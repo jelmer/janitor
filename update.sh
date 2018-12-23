@@ -1,6 +1,5 @@
 #!/bin/sh -x
 # TODO(jelmer): Create a Debian package for this
-sudo apt install brz lintian-brush
 if [ ! -d .plugins ]; then
     mkdir .plugins
     brz branch lp:brz-propose .plugins/propose
