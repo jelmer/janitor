@@ -9,12 +9,11 @@ The ultimate goal is to reduce the overhead for simple archive-wide changes to t
 
 At the moment, Debian Janitor is available as an opt-in service.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
-
 FAQ
 ***
+
+.. contents:: Contents:
+   :local:
 
 How do I opt in?
 ~~~~~~~~~~~~~~~~
