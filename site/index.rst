@@ -7,12 +7,21 @@ It finds repositories associated with packages in the Debian archive, runs a set
 
 The ultimate goal is to reduce the overhead for simple archive-wide changes to the point that maintainers just have to click *_Merge_* in a web UI.
 
-FAQ
-***
+At the moment, Debian Janitor is available as an opt-in service.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+
+FAQ
+***
+
+How do I opt in?
+~~~~~~~~~~~~~~~~
+
+Propose a change to the `policy <https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf>`_ that adds an entry for the relevant maintainer or package.
+
+Alternatively, you can send me an e-mail (`jelmer@debian.org <mailto:jelmer@debian.org>`_).
 
 I don’t find this useful. How do I stop it?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -24,6 +33,8 @@ You can send me a short message with the maintainer e-mail address (this can be 
 * XMPP: *jelmer@jelmer.uk*
 
 It would be great if you can also give me an idea of what specifically you don’t appreciate about these merge proposals, and if there’s anything I can do to improve them.
+
+Alternatively, propose a change to the `policy <https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf>`_ on Salsa.
 
 This is great. How do I get it to automatically push improvements to my repository?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -38,7 +49,7 @@ The bot uses the Vcs-Git and Vcs-Bzr fields in source packages in unstable to lo
 What repositories are supported?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-At the moment, repositories on the following hosting platforms are supported:
+Repositories on the following hosting platforms are supported:
 
 * `GitLab <https://www.gitlab.com/>`_ (currently supported instances: `GitLab.com <https://gitlab.com/>`_, `salsa.debian.org <https://salsa.debian.org/>`_)
 * `GitHub <https://github.com/>`_
@@ -59,6 +70,11 @@ The bot is proposing an incorrect change. Where do I report this?
 The bot honors lintian overrides, and will not propose fixes for issues reported by lintian that have been overridden.
 
 For issues with a fix that the bot has proposed, please just follow up on the merge proposal.
+
+The bot is doing something else wrong. Where do I report this?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Please report issues in the `Debian Janitor <https://salsa.debian.org/jelmer/debian-janitor>`_ project on Salsa.
 
 How do I run the fixers locally?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
