@@ -2,3 +2,5 @@ silver-platter
 lintian-brush
 .plugins
 _build/*
+*~
+site/_build
