@@ -15,7 +15,7 @@ FAQ
    :caption: Contents:
 
 I don’t find this useful. How do I stop it?
-===========================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can send me a short message with the maintainer e-mail address (this can be a team or an individual) for which to stop the merge proposals. You can reach me via one of the following mediums:
 
@@ -26,17 +26,17 @@ You can send me a short message with the maintainer e-mail address (this can be 
 It would be great if you can also give me an idea of what specifically you don’t appreciate about these merge proposals, and if there’s anything I can do to improve them.
 
 This is great. How do I get it to automatically push improvements to my repository?
-===================================================================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Simply give the bot commit access to your repository, and it will push fixes rather than proposing them.
 
 How are repositories located?
-=============================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The bot uses the Vcs-Git and Vcs-Bzr fields in source packages in unstable to locate repositories.
 
 What repositories are supported?
-================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 At the moment, repositories on the following hosting platforms are supported:
 
@@ -47,21 +47,21 @@ At the moment, repositories on the following hosting platforms are supported:
 Work is under way to also support Mercurial. Subversion support may also be an option, though I have yet to work out what the equivalent of pull requests in Subversion would be.
 
 What kind of changes are made?
-==============================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The janitor currently proposes changes that can be made by the `lintian-brush <https://salsa.debian.org/jelmer/lintian-brush>`_ tool. This includes fixes for the following issues flagged by lintian:
 
 .. include:: lintian-brush-tags.txt
 
 The bot is proposing an incorrect change. Where do I report this?
-=================================================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The bot honors lintian overrides, and will not propose fixes for issues reported by lintian that have been overridden.
 
 For issues with a fix that the bot has proposed, please just follow up on the merge proposal.
 
 How do I run the fixers locally?
-================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To run the collection of fixer scripts on a locally checked out package, simply run *lintian-brush*::
 
@@ -71,14 +71,14 @@ To run the collection of fixer scripts on a locally checked out package, simply 
 This will report the fixers that were run and automatically commit the changes to the local repository.
 
 How can I contribute more fixer scripts?
-========================================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can contribute scripts to the *lintian-brush* repository at `https://salsa.debian.org/jelmer/lintian-brush <https://salsa.debian.org/jelmer/lintian-brush>`_. See the lintian-brush `README file <https://salsa.debian.org/jelmer/lintian-brush/blob/master/README.md>`_ for details.
 
 Consider also adding relevant lintian tags to `lintian upstream <https://salsa.debian.org/lintian>`_. This allows silver-platter’s infrastructure to recognize which repositories it needs to process.
 
 What technologies are used?
-===========================
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 `Lintian <https://lintian.debian.org/>`_ is responsible for finding the issues
 in packages.
