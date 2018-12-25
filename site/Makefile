@@ -12,6 +12,9 @@ BUILDDIR      = _build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
+lintian-brush-tags.txt::
+	lintian-brush --list-tags 2>&1 | sed -e 's/^/\* /' > $@
+
 .PHONY: help Makefile
 
 # Catch-all target: route all unknown targets to Sphinx using the new

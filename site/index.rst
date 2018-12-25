@@ -51,63 +51,7 @@ What kind of changes are made?
 
 The janitor currently proposes changes that can be made by the `lintian-brush <https://salsa.debian.org/jelmer/lintian-brush>`_ tool. This includes fixes for the following issues flagged by lintian:
 
-* ancient-python-version-field
-
-* control-file-with-CRLF-EOLs
-
-* copyright-has-crs
-
-* debian-control-has-empty-field
-
-* debian-control-has-obsolete-dbg-package
-
-* debian-rules-should-not-use-pwd
-
-* debian-upstream-obsolete-path
-
-* debian-watch-uses-insecure-uri
-
-* dh-quilt-addon-but-quilt-source-format
-
-* dm-upload-allowed-is-obsolete
-
-* file-contains-trailing-whitespace
-
-* homepage-field-uses-insecure-uri
-
-* insecure-copyright-format-uri
-
-* malformed-dm-upload-allowed
-
-* missing-debian-source-format
-
-* missing-vcs-browser-field
-
-* out-of-date-copyright-format-uri
-
-* package-uses-deprecated-source-override-location
-
-* priority-extra-is-replaced-by-priority-optional
-
-* quilt-series-without-trailing-newline
-
-* transitional-package-should-be-oldlibs-optional
-
-* unnecessary-testsuite-autopkgtest-field
-
-* unversioned-copyright-format-uri
-
-* vcs-field-uses-insecure-uri
-
-* vcs-field-uses-not-recommended-uri-format
-
-* wrong-debian-qa-group-name
-
-* xc-package-type-in-debian-control
-
-* xs-testsuite-field-in-debian-control
-
-* xs-vcs-field-in-debian-control
+.. include:: lintian-brush-tags.txt
 
 The bot is proposing an incorrect change. Where do I report this?
 =================================================================
