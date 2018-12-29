@@ -17,7 +17,7 @@ prereqs: lintian-brush-tags.txt status.txt
 lintian-brush-tags.txt::
 	lintian-brush --list-tags 2>&1 | sed -e 's/^/\* /' > $@
 
-status.txt::
+status.rst::
 	python3 ../report-state.py ../state.db > $@
 
 .PHONY: help Makefile
