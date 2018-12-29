@@ -1,8 +1,9 @@
 #!/usr/bin/python3
 
 import sqlite3
+import sys
 
-con = sqlite3.connect('state.db')
+con = sqlite3.connect(sys.argv[1])
 
 print("Merge Proposals")
 print("===============")
