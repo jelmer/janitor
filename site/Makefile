@@ -18,7 +18,7 @@ lintian-brush-tags.txt::
 	lintian-brush --list-tags 2>&1 | sed -e 's/^/\* /' > $@
 
 status.txt::
-	python3 ../report-state.py > $@
+	python3 ../report-state.py ../state.db > $@
 
 .PHONY: help Makefile
 
