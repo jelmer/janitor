@@ -12,8 +12,13 @@ BUILDDIR      = _build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
+prereqs: lintian-brush-tags.txt status.txt
+
 lintian-brush-tags.txt::
 	lintian-brush --list-tags 2>&1 | sed -e 's/^/\* /' > $@
+
+status.txt::
+	python3 ../report-state.py > $@
 
 .PHONY: help Makefile
 
