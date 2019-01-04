@@ -71,8 +71,9 @@ parser.add_argument('--pre-check',
 parser.add_argument('--post-check',
                     help='Command to run to check package before pushing.',
                     type=str)
-parser.add_argument('--build-verify',
-                    help='Build package to verify it.', action='store_true')
+parser.add_argument('--verify-command',
+                    help='Build package to verify it.', type=str,
+                    default='brz bd --builder=\'sbuild -v\'')
 parser.add_argument('--shuffle',
                     help='Shuffle order in which packages are processed.',
                     action='store_true')
@@ -190,10 +191,10 @@ for (vcs_url, mode, env, command) in todo:
             except subprocess.CalledProcessError:
                 note('%r: post-check failed, skipping', pkg)
                 return False
-        if args.build_verify:
+        if args.verify_command:
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 subprocess.check_call(
-                    'brz bd --builder=\'sbuild -v\'', shell=True,
+                    args.verify_command, shell=True,
                     cwd=local_tree.basedir,
                     stdout=f, stderr=f)
         return True
