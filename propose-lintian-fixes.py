@@ -83,6 +83,9 @@ parser.add_argument('--refresh',
 parser.add_argument('--log-dir',
                     help='Directory to store logs in.',
                     type=str, default='public_html/pkg')
+parser.add_argument('--history-file',
+                    help='Path to file to append history to.',
+                    type=str, default='site/history.rst')
 args = parser.parse_args()
 
 JANITOR_BLURB = """
@@ -161,7 +164,16 @@ class JanitorLintianFixer(LintianFixer):
                 'package': self._pkg, 'log_id': self._log_id})
 
 
-for (vcs_url, mode, env, command) in todo:
+class JanitorResult(object):
+
+    def __init__(self, pkg, log_id, description, proposal_url=None):
+        self.package = pkg
+        self.log_id = log_id
+        self.description = description
+        self.proposal_url = proposal_url
+
+
+def process_package(vcs_url, mode, env, command):
     pkg = env['PACKAGE']
     committer = env['COMMITTER']
     subargs = subparser.parse_args(command[1:])
@@ -205,19 +217,19 @@ for (vcs_url, mode, env, command) in todo:
         main_branch = Branch.open(
                 vcs_url, possible_transports=possible_transports)
     except socket.error:
-        note('%s: ignoring, socket error', pkg)
+        return JanitorResult(pkg, log_id, 'ignoring, socket error')
     except errors.NotBranchError as e:
-        note('%s: Branch does not exist: %s', pkg, e)
+        return JanitorResult(pkg, log_id, 'Branch does not exist: %s' % e)
     except errors.UnsupportedProtocol:
-        note('%s: Branch available over unsupported protocol', pkg)
+        return JanitorResult(pkg, log_id, 'Branch available over unsupported protocol')
     except errors.ConnectionError as e:
-        note('%s: %s', pkg, e)
+        return JanitorResult(pkg, log_id, str(e))
     except errors.PermissionDenied as e:
-        note('%s: %s', pkg, e)
+        return JanitorResult(pkg, log_id, str(e))
     except errors.InvalidHttpResponse as e:
-        note('%s: %s', pkg, e)
+        return JanitorResult(pkg, log_id, str(e))
     except errors.TransportError as e:
-        note('%s: %s', pkg, e)
+        return JanitorResult(pkg, log_id, str(e))
     else:
         branch_changer = JanitorLintianFixer(
                 pkg, fixers=[fixer_scripts[fixer] for fixer in subargs.fixers],
@@ -232,32 +244,50 @@ for (vcs_url, mode, env, command) in todo:
                     possible_hosters=possible_hosters,
                     refresh=args.refresh)
         except UnsupportedHoster:
-            note('%s: Hoster unsupported', pkg)
-            continue
+            return JanitorResult(pkg, log_id, 'Hosted unsupported.')
         except NoSuchProject as e:
-            note('%s: project %s was not found', pkg, e.project)
-            continue
+            return JanitorResult(pkg, log_id, 'project %s was not found' % e.project)
         except BuildFailedError:
-            note('%s: build failed', pkg)
-            continue
+            return JanitorResult(pkg, log_id, 'build failed')
         except MissingUpstreamTarball:
-            note('%s: unable to find upstream source', pkg)
-            continue
+            return JanitorResult(pkg, log_id, 'unable to find upstream source')
         except errors.PermissionDenied as e:
-            note('%s: %s', pkg, e)
-            continue
+            return JanitorResult(pkg, log_id, str(e))
         except PostCheckFailed as e:
-            note('%s: %s', pkg, e)
-            continue
+            return JanitorResult(pkg, log_id, str(e))
         else:
+            tags = set()
+            for result, unused_summary in branch_changer.applied:
+                tags.update(result.fixed_lintian_tags)
             if proposal:
-                tags = set()
-                for result, unused_summary in branch_changer.applied:
-                    tags.update(result.fixed_lintian_tags)
                 if is_new:
-                    note('%s: Proposed fixes %r: %s', pkg, tags, proposal.url)
+                    return JanitorResult(
+                        pkg, log_id, 'Proposed fixes %r' % tags,
+                        proposal_url=proposal.url)
                 elif tags:
-                    note('%s: Updated proposal %s with fixes %r', pkg,
-                         proposal.url, tags)
+                    return JanitorResult(
+                        pkg, log_id, 'Updated proposal with fixes %r' % tags,
+                        proposal_url=proposal.url)
                 else:
-                    note('%s: No new fixes for proposal %s', pkg, proposal.url)
+                    return JanitorResult(
+                        pkg, log_id, 'No new fixes for proposal',
+                        proposal_url=proposal.url)
+
+
+with open(args.history_file, 'a+') as history_f:
+    for (vcs_url, mode, env, command) in todo:
+        result = process_package(vcs_url, mode, env, command)
+        history_f.write(
+            '- `%(package)s <https://packages.debian.org/%(package)s>`_: '
+            'Run `%(log_id)s <pkg/%(package)s/logs/%(log_id)s>`_.\n' %
+            result.__dict__)
+        history_f.write('  %(description)s\n' % result.__dict__)
+        if result.proposal_url:
+            note('%s: %s: %s', result.package, result.description,
+                 result.proposal_url)
+            history_f.write(
+                '  `Merge proposal <%(proposal_url)s>`_\n' %
+                result.__dict__)
+        else:
+            note('%s: %s', result.package, result.description)
+        history_f.write('\n')
