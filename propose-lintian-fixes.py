@@ -193,7 +193,7 @@ for (vcs_url, mode, env, command) in todo:
         if args.build_verify:
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 subprocess.check_call(
-                    'bzr bd --builder=\'sbuild -v\'', shell=True,
+                    'brz bd --builder=\'sbuild -v\'', shell=True,
                     cwd=local_tree.basedir,
                     stdout=f, stderr=f)
         return True
