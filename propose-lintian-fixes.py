@@ -15,6 +15,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import distro_info
+
 import os
 import socket
 import subprocess
@@ -139,17 +141,20 @@ subparser.add_argument(
     '--update-changelog', action="store_true", dest="update_changelog",
     help="force updating of the changelog", default=None)
 
+debian_info = distro_info.DebianDistroInfo()
+
 
 class JanitorLintianFixer(LintianFixer):
     """Janitor-specific Lintian Fixer."""
 
-    def __init__(self, pkg, fixers, update_changelog,
+    def __init__(self, pkg, fixers, update_changelog, compat_release,
                  pre_check=None, post_check=None, propose_addon_only=None,
                  committer=None, log_id=None):
         super(JanitorLintianFixer, self).__init__(
             pkg, fixers=fixers, update_changelog=update_changelog,
-            pre_check=pre_check, post_check=post_check,
-            propose_addon_only=propose_addon_only, committer=committer)
+            compat_release=compat_release, pre_check=pre_check,
+            post_check=post_check, propose_addon_only=propose_addon_only,
+            committer=committer)
         self._log_id = log_id
 
     def get_proposal_description(self, existing_proposal):
@@ -238,6 +243,7 @@ def process_package(vcs_url, mode, env, command):
         branch_changer = JanitorLintianFixer(
                 pkg, fixers=[fixer_scripts[fixer] for fixer in subargs.fixers],
                 update_changelog=subargs.update_changelog,
+                compat_release=debian_info.stable(),
                 pre_check=pre_check, post_check=post_check,
                 propose_addon_only=args.propose_addon_only,
                 committer=committer, log_id=log_id)
