@@ -15,10 +15,16 @@ for name, hoster_cls in hosters.items():
 
 
 def write_report(f, open_proposal, merged_proposals, closed_proposals):
+    f.write("""\
+Status
+======
+
+""")
+
     if open_proposals:
         f.write("""\
 Open Proposals
-==============
+--------------
 
 These proposals are currently waiting for review.
 
@@ -31,7 +37,7 @@ These proposals are currently waiting for review.
         f.write("""
 
 Merged Proposals
-================
+----------------
 
 These proposals have been merged in the past.
 
@@ -44,7 +50,7 @@ These proposals have been merged in the past.
         f.write("""
 
 Closed Proposals
-================
+----------------
 
 Proposals can be closed without being merged for a number of reasons - a
 similar change has already been applied, the change was rejected or the change
