@@ -11,6 +11,7 @@ At the moment, Debian Janitor is available as an opt-in service.
 
 .. toctree::
    :maxdepth: 1
+   :hidden:
 
    history
    status
