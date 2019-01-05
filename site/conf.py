@@ -22,6 +22,8 @@
 project = 'debian-janitor'
 copyright = '2018, Jelmer Vernooĳ'
 author = 'Jelmer Vernooĳ'
+description = 'The Debian janitor is a project to automatically propose fixes for common and trivial to fix problems in Debian packages.'
+canonical_url = 'https://janitor.debian.net/'
 
 # The short X.Y version
 version = ''
@@ -96,3 +98,11 @@ html_static_path = ['_static']
 # 'searchbox.html']``.
 #
 # html_sidebars = {}
+html_sidebars = {
+    '**': [
+        'about.html',
+        'navigation.html',
+        'relations.html',
+        'searchbox.html',
+    ]
+}
