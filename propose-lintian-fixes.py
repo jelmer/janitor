@@ -125,12 +125,16 @@ for fixer in available_lintian_fixers():
     for tag in fixer.lintian_tags:
         fixer_scripts[tag] = fixer
 
+available_fixers = set(fixer_scripts)
+if args.fixers:
+    available_fixers = available_fixers.intersection(set(args.fixers))
+
 possible_transports = []
 possible_hosters = []
 
 todo = schedule(
     args.lintian_log, args.policy, args.propose_addon_only, args.packages,
-    args.fixers, args.shuffle)
+    available_fixers, args.shuffle)
 
 subparser = argparse.ArgumentParser(prog='lintian-brush')
 subparser.add_argument("fixers", nargs='*')
