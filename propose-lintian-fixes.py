@@ -201,7 +201,7 @@ def process_package(vcs_url, mode, env, command):
                     args.post_check, shell=True, cwd=local_tree.basedir,
                     env={'SINCE_REVID': since_revid})
             except subprocess.CalledProcessError:
-                note('%r: post-check failed, skipping', pkg)
+                note('%s: post-check failed, skipping', pkg)
                 return False
         if args.verify_command:
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
@@ -211,7 +211,7 @@ def process_package(vcs_url, mode, env, command):
                         cwd=local_tree.basedir,
                         stdout=f, stderr=f)
                 except subprocess.CalledProcessError:
-                    note('%r: build failed, skipping', pkg)
+                    note('%s: build failed, skipping', pkg)
                     return False
         return True
 
