@@ -205,10 +205,14 @@ def process_package(vcs_url, mode, env, command):
                 return False
         if args.verify_command:
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
-                subprocess.check_call(
-                    args.verify_command, shell=True,
-                    cwd=local_tree.basedir,
-                    stdout=f, stderr=f)
+                try:
+                    subprocess.check_call(
+                        args.verify_command, shell=True,
+                        cwd=local_tree.basedir,
+                        stdout=f, stderr=f)
+                except subprocess.CalledProcessError:
+                    note('%r: build failed, skipping', pkg)
+                    return False
         return True
 
     note('Processing: %s', pkg)
