@@ -1,2 +1,1 @@
-DEBFULLNAME="Debian Janitor"
-DEBEMAIL=janitor@jelmer.uk
+DEBEMAIL="Debian Janitor <janitor@jelmer.uk>"
