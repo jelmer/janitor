@@ -35,7 +35,7 @@ from silver_platter.debian.lintian import (
     create_mp_description,
     parse_mp_description,
     )
-from silver_platter.debian.schedule import schedule
+from silver_platter.debian.schedule import schedule_udd
 
 from breezy import (
     errors,
@@ -130,21 +130,11 @@ available_fixers = set(fixer_scripts)
 if args.fixers:
     available_fixers = available_fixers.intersection(set(args.fixers))
 
-# Find out the number of open merge proposals per maintainer
-open_proposals = []
-for name, hoster_cls in hosters.items():
-    for instance in hoster_cls.iter_instances():
-        open_proposals.extend(instance.iter_my_proposals(status='open'))
-
-for mp in open_proposals:
-    target_branch_url = mp.get_target_branch_url()
-    import pdb; pdb.set_trace()
-
 possible_transports = []
 possible_hosters = []
 
-todo = schedule(
-    args.lintian_log, args.policy, args.propose_addon_only, args.packages,
+todo = schedule_udd(
+    args.policy, args.propose_addon_only, args.packages,
     available_fixers, args.shuffle)
 
 subparser = argparse.ArgumentParser(prog='lintian-brush')
