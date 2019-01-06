@@ -235,7 +235,7 @@ def process_package(vcs_url, mode, env, command):
                     return False
         return True
 
-    note('Processing: %s', pkg)
+    note('Processing: %s (mode: %s)', pkg, mode)
 
     try:
         main_branch = Branch.open(
