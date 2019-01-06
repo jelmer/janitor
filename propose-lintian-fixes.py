@@ -34,6 +34,7 @@ from silver_platter.debian.lintian import (
     available_lintian_fixers,
     create_mp_description,
     parse_mp_description,
+    DEFAULT_ADDON_FIXERS,
     )
 from silver_platter.debian.schedule import schedule_udd
 
@@ -67,7 +68,7 @@ parser.add_argument("--dry-run",
 parser.add_argument('--propose-addon-only',
                     help='Fixers that should be considered add-on-only.',
                     type=str, action='append',
-                    default=['file-contains-trailing-whitespace'])
+                    default=DEFAULT_ADDON_FIXERS)
 parser.add_argument('--pre-check',
                     help='Command to run to check whether to process package.',
                     type=str)
