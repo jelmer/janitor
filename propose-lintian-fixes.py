@@ -120,8 +120,6 @@ def add_janitor_blurb(text, env):
     return text
 
 
-dry_run = args.dry_run
-
 fixer_scripts = {}
 for fixer in available_lintian_fixers():
     for tag in fixer.lintian_tags:
@@ -246,8 +244,12 @@ def process_package(vcs_url, mode, env, command):
     except errors.TransportError as e:
         return JanitorResult(pkg, log_id, str(e))
     else:
+        if subargs.fixers:
+            fixers = subargs.fixers
+        else:
+            fixers = available_fixers
         branch_changer = JanitorLintianFixer(
-                pkg, fixers=[fixer_scripts[fixer] for fixer in subargs.fixers],
+                pkg, fixers=[fixer_scripts[fixer] for fixer in fixers],
                 update_changelog=subargs.update_changelog,
                 compat_release=debian_info.stable(),
                 pre_check=pre_check, post_check=post_check,
@@ -258,7 +260,7 @@ def process_package(vcs_url, mode, env, command):
                     main_branch, "lintian-fixes", branch_changer, mode,
                     possible_transports=possible_transports,
                     possible_hosters=possible_hosters,
-                    refresh=args.refresh)
+                    refresh=args.refresh, dry_run=args.dry_run)
         except UnsupportedHoster:
             return JanitorResult(pkg, log_id, 'Hosted unsupported.')
         except NoSuchProject as e:
