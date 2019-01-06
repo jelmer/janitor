@@ -48,7 +48,6 @@ from breezy.trace import note
 from breezy.plugins.propose.propose import (
     NoSuchProject,
     UnsupportedHoster,
-    hosters,
     )
 
 import argparse
@@ -234,7 +233,8 @@ def process_package(vcs_url, mode, env, command):
     except errors.NotBranchError as e:
         return JanitorResult(pkg, log_id, 'Branch does not exist: %s' % e)
     except errors.UnsupportedProtocol:
-        return JanitorResult(pkg, log_id, 'Branch available over unsupported protocol')
+        return JanitorResult(
+            pkg, log_id, 'Branch available over unsupported protocol')
     except errors.ConnectionError as e:
         return JanitorResult(pkg, log_id, str(e))
     except errors.PermissionDenied as e:
@@ -264,7 +264,8 @@ def process_package(vcs_url, mode, env, command):
         except UnsupportedHoster:
             return JanitorResult(pkg, log_id, 'Hosted unsupported.')
         except NoSuchProject as e:
-            return JanitorResult(pkg, log_id, 'project %s was not found' % e.project)
+            return JanitorResult(
+                pkg, log_id, 'project %s was not found' % e.project)
         except BuildFailedError:
             return JanitorResult(pkg, log_id, 'build failed')
         except MissingUpstreamTarball:
@@ -290,6 +291,11 @@ def process_package(vcs_url, mode, env, command):
                     return JanitorResult(
                         pkg, log_id, 'No new fixes for proposal',
                         proposal_url=result.merge_proposal.url)
+            else:
+                if tags:
+                    return JanitorResult(pkg, log_id, 'Pushed fixes %r' % tags)
+                else:
+                    return JanitorResult(pkg, log_id, 'Nothing to do.')
 
 
 with open(args.history_file, 'a+') as history_f:
