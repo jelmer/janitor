@@ -77,7 +77,7 @@ Won't this mean I get a pull request for each bit of trailing whitespace?
 Some lintian tags are considered to be "add-on only". Fixes for these lintian
 tags are only included in a pull request if there were other fixes as well.
 
-Tags currently considered read-only are:
+Tags currently considered add-on only are:
 
 * file-contains-trailing-whitespace
 * package-uses-old-debhelper-compat-version
