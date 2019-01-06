@@ -71,6 +71,17 @@ The janitor currently proposes changes that can be made by the `lintian-brush <h
 
 .. include:: lintian-brush-tags.txt
 
+Won't this mean I get a pull request for each bit of trailing whitespace?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some lintian tags are considered to be "add-on only". Fixes for these lintian
+tags are only included in a pull request if there were other fixes as well.
+
+Tags currently considered read-only are:
+
+* file-contains-trailing-whitespace
+* package-uses-old-debhelper-compat-version
+
 The bot is proposing an incorrect change. Where do I report this?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
