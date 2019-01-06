@@ -47,6 +47,7 @@ from breezy.trace import note
 from breezy.plugins.propose.propose import (
     NoSuchProject,
     UnsupportedHoster,
+    hosters,
     )
 
 import argparse
@@ -128,6 +129,16 @@ for fixer in available_lintian_fixers():
 available_fixers = set(fixer_scripts)
 if args.fixers:
     available_fixers = available_fixers.intersection(set(args.fixers))
+
+# Find out the number of open merge proposals per maintainer
+open_proposals = []
+for name, hoster_cls in hosters.items():
+    for instance in hoster_cls.iter_instances():
+        open_proposals.extend(instance.iter_my_proposals(status='open'))
+
+for mp in open_proposals:
+    target_branch_url = mp.get_target_branch_url()
+    import pdb; pdb.set_trace()
 
 possible_transports = []
 possible_hosters = []
@@ -252,7 +263,7 @@ def process_package(vcs_url, mode, env, command):
                 propose_addon_only=args.propose_addon_only,
                 committer=committer, log_id=log_id)
         try:
-            proposal, is_new = propose_or_push(
+            result = propose_or_push(
                     main_branch, "lintian-fixes", branch_changer, mode,
                     possible_transports=possible_transports,
                     possible_hosters=possible_hosters,
@@ -271,21 +282,21 @@ def process_package(vcs_url, mode, env, command):
             return JanitorResult(pkg, log_id, str(e))
         else:
             tags = set()
-            for result, unused_summary in branch_changer.applied:
-                tags.update(result.fixed_lintian_tags)
-            if proposal:
-                if is_new:
+            for brush_result, unused_summary in branch_changer.applied:
+                tags.update(brush_result.fixed_lintian_tags)
+            if result.merge_proposal:
+                if result.is_new:
                     return JanitorResult(
                         pkg, log_id, 'Proposed fixes %r' % tags,
-                        proposal_url=proposal.url)
+                        proposal_url=result.merge_proposal.url)
                 elif tags:
                     return JanitorResult(
                         pkg, log_id, 'Updated proposal with fixes %r' % tags,
-                        proposal_url=proposal.url)
+                        proposal_url=result.merge_proposal.url)
                 else:
                     return JanitorResult(
                         pkg, log_id, 'No new fixes for proposal',
-                        proposal_url=proposal.url)
+                        proposal_url=result.merge_proposal.url)
 
 
 with open(args.history_file, 'a+') as history_f:
