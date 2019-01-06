@@ -300,6 +300,11 @@ def process_package(vcs_url, mode, env, command):
 
 with open(args.history_file, 'a+') as history_f:
     for (vcs_url, mode, env, command) in todo:
+        if mode == "attempt-push" and "salsa.debian.org/debian/" in vcs_url:
+            # Make sure we don't accidentally push to unsuspecting collab-maint
+            # repositories, even if debian-janitor becomes a member of "debian"
+            # in the future.
+            mode = "propose"
         result = process_package(vcs_url, mode, env, command)
         history_f.write(
             '- `%(package)s <https://packages.debian.org/%(package)s>`_: '
