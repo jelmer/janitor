@@ -79,8 +79,8 @@ tags are only included in a pull request if there were other fixes as well.
 
 Tags currently considered add-on only are:
 
-* file-contains-trailing-whitespace
-* package-uses-old-debhelper-compat-version
+* `file-contains-trailing-whitespace <https://lintian.debian.org/tags/file-contains-trailing-whitespace.html>`_
+* `package-uses-old-debhelper-compat-version <https://lintian.debian.org/tags/package-uses-old-debhelper-compat-version.html>`_
 
 The bot is proposing an incorrect change. Where do I report this?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
