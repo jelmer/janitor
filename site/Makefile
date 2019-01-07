@@ -15,7 +15,7 @@ help:
 prereqs: lintian-brush-tags.txt status.rst
 
 lintian-brush-tags.txt::
-	lintian-brush --list-tags 2>&1 | sed -e 's/^/\* /' > $@
+	lintian-brush --list-tags 2>&1 | sed -e 's/^\(.*\)/\* `\1 <https:\/\/lintian.debian.org\/tags\/\1.html>`_/' > $@
 
 status.rst:
 	python3 ../report-state.py > $@

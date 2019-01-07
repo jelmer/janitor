@@ -1,36 +1,36 @@
-* ancient-python-version-field
-* control-file-with-CRLF-EOLs
-* copyright-has-crs
-* debhelper-but-no-misc-depends
-* debian-control-has-empty-field
-* debian-control-has-obsolete-dbg-package
-* debian-pyversions-is-obsolete
-* debian-rules-should-not-use-pwd
-* debian-upstream-obsolete-path
-* debian-watch-uses-insecure-uri
-* dh-quilt-addon-but-quilt-source-format
-* dm-upload-allowed-is-obsolete
-* file-contains-trailing-whitespace
-* homepage-field-uses-insecure-uri
-* insecure-copyright-format-uri
-* malformed-dm-upload-allowed
-* missing-debian-source-format
-* missing-vcs-browser-field
-* out-of-date-copyright-format-uri
-* package-needs-versioned-debhelper-build-depends
-* package-uses-deprecated-debhelper-compat-version
-* package-uses-deprecated-source-override-location
-* priority-extra-is-replaced-by-priority-optional
-* public-upstream-key-not-minimal
-* quilt-series-without-trailing-newline
-* transitional-package-should-be-oldlibs-optional
-* unnecessary-team-upload
-* unnecessary-testsuite-autopkgtest-field
-* unversioned-copyright-format-uri
-* useless-autoreconf-build-depends
-* vcs-field-uses-insecure-uri
-* vcs-field-uses-not-recommended-uri-format
-* wrong-debian-qa-group-name
-* xc-package-type-in-debian-control
-* xs-testsuite-field-in-debian-control
-* xs-vcs-field-in-debian-control
+* `ancient-python-version-field <https://lintian.debian.org/tags/ancient-python-version-field.html>`_
+* `control-file-with-CRLF-EOLs <https://lintian.debian.org/tags/control-file-with-CRLF-EOLs.html>`_
+* `copyright-has-crs <https://lintian.debian.org/tags/copyright-has-crs.html>`_
+* `debhelper-but-no-misc-depends <https://lintian.debian.org/tags/debhelper-but-no-misc-depends.html>`_
+* `debian-control-has-empty-field <https://lintian.debian.org/tags/debian-control-has-empty-field.html>`_
+* `debian-control-has-obsolete-dbg-package <https://lintian.debian.org/tags/debian-control-has-obsolete-dbg-package.html>`_
+* `debian-pyversions-is-obsolete <https://lintian.debian.org/tags/debian-pyversions-is-obsolete.html>`_
+* `debian-rules-should-not-use-pwd <https://lintian.debian.org/tags/debian-rules-should-not-use-pwd.html>`_
+* `debian-upstream-obsolete-path <https://lintian.debian.org/tags/debian-upstream-obsolete-path.html>`_
+* `debian-watch-uses-insecure-uri <https://lintian.debian.org/tags/debian-watch-uses-insecure-uri.html>`_
+* `dh-quilt-addon-but-quilt-source-format <https://lintian.debian.org/tags/dh-quilt-addon-but-quilt-source-format.html>`_
+* `dm-upload-allowed-is-obsolete <https://lintian.debian.org/tags/dm-upload-allowed-is-obsolete.html>`_
+* `file-contains-trailing-whitespace <https://lintian.debian.org/tags/file-contains-trailing-whitespace.html>`_
+* `homepage-field-uses-insecure-uri <https://lintian.debian.org/tags/homepage-field-uses-insecure-uri.html>`_
+* `insecure-copyright-format-uri <https://lintian.debian.org/tags/insecure-copyright-format-uri.html>`_
+* `malformed-dm-upload-allowed <https://lintian.debian.org/tags/malformed-dm-upload-allowed.html>`_
+* `missing-debian-source-format <https://lintian.debian.org/tags/missing-debian-source-format.html>`_
+* `missing-vcs-browser-field <https://lintian.debian.org/tags/missing-vcs-browser-field.html>`_
+* `out-of-date-copyright-format-uri <https://lintian.debian.org/tags/out-of-date-copyright-format-uri.html>`_
+* `package-needs-versioned-debhelper-build-depends <https://lintian.debian.org/tags/package-needs-versioned-debhelper-build-depends.html>`_
+* `package-uses-deprecated-debhelper-compat-version <https://lintian.debian.org/tags/package-uses-deprecated-debhelper-compat-version.html>`_
+* `package-uses-deprecated-source-override-location <https://lintian.debian.org/tags/package-uses-deprecated-source-override-location.html>`_
+* `priority-extra-is-replaced-by-priority-optional <https://lintian.debian.org/tags/priority-extra-is-replaced-by-priority-optional.html>`_
+* `public-upstream-key-not-minimal <https://lintian.debian.org/tags/public-upstream-key-not-minimal.html>`_
+* `quilt-series-without-trailing-newline <https://lintian.debian.org/tags/quilt-series-without-trailing-newline.html>`_
+* `transitional-package-should-be-oldlibs-optional <https://lintian.debian.org/tags/transitional-package-should-be-oldlibs-optional.html>`_
+* `unnecessary-team-upload <https://lintian.debian.org/tags/unnecessary-team-upload.html>`_
+* `unnecessary-testsuite-autopkgtest-field <https://lintian.debian.org/tags/unnecessary-testsuite-autopkgtest-field.html>`_
+* `unversioned-copyright-format-uri <https://lintian.debian.org/tags/unversioned-copyright-format-uri.html>`_
+* `useless-autoreconf-build-depends <https://lintian.debian.org/tags/useless-autoreconf-build-depends.html>`_
+* `vcs-field-uses-insecure-uri <https://lintian.debian.org/tags/vcs-field-uses-insecure-uri.html>`_
+* `vcs-field-uses-not-recommended-uri-format <https://lintian.debian.org/tags/vcs-field-uses-not-recommended-uri-format.html>`_
+* `wrong-debian-qa-group-name <https://lintian.debian.org/tags/wrong-debian-qa-group-name.html>`_
+* `xc-package-type-in-debian-control <https://lintian.debian.org/tags/xc-package-type-in-debian-control.html>`_
+* `xs-testsuite-field-in-debian-control <https://lintian.debian.org/tags/xs-testsuite-field-in-debian-control.html>`_
+* `xs-vcs-field-in-debian-control <https://lintian.debian.org/tags/xs-vcs-field-in-debian-control.html>`_
