@@ -20,6 +20,9 @@ lintian-brush-tags.txt::
 status.rst:
 	python3 ../report-state.py > $@
 
+history.rst:
+	python3 ../report-history.py > $@
+
 .PHONY: help Makefile
 
 # Catch-all target: route all unknown targets to Sphinx using the new

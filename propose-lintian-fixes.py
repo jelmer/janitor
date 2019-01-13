@@ -17,9 +17,11 @@
 
 import distro_info
 
+from datetime import datetime
 import os
 import socket
 import subprocess
+import sys
 import uuid
 
 import silver_platter   # noqa: F401
@@ -49,6 +51,10 @@ from breezy.plugins.propose.propose import (
     NoSuchProject,
     UnsupportedHoster,
     )
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+from janitor import state
 
 import argparse
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
@@ -86,9 +92,6 @@ parser.add_argument('--refresh',
 parser.add_argument('--log-dir',
                     help='Directory to store logs in.',
                     type=str, default='public_html/pkg')
-parser.add_argument('--history-file',
-                    help='Path to file to append history to.',
-                    type=str, default='site/history.rst')
 args = parser.parse_args()
 
 JANITOR_BLURB = """
@@ -174,9 +177,12 @@ class JanitorLintianFixer(LintianFixer):
 
 class JanitorResult(object):
 
-    def __init__(self, pkg, log_id, description, proposal_url=None):
+    def __init__(self, pkg, log_id, start_time, finish_time, description,
+                 proposal_url=None):
         self.package = pkg
         self.log_id = log_id
+        self.start_time = start_time
+        self.finish_time = finish_time
         self.description = description
         self.proposal_url = proposal_url
 
@@ -224,25 +230,26 @@ def process_package(vcs_url, mode, env, command):
         return True
 
     note('Processing: %s (mode: %s)', pkg, mode)
+    start_time = datetime.now()
 
     try:
         main_branch = Branch.open(
                 vcs_url, possible_transports=possible_transports)
     except socket.error:
-        return JanitorResult(pkg, log_id, 'ignoring, socket error')
+        return JanitorResult(pkg, log_id, start_time, datetime.now(), 'ignoring, socket error')
     except errors.NotBranchError as e:
-        return JanitorResult(pkg, log_id, 'Branch does not exist: %s' % e)
+        return JanitorResult(pkg, log_id, start_time, datetime.now(), 'Branch does not exist: %s' % e)
     except errors.UnsupportedProtocol:
         return JanitorResult(
-            pkg, log_id, 'Branch available over unsupported protocol')
+            pkg, log_id, start_time, datetime.now(), 'Branch available over unsupported protocol')
     except errors.ConnectionError as e:
-        return JanitorResult(pkg, log_id, str(e))
+        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
     except errors.PermissionDenied as e:
-        return JanitorResult(pkg, log_id, str(e))
+        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
     except errors.InvalidHttpResponse as e:
-        return JanitorResult(pkg, log_id, str(e))
+        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
     except errors.TransportError as e:
-        return JanitorResult(pkg, log_id, str(e))
+        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
     else:
         if subargs.fixers:
             fixers = subargs.fixers
@@ -262,18 +269,25 @@ def process_package(vcs_url, mode, env, command):
                     possible_hosters=possible_hosters,
                     refresh=args.refresh, dry_run=args.dry_run)
         except UnsupportedHoster:
-            return JanitorResult(pkg, log_id, 'Hosted unsupported.')
+            return JanitorResult(
+                pkg, log_id, start_time, datetime.now(), 'Hosted unsupported.')
         except NoSuchProject as e:
             return JanitorResult(
-                pkg, log_id, 'project %s was not found' % e.project)
+                pkg, log_id, start_time, datetime.now(),
+                'project %s was not found' % e.project)
         except BuildFailedError:
-            return JanitorResult(pkg, log_id, 'build failed')
+            return JanitorResult(
+                pkg, log_id, start_time, datetime.now(), 'build failed')
         except MissingUpstreamTarball:
-            return JanitorResult(pkg, log_id, 'unable to find upstream source')
+            return JanitorResult(
+                pkg, log_id, start_time, datetime.now(),
+                'unable to find upstream source')
         except errors.PermissionDenied as e:
-            return JanitorResult(pkg, log_id, str(e))
+            return JanitorResult(
+                pkg, log_id, start_time, datetime.now(), str(e))
         except PostCheckFailed as e:
-            return JanitorResult(pkg, log_id, str(e))
+            return JanitorResult(
+                pkg, log_id, start_time, datetime.now(), str(e))
         else:
             tags = set()
             for brush_result, unused_summary in branch_changer.applied:
@@ -281,42 +295,43 @@ def process_package(vcs_url, mode, env, command):
             if result.merge_proposal:
                 if result.is_new:
                     return JanitorResult(
-                        pkg, log_id, 'Proposed fixes %r' % tags,
+                        pkg, log_id, start_time, datetime.now(),
+                        'Proposed fixes %r' % tags,
                         proposal_url=result.merge_proposal.url)
                 elif tags:
                     return JanitorResult(
-                        pkg, log_id, 'Updated proposal with fixes %r' % tags,
+                        pkg, log_id, start_time, datetime.now(),
+                        'Updated proposal with fixes %r' % tags,
                         proposal_url=result.merge_proposal.url)
                 else:
                     return JanitorResult(
-                        pkg, log_id, 'No new fixes for proposal',
+                        pkg, log_id, start_time, datetime.now(),
+                        'No new fixes for proposal',
                         proposal_url=result.merge_proposal.url)
             else:
                 if tags:
-                    return JanitorResult(pkg, log_id, 'Pushed fixes %r' % tags)
+                    return JanitorResult(
+                        pkg, log_id, start_time, datetime.now(),
+                        'Pushed fixes %r' % tags)
                 else:
-                    return JanitorResult(pkg, log_id, 'Nothing to do.')
+                    return JanitorResult(
+                        pkg, log_id, start_time, datetime.now(),
+                        'Nothing to do.')
 
 
-with open(args.history_file, 'a+') as history_f:
-    for (vcs_url, mode, env, command) in todo:
-        if mode == "attempt-push" and "salsa.debian.org/debian/" in vcs_url:
-            # Make sure we don't accidentally push to unsuspecting collab-maint
-            # repositories, even if debian-janitor becomes a member of "debian"
-            # in the future.
-            mode = "propose"
-        result = process_package(vcs_url, mode, env, command)
-        history_f.write(
-            '- `%(package)s <https://packages.debian.org/%(package)s>`_: '
-            'Run `%(log_id)s <pkg/%(package)s/logs/%(log_id)s>`_.\n' %
-            result.__dict__)
-        history_f.write('  %(description)s\n' % result.__dict__)
-        if result.proposal_url:
-            note('%s: %s: %s', result.package, result.description,
-                 result.proposal_url)
-            history_f.write(
-                '  `Merge proposal <%(proposal_url)s>`_\n' %
-                result.__dict__)
-        else:
-            note('%s: %s', result.package, result.description)
-        history_f.write('\n')
+for (vcs_url, mode, env, command) in todo:
+    if mode == "attempt-push" and "salsa.debian.org/debian/" in vcs_url:
+        # Make sure we don't accidentally push to unsuspecting collab-maint
+        # repositories, even if debian-janitor becomes a member of "debian"
+        # in the future.
+        mode = "propose"
+    result = process_package(vcs_url, mode, env, command)
+    if result.proposal_url:
+        note('%s: %s: %s', result.package, result.description,
+             result.proposal_url)
+    else:
+        note('%s: %s', result.package, result.description)
+    state.store_run(
+        result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
+        result.start_time, result.finish_time, command,
+        result.description, result.proposal_url)

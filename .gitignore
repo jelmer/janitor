@@ -4,3 +4,5 @@ lintian-brush
 _build/*
 *~
 site/_build
+state.db
+site/history.rst
