@@ -66,3 +66,14 @@ def iter_runs():
     while row:
         yield (row[0], (row[2], row[3]), row[1], row[4], row[5], row[6])
         row = cur.fetchone()
+
+
+def get_maintainer_email(vcs_url):
+    cur = con.cursor()
+    cur.execute(
+        "SELECT maintainer_email FROM package LEFT JOIN merge_proposal ON merge_proposal.package_id = package.id WHERE merge_proposal.url = ?",
+        (vcs_url, ))
+    row = cur.fetchone()
+    if row:
+        return row[0]
+    return None

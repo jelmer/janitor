@@ -45,11 +45,15 @@ from breezy import (
     )
 
 from breezy.branch import Branch
-from breezy.trace import note
+from breezy.trace import (
+    note,
+    warning,
+    )
 
 from breezy.plugins.propose.propose import (
     NoSuchProject,
     UnsupportedHoster,
+    hosters,
     )
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -92,6 +96,10 @@ parser.add_argument('--refresh',
 parser.add_argument('--log-dir',
                     help='Directory to store logs in.',
                     type=str, default='public_html/pkg')
+parser.add_argument(
+    '--max-mps-per-maintainer',
+    default=5,
+    type=int, help='Maximum number of open merge proposals per maintainer.')
 args = parser.parse_args()
 
 JANITOR_BLURB = """
@@ -130,6 +138,19 @@ for fixer in available_lintian_fixers():
 available_fixers = set(fixer_scripts)
 if args.fixers:
     available_fixers = available_fixers.intersection(set(args.fixers))
+
+open_proposals = []
+for name, hoster_cls in hosters.items():
+    for instance in hoster_cls.iter_instances():
+        open_proposals.extend(instance.iter_my_proposals(status='open'))
+
+open_mps_per_maintainer = {}
+for proposal in open_proposals:
+    maintainer_email = state.get_maintainer_email(proposal.url)
+    if maintainer_email is None:
+        warning('No maintainer email known for %s', proposal.url)
+    open_mps_per_maintainer.setdefault(maintainer_email, 0)
+    open_mps_per_maintainer[maintainer_email] += 1
 
 possible_transports = []
 possible_hosters = []
@@ -320,6 +341,14 @@ def process_package(vcs_url, mode, env, command):
 
 
 for (vcs_url, mode, env, command) in todo:
+    maintainer_email = env['MAINTAINER_EMAIL']
+    if (args.max_mps_per_maintainer and
+            open_mps_per_maintainer.get(maintainer_email, 0)
+            >= args.max_mps_per_maintainer):
+        warning(
+            'Skipping %s, maximum number of open merge proposals reached '
+            'for maintainer %s', env['PACKAGE'], maintainer_email)
+        continue
     if mode == "attempt-push" and "salsa.debian.org/debian/" in vcs_url:
         # Make sure we don't accidentally push to unsuspecting collab-maint
         # repositories, even if debian-janitor becomes a member of "debian"
@@ -335,3 +364,5 @@ for (vcs_url, mode, env, command) in todo:
         result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
         result.start_time, result.finish_time, command,
         result.description, result.proposal_url)
+    open_mps_per_maintainer.setdefault(maintainer_email, 0)
+    open_mps_per_maintainer[maintainer_email] += 1
