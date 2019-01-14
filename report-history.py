@@ -6,6 +6,15 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state
 
+
+sys.stdout.write("""\
+History
+=======
+
+""")
+
+
+
 for run_id, times, command, description, package, proposal_url in state.iter_runs():
     sys.stdout.write(
         '- `%(package)s <https://packages.debian.org/%(package)s>`_: '
