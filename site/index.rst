@@ -111,6 +111,15 @@ You can contribute scripts to the *lintian-brush* repository at `https://salsa.d
 
 Consider also adding relevant lintian tags to `lintian upstream <https://salsa.debian.org/lintian>`_. This allows silver-platter’s infrastructure to recognize which repositories it needs to process.
 
+Would it be possible to run the Debian Janitor on the Ubuntu archive?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Debian Janitor already supports creating merge proposals for Ubuntu
+packaging branches on Launchpad. However, there is currently no easy mechanism
+for these merge proposals to be merged and they do not yet appear on the
+`Sponsoring Overview page
+<http://reqorts.qa.ubuntu.com/reports/sponsoring/index.html>`_.
+
 What technologies are used?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
