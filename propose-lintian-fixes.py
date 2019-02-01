@@ -15,9 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import distro_info
 
+import argparse
 from datetime import datetime
+import distro_info
 import os
 import socket
 import subprocess
@@ -38,7 +39,6 @@ from silver_platter.debian.lintian import (
     parse_mp_description,
     DEFAULT_ADDON_FIXERS,
     )
-from silver_platter.debian.schedule import schedule_udd
 
 from breezy import (
     errors,
@@ -59,8 +59,8 @@ from breezy.plugins.propose.propose import (
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state
+from janitor.schedule import schedule_udd
 
-import argparse
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
 parser.add_argument("packages", nargs='*')
 parser.add_argument('--lintian-log',
