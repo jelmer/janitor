@@ -25,6 +25,8 @@ import subprocess
 import sys
 import uuid
 
+from prometheus_client import CollectorRegistry, Counter, Gauge, push_to_gateway
+
 import silver_platter   # noqa: F401
 from silver_platter.debian import (
     propose_or_push,
@@ -96,11 +98,21 @@ parser.add_argument('--refresh',
 parser.add_argument('--log-dir',
                     help='Directory to store logs in.',
                     type=str, default='public_html/pkg')
+parser.add_argument('--prometheus', type=str,
+                    help='Prometheus push gateway to export to.')
 parser.add_argument(
     '--max-mps-per-maintainer',
     default=5,
     type=int, help='Maximum number of open merge proposals per maintainer.')
 args = parser.parse_args()
+
+registry = CollectorRegistry()
+packages_processed_count = Counter(
+    'package_count', 'Number of packages processed.', registry=registry)
+open_proposal_count = Gauge(
+    'open_proposal_count', 'Number of open proposals.', registry=registry)
+fixer_count = Counter(
+    'fixer_count', 'Number of selected fixers.', registry=registry)
 
 JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot
@@ -139,6 +151,8 @@ available_fixers = set(fixer_scripts)
 if args.fixers:
     available_fixers = available_fixers.intersection(set(args.fixers))
 
+fixer_count.inc(len(available_fixers))
+
 open_proposals = []
 for name, hoster_cls in hosters.items():
     for instance in hoster_cls.iter_instances():
@@ -151,6 +165,7 @@ for proposal in open_proposals:
         warning('No maintainer email known for %s', proposal.url)
     open_mps_per_maintainer.setdefault(maintainer_email, 0)
     open_mps_per_maintainer[maintainer_email] += 1
+    open_proposal_count.labels(maintainer=maintainer_email).inc()
 
 possible_transports = []
 possible_hosters = []
@@ -209,6 +224,7 @@ class JanitorResult(object):
 
 
 def process_package(vcs_url, mode, env, command):
+    packages_processed_count.inc()
     pkg = env['PACKAGE']
     committer = env['COMMITTER']
     subargs = subparser.parse_args(command[1:])
@@ -366,3 +382,8 @@ for (vcs_url, mode, env, command) in todo:
         result.description, result.proposal_url)
     open_mps_per_maintainer.setdefault(maintainer_email, 0)
     open_mps_per_maintainer[maintainer_email] += 1
+    open_proposal_count.labels(maintainer=maintainer_email).inc()
+
+if args.prometheus:
+    push_to_gateway(args.prometheus, job='propose-lintian-fixes',
+                    registry=registry)
