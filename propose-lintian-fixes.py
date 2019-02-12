@@ -163,6 +163,7 @@ for proposal in open_proposals:
     maintainer_email = state.get_maintainer_email(proposal.url)
     if maintainer_email is None:
         warning('No maintainer email known for %s', proposal.url)
+        continue
     open_mps_per_maintainer.setdefault(maintainer_email, 0)
     open_mps_per_maintainer[maintainer_email] += 1
     open_proposal_count.labels(maintainer=maintainer_email).inc()
