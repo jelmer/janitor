@@ -110,7 +110,7 @@ registry = CollectorRegistry()
 packages_processed_count = Counter(
     'package_count', 'Number of packages processed.', registry=registry)
 open_proposal_count = Gauge(
-    'open_proposal_count', 'Number of open proposals.', registry=registry)
+    'open_proposal_count', 'Number of open proposals.', labelnames=('maintainer',), registry=registry)
 fixer_count = Counter(
     'fixer_count', 'Number of selected fixers.', registry=registry)
 
