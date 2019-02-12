@@ -113,6 +113,10 @@ open_proposal_count = Gauge(
     'open_proposal_count', 'Number of open proposals.', labelnames=('maintainer',), registry=registry)
 fixer_count = Counter(
     'fixer_count', 'Number of selected fixers.', registry=registry)
+last_success_gauge = Gauge(
+    'job_last_success_unixtime',
+    'Last time a batch job successfully finished',
+    registry=registry)
 
 JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot
@@ -385,6 +389,7 @@ for (vcs_url, mode, env, command) in todo:
     open_mps_per_maintainer[maintainer_email] += 1
     open_proposal_count.labels(maintainer=maintainer_email).inc()
 
+last_success_gauge.set_to_current_time()
 if args.prometheus:
     push_to_gateway(args.prometheus, job='propose-lintian-fixes',
                     registry=registry)
