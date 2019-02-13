@@ -219,13 +219,14 @@ class JanitorLintianFixer(LintianFixer):
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, start_time, finish_time, description,
-                 proposal_url=None):
+                 proposal_url=None, is_new=None):
         self.package = pkg
         self.log_id = log_id
         self.start_time = start_time
         self.finish_time = finish_time
         self.description = description
         self.proposal_url = proposal_url
+        self.is_new = is_new
 
 
 def process_package(vcs_url, mode, env, command):
@@ -339,17 +340,20 @@ def process_package(vcs_url, mode, env, command):
                     return JanitorResult(
                         pkg, log_id, start_time, datetime.now(),
                         'Proposed fixes %r' % tags,
-                        proposal_url=result.merge_proposal.url)
+                        proposal_url=result.merge_proposal.url,
+                        is_new=True)
                 elif tags:
                     return JanitorResult(
                         pkg, log_id, start_time, datetime.now(),
                         'Updated proposal with fixes %r' % tags,
-                        proposal_url=result.merge_proposal.url)
+                        proposal_url=result.merge_proposal.url,
+                        is_new=False)
                 else:
                     return JanitorResult(
                         pkg, log_id, start_time, datetime.now(),
                         'No new fixes for proposal',
-                        proposal_url=result.merge_proposal.url)
+                        proposal_url=result.merge_proposal.url,
+                        is_new=False)
             else:
                 if tags:
                     return JanitorResult(
@@ -385,9 +389,10 @@ for (vcs_url, mode, env, command) in todo:
         result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
         result.start_time, result.finish_time, command,
         result.description, result.proposal_url)
-    open_mps_per_maintainer.setdefault(maintainer_email, 0)
-    open_mps_per_maintainer[maintainer_email] += 1
-    open_proposal_count.labels(maintainer=maintainer_email).inc()
+    if result.proposal_url and result.is_new:
+        open_mps_per_maintainer.setdefault(maintainer_email, 0)
+        open_mps_per_maintainer[maintainer_email] += 1
+        open_proposal_count.labels(maintainer=maintainer_email).inc()
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
