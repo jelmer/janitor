@@ -28,5 +28,5 @@ for run_id, times, command, description, package, proposal_url in state.iter_run
             {'proposal_url': proposal_url})
     sys.stdout.write('\n')
 
-    sys.stdout.write("\n")
-    sys.stdout.write("*Last Updated: " + time.asctime() + "*\n")
+sys.stdout.write("\n")
+sys.stdout.write("*Last Updated: " + time.asctime() + "*\n")
