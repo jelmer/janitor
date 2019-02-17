@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import sys
+import time
 from breezy.plugins.propose.propose import hosters
 
 open_proposals = []
@@ -61,6 +62,8 @@ cherry-pick.
 
     for mp in closed_proposals:
         f.write('- %s\n' % mp.url)
+
+    print("*Last Updated: " + time.asctime() + "*")
 
 
 write_report(sys.stdout, open_proposals, merged_proposals, closed_proposals)
