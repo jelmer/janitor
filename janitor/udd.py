@@ -27,9 +27,10 @@ import distro_info
 
 class PackageData(object):
 
-    def __init__(self, name, vcs_type, vcs_url, maintainer_email,
+    def __init__(self, name, version, vcs_type, vcs_url, maintainer_email,
                  uploader_emails):
         self.name = name
+        self.version = version
         self.vcs_type = vcs_type
         self.vcs_url = vcs_url
         self.maintainer_email = maintainer_email
@@ -68,10 +69,10 @@ class UDD(object):
             "SELECT source, vcs_type, vcs_url, maintainer_email, uploaders "
             "FROM sources WHERE source = %s order by version desc", (name, ))
         row = cursor.fetchone()
-        uploader_emails = extract_uploader_emails(row[4])
+        uploader_emails = extract_uploader_emails(row[5])
         return PackageData(
-                name=row[0], vcs_type=row[1], vcs_url=row[2],
-                maintainer_email=row[3],
+                name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
+                maintainer_email=row[4],
                 uploader_emails=uploader_emails)
 
     def iter_ubuntu_source_packages(self, packages=None, shuffle=False):
@@ -81,20 +82,21 @@ class UDD(object):
         release = distro_info.UbuntuDistroInfo().devel()
         cursor = self._conn.cursor()
         cursor.execute("""\
-select distinct source, vcs_type, vcs_url, maintainer_email, uploaders \
+select distinct source, version, vcs_type, vcs_url, maintainer_email, uploaders \
 FROM ubuntu_sources WHERE vcs_type != '' AND \
 release = %s AND version LIKE '%%ubuntu%%' AND \
 NOT EXISTS (SELECT * FROM sources WHERE \
 source = ubuntu_sources.source)""" + (
                 " AND source IN %s" if packages is not None else ""),
                 ((release, ) +
-                    ((tuple(packages),) if packages is not None else ())))
+                    ((tuple(packages),) if packages is not None else ())) +
+                """ order by source, version desc""")
         row = cursor.fetchone()
         while row:
-            uploader_emails = extract_uploader_emails(row[4])
+            uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
-                name=row[0], vcs_type=row[1], vcs_url=row[2],
-                maintainer_email=row[3],
+                name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
+                maintainer_email=row[4],
                 uploader_emails=uploader_emails)
             row = cursor.fetchone()
 
@@ -108,12 +110,12 @@ source = ubuntu_sources.source)""" + (
         def process(cursor):
             row = cursor.fetchone()
             while row:
-                package_rows[row[0]] = row[:5]
-                package_tags.setdefault(row[0], []).append(row[5])
+                package_rows[row[0]] = row[:6]
+                package_tags.setdefault((row[0], row[1]), []).append(row[6])
                 row = cursor.fetchone()
         args = [tuple(tags)]
         query = """\
-select distinct sources.source, sources.vcs_type, sources.vcs_url,\
+select distinct sources.source, sources.version, sources.vcs_type, sources.vcs_url,\
 sources.maintainer_email, sources.uploaders, lintian.tag from lintian \
 inner join sources on sources.source = lintian.package and \
 sources.version = lintian.package_version and \
@@ -122,11 +124,12 @@ and vcs_type != ''"""
         if packages is not None:
             query += " AND sources.source IN %s"
             args.append(tuple(packages))
+        query += " order by sources.source, sources.version desc"
         cursor.execute(query, args)
         process(cursor)
         args = [tuple(tags)]
         query = """\
-select distinct sources.source, sources.vcs_type, sources.vcs_url,\
+select distinct sources.source, sources.version, sources.vcs_type, sources.vcs_url,\
 sources.maintainer_email, sources.uploaders, lintian.tag from \
 lintian inner join packages on packages.package = lintian.package \
 and packages.version = lintian.package_version \
@@ -137,6 +140,7 @@ and vcs_type != ''"""
         if packages is not None:
             query += " AND sources.source IN %s"
             args.append(tuple(packages))
+        query += " order by sources.source, sources.version desc"
         cursor.execute(query, args)
         process(cursor)
         package_values = package_rows.values()
@@ -145,32 +149,34 @@ and vcs_type != ''"""
             import random
             random.shuffle(package_values)
         for row in package_values:
-            uploader_emails = extract_uploader_emails(row[4])
+            uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
-                name=row[0], vcs_type=row[1], vcs_url=row[2],
-                maintainer_email=row[3], uploader_emails=uploader_emails
-                ), package_tags[row[0]]
+                name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
+                maintainer_email=row[4], uploader_emails=uploader_emails
+                ), package_tags[row[0],row[1]]
 
     def iter_packages_with_new_upstream(self, packages=None):
         cursor = self._conn.cursor()
 
-        args = ()
+        args = []
         query = """\
-select sources.source, sources.vcs_type, sources.vcs_url, \
+select sources.source, sources.version, sources.vcs_type, sources.vcs_url, \
 sources.maintainer_email, sources.uploaders from upstream \
 inner join sources on upstream.version = sources.version \
 and upstream.source = sources.source where \
-status = 'newer package available' order by sources.source, sources.version asc
+status = 'newer package available' and \
+sources.vcs_url != '' \
 """
         if packages is not None:
             query += " AND upstream.source IN %s"
             args.append(tuple(packages))
+        query += " order by sources.source, sources.version desc"
         cursor.execute(query, args)
         row = cursor.fetchone()
         while row:
-            uploader_emails = extract_uploader_emails(row[4])
+            uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
-                name=row[0], vcs_type=row[1], vcs_url=row[2],
-                maintainer_email=row[3], uploader_emails=uploader_emails
+                name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
+                maintainer_email=row[4], uploader_emails=uploader_emails
                 )
             row = cursor.fetchone()
