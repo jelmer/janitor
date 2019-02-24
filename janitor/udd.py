@@ -115,7 +115,7 @@ source = ubuntu_sources.source)""" + (
         query = """\
 select distinct sources.source, sources.vcs_type, sources.vcs_url,\
 sources.maintainer_email, sources.uploaders, lintian.tag from lintian \
-full outer join sources on sources.source = lintian.package and \
+inner join sources on sources.source = lintian.package and \
 sources.version = lintian.package_version and \
 sources.release = 'sid' where tag in %s and package_type = 'source' \
 and vcs_type != ''"""
@@ -150,3 +150,27 @@ and vcs_type != ''"""
                 name=row[0], vcs_type=row[1], vcs_url=row[2],
                 maintainer_email=row[3], uploader_emails=uploader_emails
                 ), package_tags[row[0]]
+
+    def iter_packages_with_new_upstream(self, packages=None):
+        cursor = self._conn.cursor()
+
+        args = ()
+        query = """\
+select sources.source, sources.vcs_type, sources.vcs_url, \
+sources.maintainer_email, sources.uploaders from upstream \
+inner join sources on upstream.version = sources.version \
+and upstream.source = sources.source where \
+status = 'newer package available' order by sources.source, sources.version asc
+"""
+        if packages is not None:
+            query += " AND upstream.source IN %s"
+            args.append(tuple(packages))
+        cursor.execute(query, args)
+        row = cursor.fetchone()
+        while row:
+            uploader_emails = extract_uploader_emails(row[4])
+            yield PackageData(
+                name=row[0], vcs_type=row[1], vcs_url=row[2],
+                maintainer_email=row[3], uploader_emails=uploader_emails
+                )
+            row = cursor.fetchone()
