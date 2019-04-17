@@ -66,7 +66,7 @@ from breezy.plugins.propose.propose import (
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.build import build
+from janitor.build import build, add_dummy_changelog_entry  # noqa: E402
 from janitor.schedule import schedule_udd  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
@@ -275,6 +275,9 @@ def process_package(vcs_url, mode, env, command):
                 note('%s: post-check failed, skipping', pkg)
                 return False
         if args.build_command:
+            add_dummy_changelog_entry(
+                local_tree.basedir, 'janitor+lintian', 'lintian-fixes',
+                'Build lintian fixes.')
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 try:
                     build(local_tree, outf=f, build_command=args.build_command,

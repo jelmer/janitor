@@ -1,1 +1,8 @@
 - Get a more generic e-mail address for the janitor (janitor@debian.net)
+
+- per package status pages:
+  * recent runs with logs
+  * instructions on how to install from apt
+
+- for runs:
+  * add command to reproduce locally ("debian-svp ...")
