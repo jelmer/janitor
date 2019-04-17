@@ -1,0 +1,9 @@
+[Unit]
+Description=Keep apt repository up to date
+
+[Service]
+Type=forking
+ExecStart=mini-dinstall -c ~/debian-janitor/mini-dinstall.conf
+
+[Install]
+WantedBy=default.target
