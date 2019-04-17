@@ -34,7 +34,8 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
     """
     subprocess.check_call(
         ["dch", "-l" + suffix, "--no-auto-nmu", "--distribution", suite,
-            "--force-distribution", message], cwd=directory)
+            "--force-distribution", message], cwd=directory,
+        stderr=subprocess.DEVNULL)
 
 
 def build(local_tree, outf, build_command='build', incoming=None):
