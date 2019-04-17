@@ -20,14 +20,13 @@ lintian-brush-tags.txt::
 status.rst:
 	python3 ../report-state.py > $@
 
-pkg/index.rst:
-	mkdir -p $(@D)
-	python3 ../report-pkg.py > $@
+pkg:
+	python3 ../report-pkg.py pkg/
 
 history.rst:
 	python3 ../report-history.py > $@
 
-.PHONY: help Makefile
+.PHONY: help Makefile pkg
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
