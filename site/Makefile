@@ -20,6 +20,10 @@ lintian-brush-tags.txt::
 status.rst:
 	python3 ../report-state.py > $@
 
+pkg/index.rst:
+	mkdir -p $(@D)
+	python3 ../report-pkg.py > $@
+
 history.rst:
 	python3 ../report-history.py > $@
 
