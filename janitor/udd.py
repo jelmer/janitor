@@ -81,11 +81,12 @@ class UDD(object):
             raise NotImplementedError(self.iter_ubuntu_source_packages)
         release = distro_info.UbuntuDistroInfo().devel()
         cursor = self._conn.cursor()
-        cursor.execute("""\
-select distinct source, version, vcs_type, vcs_url, maintainer_email, uploaders \
-FROM ubuntu_sources WHERE vcs_type != '' AND \
-release = %s AND version LIKE '%%ubuntu%%' AND \
-NOT EXISTS (SELECT * FROM sources WHERE \
+        cursor.execute("""
+SELECT
+    distinct source, version, vcs_type, vcs_url, maintainer_email, uploaders
+FROM ubuntu_sources WHERE vcs_type != '' AND
+release = %s AND version LIKE '%%ubuntu%%' AND
+NOT EXISTS (SELECT * FROM sources WHERE
 source = ubuntu_sources.source)""" + (
                 " AND source IN %s" if packages is not None else ""),
                 ((release, ) +
@@ -114,13 +115,22 @@ source = ubuntu_sources.source)""" + (
                 package_tags.setdefault((row[0], row[1]), []).append(row[6])
                 row = cursor.fetchone()
         args = [tuple(tags)]
-        query = """\
-select distinct sources.source, sources.version, sources.vcs_type, sources.vcs_url,\
-sources.maintainer_email, sources.uploaders, lintian.tag from lintian \
-inner join sources on sources.source = lintian.package and \
-sources.version = lintian.package_version and \
-sources.release = 'sid' where tag in %s and package_type = 'source' \
-and vcs_type != ''"""
+        query = """
+SELECT DISTINCT
+    sources.source,
+    sources.version,
+    sources.vcs_type,
+    sources.vcs_url,
+    sources.maintainer_email,
+    sources.uploaders,
+    lintian.tag
+FROM
+    lintian
+INNER JOIN sources ON
+    sources.source = lintian.package AND
+    sources.version = lintian.package_version AND
+    sources.release = 'sid'
+WHERE tag IN %s AND package_type = 'source' AND vcs_type != ''"""
         if packages is not None:
             query += " AND sources.source IN %s"
             args.append(tuple(packages))
@@ -129,9 +139,17 @@ and vcs_type != ''"""
         process(cursor)
         args = [tuple(tags)]
         query = """\
-select distinct sources.source, sources.version, sources.vcs_type, sources.vcs_url,\
-sources.maintainer_email, sources.uploaders, lintian.tag from \
-lintian inner join packages on packages.package = lintian.package \
+SELECT DISTINCT
+    sources.source,
+    sources.version,
+    sources.vcs_type,
+    sources.vcs_url,
+    sources.maintainer_email,
+    sources.uploaders,
+    lintian.tag
+FROM
+    lintian
+INNER JOIN packages ON packages.package = lintian.package \
 and packages.version = lintian.package_version \
 inner join sources on sources.version = packages.version and \
 sources.source = packages.source and sources.release = 'sid' \
@@ -150,10 +168,10 @@ and vcs_type != ''"""
             random.shuffle(package_values)
         for row in package_values:
             uploader_emails = extract_uploader_emails(row[5])
-            yield PackageData(
+            yield (PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
-                maintainer_email=row[4], uploader_emails=uploader_emails
-                ), package_tags[row[0],row[1]]
+                maintainer_email=row[4], uploader_emails=uploader_emails),
+                package_tags[row[0], row[1]])
 
     def iter_packages_with_new_upstream(self, packages=None):
         cursor = self._conn.cursor()

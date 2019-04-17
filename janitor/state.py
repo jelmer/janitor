@@ -61,7 +61,15 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
 def iter_runs():
     cur = con.cursor()
     cur.execute(
-        "SELECT run.id, command, start_time, finish_time, description, package.name, merge_proposal.url FROM run JOIN package ON package.id = run.package_id LEFT JOIN merge_proposal ON merge_proposal.id = run.merge_proposal_id ORDER BY start_time DESC")
+        """
+SELECT
+    run.id, command, start_time, finish_time, description, package.name,
+    merge_proposal.url
+FROM
+    run
+JOIN package ON package.id = run.package_id
+LEFT JOIN merge_proposal ON merge_proposal.id = run.merge_proposal_id
+ORDER BY start_time DESC""")
     row = cur.fetchone()
     while row:
         yield (row[0], (row[2], row[3]), row[1], row[4], row[5], row[6])
@@ -71,7 +79,14 @@ def iter_runs():
 def get_maintainer_email(vcs_url):
     cur = con.cursor()
     cur.execute(
-        "SELECT maintainer_email FROM package LEFT JOIN merge_proposal ON merge_proposal.package_id = package.id WHERE merge_proposal.url = ?",
+        """
+SELECT
+    maintainer_email
+FROM
+    package
+LEFT JOIN merge_proposal ON merge_proposal.package_id = package.id
+WHERE
+    merge_proposal.url = ?""",
         (vcs_url, ))
     row = cur.fetchone()
     if row:

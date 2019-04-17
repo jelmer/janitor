@@ -25,14 +25,19 @@ import subprocess
 import sys
 import uuid
 
-from prometheus_client import CollectorRegistry, Counter, Gauge, push_to_gateway
+from prometheus_client import (
+    CollectorRegistry,
+    Counter,
+    Gauge,
+    push_to_gateway,
+)
 
 import silver_platter   # noqa: F401
 from silver_platter.debian import (
     propose_or_push,
     BuildFailedError,
     MissingUpstreamTarball,
-    )
+)
 from silver_platter.debian.lintian import (
     LintianFixer,
     PostCheckFailed,
@@ -40,28 +45,28 @@ from silver_platter.debian.lintian import (
     create_mp_description,
     parse_mp_description,
     DEFAULT_ADDON_FIXERS,
-    )
+)
 
 from breezy import (
     errors,
-    )
+)
 
 from breezy.branch import Branch
 from breezy.trace import (
     note,
     warning,
-    )
+)
 
 from breezy.plugins.propose.propose import (
     NoSuchProject,
     UnsupportedHoster,
     hosters,
-    )
+)
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from janitor import state
-from janitor.schedule import schedule_udd
+from janitor import state  # noqa: E402
+from janitor.schedule import schedule_udd  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
 parser.add_argument("packages", nargs='*')
@@ -100,6 +105,8 @@ parser.add_argument('--log-dir',
                     type=str, default='public_html/pkg')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
+parser.add_argument('--incoming', type=str,
+                    help='Path to copy built Debian packages into.')
 parser.add_argument(
     '--max-mps-per-maintainer',
     default=5,
@@ -110,7 +117,8 @@ registry = CollectorRegistry()
 packages_processed_count = Counter(
     'package_count', 'Number of packages processed.', registry=registry)
 open_proposal_count = Gauge(
-    'open_proposal_count', 'Number of open proposals.', labelnames=('maintainer',), registry=registry)
+    'open_proposal_count', 'Number of open proposals.',
+    labelnames=('maintainer',), registry=registry)
 fixer_count = Counter(
     'fixer_count', 'Number of selected fixers.', registry=registry)
 last_success_gauge = Gauge(
@@ -243,7 +251,7 @@ def process_package(vcs_url, mode, env, command):
         def pre_check(local_tree):
             try:
                 subprocess.check_call(
-                        args.pre_check, shell=True, cwd=local_tree.basedir)
+                    args.pre_check, shell=True, cwd=local_tree.basedir)
             except subprocess.CalledProcessError:
                 note('%r: pre-check failed, skipping', pkg)
                 return False
@@ -277,14 +285,18 @@ def process_package(vcs_url, mode, env, command):
 
     try:
         main_branch = Branch.open(
-                vcs_url, possible_transports=possible_transports)
+            vcs_url, possible_transports=possible_transports)
     except socket.error:
-        return JanitorResult(pkg, log_id, start_time, datetime.now(), 'ignoring, socket error')
+        return JanitorResult(
+            pkg, log_id, start_time, datetime.now(), 'ignoring, socket error')
     except errors.NotBranchError as e:
-        return JanitorResult(pkg, log_id, start_time, datetime.now(), 'Branch does not exist: %s' % e)
+        return JanitorResult(
+            pkg, log_id, start_time, datetime.now(),
+            'Branch does not exist: %s' % e)
     except errors.UnsupportedProtocol:
         return JanitorResult(
-            pkg, log_id, start_time, datetime.now(), 'Branch available over unsupported protocol')
+            pkg, log_id, start_time, datetime.now(),
+            'Branch available over unsupported protocol')
     except errors.ConnectionError as e:
         return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
     except errors.PermissionDenied as e:
@@ -299,18 +311,18 @@ def process_package(vcs_url, mode, env, command):
         else:
             fixers = available_fixers
         branch_changer = JanitorLintianFixer(
-                pkg, fixers=[fixer_scripts[fixer] for fixer in fixers],
-                update_changelog=subargs.update_changelog,
-                compat_release=debian_info.stable(),
-                pre_check=pre_check, post_check=post_check,
-                propose_addon_only=args.propose_addon_only,
-                committer=committer, log_id=log_id)
+            pkg, fixers=[fixer_scripts[fixer] for fixer in fixers],
+            update_changelog=subargs.update_changelog,
+            compat_release=debian_info.stable(),
+            pre_check=pre_check, post_check=post_check,
+            propose_addon_only=args.propose_addon_only,
+            committer=committer, log_id=log_id)
         try:
             result = propose_or_push(
-                    main_branch, "lintian-fixes", branch_changer, mode,
-                    possible_transports=possible_transports,
-                    possible_hosters=possible_hosters,
-                    refresh=args.refresh, dry_run=args.dry_run)
+                main_branch, "lintian-fixes", branch_changer, mode,
+                possible_transports=possible_transports,
+                possible_hosters=possible_hosters,
+                refresh=args.refresh, dry_run=args.dry_run)
         except UnsupportedHoster:
             return JanitorResult(
                 pkg, log_id, start_time, datetime.now(), 'Hosted unsupported.')
@@ -367,7 +379,7 @@ def process_package(vcs_url, mode, env, command):
 
 for (vcs_url, mode, env, command) in todo:
     maintainer_email = env['MAINTAINER_EMAIL']
-    if (args.max_mps_per_maintainer and
+    if (args.max_mps_per_maintainer and \
             open_mps_per_maintainer.get(maintainer_email, 0)
             >= args.max_mps_per_maintainer):
         warning(

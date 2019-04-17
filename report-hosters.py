@@ -25,7 +25,7 @@ renames = {
     'git.code.sf.net': 'sourceforge',
     'hg.code.sf.net': 'sourceforge',
     'svn.code.sf.net': 'sourceforge',
-    }
+}
 
 udd = UDD.public_udd_mirror()
 cursor = udd._conn.cursor()
@@ -56,7 +56,8 @@ with open('hosters.csv', 'w') as f:
         f.write('%s,%d\n' % (host, count))
 
 ordered_hosters = (
-    ordered_hosters[:5] + [('other', sum(map(operator.itemgetter(1), ordered_hosters[5:])))])
+    ordered_hosters[:5] + [
+        ('other', sum(map(operator.itemgetter(1), ordered_hosters[5:])))])
 
 labels = list(map(operator.itemgetter(0), ordered_hosters))
 sizes = list(map(operator.itemgetter(1), ordered_hosters))

@@ -15,3 +15,18 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import subprocess
+
+
+def add_dummy_changelog_entry(directory, suffix, suite, message):
+    """Add a dummy changelog entry to a package.
+
+    Args:
+      directory: Directory to run in
+      suffix: Suffix for the version
+      suite: Debian suite
+      message: Changelog message
+    """
+    subprocess.check_call(
+        ["dch", "-i", "-l" + suffix, "--no-auto-nmu", "--distribution", suite,
+            "--force-distribution", message], cwd=directory)
