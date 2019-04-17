@@ -43,6 +43,7 @@ def build(local_tree, outf, build_command='build', incoming=None):
     if incoming:
         args.append('--result-dir=%s' % incoming)
     outf.write('Running %r' % (args, ))
+    outf.flush()
     try:
         subprocess.check_call(
             args, cwd=local_tree.basedir, stdout=outf, stderr=outf)
