@@ -58,6 +58,12 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     con.commit()
 
 
+def iter_packages():
+    cur = con.cursor()
+    cur.execute("SELECT name FROM package ORDER BY name ASC")
+    return cur.fetchall()
+
+
 def iter_runs():
     cur = con.cursor()
     cur.execute(
