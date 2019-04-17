@@ -66,6 +66,7 @@ from breezy.plugins.propose.propose import (
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+from janitor.build import build
 from janitor.schedule import schedule_udd  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
@@ -91,9 +92,9 @@ parser.add_argument('--pre-check',
 parser.add_argument('--post-check',
                     help='Command to run to check package before pushing.',
                     type=str)
-parser.add_argument('--verify-command',
+parser.add_argument('--build-command',
                     help='Build package to verify it.', type=str,
-                    default='brz bd --builder=\'sbuild -v\'')
+                    default='sbuild -v')
 parser.add_argument('--shuffle',
                     help='Shuffle order in which packages are processed.',
                     action='store_true')
@@ -109,7 +110,7 @@ parser.add_argument('--incoming', type=str,
                     help='Path to copy built Debian packages into.')
 parser.add_argument(
     '--max-mps-per-maintainer',
-    default=5,
+    default=0,
     type=int, help='Maximum number of open merge proposals per maintainer.')
 args = parser.parse_args()
 
@@ -165,24 +166,29 @@ if args.fixers:
 
 fixer_count.inc(len(available_fixers))
 
-open_proposals = []
-for name, hoster_cls in hosters.items():
-    for instance in hoster_cls.iter_instances():
-        open_proposals.extend(instance.iter_my_proposals(status='open'))
+if args.max_mps_per_maintainer or args.prometheus:
+    # Don't put in the effort if we don't need the results.
+    # Querying GitHub in particular is quite slow.
+    open_proposals = []
+    for name, hoster_cls in hosters.items():
+        for instance in hoster_cls.iter_instances():
+            note('Checking open merge proposals on %r...', instance)
+            open_proposals.extend(instance.iter_my_proposals(status='open'))
 
-open_mps_per_maintainer = {}
-for proposal in open_proposals:
-    maintainer_email = state.get_maintainer_email(proposal.url)
-    if maintainer_email is None:
-        warning('No maintainer email known for %s', proposal.url)
-        continue
-    open_mps_per_maintainer.setdefault(maintainer_email, 0)
-    open_mps_per_maintainer[maintainer_email] += 1
-    open_proposal_count.labels(maintainer=maintainer_email).inc()
+    open_mps_per_maintainer = {}
+    for proposal in open_proposals:
+        maintainer_email = state.get_maintainer_email(proposal.url)
+        if maintainer_email is None:
+            warning('No maintainer email known for %s', proposal.url)
+            continue
+        open_mps_per_maintainer.setdefault(maintainer_email, 0)
+        open_mps_per_maintainer[maintainer_email] += 1
+        open_proposal_count.labels(maintainer=maintainer_email).inc()
 
 possible_transports = []
 possible_hosters = []
 
+note('Querying UDD...')
 todo = schedule_udd(
     args.policy, args.propose_addon_only, args.packages,
     available_fixers, args.shuffle)
@@ -268,14 +274,12 @@ def process_package(vcs_url, mode, env, command):
             except subprocess.CalledProcessError:
                 note('%s: post-check failed, skipping', pkg)
                 return False
-        if args.verify_command:
+        if args.build_command:
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 try:
-                    subprocess.check_call(
-                        args.verify_command, shell=True,
-                        cwd=local_tree.basedir,
-                        stdout=f, stderr=f)
-                except subprocess.CalledProcessError:
+                    build(local_tree, outf=f, build_command=args.build_command,
+                          incoming=args.incoming)
+                except BuildFailedError:
                     note('%s: build failed, skipping', pkg)
                     return False
         return True
