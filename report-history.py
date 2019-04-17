@@ -5,7 +5,7 @@ import sys
 import time
 sys.path.insert(0, os.path.dirname(__file__))
 
-from janitor import state
+from janitor import state  # noqa: E402
 
 
 sys.stdout.write("""\
@@ -15,8 +15,8 @@ History
 """)
 
 
-
-for run_id, times, command, description, package, proposal_url in state.iter_runs():
+for run_id, times, command, description, package, proposal_url in (
+        state.iter_runs()):
     sys.stdout.write(
         '- `%(package)s <https://packages.debian.org/%(package)s>`_: '
         'Run `%(run_id)s <pkg/%(package)s/logs/%(run_id)s>`_.\n' %
