@@ -33,7 +33,7 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
       message: Changelog message
     """
     subprocess.check_call(
-        ["dch", "-i", "-l" + suffix, "--no-auto-nmu", "--distribution", suite,
+        ["dch", "-l" + suffix, "--no-auto-nmu", "--distribution", suite,
             "--force-distribution", message], cwd=directory)
 
 
@@ -41,6 +41,7 @@ def build(local_tree, outf, build_command='build', incoming=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if incoming:
         args.append('--result-dir=%s' % incoming)
+    outf.write('Running %r' % (args, ))
     try:
         subprocess.check_call(
             args, cwd=local_tree.basedir, stdout=outf, stderr=outf)
