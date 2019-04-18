@@ -140,7 +140,7 @@ To stop further merge proposals, reply "opt out".
 
 LOG_BLURB = """
 Build and test logs for this branch can be found at
-https://janitor.debian.net/pkg/%(package)s/logs/%(log_id)s.
+https://janitor.debian.net/pkg/%(package)s/%(log_id)s/.
 """
 
 
