@@ -47,7 +47,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         cur.execute(
             "REPLACE INTO merge_proposal (url, package_id) VALUES (?, ?)",
             (merge_proposal_url, package_id))
-        cur.execute('SELECT id FROM merge_proposal WHERE url = ?', (url, ))
+        cur.execute('SELECT id FROM merge_proposal WHERE url = ?', (merge_proposal_url, ))
         merge_proposal_id = cur.fetchone()[0]
     else:
         merge_proposal_id = None
