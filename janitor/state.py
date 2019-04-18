@@ -41,12 +41,14 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         "REPLACE INTO package (name, branch_url, maintainer_email) "
         "VALUES (?, ?, ?)",
         (name, vcs_url, maintainer_email))
-    package_id = cur.lastrowid
+    cur.execute('SELECT id FROM package WHERE name = ?', (name, ))
+    package_id = cur.fetchrow()[0]
     if merge_proposal_url:
         cur.execute(
             "REPLACE INTO merge_proposal (url, package_id) VALUES (?, ?)",
             (merge_proposal_url, package_id))
-        merge_proposal_id = cur.lastrowid
+        cur.execute('SELECT id FROM merge_proposal WHERE url = ?', (url, ))
+        merge_proposal_id = cur.fetchrow()[0]
     else:
         merge_proposal_id = None
     cur.execute(
@@ -62,6 +64,7 @@ def iter_packages():
     cur = con.cursor()
     cur.execute("""
 SELECT
+  id,
   name,
   maintainer_email,
   branch_url
@@ -72,18 +75,23 @@ ORDER BY name ASC
     return cur.fetchall()
 
 
-def iter_runs():
+def iter_runs(package=None):
     cur = con.cursor()
-    cur.execute(
-        """
+    query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
     merge_proposal.url
 FROM
     run
-JOIN package ON package.id = run.package_id
+left JOIN package ON package.id = run.package_id
 LEFT JOIN merge_proposal ON merge_proposal.id = run.merge_proposal_id
-ORDER BY start_time DESC""")
+"""
+    args = ()
+    if package is not None:
+        query += " WHERE package.name = ? "
+        args += (package,)
+    query += "ORDER BY start_time DESC"
+    cur.execute(query, args)
     row = cur.fetchone()
     while row:
         yield (row[0], (row[2], row[3]), row[1], row[4], row[5], row[6])
@@ -106,3 +114,19 @@ WHERE
     if row:
         return row[0]
     return None
+
+
+def iter_proposals(package):
+    cur = con.cursor()
+    cur.execute(
+        """
+SELECT
+    url
+FROM
+    merge_proposal
+LEFT JOIN package ON merge_proposal.package_id = package.id
+WHERE
+    package.name = ?
+""",
+        (package, ))
+    return cur.fetchall()
