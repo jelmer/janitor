@@ -18,8 +18,8 @@ History
 for run_id, times, command, description, package, proposal_url in (
         state.iter_runs()):
     sys.stdout.write(
-        '- `%(package)s <https://packages.debian.org/%(package)s>`_: '
-        'Run `%(run_id)s <pkg/%(package)s/logs/%(run_id)s>`_.\n' %
+        '- `%(package)s <pkg/%(package)s>`_: '
+        'Run `%(run_id)s <pkg/%(package)s/%(run_id)s.html>`_.\n' %
         {'run_id': run_id, 'package': package})
     sys.stdout.write('  %s\n' % description)
     if proposal_url:
