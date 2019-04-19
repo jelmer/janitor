@@ -92,6 +92,29 @@ parser.add_argument(
     type=int, help='Maximum number of open merge proposals per maintainer.')
 args = parser.parse_args()
 
+
+class JanitorResult(object):
+
+    def __init__(self, pkg, log_id, start_time, finish_time, description,
+                 proposal_url=None, is_new=None):
+        self.package = pkg
+        self.log_id = log_id
+        self.start_time = start_time
+        self.finish_time = finish_time
+        self.description = description
+        self.proposal_url = proposal_url
+        self.is_new = is_new
+
+    @classmethod
+    def from_worker_result(cls, worker_result):
+        return JanitorResult(
+            worker_result.pkg, worker_result.log_id,
+            worker_result.start_time,
+            worker_result.finish_time,
+            worker_result.proposal_url,
+            worker_result.is_new)
+
+
 registry = CollectorRegistry()
 packages_processed_count = Counter(
     'package_count', 'Number of packages processed.', registry=registry)
@@ -159,7 +182,7 @@ for (vcs_url, mode, env, command) in todo:
         # in the future.
         mode = "propose"
     packages_processed_count.inc()
-    result = process_package(
+    worker_result = process_package(
         vcs_url, mode, env, command,
         output_directory=args.log_path,
         dry_run=args.dry_run, refresh=args.refresh,
@@ -169,6 +192,7 @@ for (vcs_url, mode, env, command) in todo:
         post_check=args.post_check,
         possible_transports=possible_transports,
         possible_hosters=possible_hosters)
+    result = JanitorResult.from_worker_result(worker_result)
     if result.proposal_url:
         note('%s: %s: %s', result.package, result.description,
              result.proposal_url)
