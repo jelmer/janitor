@@ -23,6 +23,7 @@ from prometheus_client import (
     Counter,
     Gauge,
     push_to_gateway,
+    REGISTRY,
 )
 
 import silver_platter   # noqa: F401
@@ -131,4 +132,5 @@ process_queue(
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
-    push_to_gateway(args.prometheus, job='propose-lintian-fixes')
+    push_to_gateway(
+        args.prometheus, job='propose-lintian-fixes', registry=REGISTRY)
