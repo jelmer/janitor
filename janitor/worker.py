@@ -201,7 +201,7 @@ def process_package(vcs_url, mode, env, command, output_directory,
     elif command[0] == 'new-upstream':
         subargs = new_upstream_subparser.parse_args(command[1:])
         build_version_suffix = 'janitor+newupstream'
-        build_suite = 'upstream-version'
+        build_suite = 'upstream-releases'
     else:
         raise AssertionError('unknown subcommand %s' % command[0])
     log_id = str(uuid.uuid4())

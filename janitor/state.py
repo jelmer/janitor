@@ -40,14 +40,15 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     """
     cur = con.cursor()
     cur.execute(
-        "REPLACE INTO package (name, branch_url, maintainer_email) "
+        "insert or ignore INTO package (name, branch_url, maintainer_email) "
         "VALUES (?, ?, ?)",
         (name, vcs_url, maintainer_email))
     if merge_proposal_url:
         cur.execute(
-            "REPLACE INTO merge_proposal (url, package) VALUES (?, ?)",
-            (merge_proposal_url, package))
-        cur.execute('SELECT id FROM merge_proposal WHERE url = ?', (merge_proposal_url, ))
+            "insert or ignore into merge_proposal (url, package) VALUES (?, ?)",
+            (merge_proposal_url, name))
+        cur.execute('SELECT id FROM merge_proposal WHERE url = ?',
+                    (merge_proposal_url, ))
     else:
         merge_proposal_url = None
     cur.execute(
@@ -133,6 +134,21 @@ WHERE
     return cur.fetchall()
 
 
+def iter_all_proposals():
+    cur = con.cursor()
+    cur.execute("""
+SELECT
+    merge_proposal.url, merge_proposal.status, package.name
+FROM
+    merge_proposal
+LEFT JOIN package ON merge_proposal.package = package.name
+""")
+    row = cur.fetchone()
+    while row:
+        yield row
+        row = cur.fetchone()
+
+
 def iter_queue():
     cur = con.cursor()
     cur.execute(
@@ -176,11 +192,26 @@ def add_to_queue(vcs_url, mode, env, command):
     assert env['PACKAGE']
     cur = con.cursor()
     cur.execute(
-        "REPLACE INTO package (name, branch_url, maintainer_email) "
+        "insert or ignore INTO package (name, branch_url, maintainer_email) "
         "VALUES (?, ?, ?)",
         (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL']))
     cur.execute(
-        "INSERT INTO queue (package, command, committer, mode) "
+        "INSERT or ignore INTO queue (package, command, committer, mode) "
         "VALUES (?, ?, ?, ?)", (
             env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode))
+    con.commit()
+
+
+def set_proposal_status(url, status):
+    cur = con.cursor()
+    cur.execute("""
+INSERT OR IGNORE INTO merge_proposal (url, status) VALUES (?, ?)
+""", (url, status))
+    cur.execute("""
+UPDATE
+    merge_proposal
+SET
+    status = ?
+WHERE url = ?
+""", (status, url))
     con.commit()

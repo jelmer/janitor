@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS package (
    primary key(name), unique(branch_url)
 );
 CREATE TABLE IF NOT EXISTS merge_proposal (
-   package string not null,
+   package string,
    url string not null,
    status string check(status in ("open", "closed", "merged")) NULL DEFAULT NULL,
    foreign key (package) references package(name),
