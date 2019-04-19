@@ -138,8 +138,9 @@ subparser.add_argument(
 
 def process_package(vcs_url, mode, env, command, output_directory,
                     incoming=None, dry_run=False, refresh=False,
-                    build_command=None, pre_check=None, post_check=None,
-                    possible_transports=None, possible_hosters=None):
+                    build_command=None, pre_check_command=None,
+                    post_check_command=None, possible_transports=None,
+                    possible_hosters=None):
     pkg = env['PACKAGE']
     committer = env['COMMITTER']
     subargs = subparser.parse_args(command[1:])
@@ -147,11 +148,11 @@ def process_package(vcs_url, mode, env, command, output_directory,
     log_path = os.path.join(output_directory, env['PACKAGE'], 'logs', log_id)
     os.makedirs(log_path)
 
-    if pre_check:
+    if pre_check_command:
         def pre_check(local_tree):
             try:
                 subprocess.check_call(
-                    pre_check, shell=True, cwd=local_tree.basedir)
+                    pre_check_command, shell=True, cwd=local_tree.basedir)
             except subprocess.CalledProcessError:
                 note('%r: pre-check failed, skipping', pkg)
                 return False
@@ -160,10 +161,10 @@ def process_package(vcs_url, mode, env, command, output_directory,
         pre_check = None
 
     def post_check(local_tree, since_revid):
-        if post_check:
+        if post_check_command:
             try:
                 subprocess.check_call(
-                    post_check, shell=True, cwd=local_tree.basedir,
+                    post_check_command, shell=True, cwd=local_tree.basedir,
                     env={'SINCE_REVID': since_revid})
             except subprocess.CalledProcessError:
                 note('%s: post-check failed, skipping', pkg)
@@ -273,3 +274,58 @@ def process_package(vcs_url, mode, env, command, output_directory,
                     return JanitorResult(
                         pkg, log_id, start_time, datetime.now(),
                         'Nothing to do.')
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog='janitor-worker',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '--output-directory', type=str,
+        help='Output directory', default='.')
+    parser.add_argument(
+        '--branch-url', type=str,
+        help='URL of branch to build.')
+    parser.add_argument(
+        "--dry-run",
+        help="Create branches but don't push or propose anything.",
+        action="store_true", default=False)
+    parser.add_argument(
+        '--refresh', action="store_true",
+        help='Refresh branch (discard current branch) and '
+        'create from scratch')
+    parser.add_argument(
+        '--pre-check',
+        help='Command to run to check whether to process package.',
+        type=str)
+    parser.add_argument(
+        '--post-check',
+        help='Command to run to check package before pushing.',
+        type=str, default=None)
+    parser.add_argument(
+        '--build-command',
+        help='Build package to verify it.', type=str,
+        default='sbuild -v')
+    parser.add_argument(
+        '--mode',
+        help='Mode for pushing', choices=['push', 'attempt-push', 'propose'],
+        default="propose", type=str)
+
+    parser.add_argument('command', nargs=argparse.REMAINDER)
+
+    args = parser.parse_args(argv)
+    if args.branch_url is None:
+        parser.print_usage()
+        return 1
+    process_package(
+        args.branch_url, args.mode, os.environ,
+        args.command, output_directory=args.output_directory,
+        incoming=args.output_directory, dry_run=args.dry_run,
+        refresh=args.refresh, build_command=args.build_command,
+        pre_check_command=args.pre_check,
+        post_check_command=args.post_check)
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main())
