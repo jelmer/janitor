@@ -22,6 +22,7 @@ import os
 from prometheus_client import (
     Gauge,
     push_to_gateway,
+    REGISTRY,
 )
 
 import silver_platter   # noqa: F401
@@ -106,4 +107,5 @@ process_queue(
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
-    push_to_gateway(args.prometheus, job='propose-new-upstreams')
+    push_to_gateway(args.prometheus, job='propose-new-upstreams',
+                    registry=REGISTRY)

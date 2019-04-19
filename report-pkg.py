@@ -81,7 +81,7 @@ Packages
                             name, ' '.join(
                                 ['--fixers=%s' % f for f in svp_args[1:]])))
                     elif svp_args[0] == 'new-upstream':
-                        g.write('debian-svp new-upstream '
+                        g.write(('debian-svp new-upstream %s' % name)
                                 + ' '.join(svp_args[1:]))
                     else:
                         raise AssertionError
