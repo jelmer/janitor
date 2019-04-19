@@ -205,7 +205,9 @@ def process_package(vcs_url, mode, env, command, output_directory,
     else:
         raise AssertionError('unknown subcommand %s' % command[0])
     log_id = str(uuid.uuid4())
-    log_path = os.path.join(output_directory, env['PACKAGE'], 'logs', log_id)
+    assert pkg is not None
+    assert output_directory is not None
+    log_path = os.path.join(output_directory, pkg, 'logs', log_id)
     os.makedirs(log_path)
 
     if pre_check_command:

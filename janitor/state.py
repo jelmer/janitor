@@ -17,6 +17,7 @@
 
 from datetime import datetime
 import os
+import shlex
 import sqlite3
 
 con = sqlite3.connect(
@@ -42,22 +43,19 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         "REPLACE INTO package (name, branch_url, maintainer_email) "
         "VALUES (?, ?, ?)",
         (name, vcs_url, maintainer_email))
-    cur.execute('SELECT id FROM package WHERE name = ?', (name, ))
-    package_id = cur.fetchone()[0]
     if merge_proposal_url:
         cur.execute(
-            "REPLACE INTO merge_proposal (url, package_id) VALUES (?, ?)",
-            (merge_proposal_url, package_id))
+            "REPLACE INTO merge_proposal (url, package) VALUES (?, ?)",
+            (merge_proposal_url, package))
         cur.execute('SELECT id FROM merge_proposal WHERE url = ?', (merge_proposal_url, ))
-        merge_proposal_id = cur.fetchone()[0]
     else:
-        merge_proposal_id = None
+        merge_proposal_url = None
     cur.execute(
         "INSERT INTO run (id, command, description, start_time, finish_time, "
-        "package_id, merge_proposal_id) "
+        "package, merge_proposal_url) "
         "VALUES (?, ?, ?, ?, ?, ?, ?)", (
             run_id, ' '.join(command), description, start_time, finish_time,
-            package_id, merge_proposal_id, ))
+            name, merge_proposal_url, ))
     con.commit()
 
 
@@ -81,11 +79,10 @@ def iter_runs(package=None):
     query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
-    merge_proposal.url
+    run.merge_proposal_url
 FROM
     run
-LEFT JOIN package ON package.id = run.package_id
-LEFT JOIN merge_proposal ON merge_proposal.id = run.merge_proposal_id
+LEFT JOIN package ON package.name = run.package
 """
     args = ()
     if package is not None:
@@ -110,7 +107,7 @@ SELECT
     maintainer_email
 FROM
     package
-LEFT JOIN merge_proposal ON merge_proposal.package_id = package.id
+LEFT JOIN merge_proposal ON merge_proposal.package = package.name
 WHERE
     merge_proposal.url = ?""",
         (vcs_url, ))
@@ -128,7 +125,7 @@ SELECT
     url
 FROM
     merge_proposal
-LEFT JOIN package ON merge_proposal.package_id = package.id
+LEFT JOIN package ON merge_proposal.package = package.name
 WHERE
     package.name = ?
 """,
@@ -149,7 +146,7 @@ SELECT
     queue.mode
 FROM
     queue
-LEFT JOIN package ON package.id = queue.package_id
+LEFT JOIN package ON package.name = queue.package
 ORDER BY
     queue.id
 ASC
@@ -163,5 +160,19 @@ ASC
             'MAINTAINER_EMAIL': maintainer_email,
             'COMMITTER': committer,
         }
-        yield (branch_url, env, command, mode)
+        yield (branch_url, mode, env, shlex.split(command))
         row = cur.fetchone()
+
+
+def add_to_queue(vcs_url, mode, env, command):
+    assert env['PACKAGE']
+    cur = con.cursor()
+    cur.execute(
+        "REPLACE INTO package (name, branch_url, maintainer_email) "
+        "VALUES (?, ?, ?)",
+        (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL']))
+    cur.execute(
+        "INSERT INTO queue (package, command, committer, mode) "
+        "VALUES (?, ?, ?, ?)", (
+            env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode))
+    con.commit()
