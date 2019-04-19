@@ -76,7 +76,7 @@ Packages
                     assert svp_args[0] == 'lintian-brush'
                     g.write('    debian-svp lintian-brush %s %s\n' % (
                         name,
-                        ' '.join(['--fixer=%s' % f for f in svp_args[1:]])))
+                        ' '.join(['--fixers=%s' % f for f in svp_args[1:]])))
                     g.write('\n')
                     g.write('%s\n' % description)
                     g.write('\n')
