@@ -81,5 +81,6 @@ for vcs_url, mode, env, command in todo:
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
-    push_to_gateway(args.prometheus, job='schedule-new-upstreams',
-                    registry=REGISTRY)
+    push_to_gateway(
+        args.prometheus, job='janitor.schedule-new-upstreams',
+        registry=REGISTRY)
