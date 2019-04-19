@@ -283,6 +283,9 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 subargs.snapshot, post_check=post_check,
                 pre_check=pre_check)
             branch_name = "new-upstream"
+        if mode == 'build-only':
+            dry_run = True
+            mode = 'propose'
         try:
             result = propose_or_push(
                 main_branch, branch_name, branch_changer, mode,
