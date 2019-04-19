@@ -196,8 +196,12 @@ def process_package(vcs_url, mode, env, command, output_directory,
     # TODO(jelmer): sort out this mess:
     if command[0] == 'lintian-brush':
         subargs = lintian_subparser.parse_args(command[1:])
+        build_version_suffix = 'janitor+lintian'
+        build_suite = 'lintian-fixes'
     elif command[0] == 'new-upstream':
         subargs = new_upstream_subparser.parse_args(command[1:])
+        build_version_suffix = 'janitor+newupstream'
+        build_suite = 'upstream-version'
     else:
         raise AssertionError('unknown subcommand %s' % command[0])
     log_id = str(uuid.uuid4())
@@ -227,8 +231,8 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 return False
         if build_command:
             add_dummy_changelog_entry(
-                local_tree.basedir, 'janitor+lintian', 'lintian-fixes',
-                'Build lintian fixes.')
+                local_tree.basedir, build_version_suffix, build_suite,
+                'Build for debian-janitor apt repository.')
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 try:
                     build(local_tree, outf=f, build_command=build_command,
