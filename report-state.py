@@ -2,20 +2,14 @@
 
 import sys
 import time
-from breezy.plugins.propose.propose import hosters
 
-open_proposals = []
-merged_proposals = []
-closed_proposals = []
+import os
+sys.path.insert(0, os.path.dirname(__file__))
 
-for name, hoster_cls in hosters.items():
-    for instance in hoster_cls.iter_instances():
-        open_proposals.extend(instance.iter_my_proposals(status='open'))
-        merged_proposals.extend(instance.iter_my_proposals(status='merged'))
-        closed_proposals.extend(instance.iter_my_proposals(status='closed'))
+from janitor import state  # noqa: E402
 
 
-def write_report(f, open_proposal, merged_proposals, closed_proposals):
+def write_report(f, open_proposals, merged_proposals, closed_proposals):
     f.write("""\
 Status
 ======
@@ -31,8 +25,8 @@ These proposals are currently waiting for review.
 
 """)
 
-    for mp in open_proposals:
-        f.write('- %s\n' % mp.url)
+    for url in open_proposals:
+        f.write('- %s\n' % url)
 
     if merged_proposals:
         f.write("""
@@ -44,8 +38,8 @@ These proposals have been merged in the past.
 
 """)
 
-    for mp in merged_proposals:
-        f.write('- %s\n' % mp.url)
+    for url in merged_proposals:
+        f.write('- %s\n' % url)
 
     if closed_proposals:
         f.write("""
@@ -60,10 +54,20 @@ cherry-pick.
 
 """)
 
-    for mp in closed_proposals:
-        f.write('- %s\n' % mp.url)
+    for url in closed_proposals:
+        f.write('- %s\n' % url)
 
     print("*Last Updated: " + time.asctime() + "*")
 
 
-write_report(sys.stdout, open_proposals, merged_proposals, closed_proposals)
+proposals_by_status = {}
+
+
+for url, status, package in state.iter_all_proposals():
+    proposals_by_status.setdefault(status, []).append(url)
+
+
+write_report(
+    sys.stdout, proposals_by_status.get('open', []),
+    proposals_by_status.get('merged', []),
+    proposals_by_status.get('closed', []))
