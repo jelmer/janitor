@@ -36,6 +36,8 @@ open_proposal_count = Gauge(
     labelnames=('maintainer',))
 packages_processed_count = Counter(
     'package_count', 'Number of packages processed.')
+queue_length = Gauge(
+    'queue_length', 'Number of items in the queue.')
 
 
 class JanitorResult(object):
@@ -207,6 +209,12 @@ def main(argv=None):
             build_command=args.build_command, post_check=args.post_check,
             dry_run=args.dry_run, incoming=args.incoming,
             output_directory=args.log_dir)
+
+        queue_length.set(state.queue_length())
+
+        if args.prometheus:
+            push_to_gateway(
+                args.prometheus, job='janitor.runner', registry=REGISTRY)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
