@@ -15,12 +15,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import os
 import subprocess
 
 
-from silver_platter import proposal as _mod_proposal
 from silver_platter.debian import BuildFailedError
-
 
 
 def add_dummy_changelog_entry(directory, suffix, suite, message):
@@ -38,14 +37,19 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
         stderr=subprocess.DEVNULL)
 
 
-def build(local_tree, outf, build_command='build', incoming=None):
+def build(local_tree, outf, build_command='build', incoming=None,
+          distribution=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if incoming:
         args.append('--result-dir=%s' % incoming)
     outf.write('Running %r\n' % (args, ))
     outf.flush()
+    env = dict(os.environ.items())
+    if distribution is not None:
+        env['DISTRIBUTION'] = distribution
     try:
         subprocess.check_call(
-            args, cwd=local_tree.basedir, stdout=outf, stderr=outf)
+            args, cwd=local_tree.basedir, stdout=outf, stderr=outf,
+            env=env)
     except subprocess.CalledProcessError:
         raise BuildFailedError()
