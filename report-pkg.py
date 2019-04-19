@@ -52,7 +52,8 @@ Packages
             f.write('-----------\n')
 
             for run_id, (start_time, finish_time), command, description, package_name, merge_proposal_url in state.iter_runs(name):
-                f.write('* `%s: %s <%s/>`_' % (finish_time.isoformat(timespec='hours'), command.split(' ')[0]))
+                kind = command.split(' ')[0]
+                f.write('* `%s: %s <%s/>`_' % (finish_time.isoformat(timespec='hours'), kind))
                 if merge_proposal_url:`
                     f.write(' (`merge proposal <%s>`_)' % merge_proposal_url)
                 f.write('\n')
@@ -62,7 +63,7 @@ Packages
                     os.mkdir(run_dir)
 
                 with open(os.path.join(run_dir, 'index.rst'), 'w') as g:
-                    g.write('Run %s\n' % run_id)
+                    g.write('Run of %s for %s\n' % (kind, package_name))
                     g.write('====' + len(run_id) * '=' + '\n')
 
                     g.write('* Package: `%s <..>`_\n' % package_name)
