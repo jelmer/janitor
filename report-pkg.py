@@ -53,7 +53,7 @@ Packages
 
             for run_id, (start_time, finish_time), command, description, package_name, merge_proposal_url in state.iter_runs(name):
                 kind = command.split(' ')[0]
-                f.write('* `%s: %s <%s/>`_' % (finish_time.isoformat(timespec='hours'), kind))
+                f.write('* `%s: %s <%s/>`_' % (finish_time.isoformat(timespec='minutes'), kind, run_id))
                 if merge_proposal_url:
                     f.write(' (`merge proposal <%s>`_)' % merge_proposal_url)
                 f.write('\n')
@@ -70,19 +70,20 @@ Packages
                     g.write('* Start time: %s\n' % start_time)
                     g.write('* Finish time: %s\n' % finish_time)
                     g.write('* Run time: %s\n' % (finish_time - start_time))
-                    g.write('* Command run::\n\n    %s\n' % command)
-                    g.write('* Try this locally::\n\n')
+                    g.write('* Command run: ``%s``\n' % command)
+                    g.write('* Try this locally: ``')
                     # TODO(jelmer): Don't put lintian-fixer specific code here
                     svp_args = command.split(' ')
                     assert svp_args[0] == 'lintian-brush'
-                    g.write('    debian-svp lintian-brush %s %s\n' % (
+                    g.write('debian-svp lintian-brush %s %s' % (
                         name,
                         ' '.join(['--fixers=%s' % f for f in svp_args[1:]])))
-                    g.write('\n')
+                    g.write('``\n')
                     g.write('%s\n' % description)
                     g.write('\n')
                     g.write('.. literalinclude:: ../logs/%s/build.log\n' % run_id)
                     g.write('   :linenos:\n')
+                    g.write('   :caption: build.log\n')
                     g.write('   :language: shell\n')
                     g.write("\n")
                     g.write("*Last Updated: " + time.asctime() + "*\n")
