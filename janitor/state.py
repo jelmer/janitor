@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from datetime import datetime
 import os
 import sqlite3
 
@@ -94,7 +95,10 @@ LEFT JOIN merge_proposal ON merge_proposal.id = run.merge_proposal_id
     cur.execute(query, args)
     row = cur.fetchone()
     while row:
-        yield (row[0], (row[2], row[3]), row[1], row[4], row[5], row[6])
+        yield (row[0],
+                (datetime.fromisoformat(row[2]),
+                    datetime.fromisoformat(row[3])),
+                row[1], row[4], row[5], row[6])
         row = cur.fetchone()
 
 
