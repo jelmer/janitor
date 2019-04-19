@@ -271,7 +271,9 @@ def process_package(vcs_url, mode, env, command, output_directory,
         return WorkerResult(pkg, log_id, start_time, datetime.now(), str(e))
     else:
         if command[0] == 'lintian-brush':
-            fixers = get_fixers(available_lintian_fixers(), subargs.fixers)
+            # TODO(jelmer): 'fixers' is wrong; it's actually tags.
+            fixers = get_fixers(
+                available_lintian_fixers(), tags=subargs.fixers)
             branch_changer = JanitorLintianFixer(
                 pkg, fixers=fixers,
                 update_changelog=subargs.update_changelog,
@@ -353,7 +355,8 @@ def main(argv=None):
         default='sbuild -v')
     parser.add_argument(
         '--mode',
-        help='Mode for pushing', choices=['push', 'attempt-push', 'propose'],
+        help='Mode for pushing',
+        choices=['push', 'attempt-push', 'propose', 'build-only'],
         default="propose", type=str)
 
     parser.add_argument('command', nargs=argparse.REMAINDER)

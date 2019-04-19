@@ -164,7 +164,7 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
         else:
             raise ValueError(
                 "Invalid value %r for update_changelog" % update_changelog)
-        command += list(set([available_fixers[tag].name for tag in tags]))
+        command += list(tags)
         yield (
             vcs_url, mode,
             {'COMMITTER': committer,
