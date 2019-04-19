@@ -42,7 +42,7 @@ def build(local_tree, outf, build_command='build', incoming=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if incoming:
         args.append('--result-dir=%s' % incoming)
-    outf.write('Running %r' % (args, ))
+    outf.write('Running %r\n' % (args, ))
     outf.flush()
     try:
         subprocess.check_call(
