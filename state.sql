@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    id integer primary key autoincrement,
    package_id integer,
    url string not null,
-   foreign key (package_id) references package(id)
+   foreign key (package_id) references package(id),
    unique(url)
 );
 CREATE TABLE IF NOT EXISTS run (
@@ -22,4 +22,12 @@ CREATE TABLE IF NOT EXISTS run (
    merge_proposal_id integer,
    foreign key (package_id) references package(id),
    foreign key (merge_proposal_id) references merge_proposal(id)
+);
+CREATE TABLE IF NOT EXISTS queue (
+   id integer primary key autoincrement,
+   package_id integer,
+   command string,
+   committer string,
+   mode string,
+   foreign key (package_id) references package(id)
 );

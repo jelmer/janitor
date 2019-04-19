@@ -84,7 +84,7 @@ SELECT
     merge_proposal.url
 FROM
     run
-left JOIN package ON package.id = run.package_id
+LEFT JOIN package ON package.id = run.package_id
 LEFT JOIN merge_proposal ON merge_proposal.id = run.merge_proposal_id
 """
     args = ()
@@ -134,3 +134,34 @@ WHERE
 """,
         (package, ))
     return cur.fetchall()
+
+
+def iter_queue():
+    cur = con.cursor()
+    cur.execute(
+        """
+SELECT
+    package.branch_url,
+    package.maintainer_email,
+    package.name,
+    queue.committer,
+    queue.command,
+    queue.mode
+FROM
+    queue
+LEFT JOIN package ON package.id = queue.package_id
+ORDER BY
+    queue.id
+ASC
+""")
+    row = cur.fetchone()
+    while row:
+        (branch_url, maintainer_email, package, committer,
+            command, mode) = row
+        env = {
+            'PACKAGE': package,
+            'MAINTAINER_EMAIL': maintainer_email,
+            'COMMITTER': committer,
+        }
+        yield (branch_url, env, command, mode)
+        row = cur.fetchone()
