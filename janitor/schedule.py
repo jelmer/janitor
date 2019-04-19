@@ -67,7 +67,7 @@ def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
             package.uploader_emails)
 
         if mode == 'skip':
-            trace.note('%s: skipping, per policy', package.name)
+            trace.mutter('%s: skipping, per policy', package.name)
             continue
 
         try:
@@ -110,7 +110,7 @@ def schedule_udd_new_upstreams(policy, packages, shuffle=False):
             package.maintainer_email, package.uploader_emails)
 
         if mode == 'skip':
-            trace.note('%s: skipping, per policy', package.name)
+            trace.mutter('%s: skipping, per policy', package.name)
             continue
 
         command = ["new-upstream"]
@@ -151,7 +151,7 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
             package.uploader_emails)
 
         if mode == 'skip':
-            trace.note('%s: skipping, per policy', package.name)
+            trace.mutter('%s: skipping, per policy', package.name)
             continue
 
         command = ["lintian-brush"]
