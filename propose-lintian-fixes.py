@@ -20,7 +20,6 @@ import argparse
 import os
 
 from prometheus_client import (
-    CollectorRegistry,
     Counter,
     Gauge,
     push_to_gateway,
@@ -33,19 +32,18 @@ from silver_platter.debian.lintian import (
 
 from breezy.trace import (
     note,
-    warning,
 )
 
-from breezy.plugins.propose.propose import (
-    hosters,
-)
 
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from janitor import state  # noqa: E402
+from janitor.runner import (
+    process_queue,
+    get_open_mps_per_maintainer,
+    open_proposal_count,
+    )  # noqa: E402
 from janitor.schedule import schedule_udd  # noqa: E402
-from janitor.worker import process_package  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
 parser.add_argument("packages", nargs='*')
@@ -93,40 +91,11 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-class JanitorResult(object):
-
-    def __init__(self, pkg, log_id, start_time, finish_time, description,
-                 proposal_url=None, is_new=None):
-        self.package = pkg
-        self.log_id = log_id
-        self.start_time = start_time
-        self.finish_time = finish_time
-        self.description = description
-        self.proposal_url = proposal_url
-        self.is_new = is_new
-
-    @classmethod
-    def from_worker_result(cls, worker_result):
-        return JanitorResult(
-            worker_result.pkg, worker_result.log_id,
-            worker_result.start_time,
-            worker_result.finish_time,
-            worker_result.proposal_url,
-            worker_result.is_new)
-
-
-registry = CollectorRegistry()
-packages_processed_count = Counter(
-    'package_count', 'Number of packages processed.', registry=registry)
-open_proposal_count = Gauge(
-    'open_proposal_count', 'Number of open proposals.',
-    labelnames=('maintainer',), registry=registry)
 fixer_count = Counter(
-    'fixer_count', 'Number of selected fixers.', registry=registry)
+    'fixer_count', 'Number of selected fixers.')
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
-    'Last time a batch job successfully finished',
-    registry=registry)
+    'Last time a batch job successfully finished')
 
 
 fixer_scripts = {}
@@ -141,73 +110,25 @@ if args.fixers:
 fixer_count.inc(len(available_fixers))
 
 if args.max_mps_per_maintainer or args.prometheus:
-    # Don't put in the effort if we don't need the results.
-    # Querying GitHub in particular is quite slow.
-    open_proposals = []
-    for name, hoster_cls in hosters.items():
-        for instance in hoster_cls.iter_instances():
-            note('Checking open merge proposals on %r...', instance)
-            open_proposals.extend(instance.iter_my_proposals(status='open'))
+    open_mps_per_maintainer = get_open_mps_per_maintainer()
+    for maintainer_email, count in open_mps_per_maintainer.items():
+        open_proposal_count.labels(maintainer=maintainer_email).inc(count)
 
-    open_mps_per_maintainer = {}
-    for proposal in open_proposals:
-        maintainer_email = state.get_maintainer_email(proposal.url)
-        if maintainer_email is None:
-            warning('No maintainer email known for %s', proposal.url)
-            continue
-        open_mps_per_maintainer.setdefault(maintainer_email, 0)
-        open_mps_per_maintainer[maintainer_email] += 1
-        open_proposal_count.labels(maintainer=maintainer_email).inc()
-
-possible_transports = []
-possible_hosters = []
 
 note('Querying UDD...')
 todo = schedule_udd(
     args.policy, args.propose_addon_only, args.packages,
     available_fixers, args.shuffle)
 
-for (vcs_url, mode, env, command) in todo:
-    maintainer_email = env['MAINTAINER_EMAIL']
-    if args.max_mps_per_maintainer and \
-            open_mps_per_maintainer.get(maintainer_email, 0) \
-            >= args.max_mps_per_maintainer:
-        warning(
-            'Skipping %s, maximum number of open merge proposals reached '
-            'for maintainer %s', env['PACKAGE'], maintainer_email)
-        continue
-    if mode == "attempt-push" and "salsa.debian.org/debian/" in vcs_url:
-        # Make sure we don't accidentally push to unsuspecting collab-maint
-        # repositories, even if debian-janitor becomes a member of "debian"
-        # in the future.
-        mode = "propose"
-    packages_processed_count.inc()
-    worker_result = process_package(
-        vcs_url, mode, env, command,
-        output_directory=args.log_path,
-        dry_run=args.dry_run, refresh=args.refresh,
-        incoming=args.incoming,
-        build_command=args.build_command,
-        pre_check=args.pre_check,
-        post_check=args.post_check,
-        possible_transports=possible_transports,
-        possible_hosters=possible_hosters)
-    result = JanitorResult.from_worker_result(worker_result)
-    if result.proposal_url:
-        note('%s: %s: %s', result.package, result.description,
-             result.proposal_url)
-    else:
-        note('%s: %s', result.package, result.description)
-    state.store_run(
-        result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
-        result.start_time, result.finish_time, command,
-        result.description, result.proposal_url)
-    if result.proposal_url and result.is_new:
-        open_mps_per_maintainer.setdefault(maintainer_email, 0)
-        open_mps_per_maintainer[maintainer_email] += 1
-        open_proposal_count.labels(maintainer=maintainer_email).inc()
+process_queue(
+    todo,
+    max_mps_per_maintainer=args.max_mps_per_maintainer,
+    open_mps_per_maintainer=open_mps_per_maintainer,
+    refresh=args.refresh, pre_check=args.pre_check,
+    build_command=args.build_command, post_check=args.post_check,
+    dry_run=args.dry_run, incoming=args.incoming,
+    output_directory=args.log_dir)
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
-    push_to_gateway(args.prometheus, job='propose-lintian-fixes',
-                    registry=registry)
+    push_to_gateway(args.prometheus, job='propose-lintian-fixes')

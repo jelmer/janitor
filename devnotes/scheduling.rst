@@ -7,6 +7,7 @@ scheduler:
 
 runner:
  * processes the queue, delegating work to workers
+ * tracks maximum number of entries in flight per maintainer
 
 worker(s):
  * processes a single package
