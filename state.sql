@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    id integer primary key autoincrement,
    package_id integer,
    url string not null,
+   status string check(status in ("open", "closed", "merged")) NULL DEFAULT NULL,
    foreign key (package_id) references package(id),
    unique(url)
 );
@@ -16,8 +17,8 @@ CREATE TABLE IF NOT EXISTS run (
    id string primary key,
    command string,
    description string,
-   start_time interger,
-   finish_time integer,
+   start_time string,
+   finish_time string,
    package_id integer,
    merge_proposal_id integer,
    foreign key (package_id) references package(id),
@@ -28,6 +29,6 @@ CREATE TABLE IF NOT EXISTS queue (
    package_id integer,
    command string,
    committer string,
-   mode string,
+   mode string check(mode in ("push", "attempt-push", "propose", "build-only")) not null,
    foreign key (package_id) references package(id)
 );
