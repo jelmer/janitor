@@ -1,2 +1,2 @@
 #!/bin/bash
-PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter" ./propose-lintian-fixes.py --pre-check "test ! -f debian/control.in" --policy=policy.conf "$@"
+PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter" python3 -m janitor.runner --pre-check "test ! -f debian/control.in" "$@"
