@@ -26,6 +26,9 @@ pkg:
 history.rst:
 	python3 ../report-history.py > $@
 
+queue.rst:
+	python3 ../report-queue.py > $@
+
 .PHONY: help Makefile pkg
 
 # Catch-all target: route all unknown targets to Sphinx using the new
