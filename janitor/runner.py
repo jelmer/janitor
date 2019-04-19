@@ -51,7 +51,7 @@ class JanitorResult(object):
     @classmethod
     def from_worker_result(cls, worker_result):
         return JanitorResult(
-            worker_result.pkg, worker_result.log_id,
+            worker_result.package, worker_result.log_id,
             worker_result.start_time,
             worker_result.finish_time,
             worker_result.proposal_url,
@@ -108,8 +108,8 @@ def process_queue(
             dry_run=dry_run, refresh=refresh,
             incoming=incoming,
             build_command=build_command,
-            pre_check=pre_check,
-            post_check=post_check,
+            pre_check_command=pre_check,
+            post_check_command=post_check,
             possible_transports=possible_transports,
             possible_hosters=possible_hosters)
         result = JanitorResult.from_worker_result(worker_result)
