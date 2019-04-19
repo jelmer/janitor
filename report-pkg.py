@@ -70,17 +70,17 @@ Packages
                     g.write('* Start time: %s\n' % start_time)
                     g.write('* Finish time: %s\n' % finish_time)
                     g.write('* Run time: %s\n' % (finish_time - start_time))
-                    g.write('* Command run: ``%s``\n' % command)
-                    g.write('* Try this locally: ``')
+                    g.write('* Description: %s\n' % description)
+                    g.write('\n')
+                    g.write('Command run::\n\n\t%s\n\n' % command)
+                    g.write('Try this locally::\n\n\t')
                     # TODO(jelmer): Don't put lintian-fixer specific code here
                     svp_args = command.split(' ')
                     assert svp_args[0] == 'lintian-brush'
                     g.write('debian-svp lintian-brush %s %s' % (
                         name,
                         ' '.join(['--fixers=%s' % f for f in svp_args[1:]])))
-                    g.write('``\n')
-                    g.write('%s\n' % description)
-                    g.write('\n')
+                    g.write('\n\n')
                     g.write('.. literalinclude:: ../logs/%s/build.log\n' % run_id)
                     g.write('   :linenos:\n')
                     g.write('   :caption: build.log\n')
