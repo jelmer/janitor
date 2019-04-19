@@ -74,8 +74,9 @@ Packages
                     # TODO(jelmer): Don't put lintian-fixer specific code here
                     svp_args = command.split(' ')
                     assert svp_args[0] == 'lintian-brush'
-                    g.write('    debian-svp lintian-brush %s --fixers=%s\n' % (
-                        name, ','.join(svp_args[1:])))
+                    g.write('    debian-svp lintian-brush %s %s\n' % (
+                        name,
+                        ' '.join(['--fixer=%s' % f for f in svp_args[1:]])))
                     g.write('\n')
                     g.write('%s\n' % description)
                     g.write('\n')
