@@ -149,7 +149,7 @@ LEFT JOIN package ON merge_proposal.package = package.name
         row = cur.fetchone()
 
 
-def iter_queue():
+def iter_queue(pop=True):
     cur = con.cursor()
     cur.execute(
         """
@@ -180,12 +180,14 @@ ASC
                 'COMMITTER': committer or None,
             }
             yield (branch_url, mode, env, shlex.split(command))
-            # This may occasionally remove items for the queue while the worker
-            # crashes. That's okay.
-            delcur.execute('DELETE FROM queue WHERE id = ?', (queue_id, ))
+            if pop:
+                # This may occasionally remove items for the queue while the worker
+                # crashes. That's okay.
+                delcur.execute('DELETE FROM queue WHERE id = ?', (queue_id, ))
             row = cur.fetchone()
     finally:
-        con.commit()
+        if pop:
+            con.commit()
 
 
 def add_to_queue(vcs_url, mode, env, command):
@@ -196,7 +198,7 @@ def add_to_queue(vcs_url, mode, env, command):
         "VALUES (?, ?, ?)",
         (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL']))
     cur.execute(
-        "INSERT or ignore INTO queue (package, command, committer, mode) "
+        "INSERT INTO queue (package, command, committer, mode) "
         "VALUES (?, ?, ?, ?)", (
             env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode))
     con.commit()
