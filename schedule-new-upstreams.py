@@ -71,10 +71,13 @@ todo = schedule_udd_new_upstreams(
     args.policy, args.packages, shuffle=args.shuffle)
 
 for vcs_url, mode, env, command in todo:
-    note('Scheduling %s (%s)', env['PACKAGE'], mode)
     if not args.dry_run:
-        state.add_to_queue(vcs_url, mode, env, command)
-    scheduled_count.inc()
+        added = state.add_to_queue(vcs_url, mode, env, command)
+    else:
+        added = True
+    if added:
+        note('Scheduling %s (%s)', env['PACKAGE'], mode)
+        scheduled_count.inc()
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
