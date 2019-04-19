@@ -48,6 +48,9 @@ from silver_platter.debian.lintian import (
     parse_mp_description,
     DEFAULT_ADDON_FIXERS,
 )
+from silver_platter.debian.upstream import (
+    NewUpstreamMerger,
+    )
 
 
 from janitor.build import build, add_dummy_changelog_entry  # noqa: E402
@@ -81,6 +84,23 @@ def add_janitor_blurb(text, env):
 class JanitorLintianFixer(LintianFixer):
     """Janitor-specific Lintian Fixer."""
 
+    @staticmethod
+    def setup_argparser(subparser):
+        subparser.add_argument("fixers", nargs='*')
+        subparser.add_argument(
+            '--no-update-changelog', action="store_false", default=None,
+            dest="update_changelog", help="do not update the changelog")
+        subparser.add_argument(
+            '--update-changelog', action="store_true", dest="update_changelog",
+            help="force updating of the changelog", default=None)
+        subparser.add_argument(
+            '--compat-release', type=str, default=debian_info.stable(),
+            help='Oldest Debian release to be compatible with.')
+        subparser.add_argument(
+            '--propose-addon-only',
+            help='Fixers that should be considered add-on-only.',
+            type=str, action='append', default=DEFAULT_ADDON_FIXERS)
+
     def __init__(self, pkg, fixers, update_changelog, compat_release,
                  pre_check=None, post_check=None, propose_addon_only=None,
                  committer=None, log_id=None):
@@ -102,6 +122,46 @@ class JanitorLintianFixer(LintianFixer):
             existing_lines + [l for r, l in self.applied]), {
                 'package': self._pkg, 'log_id': self._log_id})
 
+    def describe(self, result):
+        tags = set()
+        for brush_result, unused_summary in self.applied:
+            tags.update(brush_result.fixed_lintian_tags)
+        if result.merge_proposal:
+            if result.is_new:
+                return 'Proposed fixes %r' % tags
+            elif tags:
+                return 'Updated proposal with fixes %r' % tags
+            else:
+                return 'No new fixes for proposal'
+        else:
+            if tags:
+                return 'Pushed fixes %r' % tags
+            else:
+                return 'Nothing to do.'
+
+
+class JanitorNewUpstreamMerger(NewUpstreamMerger):
+
+    @staticmethod
+    def setup_argparser(subparser):
+        subparser.add_argument(
+            '--snapshot',
+            help='Merge a new upstream snapshot rather than a release',
+            action='store_true')
+
+    def describe(self, result):
+        if result.merge_proposal:
+            if result.is_new:
+                return (
+                    'Created merge proposal %s merging new '
+                    'upstream version %s.' % (
+                        result.merge_proposal.url,
+                        self._upstream_version))
+            else:
+                return 'Updated merge proposal %s for upstream version %s.' % (
+                    result.merge_proposal.url, self._upstream_version)
+        return 'Did nothing.'
+
 
 class WorkerResult(object):
 
@@ -119,21 +179,11 @@ class WorkerResult(object):
 debian_info = distro_info.DebianDistroInfo()
 
 
-subparser = argparse.ArgumentParser(prog='lintian-brush')
-subparser.add_argument("fixers", nargs='*')
-subparser.add_argument(
-    '--no-update-changelog', action="store_false", default=None,
-    dest="update_changelog", help="do not update the changelog")
-subparser.add_argument(
-    '--update-changelog', action="store_true", dest="update_changelog",
-    help="force updating of the changelog", default=None)
-subparser.add_argument(
-    '--compat-release', type=str, default=debian_info.stable(),
-    help='Oldest Debian release to be compatible with.')
-subparser.add_argument(
-    '--propose-addon-only',
-    help='Fixers that should be considered add-on-only.',
-    type=str, action='append', default=DEFAULT_ADDON_FIXERS)
+lintian_subparser = argparse.ArgumentParser(prog='lintian-brush')
+JanitorLintianFixer.setup_argparser(lintian_subparser)
+
+new_upstream_subparser = argparse.ArgumentParser(prog='new-upstream')
+JanitorNewUpstreamMerger.setup_argparser(new_upstream_subparser)
 
 
 def process_package(vcs_url, mode, env, command, output_directory,
@@ -143,8 +193,13 @@ def process_package(vcs_url, mode, env, command, output_directory,
                     possible_hosters=None):
     pkg = env['PACKAGE']
     committer = env['COMMITTER']
-    assert command[0] == 'lintian-brush'
-    subargs = subparser.parse_args(command[1:])
+    # TODO(jelmer): sort out this mess:
+    if command[0] == 'lintian-brush':
+        subargs = lintian_subparser.parse_args(command[1:])
+    elif command[0] == 'new-upstream':
+        subargs = new_upstream_subparser.parse_args(command[1:])
+    else:
+        raise AssertionError('unknown subcommand %s' % command[0])
     log_id = str(uuid.uuid4())
     log_path = os.path.join(output_directory, env['PACKAGE'], 'logs', log_id)
     os.makedirs(log_path)
@@ -209,17 +264,22 @@ def process_package(vcs_url, mode, env, command, output_directory,
     except errors.TransportError as e:
         return WorkerResult(pkg, log_id, start_time, datetime.now(), str(e))
     else:
-        fixers = get_fixers(available_lintian_fixers(), subargs.fixers)
-        branch_changer = JanitorLintianFixer(
-            pkg, fixers=fixers,
-            update_changelog=subargs.update_changelog,
-            compat_release=subargs.compat_release,
-            pre_check=pre_check, post_check=post_check,
-            propose_addon_only=subargs.propose_addon_only,
-            committer=committer, log_id=log_id)
+        if command[0] == 'lintian-brush':
+            fixers = get_fixers(available_lintian_fixers(), subargs.fixers)
+            branch_changer = JanitorLintianFixer(
+                pkg, fixers=fixers,
+                update_changelog=subargs.update_changelog,
+                compat_release=subargs.compat_release,
+                pre_check=pre_check, post_check=post_check,
+                propose_addon_only=subargs.propose_addon_only,
+                committer=committer, log_id=log_id)
+            branch_name = "lintian-fixes"
+        elif command[0] == 'new-upstream':
+            branch_changer = JanitorNewUpstreamMerger(subargs.snapshot)
+            branch_name = "new-upstream"
         try:
             result = propose_or_push(
-                main_branch, "lintian-fixes", branch_changer, mode,
+                main_branch, branch_name, branch_changer, mode,
                 possible_transports=possible_transports,
                 possible_hosters=possible_hosters,
                 refresh=refresh, dry_run=dry_run)
@@ -244,37 +304,10 @@ def process_package(vcs_url, mode, env, command, output_directory,
             return WorkerResult(
                 pkg, log_id, start_time, datetime.now(), str(e))
         else:
-            tags = set()
-            for brush_result, unused_summary in branch_changer.applied:
-                tags.update(brush_result.fixed_lintian_tags)
-            if result.merge_proposal:
-                if result.is_new:
-                    return WorkerResult(
-                        pkg, log_id, start_time, datetime.now(),
-                        'Proposed fixes %r' % tags,
-                        proposal_url=result.merge_proposal.url,
-                        is_new=True)
-                elif tags:
-                    return WorkerResult(
-                        pkg, log_id, start_time, datetime.now(),
-                        'Updated proposal with fixes %r' % tags,
-                        proposal_url=result.merge_proposal.url,
-                        is_new=False)
-                else:
-                    return WorkerResult(
-                        pkg, log_id, start_time, datetime.now(),
-                        'No new fixes for proposal',
-                        proposal_url=result.merge_proposal.url,
-                        is_new=False)
-            else:
-                if tags:
-                    return WorkerResult(
-                        pkg, log_id, start_time, datetime.now(),
-                        'Pushed fixes %r' % tags)
-                else:
-                    return WorkerResult(
-                        pkg, log_id, start_time, datetime.now(),
-                        'Nothing to do.')
+            description = branch_changer.describe(result)
+            return WorkerResult(
+                pkg, log_id, start_time, datetime.now(),
+                description)
 
 
 def main(argv=None):
