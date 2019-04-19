@@ -181,8 +181,8 @@ ASC
             }
             yield (branch_url, mode, env, shlex.split(command))
             if pop:
-                # This may occasionally remove items for the queue while the worker
-                # crashes. That's okay.
+                # This may occasionally remove items for the queue while the
+                # worker crashes. That's okay.
                 delcur.execute('DELETE FROM queue WHERE id = ?', (queue_id, ))
             row = cur.fetchone()
     finally:
@@ -197,11 +197,16 @@ def add_to_queue(vcs_url, mode, env, command):
         "insert or ignore INTO package (name, branch_url, maintainer_email) "
         "VALUES (?, ?, ?)",
         (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL']))
-    cur.execute(
-        "INSERT INTO queue (package, command, committer, mode) "
-        "VALUES (?, ?, ?, ?)", (
-            env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode))
+    try:
+        cur.execute(
+            "INSERT INTO queue (package, command, committer, mode) "
+            "VALUES (?, ?, ?, ?)", (
+                env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode))
+    except sqlite3.IntegrityError:
+        # No need to add it to the queue multiple times
+        return False
     con.commit()
+    return True
 
 
 def set_proposal_status(url, status):
