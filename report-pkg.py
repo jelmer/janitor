@@ -52,8 +52,8 @@ Packages
             f.write('-----------\n')
 
             for run_id, (start_time, finish_time), command, description, package_name, merge_proposal_url in state.iter_runs(name):
-                f.write('* `%s <%s/>`_' % (command, run_id))
-                if merge_proposal_url:
+                f.write('* `%s: %s <%s/>`_' % (finish_time.isoformat(timespec='hours'), command.split(' ')[0]))
+                if merge_proposal_url:`
                     f.write(' (`merge proposal <%s>`_)' % merge_proposal_url)
                 f.write('\n')
 
