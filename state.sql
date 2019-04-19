@@ -1,34 +1,32 @@
 CREATE TABLE IF NOT EXISTS package (
-   id integer primary key autoincrement,
    name string not null,
    branch_url string not null,
    maintainer_email string not null,
-   unique(branch_url), unique(name)
+   primary key(name), unique(branch_url)
 );
 CREATE TABLE IF NOT EXISTS merge_proposal (
-   id integer primary key autoincrement,
-   package_id integer,
+   package string not null,
    url string not null,
    status string check(status in ("open", "closed", "merged")) NULL DEFAULT NULL,
-   foreign key (package_id) references package(id),
-   unique(url)
+   foreign key (package) references package(name),
+   primary key(url)
 );
 CREATE TABLE IF NOT EXISTS run (
-   id string primary key,
+   id string not null primary key,
    command string,
    description string,
    start_time string,
    finish_time string,
-   package_id integer,
-   merge_proposal_id integer,
-   foreign key (package_id) references package(id),
-   foreign key (merge_proposal_id) references merge_proposal(id)
+   package string not null,
+   merge_proposal_url string null,
+   foreign key (package) references package(name),
+   foreign key (merge_proposal_url) references merge_proposal(url)
 );
 CREATE TABLE IF NOT EXISTS queue (
    id integer primary key autoincrement,
-   package_id integer,
-   command string,
-   committer string,
+   package string not null,
+   command string not null,
+   committer string null,
    mode string check(mode in ("push", "attempt-push", "propose", "build-only")) not null,
-   foreign key (package_id) references package(id)
+   foreign key (package) references package(name)
 );

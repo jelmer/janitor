@@ -21,6 +21,7 @@ import os
 
 from prometheus_client import (
     Gauge,
+    Counter,
     push_to_gateway,
     REGISTRY,
 )
@@ -35,11 +36,7 @@ from breezy.trace import (
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from janitor.runner import (
-    process_queue,
-    get_open_mps_per_maintainer,
-    open_proposal_count,
-    )  # noqa: E402
+from janitor import state  # noqa: E402
 from janitor.schedule import schedule_udd_new_upstreams  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='propose-new-upstream')
@@ -50,28 +47,11 @@ parser.add_argument("--policy",
 parser.add_argument("--dry-run",
                     help="Create branches but don't push or propose anything.",
                     action="store_true", default=False)
-parser.add_argument('--pre-check',
-                    help='Command to run to check whether to process package.',
-                    type=str)
-parser.add_argument('--post-check',
-                    help='Command to run to check package before pushing.',
-                    type=str)
-parser.add_argument('--build-command',
-                    help='Build package to verify it.', type=str,
-                    default='sbuild -v')
 parser.add_argument('--shuffle',
                     help='Shuffle order in which packages are processed.',
                     action='store_true')
-parser.add_argument('--refresh',
-                    help='Discard old branch and apply fixers from scratch.',
-                    action='store_true')
-parser.add_argument('--log-dir',
-                    help='Directory to store logs in.',
-                    type=str, default='site/pkg')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
-parser.add_argument('--incoming', type=str,
-                    help='Path to copy built Debian packages into.')
 parser.add_argument(
     '--max-mps-per-maintainer',
     default=0,
@@ -82,30 +62,21 @@ args = parser.parse_args()
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
-
-
-if args.max_mps_per_maintainer or args.prometheus:
-    open_mps_per_maintainer = get_open_mps_per_maintainer()
-    for maintainer_email, count in open_mps_per_maintainer.items():
-        open_proposal_count.labels(maintainer=maintainer_email).inc(count)
-else:
-    open_mps_per_maintainer = None
+scheduled_count = Counter(
+    'scheduled_count', 'Number of new runs scheduled.')
 
 
 note('Querying UDD...')
 todo = schedule_udd_new_upstreams(
     args.policy, args.packages, shuffle=args.shuffle)
 
-process_queue(
-    todo,
-    max_mps_per_maintainer=args.max_mps_per_maintainer,
-    open_mps_per_maintainer=open_mps_per_maintainer,
-    refresh=args.refresh, pre_check=args.pre_check,
-    build_command=args.build_command, post_check=args.post_check,
-    dry_run=args.dry_run, incoming=args.incoming,
-    output_directory=args.log_dir)
+for vcs_url, mode, env, command in todo:
+    note('Scheduling %s (%s)', env['PACKAGE'], mode)
+    if not args.dry_run:
+        state.add_to_queue(vcs_url, mode, env, command)
+    scheduled_count.inc()
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
-    push_to_gateway(args.prometheus, job='propose-new-upstreams',
+    push_to_gateway(args.prometheus, job='schedule-new-upstreams',
                     registry=REGISTRY)
