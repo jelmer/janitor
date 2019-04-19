@@ -275,7 +275,9 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 committer=committer, log_id=log_id)
             branch_name = "lintian-fixes"
         elif command[0] == 'new-upstream':
-            branch_changer = JanitorNewUpstreamMerger(subargs.snapshot)
+            branch_changer = JanitorNewUpstreamMerger(
+                subargs.snapshot, post_check=post_check,
+                pre_check=pre_check)
             branch_name = "new-upstream"
         try:
             result = propose_or_push(
