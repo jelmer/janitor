@@ -30,8 +30,8 @@ def matches(match, package_name, package_maintainer, package_uploaders):
         if maintainer != parseaddr(package_maintainer)[1]:
             return False
     package_uploader_emails = [
-            parseaddr(uploader)[1]
-            for uploader in package_uploaders]
+        parseaddr(uploader)[1]
+        for uploader in package_uploaders]
     for uploader in match.uploader:
         if uploader not in package_uploader_emails:
             return False
@@ -41,7 +41,7 @@ def matches(match, package_name, package_maintainer, package_uploaders):
     return True
 
 
-def apply_policy(config, package_name, maintainer, uploaders):
+def apply_policy(config, field, package_name, maintainer, uploaders):
     mode = policy_pb2.skip
     update_changelog = 'auto'
     committer = None
@@ -50,8 +50,8 @@ def apply_policy(config, package_name, maintainer, uploaders):
                 not any([matches(m, package_name, maintainer, uploaders)
                          for m in policy.match])):
             continue
-        if policy.mode is not None:
-            mode = policy.mode
+        if getattr(policy, field) is not None:
+            mode = getattr(policy, field)
         if policy.changelog is not None:
             update_changelog = policy.changelog
         if policy.committer is not None:
@@ -61,6 +61,7 @@ def apply_policy(config, package_name, maintainer, uploaders):
          policy_pb2.attempt_push: 'attempt-push',
          policy_pb2.push: 'push',
          policy_pb2.skip: 'skip',
+         policy_pb2.build_only: 'build-only',
          }[mode],
         {policy_pb2.auto: 'auto',
          policy_pb2.update_changelog: 'update',
