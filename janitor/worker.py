@@ -103,7 +103,7 @@ class JanitorLintianFixer(LintianFixer):
                 'package': self._pkg, 'log_id': self._log_id})
 
 
-class JanitorResult(object):
+class WorkerResult(object):
 
     def __init__(self, pkg, log_id, start_time, finish_time, description,
                  proposal_url=None, is_new=None):
@@ -143,6 +143,7 @@ def process_package(vcs_url, mode, env, command, output_directory,
                     possible_hosters=None):
     pkg = env['PACKAGE']
     committer = env['COMMITTER']
+    assert command[0] == 'lintian-brush'
     subargs = subparser.parse_args(command[1:])
     log_id = str(uuid.uuid4())
     log_path = os.path.join(output_directory, env['PACKAGE'], 'logs', log_id)
@@ -189,24 +190,24 @@ def process_package(vcs_url, mode, env, command, output_directory,
         main_branch = Branch.open(
             vcs_url, possible_transports=possible_transports)
     except socket.error:
-        return JanitorResult(
+        return WorkerResult(
             pkg, log_id, start_time, datetime.now(), 'ignoring, socket error')
     except errors.NotBranchError as e:
-        return JanitorResult(
+        return WorkerResult(
             pkg, log_id, start_time, datetime.now(),
             'Branch does not exist: %s' % e)
     except errors.UnsupportedProtocol:
-        return JanitorResult(
+        return WorkerResult(
             pkg, log_id, start_time, datetime.now(),
             'Branch available over unsupported protocol')
     except errors.ConnectionError as e:
-        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
+        return WorkerResult(pkg, log_id, start_time, datetime.now(), str(e))
     except errors.PermissionDenied as e:
-        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
+        return WorkerResult(pkg, log_id, start_time, datetime.now(), str(e))
     except errors.InvalidHttpResponse as e:
-        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
+        return WorkerResult(pkg, log_id, start_time, datetime.now(), str(e))
     except errors.TransportError as e:
-        return JanitorResult(pkg, log_id, start_time, datetime.now(), str(e))
+        return WorkerResult(pkg, log_id, start_time, datetime.now(), str(e))
     else:
         fixers = get_fixers(available_lintian_fixers(), subargs.fixers)
         branch_changer = JanitorLintianFixer(
@@ -223,24 +224,24 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 possible_hosters=possible_hosters,
                 refresh=refresh, dry_run=dry_run)
         except UnsupportedHoster:
-            return JanitorResult(
+            return WorkerResult(
                 pkg, log_id, start_time, datetime.now(), 'Hosted unsupported.')
         except NoSuchProject as e:
-            return JanitorResult(
+            return WorkerResult(
                 pkg, log_id, start_time, datetime.now(),
                 'project %s was not found' % e.project)
         except BuildFailedError:
-            return JanitorResult(
+            return WorkerResult(
                 pkg, log_id, start_time, datetime.now(), 'build failed')
         except MissingUpstreamTarball:
-            return JanitorResult(
+            return WorkerResult(
                 pkg, log_id, start_time, datetime.now(),
                 'unable to find upstream source')
         except errors.PermissionDenied as e:
-            return JanitorResult(
+            return WorkerResult(
                 pkg, log_id, start_time, datetime.now(), str(e))
         except PostCheckFailed as e:
-            return JanitorResult(
+            return WorkerResult(
                 pkg, log_id, start_time, datetime.now(), str(e))
         else:
             tags = set()
@@ -248,30 +249,30 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 tags.update(brush_result.fixed_lintian_tags)
             if result.merge_proposal:
                 if result.is_new:
-                    return JanitorResult(
+                    return WorkerResult(
                         pkg, log_id, start_time, datetime.now(),
                         'Proposed fixes %r' % tags,
                         proposal_url=result.merge_proposal.url,
                         is_new=True)
                 elif tags:
-                    return JanitorResult(
+                    return WorkerResult(
                         pkg, log_id, start_time, datetime.now(),
                         'Updated proposal with fixes %r' % tags,
                         proposal_url=result.merge_proposal.url,
                         is_new=False)
                 else:
-                    return JanitorResult(
+                    return WorkerResult(
                         pkg, log_id, start_time, datetime.now(),
                         'No new fixes for proposal',
                         proposal_url=result.merge_proposal.url,
                         is_new=False)
             else:
                 if tags:
-                    return JanitorResult(
+                    return WorkerResult(
                         pkg, log_id, start_time, datetime.now(),
                         'Pushed fixes %r' % tags)
                 else:
-                    return JanitorResult(
+                    return WorkerResult(
                         pkg, log_id, start_time, datetime.now(),
                         'Nothing to do.')
 
@@ -317,13 +318,18 @@ def main(argv=None):
     if args.branch_url is None:
         parser.print_usage()
         return 1
-    process_package(
+    result = process_package(
         args.branch_url, args.mode, os.environ,
         args.command, output_directory=args.output_directory,
         incoming=args.output_directory, dry_run=args.dry_run,
         refresh=args.refresh, build_command=args.build_command,
         pre_check_command=args.pre_check,
         post_check_command=args.post_check)
+    if result.proposal_url:
+        note('%s: %s: %s', result.package, result.description,
+             result.proposal_url)
+    else:
+        note('%s: %s', result.package, result.description)
 
 
 if __name__ == '__main__':
