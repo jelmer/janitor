@@ -143,7 +143,8 @@ SELECT
     package.name,
     queue.committer,
     queue.command,
-    queue.mode
+    queue.mode,
+    queue.id
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -151,17 +152,24 @@ ORDER BY
     queue.id
 ASC
 """)
-    row = cur.fetchone()
-    while row:
-        (branch_url, maintainer_email, package, committer,
-            command, mode) = row
-        env = {
-            'PACKAGE': package,
-            'MAINTAINER_EMAIL': maintainer_email,
-            'COMMITTER': committer or None,
-        }
-        yield (branch_url, mode, env, shlex.split(command))
+    delcur = con.cursor()
+    try:
         row = cur.fetchone()
+        while row:
+            (branch_url, maintainer_email, package, committer,
+                command, mode, queue_id) = row
+            env = {
+                'PACKAGE': package,
+                'MAINTAINER_EMAIL': maintainer_email,
+                'COMMITTER': committer or None,
+            }
+            yield (branch_url, mode, env, shlex.split(command))
+            # This may occasionally remove items for the queue while the worker
+            # crashes. That's okay.
+            delcur.execute('DELETE FROM queue WHERE id = ?', (queue_id, ))
+            row = cur.fetchone()
+    finally:
+        con.commit()
 
 
 def add_to_queue(vcs_url, mode, env, command):
