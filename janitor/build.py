@@ -19,6 +19,8 @@ import os
 import subprocess
 
 
+from breezy.trace import note
+
 from silver_platter.debian import BuildFailedError
 
 
@@ -47,6 +49,7 @@ def build(local_tree, outf, build_command='build', incoming=None,
     env = dict(os.environ.items())
     if distribution is not None:
         env['DISTRIBUTION'] = distribution
+    note('Building debian packages, running %r.', build_command)
     try:
         subprocess.check_call(
             args, cwd=local_tree.basedir, stdout=outf, stderr=outf,
