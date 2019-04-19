@@ -28,5 +28,6 @@ CREATE TABLE IF NOT EXISTS queue (
    command string not null,
    committer string null,
    mode string check(mode in ("push", "attempt-push", "propose", "build-only")) not null,
-   foreign key (package) references package(name)
+   foreign key (package) references package(name),
+   unique(package, command, mode)
 );
