@@ -15,6 +15,9 @@ enum Mode {
     // Attempt to push the changes, but if that fails, create a pull request
     // instead.
     attempt_push = 3;
+
+    // Build the package, but don't propose/push the changes.
+    build_only = 4;
 }
 
 enum ChangelogMode {
@@ -40,7 +43,9 @@ message Policy {
     repeated Match match = 1;
 
     // Mode
-    optional Mode mode = 2;
+    optional Mode lintian_brush = 2;
+    optional Mode new_upstream_releases = 6;
+    optional Mode new_upstream_snapshots = 7;
 
     // Changelog update mode
     optional ChangelogMode changelog = 3;
