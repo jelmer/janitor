@@ -158,7 +158,7 @@ ASC
         env = {
             'PACKAGE': package,
             'MAINTAINER_EMAIL': maintainer_email,
-            'COMMITTER': committer,
+            'COMMITTER': committer or None,
         }
         yield (branch_url, mode, env, shlex.split(command))
         row = cur.fetchone()
