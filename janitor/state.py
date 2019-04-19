@@ -222,3 +222,9 @@ SET
 WHERE url = ?
 """, (status, url))
     con.commit()
+
+
+def queue_length():
+    cur = con.cursor()
+    cur.execute('SELECT COUNT(*) FROM queue')
+    return cur.fetchone()[0]
