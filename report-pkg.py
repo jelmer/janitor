@@ -76,12 +76,18 @@ Packages
                     g.write('Try this locally::\n\n\t')
                     # TODO(jelmer): Don't put lintian-fixer specific code here
                     svp_args = command.split(' ')
-                    assert svp_args[0] == 'lintian-brush'
-                    g.write('debian-svp lintian-brush %s %s' % (
-                        name,
-                        ' '.join(['--fixers=%s' % f for f in svp_args[1:]])))
+                    if svp_args[0] == 'lintian-brush':
+                        g.write('debian-svp lintian-brush %s %s' % (
+                            name, ' '.join(
+                                ['--fixers=%s' % f for f in svp_args[1:]])))
+                    elif svp_args[0] == 'new-upstream':
+                        g.write('debian-svp new-upstream '
+                                + ' '.join(svp_args[1:]))
+                    else:
+                        raise AssertionError
                     g.write('\n\n')
-                    g.write('.. literalinclude:: ../logs/%s/build.log\n' % run_id)
+                    g.write('.. literalinclude:: ../logs/%s/build.log\n' %
+                            run_id)
                     g.write('   :linenos:\n')
                     g.write('   :caption: build.log\n')
                     g.write('   :language: shell\n')
