@@ -238,7 +238,7 @@ def process_package(vcs_url, mode, env, command, output_directory,
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 try:
                     build(local_tree, outf=f, build_command=build_command,
-                          incoming=incoming)
+                          incoming=incoming, distribution=build_suite)
                 except BuildFailedError:
                     note('%s: build failed, skipping', pkg)
                     return False
