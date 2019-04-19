@@ -67,7 +67,7 @@ parser.add_argument('--refresh',
                     action='store_true')
 parser.add_argument('--log-dir',
                     help='Directory to store logs in.',
-                    type=str, default='public_html/pkg')
+                    type=str, default='site/pkg')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
 parser.add_argument('--incoming', type=str,
