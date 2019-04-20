@@ -25,7 +25,7 @@ Packages
 """)
 
 
-    for (pkg_id, name, maintainer_email, branch_url) in state.iter_packages():
+    for (name, maintainer_email, branch_url) in state.iter_packages():
         indexf.write(
             '- `%s <%s>`_\n' % (name, name))
 

@@ -64,7 +64,6 @@ def iter_packages():
     cur = con.cursor()
     cur.execute("""
 SELECT
-  id,
   name,
   maintainer_email,
   branch_url
