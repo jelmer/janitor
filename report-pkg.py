@@ -82,7 +82,7 @@ Packages
                             package_name, build_version,
                             get_build_architecture())
                         g.write('* Changes filename: `%s '
-                                '<https://janitor/debian.net/apt/%s/%s>`_\n'
+                                '<https://janitor.debian.net/apt/%s/%s>`_\n'
                                 % (changes_name, build_distro, changes_name))
                     g.write('\n')
                     g.write('Command run::\n\n\t%s\n\n' % command)
@@ -98,6 +98,7 @@ Packages
                                 + ' '.join(svp_args[1:]))
                     else:
                         raise AssertionError
+                    g.write('\n\n')
                     if build_version:
                         changes_name = changes_filename(
                             package_name, build_version,
@@ -110,7 +111,6 @@ Packages
                         g.write('\tapt install %s=%s\n' % (
                                 package_name, build_version))
                         g.write('\n\n')
-                    g.write('\n\n')
                     g.write('.. literalinclude:: ../logs/%s/build.log\n' %
                             run_id)
                     g.write('   :linenos:\n')
