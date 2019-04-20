@@ -13,7 +13,10 @@ At the moment, Debian Janitor is available as an opt-in service.
    :maxdepth: 1
    :hidden:
 
+   apt
+   queue
    history
+   pkg
    status
    credentials
 
