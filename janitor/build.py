@@ -44,13 +44,11 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
         stderr=subprocess.DEVNULL)
 
 
-def predict_changes_filename(local_tree):
+def get_latest_changelog_version(local_tree):
     with open(os.path.join(
             local_tree.basedir, 'debian', 'changelog'), 'r') as f:
         cl = Changelog(f, max_blocks=1)
-        arch = get_build_architecture()
-        filename = changes_filename(cl.package, cl.version, arch)
-    return filename
+        return cl.package, cl.version
 
 
 def build(local_tree, outf, build_command='build', incoming=None,

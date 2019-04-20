@@ -57,8 +57,10 @@ from silver_platter.debian.upstream import (
 
 from janitor.build import (
     build,
-    predict_changes_filename,
     add_dummy_changelog_entry,
+    get_latest_changelog_version,
+    changes_filename,
+    get_build_architecture,
 )  # noqa: E402
 
 
@@ -172,7 +174,8 @@ class JanitorNewUpstreamMerger(NewUpstreamMerger):
 class WorkerResult(object):
 
     def __init__(self, pkg, log_id, start_time, finish_time, description,
-                 proposal_url=None, is_new=None):
+                 proposal_url=None, is_new=None, build_distribution=None,
+                 build_version=None):
         self.package = pkg
         self.log_id = log_id
         self.start_time = start_time
@@ -180,6 +183,8 @@ class WorkerResult(object):
         self.description = description
         self.proposal_url = proposal_url
         self.is_new = is_new
+        self.build_version = build_version
+        self.build_distribution = build_distribution
 
 
 debian_info = distro_info.DebianDistroInfo()
@@ -216,6 +221,8 @@ def process_package(vcs_url, mode, env, command, output_directory,
     log_path = os.path.join(output_directory, pkg, 'logs', log_id)
     os.makedirs(log_path)
 
+    build_details = []
+
     if pre_check_command:
         def pre_check(local_tree):
             try:
@@ -248,12 +255,16 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 except BuildFailedError:
                     note('%s: build failed, skipping', pkg)
                     return False
-            changes_filename = predict_changes_filename(local_tree)
-            changes_path = os.path.join(incoming, changes_filename)
-            note('Changes file: %s / %s', changes_path, build_suite)
+            (cl_package, cl_version) = get_latest_changelog_version(
+                local_tree)
+            changes_path = os.path.join(
+                incoming, changes_filename(
+                    cl_package, cl_version, get_build_architecture()))
             if not os.path.exists(changes_path):
                 warning('Expected changes path %s does not exist.',
                         changes_path)
+            else:
+                build_details.append((cl_version, build_suite))
         return True
 
     note('Processing: %s (mode: %s)', pkg, mode)
@@ -332,7 +343,10 @@ def process_package(vcs_url, mode, env, command, output_directory,
             description = branch_changer.describe(result)
             return WorkerResult(
                 pkg, log_id, start_time, datetime.now(),
-                description)
+                description, build_distribution=(
+                    build_details[0][1] if build_details else None),
+                build_version=(
+                    build_details[0][0] if build_details else None))
 
 
 def main(argv=None):
