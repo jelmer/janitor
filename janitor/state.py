@@ -80,7 +80,7 @@ def iter_runs(package=None):
     query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
-    run.merge_proposal_url
+    run.merge_proposal_url, changes_filename, build_distribution
 FROM
     run
 LEFT JOIN package ON package.name = run.package
@@ -96,7 +96,7 @@ LEFT JOIN package ON package.name = run.package
         yield (row[0],
                 (datetime.fromisoformat(row[2]),
                     datetime.fromisoformat(row[3])),
-                row[1], row[4], row[5], row[6])
+                row[1], row[4], row[5], row[6], row[7], row[8])
         row = cur.fetchone()
 
 
@@ -181,7 +181,7 @@ ASC
 
 def drop_queue_item(queue_id):
     cur = con.cursor()
-    cur.execute("DELETE FROM queue WHERE id = ?", (queue_id))
+    cur.execute("DELETE FROM queue WHERE id = ?", (queue_id,))
     con.commit()
 
 

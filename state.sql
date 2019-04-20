@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS run (
    finish_time string,
    package string not null,
    merge_proposal_url string null,
+   changes_filename string,
+   build_distribution string,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );

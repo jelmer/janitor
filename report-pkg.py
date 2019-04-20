@@ -51,9 +51,12 @@ Packages
             f.write('Recent runs\n')
             f.write('-----------\n')
 
-            for run_id, (start_time, finish_time), command, description, package_name, merge_proposal_url in state.iter_runs(name):
+            for (run_id, (start_time, finish_time), command, description,
+                    package_name, merge_proposal_url, changes_filename,
+                    build_distro) in state.iter_runs(name):
                 kind = command.split(' ')[0]
-                f.write('* `%s: %s <%s/>`_' % (finish_time.isoformat(timespec='minutes'), kind, run_id))
+                f.write('* `%s: %s <%s/>`_' % (
+                    finish_time.isoformat(timespec='minutes'), kind, run_id))
                 if merge_proposal_url:
                     f.write(' (`merge proposal <%s>`_)' % merge_proposal_url)
                 f.write('\n')
@@ -71,6 +74,8 @@ Packages
                     g.write('* Finish time: %s\n' % finish_time)
                     g.write('* Run time: %s\n' % (finish_time - start_time))
                     g.write('* Description: %s\n' % description)
+                    if changes_filename:
+                        g.write('* Changes filename: %s\n' % changes_filename)
                     g.write('\n')
                     g.write('Command run::\n\n\t%s\n\n' % command)
                     g.write('Try this locally::\n\n\t')
@@ -85,6 +90,20 @@ Packages
                                 + ' '.join(svp_args[1:]))
                     else:
                         raise AssertionError
+                    if changes_filename:
+                        g.write('Fetch the package::\n\n')
+                        g.write(
+                            '\tdget https://janitor.debian.net/apt/%s/%s\n' %
+                            (build_distro, changes_filename))
+                        g.write('\n')
+                        g.write('Install this package (if you have the ')
+                        g.write('`apt repository <../../apt/>`_ enabled) '
+                                'by running one of::\n\n')
+                        g.write('\tapt install -t upstream-releases %s\n' %
+                                package_name)
+                        g.write('\tapt install %s=%s\n' % (
+                                package_name, changes_filename.split('_')[1]))
+                        g.write('\n\n')
                     g.write('\n\n')
                     g.write('.. literalinclude:: ../logs/%s/build.log\n' %
                             run_id)
