@@ -117,8 +117,8 @@ Package Index
                         g.write('Install this package (if you have the ')
                         g.write('`apt repository <../../apt/>`_ enabled) '
                                 'by running one of::\n\n')
-                        with open(os.path.join("../public_html/apt", build_distro, changes_name), "r") as f:
-                            changes = Changes(f)
+                        with open(os.path.join("../public_html/apt", build_distro, changes_name), "r") as cf:
+                            changes = Changes(cf)
                             binaries = changes['Binary'].split(' ')
                         for binary in binaries:
                             g.write('\tapt install -t upstream-releases %s\n' %
