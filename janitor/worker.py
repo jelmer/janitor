@@ -219,6 +219,7 @@ def process_package(vcs_url, mode, env, command, output_directory,
     log_id = str(uuid.uuid4())
     assert pkg is not None
     assert output_directory is not None
+    output_directory = os.path.abspath(output_directory)
     log_path = os.path.join(output_directory, pkg, 'logs', log_id)
     os.makedirs(log_path)
 
@@ -259,15 +260,16 @@ def process_package(vcs_url, mode, env, command, output_directory,
                     return False
             (cl_package, cl_version) = get_latest_changelog_version(
                 local_tree)
+            changes_name = changes_filename(
+                cl_package, cl_version, get_build_architecture())
             changes_path = os.path.join(
-                output_directory, changes_filename(
-                    cl_package, cl_version, get_build_architecture()))
+                output_directory, changes_name)
             if not os.path.exists(changes_path):
                 warning('Expected changes path %s does not exist.',
                         changes_path)
             else:
                 build_details.append(
-                    (cl_version, build_suite, changes_filename))
+                    (cl_version, build_suite, changes_name))
         return True
 
     note('Processing: %s (mode: %s)', pkg, mode)
