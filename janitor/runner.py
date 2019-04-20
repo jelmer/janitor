@@ -200,7 +200,7 @@ def main(argv=None):
     else:
         open_mps_per_maintainer = None
 
-    for (vcs_url, mode, env, command) in state.iter_queue():
+    for (queue_id, vcs_url, mode, env, command) in state.iter_queue():
         process_one(
             vcs_url, mode, env, command,
             max_mps_per_maintainer=args.max_mps_per_maintainer,
@@ -209,6 +209,7 @@ def main(argv=None):
             build_command=args.build_command, post_check=args.post_check,
             dry_run=args.dry_run, incoming=args.incoming,
             output_directory=args.log_dir)
+        state.drop_queue_item(queue_id)
 
         queue_length.set(state.queue_length())
 
