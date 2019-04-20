@@ -81,7 +81,9 @@ Packages
                         changes_name = changes_filename(
                             package_name, build_version,
                             get_build_architecture())
-                        g.write('* Changes filename: %s_\n' % changes_name)
+                        g.write('* Changes filename: `%s '
+                                '<https://janitor/debian.net/apt/%s/%s>`_\n'
+                                % (changes_name, build_distro, changes_name))
                     g.write('\n')
                     g.write('Command run::\n\n\t%s\n\n' % command)
                     g.write('Try this locally::\n\n\t')
@@ -100,11 +102,6 @@ Packages
                         changes_name = changes_filename(
                             package_name, build_version,
                             get_build_architecture())
-                        g.write('Fetch the package::\n\n')
-                        g.write(
-                            '\tdget https://janitor.debian.net/apt/%s/%s\n' %
-                            (build_distro, changes_name))
-                        g.write('\n')
                         g.write('Install this package (if you have the ')
                         g.write('`apt repository <../../apt/>`_ enabled) '
                                 'by running one of::\n\n')
