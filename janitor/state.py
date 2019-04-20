@@ -49,7 +49,8 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         (name, vcs_url, maintainer_email))
     if merge_proposal_url:
         cur.execute(
-            "insert or ignore into merge_proposal (url, package) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO merge_proposal (url, package) "
+            "VALUES (?, ?)",
             (merge_proposal_url, name))
         cur.execute('SELECT id FROM merge_proposal WHERE url = ?',
                     (merge_proposal_url, ))
@@ -98,10 +99,10 @@ LEFT JOIN package ON package.name = run.package
     row = cur.fetchone()
     while row:
         yield (row[0],
-                (datetime.fromisoformat(row[2]),
-                    datetime.fromisoformat(row[3])),
-                row[1], row[4], row[5], row[6],
-                Version(row[7]) if row[7] else None, row[8])
+               (datetime.fromisoformat(row[2]),
+                datetime.fromisoformat(row[3])),
+               row[1], row[4], row[5], row[6],
+               Version(row[7]) if row[7] else None, row[8])
         row = cur.fetchone()
 
 
