@@ -22,8 +22,8 @@ if not os.path.isdir(dir):
 
 with open(os.path.join(dir, 'index.rst'), 'w') as indexf:
     indexf.write("""\
-Packages
-========
+Package Index
+=============
 
 """)
 
