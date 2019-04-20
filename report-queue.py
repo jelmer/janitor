@@ -21,8 +21,6 @@ import sys
 import breezy  # noqa: E402
 breezy.initialize()
 
-from breezy.trace import note  # noqa: E402
-
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402

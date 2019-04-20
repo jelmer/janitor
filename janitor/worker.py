@@ -252,7 +252,8 @@ def process_package(vcs_url, mode, env, command, output_directory,
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 try:
                     build(local_tree, outf=f, build_command=build_command,
-                          output_directory=output_directory, distribution=build_suite)
+                          result_dir=output_directory,
+                          distribution=build_suite)
                 except BuildFailedError:
                     note('%s: build failed, skipping', pkg)
                     return False
@@ -265,7 +266,8 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 warning('Expected changes path %s does not exist.',
                         changes_path)
             else:
-                build_details.append((cl_version, build_suite, changes_filename))
+                build_details.append(
+                    (cl_version, build_suite, changes_filename))
         return True
 
     note('Processing: %s (mode: %s)', pkg, mode)

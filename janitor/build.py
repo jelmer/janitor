@@ -15,6 +15,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+__all__ = [
+    'changes_filename',
+    'get_build_architecture',
+    'add_dummy_changelog_entry',
+    'build',
+]
+
 import os
 import subprocess
 
@@ -51,11 +58,11 @@ def get_latest_changelog_version(local_tree):
         return cl.package, cl.version
 
 
-def build(local_tree, outf, build_command='build', incoming=None,
+def build(local_tree, outf, build_command='build', result_dir=None,
           distribution=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
-    if incoming:
-        args.append('--result-dir=%s' % incoming)
+    if result_dir:
+        args.append('--result-dir=%s' % result_dir)
     outf.write('Running %r\n' % (args, ))
     outf.flush()
     env = dict(os.environ.items())
@@ -68,4 +75,3 @@ def build(local_tree, outf, build_command='build', incoming=None,
             env=env)
     except subprocess.CalledProcessError:
         raise BuildFailedError()
-

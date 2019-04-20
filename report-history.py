@@ -20,7 +20,9 @@ for (run_id, times, command, description, package, proposal_url,
     sys.stdout.write(
         '- `%(package)s <pkg/%(package)s>`_: '
         'Run `%(command)s <pkg/%(package)s/%(run_id)s/>`_.\n' %
-        {'run_id': run_id, 'package': package, 'command': command.split(' ')[0]})
+        {'run_id': run_id,
+         'package': package,
+         'command': command.split(' ')[0]})
     sys.stdout.write('  %s\n' % description)
     if proposal_url:
         sys.stdout.write(

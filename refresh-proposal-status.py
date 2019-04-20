@@ -15,22 +15,22 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import breezy  # noqa: E402
-breezy.initialize()
-
-from breezy.trace import note
-from breezy.plugins.propose.propose import hosters
+import argparse
+import os
+import sys
 
 from prometheus_client import (
-    Counter,
     Gauge,
     push_to_gateway,
     REGISTRY,
 )
 
-import argparse
-import os
-import sys
+import breezy  # noqa: E402
+breezy.initialize()
+
+from breezy.trace import note  # noqa: E402
+from breezy.plugins.propose.propose import hosters  # noqa: E402
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
@@ -60,7 +60,7 @@ for name, hoster_cls in hosters.items():
         note('Checking merge proposals on %r...', instance)
         for status in ['open', 'merged', 'closed']:
             for mp in instance.iter_my_proposals(status=status):
-                state.set_proposal_status(mp.url, status) 
+                state.set_proposal_status(mp.url, status)
                 merge_proposal_count.labels(status=status).inc()
 
 

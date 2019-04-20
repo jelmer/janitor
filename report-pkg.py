@@ -18,6 +18,13 @@ parser.add_argument("directory")
 args = parser.parse_args()
 dir = args.directory
 
+
+def changes_get_binaries(changes_path):
+    with open(changes_path, "r") as cf:
+        changes = Changes(cf)
+        return changes['Binary'].split(' ')
+
+
 if not os.path.isdir(dir):
     os.mkdir(dir)
 
@@ -27,7 +34,6 @@ Package Index
 =============
 
 """)
-
 
     for (name, maintainer_email, branch_url) in state.iter_packages():
         indexf.write(
@@ -40,7 +46,8 @@ Package Index
         with open(os.path.join(pkg_dir, 'index.rst'), 'w') as f:
             f.write('%s\n' % name)
             f.write('%s\n' % ('=' * len(name)))
-            f.write('* `QA Page <https://tracker.debian.org/pkg/%s>`_\n' % name)
+            f.write(
+                '* `QA Page <https://tracker.debian.org/pkg/%s>`_\n' % name)
             f.write('* Maintainer email: %s\n' % maintainer_email)
             f.write('* Branch URL: `%s <%s>`_\n' % (branch_url, branch_url))
             f.write('\n')
@@ -117,10 +124,9 @@ Package Index
                         g.write('Install this package (if you have the ')
                         g.write('`apt repository <../../apt/>`_ enabled) '
                                 'by running one of::\n\n')
-                        with open(os.path.join("../public_html/apt", build_distro, changes_name), "r") as cf:
-                            changes = Changes(cf)
-                            binaries = changes['Binary'].split(' ')
-                        for binary in binaries:
+                        changes_path = os.path.join(
+                            "../public_html/apt", build_distro, changes_name)
+                        for binary in changes_get_binaries(changes_path):
                             g.write('\tapt install -t upstream-releases %s\n' %
                                     binary)
                             g.write('\tapt install %s=%s\n' % (
