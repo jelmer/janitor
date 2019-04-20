@@ -21,11 +21,33 @@ breezy.initialize()
 from breezy.trace import note
 from breezy.plugins.propose.propose import hosters
 
+from prometheus_client import (
+    Counter,
+    Gauge,
+    push_to_gateway,
+    REGISTRY,
+)
+
+import argparse
 import os
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+
+parser = argparse.ArgumentParser(prog='refresh-proposal-status')
+parser.add_argument(
+    '--prometheus', type=str,
+    help='Prometheus push gateway to export to.')
+args = parser.parse_args()
+
+merge_proposal_count = Counter(
+    'merge_proposal_count', 'Number of merge proposals by status.',
+    labelnames=('status',))
+last_success_gauge = Gauge(
+    'job_last_success_unixtime',
+    'Last time a batch job successfully finished')
+
 
 open_proposals = []
 merged_proposals = []
@@ -39,3 +61,13 @@ for name, hoster_cls in hosters.items():
         for status in ['open', 'merged', 'closed']:
             for mp in instance.iter_my_proposals(status=status):
                 state.set_proposal_status(mp.url, status)
+
+for status, urls in mps_by_state:
+    merge_proposal_count.labels(status=status).set(len(urls))
+
+
+last_success_gauge.set_to_current_time()
+if args.prometheus:
+    push_to_gateway(
+        args.prometheus, job='janitor.refresh-proposal-status',
+        registry=REGISTRY)
