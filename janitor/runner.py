@@ -49,7 +49,7 @@ class JanitorResult(object):
 
     def __init__(self, pkg, log_id, start_time, finish_time, description,
                  proposal_url=None, is_new=None, build_distribution=None,
-                 build_version=None):
+                 build_version=None, changes_filename=None):
         self.package = pkg
         self.log_id = log_id
         self.start_time = start_time
@@ -59,6 +59,7 @@ class JanitorResult(object):
         self.is_new = is_new
         self.build_distribution = build_distribution
         self.build_version = build_version
+        self.changes_filename = changes_filename
 
     @classmethod
     def from_worker_result(cls, worker_result):
@@ -71,7 +72,8 @@ class JanitorResult(object):
             is_new=worker_result.is_new,
             description=worker_result.description,
             build_distribution=worker_result.build_distribution,
-            build_version=worker_result.build_version)
+            build_version=worker_result.build_version,
+            changes_filename=worker_result.changes_filename)
 
 
 def get_open_mps_per_maintainer():
