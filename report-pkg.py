@@ -100,7 +100,7 @@ Package Index
                             package_name, build_version,
                             get_build_architecture())
                         g.write('* Changes filename: `%s '
-                                '<https://janitor.debian.net/apt/%s/%s>`_\n'
+                                '<../../..//apt/%s/%s>`_\n'
                                 % (changes_name, build_distro, changes_name))
                     g.write('\n')
                     g.write('Command run::\n\n\t%s\n\n' % command)
@@ -122,7 +122,7 @@ Package Index
                             package_name, build_version,
                             get_build_architecture())
                         g.write('Install this package (if you have the ')
-                        g.write('`apt repository <../../apt/>`_ enabled) '
+                        g.write('`apt repository <../../../apt/>`_ enabled) '
                                 'by running one of::\n\n')
                         changes_path = os.path.join(
                             "../public_html/apt", build_distro, changes_name)
