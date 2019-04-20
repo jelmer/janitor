@@ -44,7 +44,7 @@ setup(
     entry_points={
         'console_scripts': [
             'janitor-runner=janitor.run:main',
-            'janitor-worker:janitor.worker:main',
+            'janitor-worker=janitor.worker:main',
         ],
     },
     test_suite='janitor.tests.test_suite',
