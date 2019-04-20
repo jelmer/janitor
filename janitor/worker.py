@@ -27,7 +27,10 @@ from breezy.branch import Branch
 from breezy import (
     errors,
 )
-from breezy.trace import note
+from breezy.trace import (
+    note,
+    warning,
+)
 from breezy.plugins.propose.propose import (
     NoSuchProject,
     UnsupportedHoster,
@@ -50,10 +53,13 @@ from silver_platter.debian.lintian import (
 )
 from silver_platter.debian.upstream import (
     NewUpstreamMerger,
-    )
+)
 
-
-from janitor.build import build, add_dummy_changelog_entry  # noqa: E402
+from janitor.build import (
+    build,
+    predict_changes_filename,
+    add_dummy_changelog_entry,
+)  # noqa: E402
 
 
 JANITOR_BLURB = """
@@ -242,6 +248,12 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 except BuildFailedError:
                     note('%s: build failed, skipping', pkg)
                     return False
+            changes_filename = predict_changes_filename(local_tree)
+            changes_path = os.path.join(incoming, changes_filename)
+            note('Changes file: %s / %s', changes_path, build_suite)
+            if not os.path.exists(changes_path):
+                warning('Expected changes path %s does not exist.',
+                        changes_path)
         return True
 
     note('Processing: %s (mode: %s)', pkg, mode)
