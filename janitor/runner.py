@@ -64,6 +64,7 @@ class JanitorResult(object):
             finish_time=worker_result.finish_time,
             proposal_url=worker_result.proposal_url,
             is_new=worker_result.is_new,
+            description=worker_result.description,
             build_distribution=worker_result.build_distribution,
             build_version=worker_result.build_version)
 
