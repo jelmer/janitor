@@ -25,7 +25,8 @@ con = sqlite3.connect(
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, merge_proposal_url):
+              command, description, merge_proposal_url, changes_filename,
+              build_distribution):
     """Store a run.
 
     :param run_id: Run id
@@ -37,6 +38,8 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param command: Command
     :param description: A human-readable description
     :param merge_proposal_url: Optional merge proposal URL
+    :param changes_filename: Filename of the generated changes file
+    :param build_distribution: Build distribution
     """
     cur = con.cursor()
     cur.execute(
@@ -53,10 +56,10 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         merge_proposal_url = None
     cur.execute(
         "INSERT INTO run (id, command, description, start_time, finish_time, "
-        "package, merge_proposal_url) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)", (
+        "package, merge_proposal_url, changes_filename, build_distribution) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
             run_id, ' '.join(command), description, start_time, finish_time,
-            name, merge_proposal_url, ))
+            name, merge_proposal_url, changes_filename, build_distribution))
     con.commit()
 
 
