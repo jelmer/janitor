@@ -41,7 +41,7 @@ parser.add_argument(
     help='Prometheus push gateway to export to.')
 args = parser.parse_args()
 
-merge_proposal_count = Counter(
+merge_proposal_count = Gauge(
     'merge_proposal_count', 'Number of merge proposals by status.',
     labelnames=('status',))
 last_success_gauge = Gauge(
@@ -60,10 +60,8 @@ for name, hoster_cls in hosters.items():
         note('Checking merge proposals on %r...', instance)
         for status in ['open', 'merged', 'closed']:
             for mp in instance.iter_my_proposals(status=status):
-                state.set_proposal_status(mp.url, status)
-
-for status, urls in mps_by_state:
-    merge_proposal_count.labels(status=status).set(len(urls))
+                state.set_proposal_status(mp.url, status) 
+                merge_proposal_count.labels(status=status).inc()
 
 
 last_success_gauge.set_to_current_time()
