@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from debian.changelog import Version
 from datetime import datetime
 import os
 import shlex
@@ -25,7 +26,7 @@ con = sqlite3.connect(
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, merge_proposal_url, changes_filename,
+              command, description, merge_proposal_url, build_version,
               build_distribution):
     """Store a run.
 
@@ -38,7 +39,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param command: Command
     :param description: A human-readable description
     :param merge_proposal_url: Optional merge proposal URL
-    :param changes_filename: Filename of the generated changes file
+    :param build_version: Version that was built
     :param build_distribution: Build distribution
     """
     cur = con.cursor()
@@ -56,10 +57,11 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         merge_proposal_url = None
     cur.execute(
         "INSERT INTO run (id, command, description, start_time, finish_time, "
-        "package, merge_proposal_url, changes_filename, build_distribution) "
+        "package, merge_proposal_url, build_version, build_distribution) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
             run_id, ' '.join(command), description, start_time, finish_time,
-            name, merge_proposal_url, changes_filename, build_distribution))
+            name, merge_proposal_url,
+            str(build_version) if build_version else None, build_distribution))
     con.commit()
 
 
@@ -82,7 +84,7 @@ def iter_runs(package=None):
     query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
-    run.merge_proposal_url, changes_filename, build_distribution
+    run.merge_proposal_url, build_version, build_distribution
 FROM
     run
 LEFT JOIN package ON package.name = run.package
@@ -98,7 +100,8 @@ LEFT JOIN package ON package.name = run.package
         yield (row[0],
                 (datetime.fromisoformat(row[2]),
                     datetime.fromisoformat(row[3])),
-                row[1], row[4], row[5], row[6], row[7], row[8])
+                row[1], row[4], row[5], row[6],
+                Version(row[7]) if row[7] else None, row[8])
         row = cur.fetchone()
 
 

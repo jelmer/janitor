@@ -43,8 +43,8 @@ queue_length = Gauge(
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, start_time, finish_time, description,
-                 proposal_url=None, is_new=None, build_distribution=None
-                 changes_filename=None):
+                 proposal_url=None, is_new=None, build_distribution=None,
+                 build_version=None):
         self.package = pkg
         self.log_id = log_id
         self.start_time = start_time
@@ -53,7 +53,7 @@ class JanitorResult(object):
         self.proposal_url = proposal_url
         self.is_new = is_new
         self.build_distribution = build_distribution
-        self.changes_filename = changes_filename
+        self.build_version = build_version
 
     @classmethod
     def from_worker_result(cls, worker_result):
@@ -126,7 +126,7 @@ def process_one(
         result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
         result.start_time, result.finish_time, command,
         result.description, result.proposal_url,
-        changes_filename=result.changes_filename,
+        build_version=result.build_version,
         build_distribution=result.build_distribution)
     if result.proposal_url and result.is_new:
         open_mps_per_maintainer.setdefault(maintainer_email, 0)

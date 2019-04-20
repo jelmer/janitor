@@ -1,13 +1,16 @@
 #!/usr/bin/python3
 
+import argparse
 import os
 import sys
 import time
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-
-import argparse
+from janitor.build import (
+    changes_filename,
+    get_build_architecture,
+)  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-pkg')
 parser.add_argument("directory")
@@ -52,7 +55,7 @@ Packages
             f.write('-----------\n')
 
             for (run_id, (start_time, finish_time), command, description,
-                    package_name, merge_proposal_url, changes_filename,
+                    package_name, merge_proposal_url, build_version,
                     build_distro) in state.iter_runs(name):
                 kind = command.split(' ')[0]
                 f.write('* `%s: %s <%s/>`_' % (
@@ -74,8 +77,11 @@ Packages
                     g.write('* Finish time: %s\n' % finish_time)
                     g.write('* Run time: %s\n' % (finish_time - start_time))
                     g.write('* Description: %s\n' % description)
-                    if changes_filename:
-                        g.write('* Changes filename: %s\n' % changes_filename)
+                    if build_version:
+                        changes_name = changes_filename(
+                            package_name, build_version,
+                            get_build_architecture())
+                        g.write('* Changes filename: %s_\n' % changes_name)
                     g.write('\n')
                     g.write('Command run::\n\n\t%s\n\n' % command)
                     g.write('Try this locally::\n\n\t')
@@ -90,11 +96,14 @@ Packages
                                 + ' '.join(svp_args[1:]))
                     else:
                         raise AssertionError
-                    if changes_filename:
+                    if build_version:
+                        changes_name = changes_filename(
+                            package_name, build_version,
+                            get_build_architecture())
                         g.write('Fetch the package::\n\n')
                         g.write(
                             '\tdget https://janitor.debian.net/apt/%s/%s\n' %
-                            (build_distro, changes_filename))
+                            (build_distro, changes_name))
                         g.write('\n')
                         g.write('Install this package (if you have the ')
                         g.write('`apt repository <../../apt/>`_ enabled) '
@@ -102,7 +111,7 @@ Packages
                         g.write('\tapt install -t upstream-releases %s\n' %
                                 package_name)
                         g.write('\tapt install %s=%s\n' % (
-                                package_name, changes_filename.split('_')[1]))
+                                package_name, build_version))
                         g.write('\n\n')
                     g.write('\n\n')
                     g.write('.. literalinclude:: ../logs/%s/build.log\n' %
