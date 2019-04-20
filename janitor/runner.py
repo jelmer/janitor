@@ -62,7 +62,9 @@ class JanitorResult(object):
             worker_result.start_time,
             worker_result.finish_time,
             worker_result.proposal_url,
-            worker_result.is_new)
+            worker_result.is_new,
+            worker_result.build_distribution,
+            worker_result.build_version)
 
 
 def get_open_mps_per_maintainer():
