@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+from debian.deb822 import Changes
 import os
 import sys
 import time
@@ -116,10 +117,14 @@ Package Index
                         g.write('Install this package (if you have the ')
                         g.write('`apt repository <../../apt/>`_ enabled) '
                                 'by running one of::\n\n')
-                        g.write('\tapt install -t upstream-releases %s\n' %
-                                package_name)
-                        g.write('\tapt install %s=%s\n' % (
-                                package_name, build_version))
+                        with open(os.path.join("../public_html/apt", build_distro, changes_name), "r") as f:
+                            changes = Changes(f)
+                            binaries = changes['Binary'].split(' ')
+                        for binary in binaries:
+                            g.write('\tapt install -t upstream-releases %s\n' %
+                                    binary)
+                            g.write('\tapt install %s=%s\n' % (
+                                    binary, build_version))
                         g.write('\n\n')
                     g.write('`Build log <../logs/%s/build.log>`_\n' %
                             run_id)
