@@ -16,6 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+from breezy.plugins.debian.util import (
+    debsign,
+    dget_changes,
+    )
 from breezy.plugins.propose.propose import (
     hosters,
 )
@@ -70,6 +74,11 @@ class JanitorResult(object):
 
 
 def get_open_mps_per_maintainer():
+    """Retrieve the number of open merge proposals by maintainer.
+
+    Returns:
+      dictionary mapping maintainer emails to counts
+    """
     # Don't put in the effort if we don't need the results.
     # Querying GitHub in particular is quite slow.
     open_proposals = []
@@ -95,7 +104,7 @@ def process_one(
         build_command, open_mps_per_maintainer,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, output_directory=None,
-        possible_transports=None, possible_hosters=None):
+        debsign_keyid=None, possible_transports=None, possible_hosters=None):
     maintainer_email = env['MAINTAINER_EMAIL']
     if max_mps_per_maintainer and \
             open_mps_per_maintainer.get(maintainer_email, 0) \
@@ -114,7 +123,6 @@ def process_one(
         vcs_url, mode, env, command,
         output_directory=output_directory,
         dry_run=dry_run, refresh=refresh,
-        incoming=incoming,
         build_command=build_command,
         pre_check_command=pre_check,
         post_check_command=post_check,
@@ -126,6 +134,9 @@ def process_one(
              result.proposal_url)
     else:
         note('%s: %s', result.package, result.description)
+    changes_path = os.path.join(output_directory, result.changes_filename)
+    debsign(changes_path, debsign_keyid)
+    dget_changes(changes_path, incoming)
     state.store_run(
         result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
         result.start_time, result.finish_time, command,
@@ -195,6 +206,9 @@ def main(argv=None):
     parser.add_argument(
         '--incoming', type=str,
         help='Path to copy built Debian packages into.')
+    parser.add_argument(
+        '--debsign-keyid', type=str,
+        help='GPG key to sign Debian package with.')
 
     args = parser.parse_args()
 
@@ -217,6 +231,7 @@ def main(argv=None):
             refresh=args.refresh, pre_check=args.pre_check,
             build_command=args.build_command, post_check=args.post_check,
             dry_run=args.dry_run, incoming=args.incoming,
+            debsign_keyid=args.debsign_keyid,
             output_directory=args.log_dir)
         state.drop_queue_item(queue_id)
 
