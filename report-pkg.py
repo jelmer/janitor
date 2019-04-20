@@ -51,6 +51,16 @@ Packages
 
             f.write('\n')
 
+            f.write('Recent package builds\n')
+            f.write('---------------------\n')
+            for (run_id, (start_time, finish_time), command, description,
+                    package_name, merge_proposal_url, build_version,
+                    build_distro) in state.iter_runs(name):
+                if build_version is None:
+                    continue
+                f.write('* %s (for %s)\n' % (build_version, build_distro))
+            f.write('\n')
+
             f.write('Recent runs\n')
             f.write('-----------\n')
 
