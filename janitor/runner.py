@@ -58,13 +58,14 @@ class JanitorResult(object):
     @classmethod
     def from_worker_result(cls, worker_result):
         return JanitorResult(
-            worker_result.package, worker_result.log_id,
-            worker_result.start_time,
-            worker_result.finish_time,
-            worker_result.proposal_url,
-            worker_result.is_new,
-            worker_result.build_distribution,
-            worker_result.build_version)
+            pkg=worker_result.package,
+            log_id=worker_result.log_id,
+            start_time=worker_result.start_time,
+            finish_time=worker_result.finish_time,
+            proposal_url=worker_result.proposal_url,
+            is_new=worker_result.is_new,
+            build_distribution=worker_result.build_distribution,
+            build_version=worker_result.build_version)
 
 
 def get_open_mps_per_maintainer():
