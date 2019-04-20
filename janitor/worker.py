@@ -175,7 +175,7 @@ class WorkerResult(object):
 
     def __init__(self, pkg, log_id, start_time, finish_time, description,
                  proposal_url=None, is_new=None, build_distribution=None,
-                 build_version=None):
+                 build_version=None, changes_filename=None):
         self.package = pkg
         self.log_id = log_id
         self.start_time = start_time
@@ -185,6 +185,7 @@ class WorkerResult(object):
         self.is_new = is_new
         self.build_version = build_version
         self.build_distribution = build_distribution
+        self.changes_filename = changes_filename
 
 
 debian_info = distro_info.DebianDistroInfo()
@@ -198,7 +199,7 @@ JanitorNewUpstreamMerger.setup_argparser(new_upstream_subparser)
 
 
 def process_package(vcs_url, mode, env, command, output_directory,
-                    incoming=None, dry_run=False, refresh=False,
+                    dry_run=False, refresh=False,
                     build_command=None, pre_check_command=None,
                     post_check_command=None, possible_transports=None,
                     possible_hosters=None):
@@ -251,20 +252,20 @@ def process_package(vcs_url, mode, env, command, output_directory,
             with open(os.path.join(log_path, 'build.log'), 'w') as f:
                 try:
                     build(local_tree, outf=f, build_command=build_command,
-                          incoming=incoming, distribution=build_suite)
+                          output_directory=output_directory, distribution=build_suite)
                 except BuildFailedError:
                     note('%s: build failed, skipping', pkg)
                     return False
             (cl_package, cl_version) = get_latest_changelog_version(
                 local_tree)
             changes_path = os.path.join(
-                incoming, changes_filename(
+                output_directory, changes_filename(
                     cl_package, cl_version, get_build_architecture()))
             if not os.path.exists(changes_path):
                 warning('Expected changes path %s does not exist.',
                         changes_path)
             else:
-                build_details.append((cl_version, build_suite))
+                build_details.append((cl_version, build_suite, changes_filename))
         return True
 
     note('Processing: %s (mode: %s)', pkg, mode)
@@ -346,7 +347,9 @@ def process_package(vcs_url, mode, env, command, output_directory,
                 description, build_distribution=(
                     build_details[0][1] if build_details else None),
                 build_version=(
-                    build_details[0][0] if build_details else None))
+                    build_details[0][0] if build_details else None),
+                changes_filename=(
+                    build_details[0][2] if build_details else None))
 
 
 def main(argv=None):
@@ -394,9 +397,8 @@ def main(argv=None):
     result = process_package(
         args.branch_url, args.mode, os.environ,
         args.command, output_directory=args.output_directory,
-        incoming=args.output_directory, dry_run=args.dry_run,
-        refresh=args.refresh, build_command=args.build_command,
-        pre_check_command=args.pre_check,
+        dry_run=args.dry_run, refresh=args.refresh,
+        build_command=args.build_command, pre_check_command=args.pre_check,
         post_check_command=args.post_check)
     if result.proposal_url:
         note('%s: %s: %s', result.package, result.description,
