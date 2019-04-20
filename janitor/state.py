@@ -149,7 +149,7 @@ LEFT JOIN package ON merge_proposal.package = package.name
         row = cur.fetchone()
 
 
-def iter_queue(pop=True):
+def iter_queue():
     cur = con.cursor()
     cur.execute(
         """
@@ -168,26 +168,21 @@ ORDER BY
     queue.id
 ASC
 """)
-    delcur = con.cursor()
-    try:
-        row = cur.fetchone()
-        while row:
-            (branch_url, maintainer_email, package, committer,
-                command, mode, queue_id) = row
-            env = {
-                'PACKAGE': package,
-                'MAINTAINER_EMAIL': maintainer_email,
-                'COMMITTER': committer or None,
-            }
-            yield (branch_url, mode, env, shlex.split(command))
-            if pop:
-                # This may occasionally remove items for the queue while the
-                # worker crashes. That's okay.
-                delcur.execute('DELETE FROM queue WHERE id = ?', (queue_id, ))
-            row = cur.fetchone()
-    finally:
-        if pop:
-            con.commit()
+    for row in cur.fetchall():
+        (branch_url, maintainer_email, package, committer,
+            command, mode, queue_id) = row
+        env = {
+            'PACKAGE': package,
+            'MAINTAINER_EMAIL': maintainer_email,
+            'COMMITTER': committer or None,
+        }
+        yield (queue_id, branch_url, mode, env, shlex.split(command))
+
+
+def drop_queue_item(queue_id):
+    cur = con.cursor()
+    cur.execute("DELETE FROM queue WHERE id = ?", (queue_id))
+    con.commit()
 
 
 def add_to_queue(vcs_url, mode, env, command):

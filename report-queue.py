@@ -15,13 +15,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import os
+import sys
+
 import breezy  # noqa: E402
 breezy.initialize()
 
-from breezy.trace import note
+from breezy.trace import note  # noqa: E402
 
-import os
-import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
@@ -30,5 +31,7 @@ print("Queue")
 print("=====")
 print("")
 
-for i, (branch_url, mode, env, command) in enumerate(state.iter_queue(pop=False), 1):
-    print("%d. `%s <pkg/%s>`_ (%s)" % (i, env["PACKAGE"], env["PACKAGE"], command[0]))
+for i, (queue_id, branch_url, mode, env, command) in enumerate(
+        state.iter_queue(), 1):
+    print("%d. `%s <pkg/%s>`_ (%s)" % (
+        i, env["PACKAGE"], env["PACKAGE"], command[0]))
