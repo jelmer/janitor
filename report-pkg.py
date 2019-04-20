@@ -121,11 +121,8 @@ Package Index
                         g.write('\tapt install %s=%s\n' % (
                                 package_name, build_version))
                         g.write('\n\n')
-                    g.write('.. literalinclude:: ../logs/%s/build.log\n' %
+                    g.write('`Build log <../logs/%s/build.log>`_\n' %
                             run_id)
-                    g.write('   :linenos:\n')
-                    g.write('   :caption: build.log\n')
-                    g.write('   :language: shell\n')
                     g.write("\n")
                     g.write("*Last Updated: " + time.asctime() + "*\n")
 
