@@ -18,7 +18,12 @@
 import os
 import subprocess
 
+from debian.changelog import Changelog
 
+from breezy.plugins.debian.util import (
+    changes_filename,
+    get_build_architecture,
+    )
 from breezy.trace import note
 
 from silver_platter.debian import BuildFailedError
@@ -39,6 +44,15 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
         stderr=subprocess.DEVNULL)
 
 
+def predict_changes_filename(local_tree):
+    with open(os.path.join(
+            local_tree.basedir, 'debian', 'changelog'), 'r') as f:
+        cl = Changelog(f, max_blocks=1)
+        arch = get_build_architecture()
+        filename = changes_filename(cl.package, cl.version, arch)
+    return filename
+
+
 def build(local_tree, outf, build_command='build', incoming=None,
           distribution=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
@@ -56,3 +70,4 @@ def build(local_tree, outf, build_command='build', incoming=None,
             env=env)
     except subprocess.CalledProcessError:
         raise BuildFailedError()
+
