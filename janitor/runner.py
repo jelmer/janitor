@@ -536,14 +536,10 @@ def main(argv=None):
 
         queue_length.set(state.queue_length())
 
+        last_success_gauge.set_to_current_time()
         if args.prometheus:
             push_to_gateway(
                 args.prometheus, job='janitor.runner', registry=REGISTRY)
-
-    last_success_gauge.set_to_current_time()
-    if args.prometheus:
-        push_to_gateway(
-            args.prometheus, job='janitor.runner', registry=REGISTRY)
 
 
 if __name__ == '__main__':
