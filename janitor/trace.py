@@ -22,6 +22,7 @@ __all__ = [
 ]
 
 import breezy
-breezy.initialize()
+if not breezy._global_state:
+    breezy.initialize()
 
 from breezy.trace import mutter, note, warning  # noqa: E402
