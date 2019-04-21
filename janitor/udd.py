@@ -221,3 +221,12 @@ where sources.vcs_url != ''
                 maintainer_email=row[4], uploader_emails=uploader_emails
                 )
             row = cursor.fetchone()
+
+    def get_popcon_score(self, package):
+        cursor = self._conn.cursor()
+        query = "select insts from sources_popcon where name = ?"
+        cursor.execute(query, (package,))
+        row = cursor.fetchone()
+        if row:
+            return row[0]
+        return None
