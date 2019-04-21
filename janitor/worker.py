@@ -39,7 +39,8 @@ from silver_platter.debian import (
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
     get_fixers,
-    LintianFixer,
+    run_lintian_fixers,
+    has_nontrivial_changes,
     DEFAULT_ADDON_FIXERS,
 )
 from silver_platter.debian.upstream import (
@@ -165,26 +166,36 @@ def process_package(vcs_url, env, command, output_directory,
 
     with Workspace(main_branch, resume_branch=resume_branch,
                    path=os.path.join(output_directory, pkg)) as ws:
+        if not ws.local_tree.has_filename('debian/control'):
+            raise WorkerFailure('missing control file')
+
         run_pre_check(ws.local_tree, pre_check_command)
 
         if command[0] == 'lintian-brush':
             # TODO(jelmer): 'fixers' is wrong; it's actually tags.
             fixers = get_fixers(
                 available_lintian_fixers(), tags=subargs.fixers)
-            branch_changer = LintianFixer(
-                pkg, fixers=fixers,
-                update_changelog=subargs.update_changelog,
-                compat_release=subargs.compat_release,
-                propose_addon_only=subargs.propose_addon_only,
-                committer=committer)
+
+            applied, failed = run_lintian_fixers(
+                    ws.local_tree, fixers,
+                    committer=committer,
+                    update_changelog=subargs.update_changelog,
+                    compat_release=subargs.compat_release)
+            if failed:
+                note('%s: some fixers failed to run: %r',
+                     pkg, failed)
+
+            if not applied:
+                return WorkerResult('no fixers to apply')
+
         elif command[0] == 'new-upstream':
             branch_changer = NewUpstreamMerger(
                 subargs.snapshot)
 
-        branch_changer.make_changes(ws.local_tree)
+            branch_changer.make_changes(ws.local_tree)
 
         if not ws.changes_since_main():
-            raise WorkerResult('Nothing to do.')
+            return WorkerResult('Nothing to do.')
 
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
@@ -230,8 +241,9 @@ def process_package(vcs_url, env, command, output_directory,
                 worker_result = {'upstream_version': branch_changer._upstream_version}
             elif command[0] == 'lintian-brush':
                 worker_result = {
-                    'applied': branch_changer.applied,
-                    'add_on_only': branch_changer.should_create_proposal(),
+                    'applied': applied,
+                    'add_on_only': not has_nontrivial_changes(
+                        applied, subargs.propose_addon_only),
                 }
             else:
                 worker_result = {}

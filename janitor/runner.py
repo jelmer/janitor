@@ -121,7 +121,7 @@ class LintianBrushRunner(object):
             if result.is_new:
                 return 'Proposed fixes %r' % tags
             elif tags:
-                return 'Updated proposal with fixes %r' % tags
+                return 'Updated proposal with fixes for %r' % tags
             else:
                 return 'No new fixes for proposal'
         else:
