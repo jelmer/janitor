@@ -18,12 +18,10 @@
 import os
 import sys
 
-import breezy  # noqa: E402
-breezy.initialize()
-
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+
 
 print("Queue")
 print("=====")

@@ -17,12 +17,10 @@
 
 import argparse
 from datetime import datetime
-from debian.changelog import Version
 import distro_info
 import json
 import os
 import socket
-import subprocess
 
 from breezy.branch import Branch
 from breezy import (
@@ -43,6 +41,7 @@ from silver_platter.debian.lintian import (
 )
 from silver_platter.debian.upstream import (
     merge_upstream,
+    UpstreamAlreadyImported,
 )
 
 from silver_platter.utils import (
