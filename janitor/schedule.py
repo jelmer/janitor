@@ -131,6 +131,45 @@ def schedule_udd_new_upstreams(policy, packages, shuffle=False):
             command)
 
 
+def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
+    udd = UDD.public_udd_mirror()
+
+    with open(policy, 'r') as f:
+        policy = read_policy(f)
+
+    for package in udd.iter_source_packages_with_vcs(packages or None):
+        try:
+            vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
+        except ValueError as e:
+            trace.note('%s: %s', package.name, e)
+            continue
+
+        mode, update_changelog, committer = apply_policy(
+            policy, 'new_upstream_snapshots', package.name,
+            package.maintainer_email, package.uploader_emails)
+
+        if mode == 'skip':
+            trace.mutter('%s: skipping, per policy', package.name)
+            continue
+
+        command = ["new-upstream", "--snapshot"]
+        if update_changelog == "update":
+            command.append("--update-changelog")
+        elif update_changelog == "leave":
+            command.append("--no-update-changelog")
+        elif update_changelog == "auto":
+            pass
+        else:
+            raise ValueError(
+                "Invalid value %r for update_changelog" % update_changelog)
+        yield (
+            vcs_url, mode,
+            {'COMMITTER': committer,
+             'PACKAGE': package.name,
+             'MAINTAINER_EMAIL': package.maintainer_email},
+            command)
+
+
 def schedule_udd(policy, propose_addon_only, packages, available_fixers,
                  shuffle=False):
     udd = UDD.public_udd_mirror()

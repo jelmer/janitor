@@ -32,7 +32,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.schedule import schedule_udd_new_upstreams  # noqa: E402
+from janitor.schedule import schedule_udd_new_upstream_snapshots  # noqa: E402
 from janitor.trace import (
     note,
 )  # noqa: E402
@@ -48,6 +48,8 @@ parser.add_argument("--dry-run",
 parser.add_argument('--shuffle',
                     help='Shuffle order in which packages are processed.',
                     action='store_true')
+parser.add_argument('--default-priority', default=-10, type=int,
+                    help='Default priority.')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
 parser.add_argument(
@@ -65,12 +67,13 @@ scheduled_count = Counter(
 
 
 note('Querying UDD...')
-todo = schedule_udd_new_upstreams(
+todo = schedule_udd_new_upstream_snapshots(
     args.policy, args.packages, shuffle=args.shuffle)
 
 for vcs_url, mode, env, command in todo:
     if not args.dry_run:
-        added = state.add_to_queue(vcs_url, mode, env, command)
+        added = state.add_to_queue(
+            vcs_url, mode, env, command, args.default_priority)
     else:
         added = True
     if added:
@@ -80,5 +83,5 @@ for vcs_url, mode, env, command in todo:
 last_success_gauge.set_to_current_time()
 if args.prometheus:
     push_to_gateway(
-        args.prometheus, job='janitor.schedule-new-upstreams',
+        args.prometheus, job='janitor.schedule-new-upstream-snapshots',
         registry=REGISTRY)
