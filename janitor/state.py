@@ -60,7 +60,8 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         "INSERT INTO run (id, command, description, start_time, finish_time, "
         "package, merge_proposal_url, build_version, build_distribution) "
         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
-            run_id, ' '.join(command), description, start_time, finish_time,
+            run_id, ' '.join(command), description,
+            start_time.isoformat(), finish_time.isoformat(),
             name, merge_proposal_url,
             str(build_version) if build_version else None, build_distribution))
     con.commit()

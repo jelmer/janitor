@@ -531,7 +531,7 @@ def main(argv=None):
         open_mps_per_maintainer = None
 
     for (queue_id, vcs_url, mode, env, command) in state.iter_queue():
-        process_one(
+        result = process_one(
             vcs_url, mode, env, command,
             max_mps_per_maintainer=args.max_mps_per_maintainer,
             open_mps_per_maintainer=open_mps_per_maintainer,
@@ -540,6 +540,13 @@ def main(argv=None):
             dry_run=args.dry_run, incoming=args.incoming,
             debsign_keyid=args.debsign_keyid,
             log_dir=args.log_dir)
+        state.store_run(
+            result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
+            result.start_time, result.finish_time, command,
+            result.description, result.proposal.url,
+            build_version=result.build_version,
+            build_distribution=result.build_distribution)
+
         state.drop_queue_item(queue_id)
 
         queue_length.set(state.queue_length())
