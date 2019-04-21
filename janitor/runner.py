@@ -372,7 +372,7 @@ def process_one(
             return JanitorResult(
                 pkg, log_id=log_id,
                 start_time=start_time, finish_time=datetime.now(),
-                description="Build failed.: %s" % e)
+                description="Build failed")
         finally:
             src_build_log_path = os.path.join(output_directory, 'build.log')
             if os.path.exists(src_build_log_path):
