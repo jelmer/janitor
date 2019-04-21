@@ -199,7 +199,7 @@ def drop_queue_item(queue_id):
     con.commit()
 
 
-def add_to_queue(vcs_url, mode, env, command):
+def add_to_queue(vcs_url, mode, env, command, priority=None):
     assert env['PACKAGE']
     cur = con.cursor()
     cur.execute(
@@ -208,9 +208,10 @@ def add_to_queue(vcs_url, mode, env, command):
         (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL']))
     try:
         cur.execute(
-            "INSERT INTO queue (package, command, committer, mode) "
-            "VALUES (?, ?, ?, ?)", (
-                env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode))
+            "INSERT INTO queue (package, command, committer, mode, priority) "
+            "VALUES (?, ?, ?, ?, ?)", (
+                env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode,
+                priority))
     except sqlite3.IntegrityError:
         # No need to add it to the queue multiple times
         return False
