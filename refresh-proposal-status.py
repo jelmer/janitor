@@ -28,12 +28,12 @@ from prometheus_client import (
 import breezy  # noqa: E402
 breezy.initialize()
 
-from breezy.trace import note  # noqa: E402
 from breezy.plugins.propose.propose import hosters  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+from janitor.trace import note  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='refresh-proposal-status')
 parser.add_argument(

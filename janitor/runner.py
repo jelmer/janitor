@@ -41,7 +41,6 @@ from breezy.plugins.propose.propose import (
     NoSuchProject,
     UnsupportedHoster,
 )
-from breezy.trace import note, warning
 
 from prometheus_client import (
     Counter,
@@ -62,8 +61,9 @@ from silver_platter.proposal import (
     propose_changes,
     )
 
-from janitor import state
-from janitor.worker import process_package
+from . import state
+from .worker import process_package
+from .trace import note, warning
 
 open_proposal_count = Gauge(
     'open_proposal_count', 'Number of open proposals.',

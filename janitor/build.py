@@ -31,9 +31,11 @@ from breezy.plugins.debian.util import (
     changes_filename,
     get_build_architecture,
     )
-from breezy.trace import note
 
 from silver_platter.debian import BuildFailedError
+
+
+from .trace import note
 
 
 def add_dummy_changelog_entry(directory, suffix, suite, message):

@@ -32,16 +32,14 @@ from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
 )
 
-from breezy.trace import (
-    note,
-)
-
-
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
 from janitor.schedule import schedule_udd  # noqa: E402
+from janitor.trace import (
+    note,
+)
 
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
 parser.add_argument("packages", nargs='*')
