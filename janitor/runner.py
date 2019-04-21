@@ -27,7 +27,10 @@ import uuid
 from debian.deb822 import Changes
 
 from breezy.branch import Branch
-from breezy.errors import PermissionDenied
+from breezy.errors import (
+    PermissionDenied,
+    UnsupportedProtocol,
+    )
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -335,7 +338,12 @@ def process_one(
     else:
         raise AssertionError('Unknown command %s' % command[0])
 
-    main_branch = Branch.open(vcs_url, possible_transports=possible_transports)
+    try:
+        main_branch = Branch.open(vcs_url, possible_transports=possible_transports)
+    except (UnsupportedProtocol, OSError) as e:
+        return JanitorResult(
+            pkg, log_id=log_id, start_time=start_time, finish_time=datetime.now(),
+            description=str(e))
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
