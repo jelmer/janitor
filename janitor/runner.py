@@ -380,7 +380,7 @@ def process_one(
             src_build_log_path = os.path.join(output_directory, 'build.log')
             if os.path.exists(src_build_log_path):
                 dest_build_log_path = os.path.join(
-                    log_dir, pkg, 'logs', log_id)
+                    log_dir, pkg, log_id)
                 os.makedirs(dest_build_log_path, exist_ok=True)
                 shutil.copy(src_build_log_path, dest_build_log_path)
 
