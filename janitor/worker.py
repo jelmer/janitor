@@ -59,7 +59,22 @@ from .trace import (
 )
 
 
-class LintianBrushWorker(object):
+class SubWorker(object):
+
+    build_version_suffix = None
+    build_suite = None
+
+    def __init__(self, command, env):
+        pass
+
+    def make_changes(self, local_tree):
+        raise NotImplementedError(self.make_changes)
+
+    def result(self):
+        raise NotImplementedError(self.result)
+
+
+class LintianBrushWorker(SubWorker):
     """Janitor-specific Lintian Fixer."""
 
     build_version_suffix = 'janitor+lintian'
@@ -115,7 +130,7 @@ class LintianBrushWorker(object):
         }
 
 
-class NewUpstreamWorker(object):
+class NewUpstreamWorker(SubWorker):
 
     build_suite = 'upstream-releases'
     build_version_suffix = 'janitor+newupstream'
@@ -165,11 +180,12 @@ def process_package(vcs_url, env, command, output_directory,
     pkg = env['PACKAGE']
     # TODO(jelmer): sort out this mess:
     if command[0] == 'lintian-brush':
-        subworker = LintianBrushWorker(command[1:], env)
+        subworker_cls = LintianBrushWorker
     elif command[0] == 'new-upstream':
-        subworker = NewUpstreamWorker(command[1:], env)
+        subworker_cls = NewUpstreamWorker
     else:
         raise WorkerFailure('unknown subcommand %s' % command[0])
+    subworker = subworker_cls(command[1:], env)
     build_suite = subworker.build_suite
     assert pkg is not None
     assert output_directory is not None
