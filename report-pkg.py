@@ -104,7 +104,6 @@ Package Index
                                 '<../../../apt/%s/%s>`_\n'
                                 % (changes_name, build_distro, changes_name))
                     g.write('\n')
-                    g.write('Command run::\n\n\t%s\n\n' % command)
                     g.write('Try this locally::\n\n\t')
                     # TODO(jelmer): Don't put lintian-fixer specific code here
                     svp_args = command.split(' ')
