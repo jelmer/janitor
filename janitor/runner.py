@@ -443,10 +443,11 @@ def process_one(
                  result.proposal.url)
         else:
             note('%s: %s', result.package, result.description)
-        changes_path = os.path.join(output_directory, result.changes_filename)
-        debsign(changes_path, debsign_keyid)
-        if incoming is not None:
-            dget_changes(changes_path, incoming)
+        if result.changes_filename:
+            changes_path = os.path.join(output_directory, result.changes_filename)
+            debsign(changes_path, debsign_keyid)
+            if incoming is not None:
+                dget_changes(changes_path, incoming)
 
     return result
 
