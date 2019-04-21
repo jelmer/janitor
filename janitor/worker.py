@@ -17,10 +17,12 @@
 
 import argparse
 from datetime import datetime
+from debian.changelog import Version
 import distro_info
 import json
 import os
 import socket
+import subprocess
 
 from breezy.branch import Branch
 from breezy import (
@@ -44,7 +46,7 @@ from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
 )
 from silver_platter.debian.upstream import (
-    NewUpstreamMerger,
+    merge_upstream,
 )
 
 from silver_platter.utils import (
@@ -189,10 +191,12 @@ def process_package(vcs_url, env, command, output_directory,
                 return WorkerResult('no fixers to apply')
 
         elif command[0] == 'new-upstream':
-            branch_changer = NewUpstreamMerger(
-                subargs.snapshot)
-
-            branch_changer.make_changes(ws.local_tree)
+            try:
+                upstream_version = merge_upstream(
+                    tree=ws.local_tree, snapshot=subargs.snapshot)
+            except UpstreamAlreadyImported as e:
+                return WorkerResult('Last upstream version %s already imported'
+                                    % e.version)
 
         if not ws.changes_since_main():
             return WorkerResult('Nothing to do.')
@@ -238,7 +242,7 @@ def process_package(vcs_url, env, command, output_directory,
 
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
             if command[0] == 'new-upstream':
-                worker_result = {'upstream_version': branch_changer._upstream_version}
+                worker_result = {'upstream_version': upstream_version}
             elif command[0] == 'lintian-brush':
                 worker_result = {
                     'applied': applied,
