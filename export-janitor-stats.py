@@ -20,6 +20,7 @@ import os
 import sys
 
 from prometheus_client import (
+    Counter,
     Gauge,
     push_to_gateway,
     REGISTRY,
@@ -36,13 +37,13 @@ parser.add_argument(
     help='Prometheus push gateway to export to.')
 args = parser.parse_args()
 
-run_count = Gauge(
+run_count = Counter(
     'run_count', 'Number of total runs.',
     labelnames=('command', ))
-run_with_build_count = Gauge(
+run_with_build_count = Counter(
     'run_with_build_count', 'Number of total runs with package built.',
     labelnames=('command', ))
-run_with_proposal_count = Gauge(
+run_with_proposal_count = Counter(
     'run_with_proposal_count', 'Number of total runs with merge proposal.',
     labelnames=('command', ))
 last_success_gauge = Gauge(
