@@ -102,16 +102,19 @@ class NoChangesFile(Exception):
 
 class LintianBrushRunner(object):
 
+    branch_name = "lintian-fixes"
+
     def get_proposal_description(self, existing_description):
         if existing_description:
             existing_lines = parse_mp_description(existing_description)
         else:
             existing_lines = []
         return create_mp_description(
-            existing_lines + [l for r, l in self.applied])
+            existing_lines + [l['summary'] for l in self.applied])
 
     def read_worker_result(self, result):
         self.applied = result['applied']
+        self.failed = result['failed']
         self.add_on_only = result['add_on_only']
 
     def describe(self, result):
@@ -136,6 +139,8 @@ class LintianBrushRunner(object):
 
 
 class NewUpstreamRunner(object):
+
+    branch_name = "new-upstream"
 
     def describe(self, result):
         if result.proposal:
@@ -328,11 +333,9 @@ def process_one(
     start_time = datetime.now()
 
     if command[0] == "new-upstream":
-        discipline_runner = NewUpstreamRunner()
-        branch_name = "new-upstream"
+        subrunner = NewUpstreamRunner()
     elif command[0] == "lintian-brush":
-        discipline_runner = LintianBrushRunner()
-        branch_name = "lintian-fixes"
+        subrunner = LintianBrushRunner()
     else:
         raise AssertionError('Unknown command %s' % command[0])
 
@@ -357,7 +360,7 @@ def process_one(
                 e, main_branch.user_url)
     else:
         (resume_branch, overwrite, existing_proposal) = (
-            find_existing_proposed(main_branch, hoster, branch_name))
+            find_existing_proposed(main_branch, hoster, subrunner.branch_name))
 
     if refresh:
         resume_branch = None
@@ -368,7 +371,7 @@ def process_one(
                     main_branch, env, command, output_directory,
                     resume_branch=resume_branch, pre_check=pre_check,
                     post_check=post_check, build_command=build_command)
-        except subprocess.CalledProcessError as e:
+        except subprocess.CalledProcessError:
             return JanitorResult(
                 pkg, log_id=log_id,
                 start_time=start_time, finish_time=datetime.now(),
@@ -389,7 +392,7 @@ def process_one(
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
             with open(json_result_path, 'r') as f:
-                discipline_runner.read_worker_result(json.load(f))
+                subrunner.read_worker_result(json.load(f))
 
         try:
             (result.changes_filename, result.build_version,
@@ -406,7 +409,7 @@ def process_one(
                     existing_description)
             else:
                 existing_description = None
-            description = discipline_runner.get_proposal_description(
+            description = subrunner.get_proposal_description(
                 existing_description)
             return add_janitor_blurb(description, pkg, log_id)
 
@@ -422,11 +425,11 @@ def process_one(
                              resume_branch=resume_branch) as ws:
                     enable_tag_pushing(local_branch)
                     (result.proposal, is_new) = publish_changes(
-                        ws, mode, branch_name,
+                        ws, mode, subrunner.branch_name,
                         get_proposal_description=get_proposal_description,
                         dry_run=dry_run, hoster=hoster,
                         allow_create_proposal=(
-                            discipline_runner.allow_create_proposal()),
+                            subrunner.allow_create_proposal()),
                         overwrite_existing=True,
                         existing_proposal=existing_proposal)
             except NoSuchProject as e:
