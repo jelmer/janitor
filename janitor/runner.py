@@ -26,11 +26,6 @@ import uuid
 
 from debian.deb822 import Changes
 
-from breezy.branch import Branch
-from breezy.errors import (
-    NotBranchError,
-    UnsupportedProtocol,
-    )
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -58,6 +53,10 @@ from silver_platter.proposal import (
     PermissionDenied,
     get_hoster,
     hosters,
+    )
+from silver_platter.utils import (
+    open_branch,
+    BranchUnavailable,
     )
 
 from . import state
@@ -338,9 +337,9 @@ def process_one(
         raise AssertionError('Unknown command %s' % command[0])
 
     try:
-        main_branch = Branch.open(
+        main_branch = open_branch(
             vcs_url, possible_transports=possible_transports)
-    except (UnsupportedProtocol, OSError, NotBranchError) as e:
+    except BranchUnavailable as e:
         return JanitorResult(
             pkg, log_id=log_id, start_time=start_time,
             finish_time=datetime.now(), description=str(e))
@@ -412,7 +411,12 @@ def process_one(
             return add_janitor_blurb(description, pkg, log_id)
 
         if mode != 'build-only':
-            local_branch = Branch.open(os.path.join(output_directory, pkg))
+            try:
+                local_branch = open_branch(os.path.join(output_directory, pkg))
+            except BranchUnavailable as e:
+                return JanitorResult(
+                    pkg, log_id, start_time, datetime.now(),
+                    'result branch missing: %s' % e)
             try:
                 with Pending(main_branch, local_branch,
                              resume_branch=resume_branch) as ws:
@@ -444,7 +448,8 @@ def process_one(
         else:
             note('%s: %s', result.package, result.description)
         if result.changes_filename:
-            changes_path = os.path.join(output_directory, result.changes_filename)
+            changes_path = os.path.join(
+                output_directory, result.changes_filename)
             debsign(changes_path, debsign_keyid)
             if incoming is not None:
                 dget_changes(changes_path, incoming)
