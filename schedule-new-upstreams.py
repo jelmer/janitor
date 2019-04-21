@@ -28,16 +28,14 @@ from prometheus_client import (
 
 import silver_platter   # noqa: F401
 
-from breezy.trace import (
-    note,
-)
-
-
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
 from janitor.schedule import schedule_udd_new_upstreams  # noqa: E402
+from janitor.trace import (
+    note,
+)
 
 parser = argparse.ArgumentParser(prog='propose-new-upstream')
 parser.add_argument("packages", nargs='*')

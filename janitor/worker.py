@@ -28,10 +28,6 @@ from breezy.branch import Branch
 from breezy import (
     errors,
 )
-from breezy.trace import (
-    note,
-    warning,
-)
 
 from silver_platter.debian import (
     BuildFailedError,
@@ -55,12 +51,16 @@ from silver_platter.utils import (
     PostCheckFailed,
 )
 
-from janitor.build import (
+from .build import (
     build,
     add_dummy_changelog_entry,
     get_latest_changelog_version,
     changes_filename,
     get_build_architecture,
+)
+from .trace import (
+    note,
+    warning,
 )
 
 
