@@ -18,6 +18,7 @@
 import argparse
 from datetime import datetime
 import distro_info
+import json
 import os
 import socket
 
@@ -120,7 +121,7 @@ def process_package(vcs_url, env, command, output_directory,
                     post_check_command=None, possible_transports=None,
                     possible_hosters=None, resume_branch_url=None):
     pkg = env['PACKAGE']
-    committer = env['COMMITTER']
+    committer = env.get('COMMITTER')
     # TODO(jelmer): sort out this mess:
     if command[0] == 'lintian-brush':
         subargs = lintian_subparser.parse_args(command[1:])
@@ -162,7 +163,8 @@ def process_package(vcs_url, env, command, output_directory,
     except errors.TransportError as e:
         raise WorkerFailure(str(e))
 
-    with Workspace(main_branch, resume_branch=resume_branch) as ws:
+    with Workspace(main_branch, resume_branch=resume_branch,
+                   path=os.path.join(output_directory, pkg)) as ws:
         run_pre_check(ws.local_tree, pre_check_command)
 
         if command[0] == 'lintian-brush':
@@ -223,6 +225,19 @@ def process_package(vcs_url, env, command, output_directory,
             changes_name = None
             cl_version = None
 
+        with open(os.path.join(output_directory, 'result.json'), 'w') as f:
+            if command[0] == 'new-upstream':
+                worker_result = {'upstream_version': branch_changer._upstream_version}
+            elif command[0] == 'lintian-brush':
+                worker_result = {
+                    'applied': branch_changer.applied,
+                    'add_on_only': branch_changer.should_create_proposal(),
+                }
+            else:
+                worker_result = {}
+            json.dump(worker_result, f)
+
+        ws.defer_destroy()
         return WorkerResult(
             'Success',
             build_distribution=build_suite,

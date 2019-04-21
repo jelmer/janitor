@@ -16,8 +16,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from datetime import datetime
+import json
 import os
 import shutil
+import subprocess
+import sys
 import tempfile
 import uuid
 
@@ -51,6 +54,9 @@ from silver_platter.debian.lintian import (
 from silver_platter.proposal import (
     publish_changes,
     find_existing_proposed,
+    enable_tag_pushing,
+    push_changes,
+    propose_changes,
     )
 
 from janitor import state
@@ -83,10 +89,9 @@ def strip_janitor_blurb(text):
     return text[text.index(JANITOR_BLURB):]
 
 
-def add_janitor_blurb(text, env):
+def add_janitor_blurb(text, pkg, log_id):
     text += JANITOR_BLURB
-    if env['log_id']:
-        text += (LOG_BLURB % env)
+    text += (LOG_BLURB % {'package': pkg, 'log_id': log_id})
     return text
 
 
@@ -96,22 +101,23 @@ class NoChangesFile(Exception):
 
 class LintianBrushRunner(object):
 
-    def get_proposal_description(self, existing_proposal):
-        if existing_proposal:
-            existing_description = existing_proposal.get_description()
-            existing_description = strip_janitor_blurb(existing_description)
+    def get_proposal_description(self, existing_description):
+        if existing_description:
             existing_lines = parse_mp_description(existing_description)
         else:
             existing_lines = []
-        return add_janitor_blurb(create_mp_description(
-            existing_lines + [l for r, l in self.applied]), {
-                'package': self._pkg, 'log_id': self._log_id})
+        return create_mp_description(
+            existing_lines + [l for r, l in self.applied])
+
+    def read_worker_result(self, result):
+        self.applied = result['applied']
+        self.add_on_only = result['add_on_only']
 
     def describe(self, result):
         tags = set()
         for brush_result, unused_summary in self.applied:
             tags.update(brush_result.fixed_lintian_tags)
-        if result.merge_proposal:
+        if result.proposal:
             if result.is_new:
                 return 'Proposed fixes %r' % tags
             elif tags:
@@ -124,26 +130,34 @@ class LintianBrushRunner(object):
             else:
                 return 'Nothing to do.'
 
+    def allow_create_proposal(self):
+        return self.applied
+
 
 class NewUpstreamRunner(object):
 
     def describe(self, result):
-        if result.merge_proposal:
+        if result.proposal:
             if result.is_new:
                 return (
                     'Created merge proposal %s merging new '
                     'upstream version %s.' % (
-                        result.merge_proposal.url,
+                        result.proposal.url,
                         self._upstream_version))
             else:
                 return 'Updated merge proposal %s for upstream version %s.' % (
-                    result.merge_proposal.url, self._upstream_version)
+                    result.proposal.url, self._upstream_version)
         return 'Did nothing.'
 
-    def get_proposal_description(self, existing_proposal):
-        return add_janitor_blurb(
-            "New upstream version %s" % self._upstream_version,
-            {'package': self._pkg, 'log_id': self._log_id})
+    def read_worker_result(self, result):
+        self._upstream_version = result['upstream_version']
+
+    def get_proposal_description(self, existing_description):
+        return "New upstream version %s" % self._upstream_version
+
+    def allow_create_proposal(self):
+        # No upstream release too small...
+        return True
 
 
 class JanitorResult(object):
@@ -161,16 +175,6 @@ class JanitorResult(object):
         self.build_distribution = build_distribution
         self.build_version = build_version
         self.changes_filename = changes_filename
-
-    @classmethod
-    def from_worker_result(cls, worker_result, package, log_id, start_time,
-                           finish_time):
-        return JanitorResult(
-            pkg=package,
-            log_id=log_id,
-            start_time=start_time,
-            finish_time=finish_time,
-            description=worker_result.description)
 
 
 def find_changes(path, package):
@@ -208,6 +212,93 @@ def get_open_mps_per_maintainer():
         open_mps_per_maintainer.setdefault(maintainer_email, 0)
         open_mps_per_maintainer[maintainer_email] += 1
     return open_mps_per_maintainer
+
+
+class Pending(object):
+    """Workspace-like object that doesn't use working trees.
+
+    TODO(jelmer): better name
+    """
+
+    def __init__(self, main_branch, local_branch, resume_branch=None):
+        self.main_branch = main_branch
+        self.local_branch = local_branch
+        self.resume_branch = resume_branch
+        self.orig_revid = (resume_branch or main_branch).last_revision()
+        self.additional_colocated_branches = ['pristine-tar', 'upstream']
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False
+
+    def changes_since_main(self):
+        return self.local_branch.last_revision() \
+               != self.main_branch.last_revision()
+
+    def changes_since_resume(self):
+        return self.orig_revid != self.local_branch.last_revision()
+
+    def propose(self, name, description, hoster=None, existing_proposal=None,
+                overwrite_existing=None, labels=None, dry_run=False):
+        if hoster is None:
+            hoster = get_hoster(self.main_branch)
+        return propose_changes(
+            self.local_branch, self.main_branch,
+            hoster=hoster, name=name, mp_description=description,
+            resume_branch=self.resume_branch,
+            resume_proposal=existing_proposal,
+            overwrite_existing=overwrite_existing,
+            labels=labels, dry_run=dry_run,
+            additional_colocated_branches=self.additional_colocated_branches)
+
+    def push(self, hoster=None, dry_run=False):
+        if hoster is None:
+            hoster = get_hoster(self.main_branch)
+        return push_changes(
+            self.local_branch, self.main_branch, hoster=hoster,
+            additional_colocated_branches=self.additional_colocated_branches,
+            dry_run=dry_run)
+
+
+def invoke_worker(
+        main_branch, env, command, output_directory, resume_branch=None,
+        pre_check=None, post_check=None, build_command=None,
+        possible_transports=None, possible_hosters=None):
+    process_package(
+        main_branch.user_url, env, command,
+        resume_branch_url=(resume_branch.user_url if resume_branch else None),
+        output_directory=output_directory,
+        build_command=build_command,
+        pre_check_command=pre_check,
+        post_check_command=post_check,
+        possible_transports=possible_transports,
+        possible_hosters=possible_hosters)
+
+
+def invoke_subprocess_worker(
+        main_branch, env, command, output_directory, resume_branch=None,
+        pre_check=None, post_check=None, build_command=None):
+    subprocess_env = dict(os.environ.items())
+    for k, v in env.items():
+        if v is not None:
+            subprocess_env[k] = v
+    args = [sys.executable, '-m', 'janitor.worker',
+            '--branch-url=%s' % main_branch.user_url,
+            '--output-directory=%s' % output_directory]
+    if resume_branch:
+        args.append('--resume-branch-url=%s' % resume_branch.user_url)
+    if pre_check:
+        args.append('--pre-check=%s' % pre_check)
+    if post_check:
+        args.append('--post-check=%s' % post_check)
+    if build_command:
+        args.append('--build-command=%s' % build_command)
+
+    args.extend(command)
+
+    subprocess.check_call(args, env=subprocess_env)
 
 
 def process_one(
@@ -265,27 +356,33 @@ def process_one(
         resume_branch = None
 
     with tempfile.TemporaryDirectory() as output_directory:
-        worker_result = process_package(
-            vcs_url, env, command,
-            resume_branch_url=(
-                resume_branch.user_url if resume_branch else None),
-            output_directory=output_directory,
-            build_command=build_command,
-            pre_check_command=pre_check,
-            post_check_command=post_check,
-            possible_transports=possible_transports,
-            possible_hosters=possible_hosters)
+        try:
+            invoke_subprocess_worker(
+                    main_branch, env, command, output_directory,
+                    resume_branch=resume_branch, pre_check=pre_check,
+                    post_check=post_check, build_command=build_command)
+        except subprocess.CalledProcessError as e:
+            return JanitorResult(
+                pkg, log_id=log_id,
+                start_time=start_time, finish_time=datetime.now(),
+                description="Build failed.")
+        finally:
+            src_build_log_path = os.path.join(output_directory, 'build.log')
+            if os.path.exists(src_build_log_path):
+                dest_build_log_path = os.path.join(
+                    log_dir, pkg, 'logs', log_id)
+                os.makedirs(dest_build_log_path, exist_ok=True)
+                shutil.copy(src_build_log_path, dest_build_log_path)
 
-        result = JanitorResult.from_worker_result(
-            worker_result, package=pkg, log_id=log_id,
-            start_time=start_time, finish_time=datetime.now())
+        result = JanitorResult(
+            pkg, log_id=log_id,
+            start_time=start_time, finish_time=datetime.now(),
+            description="Built succeeded.")
 
-        src_build_log_path = os.path.join(output_directory, 'build.log')
-        if os.path.exists(src_build_log_path):
-            dest_build_log_path = os.path.join(
-                log_dir, result.package, 'logs', log_id)
-            os.makedirs(dest_build_log_path, exist_ok=True)
-            shutil.copy(src_build_log_path, dest_build_log_path)
+        json_result_path = os.path.join(output_directory, 'result.json')
+        if os.path.exists(json_result_path):
+            with open(json_result_path, 'r') as f:
+                discipline_runner.read_worker_result(json.load(f))
 
         try:
             (result.changes_filename, result.build_version,
@@ -296,18 +393,29 @@ def process_one(
             note('No changes file found: %s', e)
 
         if mode != 'build-only':
+            local_branch = Branch.open(os.path.join(output_directory, pkg))
             try:
-                # TODO(jelmer): ws
-                ws = None
-                (result.proposal, is_new) = publish_changes(
-                    ws, mode, branch_name,
-                    get_proposal_description=(
-                        discipline_runner.get_proposal_description),
-                    dry_run=dry_run, hoster=hoster,
-                    allow_create_proposal=(
-                        discipline_runner.allow_create_proposal),
-                    overwrite_existing=True,
-                    existing_proposal=existing_proposal)
+                def get_proposal_description(existing_proposal):
+                    if existing_proposal:
+                        existing_description = existing_proposal.get_description()
+                        existing_description = strip_janitor_blurb(existing_description)
+                    else:
+                        existing_description = None
+                    description = discipline_runner.get_proposal_description(
+                        existing_description)
+                    return add_janitor_blurb(description, pkg, log_id)
+
+                with Pending(main_branch, local_branch,
+                             resume_branch=resume_branch) as ws:
+                    enable_tag_pushing(local_branch)
+                    (result.proposal, is_new) = publish_changes(
+                        ws, mode, branch_name,
+                        get_proposal_description=get_proposal_description,
+                        dry_run=dry_run, hoster=hoster,
+                        allow_create_proposal=(
+                            discipline_runner.allow_create_proposal()),
+                        overwrite_existing=True,
+                        existing_proposal=existing_proposal)
             except NoSuchProject as e:
                 return JanitorResult(
                     pkg, log_id, start_time, datetime.now(),
@@ -439,5 +547,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    import sys
     sys.exit(main(sys.argv))
