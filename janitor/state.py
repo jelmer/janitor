@@ -178,9 +178,8 @@ SELECT
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
-ORDER BY
-    queue.id
-ASC
+ORDER BY queue.priority DESC
+ORDER BY queue.id ASC
 """)
     for row in cur.fetchall():
         (branch_url, maintainer_email, package, committer,
