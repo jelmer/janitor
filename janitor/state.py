@@ -82,6 +82,15 @@ ORDER BY name ASC
 
 
 def iter_runs(package=None):
+    """Iterate over runs.
+
+    Args:
+      package: package to restrict to
+    Returns:
+      iterator over (
+        run_id, (start_time, finish_time), command, description,
+        package_name, merge_proposal_url, build_version, build_distribution)
+    """
     cur = con.cursor()
     query = """
 SELECT
