@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from urllib.parse import urlparse
 
-from breezy.plugins.debian.directory import vcs_field_to_bzr_url_converters
+from silver_platter.debian import vcs_field_to_bzr_url_converters
 
 from silver_platter.debian.udd import UDD
 

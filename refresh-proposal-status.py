@@ -25,10 +25,7 @@ from prometheus_client import (
     REGISTRY,
 )
 
-import breezy  # noqa: E402
-breezy.initialize()
-
-from breezy.plugins.propose.propose import hosters  # noqa: E402
+from silver_platter.proposal import hosters  # noqa: E402
 
 sys.path.insert(0, os.path.dirname(__file__))
 

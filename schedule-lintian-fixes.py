@@ -39,7 +39,7 @@ from janitor import state  # noqa: E402
 from janitor.schedule import schedule_udd  # noqa: E402
 from janitor.trace import (
     note,
-)
+)  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
 parser.add_argument("packages", nargs='*')

@@ -22,7 +22,7 @@ __all__ = [
     'schedule_ubuntu',
 ]
 
-from breezy import trace
+from . import trace
 
 from silver_platter.debian import (
     convert_debian_vcs_url,

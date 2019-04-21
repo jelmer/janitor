@@ -35,7 +35,7 @@ from janitor import state  # noqa: E402
 from janitor.schedule import schedule_udd_new_upstreams  # noqa: E402
 from janitor.trace import (
     note,
-)
+)  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='propose-new-upstream')
 parser.add_argument("packages", nargs='*')

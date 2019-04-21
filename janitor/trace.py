@@ -16,8 +16,12 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 __all__ = [
+    'mutter',
     'note',
     'warning',
 ]
 
-from breezy.trace import note, warning
+import breezy
+breezy.initialize()
+
+from breezy.trace import mutter, note, warning  # noqa: E402

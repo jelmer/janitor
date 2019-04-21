@@ -28,19 +28,13 @@ from debian.deb822 import Changes
 
 from breezy.branch import Branch
 from breezy.errors import (
-    PermissionDenied,
+    NotBranchError,
     UnsupportedProtocol,
     )
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
     )
-from breezy.plugins.propose.propose import (
-    hosters,
-    get_hoster,
-    NoSuchProject,
-    UnsupportedHoster,
-)
 
 from prometheus_client import (
     Counter,
@@ -59,6 +53,11 @@ from silver_platter.proposal import (
     enable_tag_pushing,
     push_changes,
     propose_changes,
+    UnsupportedHoster,
+    NoSuchProject,
+    PermissionDenied,
+    get_hoster,
+    hosters,
     )
 
 from . import state
@@ -339,11 +338,12 @@ def process_one(
         raise AssertionError('Unknown command %s' % command[0])
 
     try:
-        main_branch = Branch.open(vcs_url, possible_transports=possible_transports)
-    except (UnsupportedProtocol, OSError) as e:
+        main_branch = Branch.open(
+            vcs_url, possible_transports=possible_transports)
+    except (UnsupportedProtocol, OSError, NotBranchError) as e:
         return JanitorResult(
-            pkg, log_id=log_id, start_time=start_time, finish_time=datetime.now(),
-            description=str(e))
+            pkg, log_id=log_id, start_time=start_time,
+            finish_time=datetime.now(), description=str(e))
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
@@ -373,7 +373,7 @@ def process_one(
             return JanitorResult(
                 pkg, log_id=log_id,
                 start_time=start_time, finish_time=datetime.now(),
-                description="Build failed.")
+                description="Build failed.: %s" % e)
         finally:
             src_build_log_path = os.path.join(output_directory, 'build.log')
             if os.path.exists(src_build_log_path):
@@ -400,19 +400,20 @@ def process_one(
             # Oh, well.
             note('No changes file found: %s', e)
 
+        def get_proposal_description(existing_proposal):
+            if existing_proposal:
+                existing_description = existing_proposal.get_description()
+                existing_description = strip_janitor_blurb(
+                    existing_description)
+            else:
+                existing_description = None
+            description = discipline_runner.get_proposal_description(
+                existing_description)
+            return add_janitor_blurb(description, pkg, log_id)
+
         if mode != 'build-only':
             local_branch = Branch.open(os.path.join(output_directory, pkg))
             try:
-                def get_proposal_description(existing_proposal):
-                    if existing_proposal:
-                        existing_description = existing_proposal.get_description()
-                        existing_description = strip_janitor_blurb(existing_description)
-                    else:
-                        existing_description = None
-                    description = discipline_runner.get_proposal_description(
-                        existing_description)
-                    return add_janitor_blurb(description, pkg, log_id)
-
                 with Pending(main_branch, local_branch,
                              resume_branch=resume_branch) as ws:
                     enable_tag_pushing(local_branch)
@@ -543,7 +544,8 @@ def main(argv=None):
         state.store_run(
             result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
             result.start_time, result.finish_time, command,
-            result.description, result.proposal.url if result.proposal else None,
+            result.description,
+            result.proposal.url if result.proposal else None,
             build_version=result.build_version,
             build_distribution=result.build_distribution)
 
