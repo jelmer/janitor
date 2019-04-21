@@ -49,11 +49,9 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         (name, vcs_url, maintainer_email))
     if merge_proposal_url:
         cur.execute(
-            "INSERT OR IGNORE INTO merge_proposal (url, package) "
-            "VALUES (?, ?)",
+            "INSERT OR IGNORE INTO merge_proposal (url, package, status) "
+            "VALUES (?, ?, 'open')",
             (merge_proposal_url, name))
-        cur.execute('SELECT id FROM merge_proposal WHERE url = ?',
-                    (merge_proposal_url, ))
     else:
         merge_proposal_url = None
     cur.execute(
