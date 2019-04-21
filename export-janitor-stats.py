@@ -39,7 +39,8 @@ args = parser.parse_args()
 run_count = Gauge(
     'run_count', 'Number of total runs.')
 run_with_build_count = Gauge(
-    'run_with_build_count', 'Number of total runs with package built.')
+    'run_with_build_count', 'Number of total runs with package built.',
+    labelnames=('suite', ))
 run_with_proposal_count = Gauge(
     'run_with_proposal_count', 'Number of total runs with merge proposal.')
 last_success_gauge = Gauge(
@@ -47,12 +48,12 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-for (run_id, (start_time, finish_time), command, descritpion, package_name,
+for (run_id, (start_time, finish_time), command, description, package_name,
         merge_proposal_url, build_version,
         build_distribution) in state.iter_runs():
     run_count.inc()
     if build_version:
-        run_with_build_count.inc()
+        run_with_build_count.labels(suite=build_distribution).inc()
     if merge_proposal_url:
         run_with_proposal_count.inc()
 
