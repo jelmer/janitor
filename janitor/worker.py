@@ -59,11 +59,15 @@ from .trace import (
 )
 
 
-class JanitorLintianFixer(object):
+class LintianBrushWorker(object):
     """Janitor-specific Lintian Fixer."""
 
-    @staticmethod
-    def setup_argparser(subparser):
+    build_version_suffix = 'janitor+lintian'
+    build_suite = 'lintian-fixes'
+
+    def __init__(self, command, env):
+        self.committer = env.get('COMMITTER')
+        subparser = argparse.ArgumentParser(prog='lintian-brush')
         subparser.add_argument("fixers", nargs='*')
         subparser.add_argument(
             '--no-update-changelog', action="store_false", default=None,
@@ -78,16 +82,58 @@ class JanitorLintianFixer(object):
             '--propose-addon-only',
             help='Fixers that should be considered add-on-only.',
             type=str, action='append', default=DEFAULT_ADDON_FIXERS)
+        self.args = subparser.parse_args(command)
+
+    def make_changes(self, local_tree):
+        # TODO(jelmer): 'fixers' is wrong; it's actually tags.
+        fixers = get_fixers(
+            available_lintian_fixers(), tags=self.args.fixers)
+
+        with local_tree.lock_write():
+            self.applied, self.failed = run_lintian_fixers(
+                    local_tree, fixers,
+                    committer=self.committer,
+                    update_changelog=self.args.update_changelog,
+                    compat_release=self.args.compat_release)
+        if self.failed:
+            note('some fixers failed to run: %r', self.failed)
+
+        if not self.applied:
+            note('no fixers to apply')
+
+    def result(self):
+        return {
+            'applied': self.applied,
+            'failed': self.failed,
+            'add_on_only': not has_nontrivial_changes(
+                self.applied, self.args.propose_addon_only),
+        }
 
 
-class JanitorNewUpstreamMerger(object):
+class NewUpstreamWorker(object):
 
-    @staticmethod
-    def setup_argparser(subparser):
+    build_suite = 'upstream-releases'
+    build_version_suffix = 'janitor+newupstream'
+
+    def __init__(self, command, env):
+        subparser = argparse.ArgumentParser(prog='new-upstream')
         subparser.add_argument(
             '--snapshot',
             help='Merge a new upstream snapshot rather than a release',
             action='store_true')
+        self.args = subparser.parse_args(command)
+        self.upstream_version = None
+
+    def make_changes(self, local_tree):
+        try:
+            self.upstream_version = merge_upstream(
+                tree=local_tree, snapshot=self.args.snapshot)
+        except UpstreamAlreadyImported as e:
+            note('Last upstream version %s already imported' % e.version)
+            self.upstream_version = e.version
+
+    def result(self):
+        return {'upstream_version': self.upstream_version}
 
 
 class WorkerResult(object):
@@ -107,30 +153,19 @@ class WorkerFailure(Exception):
 debian_info = distro_info.DebianDistroInfo()
 
 
-lintian_subparser = argparse.ArgumentParser(prog='lintian-brush')
-JanitorLintianFixer.setup_argparser(lintian_subparser)
-
-new_upstream_subparser = argparse.ArgumentParser(prog='new-upstream')
-JanitorNewUpstreamMerger.setup_argparser(new_upstream_subparser)
-
-
 def process_package(vcs_url, env, command, output_directory,
                     build_command=None, pre_check_command=None,
                     post_check_command=None, possible_transports=None,
                     possible_hosters=None, resume_branch_url=None):
     pkg = env['PACKAGE']
-    committer = env.get('COMMITTER')
     # TODO(jelmer): sort out this mess:
     if command[0] == 'lintian-brush':
-        subargs = lintian_subparser.parse_args(command[1:])
-        build_version_suffix = 'janitor+lintian'
-        build_suite = 'lintian-fixes'
+        subworker = LintianBrushWorker(command[1:], env)
     elif command[0] == 'new-upstream':
-        subargs = new_upstream_subparser.parse_args(command[1:])
-        build_version_suffix = 'janitor+newupstream'
-        build_suite = 'upstream-releases'
+        subworker = NewUpstreamWorker(command[1:], env)
     else:
         raise WorkerFailure('unknown subcommand %s' % command[0])
+    build_suite = subworker.build_suite
     assert pkg is not None
     assert output_directory is not None
     output_directory = os.path.abspath(output_directory)
@@ -160,30 +195,9 @@ def process_package(vcs_url, env, command, output_directory,
 
         run_pre_check(ws.local_tree, pre_check_command)
 
-        if command[0] == 'lintian-brush':
-            # TODO(jelmer): 'fixers' is wrong; it's actually tags.
-            fixers = get_fixers(
-                available_lintian_fixers(), tags=subargs.fixers)
-
-            applied, failed = run_lintian_fixers(
-                    ws.local_tree, fixers,
-                    committer=committer,
-                    update_changelog=subargs.update_changelog,
-                    compat_release=subargs.compat_release)
-            if failed:
-                note('%s: some fixers failed to run: %r',
-                     pkg, failed)
-
-            if not applied:
-                return WorkerResult('no fixers to apply')
-
-        elif command[0] == 'new-upstream':
-            try:
-                upstream_version = merge_upstream(
-                    tree=ws.local_tree, snapshot=subargs.snapshot)
-            except UpstreamAlreadyImported as e:
-                return WorkerResult('Last upstream version %s already imported'
-                                    % e.version)
+        subworker.make_changes(ws.local_tree)
+        with open(os.path.join(output_directory, 'result.json'), 'w') as f:
+            json.dump(subworker.result(), f)
 
         if not ws.changes_since_main():
             return WorkerResult('Nothing to do.')
@@ -196,8 +210,8 @@ def process_package(vcs_url, env, command, output_directory,
 
         if build_command:
             add_dummy_changelog_entry(
-                ws.local_tree.basedir, build_version_suffix, build_suite,
-                'Build for debian-janitor apt repository.')
+                ws.local_tree.basedir, subworker.build_version_suffix,
+                build_suite, 'Build for debian-janitor apt repository.')
             with open(os.path.join(output_directory, 'build.log'), 'w') as f:
                 try:
                     build(ws.local_tree, outf=f, build_command=build_command,
@@ -226,19 +240,6 @@ def process_package(vcs_url, env, command, output_directory,
             build_suite = None
             changes_name = None
             cl_version = None
-
-        with open(os.path.join(output_directory, 'result.json'), 'w') as f:
-            if command[0] == 'new-upstream':
-                worker_result = {'upstream_version': upstream_version}
-            elif command[0] == 'lintian-brush':
-                worker_result = {
-                    'applied': applied,
-                    'add_on_only': not has_nontrivial_changes(
-                        applied, subargs.propose_addon_only),
-                }
-            else:
-                worker_result = {}
-            json.dump(worker_result, f)
 
         ws.defer_destroy()
         return WorkerResult(
