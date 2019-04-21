@@ -272,7 +272,7 @@ def main(argv=None):
     parser.add_argument(
         '--build-command',
         help='Build package to verify it.', type=str,
-        default='sbuild -v')
+        default='sbuild -v -d$DISTRIBUTION')
 
     parser.add_argument('command', nargs=argparse.REMAINDER)
 
