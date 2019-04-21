@@ -28,6 +28,7 @@ from breezy.ui import (
     NullOutputStream,
 )
 
+
 class JanitorUIFactory(NoninteractiveUIFactory):
     """UI Factory implementation for the janitor."""
 
@@ -50,7 +51,7 @@ class JanitorUIFactory(NoninteractiveUIFactory):
         sys.stderr.write('warning: %s\n' % msg)
 
 
-import breezy
+import breezy  # noqa: E402
 if not breezy._global_state:
     breezy.initialize(setup_ui=False)
     import breezy.ui
