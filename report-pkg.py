@@ -12,6 +12,7 @@ from janitor.build import (
     changes_filename,
     get_build_architecture,
 )  # noqa: E402
+from janitor.trace import warning
 
 parser = argparse.ArgumentParser(prog='report-pkg')
 parser.add_argument("directory")
@@ -100,7 +101,7 @@ Package Index
                             package_name, build_version,
                             get_build_architecture())
                         g.write('* Changes filename: `%s '
-                                '<../../..//apt/%s/%s>`_\n'
+                                '<../../../apt/%s/%s>`_\n'
                                 % (changes_name, build_distro, changes_name))
                     g.write('\n')
                     g.write('Command run::\n\n\t%s\n\n' % command)
@@ -117,6 +118,8 @@ Package Index
                     else:
                         raise AssertionError
                     g.write('\n\n')
+                    build_log_path = os.path.join(
+                        '..', 'logs', run_id, 'build.log')
                     if build_version:
                         changes_name = changes_filename(
                             package_name, build_version,
@@ -126,21 +129,30 @@ Package Index
                                 'by running one of::\n\n')
                         changes_path = os.path.join(
                             "../public_html/apt", build_distro, changes_name)
-                        for binary in changes_get_binaries(changes_path):
-                            g.write('\tapt install -t upstream-releases %s\n' %
+                        if not os.path.exists(changes_path):
+                            warning('Missing changes path %r', changes_path)
+                        else:
+                            for binary in changes_get_binaries(changes_path):
+                                g.write(
+                                    '\tapt install -t upstream-releases %s\n' %
                                     binary)
-                            g.write('\tapt install %s=%s\n' % (
-                                    binary, build_version))
+                                g.write('\tapt install %s=%s\n' % (
+                                        binary, build_version))
                         g.write('\n\n')
-                    else:
-                        g.write('.. literalinclude:: ../logs/%s/build.log\n'
-                                % run_id)
+                    elif os.path.exists(os.path.join(run_dir, build_log_path)):
+                        g.write('.. literalinclude:: %s\n' % build_log_path)
                         g.write('  :language: console\n')
                         g.write('  :linenos:\n')
-                        g.write('  :lines: -15-\n')
+                        with open(os.path.join(run_dir, build_log_path),
+                                  'r') as l:
+                            linecount = l.read().count('\n')
+                        if linecount > 15:
+                            # Just output the last 15 lines
+                            g.write('  :lines: %d-\n' % (linecount - 15))
                         g.write('\n')
-                    g.write('`Build log <../logs/%s/build.log>`_\n' %
-                            run_id)
+                    if os.path.exists(os.path.join(run_dir, build_log_path)):
+                        g.write('`Full build log <%s>`_\n' %
+                                build_log_path)
                     g.write("\n")
                     g.write("*Last Updated: " + time.asctime() + "*\n")
 
