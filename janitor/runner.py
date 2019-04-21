@@ -87,7 +87,7 @@ https://janitor.debian.net/pkg/%(package)s/%(log_id)s/.
 
 
 def strip_janitor_blurb(text):
-    return text[text.index(JANITOR_BLURB):]
+    return text[:text.index(JANITOR_BLURB)]
 
 
 def add_janitor_blurb(text, pkg, log_id):
