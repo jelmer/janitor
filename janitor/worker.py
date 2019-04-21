@@ -103,7 +103,12 @@ class LintianBrushWorker(object):
 
     def result(self):
         return {
-            'applied': self.applied,
+            'applied': [
+                {'summary': summary,
+                 'description': result.description,
+                 'fixed_lintian_tags': result.fixed_lintian_tags,
+                 'certainty': result.certainty}
+                for result, summary in self.applied],
             'failed': self.failed,
             'add_on_only': not has_nontrivial_changes(
                 self.applied, self.args.propose_addon_only),
