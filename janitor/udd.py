@@ -198,3 +198,26 @@ sources.vcs_url != '' \
                 maintainer_email=row[4], uploader_emails=uploader_emails
                 )
             row = cursor.fetchone()
+
+    def iter_source_packages_with_vcs(self, packages=None):
+        cursor = self._conn.cursor()
+
+        args = []
+        query = """\
+select sources.source, sources.version, sources.vcs_type, sources.vcs_url,
+sources.maintainer_email, sources.uploaders from sources
+where sources.vcs_url != ''
+"""
+        if packages is not None:
+            query += " AND sources.source IN %s"
+            args.append(tuple(packages))
+        query += " order by sources.source, sources.version desc"
+        cursor.execute(query, args)
+        row = cursor.fetchone()
+        while row:
+            uploader_emails = extract_uploader_emails(row[5])
+            yield PackageData(
+                name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
+                maintainer_email=row[4], uploader_emails=uploader_emails
+                )
+            row = cursor.fetchone()
