@@ -14,6 +14,8 @@ from janitor.build import (
 )  # noqa: E402
 from janitor.trace import warning  # noqa: E402
 
+FAIL_BUILD_LOG_TAIL = 15
+
 parser = argparse.ArgumentParser(prog='report-pkg')
 parser.add_argument("directory")
 args = parser.parse_args()
@@ -144,9 +146,10 @@ Package Index
                         with open(os.path.join(run_dir, build_log_path),
                                   'r') as buildf:
                             linecount = buildf.read().count('\n')
-                        if linecount > 15:
-                            # Just output the last 15 lines
-                            g.write('  :lines: %d-\n' % (linecount - 15))
+                        if linecount > FAIL_BUILD_LOG_TAIL:
+                            # Just output the last FAIL_BUILD_LOG_TAIL lines
+                            g.write('  :lines: %d-\n' %
+                                    (linecount - FAIL_BUILD_LOG_TAIL))
                         g.write('\n')
                     if os.path.exists(os.path.join(run_dir, build_log_path)):
                         g.write('`Full build log <%s>`_\n' %
