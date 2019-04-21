@@ -132,6 +132,13 @@ Package Index
                             g.write('\tapt install %s=%s\n' % (
                                     binary, build_version))
                         g.write('\n\n')
+                    else:
+                        g.write('.. literalinclude:: ../logs/%s/build.log\n'
+                                % run_id)
+                        g.write('  :language: console\n')
+                        g.write('  :linenos:\n')
+                        g.write('  :lines: -15-\n')
+                        g.write('\n')
                     g.write('`Build log <../logs/%s/build.log>`_\n' %
                             run_id)
                     g.write("\n")
