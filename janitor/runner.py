@@ -543,7 +543,7 @@ def main(argv=None):
         state.store_run(
             result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
             result.start_time, result.finish_time, command,
-            result.description, result.proposal.url,
+            result.description, result.proposal.url if result.proposal else None,
             build_version=result.build_version,
             build_distribution=result.build_distribution)
 
