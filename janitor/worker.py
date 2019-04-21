@@ -20,12 +20,6 @@ from datetime import datetime
 import distro_info
 import json
 import os
-import socket
-
-from breezy.branch import Branch
-from breezy import (
-    errors,
-)
 
 from silver_platter.debian import (
     BuildFailedError,
@@ -48,6 +42,8 @@ from silver_platter.utils import (
     run_pre_check,
     run_post_check,
     PostCheckFailed,
+    open_branch,
+    BranchUnavailable,
 )
 
 from .build import (
@@ -142,28 +138,20 @@ def process_package(vcs_url, env, command, output_directory,
     note('Processing: %s', pkg)
 
     try:
-        main_branch = Branch.open(
+        main_branch = open_branch(
             vcs_url, possible_transports=possible_transports)
-        if resume_branch_url:
-            resume_branch = Branch.open(
+    except BranchUnavailable as e:
+        raise WorkerFailure(str(e))
+
+    if resume_branch_url:
+        try:
+            resume_branch = open_branch(
                 resume_branch_url,
                 possible_transports=possible_transports)
-        else:
-            resume_branch = None
-    except socket.error:
-        raise WorkerFailure('ignoring, socket error')
-    except errors.NotBranchError as e:
-        raise WorkerFailure('Branch does not exist: %s' % e)
-    except errors.UnsupportedProtocol:
-        raise WorkerFailure('Branch available over unsupported protocol')
-    except errors.ConnectionError as e:
-        raise WorkerFailure(str(e))
-    except errors.PermissionDenied as e:
-        raise WorkerFailure(str(e))
-    except errors.InvalidHttpResponse as e:
-        raise WorkerFailure(str(e))
-    except errors.TransportError as e:
-        raise WorkerFailure(str(e))
+        except BranchUnavailable as e:
+            raise WorkerFailure(str(e))
+    else:
+        resume_branch = None
 
     with Workspace(main_branch, resume_branch=resume_branch,
                    path=os.path.join(output_directory, pkg)) as ws:
