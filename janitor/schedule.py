@@ -98,7 +98,10 @@ def schedule_udd_new_upstreams(policy, packages, shuffle=False):
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
-    for package in udd.iter_packages_with_new_upstream(packages or None):
+    for package, upstream_version in udd.iter_packages_with_new_upstream(
+            packages or None):
+        # TODO(jelmer): skip if "new-upstream $upstream_version" has already
+        # been processed
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:

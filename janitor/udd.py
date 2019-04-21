@@ -179,7 +179,8 @@ and vcs_type != ''"""
         args = []
         query = """\
 select sources.source, sources.version, sources.vcs_type, sources.vcs_url, \
-sources.maintainer_email, sources.uploaders from upstream \
+sources.maintainer_email, sources.uploaders, \
+upstream.upstream_version from upstream \
 inner join sources on upstream.version = sources.version \
 and upstream.source = sources.source where \
 status = 'newer package available' and \
@@ -196,7 +197,7 @@ sources.vcs_url != '' \
             yield PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
                 maintainer_email=row[4], uploader_emails=uploader_emails
-                )
+                ), row[6]
             row = cursor.fetchone()
 
     def iter_source_packages_with_vcs(self, packages=None):
