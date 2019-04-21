@@ -12,7 +12,7 @@ from janitor.build import (
     changes_filename,
     get_build_architecture,
 )  # noqa: E402
-from janitor.trace import warning
+from janitor.trace import warning  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-pkg')
 parser.add_argument("directory")
@@ -144,8 +144,8 @@ Package Index
                         g.write('  :language: console\n')
                         g.write('  :linenos:\n')
                         with open(os.path.join(run_dir, build_log_path),
-                                  'r') as l:
-                            linecount = l.read().count('\n')
+                                  'r') as buildf:
+                            linecount = buildf.read().count('\n')
                         if linecount > 15:
                             # Just output the last 15 lines
                             g.write('  :lines: %d-\n' % (linecount - 15))
