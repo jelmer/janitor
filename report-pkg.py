@@ -143,14 +143,14 @@ Package Index
                         changes_name = changes_filename(
                             package_name, build_version,
                             get_build_architecture())
-                        g.write('Install this package (if you have the ')
-                        g.write('`apt repository <../../../>`_ enabled) '
-                                'by running one of::\n\n')
                         changes_path = os.path.join(
                             "../public_html", build_distro, changes_name)
                         if not os.path.exists(changes_path):
                             warning('Missing changes path %r', changes_path)
                         else:
+                            g.write('Install this package (if you have the ')
+                            g.write('`apt repository <../../../>`_ enabled) '
+                                    'by running one of::\n\n')
                             for binary in changes_get_binaries(changes_path):
                                 g.write(
                                     '\tapt install -t upstream-releases %s\n' %

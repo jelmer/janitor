@@ -65,7 +65,7 @@ def build(local_tree, outf, build_command='build', result_dir=None,
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if result_dir:
         args.append('--result-dir=%s' % result_dir)
-    outf.write('Running %r\n' % (args, ))
+    outf.write('Running %r\n' % (build_command, ))
     outf.flush()
     env = dict(os.environ.items())
     if distribution is not None:
