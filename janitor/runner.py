@@ -540,7 +540,12 @@ def main(argv=None):
     else:
         open_mps_per_maintainer = None
 
-    for (queue_id, vcs_url, mode, env, command) in state.iter_queue():
+    while True:
+        try:
+            (queue_id, vcs_url, mode, env, command) = next(
+                state.iter_queue(limit=1))
+        except StopIteration:
+            break
         result = process_one(
             vcs_url, mode, env, command,
             max_mps_per_maintainer=args.max_mps_per_maintainer,

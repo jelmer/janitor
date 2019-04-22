@@ -163,10 +163,9 @@ LEFT JOIN package ON merge_proposal.package = package.name
         row = cur.fetchone()
 
 
-def iter_queue():
+def iter_queue(limit=None):
     cur = con.cursor()
-    cur.execute(
-        """
+    query = """
 SELECT
     package.branch_url,
     package.maintainer_email,
@@ -181,7 +180,10 @@ LEFT JOIN package ON package.name = queue.package
 ORDER BY
 queue.priority DESC,
 queue.id ASC
-""")
+"""
+    if limit:
+        query += " LIMIT %d" % limit
+    cur.execute(query)
     for row in cur.fetchall():
         (branch_url, maintainer_email, package, committer,
             command, mode, queue_id) = row
