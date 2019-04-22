@@ -359,8 +359,9 @@ def process_one(
         # that can tell us.
         resume_branch = None
         existing_proposal = None
-        warning('Unsupported hoster (%s), will attempt to push to %s',
-                e, main_branch.user_url)
+        if mode == 'push':
+            warning('Unsupported hoster (%s), will attempt to push to %s',
+                    e, main_branch.user_url)
     else:
         (resume_branch, overwrite, existing_proposal) = (
             find_existing_proposed(main_branch, hoster, subrunner.branch_name))
