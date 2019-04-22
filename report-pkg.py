@@ -28,6 +28,19 @@ def changes_get_binaries(changes_path):
         return changes['Binary'].split(' ')
 
 
+def include_console_log(f, log_path, tail=None):
+    f.write('.. literalinclude:: %s\n' % log_path)
+    f.write('  :language: console\n')
+    f.write('  :linenos:\n')
+    if tail:
+        with open(log_path, 'r') as logf:
+            linecount = logf.read().count('\n')
+        if linecount > tail:
+            # Just output the last tail lines
+            f.write('  :lines: %d-\n' % (linecount - tail))
+    f.write('\n')
+
+
 if not os.path.isdir(dir):
     os.mkdir(dir)
 
@@ -125,6 +138,7 @@ Package Index
                         raise AssertionError
                     g.write('\n\n')
                     build_log_path = os.path.join('..', run_id, 'build.log')
+                    worker_log_path = os.path.join('..', run_id, 'worker.log')
                     if build_version:
                         changes_name = changes_filename(
                             package_name, build_version,
@@ -145,20 +159,19 @@ Package Index
                                         binary, build_version))
                         g.write('\n\n')
                     elif os.path.exists(os.path.join(run_dir, build_log_path)):
-                        g.write('.. literalinclude:: %s\n' % build_log_path)
-                        g.write('  :language: console\n')
-                        g.write('  :linenos:\n')
-                        with open(os.path.join(run_dir, build_log_path),
-                                  'r') as buildf:
-                            linecount = buildf.read().count('\n')
-                        if linecount > FAIL_BUILD_LOG_TAIL:
-                            # Just output the last FAIL_BUILD_LOG_TAIL lines
-                            g.write('  :lines: %d-\n' %
-                                    (linecount - FAIL_BUILD_LOG_TAIL))
-                        g.write('\n')
+                        include_console_log(
+                            g, os.path.join(run_dir, build_log_path),
+                            FAIL_BUILD_LOG_TAIL)
+                    else:
+                        include_console_log(
+                            g, os.path.join(run_dir, worker_log_path))
                     if os.path.exists(os.path.join(run_dir, build_log_path)):
                         g.write('`Full build log <%s>`_\n' %
                                 build_log_path)
+                    elif os.path.exists(
+                            os.path.join(run_dir, worker_log_path)):
+                        g.write('`Full worker log <%s>`_\n' %
+                                worker_log_path)
                     g.write("\n")
                     g.write("*Last Updated: " + time.asctime() + "*\n")
 
