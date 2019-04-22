@@ -65,7 +65,7 @@ class UDD(object):
 
     def get_source_packages(self, packages, release=None):
         cursor = self._conn.cursor()
-        args = [packages]
+        args = [tuple(packages)]
         query = (
             "SELECT source, version, vcs_type, vcs_url, "
             "maintainer_email, uploaders "
