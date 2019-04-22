@@ -26,8 +26,8 @@ con = sqlite3.connect(
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, result_code, merge_proposal_url, build_version,
-              build_distribution):
+              command, description, result_code, merge_proposal_url,
+              build_version, build_distribution):
     """Store a run.
 
     :param run_id: Run id

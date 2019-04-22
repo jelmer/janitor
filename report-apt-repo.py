@@ -12,5 +12,20 @@ parser = argparse.ArgumentParser(prog='report-apt-repo')
 parser.add_argument("suite")
 args = parser.parse_args()
 
+present = {}
+
 for source, version in state.iter_published_packages(args.suite):
-    sys.stdout.write('* %s %s\n' % (source, Version(version).upstream_version))
+    present[source] = version
+
+unstable = {}
+for package in state.get_source_packages(
+        packages=set(present), release='unstable'):
+    unstable[package.name] = package.version
+
+for source in sorted(present):
+    sys.stdout.write(
+        '* %s %s' %
+        source, Version(present[source]).upstream_version)
+    if source in unstable:
+        sys.stdout.write(' (%s in unstable)' % (unstable[source], ))
+    sys.stdout.write('\n')

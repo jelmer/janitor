@@ -169,8 +169,9 @@ class NewUpstreamRunner(object):
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, description,
-                 code=None, proposal=None, is_new=None, build_distribution=None,
-                 build_version=None, changes_filename=None):
+                 code=None, proposal=None, is_new=None,
+                 build_distribution=None, build_version=None,
+                 changes_filename=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description

@@ -63,17 +63,27 @@ class UDD(object):
     def __init__(self, conn):
         self._conn = conn
 
-    def get_source_package(self, name):
+    def get_source_packages(self, packages, release=None):
         cursor = self._conn.cursor()
-        cursor.execute(
-            "SELECT source, vcs_type, vcs_url, maintainer_email, uploaders "
-            "FROM sources WHERE source = %s order by version desc", (name, ))
+        args = [packages]
+        query = (
+            "SELECT source, version, vcs_type, vcs_url, "
+            "maintainer_email, uploaders "
+            "FROM sources WHERE source IN %s")
+        if release:
+            query += " AND release = %s"
+            args.append(release)
+        query += " order by version desc"
+        cursor.execute(query, args)
         row = cursor.fetchone()
         uploader_emails = extract_uploader_emails(row[5])
-        return PackageData(
-                name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
-                maintainer_email=row[4],
-                uploader_emails=uploader_emails)
+        row = cursor.fetchone()
+        while row:
+            yield PackageData(
+                    name=row[0], version=row[1], vcs_type=row[2],
+                    vcs_url=row[3], maintainer_email=row[4],
+                    uploader_emails=uploader_emails)
+            row = cursor.fetchone()
 
     def iter_ubuntu_source_packages(self, packages=None, shuffle=False):
         # TODO(jelmer): Support shuffle
