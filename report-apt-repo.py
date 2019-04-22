@@ -11,14 +11,6 @@ parser = argparse.ArgumentParser(prog='report-apt-repo')
 parser.add_argument("suite")
 args = parser.parse_args()
 
-os.makedirs(args.suite, exist_ok=True)
-
-sys.stdout.write("""\
-Package Index
-=============
-
-""")
-
 for source, version in state.iter_published_packages(
         args.suite):
     sys.stdout.write('* %s %s\n' % (source, version))
