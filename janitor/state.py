@@ -245,6 +245,6 @@ def queue_length():
 def iter_published_packages(suite):
     cur = con.cursor()
     cur.execute("""
-select package, build_version from run where build_distribution = ?
+select distinct package, build_version from run where build_distribution = ?
 """, (suite, ))
     return cur.fetchall()
