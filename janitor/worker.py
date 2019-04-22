@@ -158,7 +158,7 @@ class NewUpstreamWorker(SubWorker):
                 tree=local_tree, snapshot=self.args.snapshot)
         except UpstreamAlreadyImported as e:
             note('Last upstream version %s already imported' % e.version)
-            self.error_description = "Upstream version already imported." % (
+            self.error_description = "Upstream version %s already imported." % (
                 e.version)
             self.error_code = 'upstream-already-imported'
             self.upstream_version = e.version
