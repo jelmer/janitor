@@ -285,7 +285,8 @@ def invoke_worker(
 
 def invoke_subprocess_worker(
         main_branch, env, command, output_directory, resume_branch=None,
-        pre_check=None, post_check=None, build_command=None):
+        pre_check=None, post_check=None, build_command=None,
+        log_path=None):
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
@@ -304,7 +305,13 @@ def invoke_subprocess_worker(
 
     args.extend(command)
 
-    subprocess.check_call(args, env=subprocess_env)
+    if log_path:
+        p = subprocess.Popen(
+            ["tee", log_path], stdin=subprocess.PIPE)
+        tee = p.stdin
+    else:
+        tee = sys.stdout
+    subprocess.check_call(args, env=subprocess_env, stdout=tee, stderr=tee)
 
 
 def process_one(
@@ -374,29 +381,36 @@ def process_one(
             invoke_subprocess_worker(
                     main_branch, env, command, output_directory,
                     resume_branch=resume_branch, pre_check=pre_check,
-                    post_check=post_check, build_command=build_command)
+                    post_check=post_check, build_command=build_command,
+                    log_path=os.path.join(output_directory, 'worker.log'))
         except subprocess.CalledProcessError:
-            return JanitorResult(
-                pkg, log_id=log_id,
-                start_time=start_time, finish_time=datetime.now(),
-                description="Build failed")
-        finally:
-            src_build_log_path = os.path.join(output_directory, 'build.log')
+            worker_success = False
+        else:
+            worker_success = True
+
+        for name in ['build.log', 'worker.log']:
+            src_build_log_path = os.path.join(output_directory, name)
             if os.path.exists(src_build_log_path):
                 dest_build_log_path = os.path.join(
                     log_dir, pkg, log_id)
                 os.makedirs(dest_build_log_path, exist_ok=True)
                 shutil.copy(src_build_log_path, dest_build_log_path)
 
-        result = JanitorResult(
-            pkg, log_id=log_id,
-            start_time=start_time, finish_time=datetime.now(),
-            description="Built succeeded.")
-
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
             with open(json_result_path, 'r') as f:
                 subrunner.read_worker_result(json.load(f))
+
+        if not worker_success:
+            return JanitorResult(
+                pkg, log_id=log_id,
+                start_time=start_time, finish_time=datetime.now(),
+                description="Build failed")
+
+        result = JanitorResult(
+            pkg, log_id=log_id,
+            start_time=start_time, finish_time=datetime.now(),
+            description="Build succeeded.")
 
         try:
             (result.changes_filename, result.build_version,
