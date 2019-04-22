@@ -240,3 +240,11 @@ def queue_length():
     cur = con.cursor()
     cur.execute('SELECT COUNT(*) FROM queue')
     return cur.fetchone()[0]
+
+
+def iter_published_packages(suite):
+    cur = con.cursor()
+    cur.execute("""
+select package, build_version from run where build_distribution = ?
+""", (suite, ))
+    return cur.fetchall()
