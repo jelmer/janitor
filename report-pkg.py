@@ -137,8 +137,8 @@ Package Index
                     else:
                         raise AssertionError
                     g.write('\n\n')
-                    build_log_path = os.path.join('..', run_id, 'build.log')
-                    worker_log_path = os.path.join('..', run_id, 'worker.log')
+                    build_log_path = 'build.log'
+                    worker_log_path = 'worker.log'
                     if build_version:
                         changes_name = changes_filename(
                             package_name, build_version,
