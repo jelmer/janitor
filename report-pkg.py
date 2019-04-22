@@ -108,7 +108,7 @@ Package Index
                             package_name, build_version,
                             get_build_architecture())
                         g.write('* Changes filename: `%s '
-                                '<../../../apt/%s/%s>`_\n'
+                                '<../../../%s/%s>`_\n'
                                 % (changes_name, build_distro, changes_name))
                     g.write('\n')
                     g.write('Try this locally::\n\n\t')
@@ -130,10 +130,10 @@ Package Index
                             package_name, build_version,
                             get_build_architecture())
                         g.write('Install this package (if you have the ')
-                        g.write('`apt repository <../../../apt/>`_ enabled) '
+                        g.write('`apt repository <../../../>`_ enabled) '
                                 'by running one of::\n\n')
                         changes_path = os.path.join(
-                            "../public_html/apt", build_distro, changes_name)
+                            "../public_html", build_distro, changes_name)
                         if not os.path.exists(changes_path):
                             warning('Missing changes path %r', changes_path)
                         else:
