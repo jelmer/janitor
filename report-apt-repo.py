@@ -19,7 +19,7 @@ for source, version in state.iter_published_packages(args.suite):
 
 unstable = {}
 for package in state.get_source_packages(
-        packages=set(present), release='unstable'):
+        packages=set(present), release='sid'):
     unstable[package.name] = package.version
 
 for source in sorted(present):
