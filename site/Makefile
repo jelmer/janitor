@@ -29,6 +29,12 @@ history.rst:
 queue.rst:
 	python3 ../report-queue.py > $@
 
+upstream-releases/package-list.rst:
+	python3 ../report-apt-repo.py upstream-releases > $@
+
+upstream-snapshots/package-list.rst:
+	python3 ../report-apt-repo.py upstream-snapshots > $@
+
 .PHONY: help Makefile pkg
 
 # Catch-all target: route all unknown targets to Sphinx using the new
