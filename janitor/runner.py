@@ -503,7 +503,7 @@ def main(argv=None):
     parser.add_argument(
         '--build-command',
         help='Build package to verify it.', type=str,
-        default='sbuild -v')
+        default=None)
     parser.add_argument(
         "--dry-run",
         help="Create branches but don't push or propose anything.",
