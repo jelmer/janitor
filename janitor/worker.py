@@ -62,7 +62,6 @@ from .trace import (
 class SubWorker(object):
 
     build_version_suffix = None
-    build_suite = None
 
     def __init__(self, command, env):
         pass
@@ -73,12 +72,14 @@ class SubWorker(object):
     def result(self):
         raise NotImplementedError(self.result)
 
+    def build_suite(self):
+        raise NotImplementedError(self.build_suite)
+
 
 class LintianBrushWorker(SubWorker):
     """Janitor-specific Lintian Fixer."""
 
     build_version_suffix = 'janitor+lintian'
-    build_suite = 'lintian-fixes'
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
@@ -129,10 +130,12 @@ class LintianBrushWorker(SubWorker):
                 self.applied, self.args.propose_addon_only),
         }
 
+    def build_suite(self):
+        return 'lintian-fixes'
+
 
 class NewUpstreamWorker(SubWorker):
 
-    build_suite = 'upstream-releases'
     build_version_suffix = 'janitor+newupstream'
 
     def __init__(self, command, env):
@@ -154,6 +157,12 @@ class NewUpstreamWorker(SubWorker):
 
     def result(self):
         return {'upstream_version': self.upstream_version}
+
+    def build_suite(self):
+        if self.args.snapshot:
+            return 'upstream-snapshots'
+        else:
+            return 'upstream-releases'
 
 
 class WorkerResult(object):
@@ -186,7 +195,7 @@ def process_package(vcs_url, env, command, output_directory,
     else:
         raise WorkerFailure('unknown subcommand %s' % command[0])
     subworker = subworker_cls(command[1:], env)
-    build_suite = subworker.build_suite
+    build_suite = subworker.build_suite()
     assert pkg is not None
     assert output_directory is not None
     output_directory = os.path.abspath(output_directory)
