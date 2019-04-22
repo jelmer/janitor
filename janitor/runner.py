@@ -318,11 +318,14 @@ def process_one(
     pkg = env['PACKAGE']
     if max_mps_per_maintainer and \
             open_mps_per_maintainer.get(maintainer_email, 0) \
-            >= max_mps_per_maintainer:
+            >= max_mps_per_maintainer and mode in ('propose', 'attempt-push'):
         warning(
-            'Skipping %s, maximum number of open merge proposals reached '
-            'for maintainer %s', pkg, maintainer_email)
-        return
+            'Not creating proposal for %s, maximum number of open merge '
+            'proposals reached for maintainer %s', pkg, maintainer_email)
+        if mode == 'propose':
+            mode = 'build-only'
+        if mode == 'attempt-push':
+            mode = 'push'
     if mode == "attempt-push" and "salsa.debian.org/debian/" in vcs_url:
         # Make sure we don't accidentally push to unsuspecting collab-maint
         # repositories, even if debian-janitor becomes a member of "debian"
