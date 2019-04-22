@@ -29,7 +29,7 @@ def changes_get_binaries(changes_path):
 
 
 def include_console_log(f, log_path, tail=None):
-    f.write('.. literalinclude:: %s\n' % log_path)
+    f.write('.. literalinclude:: %s\n' % os.path.basename(log_path))
     f.write('  :language: console\n')
     f.write('  :linenos:\n')
     if tail:
