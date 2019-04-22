@@ -35,7 +35,10 @@ from silver_platter.debian.lintian import (
 )
 from silver_platter.debian.upstream import (
     merge_upstream,
+    NewUpstreamMissing,
     UpstreamAlreadyImported,
+    UpstreamAlreadyMerged,
+    UpstreamBranchUnavailable,
 )
 
 from silver_platter.utils import (
@@ -151,13 +154,30 @@ class NewUpstreamWorker(SubWorker):
 
     def make_changes(self, local_tree):
         try:
-            self.upstream_version = merge_upstream(
+            old_upstream_version, self.upstream_version = merge_upstream(
                 tree=local_tree, snapshot=self.args.snapshot)
         except UpstreamAlreadyImported as e:
             note('Last upstream version %s already imported' % e.version)
-            self.error_description = "Upstream version already imported."
+            self.error_description = "Upstream version already imported." % (
+                e.version)
             self.error_code = 'upstream-already-imported'
             self.upstream_version = e.version
+        except UpstreamAlreadyMerged as e:
+            note('Last upstream version %s already merged' % e.version)
+            self.error_description = "Upstream version %s already merged." % (
+                e.version)
+            self.error_code = 'upstream-already-merged'
+            self.upstream_version = e.version
+        except NewUpstreamMissing:
+            note('Unable to find new upstream source.')
+            self.error_description = "Unable to find new upstream source."
+            self.error_code = 'new-upstream-missing'
+            self.upstream_version = None
+        except UpstreamBranchUnavailable:
+            note('Upstream branch was not available.')
+            self.error_description = "The upsteam branch was unavailable."
+            self.error_code = 'upstream-branch-unavailable'
+            self.upstream_version = None
 
     def result(self):
         return {
