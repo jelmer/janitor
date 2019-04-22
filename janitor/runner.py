@@ -169,11 +169,12 @@ class NewUpstreamRunner(object):
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, description,
-                 proposal=None, is_new=None, build_distribution=None,
+                 code=None, proposal=None, is_new=None, build_distribution=None,
                  build_version=None, changes_filename=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
+        self.code = code
         self.proposal = proposal
         self.is_new = is_new
         self.build_distribution = build_distribution
@@ -351,13 +352,14 @@ def process_one(
             vcs_url, possible_transports=possible_transports)
     except BranchUnavailable as e:
         return JanitorResult(
-            pkg, log_id=log_id, description=str(e))
+            pkg, log_id=log_id, description=str(e), code='branch-unavailable')
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
         if mode not in ('push', 'build-only'):
             return JanitorResult(
-                pkg, log_id, 'Hoster unsupported.')
+                pkg, log_id, description='Hoster unsupported.',
+                code='hoster-unsupported')
         # We can't figure out what branch to resume from when there's no hoster
         # that can tell us.
         resume_branch = None
@@ -400,11 +402,11 @@ def process_one(
         if not worker_success:
             return JanitorResult(
                 pkg, log_id=log_id,
-                description="Build failed")
+                description="Build failed", code='worker-failed')
 
         result = JanitorResult(
             pkg, log_id=log_id,
-            description="Build succeeded.")
+            description="Build succeeded.", code='success')
 
         try:
             (result.changes_filename, result.build_version,
@@ -431,7 +433,8 @@ def process_one(
             except BranchUnavailable as e:
                 return JanitorResult(
                     pkg, log_id,
-                    'result branch missing: %s' % e)
+                    description='result branch missing: %s' % e,
+                    code='result-branch-unavailable')
             try:
                 with Pending(main_branch, local_branch,
                              resume_branch=resume_branch) as ws:
@@ -447,10 +450,12 @@ def process_one(
             except NoSuchProject as e:
                 return JanitorResult(
                     pkg, log_id,
-                    'project %s was not found' % e.project)
+                    description='project %s was not found' % e.project,
+                    code='project-not-found')
             except PermissionDenied as e:
                 return JanitorResult(
-                    pkg, log_id,, str(e))
+                    pkg, log_id, description=str(e),
+                    code='permission-denied')
 
         if result.proposal and result.is_new:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
@@ -547,6 +552,7 @@ def main(argv=None):
             result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
             start_time, finish_time, command,
             result.description,
+            result.code,
             result.proposal.url if result.proposal else None,
             build_version=result.build_version,
             build_distribution=result.build_distribution)

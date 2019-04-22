@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS run (
    build_version string,
    -- Distribution the package was built for (e.g. "lintian-fixes")
    build_distribution string,
+   result_code string,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );

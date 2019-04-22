@@ -26,7 +26,7 @@ con = sqlite3.connect(
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, merge_proposal_url, build_version,
+              command, description, result_code, merge_proposal_url, build_version,
               build_distribution):
     """Store a run.
 
@@ -38,6 +38,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param finish_time: Finish time
     :param command: Command
     :param description: A human-readable description
+    :param result_code: Result code (as constant string)
     :param merge_proposal_url: Optional merge proposal URL
     :param build_version: Version that was built
     :param build_distribution: Build distribution
@@ -55,10 +56,11 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     else:
         merge_proposal_url = None
     cur.execute(
-        "INSERT INTO run (id, command, description, start_time, finish_time, "
-        "package, merge_proposal_url, build_version, build_distribution) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", (
-            run_id, ' '.join(command), description,
+        "INSERT INTO run (id, command, description, result_code, start_time, "
+        "finish_time, package, merge_proposal_url, build_version, "
+        "build_distribution) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
+            run_id, ' '.join(command), description, result_code,
             start_time.isoformat(), finish_time.isoformat(),
             name, merge_proposal_url,
             str(build_version) if build_version else None, build_distribution))
