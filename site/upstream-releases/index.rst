@@ -11,7 +11,7 @@ Using the repository
 
 To use the apt repository, run something like::
 
-   echo deb https://janitor.debian.net/apt upstream-releases/ > /etc/apt/sources.list.d/janitor.list
+   echo deb https://janitor.debian.net/ upstream-releases/ > /etc/apt/sources.list.d/janitor.list
    gpg --recv-keys 6F915003D1998D6A
    gpg --export 6F915003D1998D6A | sudo apt-key add -
    apt update

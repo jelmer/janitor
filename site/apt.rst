@@ -6,7 +6,7 @@ resulting Debian package.
 
 To use the apt repository, e.g. for lintian fixes, run::
 
-   echo deb https://janitor.debian.net/apt lintian-fixes/ > /etc/apt/sources.list.d/janitor.list
+   echo deb https://janitor.debian.net/ lintian-fixes/ > /etc/apt/sources.list.d/janitor.list
    gpg --recv-keys 6F915003D1998D6A
    gpg --export 6F915003D1998D6A | sudo apt-key add -
    apt update
