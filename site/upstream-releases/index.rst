@@ -27,7 +27,7 @@ Pinning
 
 Optionally, if you want to track a given package so upgrades happen automatically,
 add the following to ``/etc/apt/preferences`` (and see
-`the documentation about apt preferences <https://wiki.debian.orgAptPreferences>`_)::
+`the documentation about apt preferences <https://wiki.debian.org/AptPreferences>`_)::
 
     Package: cifs-utils
     Pin: release a=upstream-releases
