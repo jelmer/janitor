@@ -308,10 +308,11 @@ def invoke_subprocess_worker(
     if log_path:
         p = subprocess.Popen(
             ["tee", log_path], stdin=subprocess.PIPE)
-        tee = p.stdin
+        subprocess.check_call(
+            args, env=subprocess_env, stdout=p.stdin, stderr=p.stdin)
+        p.communicate()
     else:
-        tee = sys.stdout
-    subprocess.check_call(args, env=subprocess_env, stdout=tee, stderr=tee)
+        subprocess.check_call(args, env=subprocess_env)
 
 
 def process_one(
