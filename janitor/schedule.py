@@ -182,6 +182,8 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
 
     for package, tags in udd.iter_source_packages_by_lintian(
             available_fixers, packages if packages else None, shuffle=shuffle):
+        # TODO(jelmer): skip if "lintian-brush $tags" has already been
+        # processed for $package
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:
