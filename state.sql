@@ -18,8 +18,11 @@ CREATE TABLE IF NOT EXISTS run (
    start_time string,
    finish_time string,
    package string not null,
+   -- Associated merge proposal URL, if any.
    merge_proposal_url string null,
+   -- Debian version string of the built package
    build_version string,
+   -- Distribution the package was built for (e.g. "lintian-fixes")
    build_distribution string,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
