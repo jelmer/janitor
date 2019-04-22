@@ -168,13 +168,11 @@ class NewUpstreamRunner(object):
 
 class JanitorResult(object):
 
-    def __init__(self, pkg, log_id, start_time, finish_time, description,
+    def __init__(self, pkg, log_id, description,
                  proposal=None, is_new=None, build_distribution=None,
                  build_version=None, changes_filename=None):
         self.package = pkg
         self.log_id = log_id
-        self.start_time = start_time
-        self.finish_time = finish_time
         self.description = description
         self.proposal = proposal
         self.is_new = is_new
@@ -340,7 +338,6 @@ def process_one(
         mode = "propose"
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
-    start_time = datetime.now()
 
     if command[0] == "new-upstream":
         subrunner = NewUpstreamRunner()
@@ -354,14 +351,13 @@ def process_one(
             vcs_url, possible_transports=possible_transports)
     except BranchUnavailable as e:
         return JanitorResult(
-            pkg, log_id=log_id, start_time=start_time,
-            finish_time=datetime.now(), description=str(e))
+            pkg, log_id=log_id, description=str(e))
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
         if mode not in ('push', 'build-only'):
             return JanitorResult(
-                pkg, log_id, start_time, datetime.now(), 'Hoster unsupported.')
+                pkg, log_id, 'Hoster unsupported.')
         # We can't figure out what branch to resume from when there's no hoster
         # that can tell us.
         resume_branch = None
@@ -404,12 +400,10 @@ def process_one(
         if not worker_success:
             return JanitorResult(
                 pkg, log_id=log_id,
-                start_time=start_time, finish_time=datetime.now(),
                 description="Build failed")
 
         result = JanitorResult(
             pkg, log_id=log_id,
-            start_time=start_time, finish_time=datetime.now(),
             description="Build succeeded.")
 
         try:
@@ -436,7 +430,7 @@ def process_one(
                 local_branch = open_branch(os.path.join(output_directory, pkg))
             except BranchUnavailable as e:
                 return JanitorResult(
-                    pkg, log_id, start_time, datetime.now(),
+                    pkg, log_id,
                     'result branch missing: %s' % e)
             try:
                 with Pending(main_branch, local_branch,
@@ -452,11 +446,11 @@ def process_one(
                         existing_proposal=existing_proposal)
             except NoSuchProject as e:
                 return JanitorResult(
-                    pkg, log_id, start_time, datetime.now(),
+                    pkg, log_id,
                     'project %s was not found' % e.project)
             except PermissionDenied as e:
                 return JanitorResult(
-                    pkg, log_id, start_time, datetime.now(), str(e))
+                    pkg, log_id,, str(e))
 
         if result.proposal and result.is_new:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
@@ -476,32 +470,6 @@ def process_one(
                 dget_changes(changes_path, incoming)
 
     return result
-
-
-def process_queue(
-        todo, max_mps_per_maintainer,
-        build_command, open_mps_per_maintainer,
-        refresh=False, pre_check=None, post_check=None,
-        dry_run=False, incoming=None, output_directory=None):
-
-    possible_transports = []
-    possible_hosters = []
-
-    for (vcs_url, mode, env, command) in todo:
-        result = process_one(
-            vcs_url, mode, env, command, max_mps_per_maintainer,
-            build_command, open_mps_per_maintainer,
-            refresh=refresh, pre_check=pre_check, post_check=post_check,
-            dry_run=dry_run, incoming=incoming,
-            output_directory=output_directory,
-            possible_transports=possible_transports,
-            possible_hosters=possible_hosters)
-        state.store_run(
-            result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
-            result.start_time, result.finish_time, command,
-            result.description, result.proposal.url,
-            build_version=result.build_version,
-            build_distribution=result.build_distribution)
 
 
 def main(argv=None):
@@ -564,6 +532,7 @@ def main(argv=None):
                 state.iter_queue(limit=1))
         except StopIteration:
             break
+        start_time = datetime.now()
         result = process_one(
             vcs_url, mode, env, command,
             max_mps_per_maintainer=args.max_mps_per_maintainer,
@@ -573,9 +542,10 @@ def main(argv=None):
             dry_run=args.dry_run, incoming=args.incoming,
             debsign_keyid=args.debsign_keyid,
             log_dir=args.log_dir)
+        finish_time = datetime.now()
         state.store_run(
             result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
-            result.start_time, result.finish_time, command,
+            start_time, finish_time, command,
             result.description,
             result.proposal.url if result.proposal else None,
             build_version=result.build_version,
