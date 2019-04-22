@@ -40,6 +40,9 @@ args = parser.parse_args()
 run_count = Counter(
     'run_count', 'Number of total runs.',
     labelnames=('command', ))
+run_result_count = Counter(
+    'run_result_count', 'Number of runs by code.',
+    labelnames=('command', 'result_code'))
 run_with_build_count = Counter(
     'run_with_build_count', 'Number of total runs with package built.',
     labelnames=('command', ))
@@ -53,9 +56,10 @@ last_success_gauge = Gauge(
 
 for (run_id, (start_time, finish_time), command, description, package_name,
         merge_proposal_url, build_version,
-        build_distribution) in state.iter_runs():
+        build_distribution, result_code) in state.iter_runs():
     command = command.split(' ')[0]
     run_count.labels(command=command).inc()
+    run_result_count.labels(command=command, result_code=result_code).inc()
     if build_version:
         run_with_build_count.labels(command=command).inc()
     if merge_proposal_url:

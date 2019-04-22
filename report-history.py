@@ -16,18 +16,19 @@ History
 
 
 for (run_id, times, command, description, package, proposal_url,
-        changes_filename, build_distro) in state.iter_runs():
+        changes_filename, build_distro, result_code) in state.iter_runs():
     sys.stdout.write(
         '- `%(package)s <pkg/%(package)s>`_: '
         'Run `%(command)s <pkg/%(package)s/%(run_id)s/>`_.\n' %
         {'run_id': run_id,
          'package': package,
          'command': command.split(' ')[0]})
-    sys.stdout.write('  %s\n' % description)
     if proposal_url:
         sys.stdout.write(
             '  `Merge proposal <%(proposal_url)s>`_\n' %
             {'proposal_url': proposal_url})
+    if result_code:
+        sys.stdout.write(' => %s' % result_code)
     sys.stdout.write('\n')
 
 sys.stdout.write("\n")

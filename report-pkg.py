@@ -66,10 +66,13 @@ Package Index
             f.write('---------------------\n')
             for (run_id, (start_time, finish_time), command, description,
                     package_name, merge_proposal_url, build_version,
-                    build_distro) in state.iter_runs(name):
+                    build_distro, result_code) in state.iter_runs(name):
                 if build_version is None:
                     continue
-                f.write('* %s (for %s)\n' % (build_version, build_distro))
+                f.write('* %s (for %s)' % (build_version, build_distro))
+                if result_code:
+                    f.write(' => %s' % result_code)
+                f.write('\n')
             f.write('\n')
 
             f.write('Recent runs\n')
@@ -77,12 +80,14 @@ Package Index
 
             for (run_id, (start_time, finish_time), command, description,
                     package_name, merge_proposal_url, build_version,
-                    build_distro) in state.iter_runs(name):
+                    build_distro, result_code) in state.iter_runs(name):
                 kind = command.split(' ')[0]
                 f.write('* `%s: %s <%s/>`_' % (
                     finish_time.isoformat(timespec='minutes'), kind, run_id))
                 if merge_proposal_url:
                     f.write(' (`merge proposal <%s>`_)' % merge_proposal_url)
+                if result_code:
+                    f.write(' => %s' % result_code)
                 f.write('\n')
 
                 run_dir = os.path.join(pkg_dir, run_id)
