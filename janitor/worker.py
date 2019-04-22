@@ -146,8 +146,8 @@ class NewUpstreamWorker(SubWorker):
             action='store_true')
         self.args = subparser.parse_args(command)
         self.upstream_version = None
-        self.error = None
-        self.error_kind = None
+        self.error_description = None
+        self.error_code = None
 
     def make_changes(self, local_tree):
         try:
@@ -156,13 +156,13 @@ class NewUpstreamWorker(SubWorker):
         except UpstreamAlreadyImported as e:
             note('Last upstream version %s already imported' % e.version)
             self.error_description = "Upstream version already imported."
-            self.error_kind = 'upstream-already-imported'
+            self.error_code = 'upstream-already-imported'
             self.upstream_version = e.version
 
     def result(self):
         return {
             'upstream_version': self.upstream_version,
-            'error_kind': self.error_kind,
+            'error_kind': self.error_code,
             'error_description': self.error_description,
         }
 
