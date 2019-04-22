@@ -207,7 +207,7 @@ sources.vcs_url != '' \
         query = """\
 select sources.source, sources.version, sources.vcs_type, sources.vcs_url,
 sources.maintainer_email, sources.uploaders from sources
-where sources.vcs_url != ''
+where sources.vcs_url != '' and '-' in sources.version
 """
         if packages is not None:
             query += " AND sources.source IN %s"
