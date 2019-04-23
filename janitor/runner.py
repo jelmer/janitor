@@ -493,6 +493,56 @@ async def process_one(
     return result
 
 
+async def export_queue_length():
+    while True:
+        queue_length.set(state.queue_length())
+        await asyncio.sleep(60)
+
+
+async def process_queue(
+        max_mps_per_maintainer,
+        build_command, open_mps_per_maintainer,
+        refresh=False, pre_check=None, post_check=None,
+        dry_run=False, incoming=None, log_dir=None,
+        debsign_keyid=None, prometheus=None):
+    last_success_gauge = Gauge(
+        'job_last_success_unixtime',
+        'Last time a batch job successfully finished')
+
+    while True:
+        try:
+            (queue_id, vcs_url, mode, env, command) = next(
+                state.iter_queue(limit=1))
+        except StopIteration:
+            break
+        start_time = datetime.now()
+        result = await process_one(
+            vcs_url, mode, env, command,
+            max_mps_per_maintainer=max_mps_per_maintainer,
+            open_mps_per_maintainer=open_mps_per_maintainer,
+            refresh=refresh, pre_check=pre_check,
+            build_command=build_command, post_check=post_check,
+            dry_run=dry_run, incoming=incoming,
+            debsign_keyid=debsign_keyid,
+            log_dir=log_dir)
+        finish_time = datetime.now()
+        state.store_run(
+            result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
+            start_time, finish_time, command,
+            result.description,
+            result.code,
+            result.proposal.url if result.proposal else None,
+            build_version=result.build_version,
+            build_distribution=result.build_distribution)
+
+        state.drop_queue_item(queue_id)
+
+        last_success_gauge.set_to_current_time()
+        if prometheus:
+            push_to_gateway(
+                prometheus, job='janitor.runner', registry=REGISTRY)
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.runner')
@@ -536,10 +586,6 @@ def main(argv=None):
 
     args = parser.parse_args()
 
-    last_success_gauge = Gauge(
-        'job_last_success_unixtime',
-        'Last time a batch job successfully finished')
-
     if args.max_mps_per_maintainer or args.prometheus:
         open_mps_per_maintainer = get_open_mps_per_maintainer()
         for maintainer_email, count in open_mps_per_maintainer.items():
@@ -547,40 +593,16 @@ def main(argv=None):
     else:
         open_mps_per_maintainer = None
 
-    while True:
-        try:
-            (queue_id, vcs_url, mode, env, command) = next(
-                state.iter_queue(limit=1))
-        except StopIteration:
-            break
-        start_time = datetime.now()
-        result = asyncio.run(process_one(
-            vcs_url, mode, env, command,
-            max_mps_per_maintainer=args.max_mps_per_maintainer,
-            open_mps_per_maintainer=open_mps_per_maintainer,
-            refresh=args.refresh, pre_check=args.pre_check,
-            build_command=args.build_command, post_check=args.post_check,
-            dry_run=args.dry_run, incoming=args.incoming,
-            debsign_keyid=args.debsign_keyid,
-            log_dir=args.log_dir))
-        finish_time = datetime.now()
-        state.store_run(
-            result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
-            start_time, finish_time, command,
-            result.description,
-            result.code,
-            result.proposal.url if result.proposal else None,
-            build_version=result.build_version,
-            build_distribution=result.build_distribution)
-
-        state.drop_queue_item(queue_id)
-
-        queue_length.set(state.queue_length())
-
-        last_success_gauge.set_to_current_time()
-        if args.prometheus:
-            push_to_gateway(
-                args.prometheus, job='janitor.runner', registry=REGISTRY)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(asyncio.gather(
+        loop.create_task(process_queue(
+            args.max_mps_per_maintainer,
+            args.build_command, open_mps_per_maintainer,
+            args.refresh, args.pre_check, args.post_check,
+            args.dry_run, args.incoming, args.log_dir,
+            args.debsign_keyid, args.prometheus)),
+        loop.create_task(export_queue_length()),
+        ))
 
 
 if __name__ == '__main__':
