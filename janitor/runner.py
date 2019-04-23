@@ -370,8 +370,17 @@ def process_one(
             warning('Unsupported hoster (%s), will attempt to push to %s',
                     e, main_branch.user_url)
     else:
-        (resume_branch, overwrite, existing_proposal) = (
-            find_existing_proposed(main_branch, hoster, subrunner.branch_name))
+        try:
+            (resume_branch, overwrite, existing_proposal) = (
+                find_existing_proposed(main_branch, hoster, subrunner.branch_name))
+        except NoSuchProject as e:
+            if mode not in ('push', 'build-only'):
+                return JanitorResult(
+                    pkg, log_id, description='Project %s not found.' % e.project,
+                    code='project-not-found')
+            resume_branch = None
+            overwrite = False
+            existing_proposal = None
 
     if refresh:
         resume_branch = None
