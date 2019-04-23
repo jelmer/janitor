@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import web
 import asyncio
 from datetime import datetime
 import json
@@ -35,8 +36,8 @@ from breezy.plugins.debian.util import (
 from prometheus_client import (
     Counter,
     Gauge,
-    push_to_gateway,
-    REGISTRY,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
 )
 
 from silver_platter.debian.lintian import (
@@ -71,6 +72,9 @@ packages_processed_count = Counter(
     'package_count', 'Number of packages processed.')
 queue_length = Gauge(
     'queue_length', 'Number of items in the queue.')
+last_success_gauge = Gauge(
+    'job_last_success_unixtime',
+    'Last time a batch job successfully finished')
 
 
 JANITOR_BLURB = """
@@ -317,7 +321,7 @@ async def invoke_subprocess_worker(
     else:
         p = await asyncio.create_subprocess_exec(
             *args, env=subprocess_env)
-        return await process.wait()
+        return await p.wait()
 
 
 async def process_one(
@@ -377,14 +381,15 @@ async def process_one(
     else:
         try:
             (resume_branch, overwrite, existing_proposal) = (
-                find_existing_proposed(main_branch, hoster, subrunner.branch_name))
+                find_existing_proposed(
+                    main_branch, hoster, subrunner.branch_name))
         except NoSuchProject as e:
             if mode not in ('push', 'build-only'):
                 return JanitorResult(
-                    pkg, log_id, description='Project %s not found.' % e.project,
+                    pkg, log_id,
+                    description='Project %s not found.' % e.project,
                     code='project-not-found')
             resume_branch = None
-            overwrite = False
             existing_proposal = None
 
     if refresh:
@@ -504,11 +509,7 @@ async def process_queue(
         build_command, open_mps_per_maintainer,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None, prometheus=None):
-    last_success_gauge = Gauge(
-        'job_last_success_unixtime',
-        'Last time a batch job successfully finished')
-
+        debsign_keyid=None):
     while True:
         try:
             (queue_id, vcs_url, mode, env, command) = next(
@@ -536,19 +537,32 @@ async def process_queue(
             build_distribution=result.build_distribution)
 
         state.drop_queue_item(queue_id)
-
         last_success_gauge.set_to_current_time()
-        if prometheus:
-            push_to_gateway(
-                prometheus, job='janitor.runner', registry=REGISTRY)
+
+
+async def run_web_server(listen_addr, port):
+    async def metrics(request):
+        resp = web.Response(body=generate_latest())
+        resp.content_type = CONTENT_TYPE_LATEST
+        return resp
+
+    app = web.Application()
+    app.router.add_get("/metrics", metrics)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, listen_addr, port)
+    await site.start()
 
 
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.runner')
     parser.add_argument(
-        '--prometheus', type=str,
-        help='Prometheus push gateway to export to.')
+        '--listen-address', type=str,
+        help='Listen address', default='localhost')
+    parser.add_argument(
+        '--port', type=int,
+        help='Listen port', default=9911)
     parser.add_argument(
         '--max-mps-per-maintainer',
         default=0,
@@ -586,12 +600,9 @@ def main(argv=None):
 
     args = parser.parse_args()
 
-    if args.max_mps_per_maintainer or args.prometheus:
-        open_mps_per_maintainer = get_open_mps_per_maintainer()
-        for maintainer_email, count in open_mps_per_maintainer.items():
-            open_proposal_count.labels(maintainer=maintainer_email).inc(count)
-    else:
-        open_mps_per_maintainer = None
+    open_mps_per_maintainer = get_open_mps_per_maintainer()
+    for maintainer_email, count in open_mps_per_maintainer.items():
+        open_proposal_count.labels(maintainer=maintainer_email).inc(count)
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
@@ -600,8 +611,9 @@ def main(argv=None):
             args.build_command, open_mps_per_maintainer,
             args.refresh, args.pre_check, args.post_check,
             args.dry_run, args.incoming, args.log_dir,
-            args.debsign_keyid, args.prometheus)),
+            args.debsign_keyid)),
         loop.create_task(export_queue_length()),
+        loop.create_task(run_web_server(args.listen_address, args.port)),
         ))
 
 
