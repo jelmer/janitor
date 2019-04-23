@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncio
 from datetime import datetime
 import json
 import os
@@ -283,7 +284,7 @@ def invoke_worker(
         possible_hosters=possible_hosters)
 
 
-def invoke_subprocess_worker(
+async def invoke_subprocess_worker(
         main_branch, env, command, output_directory, resume_branch=None,
         pre_check=None, post_check=None, build_command=None,
         log_path=None):
@@ -306,16 +307,20 @@ def invoke_subprocess_worker(
     args.extend(command)
 
     if log_path:
-        p = subprocess.Popen(
-            ["tee", log_path], stdin=subprocess.PIPE)
-        subprocess.check_call(
-            args, env=subprocess_env, stdout=p.stdin, stderr=p.stdin)
-        p.communicate()
+        read, write = os.pipe()
+        p = await asyncio.create_subprocess_exec(
+            *args, env=subprocess_env, stdout=write, stderr=write)
+        os.close(write)
+        tee = await asyncio.create_subprocess_exec('tee', log_path, stdin=read)
+        os.close(read)
+        return await tee.wait()
     else:
-        subprocess.check_call(args, env=subprocess_env)
+        p = await asyncio.create_subprocess_exec(
+            *args, env=subprocess_env)
+        return await process.wait()
 
 
-def process_one(
+async def process_one(
         vcs_url, mode, env, command,
         max_mps_per_maintainer,
         build_command, open_mps_per_maintainer,
@@ -387,7 +392,7 @@ def process_one(
 
     with tempfile.TemporaryDirectory() as output_directory:
         try:
-            invoke_subprocess_worker(
+            await invoke_subprocess_worker(
                     main_branch, env, command, output_directory,
                     resume_branch=resume_branch, pre_check=pre_check,
                     post_check=post_check, build_command=build_command,
@@ -549,7 +554,7 @@ def main(argv=None):
         except StopIteration:
             break
         start_time = datetime.now()
-        result = process_one(
+        result = asyncio.run(process_one(
             vcs_url, mode, env, command,
             max_mps_per_maintainer=args.max_mps_per_maintainer,
             open_mps_per_maintainer=open_mps_per_maintainer,
@@ -557,7 +562,7 @@ def main(argv=None):
             build_command=args.build_command, post_check=args.post_check,
             dry_run=args.dry_run, incoming=args.incoming,
             debsign_keyid=args.debsign_keyid,
-            log_dir=args.log_dir)
+            log_dir=args.log_dir))
         finish_time = datetime.now()
         state.store_run(
             result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
