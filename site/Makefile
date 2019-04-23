@@ -35,6 +35,9 @@ upstream-releases/package-list.rst:
 upstream-snapshots/package-list.rst:
 	python3 ../report-apt-repo.py upstream-snapshots > $@
 
+logs:
+	for I in $$(find pkg -name '*.log'); do { mkdir -p _build/html/$$(dirname $$I); ln -f $$I _build/html/$$I; } done
+
 .PHONY: help Makefile pkg
 
 # Catch-all target: route all unknown targets to Sphinx using the new
