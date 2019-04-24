@@ -16,7 +16,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from debian.changelog import Version
-from datetime import datetime
 import os
 import shlex
 import psycopg2
@@ -66,8 +65,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         "build_distribution) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
             run_id, ' '.join(command), description, result_code,
-            start_time.isoformat(), finish_time.isoformat(),
-            name, merge_proposal_url,
+            start_time, finish_time, name, merge_proposal_url,
             str(build_version) if build_version else None, build_distribution))
     conn.commit()
 
@@ -115,8 +113,7 @@ LEFT JOIN package ON package.name = run.package
     row = cur.fetchone()
     while row:
         yield (row[0],
-               (datetime.fromisoformat(row[2]),
-                datetime.fromisoformat(row[3])),
+               (row[2], row[3]),
                row[1], row[4], row[5], row[6],
                Version(row[7]) if row[7] else None, row[8],
                row[9] if row[9] else None)
@@ -226,7 +223,7 @@ def add_to_queue(vcs_url, mode, env, command, priority=None):
     except sqlite3.IntegrityError:
         # No need to add it to the queue multiple times
         return False
-    con.commit()
+    conn.commit()
     return True
 
 
@@ -234,9 +231,9 @@ def set_proposal_status(url, status):
     cur = conn.cursor()
     cur.execute("""
 INSERT INTO merge_proposal (url, status) VALUES (%s, %s)
-ON CONFLICT DO UPDATE SET status = %s
+ON CONFLICT (url) DO UPDATE SET status = %s
 """, (url, status, status))
-    con.commit()
+    conn.commit()
 
 
 def queue_length():
