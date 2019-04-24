@@ -140,7 +140,7 @@ class LintianBrushRunner(object):
                 return 'Nothing to do.'
 
     def allow_create_proposal(self):
-        return self.applied
+        return self.applied and not self.add_on_only
 
 
 class NewUpstreamRunner(object):
