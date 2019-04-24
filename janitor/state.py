@@ -139,19 +139,20 @@ WHERE
     return None
 
 
-def iter_proposals(package):
+def iter_proposals(package=None):
     cur = conn.cursor()
-    cur.execute(
-        """
+    args = []
+    query = """
 SELECT
-    url
+    package, url, status
 FROM
     merge_proposal
 LEFT JOIN package ON merge_proposal.package = package.name
-WHERE
-    package.name =%s
-""",
-        (package, ))
+"""
+    if package:
+        args.append(package)
+        query += " WHERE package = %s"
+    cur.execute(query, args)
     return cur.fetchall()
 
 
