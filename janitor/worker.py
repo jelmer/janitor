@@ -38,6 +38,7 @@ from silver_platter.debian.upstream import (
     NewUpstreamMissing,
     UpstreamAlreadyImported,
     UpstreamAlreadyMerged,
+    UpstreamMergeConflicted,
     UpstreamBranchUnavailable,
 )
 
@@ -157,13 +158,13 @@ class NewUpstreamWorker(SubWorker):
             old_upstream_version, self.upstream_version = merge_upstream(
                 tree=local_tree, snapshot=self.args.snapshot)
         except UpstreamAlreadyImported as e:
-            note('Last upstream version %s already imported' % e.version)
+            note('Last upstream version %s already imported', e.version)
             self.error_description = (
                 "Upstream version %s already imported." % (e.version))
             self.error_code = 'upstream-already-imported'
             self.upstream_version = e.version
         except UpstreamAlreadyMerged as e:
-            note('Last upstream version %s already merged' % e.version)
+            note('Last upstream version %s already merged', e.version)
             self.error_description = "Upstream version %s already merged." % (
                 e.version)
             self.error_code = 'upstream-already-merged'
@@ -178,6 +179,13 @@ class NewUpstreamWorker(SubWorker):
             self.error_description = "The upsteam branch was unavailable."
             self.error_code = 'upstream-branch-unavailable'
             self.upstream_version = None
+        except UpstreamMergeConflicted as e:
+            note('Merging new upstream version %s result in conflicts.',
+                 e.version)
+            self.error_description = "Upstream version %s conflicted." % (
+                e.version)
+            self.error_code = 'upstream-merged-conflicts'
+            self.upstream_version = e.version
 
     def result(self):
         return {
