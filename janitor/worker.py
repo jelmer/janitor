@@ -191,7 +191,8 @@ class NewUpstreamWorker(SubWorker):
             note('Unable to find tag %s for previous upstream version %s',
                  e.tag_name, e.version)
             self.error_description = (
-                 "Previous upstream version %s missing (tag: %s)" % e.version)
+                 "Previous upstream version %s missing (tag: %s)" %
+                 (e.version, e.tag_name))
             self.error_code = 'previous-upstream-missing'
             self.upstream_version = None
 
