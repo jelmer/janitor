@@ -16,7 +16,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from debian.changelog import Version
-import os
 import shlex
 import psycopg2
 
@@ -219,15 +218,11 @@ def add_to_queue(vcs_url, mode, env, command, priority=None):
         "branch_url = %s, maintainer_email = %s",
         (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
          vcs_url, env['MAINTAINER_EMAIL']))
-    try:
-        cur.execute(
-            "INSERT INTO queue (package, command, committer, mode, priority) "
-            "VALUES (%s, %s, %s, %s, %s)", (
-                env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode,
-                priority))
-    except sqlite3.IntegrityError:
-        # No need to add it to the queue multiple times
-        return False
+    cur.execute(
+        "INSERT INTO queue (package, command, committer, mode, priority) "
+        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING", (
+            env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode,
+            priority))
     conn.commit()
     return True
 
