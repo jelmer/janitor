@@ -209,7 +209,7 @@ def drop_queue_item(queue_id):
     conn.commit()
 
 
-def add_to_queue(vcs_url, mode, env, command, priority=None):
+def add_to_queue(vcs_url, mode, env, command, priority=0):
     assert env['PACKAGE']
     cur = conn.cursor()
     cur.execute(
