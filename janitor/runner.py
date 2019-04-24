@@ -396,16 +396,11 @@ async def process_one(
         resume_branch = None
 
     with tempfile.TemporaryDirectory() as output_directory:
-        try:
-            await invoke_subprocess_worker(
-                    main_branch, env, command, output_directory,
-                    resume_branch=resume_branch, pre_check=pre_check,
-                    post_check=post_check, build_command=build_command,
-                    log_path=os.path.join(output_directory, 'worker.log'))
-        except subprocess.CalledProcessError:
-            worker_success = False
-        else:
-            worker_success = True
+        retcode = await invoke_subprocess_worker(
+                main_branch, env, command, output_directory,
+                resume_branch=resume_branch, pre_check=pre_check,
+                post_check=post_check, build_command=build_command,
+                log_path=os.path.join(output_directory, 'worker.log'))
 
         for name in ['build.log', 'worker.log']:
             src_build_log_path = os.path.join(output_directory, name)
@@ -420,7 +415,7 @@ async def process_one(
             with open(json_result_path, 'r') as f:
                 subrunner.read_worker_result(json.load(f))
 
-        if not worker_success:
+        if retcode != 0:
             return JanitorResult(
                 pkg, log_id=log_id,
                 description="Build failed", code='worker-failed')
