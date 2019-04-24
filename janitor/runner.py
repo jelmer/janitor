@@ -417,9 +417,16 @@ async def process_one(
                 subrunner.read_worker_result(json.load(f))
 
         if retcode != 0:
-            return JanitorResult(
-                pkg, log_id=log_id,
-                description="Build failed", code='worker-failed')
+            if os.path.exists(
+                os.path.join(output_directory, 'build.log')):
+                return JanitorResult(
+                    pkg, log_id=log_id,
+                    description="Build failed", code='build-failed')
+            else:
+                return JanitorResult(
+                    pkg, log_id=log_id,
+                    description="Worker failed", code='worker-failed')
+
 
         result = JanitorResult(
             pkg, log_id=log_id,
