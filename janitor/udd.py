@@ -67,9 +67,10 @@ class UDD(object):
         cursor = self._conn.cursor()
         args = [tuple(packages)]
         query = (
-            "SELECT source, version, vcs_type, vcs_url, "
+            "SELECT DISTINCT ON (source) "
+            "source, version, vcs_type, vcs_url, "
             "maintainer_email, uploaders "
-            "FROM sources WHERE source IN %s")
+            "FROM sources WHERE source IN %s ORDER BY source, version DESC")
         if release:
             query += " AND release = %s"
             args.append(release)
@@ -93,15 +94,16 @@ class UDD(object):
         cursor = self._conn.cursor()
         cursor.execute("""
 SELECT
-    distinct source, version, vcs_type, vcs_url, maintainer_email, uploaders
-FROM ubuntu_sources WHERE vcs_type != '' AND
+    DISTINCT ON (source)
+    source, version, vcs_type, vcs_url, maintainer_email, uploaders
+    FROM ubuntu_sources WHERE vcs_type != '' AND
 release = %s AND version LIKE '%%ubuntu%%' AND
 NOT EXISTS (SELECT * FROM sources WHERE
 source = ubuntu_sources.source)""" + (
                 " AND source IN %s" if packages is not None else ""),
                 ((release, ) +
                     ((tuple(packages),) if packages is not None else ())) +
-                """ order by source, version desc""")
+                """ ORDER BY source, version DESC""")
         row = cursor.fetchone()
         while row:
             uploader_emails = extract_uploader_emails(row[5])
@@ -126,7 +128,7 @@ source = ubuntu_sources.source)""" + (
                 row = cursor.fetchone()
         args = [tuple(tags)]
         query = """
-SELECT DISTINCT
+SELECT DISTINCT ON (sources.source)
     sources.source,
     sources.version,
     sources.vcs_type,
@@ -140,16 +142,17 @@ INNER JOIN sources ON
     sources.source = lintian.package AND
     sources.version = lintian.package_version AND
     sources.release = 'sid'
-WHERE tag IN %s AND package_type = 'source' AND vcs_type != ''"""
+WHERE tag IN %s AND package_type = 'source' AND vcs_type != ''
+"""
         if packages is not None:
             query += " AND sources.source IN %s"
             args.append(tuple(packages))
-        query += " order by sources.source, sources.version desc"
+        query += " ORDER BY sources.source, sources.version DESC"
         cursor.execute(query, args)
         process(cursor)
         args = [tuple(tags)]
         query = """\
-SELECT DISTINCT
+SELECT DISTINCT ON (sources.source)
     sources.source,
     sources.version,
     sources.vcs_type,
@@ -168,7 +171,7 @@ and vcs_type != ''"""
         if packages is not None:
             query += " AND sources.source IN %s"
             args.append(tuple(packages))
-        query += " order by sources.source, sources.version desc"
+        query += " ORDER BY sources.source, sources.version DESC"
         cursor.execute(query, args)
         process(cursor)
         package_values = package_rows.values()
@@ -188,18 +191,19 @@ and vcs_type != ''"""
 
         args = []
         query = """\
-select sources.source, sources.version, sources.vcs_type, sources.vcs_url, \
+SELECT DISTINCT ON (sources.source)
+sources.source, sources.version, sources.vcs_type, sources.vcs_url, \
 sources.maintainer_email, sources.uploaders, \
 upstream.upstream_version from upstream \
-inner join sources on upstream.version = sources.version \
-and upstream.source = sources.source where \
-status = 'newer package available' and \
+INNER JOIN sources on upstream.version = sources.version \
+AND upstream.source = sources.source where \
+status = 'newer package available' AND \
 sources.vcs_url != '' \
 """
         if packages is not None:
             query += " AND upstream.source IN %s"
             args.append(tuple(packages))
-        query += " order by sources.source, sources.version desc"
+        query += " ORDER BY sources.source, sources.version DESC"
         cursor.execute(query, args)
         row = cursor.fetchone()
         while row:
@@ -215,14 +219,15 @@ sources.vcs_url != '' \
 
         args = []
         query = """\
-select sources.source, sources.version, sources.vcs_type, sources.vcs_url,
+SELECT DISTINCT ON (sources.source)
+sources.source, sources.version, sources.vcs_type, sources.vcs_url,
 sources.maintainer_email, sources.uploaders from sources
 where sources.vcs_url != '' and position('-' in sources.version) > 0
 """
         if packages is not None:
             query += " AND sources.source IN %s"
             args.append(tuple(packages))
-        query += " order by sources.source, sources.version desc"
+        query += " ORDER BY sources.source, sources.version DESC"
         cursor.execute(query, args)
         row = cursor.fetchone()
         while row:
@@ -235,7 +240,7 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
 
     def get_popcon_score(self, package):
         cursor = self._conn.cursor()
-        query = "select insts from sources_popcon where name = ?"
+        query = "SELECT insts FROM sources_popcon WHERE name = ?"
         cursor.execute(query, (package,))
         row = cursor.fetchone()
         if row:
