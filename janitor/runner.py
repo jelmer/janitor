@@ -317,7 +317,8 @@ async def invoke_subprocess_worker(
         os.close(write)
         tee = await asyncio.create_subprocess_exec('tee', log_path, stdin=read)
         os.close(read)
-        return await tee.wait()
+        await tee.wait()
+        return await p.wait()
     else:
         p = await asyncio.create_subprocess_exec(
             *args, env=subprocess_env)
