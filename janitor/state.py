@@ -50,13 +50,14 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     cur = conn.cursor()
     cur.execute(
         "INSERT INTO package (name, branch_url, maintainer_email) "
-        "VALUES (%s, %s, %s) ON CONFLICT (name) DO SET "
+        "VALUES (%s, %s, %s) ON CONFLICT (name) DO UPDATE SET "
         "branch_url = %s, maintainer_email = %s",
         (name, vcs_url, maintainer_email, vcs_url, maintainer_email))
     if merge_proposal_url:
         cur.execute(
             "INSERT INTO merge_proposal (url, package, status) "
-            "VALUES (%s, %s, 'open') ON CONFLICT (url) DO SET package = %s",
+            "VALUES (%s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
+            "package = %s",
             (merge_proposal_url, name, name))
     else:
         merge_proposal_url = None
@@ -214,8 +215,8 @@ def add_to_queue(vcs_url, mode, env, command, priority=None):
     cur = conn.cursor()
     cur.execute(
         "insert INTO package (name, branch_url, maintainer_email) "
-        "VALUES (%s, %s, %s) ON CONFLICT (name) DO SET branch_url = %s, "
-        "maintainer_email = %s",
+        "VALUES (%s, %s, %s) ON CONFLICT (name) DO UPDATE SET "
+        "branch_url = %s, maintainer_email = %s",
         (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
          vcs_url, env['MAINTAINER_EMAIL']))
     try:
