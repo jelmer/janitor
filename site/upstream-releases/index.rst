@@ -6,6 +6,11 @@ to automatically merge in a new upstream version.
 
 These packages are currently only available for amd64.
 
+.. warning::
+   The packages in this repository were created automatically, without review
+   from a human.
+
+
 Using the repository
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -36,6 +41,7 @@ add the following to ``/etc/apt/preferences`` (and see
 Package list
 ~~~~~~~~~~~~
 
-The following source packages with new upstream releases merge are currently available:
+The following source packages with new upstream releases merged are currently
+available:
 
 .. include:: package-list.rst
