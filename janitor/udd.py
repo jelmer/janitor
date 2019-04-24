@@ -70,11 +70,11 @@ class UDD(object):
             "SELECT DISTINCT ON (source) "
             "source, version, vcs_type, vcs_url, "
             "maintainer_email, uploaders "
-            "FROM sources WHERE source IN %s ORDER BY source, version DESC")
+            "FROM sources WHERE source IN %s")
         if release:
             query += " AND release = %s"
             args.append(release)
-        query += " order by version desc"
+        query += " ORDER BY source, version DESC"
         cursor.execute(query, args)
         row = cursor.fetchone()
         uploader_emails = extract_uploader_emails(row[5])
