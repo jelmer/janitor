@@ -40,6 +40,7 @@ from silver_platter.debian.upstream import (
     UpstreamAlreadyMerged,
     UpstreamMergeConflicted,
     UpstreamBranchUnavailable,
+    PreviousVersionTagMissing,
 )
 
 from silver_platter.utils import (
@@ -186,6 +187,13 @@ class NewUpstreamWorker(SubWorker):
                 e.version)
             self.error_code = 'upstream-merged-conflicts'
             self.upstream_version = e.version
+        except PreviousVersionTagMissing as e:
+            note('Unable to find tag %s for previous upstream version %s',
+                 e.tag_name, e.version)
+            self.error_description = (
+                 "Previous upstream version %s missing (tag: %s)" % e.version)
+            self.error_code = 'previous-upstream-missing'
+            self.upstream_version = None
 
     def result(self):
         return {
