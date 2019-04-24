@@ -129,6 +129,11 @@ for run in state.iter_runs():
         g.write("*Last Updated: " + time.asctime() + "*\n")
 
 
+merge_proposals = {}
+for package, url, status in state.iter_proposals():
+    merge_proposals.setdefault(package, []).append((url, status))
+
+
 with open(os.path.join(dir, 'index.rst'), 'w') as indexf:
     indexf.write("""\
 Package Index
@@ -155,9 +160,8 @@ Package Index
 
             f.write('Recent merge proposals\n')
             f.write('----------------------\n')
-            for merge_proposal_url in state.iter_proposals(name):
+            for merge_proposal_url, status in merge_proposals.get(name, []):
                 f.write('* `merge proposal <%s>`_\n' % merge_proposal_url)
-
             f.write('\n')
 
             f.write('Recent package builds\n')
