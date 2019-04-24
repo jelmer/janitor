@@ -19,10 +19,15 @@ from debian.changelog import Version
 from datetime import datetime
 import os
 import shlex
-import sqlite3
+import psycopg2
 
-con = sqlite3.connect(
-    os.path.join(os.path.dirname(__file__), '..', 'state.db'))
+
+conn = psycopg2.connect(
+    database="janitor",
+    user="janitor",
+    port=5432,
+    host="brangwain.vpn.jelmer.uk")
+conn.set_client_encoding('UTF8')
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
@@ -43,15 +48,15 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param build_version: Version that was built
     :param build_distribution: Build distribution
     """
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute(
-        "insert or ignore INTO package (name, branch_url, maintainer_email) "
-        "VALUES (?, ?, ?)",
+        "INSERT INTO package (name, branch_url, maintainer_email) "
+        "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
         (name, vcs_url, maintainer_email))
     if merge_proposal_url:
         cur.execute(
-            "INSERT OR IGNORE INTO merge_proposal (url, package, status) "
-            "VALUES (?, ?, 'open')",
+            "INSERT INTO merge_proposal (url, package, status) "
+            "VALUES (%s, %s, 'open') ON CONFLICT DO NOTHING",
             (merge_proposal_url, name))
     else:
         merge_proposal_url = None
@@ -59,16 +64,16 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         "INSERT INTO run (id, command, description, result_code, start_time, "
         "finish_time, package, merge_proposal_url, build_version, "
         "build_distribution) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
             run_id, ' '.join(command), description, result_code,
             start_time.isoformat(), finish_time.isoformat(),
             name, merge_proposal_url,
             str(build_version) if build_version else None, build_distribution))
-    con.commit()
+    conn.commit()
 
 
 def iter_packages():
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute("""
 SELECT
   name,
@@ -92,7 +97,7 @@ def iter_runs(package=None):
         package_name, merge_proposal_url, build_version, build_distribution,
         result_code)
     """
-    cur = con.cursor()
+    cur = conn.cursor()
     query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
@@ -103,7 +108,7 @@ LEFT JOIN package ON package.name = run.package
 """
     args = ()
     if package is not None:
-        query += " WHERE package.name = ? "
+        query += " WHERE package.name = %s "
         args += (package,)
     query += "ORDER BY start_time DESC"
     cur.execute(query, args)
@@ -119,7 +124,7 @@ LEFT JOIN package ON package.name = run.package
 
 
 def get_maintainer_email(vcs_url):
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute(
         """
 SELECT
@@ -128,7 +133,7 @@ FROM
     package
 LEFT JOIN merge_proposal ON merge_proposal.package = package.name
 WHERE
-    merge_proposal.url = ?""",
+    merge_proposal.url = %s""",
         (vcs_url, ))
     row = cur.fetchone()
     if row:
@@ -137,7 +142,7 @@ WHERE
 
 
 def iter_proposals(package):
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute(
         """
 SELECT
@@ -146,14 +151,14 @@ FROM
     merge_proposal
 LEFT JOIN package ON merge_proposal.package = package.name
 WHERE
-    package.name = ?
+    package.name =%s
 """,
         (package, ))
     return cur.fetchall()
 
 
 def iter_all_proposals():
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute("""
 SELECT
     merge_proposal.url, merge_proposal.status, package.name
@@ -168,7 +173,7 @@ LEFT JOIN package ON merge_proposal.package = package.name
 
 
 def iter_queue(limit=None):
-    cur = con.cursor()
+    cur = conn.cursor()
     query = """
 SELECT
     package.branch_url,
@@ -200,22 +205,22 @@ queue.id ASC
 
 
 def drop_queue_item(queue_id):
-    cur = con.cursor()
-    cur.execute("DELETE FROM queue WHERE id = ?", (queue_id,))
-    con.commit()
+    cur = conn.cursor()
+    cur.execute("DELETE FROM queue WHERE id = %s", (queue_id,))
+    conn.commit()
 
 
 def add_to_queue(vcs_url, mode, env, command, priority=None):
     assert env['PACKAGE']
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute(
-        "insert or ignore INTO package (name, branch_url, maintainer_email) "
-        "VALUES (?, ?, ?)",
+        "insert INTO package (name, branch_url, maintainer_email) "
+        "VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
         (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL']))
     try:
         cur.execute(
             "INSERT INTO queue (package, command, committer, mode, priority) "
-            "VALUES (?, ?, ?, ?, ?)", (
+            "VALUES (%s, %s, %s, %s, %s)", (
                 env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode,
                 priority))
     except sqlite3.IntegrityError:
@@ -226,29 +231,23 @@ def add_to_queue(vcs_url, mode, env, command, priority=None):
 
 
 def set_proposal_status(url, status):
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute("""
-INSERT OR IGNORE INTO merge_proposal (url, status) VALUES (?, ?)
-""", (url, status))
-    cur.execute("""
-UPDATE
-    merge_proposal
-SET
-    status = ?
-WHERE url = ?
-""", (status, url))
+INSERT INTO merge_proposal (url, status) VALUES (%s, %s)
+ON CONFLICT DO UPDATE SET status = %s
+""", (url, status, status))
     con.commit()
 
 
 def queue_length():
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute('SELECT COUNT(*) FROM queue')
     return cur.fetchone()[0]
 
 
 def iter_published_packages(suite):
-    cur = con.cursor()
+    cur = conn.cursor()
     cur.execute("""
-select distinct package, build_version from run where build_distribution = ?
+select distinct package, build_version from run where build_distribution = %s
 """, (suite, ))
     return cur.fetchall()
