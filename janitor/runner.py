@@ -364,6 +364,13 @@ async def process_one(
     except BranchUnavailable as e:
         return JanitorResult(
             pkg, log_id=log_id, description=str(e), code='branch-unavailable')
+    except KeyError as e:
+        if e.args == ('www-authenticate not found'):
+            return JanitorResult(
+                pkg, log_id=log_id, description=str(e),
+                code='401-without-www-authenticate')
+        else:
+            raise
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
