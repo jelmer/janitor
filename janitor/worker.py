@@ -74,9 +74,6 @@ class SubWorker(object):
     def make_changes(self, local_tree):
         raise NotImplementedError(self.make_changes)
 
-    def result(self):
-        raise NotImplementedError(self.result)
-
     def build_suite(self):
         raise NotImplementedError(self.build_suite)
 
@@ -111,28 +108,27 @@ class LintianBrushWorker(SubWorker):
             available_lintian_fixers(), tags=self.args.fixers)
 
         with local_tree.lock_write():
-            self.applied, self.failed = run_lintian_fixers(
+            applied, failed = run_lintian_fixers(
                     local_tree, fixers,
                     committer=self.committer,
                     update_changelog=self.args.update_changelog,
                     compat_release=self.args.compat_release)
-        if self.failed:
-            note('some fixers failed to run: %r', self.failed)
+        if failed:
+            note('some fixers failed to run: %r', failed)
 
-        if not self.applied:
+        if not applied:
             note('no fixers to apply')
 
-    def result(self):
         return {
             'applied': [
                 {'summary': summary,
                  'description': result.description,
                  'fixed_lintian_tags': result.fixed_lintian_tags,
                  'certainty': result.certainty}
-                for result, summary in self.applied],
-            'failed': self.failed,
+                for result, summary in applied],
+            'failed': failed,
             'add_on_only': not has_nontrivial_changes(
-                self.applied, self.args.propose_addon_only),
+                applied, self.args.propose_addon_only),
         }
 
     def build_suite(self):
@@ -150,57 +146,56 @@ class NewUpstreamWorker(SubWorker):
             help='Merge a new upstream snapshot rather than a release',
             action='store_true')
         self.args = subparser.parse_args(command)
-        self.upstream_version = None
-        self.error_description = None
-        self.error_code = None
 
     def make_changes(self, local_tree):
         try:
-            old_upstream_version, self.upstream_version = merge_upstream(
+            old_upstream_version, upstream_version = merge_upstream(
                 tree=local_tree, snapshot=self.args.snapshot)
         except UpstreamAlreadyImported as e:
             note('Last upstream version %s already imported', e.version)
-            self.error_description = (
+            error_description = (
                 "Upstream version %s already imported." % (e.version))
-            self.error_code = 'upstream-already-imported'
-            self.upstream_version = e.version
+            error_code = 'upstream-already-imported'
+            upstream_version = e.version
         except UpstreamAlreadyMerged as e:
             note('Last upstream version %s already merged', e.version)
-            self.error_description = "Upstream version %s already merged." % (
+            error_description = "Upstream version %s already merged." % (
                 e.version)
-            self.error_code = 'upstream-already-merged'
-            self.upstream_version = e.version
+            error_code = 'upstream-already-merged'
+            upstream_version = e.version
         except NewUpstreamMissing:
             note('Unable to find new upstream source.')
-            self.error_description = "Unable to find new upstream source."
-            self.error_code = 'new-upstream-missing'
-            self.upstream_version = None
+            error_description = "Unable to find new upstream source."
+            error_code = 'new-upstream-missing'
+            upstream_version = None
         except UpstreamBranchUnavailable:
             note('Upstream branch was not available.')
-            self.error_description = "The upsteam branch was unavailable."
-            self.error_code = 'upstream-branch-unavailable'
-            self.upstream_version = None
+            error_description = "The upsteam branch was unavailable."
+            error_code = 'upstream-branch-unavailable'
+            upstream_version = None
         except UpstreamMergeConflicted as e:
             note('Merging new upstream version %s result in conflicts.',
                  e.version)
-            self.error_description = "Upstream version %s conflicted." % (
+            error_description = "Upstream version %s conflicted." % (
                 e.version)
-            self.error_code = 'upstream-merged-conflicts'
-            self.upstream_version = e.version
+            error_code = 'upstream-merged-conflicts'
+            upstream_version = e.version
         except PreviousVersionTagMissing as e:
             note('Unable to find tag %s for previous upstream version %s',
                  e.tag_name, e.version)
-            self.error_description = (
+            error_description = (
                  "Previous upstream version %s missing (tag: %s)" %
                  (e.version, e.tag_name))
-            self.error_code = 'previous-upstream-missing'
-            self.upstream_version = None
+            error_code = 'previous-upstream-missing'
+            upstream_version = None
+        else:
+            error_description = None
+            error_code = None
 
-    def result(self):
         return {
-            'upstream_version': self.upstream_version,
-            'error_kind': self.error_code,
-            'error_description': self.error_description,
+            'upstream_version': upstream_version,
+            'error_kind': error_code,
+            'error_description': error_description,
         }
 
     def build_suite(self):
@@ -270,9 +265,9 @@ def process_package(vcs_url, env, command, output_directory,
 
         run_pre_check(ws.local_tree, pre_check_command)
 
-        subworker.make_changes(ws.local_tree)
+        subworker_result = subworker.make_changes(ws.local_tree)
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
-            json.dump(subworker.result(), f)
+            json.dump(subworker_result, f)
 
         if not ws.changes_since_main():
             return WorkerResult('Nothing to do.')

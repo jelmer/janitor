@@ -21,7 +21,6 @@ from datetime import datetime
 import json
 import os
 import shutil
-import subprocess
 import sys
 import tempfile
 import uuid
@@ -418,7 +417,7 @@ async def process_one(
 
         if retcode != 0:
             if os.path.exists(
-                os.path.join(output_directory, 'build.log')):
+                    os.path.join(output_directory, 'build.log')):
                 return JanitorResult(
                     pkg, log_id=log_id,
                     description="Build failed", code='build-failed')
@@ -426,7 +425,6 @@ async def process_one(
                 return JanitorResult(
                     pkg, log_id=log_id,
                     description="Worker failed", code='worker-failed')
-
 
         result = JanitorResult(
             pkg, log_id=log_id,
