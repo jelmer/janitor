@@ -1,0 +1,42 @@
+E.g.:
+
+Processing: pymediainfo
+7/871)
+  14% (48/339)
+Total 871 (delta 459), reused 853 (delta 441)
+Using version string 4.0.
+Using uscan to look for the upstream tarball.
+Traceback (most recent call last):
+  File "/usr/lib/python3.7/runpy.py", line 193, in _run_module_as_main
+    "__main__", mod_spec)
+  File "/usr/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "/home/janitor/debian-janitor/janitor/worker.py", line 381, in <module>
+    sys.exit(main())
+  File "/home/janitor/debian-janitor/janitor/worker.py", line 366, in main
+    resume_branch_url=args.resume_branch_url)
+  File "/home/janitor/debian-janitor/janitor/worker.py", line 273, in process_package
+    subworker.make_changes(ws.local_tree)
+  File "/home/janitor/debian-janitor/janitor/worker.py", line 160, in make_changes
+    tree=local_tree, snapshot=self.args.snapshot)
+  File "/home/janitor/debian-janitor/silver-platter/silver_platter/debian/upstream.py", line 229, in merge_upstream
+    upstream_revisions, merge_type=None, force=force)
+  File "/home/janitor/.config/breezy/plugins/debian/merge_upstream.py", line 148, in do_merge
+    force_pristine_tar=force_pristine_tar)
+  File "/home/janitor/.config/breezy/plugins/debian/import_dsc.py", line 1369, in merge_upstream
+    force_pristine_tar=force_pristine_tar)
+  File "/home/janitor/.config/breezy/plugins/debian/import_dsc.py", line 869, in import_upstream
+    exclude=exclude, force_pristine_tar=force_pristine_tar)
+  File "/home/janitor/.config/breezy/plugins/debian/upstream/pristinetar.py", line 306, in import_component_tarball
+    exclude=exclude)
+  File "/home/janitor/.config/breezy/plugins/debian/upstream/pristinetar.py", line 163, in make_pristine_tar_delta_from_tree
+    return make_pristine_tar_delta(dest, tarball_path)
+  File "/home/janitor/.config/breezy/plugins/debian/upstream/pristinetar.py", line 152, in make_pristine_tar_delta
+    stderr)
+breezy.plugins.debian.upstream.pristinetar.PristineTarError: There was an error using pristine-tar: Generating delta from tar failed: b'tar: pymediai
+to previous errors\npristine-tar: command failed: tar cf /home/janitor/tmp/pristine-tar.A_s2SjLVZI/recreatetarball --owner 0 --group 0 --numeric-owne
+janitor/tmp/pristine-tar.A_s2SjLVZI/manifest\n'.
+
+Related bug:
+* https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=719078
+* https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=902115
