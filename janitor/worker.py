@@ -208,11 +208,11 @@ class NewUpstreamWorker(SubWorker):
                 check_quilt_patches_apply(local_tree)
             except QuiltError as e:
                 note(
-                    "An error (%(retcode)d) occurred running quilt: "
-                    "%(stderr)s%(extra)s", e.retcode, e.stderr, e.extra)
+                    "An error (%d) occurred running quilt: "
+                    "%s%s", e.retcode, e.stderr, e.extra)
                 error_description = (
-                    "An error (%(retcode)d) occurred running quilt: "
-                    "%(stderr)s%(extra)s" % (e.retcode, e.stderr, e.extra))
+                    "An error (%d) occurred running quilt: "
+                    "%s%s" % (e.retcode, e.stderr, e.extra))
                 error_code = 'quilt-error'
 
         return {
