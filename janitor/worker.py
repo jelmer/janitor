@@ -161,6 +161,18 @@ class NewUpstreamWorker(SubWorker):
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree):
+        # Make sure that the quilt patches applied in the first place..
+        try:
+            check_quilt_patches_apply(local_tree)
+        except QuiltError as e:
+            note(
+                "An error (%d) occurred running quilt before the merge: "
+                "%s%s", e.retcode, e.stderr, e.extra)
+            error_description = (
+                "An error (%d) occurred running quilt before the merge: "
+                "%s%s" % (e.retcode, e.stderr, e.extra))
+            error_code = 'before-quilt-error'
+
         try:
             old_upstream_version, upstream_version = merge_upstream(
                 tree=local_tree, snapshot=self.args.snapshot)
