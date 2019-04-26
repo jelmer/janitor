@@ -60,7 +60,7 @@ for run in state.iter_runs():
     kind = command.split(' ')[0]
     with open(os.path.join(run_dir, 'index.rst'), 'w') as g:
         g.write('Run of %s for %s\n' % (kind, package_name))
-        g.write('====' + len(run_id) * '=' + '\n')
+        g.write('============' + (len(kind) + len(package_name)) * '=' + '\n')
 
         g.write('* Package: `%s <..>`_\n' % package_name)
         g.write('* Start time: %s\n' % start_time)
