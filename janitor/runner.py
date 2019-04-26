@@ -161,6 +161,8 @@ class NewUpstreamRunner(object):
 
     def read_worker_result(self, result):
         self._upstream_version = result['upstream_version']
+        self._error_code = result.get('error_code')
+        self._error_description = result.get('error_description')
 
     def get_proposal_description(self, existing_description):
         return "New upstream version %s" % self._upstream_version
