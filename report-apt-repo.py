@@ -14,25 +14,29 @@ args = parser.parse_args()
 
 
 def format_rst_table(header, data):
+    def separator(lengths):
+        for i, length in enumerate(lengths):
+            if i > 0:
+                sys.stdout.write(' ')
+            sys.stdout.write('=' * length)
+        sys.stdout.write('\n')
     lengths = [
         max([len(str(x[i])) for x in [header] + data])
         for i in range(len(header))]
+    separator(lengths)
     for i, (column, length) in enumerate(zip(header, lengths)):
         if i > 0:
             sys.stdout.write(' ')
         sys.stdout.write(column + (' ' * (length - len(column))))
     sys.stdout.write('\n')
-    for i, length in enumerate(lengths):
-        if i > 0:
-            sys.stdout.write(' ')
-        sys.stdout.write('=' * length)
-    sys.stdout.write('\n')
+    separator(lengths)
     for row in data:
         for i, (column, length) in enumerate(zip(row, lengths)):
             if i > 0:
                 sys.stdout.write(' ')
             sys.stdout.write(str(column) + (' ' * (length - len(str(column)))))
         sys.stdout.write('\n')
+    separator(lengths)
 
 
 present = {}
