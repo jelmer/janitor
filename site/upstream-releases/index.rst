@@ -25,7 +25,7 @@ The repository is marked as ``experimental``, meaning that apt won't
 automatically update to packages in them unless explicitly requested to do so.
 To e.g. install the version of *cifs-utils* that's in this repository, run::
 
-   apt install -t lintian-fixes cifs-utils
+   apt install -t upstream-releases cifs-utils
 
 Pinning
 ~~~~~~~
