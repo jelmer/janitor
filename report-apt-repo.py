@@ -12,6 +12,29 @@ parser = argparse.ArgumentParser(prog='report-apt-repo')
 parser.add_argument("suite")
 args = parser.parse_args()
 
+
+def format_rst_table(header, data):
+    lengths = [
+        max([len(str(x[i])) for x in [header] + data])
+        for i in range(len(header))]
+    for i, (column, length) in enumerate(zip(header, lengths)):
+        if i > 0:
+            sys.stdout.write(' ')
+        sys.stdout.write(column + (' ' * (length - len(column))))
+    sys.stdout.write('\n')
+    for i, length in enumerate(lengths):
+        if i > 0:
+            sys.stdout.write(' ')
+        sys.stdout.write('=' * length)
+    sys.stdout.write('\n')
+    for row in data:
+        for i, (column, length) in enumerate(zip(row, lengths)):
+            if i > 0:
+                sys.stdout.write(' ')
+            sys.stdout.write(str(column) + (' ' * (length - len(str(column)))))
+        sys.stdout.write('\n')
+
+
 present = {}
 
 for source, version in state.iter_published_packages(args.suite):
@@ -23,11 +46,16 @@ if present:
             packages=list(present), release='sid'):
         unstable[package.name] = Version(package.version)
 
+header = ['Package', 'Version', 'Upstream Version in Unstable',
+          'New Upstream Version']
+data = []
+
 for source in sorted(present):
-    sys.stdout.write(
-        '* %s %s' %
-        (source, present[source].upstream_version))
-    if source in unstable:
-        sys.stdout.write(' (%s in unstable)' % (
-            unstable[source].upstream_version, ))
-    sys.stdout.write('\n')
+    data.append(
+        (source, present[source],
+         present[source].upstream_version,
+         unstable[source].upstream_version
+         if source in unstable else ''))
+
+
+format_rst_table(header, data)
