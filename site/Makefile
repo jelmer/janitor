@@ -36,7 +36,7 @@ upstream-snapshots/package-list.rst:
 	python3 ../report-apt-repo.py upstream-snapshots > $@
 
 logs:
-	for I in $$(find pkg -name '*.log'); do { mkdir -p _build/html/$$(dirname $$I); ln -f $$I _build/html/$$I; } done
+	for I in $$(find pkg -name '*.log' -o -name 'result.json'); do { mkdir -p _build/html/$$(dirname $$I); ln -f $$I _build/html/$$I; } done
 
 .PHONY: help Makefile pkg
 

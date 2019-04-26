@@ -411,7 +411,7 @@ async def process_one(
                 post_check=post_check, build_command=build_command,
                 log_path=os.path.join(output_directory, 'worker.log'))
 
-        for name in ['build.log', 'worker.log']:
+        for name in ['build.log', 'worker.log', 'result.json']:
             src_build_log_path = os.path.join(output_directory, name)
             if os.path.exists(src_build_log_path):
                 dest_build_log_path = os.path.join(
