@@ -49,6 +49,7 @@ from silver_platter.debian.upstream import (
 from silver_platter.utils import (
     run_pre_check,
     run_post_check,
+    PreCheckFailed,`
     PostCheckFailed,
     open_branch,
     BranchUnavailable,
@@ -309,7 +310,11 @@ def process_package(vcs_url, env, command, output_directory,
         if not ws.local_tree.has_filename('debian/control'):
             raise WorkerFailure('missing control file')
 
-        run_pre_check(ws.local_tree, pre_check_command)
+        try:
+            run_pre_check(ws.local_tree, pre_check_command)
+        except PreCheckFailed as e:
+            note('%s: pre-check failed')
+            raise WorkerFailure(str(e))
 
         subworker_result = subworker.make_changes(ws.local_tree)
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
