@@ -28,17 +28,43 @@ def changes_get_binaries(changes_path):
         return changes['Binary'].split(' ')
 
 
-def include_console_log(f, log_path, tail=None):
+def include_console_log(f, log_path, lines=None):
     f.write('.. literalinclude:: %s\n' % os.path.basename(log_path))
     f.write('  :language: console\n')
     f.write('  :linenos:\n')
-    if tail:
-        with open(log_path, 'r') as logf:
-            linecount = logf.read().count('\n')
-        if linecount > tail:
-            # Just output the last tail lines
-            f.write('  :lines: %d-\n' % (linecount - tail))
+    if lines:
+        f.write('  :lines: ')
+        if lines[0] is not None:
+            f.write('%d' % lines[0])
+        f.write('-')
+        if lines[1] is not None:
+            f.write('%d' % lines[1])
+        f.write('\n')
     f.write('\n')
+
+
+def include_console_log_tail(f, log_path, tail):
+    with open(log_path, 'r') as logf:
+        linecount = logf.read().count('\n')
+    if linecount > tail:
+        include_console_log(f, log_path, lines=(linecount-tail, None))
+    else:
+        include_console_log(f, log_path)
+
+
+def include_build_log_failure(f, log_path, length):
+    build_end = None
+    linecount = 0
+    with open(log_path, 'r') as logf:
+        for i, l in enumerate(logf):
+            if l.startswith('Build finished at '):
+                build_end = i
+            if l.startswith('Fail-Stage: '):
+                include_console_log(f, log_path, (i-length, i))
+                return
+            linecount += 1
+
+    include_console_log_tail(f, log_path, (linecount-length, None))
 
 
 if not os.path.isdir(dir):
@@ -111,11 +137,11 @@ for run in state.iter_runs():
                             binary, build_version))
             g.write('\n\n')
         elif os.path.exists(os.path.join(run_dir, build_log_path)):
-            include_console_log(
+            include_build_log_failure(
                 g, os.path.join(run_dir, build_log_path),
-                FAIL_BUILD_LOG_TAIL)
+                FAIL_BUILD_LOG_LEN)
         else:
-            include_console_log(
+            include_console_log_tail(
                 g, os.path.join(run_dir, worker_log_path))
         if os.path.exists(os.path.join(run_dir, build_log_path)):
             g.write('`Full build log <%s>`_\n' %
