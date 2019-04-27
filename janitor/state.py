@@ -60,7 +60,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     if merge_proposal_url:
         cur.execute(
             "INSERT INTO merge_proposal (url, package, status) "
-            "VALUES (%s, %s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
+            "VALUES (%s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
             "package = %s",
             (merge_proposal_url, name, name))
     else:
