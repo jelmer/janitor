@@ -61,7 +61,6 @@ from silver_platter.utils import (
     )
 
 from . import state
-from .worker import process_package
 from .trace import note, warning
 
 open_proposal_count = Gauge(
@@ -125,6 +124,7 @@ class LintianBrushRunner(object):
         return (None, None)
 
     def describe(self, result):
+        # TODO(jelmer): This method is unused
         tags = set()
         for brush_result, unused_summary in self.applied:
             tags.update(brush_result.fixed_lintian_tags)
@@ -150,6 +150,7 @@ class NewUpstreamRunner(object):
     branch_name = "new-upstream"
 
     def describe(self, result):
+        # TODO(jelmer): This method is unused
         if result.proposal:
             if result.is_new:
                 return (
@@ -183,7 +184,7 @@ class JanitorResult(object):
     def __init__(self, pkg, log_id, description,
                  code=None, proposal=None, is_new=None,
                  build_distribution=None, build_version=None,
-                 changes_filename=None, context=None):
+                 changes_filename=None, worker_result=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
@@ -193,7 +194,14 @@ class JanitorResult(object):
         self.build_distribution = build_distribution
         self.build_version = build_version
         self.changes_filename = changes_filename
-        self.context = context
+        if worker_result:
+            self.context = worker_result.context
+            if self.code is None:
+                self.code = worker_result.code
+            if self.description is None:
+                self.description = worker_result.description
+        else:
+            self.context = None
 
 
 def find_changes(path, package):
@@ -281,19 +289,21 @@ class Pending(object):
             dry_run=dry_run)
 
 
-def invoke_worker(
-        main_branch, env, command, output_directory, resume_branch=None,
-        pre_check=None, post_check=None, build_command=None,
-        possible_transports=None, possible_hosters=None):
-    process_package(
-        main_branch.user_url, env, command,
-        resume_branch_url=(resume_branch.user_url if resume_branch else None),
-        output_directory=output_directory,
-        build_command=build_command,
-        pre_check_command=pre_check,
-        post_check_command=post_check,
-        possible_transports=possible_transports,
-        possible_hosters=possible_hosters)
+class WorkerResult(object):
+
+    def __init__(self, code, description, context=None, subworker=None):
+        self.code = code
+        self.description = description
+        self.context = context
+        self.subworker = subworker
+
+    @classmethod
+    def from_file(cls, path):
+        with open(path, 'r') as f:
+            worker_result = json.load(f)
+        return cls(
+                worker_result.get('code'), worker_result.get('description'),
+                worker_result.get('context'), worker_result.get('subworker'))
 
 
 async def invoke_subprocess_worker(
@@ -428,34 +438,21 @@ async def process_one(
 
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
-            with open(json_result_path, 'r') as f:
-                worker_result = json.load(f)
-            (worker_result_code, worker_result_description,
-                    worker_result_context) = (
-                subrunner.read_worker_result(worker_result['subworker']))
-            if worker_result_code:
-                return JanitorResult(
-                    pkg, log_id=log_id,
-                    description=worker_result_description,
-                    code=worker_result_code)
+            worker_result = WorkerResult.from_file(json_result_path)
         else:
-            worker_result_context = None
+            worker_result = WorkerResult(
+                'worker-failed',
+                'Worker failed and did not write a result file.')
+        if worker_result.subworker:
+            subrunner.read_worker_result(worker_result.subworker)
 
         if retcode != 0:
-            if os.path.exists(
-                    os.path.join(output_directory, 'build.log')):
-                return JanitorResult(
-                    pkg, log_id=log_id,
-                    description="Build failed", code='build-failed')
-            else:
-                return JanitorResult(
-                    pkg, log_id=log_id,
-                    description="Worker failed", code='worker-failed')
+            return JanitorResult(
+                pkg, log_id=log_id, worker_result=worker_result)
 
-        result = JanitorResult(
-            pkg, log_id=log_id,
-            description="Build succeeded.", code='success',
-            context=worker_result_context)
+        assert worker_result.code is None
+
+        result = JanitorResult(pkg, log_id=log_id, worker_result=worker_result)
 
         try:
             (result.changes_filename, result.build_version,
@@ -483,7 +480,8 @@ async def process_one(
                 return JanitorResult(
                     pkg, log_id,
                     description='result branch missing: %s' % e,
-                    code='result-branch-unavailable')
+                    code='result-branch-unavailable',
+                    worker_result=worker_result)
             try:
                 with Pending(main_branch, local_branch,
                              resume_branch=resume_branch) as ws:
@@ -500,11 +498,13 @@ async def process_one(
                 return JanitorResult(
                     pkg, log_id,
                     description='project %s was not found' % e.project,
-                    code='project-not-found')
+                    code='project-not-found',
+                    worker_result=worker_result)
             except PermissionDenied as e:
                 return JanitorResult(
                     pkg, log_id, description=str(e),
-                    code='permission-denied')
+                    code='permission-denied',
+                    worker_result=worker_result)
 
         if result.proposal and result.is_new:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
