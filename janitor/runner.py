@@ -203,8 +203,10 @@ class JanitorResult(object):
                 self.code = worker_result.code
             if self.description is None:
                 self.description = worker_result.description
+            self.main_branch_revision = worker_result.main_branch_revision
         else:
             self.context = None
+            self.main_branch_revision = None
 
 
 def find_changes(path, package):
@@ -296,11 +298,13 @@ class Pending(object):
 
 class WorkerResult(object):
 
-    def __init__(self, code, description, context=None, subworker=None):
+    def __init__(self, code, description, context=None, subworker=None,
+                 main_branch_revision=None):
         self.code = code
         self.description = description
         self.context = context
         self.subworker = subworker
+        self.main_branch_revision = main_branch_revision
 
     @classmethod
     def from_file(cls, path):
@@ -308,7 +312,8 @@ class WorkerResult(object):
             worker_result = json.load(f)
         return cls(
                 worker_result.get('code'), worker_result.get('description'),
-                worker_result.get('context'), worker_result.get('subworker'))
+                worker_result.get('context'), worker_result.get('subworker'),
+                worker_result.get('main_branch_revision'))
 
 
 async def invoke_subprocess_worker(
@@ -578,6 +583,7 @@ async def process_queue(
             start_time, finish_time, command,
             result.description,
             result.context,
+            result.main_branch_revision,
             result.code,
             result.proposal.url if result.proposal else None,
             build_version=result.build_version,
