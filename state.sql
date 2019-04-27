@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS run (
    -- Distribution the package was built for (e.g. "lintian-fixes")
    build_distribution text,
    result_code text,
+   -- Some subworker-specific indication of what we attempted to do
+   context text,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );
@@ -38,5 +40,7 @@ CREATE TABLE IF NOT EXISTS queue (
    mode publish_mode not null,
    priority integer default 0 not null,
    foreign key (package) references package(name),
+   -- Some subworker-specific indication of what we are expecting to do.
+   context text,
    unique(package, command, mode)
 );

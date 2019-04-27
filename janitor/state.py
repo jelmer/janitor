@@ -28,8 +28,16 @@ conn = psycopg2.connect(
 conn.set_client_encoding('UTF8')
 
 
+def _ensure_package(cur, name, vcs_url, maintainer_email):
+    cur.execute(
+        "INSERT INTO package (name, branch_url, maintainer_email) "
+        "VALUES (%s, %s, %s) ON CONFLICT (name) DO UPDATE SET "
+        "branch_url = %s, maintainer_email = %s",
+        (name, vcs_url, maintainer_email, vcs_url, maintainer_email))
+
+
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, result_code, merge_proposal_url,
+              command, description, context, result_code, merge_proposal_url,
               build_version, build_distribution):
     """Store a run.
 
@@ -41,32 +49,29 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param finish_time: Finish time
     :param command: Command
     :param description: A human-readable description
+    :param context: Subworker-specific context
     :param result_code: Result code (as constant string)
     :param merge_proposal_url: Optional merge proposal URL
     :param build_version: Version that was built
     :param build_distribution: Build distribution
     """
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO package (name, branch_url, maintainer_email) "
-        "VALUES (%s, %s, %s) ON CONFLICT (name) DO UPDATE SET "
-        "branch_url = %s, maintainer_email = %s",
-        (name, vcs_url, maintainer_email, vcs_url, maintainer_email))
+    _ensure_package(name, vcs_url, maintainer_email)
     if merge_proposal_url:
         cur.execute(
             "INSERT INTO merge_proposal (url, package, status) "
-            "VALUES (%s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
+            "VALUES (%s, %s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
             "package = %s",
             (merge_proposal_url, name, name))
     else:
         merge_proposal_url = None
     cur.execute(
         "INSERT INTO run (id, command, description, result_code, start_time, "
-        "finish_time, package, merge_proposal_url, build_version, "
+        "finish_time, package, context, merge_proposal_url, build_version, "
         "build_distribution) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
             run_id, ' '.join(command), description, result_code,
-            start_time, finish_time, name, merge_proposal_url,
+            start_time, finish_time, name, context, merge_proposal_url,
             str(build_version) if build_version else None, build_distribution))
     conn.commit()
 
@@ -181,6 +186,7 @@ SELECT
     queue.committer,
     queue.command,
     queue.mode,
+    queue.context,
     queue.id
 FROM
     queue
@@ -194,11 +200,12 @@ queue.id ASC
     cur.execute(query)
     for row in cur.fetchall():
         (branch_url, maintainer_email, package, committer,
-            command, mode, queue_id) = row
+            command, mode, context, queue_id) = row
         env = {
             'PACKAGE': package,
             'MAINTAINER_EMAIL': maintainer_email,
             'COMMITTER': committer or None,
+            'CONTEXT': context,
         }
         yield (queue_id, branch_url, mode, env, shlex.split(command))
 
@@ -210,19 +217,19 @@ def drop_queue_item(queue_id):
 
 
 def add_to_queue(vcs_url, mode, env, command, priority=0):
-    assert env['PACKAGE']
+    package = env['PACKAGE']
+    maintainer_email = env.get('MAINTAINER_EMAIL')
+    context = env.get('CONTEXT')
+    committer = env.get('COMMITTER')
     cur = conn.cursor()
+    _ensure_package(package, vcs_url, maintainer_email)
     cur.execute(
-        "insert INTO package (name, branch_url, maintainer_email) "
-        "VALUES (%s, %s, %s) ON CONFLICT (name) DO UPDATE SET "
-        "branch_url = %s, maintainer_email = %s",
-        (env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
-         vcs_url, env['MAINTAINER_EMAIL']))
-    cur.execute(
-        "INSERT INTO queue (package, command, committer, mode, priority) "
-        "VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING", (
-            env['PACKAGE'], ' '.join(command), env['COMMITTER'], mode,
-            priority))
+        "INSERT INTO queue "
+        "(package, command, committer, mode, priority, context) "
+        "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT () DO UPDATE SET "
+        "context = %s, priority = %s", (
+            package, ' '.join(command), committer, mode,
+            priority, context, context, priority))
     conn.commit()
     return True
 

@@ -31,11 +31,15 @@ for i, (queue_id, branch_url, mode, env, command) in enumerate(
         state.iter_queue(), 1):
     if command[0] == 'new-upstream':
         if len(command) > 0 and command[1] == 'snapshot':
-            description = 'new-upstream-snapshot'
+            description = 'New upstream snapshot'
         else:
-            description = 'new-upstream'
+            description = 'New upstream'
+            if env.get('CONTEXT'):
+                description += ', expecting to merge %s' % env['CONTEXT']
     elif command[0] == 'lintian-brush':
-        description = 'lintian-brush'
+        description = 'Lintian fixes'
+            if env.get('CONTEXT'):
+                description += ', expecting to fix: %s' % env['CONTEXT']
     else:
         raise AssertionError('invalid command %s' % command)
     print("%d. `%s <pkg/%s>`_ (%s)" % (
