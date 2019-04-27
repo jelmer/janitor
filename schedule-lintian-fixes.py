@@ -36,7 +36,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.schedule import schedule_udd  # noqa: E402
+from janitor.schedule import add_to_queue, schedule_udd  # noqa: E402
 from janitor.trace import (
     note,
 )  # noqa: E402
@@ -65,8 +65,6 @@ args = parser.parse_args()
 
 fixer_count = Counter(
     'fixer_count', 'Number of selected fixers.')
-scheduled_count = Counter(
-    'scheduled_count', 'Number of new runs scheduled.')
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
@@ -89,15 +87,7 @@ todo = schedule_udd(
     args.policy, args.propose_addon_only, args.packages,
     available_fixers, args.shuffle)
 
-for vcs_url, mode, env, command in todo:
-    if not args.dry_run:
-        added = state.add_to_queue(vcs_url, mode, env, command)
-    else:
-        added = True
-    if added:
-        note('Scheduling %s (%s)', env['PACKAGE'], mode)
-        scheduled_count.inc()
-
+add_to_queue(todo, dry_run=args.dry_run)
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
