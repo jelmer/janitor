@@ -120,6 +120,9 @@ class LintianBrushRunner(object):
         self.applied = result['applied']
         self.failed = result['failed']
         self.add_on_only = result['add_on_only']
+        if not self.applied:
+            return ('nothing-to-do', 'Nothing to do.')
+        return (None, None)
 
     def describe(self, result):
         tags = set()
@@ -163,6 +166,9 @@ class NewUpstreamRunner(object):
         self._upstream_version = result['upstream_version']
         self._error_code = result.get('error_code')
         self._error_description = result.get('error_description')
+        if self._error_code:
+            return (self._error_code, self._error_description)
+        return (None, None)
 
     def get_proposal_description(self, existing_description):
         return "New upstream version %s" % self._upstream_version
@@ -423,7 +429,13 @@ async def process_one(
         if os.path.exists(json_result_path):
             with open(json_result_path, 'r') as f:
                 worker_result = json.load(f)
-            subrunner.read_worker_result(worker_result['subworker'])
+            (worker_result_code, worker_result_description) = (
+                subrunner.read_worker_result(worker_result['subworker']))
+            if result_code:
+                return JanitorResult(
+                    pkg, log_id=log_id,
+                    description=worker_result_description,
+                    code=worker_result_code)
 
         if retcode != 0:
             if os.path.exists(
