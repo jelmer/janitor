@@ -49,7 +49,7 @@ from silver_platter.debian.upstream import (
 from silver_platter.utils import (
     run_pre_check,
     run_post_check,
-    PreCheckFailed,`
+    PreCheckFailed,
     PostCheckFailed,
     open_branch,
     BranchUnavailable,
@@ -133,10 +133,7 @@ class LintianBrushWorker(SubWorker):
         if failed:
             note('some fixers failed to run: %r', failed)
 
-        if not applied:
-            note('no fixers to apply')
-
-        return {
+        subworker = {
             'applied': [
                 {'summary': summary,
                  'description': result.description,
@@ -147,6 +144,19 @@ class LintianBrushWorker(SubWorker):
             'add_on_only': not has_nontrivial_changes(
                 applied, self.args.propose_addon_only),
         }
+
+        if not applied:
+            note('no fixers to apply')
+            code = 'nothing-to-do'
+            description = 'no fixers to apply'
+        else:
+            code = None
+            tags = set()
+            for brush_result, unused_summary in applied:
+                tags.update(brush_result.fixed_lintian_tags)
+            description = 'Applied fixes for %r' % tags
+
+        return (code, description, subworker, None)
 
     def build_suite(self):
         return 'lintian-fixes'
@@ -239,11 +249,9 @@ class NewUpstreamWorker(SubWorker):
             error_description = None
             error_code = None
 
-        return {
-            'upstream_version': upstream_version,
-            'error_kind': error_code,
-            'error_description': error_description,
-        }
+        return (error_code, error_description,
+                {'upstream_version': upstream_version},
+                upstream_version)
 
     def build_suite(self):
         if self.args.snapshot:
@@ -316,12 +324,18 @@ def process_package(vcs_url, env, command, output_directory,
             note('%s: pre-check failed')
             raise WorkerFailure(str(e))
 
-        subworker_result = subworker.make_changes(ws.local_tree)
+        code, description, subworker_result, context = subworker.make_changes(
+            ws.local_tree)
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
-            json.dump({'subworker': subworker_result,
-                       'command': command,
-                       'main_branch_revision': main_branch.last_revision().decode(),
-                       }, f)
+            # TODO(jelmer): write result.json outside of this function
+            json.dump({
+                'subworker': subworker_result,
+                'command': command,
+                'main_branch_revision': main_branch.last_revision().decode(),
+                'code': code,
+                'description': description,
+                'context': context,
+                }, f)
 
         if not ws.changes_since_main():
             return WorkerResult('Nothing to do.')
