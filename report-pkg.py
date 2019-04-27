@@ -14,7 +14,7 @@ from janitor.build import (
 )  # noqa: E402
 from janitor.trace import warning  # noqa: E402
 
-FAIL_BUILD_LOG_TAIL = 15
+FAIL_BUILD_LOG_LEN = 15
 
 parser = argparse.ArgumentParser(prog='report-pkg')
 parser.add_argument("directory")
@@ -64,7 +64,7 @@ def include_build_log_failure(f, log_path, length):
                 return
             linecount += 1
 
-    include_console_log_tail(f, log_path, (linecount-length, None))
+    include_console_log(f, log_path, (linecount-length, None))
 
 
 if not os.path.isdir(dir):
@@ -141,7 +141,7 @@ for run in state.iter_runs():
                 g, os.path.join(run_dir, build_log_path),
                 FAIL_BUILD_LOG_LEN)
         else:
-            include_console_log_tail(
+            include_console_log(
                 g, os.path.join(run_dir, worker_log_path))
         if os.path.exists(os.path.join(run_dir, build_log_path)):
             g.write('`Full build log <%s>`_\n' %
