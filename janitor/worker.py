@@ -47,6 +47,7 @@ from silver_platter.debian.upstream import (
     UpstreamMergeConflicted,
     UpstreamBranchUnavailable,
     PreviousVersionTagMissing,
+    PristineTarError,
 )
 
 from silver_platter.utils import (
@@ -212,6 +213,11 @@ class NewUpstreamWorker(SubWorker):
                  "Previous upstream version %s missing (tag: %s)" %
                  (e.version, e.tag_name))
             error_code = 'previous-upstream-missing'
+            upstream_version = None
+        except PristineTarError as e:
+            note('Pristine tar error: %s', e)
+            error_description = ('Error from pristine-tar: %s' % e)
+            error_code = 'pristine-tar-error'
             upstream_version = None
         else:
             error_description = None
