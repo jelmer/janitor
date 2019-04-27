@@ -119,9 +119,6 @@ class LintianBrushRunner(object):
         self.applied = result['applied']
         self.failed = result['failed']
         self.add_on_only = result['add_on_only']
-        if not self.applied:
-            return ('nothing-to-do', 'Nothing to do.')
-        return (None, None)
 
     def describe(self, result):
         # TODO(jelmer): This method is unused
@@ -165,11 +162,6 @@ class NewUpstreamRunner(object):
 
     def read_worker_result(self, result):
         self._upstream_version = result['upstream_version']
-        self._error_code = result.get('error_code')
-        self._error_description = result.get('error_description')
-        if self._error_code:
-            return (self._error_code, self._error_description)
-        return (None, None)
 
     def get_proposal_description(self, existing_description):
         return "New upstream version %s" % self._upstream_version
@@ -452,7 +444,9 @@ async def process_one(
 
         assert worker_result.code is None
 
-        result = JanitorResult(pkg, log_id=log_id, worker_result=worker_result)
+        result = JanitorResult(
+            pkg, log_id=log_id,
+            code='success', worker_result=worker_result)
 
         try:
             (result.changes_filename, result.build_version,
