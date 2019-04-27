@@ -21,12 +21,6 @@ import distro_info
 import json
 import os
 
-from breezy.plugins.debian.quilt import (
-    QuiltError,
-    quilt_push_all,
-    quilt_pop_all,
-    )
-
 from silver_platter.debian import (
     BuildFailedError,
     MissingUpstreamTarball,
@@ -40,6 +34,7 @@ from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
 )
 from silver_platter.debian.upstream import (
+    check_quilt_patches_apply,
     merge_upstream,
     NewUpstreamMissing,
     UpstreamAlreadyImported,
@@ -48,6 +43,7 @@ from silver_platter.debian.upstream import (
     UpstreamBranchUnavailable,
     PreviousVersionTagMissing,
     PristineTarError,
+    QuiltError,
 )
 
 from silver_platter.utils import (
@@ -155,13 +151,6 @@ class LintianBrushWorker(SubWorker):
         return 'lintian-fixes'
 
 
-def check_quilt_patches_apply(local_tree):
-    if local_tree.has_filename('debian/patches/series'):
-        quilt_push_all(local_tree.basedir)
-        quilt_pop_all(local_tree.basedir)
-        assert not local_tree.has_changes()
-
-
 class NewUpstreamWorker(SubWorker):
 
     build_version_suffix = 'janitor+newupstream'
@@ -186,6 +175,11 @@ class NewUpstreamWorker(SubWorker):
                 "An error (%d) occurred running quilt before the merge: "
                 "%s%s" % (e.retcode, e.stderr, e.extra))
             error_code = 'before-quilt-error'
+            return {
+                'error_kind': error_code,
+                'error_description': error_description,
+                'upstream_version': None,
+            }
 
         try:
             old_upstream_version, upstream_version = merge_upstream(
@@ -232,19 +226,17 @@ class NewUpstreamWorker(SubWorker):
             error_description = ('Error from pristine-tar: %s' % e)
             error_code = 'pristine-tar-error'
             upstream_version = None
+        except QuiltError as e:
+            note(
+                "An error (%d) occurred running quilt: "
+                "%s%s", e.retcode, e.stderr, e.extra)
+            error_description = (
+                "An error (%d) occurred running quilt: "
+                "%s%s" % (e.retcode, e.stderr, e.extra))
+            error_code = 'quilt-error'
         else:
             error_description = None
             error_code = None
-            try:
-                check_quilt_patches_apply(local_tree)
-            except QuiltError as e:
-                note(
-                    "An error (%d) occurred running quilt: "
-                    "%s%s", e.retcode, e.stderr, e.extra)
-                error_description = (
-                    "An error (%d) occurred running quilt: "
-                    "%s%s" % (e.retcode, e.stderr, e.extra))
-                error_code = 'quilt-error'
 
         return {
             'upstream_version': upstream_version,
