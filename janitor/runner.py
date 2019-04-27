@@ -183,7 +183,7 @@ class JanitorResult(object):
     def __init__(self, pkg, log_id, description,
                  code=None, proposal=None, is_new=None,
                  build_distribution=None, build_version=None,
-                 changes_filename=None):
+                 changes_filename=None, context=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
@@ -193,6 +193,7 @@ class JanitorResult(object):
         self.build_distribution = build_distribution
         self.build_version = build_version
         self.changes_filename = changes_filename
+        self.context = context
 
 
 def find_changes(path, package):
@@ -429,13 +430,16 @@ async def process_one(
         if os.path.exists(json_result_path):
             with open(json_result_path, 'r') as f:
                 worker_result = json.load(f)
-            (worker_result_code, worker_result_description) = (
+            (worker_result_code, worker_result_description,
+                    worker_result_context) = (
                 subrunner.read_worker_result(worker_result['subworker']))
             if worker_result_code:
                 return JanitorResult(
                     pkg, log_id=log_id,
                     description=worker_result_description,
                     code=worker_result_code)
+        else:
+            worker_result_context = None
 
         if retcode != 0:
             if os.path.exists(
@@ -450,7 +454,8 @@ async def process_one(
 
         result = JanitorResult(
             pkg, log_id=log_id,
-            description="Build succeeded.", code='success')
+            description="Build succeeded.", code='success',
+            context=worker_result_context)
 
         try:
             (result.changes_filename, result.build_version,
@@ -554,6 +559,7 @@ async def process_queue(
             result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
             start_time, finish_time, command,
             result.description,
+            result.context,
             result.code,
             result.proposal.url if result.proposal else None,
             build_version=result.build_version,
