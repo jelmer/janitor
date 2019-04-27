@@ -42,6 +42,7 @@ from prometheus_client import (
 from silver_platter.debian.lintian import (
     create_mp_description,
     parse_mp_description,
+    update_proposal_commit_message,
     )
 from silver_platter.proposal import (
     publish_changes,
@@ -115,6 +116,13 @@ class LintianBrushRunner(object):
         return create_mp_description(
             existing_lines + [l['summary'] for l in self.applied])
 
+    def get_proposal_commit_message(self, existing_commit_message):
+        fixed_tags = set()
+        for result in self.applied:
+            fixed_tags.update(result['fixed_lintian_tags'])
+        return update_proposal_commit_message(
+            existing_commit_message, fixed_tags)
+
     def read_worker_result(self, result):
         self.applied = result['applied']
         self.failed = result['failed']
@@ -165,6 +173,9 @@ class NewUpstreamRunner(object):
 
     def get_proposal_description(self, existing_description):
         return "New upstream version %s" % self._upstream_version
+
+    def get_proposal_commit_message(self, existing_commit_message):
+        return self.get_proposal_description(None)
 
     def allow_create_proposal(self):
         # No upstream release too small...
@@ -260,7 +271,8 @@ class Pending(object):
         return self.orig_revid != self.local_branch.last_revision()
 
     def propose(self, name, description, hoster=None, existing_proposal=None,
-                overwrite_existing=None, labels=None, dry_run=False):
+                overwrite_existing=None, labels=None, dry_run=False,
+                commit_message=None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return propose_changes(
@@ -270,6 +282,7 @@ class Pending(object):
             resume_proposal=existing_proposal,
             overwrite_existing=overwrite_existing,
             labels=labels, dry_run=dry_run,
+            commit_message=commit_message,
             additional_colocated_branches=self.additional_colocated_branches)
 
     def push(self, hoster=None, dry_run=False):
@@ -467,6 +480,15 @@ async def process_one(
                 existing_description)
             return add_janitor_blurb(description, pkg, log_id)
 
+        def get_proposal_commit_message(existing_proposal):
+            if existing_proposal:
+                existing_commit_message = (
+                    existing_proposal.get_commit_message())
+            else:
+                existing_commit_message = None
+            return subrunner.get_proposal_commit_message(
+                existing_commit_message)
+
         if mode != 'build-only':
             try:
                 local_branch = open_branch(os.path.join(output_directory, pkg))
@@ -483,6 +505,8 @@ async def process_one(
                     (result.proposal, is_new) = publish_changes(
                         ws, mode, subrunner.branch_name,
                         get_proposal_description=get_proposal_description,
+                        get_proposal_commit_message=(
+                            get_proposal_commit_message),
                         dry_run=dry_run, hoster=hoster,
                         allow_create_proposal=(
                             subrunner.allow_create_proposal()),
