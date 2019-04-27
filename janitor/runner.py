@@ -431,7 +431,7 @@ async def process_one(
                 worker_result = json.load(f)
             (worker_result_code, worker_result_description) = (
                 subrunner.read_worker_result(worker_result['subworker']))
-            if result_code:
+            if worker_result_code:
                 return JanitorResult(
                     pkg, log_id=log_id,
                     description=worker_result_description,
