@@ -208,10 +208,11 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
         else:
             raise ValueError(
                 "Invalid value %r for update_changelog" % update_changelog)
-        command += list(tags)
+        context = ' '.join(sorted(tags))
         yield (
             vcs_url, mode,
             {'COMMITTER': committer,
              'PACKAGE': package.name,
+             'CONTEXT': context,
              'MAINTAINER_EMAIL': package.maintainer_email},
             command)
