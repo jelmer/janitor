@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS package (
    name text not null,
    branch_url text not null,
    maintainer_email text not null,
-   primary key(name), unique(branch_url)
+   primary key(name),
 );
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged');
 CREATE TABLE IF NOT EXISTS merge_proposal (
