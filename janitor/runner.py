@@ -441,7 +441,7 @@ async def process_one(
             worker_result = WorkerResult.from_file(json_result_path)
         else:
             worker_result = WorkerResult(
-                'worker-failed',
+                'worker-missing-result',
                 'Worker failed and did not write a result file.')
         if worker_result.subworker:
             subrunner.read_worker_result(worker_result.subworker)
