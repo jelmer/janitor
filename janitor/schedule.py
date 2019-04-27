@@ -216,3 +216,15 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
              'CONTEXT': context,
              'MAINTAINER_EMAIL': package.maintainer_email},
             command)
+
+
+def add_to_queue(todo, dry_run=False, default_priority=0):
+    from . import state
+    for vcs_url, mode, env, command in todo:
+        if not dry_run:
+            added = state.add_to_queue(
+                vcs_url, mode, env, command, priority=default_priority)
+        else:
+            added = True
+        if added:
+            trace.note('Scheduling %s (%s)', env['PACKAGE'], mode)
