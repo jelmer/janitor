@@ -18,11 +18,19 @@
 from __future__ import absolute_import
 
 __all__ = [
+    'add_to_queue',
     'schedule_udd',
     'schedule_ubuntu',
+    'schedule_udd_new_upstreams',
+    'schedule_udd_new_upstream_snapshots',
 ]
 
-from . import trace
+import datetime
+
+from . import (
+    state,
+    trace,
+    )
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
@@ -218,13 +226,47 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
             command)
 
 
+def determine_priority(package, command, mode, context=None, priority=0):
+    # Priority increase for packages that have never been processed before
+    FIRST_RUN_BONUS = 100
+
+    # Penalty if the context has already been processed
+    CONTEXT_PROCESSED_PENALTY = 1000
+
+    LAST_SUCCESSFUL_BONUS = 90
+
+    NO_CONTEXT_REFRESH_FREQUENCY = 7
+    NO_CONTEXT_REFRESH_BONUS = 50
+
+    previous_runs = list(
+        state.iter_previous_runs(package, command, mode))
+    if previous_runs:
+        (last_start_time, last_duration, last_context,
+         last_main_branch_revision, last_successful) = (
+             previous_runs[0])
+        if last_context and last_context == context:
+            priority -= CONTEXT_PROCESSED_PENALTY
+        elif last_context is None:
+            age = (last_start_time - datetime.now())
+            if age.days > NO_CONTEXT_REFRESH_FREQUENCY:
+                priority += NO_CONTEXT_REFRESH_BONUS
+        if last_successful:
+            priority += LAST_SUCCESSFUL_BONUS
+        priority -= (last_duration / 60)
+    else:
+        priority += FIRST_RUN_BONUS
+    return priority
+
+
 def add_to_queue(todo, dry_run=False, default_priority=0):
-    from . import state
     for vcs_url, mode, env, command in todo:
+        priority = determine_priority(
+            env['PACKAGE'], command, mode, env.get('CONTEXT'))
         if not dry_run:
             added = state.add_to_queue(
                 vcs_url, mode, env, command, priority=default_priority)
         else:
             added = True
         if added:
-            trace.note('Scheduling %s (%s)', env['PACKAGE'], mode)
+            trace.note('Scheduling %s (%s) with priority %d', env['PACKAGE'],
+                       mode, priority)

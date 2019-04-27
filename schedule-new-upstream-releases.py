@@ -21,7 +21,6 @@ import os
 
 from prometheus_client import (
     Gauge,
-    Counter,
     push_to_gateway,
     REGISTRY,
 )
@@ -31,8 +30,10 @@ import silver_platter   # noqa: F401
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from janitor import state  # noqa: E402
-from janitor.schedule import schedule_udd_new_upstreams, add_to_queue # noqa: E402
+from janitor.schedule import (
+    schedule_udd_new_upstreams,
+    add_to_queue,
+)  # noqa: E402
 from janitor.trace import (
     note,
 )  # noqa: E402
