@@ -29,16 +29,16 @@ history.rst:
 queue.rst:
 	python3 ../report-queue.py > $@
 
-upstream-releases/package-list.rst:
-	python3 ../report-apt-repo.py upstream-releases > $@
+upstream-releases:
+	python3 ../report-apt-repo.py upstream-releases
 
-upstream-snapshots/package-list.rst:
-	python3 ../report-apt-repo.py upstream-snapshots > $@
+upstream-snapshots:
+	python3 ../report-apt-repo.py upstream-snapshots
 
 logs:
 	for I in $$(find pkg -name '*.log' -o -name 'result.json'); do { mkdir -p _build/html/$$(dirname $$I); ln -f $$I _build/html/$$I; } done
 
-.PHONY: help Makefile pkg
+.PHONY: help Makefile pkg upstream-releases upstream-snapshots
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
