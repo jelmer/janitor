@@ -258,3 +258,21 @@ def iter_published_packages(suite):
 select distinct package, build_version from run where build_distribution = %s
 """, (suite, ))
     return cur.fetchall()
+
+
+def iter_previous_runs(package, command, mode):
+    cur = conn.cursor()
+    cur.execute("""
+SELECT
+  start_time,
+  (finish_time - start_time) AS duration,
+  context,
+  main_branch_revision,
+  (result_code = 'success') AS successful
+FROM
+  run
+WHERE
+  package = %s AND command = %s AND mode = %s
+ORDER BY start_time DESC
+""", (package, command, mode))
+    return cur.fetchall()

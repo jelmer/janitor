@@ -35,7 +35,6 @@ from silver_platter.debian.lintian import (
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from janitor import state  # noqa: E402
 from janitor.schedule import add_to_queue, schedule_udd  # noqa: E402
 from janitor.trace import (
     note,

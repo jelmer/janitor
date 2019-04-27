@@ -56,10 +56,10 @@ def include_build_log_failure(f, log_path, length):
     build_end = None
     linecount = 0
     with open(log_path, 'r') as logf:
-        for i, l in enumerate(logf, 1):
-            if l.startswith('Build finished at '):
+        for i, line in enumerate(logf, 1):
+            if line.startswith('Build finished at '):
                 build_end = i
-            if l == 'Fail-Stage: build\n' and build_end is not None:
+            if line == 'Fail-Stage: build\n' and build_end is not None:
                 include_console_log(f, log_path, (build_end-length, build_end))
                 return
             linecount += 1
