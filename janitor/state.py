@@ -56,7 +56,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param build_distribution: Build distribution
     """
     cur = conn.cursor()
-    _ensure_package(name, vcs_url, maintainer_email)
+    _ensure_package(cur, name, vcs_url, maintainer_email)
     if merge_proposal_url:
         cur.execute(
             "INSERT INTO merge_proposal (url, package, status) "
@@ -222,7 +222,7 @@ def add_to_queue(vcs_url, mode, env, command, priority=0):
     context = env.get('CONTEXT')
     committer = env.get('COMMITTER')
     cur = conn.cursor()
-    _ensure_package(package, vcs_url, maintainer_email)
+    _ensure_package(cur, package, vcs_url, maintainer_email)
     cur.execute(
         "INSERT INTO queue "
         "(package, command, committer, mode, priority, context) "
