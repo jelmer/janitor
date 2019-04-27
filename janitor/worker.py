@@ -448,7 +448,7 @@ def main(argv=None):
         metadata['finish_time'] = finish_time.isoformat()
         metadata['duration'] = (finish_time - start_time).seconds
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
-            json.dump(metadata, f)
+            json.dump(metadata, f, indent=2)
 
 
 if __name__ == '__main__':
