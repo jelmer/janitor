@@ -422,7 +422,8 @@ async def process_one(
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
             with open(json_result_path, 'r') as f:
-                subrunner.read_worker_result(json.load(f))
+                worker_result = json.load(f)
+            subrunner.read_worker_result(worker_result['subworker'])
 
         if retcode != 0:
             if os.path.exists(
