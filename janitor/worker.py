@@ -80,13 +80,12 @@ class SubWorker(object):
           env: Environment dictionary
         """
 
-    def make_changes(self, local_tree):
+    def make_changes(self, local_tree, report_context, metadata):
         """Make the actual changes to a tree.
 
         Args:
           local_tree: Tree to make changes to
-        Returns:
-          dictionary with subworker-specific results
+          report_context: report context
         """
         raise NotImplementedError(self.make_changes)
 
@@ -119,7 +118,7 @@ class LintianBrushWorker(SubWorker):
             type=str, action='append', default=DEFAULT_ADDON_FIXERS)
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree):
+    def make_changes(self, local_tree, report_context, metadata):
         # TODO(jelmer): 'fixers' is wrong; it's actually tags.
         fixers = get_fixers(
             available_lintian_fixers(), tags=self.args.fixers)
@@ -133,30 +132,23 @@ class LintianBrushWorker(SubWorker):
         if failed:
             note('some fixers failed to run: %r', failed)
 
-        subworker = {
-            'applied': [
-                {'summary': summary,
-                 'description': result.description,
-                 'fixed_lintian_tags': result.fixed_lintian_tags,
-                 'certainty': result.certainty}
-                for result, summary in applied],
-            'failed': failed,
-            'add_on_only': not has_nontrivial_changes(
-                applied, self.args.propose_addon_only),
-        }
+        metadata['applied'] = [{
+            'summary': summary,
+            'description': result.description,
+            'fixed_lintian_tags': result.fixed_lintian_tags,
+            'certainty': result.certainty}
+            for result, summary in applied]
+        metadata['failed'] = failed
+        metadata['add_on_only'] = not has_nontrivial_changes(
+            applied, self.args.propose_addon_only)
 
         if not applied:
-            note('no fixers to apply')
-            code = 'nothing-to-do'
-            description = 'no fixers to apply'
+            raise WorkerFailure('nothing-to-do', 'no fixers to apply')
         else:
-            code = None
             tags = set()
             for brush_result, unused_summary in applied:
                 tags.update(brush_result.fixed_lintian_tags)
-            description = 'Applied fixes for %r' % tags
-
-        return (code, description, subworker, None)
+        return 'Applied fixes for %r' % tags
 
     def build_suite(self):
         return 'lintian-fixes'
@@ -174,84 +166,71 @@ class NewUpstreamWorker(SubWorker):
             action='store_true')
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree):
+    def make_changes(self, local_tree, report_context, metadata):
         # Make sure that the quilt patches applied in the first place..
         try:
             check_quilt_patches_apply(local_tree)
         except QuiltError as e:
-            note(
-                "An error (%d) occurred running quilt before the merge: "
-                "%s%s", e.retcode, e.stderr, e.extra)
             error_description = (
                 "An error (%d) occurred running quilt before the merge: "
                 "%s%s" % (e.retcode, e.stderr, e.extra))
             error_code = 'before-quilt-error'
-            return {
-                'error_kind': error_code,
-                'error_description': error_description,
-                'upstream_version': None,
-            }
+            raise WorkerFailure(error_code, error_description)
 
         try:
             old_upstream_version, upstream_version = merge_upstream(
                 tree=local_tree, snapshot=self.args.snapshot)
         except UpstreamAlreadyImported as e:
-            note('Last upstream version %s already imported', e.version)
+            report_context(e.version)
+            metadata['upstream_version'] = e.version
             error_description = (
                 "Upstream version %s already imported." % (e.version))
-            error_code = 'upstream-already-imported'
-            upstream_version = e.version
+            raise WorkerFailure(
+                'upstream-already-imported', error_description)
         except UpstreamAlreadyMerged as e:
-            note('Last upstream version %s already merged', e.version)
-            error_description = "Upstream version %s already merged." % (
+            error_description = "Last upstream version %s already merged." % (
                 e.version)
             error_code = 'upstream-already-merged'
-            upstream_version = e.version
+            report_context(e.version)
+            metadata['upstream_version'] = e.version
+            raise WorkerFailure(error_code, error_description)
         except NewUpstreamMissing:
-            note('Unable to find new upstream source.')
             error_description = "Unable to find new upstream source."
             error_code = 'new-upstream-missing'
-            upstream_version = None
+            raise WorkerFailure(error_code, error_description)
         except UpstreamBranchUnavailable:
-            note('Upstream branch was not available.')
             error_description = "The upsteam branch was unavailable."
             error_code = 'upstream-branch-unavailable'
-            upstream_version = None
+            raise WorkerFailure(error_code, error_description)
         except UpstreamMergeConflicted as e:
-            note('Merging new upstream version %s result in conflicts.',
-                 e.version)
             error_description = "Upstream version %s conflicted." % (
                 e.version)
             error_code = 'upstream-merged-conflicts'
             upstream_version = e.version
+            report_context(e.version)
+            metadata['upstream_version'] = e.version
+            raise WorkerFailure(error_code, error_description)
         except PreviousVersionTagMissing as e:
-            note('Unable to find tag %s for previous upstream version %s',
-                 e.tag_name, e.version)
             error_description = (
                  "Previous upstream version %s missing (tag: %s)" %
                  (e.version, e.tag_name))
             error_code = 'previous-upstream-missing'
-            upstream_version = None
+            raise WorkerFailure(error_code, error_description)
         except PristineTarError as e:
-            note('Pristine tar error: %s', e)
             error_description = ('Error from pristine-tar: %s' % e)
             error_code = 'pristine-tar-error'
-            upstream_version = None
+            raise WorkerFailure(error_code, error_description)
         except QuiltError as e:
-            note(
-                "An error (%d) occurred running quilt: "
-                "%s%s", e.retcode, e.stderr, e.extra)
             error_description = (
                 "An error (%d) occurred running quilt: "
                 "%s%s" % (e.retcode, e.stderr, e.extra))
             error_code = 'quilt-error'
+            raise WorkerFailure(error_code, error_description)
         else:
-            error_description = None
-            error_code = None
-
-        return (error_code, error_description,
-                {'upstream_version': upstream_version},
-                upstream_version)
+            report_context(upstream_version)
+            metadata['old_upstream_version'] = old_upstream_version
+            metadata['upstream_version'] = upstream_version
+            return "Merged new upstream version %s" % upstream_version
 
     def build_suite(self):
         if self.args.snapshot:
@@ -273,27 +252,35 @@ class WorkerResult(object):
 class WorkerFailure(Exception):
     """Worker processing failed."""
 
+    def __init__(self, code, description):
+        self.code = code
+        self.description = description
+
 
 debian_info = distro_info.DebianDistroInfo()
 
 
 def process_package(vcs_url, env, command, output_directory,
-                    build_command=None, pre_check_command=None,
+                    metadata, build_command=None, pre_check_command=None,
                     post_check_command=None, possible_transports=None,
                     possible_hosters=None, resume_branch_url=None):
     pkg = env['PACKAGE']
+
+    metadata['package'] = pkg
+    metadata['command'] = command
+
     # TODO(jelmer): sort out this mess:
     if command[0] == 'lintian-brush':
         subworker_cls = LintianBrushWorker
     elif command[0] == 'new-upstream':
         subworker_cls = NewUpstreamWorker
     else:
-        raise WorkerFailure('unknown subcommand %s' % command[0])
+        raise WorkerFailure(
+            'unknown-subcommand',
+            'unknown subcommand %s' % command[0])
     subworker = subworker_cls(command[1:], env)
     build_suite = subworker.build_suite()
     assert pkg is not None
-    assert output_directory is not None
-    output_directory = os.path.abspath(output_directory)
 
     note('Processing: %s', pkg)
 
@@ -301,7 +288,7 @@ def process_package(vcs_url, env, command, output_directory,
         main_branch = open_branch(
             vcs_url, possible_transports=possible_transports)
     except BranchUnavailable as e:
-        raise WorkerFailure(str(e))
+        raise WorkerFailure('worker-branch-unavailable', str(e))
 
     if resume_branch_url:
         try:
@@ -309,45 +296,42 @@ def process_package(vcs_url, env, command, output_directory,
                 resume_branch_url,
                 possible_transports=possible_transports)
         except BranchUnavailable as e:
-            raise WorkerFailure(str(e))
+            raise WorkerFailure('worker-resume-branch-unavailable', str(e))
     else:
         resume_branch = None
 
     with Workspace(main_branch, resume_branch=resume_branch,
                    path=os.path.join(output_directory, pkg)) as ws:
+        metadata['main_branch_revision'] = (
+            ws.main_branch.last_revision().decode())
+
         if not ws.local_tree.has_filename('debian/control'):
-            raise WorkerFailure('missing control file')
+            raise WorkerFailure('missing-control-file', 'missing control file')
 
         try:
             run_pre_check(ws.local_tree, pre_check_command)
         except PreCheckFailed as e:
             note('%s: pre-check failed')
-            raise WorkerFailure(str(e))
+            raise WorkerFailure('pre-check-failed', str(e))
 
-        code, description, subworker_result, context = subworker.make_changes(
-            ws.local_tree)
-        with open(os.path.join(output_directory, 'result.json'), 'w') as f:
-            # TODO(jelmer): write result.json outside of this function
-            json.dump({
-                'subworker': subworker_result,
-                'command': command,
-                'main_branch_revision': main_branch.last_revision().decode(),
-                'code': code,
-                'description': description,
-                'context': context,
-                }, f)
+        metadata['subworker'] = {}
+
+        def provide_context(c):
+            metadata['context'] = c
+        description = subworker.make_changes(
+            ws.local_tree, provide_context, metadata['subworker'])
 
         if not ws.changes_since_main():
-            return WorkerResult('Nothing to do.')
+            raise WorkerFailure('nothing-to-do', 'Nothing to do.')
 
         if not ws.changes_since_resume():
-            return WorkerResult('Nothing new to do.')
+            raise WorkerFailure('nothing-new-to-do', 'Nothing new to do.')
 
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
         except PostCheckFailed as e:
             note('%s: post-check failed')
-            raise WorkerFailure(str(e))
+            raise WorkerFailure('post-check-failed', str(e))
 
         if build_command:
             add_dummy_changelog_entry(
@@ -359,9 +343,11 @@ def process_package(vcs_url, env, command, output_directory,
                           result_dir=output_directory,
                           distribution=build_suite)
                 except BuildFailedError:
-                    raise WorkerFailure('build failed')
+                    raise WorkerFailure('build-failed', 'build failed')
                 except MissingUpstreamTarball:
-                    raise WorkerFailure('unable to find upstream source')
+                    raise WorkerFailure(
+                        'build-missing-upstream-source',
+                        'unable to find upstream source')
 
             (cl_package, cl_version) = get_latest_changelog_version(
                 ws.local_tree)
@@ -384,7 +370,7 @@ def process_package(vcs_url, env, command, output_directory,
 
         ws.defer_destroy()
         return WorkerResult(
-            'Success',
+            description,
             build_distribution=build_suite,
             changes_filename=changes_name,
             build_version=cl_version)
@@ -422,24 +408,40 @@ def main(argv=None):
     if args.branch_url is None:
         parser.print_usage()
         return 1
+
+    output_directory = os.path.abspath(args.output_directory)
+
+    metadata = {}
     start_time = datetime.now()
+    metadata['start_time'] = start_time.isoformat()
     try:
         result = process_package(
             args.branch_url, os.environ,
-            args.command, output_directory=args.output_directory,
+            args.command, output_directory, metadata,
             build_command=args.build_command, pre_check_command=args.pre_check,
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url)
     except WorkerFailure as e:
-        note('Elapsed time: %s', datetime.now() - start_time)
-        note('Worker failed: %s', e)
+        metadata['code'] = e.code
+        metadata['description'] = e.description
+        note('Worker failed: %s', e.description)
         return 1
     else:
-        note('Elapsed time: %s', datetime.now() - start_time)
+        metadata['code'] = result.code
+        metadata['description'] = result.description
+        metadata['changes_filename'] = result.changes_filename
+        metadata['changes_filename'] = result.build_version
         note('%s', result.description)
         if result.changes_filename is not None:
             note('Built %s.', result.changes_filename)
         return 0
+    finally:
+        finish_time = datetime.now()
+        note('Elapsed time: %s', finish_time() - start_time)
+        metadata['finish_time'] = finish_time.isoformat()
+        metadata['duration'] = (finish_time - start_time).seconds
+        with open(os.path.join(output_directory, 'result.json'), 'w') as f:
+            json.dump(metadata, f)
 
 
 if __name__ == '__main__':
