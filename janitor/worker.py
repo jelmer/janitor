@@ -442,7 +442,7 @@ def main(argv=None):
         return 0
     finally:
         finish_time = datetime.now()
-        note('Elapsed time: %s', finish_time() - start_time)
+        note('Elapsed time: %s', finish_time - start_time)
         metadata['finish_time'] = finish_time.isoformat()
         metadata['duration'] = (finish_time - start_time).seconds
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
