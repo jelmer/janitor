@@ -38,8 +38,8 @@ for i, (queue_id, branch_url, mode, env, command) in enumerate(
                 description += ', expecting to merge %s' % env['CONTEXT']
     elif command[0] == 'lintian-brush':
         description = 'Lintian fixes'
-            if env.get('CONTEXT'):
-                description += ', expecting to fix: %s' % env['CONTEXT']
+        if env.get('CONTEXT'):
+            description += ', expecting to fix: %s' % env['CONTEXT']
     else:
         raise AssertionError('invalid command %s' % command)
     print("%d. `%s <pkg/%s>`_ (%s)" % (
