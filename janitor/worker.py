@@ -76,12 +76,25 @@ class SubWorker(object):
     build_version_suffix = None
 
     def __init__(self, command, env):
-        pass
+        """Initialize a subworker.
+
+        Args:
+          command: List of command arguments
+          env: Environment dictionary
+        """
 
     def make_changes(self, local_tree):
+        """Make the actual changes to a tree.
+
+        Args:
+          local_tree: Tree to make changes to
+        Returns:
+          dictionary with subworker-specific results
+        """
         raise NotImplementedError(self.make_changes)
 
     def build_suite(self):
+        """Returns the name of the suite to build for."""
         raise NotImplementedError(self.build_suite)
 
 
