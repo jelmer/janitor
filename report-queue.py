@@ -30,7 +30,7 @@ print("")
 for i, (queue_id, branch_url, mode, env, command) in enumerate(
         state.iter_queue(), 1):
     if command[0] == 'new-upstream':
-        if len(command) > 0 and command[1] == 'snapshot':
+        if '--snapshot' in command:
             description = 'New upstream snapshot'
         else:
             description = 'New upstream'
