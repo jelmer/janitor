@@ -321,7 +321,8 @@ def process_package(vcs_url, env, command, output_directory,
 
         subworker_result = subworker.make_changes(ws.local_tree)
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
-            json.dump(subworker_result, f)
+            json.dump({'subworker': subworker_result,
+                       'command': command}, f)
 
         if not ws.changes_since_main():
             return WorkerResult('Nothing to do.')
