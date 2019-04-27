@@ -426,11 +426,16 @@ def main(argv=None):
         metadata['description'] = e.description
         note('Worker failed: %s', e.description)
         return 1
+    except BaseException as e:
+        metadata['code'] = 'worker-exception'
+        metadata['description'] = str(e)
+        raise
     else:
-        metadata['code'] = result.code
+        metadata['code'] = None
         metadata['description'] = result.description
         metadata['changes_filename'] = result.changes_filename
-        metadata['changes_filename'] = result.build_version
+        metadata['build_version'] = result.build_version
+        metadata['build_distribution'] = result.build_distribution
         note('%s', result.description)
         if result.changes_filename is not None:
             note('Built %s.', result.changes_filename)
