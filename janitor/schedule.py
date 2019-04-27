@@ -25,7 +25,7 @@ __all__ = [
     'schedule_udd_new_upstream_snapshots',
 ]
 
-import datetime
+from datetime import datetime
 
 from . import (
     state,
@@ -239,7 +239,7 @@ def determine_priority(package, command, mode, context=None, priority=0):
     NO_CONTEXT_REFRESH_BONUS = 50
 
     previous_runs = list(
-        state.iter_previous_runs(package, command, mode))
+        state.iter_previous_runs(package, command))
     if previous_runs:
         (last_start_time, last_duration, last_context,
          last_main_branch_revision, last_successful) = (
@@ -252,7 +252,6 @@ def determine_priority(package, command, mode, context=None, priority=0):
                 priority += NO_CONTEXT_REFRESH_BONUS
         if last_successful:
             priority += LAST_SUCCESSFUL_BONUS
-        priority -= (last_duration / 60)
     else:
         priority += FIRST_RUN_BONUS
     return priority
