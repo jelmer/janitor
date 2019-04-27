@@ -319,6 +319,9 @@ def process_package(vcs_url, env, command, output_directory,
         if not ws.changes_since_main():
             return WorkerResult('Nothing to do.')
 
+        if not ws.changes_since_resume():
+            return WorkerResult('Nothing new to do.')
+
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
         except PostCheckFailed as e:
