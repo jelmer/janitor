@@ -389,7 +389,7 @@ async def process_one(
         return JanitorResult(
             pkg, log_id=log_id, description=str(e), code='branch-unavailable')
     except KeyError as e:
-        if e.args == ('www-authenticate not found'):
+        if e.args == ('www-authenticate not found',):
             return JanitorResult(
                 pkg, log_id=log_id, description=str(e),
                 code='401-without-www-authenticate')
