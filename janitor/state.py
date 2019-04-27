@@ -229,7 +229,8 @@ def add_to_queue(vcs_url, mode, env, command, priority=0):
     cur.execute(
         "INSERT INTO queue "
         "(package, command, committer, mode, priority, context) "
-        "VALUES (%s, %s, %s, %s, %s, %s) ON CONFLICT () DO UPDATE SET "
+        "VALUES (%s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT (package, command, mode) DO UPDATE SET "
         "context = %s, priority = %s", (
             package, ' '.join(command), committer, mode,
             priority, context, context, priority))
@@ -260,7 +261,7 @@ select distinct package, build_version from run where build_distribution = %s
     return cur.fetchall()
 
 
-def iter_previous_runs(package, command, mode):
+def iter_previous_runs(package, command):
     cur = conn.cursor()
     cur.execute("""
 SELECT
@@ -272,7 +273,7 @@ SELECT
 FROM
   run
 WHERE
-  package = %s AND command = %s AND mode = %s
+  package = %s AND command = %s
 ORDER BY start_time DESC
-""", (package, command, mode))
+""", (package, ' '.join(command)))
     return cur.fetchall()
