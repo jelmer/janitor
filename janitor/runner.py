@@ -364,9 +364,9 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
 
     This creates a repository with the following branches:
      * master - the original Debian packaging branch
-     * upstream - the upstream branch
-     * pristine-tar the pristine tar packaging branch
      * KIND - whatever command was run
+     * upstream - the upstream branch (optional)
+     * pristine-tar the pristine tar packaging branch (optional)
     """
     if getattr(ws.main_branch.repository, '_git', None):
         vcs_type = 'git-bare'
@@ -390,6 +390,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
             except NotBranchError:
                 target_branch = vcs_result_controldir.create_branch(
                     name=target_branch_name)
+            # TODO(jelmer): Set depth
             from_branch.push(target_branch, overwrite=True)
         for branch_name in ADDITIONAL_COLOCATED_BRANCHES:
             try:
