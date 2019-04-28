@@ -488,7 +488,8 @@ async def process_one(
         def get_proposal_commit_message(existing_proposal):
             if existing_proposal:
                 existing_commit_message = (
-                    existing_proposal.get_commit_message())
+                    getattr(existing_proposal, 'get_commit_message',
+                            lambda: None)())
             else:
                 existing_commit_message = None
             return subrunner.get_proposal_commit_message(
