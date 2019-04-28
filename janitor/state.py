@@ -277,3 +277,20 @@ WHERE
 ORDER BY start_time DESC
 """, (package, ' '.join(command)))
     return cur.fetchall()
+
+
+def iter_last_runs(suite):
+    cur = conn.cursor()
+    cur.execute("""
+SELECT DISTINCT ON (package)
+  package,
+  build_version,
+  result_code,
+  context,
+  start_time,
+  id
+FROM
+  run
+ORDER BY package, result_code = 'success' DESC, start_time DESC
+""")
+    return cur.fetchall()
