@@ -21,6 +21,8 @@ import distro_info
 import json
 import os
 
+from breezy.config import GlobalStack
+
 from silver_platter.debian import (
     BuildFailedError,
     MissingUpstreamTarball,
@@ -410,6 +412,9 @@ def main(argv=None):
         return 1
 
     output_directory = os.path.abspath(args.output_directory)
+
+    global_config = GlobalStack()
+    global_config.set('branch.fetch_tags', True)
 
     metadata = {}
     start_time = datetime.now()
