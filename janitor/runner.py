@@ -28,7 +28,7 @@ import uuid
 from debian.deb822 import Changes
 
 from breezy.branch import Branch
-from breezy.controldir import ControlDir
+from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
 from breezy.plugins.debian.util import (
     debsign,
@@ -369,14 +369,13 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
      * pristine-tar the pristine tar packaging branch (optional)
     """
     if getattr(ws.main_branch.repository, '_git', None):
-        vcs_type = 'git-bare'
-        path = os.path.join(vcs_result_dir, vcs_type, pkg)
+        path = os.path.join(vcs_result_dir, 'git', pkg)
         os.makedirs(path, exist_ok=True)
         try:
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
-                path, format='bzr')
+                path, format=format_registry.get('git-bare'))
         try:
             target_branch = vcs_result_controldir.open_branch(name='msater')
         except NotBranchError:
@@ -406,14 +405,13 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
                     name=branch_name)
             from_branch.push(target_branch, overwrite=True)
     else:
-        vcs_type = 'bzr'
-        path = os.path.join(vcs_result_dir, vcs_type, pkg)
+        path = os.path.join(vcs_result_dir, 'bzr', pkg)
         os.makedirs(path, exist_ok=True)
         try:
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
-                path, format='bzr')
+                path, format=format_registry.get('bzr'))
         vcs_result_controldir.create_repository(shared=True)
         for (from_branch, target_branch_name) in [
                 (ws.local_branch, name),
