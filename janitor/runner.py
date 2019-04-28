@@ -359,7 +359,8 @@ async def process_one(
         build_command, open_mps_per_maintainer,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None, possible_transports=None, possible_hosters=None):
+        debsign_keyid=None,
+        possible_transports=None, possible_hosters=None):
     maintainer_email = env['MAINTAINER_EMAIL']
     pkg = env['PACKAGE']
     if max_mps_per_maintainer and \
@@ -495,19 +496,19 @@ async def process_one(
             return subrunner.get_proposal_commit_message(
                 existing_commit_message)
 
-        if mode != 'build-only':
-            try:
-                local_branch = open_branch(os.path.join(output_directory, pkg))
-            except BranchUnavailable as e:
-                return JanitorResult(
-                    pkg, log_id,
-                    description='result branch missing: %s' % e,
-                    code='result-branch-unavailable',
-                    worker_result=worker_result)
-            try:
-                with Pending(main_branch, local_branch,
-                             resume_branch=resume_branch) as ws:
-                    enable_tag_pushing(local_branch)
+        try:
+            local_branch = open_branch(os.path.join(output_directory, pkg))
+        except BranchUnavailable as e:
+            return JanitorResult(
+                pkg, log_id,
+                description='result branch missing: %s' % e,
+                code='result-branch-unavailable',
+                worker_result=worker_result)
+        with Pending(main_branch, local_branch,
+                     resume_branch=resume_branch) as ws:
+            enable_tag_pushing(local_branch)
+            if mode != 'build-only':
+                try:
                     (result.proposal, is_new) = publish_changes(
                         ws, mode, subrunner.branch_name,
                         get_proposal_description=get_proposal_description,
@@ -518,17 +519,17 @@ async def process_one(
                             subrunner.allow_create_proposal()),
                         overwrite_existing=True,
                         existing_proposal=existing_proposal)
-            except NoSuchProject as e:
-                return JanitorResult(
-                    pkg, log_id,
-                    description='project %s was not found' % e.project,
-                    code='project-not-found',
-                    worker_result=worker_result)
-            except PermissionDenied as e:
-                return JanitorResult(
-                    pkg, log_id, description=str(e),
-                    code='permission-denied',
-                    worker_result=worker_result)
+                except NoSuchProject as e:
+                    return JanitorResult(
+                        pkg, log_id,
+                        description='project %s was not found' % e.project,
+                        code='project-not-found',
+                        worker_result=worker_result)
+                except PermissionDenied as e:
+                    return JanitorResult(
+                        pkg, log_id, description=str(e),
+                        code='permission-denied',
+                        worker_result=worker_result)
 
         if result.proposal and result.is_new:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
