@@ -27,6 +27,9 @@ import uuid
 
 from debian.deb822 import Changes
 
+from breezy.branch import Branch
+from breezy.controldir import ControlDir
+from breezy.errors import NotBranchError
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -75,6 +78,8 @@ last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
 
+
+ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
 
 JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot
@@ -257,7 +262,7 @@ class Pending(object):
         self.local_branch = local_branch
         self.resume_branch = resume_branch
         self.orig_revid = (resume_branch or main_branch).last_revision()
-        self.additional_colocated_branches = ['pristine-tar', 'upstream']
+        self.additional_colocated_branches = ADDITIONAL_COLOCATED_BRANCHES
 
     def __enter__(self):
         return self
@@ -353,13 +358,81 @@ async def invoke_subprocess_worker(
         return await p.wait()
 
 
+def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
+                    additional_colocated_branches=None):
+    """Publish resulting changes in VCS form.
+
+    This creates a repository with the following branches:
+     * master - the original Debian packaging branch
+     * upstream - the upstream branch
+     * pristine-tar the pristine tar packaging branch
+     * KIND - whatever command was run
+    """
+    if getattr(ws.main_branch.repository, '_git', None):
+        vcs_type = 'git-bare'
+        path = os.path.join(vcs_result_dir, vcs_type, pkg)
+        os.makedirs(path, exist_ok=True)
+        try:
+            vcs_result_controldir = ControlDir.open(path)
+        except NotBranchError:
+            vcs_result_controldir = ControlDir.create(
+                path, format='bzr')
+        try:
+            target_branch = vcs_result_controldir.open_branch(name='msater')
+        except NotBranchError:
+            target_branch = vcs_result_controldir.create_branch(name='master')
+        for (from_branch, target_branch_name) in [
+                (ws.main_branch, 'master'),
+                (ws.local_branch, name)]:
+            try:
+                target_branch = vcs_result_controldir.open_branch(
+                    name=target_branch_name)
+            except NotBranchError:
+                target_branch = vcs_result_controldir.create_branch(
+                    name=target_branch_name)
+            from_branch.push(target_branch, overwrite=True)
+        for branch_name in ADDITIONAL_COLOCATED_BRANCHES:
+            try:
+                from_branch = ws.local_branch.controldir.open_branch(
+                    name=branch_name)
+            except NotBranchError:
+                continue
+            try:
+                target_branch = vcs_result_controldir.open_branch(
+                    name=branch_name)
+            except NotBranchError:
+                target_branch = vcs_result_controldir.create_branch(
+                    name=branch_name)
+            from_branch.push(target_branch, overwrite=True)
+    else:
+        vcs_type = 'bzr'
+        path = os.path.join(vcs_result_dir, vcs_type, pkg)
+        os.makedirs(path, exist_ok=True)
+        try:
+            vcs_result_controldir = ControlDir.open(path)
+        except NotBranchError:
+            vcs_result_controldir = ControlDir.create(
+                path, format='bzr')
+        vcs_result_controldir.create_repository(shared=True)
+        for (from_branch, target_branch_name) in [
+                (ws.local_branch, name),
+                (ws.main_branch, 'master')]:
+            target_branch_path = os.path.join(path, target_branch_name)
+            try:
+                target_branch = Branch.open(target_branch_path)
+            except NotBranchError:
+                target_branch = ControlDir.create_branch_convenience(
+                    target_branch_path)
+            from_branch.push(target_branch, overwrite=True)
+
+
 async def process_one(
         vcs_url, mode, env, command,
         max_mps_per_maintainer,
         build_command, open_mps_per_maintainer,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None,
+        debsign_keyid=None, vcs_result_dir=None,
         possible_transports=None, possible_hosters=None):
     maintainer_email = env['MAINTAINER_EMAIL']
     pkg = env['PACKAGE']
@@ -530,6 +603,11 @@ async def process_one(
                         pkg, log_id, description=str(e),
                         code='permission-denied',
                         worker_result=worker_result)
+            if vcs_result_dir:
+                publish_vcs_dir(
+                    ws, vcs_result_dir, pkg, subrunner.branch_name,
+                    additional_colocated_branches=(
+                        ws.additional_colocated_branches))
 
         if result.proposal and result.is_new:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
@@ -562,7 +640,7 @@ async def process_queue(
         build_command, open_mps_per_maintainer,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None):
+        debsign_keyid=None, vcs_result_dir=None):
     while True:
         try:
             (queue_id, vcs_url, mode, env, command) = next(
@@ -577,7 +655,7 @@ async def process_queue(
             refresh=refresh, pre_check=pre_check,
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
-            debsign_keyid=debsign_keyid,
+            debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
             log_dir=log_dir)
         finish_time = datetime.now()
         state.store_run(
@@ -652,6 +730,9 @@ def main(argv=None):
     parser.add_argument(
         '--debsign-keyid', type=str,
         help='GPG key to sign Debian package with.')
+    parser.add_argument(
+        '--vcs-result-dir', type=str,
+        help='Directory to store VCS repositories in.')
 
     args = parser.parse_args()
 
@@ -666,7 +747,8 @@ def main(argv=None):
             args.build_command, open_mps_per_maintainer,
             args.refresh, args.pre_check, args.post_check,
             args.dry_run, args.incoming, args.log_dir,
-            args.debsign_keyid)),
+            args.debsign_keyid,
+            args.vcs_result_dir)),
         loop.create_task(export_queue_length()),
         loop.create_task(run_web_server(args.listen_address, args.port)),
         ))
