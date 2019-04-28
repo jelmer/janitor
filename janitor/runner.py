@@ -423,6 +423,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
             except NotBranchError:
                 target_branch = ControlDir.create_branch_convenience(
                     target_branch_path)
+            target_branch.set_stacked_on(ws.main_branch)
             from_branch.push(target_branch, overwrite=True)
 
 
