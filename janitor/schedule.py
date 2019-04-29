@@ -259,11 +259,11 @@ def determine_priority(package, command, mode, context=None, priority=0):
 
 def add_to_queue(todo, dry_run=False, default_priority=0):
     for vcs_url, mode, env, command in todo:
-        priority = determine_priority(
+        priority = default_priority + determine_priority(
             env['PACKAGE'], command, mode, env.get('CONTEXT'))
         if not dry_run:
             added = state.add_to_queue(
-                vcs_url, mode, env, command, priority=default_priority)
+                vcs_url, mode, env, command, priority=priority)
         else:
             added = True
         if added:
