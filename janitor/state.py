@@ -32,8 +32,9 @@ def _ensure_package(cur, name, vcs_url, maintainer_email):
     cur.execute(
         "INSERT INTO package (name, branch_url, maintainer_email) "
         "VALUES (%s, %s, %s) ON CONFLICT (name) DO UPDATE SET "
-        "branch_url = %s, maintainer_email = %s",
-        (name, vcs_url, maintainer_email, vcs_url, maintainer_email))
+        "branch_url = EXCLUDED.branch_url, "
+        "maintainer_email = EXCLUDED.maintainer_email",
+        (name, vcs_url, maintainer_email))
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
@@ -63,8 +64,8 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         cur.execute(
             "INSERT INTO merge_proposal (url, package, status) "
             "VALUES (%s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
-            "package = %s",
-            (merge_proposal_url, name, name))
+            "package = EXCLUDED.package",
+            (merge_proposal_url, name))
     else:
         merge_proposal_url = None
     cur.execute(
@@ -231,9 +232,10 @@ def add_to_queue(vcs_url, mode, env, command, priority=0):
         "(package, command, committer, mode, priority, context) "
         "VALUES (%s, %s, %s, %s, %s, %s) "
         "ON CONFLICT (package, command, mode) DO UPDATE SET "
-        "context = %s, priority = %s", (
+        "context = EXCLUDED.context, priority = EXCLUDED.priority "
+        "WHERE priority < EXCLUDED.priority", (
             package, ' '.join(command), committer, mode,
-            priority, context, context, priority))
+            priority, context))
     conn.commit()
     return True
 
@@ -242,8 +244,8 @@ def set_proposal_status(url, status):
     cur = conn.cursor()
     cur.execute("""
 INSERT INTO merge_proposal (url, status) VALUES (%s, %s)
-ON CONFLICT (url) DO UPDATE SET status = %s
-""", (url, status, status))
+ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
+""", (url, status))
     conn.commit()
 
 
