@@ -136,11 +136,9 @@ for run in state.iter_runs():
                 g.write('\tgit pull https://janitor.debian.net/git/%s %s\n' % (
                     package_name, branch_name))
             elif os.path.exists('../../vcs/bzr/%s' % package_name):
-                # No loggerhead yet.
-                pass
-                # g.write(
-                #     '\tbrz merge https://janitor.debian.net/bzr/%s/%s\n' % (
-                #        package_name, branch_name))
+                g.write(
+                    '\tbrz merge https://janitor.debian.net/bzr/%s/%s\n' % (
+                       package_name, branch_name))
             g.write('\n')
         build_log_path = 'build.log'
         worker_log_path = 'worker.log'
