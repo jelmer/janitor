@@ -138,6 +138,7 @@ def schedule_udd_new_upstreams(policy, packages, shuffle=False):
             vcs_url, mode,
             {'COMMITTER': committer,
              'PACKAGE': package.name,
+             'CONTEXT': upstream_version,
              'MAINTAINER_EMAIL': package.maintainer_email},
             command)
 
@@ -177,6 +178,7 @@ def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
             vcs_url, mode,
             {'COMMITTER': committer,
              'PACKAGE': package.name,
+             'CONTEXT': None,
              'MAINTAINER_EMAIL': package.maintainer_email},
             command)
 
