@@ -233,7 +233,7 @@ def add_to_queue(vcs_url, mode, env, command, priority=0):
         "VALUES (%s, %s, %s, %s, %s, %s) "
         "ON CONFLICT (package, command, mode) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority "
-        "WHERE priority < EXCLUDED.priority", (
+        "WHERE queue.priority < EXCLUDED.priority", (
             package, ' '.join(command), committer, mode,
             priority, context))
     conn.commit()
