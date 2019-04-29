@@ -1,0 +1,10 @@
+steps:
+- name: 'gcr.io/$PROJECT_ID/worker'
+  id: build
+  args: [ '--branch-url=https://salsa.debian.org/jelmer/xandikos', '--output-directory=/output', 'lintian-brush']
+  env:
+   - 'PACKAGE=xandikos'
+artifacts:
+  objects:
+    location: 'gs://my-bucket/artifacts/'
+    paths: ["/output/result.json", "/output/build.log", "/output/*.dsc", "/output/*.deb", "/output/*.tar.*"]
