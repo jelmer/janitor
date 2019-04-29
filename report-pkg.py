@@ -123,8 +123,8 @@ for run in state.iter_runs():
         else:
             raise AssertionError
         g.write('\n\n')
-        if (os.path.exists('../../vcs/git/%s' % package_name) or
-                os.path.exists('../../vcs/bzr/%s' % package_name)):
+        if (os.path.exists('../vcs/git/%s' % package_name) or
+                os.path.exists('../vcs/bzr/%s' % package_name)):
             if svp_args[0] == 'lintian-brush':
                 branch_name = 'lintian-fixes'
             elif svp_args[0] == 'new-upstream':
@@ -132,10 +132,10 @@ for run in state.iter_runs():
             else:
                 raise AssertionError
             g.write('Merge these changes:\n\n')
-            if os.path.exists('../../vcs/git/%s' % package_name):
+            if os.path.exists('../vcs/git/%s' % package_name):
                 g.write('\tgit pull https://janitor.debian.net/git/%s %s\n' % (
                     package_name, branch_name))
-            elif os.path.exists('../../vcs/bzr/%s' % package_name):
+            elif os.path.exists('../vcs/bzr/%s' % package_name):
                 g.write(
                     '\tbrz merge https://janitor.debian.net/bzr/%s/%s\n' % (
                        package_name, branch_name))
