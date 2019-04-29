@@ -511,6 +511,12 @@ async def process_one(
                 post_check=post_check, build_command=build_command,
                 log_path=os.path.join(output_directory, 'worker.log'))
 
+        if retcode != 0:
+            return JanitorResult(
+                pkg, log_id=log_id,
+                code='worker-failure',
+                description='Worker exited with return code %d' % retcode)
+
         for name in ['build.log', 'worker.log', 'result.json']:
             src_build_log_path = os.path.join(output_directory, name)
             if os.path.exists(src_build_log_path):
@@ -529,11 +535,9 @@ async def process_one(
         if worker_result.subworker:
             subrunner.read_worker_result(worker_result.subworker)
 
-        if retcode != 0:
+        if worker_result.code is not None:
             return JanitorResult(
                 pkg, log_id=log_id, worker_result=worker_result)
-
-        assert worker_result.code is None
 
         result = JanitorResult(
             pkg, log_id=log_id,
