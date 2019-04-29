@@ -375,7 +375,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
-                path, format=format_registry.get('git-bare'))
+                path, format=format_registry.get('git-bare')())
         try:
             target_branch = vcs_result_controldir.open_branch(name='msater')
         except NotBranchError:
@@ -411,7 +411,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
-                path, format=format_registry.get('bzr'))
+                path, format=format_registry.get('bzr')())
         vcs_result_controldir.create_repository(shared=True)
         for (from_branch, target_branch_name) in [
                 (ws.local_branch, name),
