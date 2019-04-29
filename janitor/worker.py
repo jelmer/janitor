@@ -43,6 +43,7 @@ from silver_platter.debian.upstream import (
     UpstreamAlreadyMerged,
     UpstreamMergeConflicted,
     UpstreamBranchUnavailable,
+    UpstreamBranchUnknown,
     PreviousVersionTagMissing,
     PristineTarError,
     QuiltError,
@@ -227,6 +228,11 @@ class NewUpstreamWorker(SubWorker):
                 "An error (%d) occurred running quilt: "
                 "%s%s" % (e.retcode, e.stderr, e.extra))
             error_code = 'quilt-error'
+            raise WorkerFailure(error_code, error_description)
+        except UpstreamBranchUnknown as e:
+            error_description = (
+                'The location of the upstream branch is unknown.')
+            error_code = 'upstream-branch-unknown'
             raise WorkerFailure(error_code, error_description)
         else:
             report_context(upstream_version)
