@@ -308,12 +308,13 @@ def process_package(vcs_url, env, command, output_directory,
             ws.main_branch.last_revision().decode())
 
         if not ws.local_tree.has_filename('debian/control'):
-            raise WorkerFailure('missing-control-file', 'missing control file')
+            raise WorkerFailure(
+                'missing-control-file',
+                'missing control file: debian/control')
 
         try:
             run_pre_check(ws.local_tree, pre_check_command)
         except PreCheckFailed as e:
-            note('%s: pre-check failed')
             raise WorkerFailure('pre-check-failed', str(e))
 
         metadata['subworker'] = {}
@@ -339,7 +340,8 @@ def process_package(vcs_url, env, command, output_directory,
             add_dummy_changelog_entry(
                 ws.local_tree.basedir, subworker.build_version_suffix,
                 build_suite, 'Build for debian-janitor apt repository.')
-            with open(os.path.join(output_directory, 'build.log'), 'w') as f:
+            build_log_path = os.path.join(output_directory, 'build.log')
+            with open(build_log_path, 'w') as f:
                 try:
                     build(ws.local_tree, outf=f, build_command=build_command,
                           result_dir=output_directory,
