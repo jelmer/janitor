@@ -368,7 +368,8 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
      * upstream - the upstream branch (optional)
      * pristine-tar the pristine tar packaging branch (optional)
     """
-    if getattr(ws.main_branch.repository, '_git', None):
+    vcs = getattr(ws.main_branch.repository, 'vcs', None)
+    if vcs and vcs.abbreviation == 'git':
         path = os.path.join(vcs_result_dir, 'git', pkg)
         os.makedirs(path, exist_ok=True)
         try:
@@ -404,7 +405,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
                 target_branch = vcs_result_controldir.create_branch(
                     name=branch_name)
             from_branch.push(target_branch, overwrite=True)
-    else:
+    elif not vcs:
         path = os.path.join(vcs_result_dir, 'bzr', pkg)
         os.makedirs(path, exist_ok=True)
         try:
@@ -422,8 +423,10 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
             except NotBranchError:
                 target_branch = ControlDir.create_branch_convenience(
                     target_branch_path)
-            target_branch.set_stacked_on(ws.main_branch)
+            target_branch.set_stacked_on_url(ws.main_branch.user_url)
             from_branch.push(target_branch, overwrite=True)
+    else:
+        raise AssertionError('unsupported vcs %s' % vcs.abbreviation)
 
 
 async def process_one(
