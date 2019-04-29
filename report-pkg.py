@@ -118,7 +118,7 @@ for run in state.iter_runs():
                     ['--fixers=%s' % f for f in svp_args[1:]])))
         elif svp_args[0] == 'new-upstream':
             g.write('debian-svp new-upstream')
-            g.write(' '.join(svp_args[1:]))
+            g.write(''.join([' ' + arg for arg in svp_args[1:]]))
             g.write(' ' + package_name)
         else:
             raise AssertionError
