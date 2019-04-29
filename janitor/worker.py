@@ -443,7 +443,7 @@ def main(argv=None):
         metadata['code'] = e.code
         metadata['description'] = e.description
         note('Worker failed: %s', e.description)
-        return 1
+        return 0
     except BaseException as e:
         metadata['code'] = 'worker-exception'
         metadata['description'] = str(e)
