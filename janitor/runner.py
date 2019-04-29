@@ -377,10 +377,6 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('git-bare')())
-        try:
-            target_branch = vcs_result_controldir.open_branch(name='msater')
-        except NotBranchError:
-            target_branch = vcs_result_controldir.create_branch(name='master')
         for (from_branch, target_branch_name) in [
                 (ws.main_branch, 'master'),
                 (ws.local_branch, name)]:
