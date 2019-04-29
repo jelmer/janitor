@@ -131,7 +131,7 @@ for run in state.iter_runs():
                 branch_name = 'new-upstream'
             else:
                 raise AssertionError
-            g.write('Merge these changes:\n\n')
+            g.write('Merge these changes::\n\n')
             if os.path.exists('../vcs/git/%s' % package_name):
                 g.write('\tgit pull https://janitor.debian.net/git/%s %s\n' % (
                     package_name, branch_name))
