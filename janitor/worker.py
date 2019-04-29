@@ -312,6 +312,11 @@ def process_package(vcs_url, env, command, output_directory,
                 'missing-control-file',
                 'missing control file: debian/control')
 
+        if ws.local_tree.has_filename('debian/control.in'):
+            raise WorkerFailure(
+                'control-file-is-generated',
+                'A control file is generated: debian/control.in')
+
         try:
             run_pre_check(ws.local_tree, pre_check_command)
         except PreCheckFailed as e:
