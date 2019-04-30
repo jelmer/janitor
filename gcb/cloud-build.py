@@ -5,7 +5,27 @@ import json
 import os
 import subprocess
 import sys
+import time
+import urllib.parse
 import urllib3
+from google.cloud import storage
+from google.cloud import pubsub
+
+
+BUCKET_NAME = 'results.janitor.debian.net'
+
+
+# In theory, we should be able to use pubsub to be notified when our build finishes..
+#     subscriber = pubsub.SubscriberClient()
+#    topic = 'projects/debian-janitor/topics/cloud-builds'
+#    subscription_name = 'projects/debian-janitor/subscriptions/worker'
+#    subscription = subscriber.create_subscription(
+#        subscription_name, topic)
+#    def callback(message):
+#        import pdb; pdb.set_trace()
+#        message.ack()
+#    future = subscription.open(callback)
+#    future.result()
 
 
 def gcb_run_build(http, bearer, args):
@@ -38,6 +58,22 @@ def gcb_run_build(http, bearer, args):
     return build_id
 
 
+def get_blob(client, url):
+    result = urllib.parse.urlparse(url)
+    bucket = client.get_bucket(result.netloc)
+    return bucket.get_blob(result.path.lstrip('/'))
+
+
+def download_results(client, manifest_url, output_directory):
+    blob = get_blob(client, manifest_url)
+    for line in blob.download_as_string().splitlines():
+        manifest = json.loads(line)
+        blob = get_blob(client, manifest['location'])
+        blob.download_to_filename(
+            os.path.join(output_directory, os.path.basename(blob.name)),
+            client)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog='janitor-worker',
@@ -53,12 +89,22 @@ def main(argv=None):
          "--format=value(credential.access_token)"]).decode().strip("\n")
 
     build_id = gcb_run_build(http, bearer, unknown)
-    r = http.request(
-        'GET',
-        'https://cloudbuild.googleapis.com/v1/projects/debian-janitor/builds/%s' % build_id,
-        headers={'Authorization': "Bearer %s" % bearer})
-    build_state = json.loads(r.data.decode('utf-8'))
-    # TODO(jelmer): Copy artefacts to output-directory
+
+    while True:
+        # Urgh
+        time.sleep(10)
+        r = http.request(
+            'GET',
+            'https://cloudbuild.googleapis.com/v1/projects/debian-janitor/builds/%s' % build_id,
+            headers={'Authorization': "Bearer %s" % bearer})
+        ops = json.loads(r.data.decode('utf-8'))
+        if ops['status'] == 'SUCCESS':
+            break
+    artifact_manifest_url = ops['results']['artifactManifest']
+    client = storage.Client()
+    download_results(client, artifact_manifest_url, args.output_directory)
+    blob = get_blob(client, ops['logsBucket'] + '/log-%s.txt' % build_id)
+    sys.stdout.buffer.write(blob.download_as_string())
 
 
 if __name__ == '__main__':

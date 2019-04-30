@@ -4,7 +4,8 @@ RUN mkdir -p /srv/chroot
 RUN apt-get update
 RUN apt-get install -y sbuild
 RUN sbuild-createchroot --include=eatmydata,ccache,gnupg unstable /srv/chroot/unstable-amd64-sbuild http://deb.debian.org/debian
-COPY sbuildrc /root/.sbuildrc
+COPY sbuildrc /sbuildrc
+ENV SBUILD_CONFIG=/sbuildrc
 
 # Install debian-janitor dependencies
 RUN apt-get install -y brz git python3-debian python3-dulwich sudo python3-distro-info python3-apt devscripts patchutils pristine-tar quilt python3-yaml fakeroot dpkg-dev libalgorithm-merge-perl
