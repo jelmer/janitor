@@ -162,6 +162,7 @@ class NewUpstreamWorker(SubWorker):
     build_version_suffix = 'janitor+newupstream'
 
     def __init__(self, command, env):
+        self.committer = env.get('COMMITTER')
         subparser = argparse.ArgumentParser(prog='new-upstream')
         subparser.add_argument(
             '--snapshot',
@@ -182,7 +183,8 @@ class NewUpstreamWorker(SubWorker):
 
         try:
             old_upstream_version, upstream_version = merge_upstream(
-                tree=local_tree, snapshot=self.args.snapshot)
+                tree=local_tree, snapshot=self.args.snapshot,
+                committer=self.committer)
         except UpstreamAlreadyImported as e:
             report_context(e.version)
             metadata['upstream_version'] = e.version
