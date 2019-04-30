@@ -35,6 +35,9 @@ upstream-releases:
 upstream-snapshots:
 	python3 ../report-apt-repo.py upstream-snapshots
 
+lintian-fixes:
+	python3 ../report-apt-repo.py lintian-fixes
+
 logs:
 	for I in $$(find pkg -name '*.log' -o -name 'result.json'); do { mkdir -p _build/html/$$(dirname $$I); ln -f $$I _build/html/$$I; } done
 
