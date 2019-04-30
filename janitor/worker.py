@@ -20,6 +20,7 @@ from datetime import datetime
 import distro_info
 import json
 import os
+import subprocess
 
 from breezy.config import GlobalStack
 
@@ -273,7 +274,8 @@ debian_info = distro_info.DebianDistroInfo()
 def process_package(vcs_url, env, command, output_directory,
                     metadata, build_command=None, pre_check_command=None,
                     post_check_command=None, possible_transports=None,
-                    possible_hosters=None, resume_branch_url=None):
+                    possible_hosters=None, resume_branch_url=None,
+                    tgz_repo=False):
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg
@@ -385,7 +387,12 @@ def process_package(vcs_url, env, command, output_directory,
             changes_name = None
             cl_version = None
 
-        ws.defer_destroy()
+        if tgz_repo:
+            subprocess.check_call([
+                'tar', 'cz', os.path.join(output_directory, pkg + '.tgz'),
+                os.path.join(output_directory, pkg)])
+        else:
+            ws.defer_destroy()
         return WorkerResult(
             description,
             build_distribution=build_suite,
@@ -418,6 +425,10 @@ def main(argv=None):
         '--build-command',
         help='Build package to verify it.', type=str,
         default='sbuild -A -s -v -d$DISTRIBUTION')
+    parser.add_argument(
+        '--tgz-repo',
+        help='Whether to create a tgz of the VCS repo.',
+        action='store_true')
 
     parser.add_argument('command', nargs=argparse.REMAINDER)
 
@@ -440,7 +451,8 @@ def main(argv=None):
             args.command, output_directory, metadata,
             build_command=args.build_command, pre_check_command=args.pre_check,
             post_check_command=args.post_check,
-            resume_branch_url=args.resume_branch_url)
+            resume_branch_url=args.resume_branch_url,
+            tgz_repo=args.tgz_repo)
     except WorkerFailure as e:
         metadata['code'] = e.code
         metadata['description'] = e.description
