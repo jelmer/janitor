@@ -8,7 +8,7 @@ import sys
 import urllib3
 
 
-def gcb_run_build(args):
+def gcb_run_build(http, bearer, args):
     env = {}
     for key in ['PACKAGE', 'COMMITTER']:
         if key in os.environ:
@@ -21,26 +21,21 @@ def gcb_run_build(args):
         }],
         "artifacts": {
           'objects': {
-             'location': 'gs://my-bucket/artifacts/',
-             'paths': ["result.json", "build.log",
-                       "*.dsc", "*.changes", "*.deb", "*.tar.*"],
+             'location': 'gs://results.janitor.debian.net/$BUILD_ID',
+             'paths': ["*"],
           }
         }
     }
 
-    bearer = subprocess.check_output(
-        ["gcloud", "config", "config-helper",
-         "--format=value(credential.access_token)"])
-    http = urllib3.PoolManager()
     r = http.request(
         'POST',
         'https://cloudbuild.googleapis.com/v1/projects/debian-janitor/builds',
         body=json.dumps(request),
-        headers={'Authorization': "Bearer %s" % bearer.decode().strip("\n")})
+        headers={'Authorization': "Bearer %s" % bearer})
     response = json.loads(r.data.decode('utf-8'))
     print("Log URL: %s" % response['metadata']['build']['logUrl'])
     build_id = response['metadata']['build']['id']
-    import pdb; pdb.set_trace()
+    return build_id
 
 
 def main(argv=None):
@@ -52,8 +47,17 @@ def main(argv=None):
         help='Output directory', default='.')
     args, unknown = parser.parse_known_args()
 
-    gcb_run_build(unknown)
+    http = urllib3.PoolManager()
+    bearer = subprocess.check_output(
+        ["gcloud", "config", "config-helper",
+         "--format=value(credential.access_token)"]).decode().strip("\n")
 
+    build_id = gcb_run_build(http, bearer, unknown)
+    r = http.request(
+        'GET',
+        'https://cloudbuild.googleapis.com/v1/projects/debian-janitor/builds/%s' % build_id,
+        headers={'Authorization': "Bearer %s" % bearer})
+    build_state = json.loads(r.data.decode('utf-8'))
     # TODO(jelmer): Copy artefacts to output-directory
 
 
