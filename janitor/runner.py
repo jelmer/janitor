@@ -612,7 +612,7 @@ async def process_one(
                 code='result-branch-unavailable',
                 worker_result=worker_result)
 
-        result.revision = local_branch.last_revision()
+        result.revision = local_branch.last_revision().decode('utf-8')
         enable_tag_pushing(local_branch)
         if mode != 'build-only':
             try:
@@ -688,8 +688,8 @@ async def process_queue(
             result.proposal.url if result.proposal else None,
             build_version=result.build_version,
             build_distribution=result.build_distribution,
-            result.branch_name,
-            result.revision)
+            branch_name=result.branch_name,
+            revision=result.revision)
 
         state.drop_queue_item(queue_id)
         last_success_gauge.set_to_current_time()
