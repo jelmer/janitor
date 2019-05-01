@@ -26,7 +26,7 @@ BUCKET_NAME = 'results.janitor.debian.net'
 #    future.result()
 
 
-def gcb_run_build(http, bearer, args):
+def gcb_run_build(http, bearer, args, timeout=3600):
     env = {}
     for key in ['PACKAGE', 'COMMITTER']:
         if key in os.environ:
@@ -48,7 +48,8 @@ def gcb_run_build(http, bearer, args):
              'location': 'gs://results.janitor.debian.net/$BUILD_ID',
              'paths': ["*"],
           }
-        }
+        },
+        'timeout': '%ds' % timeout,
     }
 
     r = http.request(
@@ -93,6 +94,9 @@ def main(argv=None):
     parser.add_argument(
         '--output-directory', type=str,
         help='Output directory', default='.')
+    parser.add_argument(
+        '--timeout', type=int,
+        help='Build timeout (in seconds)', default=3600)
     args, unknown = parser.parse_known_args()
 
     http = urllib3.PoolManager()
@@ -100,7 +104,7 @@ def main(argv=None):
         ["gcloud", "config", "config-helper",
          "--format=value(credential.access_token)"]).decode().strip("\n")
 
-    build_id = gcb_run_build(http, bearer, unknown)
+    build_id = gcb_run_build(http, bearer, unknown, args.timeout)
 
     while True:
         # Urgh
