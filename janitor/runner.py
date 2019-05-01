@@ -133,24 +133,6 @@ class LintianBrushRunner(object):
         self.failed = result['failed']
         self.add_on_only = result['add_on_only']
 
-    def describe(self, result):
-        # TODO(jelmer): This method is unused
-        tags = set()
-        for brush_result, unused_summary in self.applied:
-            tags.update(brush_result.fixed_lintian_tags)
-        if result.proposal:
-            if result.is_new:
-                return 'Proposed fixes %r' % tags
-            elif tags:
-                return 'Updated proposal with fixes for %r' % tags
-            else:
-                return 'No new fixes for proposal'
-        else:
-            if tags:
-                return 'Pushed fixes %r' % tags
-            else:
-                return 'Nothing to do.'
-
     def allow_create_proposal(self):
         return self.applied and not self.add_on_only
 
@@ -158,20 +140,6 @@ class LintianBrushRunner(object):
 class NewUpstreamRunner(object):
 
     branch_name = "new-upstream"
-
-    def describe(self, result):
-        # TODO(jelmer): This method is unused
-        if result.proposal:
-            if result.is_new:
-                return (
-                    'Created merge proposal %s merging new '
-                    'upstream version %s.' % (
-                        result.proposal.url,
-                        self._upstream_version))
-            else:
-                return 'Updated merge proposal %s for upstream version %s.' % (
-                    result.proposal.url, self._upstream_version)
-        return 'Did nothing.'
 
     def read_worker_result(self, result):
         self._upstream_version = result['upstream_version']
