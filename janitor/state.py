@@ -281,11 +281,12 @@ ORDER BY start_time DESC
     return cur.fetchall()
 
 
-def iter_last_runs(suite):
+def iter_last_successes(suite):
     cur = conn.cursor()
     cur.execute("""
-SELECT DISTINCT ON (package)
+SELECT DISTINCT ON (package, command)
   package,
+  command,
   build_version,
   result_code,
   context,
@@ -293,6 +294,23 @@ SELECT DISTINCT ON (package)
   id
 FROM
   run
+WHERE build_distribution = %s
 ORDER BY package, result_code = 'success' DESC, start_time DESC
+""", (suite,))
+    return cur.fetchall()
+
+
+def iter_last_runs():
+    cur = conn.cursor()
+    cur.execute("""
+SELECT DISTINCT ON (package, command)
+  package,
+  command,
+  result_code,
+  id,
+  description
+FROM
+  run
+ORDER BY package, command
 """)
     return cur.fetchall()
