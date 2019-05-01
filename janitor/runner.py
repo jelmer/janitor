@@ -111,7 +111,11 @@ class NoChangesFile(Exception):
 
 class LintianBrushRunner(object):
 
-    branch_name = "lintian-fixes"
+    def __init__(self, args):
+        self.args = args
+
+    def branch_name(self):
+        return "lintian-fixes"
 
     def get_proposal_description(self, existing_description):
         if existing_description:
@@ -139,7 +143,14 @@ class LintianBrushRunner(object):
 
 class NewUpstreamRunner(object):
 
-    branch_name = "new-upstream"
+    def __init__(self, args):
+        self.args = args
+
+    def branch_name(self):
+        if '--snapshot' in args:
+            return "new-upstream-snapshot"
+        else:
+            return "new-upstream"
 
     def read_worker_result(self, result):
         self._upstream_version = result['upstream_version']
@@ -422,9 +433,9 @@ async def process_one(
     log_id = str(uuid.uuid4())
 
     if command[0] == "new-upstream":
-        subrunner = NewUpstreamRunner()
+        subrunner = NewUpstreamRunner(command[1:])
     elif command[0] == "lintian-brush":
-        subrunner = LintianBrushRunner()
+        subrunner = LintianBrushRunner(command[1:])
     else:
         raise AssertionError('Unknown command %s' % command[0])
 
@@ -465,7 +476,7 @@ async def process_one(
         try:
             (resume_branch, overwrite, existing_proposal) = (
                 find_existing_proposed(
-                    main_branch, hoster, subrunner.branch_name))
+                    main_branch, hoster, subrunner.branch_name()))
         except NoSuchProject as e:
             if mode not in ('push', 'build-only'):
                 return JanitorResult(
@@ -560,7 +571,7 @@ async def process_one(
             if mode != 'build-only':
                 try:
                     (result.proposal, is_new) = publish_changes(
-                        ws, mode, subrunner.branch_name,
+                        ws, mode, subrunner.branch_name(),
                         get_proposal_description=get_proposal_description,
                         get_proposal_commit_message=(
                             get_proposal_commit_message),
@@ -595,7 +606,7 @@ async def process_one(
 
             if vcs_result_dir:
                 publish_vcs_dir(
-                    ws, vcs_result_dir, pkg, subrunner.branch_name,
+                    ws, vcs_result_dir, pkg, subrunner.branch_name(),
                     additional_colocated_branches=(
                         ws.additional_colocated_branches))
 
