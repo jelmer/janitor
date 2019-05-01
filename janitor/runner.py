@@ -48,7 +48,7 @@ from silver_platter.debian.lintian import (
     update_proposal_commit_message,
     )
 from silver_platter.proposal import (
-    publish_changes,
+    publish_changes as publish_changes_from_workspace,
     find_existing_proposed,
     enable_tag_pushing,
     push_changes,
@@ -147,7 +147,7 @@ class NewUpstreamRunner(object):
         self.args = args
 
     def branch_name(self):
-        if '--snapshot' in args:
+        if '--snapshot' in self.args:
             return "new-upstream-snapshot"
         else:
             return "new-upstream"
@@ -404,16 +404,18 @@ def publish_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
         raise AssertionError('unsupported vcs %s' % vcs.abbreviation)
 
 
-async def process_one(
-        worker_module, vcs_url, mode, env, command,
-        max_mps_per_maintainer,
-        build_command, open_mps_per_maintainer,
-        refresh=False, pre_check=None, post_check=None,
-        dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None, vcs_result_dir=None,
-        possible_transports=None, possible_hosters=None):
-    maintainer_email = env['MAINTAINER_EMAIL']
-    pkg = env['PACKAGE']
+class PublishFailure(Exception):
+
+    def __init__(self, code, description):
+        self.code = code
+        self.description = description
+
+
+def publish_changes(pkg, maintainer_email, subrunner, mode, hoster,
+                    main_branch, local_branch, resume_branch=None,
+                    max_mps_per_maintainer=None,
+                    open_mps_per_maintainer=None,
+                    dry_run=False, log_id=None, existing_proposal=None):
     if max_mps_per_maintainer and \
             open_mps_per_maintainer.get(maintainer_email, 0) \
             >= max_mps_per_maintainer and mode in ('propose', 'attempt-push'):
@@ -424,11 +426,74 @@ async def process_one(
             mode = 'build-only'
         if mode == 'attempt-push':
             mode = 'push'
-    if mode == "attempt-push" and "salsa.debian.org/debian/" in vcs_url:
+    if mode == "attempt-push" and \
+            "salsa.debian.org/debian/" in main_branch.user_url:
         # Make sure we don't accidentally push to unsuspecting collab-maint
         # repositories, even if debian-janitor becomes a member of "debian"
         # in the future.
         mode = "propose"
+
+    def get_proposal_description(existing_proposal):
+        if existing_proposal:
+            existing_description = existing_proposal.get_description()
+            existing_description = strip_janitor_blurb(
+                existing_description)
+        else:
+            existing_description = None
+        description = subrunner.get_proposal_description(
+            existing_description)
+        return add_janitor_blurb(description, pkg, log_id)
+
+    def get_proposal_commit_message(existing_proposal):
+        if existing_proposal:
+            existing_commit_message = (
+                getattr(existing_proposal, 'get_commit_message',
+                        lambda: None)())
+        else:
+            existing_commit_message = None
+        return subrunner.get_proposal_commit_message(
+            existing_commit_message)
+
+    with Pending(main_branch, local_branch,
+                 resume_branch=resume_branch) as ws:
+        try:
+            (proposal, is_new) = publish_changes_from_workspace(
+                ws, mode, subrunner.branch_name(),
+                get_proposal_description=get_proposal_description,
+                get_proposal_commit_message=(
+                    get_proposal_commit_message),
+                dry_run=dry_run, hoster=hoster,
+                allow_create_proposal=(
+                    subrunner.allow_create_proposal()),
+                overwrite_existing=True,
+                existing_proposal=existing_proposal)
+        except NoSuchProject as e:
+            raise PublishFailure(
+                description='project %s was not found' % e.project,
+                code='project-not-found')
+        except PermissionDenied as e:
+            raise PublishFailure(
+                description=str(e), code='permission-denied')
+
+        if proposal and is_new:
+            open_mps_per_maintainer.setdefault(maintainer_email, 0)
+            open_mps_per_maintainer[maintainer_email] += 1
+            open_proposal_count.labels(
+                maintainer=maintainer_email).inc()
+
+    return proposal, is_new
+
+
+async def process_one(
+        worker_module, vcs_url, mode, env, command,
+        max_mps_per_maintainer,
+        build_command, open_mps_per_maintainer,
+        refresh=False, pre_check=None, post_check=None,
+        dry_run=False, incoming=None, log_dir=None,
+        debsign_keyid=None, vcs_result_dir=None,
+        possible_transports=None, possible_hosters=None):
+    maintainer_email = env['MAINTAINER_EMAIL']
+    pkg = env['PACKAGE']
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
 
@@ -536,27 +601,6 @@ async def process_one(
             # Oh, well.
             note('No changes file found: %s', e)
 
-        def get_proposal_description(existing_proposal):
-            if existing_proposal:
-                existing_description = existing_proposal.get_description()
-                existing_description = strip_janitor_blurb(
-                    existing_description)
-            else:
-                existing_description = None
-            description = subrunner.get_proposal_description(
-                existing_description)
-            return add_janitor_blurb(description, pkg, log_id)
-
-        def get_proposal_commit_message(existing_proposal):
-            if existing_proposal:
-                existing_commit_message = (
-                    getattr(existing_proposal, 'get_commit_message',
-                            lambda: None)())
-            else:
-                existing_commit_message = None
-            return subrunner.get_proposal_commit_message(
-                existing_commit_message)
-
         try:
             local_branch = open_branch(os.path.join(output_directory, pkg))
         except BranchUnavailable as e:
@@ -565,51 +609,31 @@ async def process_one(
                 description='result branch missing: %s' % e,
                 code='result-branch-unavailable',
                 worker_result=worker_result)
-        with Pending(main_branch, local_branch,
-                     resume_branch=resume_branch) as ws:
-            enable_tag_pushing(local_branch)
-            if mode != 'build-only':
-                try:
-                    (result.proposal, is_new) = publish_changes(
-                        ws, mode, subrunner.branch_name(),
-                        get_proposal_description=get_proposal_description,
-                        get_proposal_commit_message=(
-                            get_proposal_commit_message),
-                        dry_run=dry_run, hoster=hoster,
-                        allow_create_proposal=(
-                            subrunner.allow_create_proposal()),
-                        overwrite_existing=True,
-                        existing_proposal=existing_proposal)
-                except NoSuchProject as e:
-                    return JanitorResult(
-                        pkg, log_id,
-                        description='project %s was not found' % e.project,
-                        code='project-not-found',
-                        worker_result=worker_result)
-                except PermissionDenied as e:
-                    return JanitorResult(
-                        pkg, log_id, description=str(e),
-                        code='permission-denied',
-                        worker_result=worker_result)
 
-                if result.proposal and result.is_new:
-                    open_mps_per_maintainer.setdefault(maintainer_email, 0)
-                    open_mps_per_maintainer[maintainer_email] += 1
-                    open_proposal_count.labels(
-                        maintainer=maintainer_email).inc()
+        enable_tag_pushing(local_branch)
+        if mode != 'build-only':
+            try:
+                result.proposal, result.is_new = publish_changes(
+                    pkg, maintainer_email,
+                    subrunner, mode, hoster, main_branch, local_branch,
+                    resume_branch,
+                    max_mps_per_maintainer=max_mps_per_maintainer,
+                    open_mps_per_maintainer=open_mps_per_maintainer,
+                    dry_run=dry_run, log_id=log_id,
+                    existing_proposal=existing_proposal)
+            except PublishFailure as e:
+                return JanitorResult(
+                    pkg, log_id,
+                    code=e.code,
+                    description=e.description,
+                    worker_result=worker_result)
 
-                if result.proposal:
-                    note('%s: %s: %s', result.package, result.description,
-                         result.proposal.url)
-                else:
-                    note('%s: %s', result.package, result.description)
-
-            if vcs_result_dir:
-                publish_vcs_dir(
-                    main_branch, local_branch,
-                    vcs_result_dir, pkg, subrunner.branch_name(),
-                    additional_colocated_branches=(
-                        ws.additional_colocated_branches))
+        if vcs_result_dir:
+            publish_vcs_dir(
+                main_branch, local_branch,
+                vcs_result_dir, pkg, subrunner.branch_name(),
+                additional_colocated_branches=(
+                    ADDITIONAL_COLOCATED_BRANCHES))
 
         if result.changes_filename:
             changes_path = os.path.join(
