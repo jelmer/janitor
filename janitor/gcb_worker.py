@@ -37,7 +37,7 @@ def gcb_run_build(http, bearer, args):
             "args": [
                 '--build-command='
                 'sbuild -A -s -v -d$$DISTRIBUTION -c unstable-amd64-sbuild',
-                ] + args,
+                ] + [arg.replace('$', '$$') for arg in args],
             "env": ['%s=%s' % item for item in env.items()],
         }],
         "artifacts": {
