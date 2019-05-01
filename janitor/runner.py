@@ -337,7 +337,7 @@ async def invoke_subprocess_worker(
         return await p.wait()
 
 
-def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
+def publish_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
                     additional_colocated_branches=None):
     """Publish resulting changes in VCS form.
 
@@ -347,7 +347,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
      * upstream - the upstream branch (optional)
      * pristine-tar the pristine tar packaging branch (optional)
     """
-    vcs = getattr(ws.main_branch.repository, 'vcs', None)
+    vcs = getattr(main_branch.repository, 'vcs', None)
     if vcs and vcs.abbreviation == 'git':
         path = os.path.join(vcs_result_dir, 'git', pkg)
         os.makedirs(path, exist_ok=True)
@@ -357,8 +357,8 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('git-bare')())
         for (from_branch, target_branch_name) in [
-                (ws.main_branch, 'master'),
-                (ws.local_branch, name)]:
+                (main_branch, 'master'),
+                (local_branch, name)]:
             try:
                 target_branch = vcs_result_controldir.open_branch(
                     name=target_branch_name)
@@ -369,7 +369,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
             from_branch.push(target_branch, overwrite=True)
         for branch_name in ADDITIONAL_COLOCATED_BRANCHES:
             try:
-                from_branch = ws.local_branch.controldir.open_branch(
+                from_branch = local_branch.controldir.open_branch(
                     name=branch_name)
             except NotBranchError:
                 continue
@@ -390,15 +390,15 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
                 path, format=format_registry.get('bzr')())
         vcs_result_controldir.create_repository(shared=True)
         for (from_branch, target_branch_name) in [
-                (ws.local_branch, name),
-                (ws.main_branch, 'master')]:
+                (local_branch, name),
+                (main_branch, 'master')]:
             target_branch_path = os.path.join(path, target_branch_name)
             try:
                 target_branch = Branch.open(target_branch_path)
             except NotBranchError:
                 target_branch = ControlDir.create_branch_convenience(
                     target_branch_path)
-            target_branch.set_stacked_on_url(ws.main_branch.user_url)
+            target_branch.set_stacked_on_url(main_branch.user_url)
             from_branch.push(target_branch, overwrite=True)
     else:
         raise AssertionError('unsupported vcs %s' % vcs.abbreviation)
@@ -606,7 +606,8 @@ async def process_one(
 
             if vcs_result_dir:
                 publish_vcs_dir(
-                    ws, vcs_result_dir, pkg, subrunner.branch_name(),
+                    main_branch, local_branch,
+                    vcs_result_dir, pkg, subrunner.branch_name(),
                     additional_colocated_branches=(
                         ws.additional_colocated_branches))
 
