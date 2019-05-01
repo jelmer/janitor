@@ -311,6 +311,6 @@ SELECT DISTINCT ON (package, command)
   description
 FROM
   run
-ORDER BY package, command
+ORDER BY package, command, start_time DESC
 """)
     return cur.fetchall()
