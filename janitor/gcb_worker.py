@@ -12,7 +12,8 @@ import urllib3
 
 BUCKET_NAME = 'results.janitor.debian.net'
 
-# In theory, we should be able to use pubsub to be notified when our build finishes..
+# In theory, we should be able to use pubsub to be notified when our build
+# finishes..
 #     subscriber = pubsub.SubscriberClient()
 #    topic = 'projects/debian-janitor/topics/cloud-builds'
 #    subscription_name = 'projects/debian-janitor/subscriptions/worker'
@@ -62,7 +63,8 @@ def get_blob(http, bearer, url):
     result = urllib.parse.urlparse(url)
     r = http.request(
         'GET',
-        "https://www.googleapis.com/storage/v1/b/%(bucket_id)s/o/%(object_name)s?alt=media" % {
+        'https://www.googleapis.com/storage/v1/b/'
+        '%(bucket_id)s/o/%(object_name)s?alt=media' % {
             'object_name': urllib.parse.quote(result.path.lstrip('/'), ''),
             'bucket_id': result.netloc,
         },
@@ -102,21 +104,25 @@ def main(argv=None):
         time.sleep(10)
         r = http.request(
             'GET',
-            'https://cloudbuild.googleapis.com/v1/projects/debian-janitor/builds/%s' % build_id,
+            'https://cloudbuild.googleapis.com/v1/projects/'
+            'debian-janitor/builds/%s' % build_id,
             headers={'Authorization': "Bearer %s" % bearer})
         ops = json.loads(r.data.decode('utf-8'))
-        if ops['status'] == 'SUCCESS':
+        if ops['status'] != 'WORKING':
             break
+    assert ops['status'] == 'SUCCESS', ops['status']
     artifact_manifest_url = ops['results']['artifactManifest']
     download_results(
         http, bearer, artifact_manifest_url, args.output_directory)
     blob = get_blob(http, bearer, ops['logsBucket'] + '/log-%s.txt' % build_id)
     sys.stdout.buffer.write(blob.data)
     tgz_name = os.environ['PACKAGE'] + '.tgz'
-    if os.path.exists(os.path.join(args.output_directory, tgz_name)):
+    tgz_path = os.path.join(args.output_directory, tgz_name)
+    if os.path.exists(tgz_path):
         subprocess.check_call(
             ['tar', 'xfz', tgz_name],
             cwd=args.output_directory)
+        os.unlink(tgz_path)
 
 
 if __name__ == '__main__':
