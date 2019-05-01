@@ -10,7 +10,7 @@ COPY sbuildrc /sbuildrc
 ENV SBUILD_CONFIG=/sbuildrc
 
 # Install debian-janitor dependencies
-RUN apt-get install --no-install-recommends -y brz git python3-debian python3-dulwich sudo python3-distro-info python3-apt devscripts patchutils pristine-tar quilt python3-yaml fakeroot dpkg-dev libalgorithm-merge-perl python3-launchpadlib python3-github python3-gitlab
+RUN apt-get install --no-install-recommends -y brz git python3-debian python3-dulwich sudo python3-distro-info python3-apt devscripts patchutils pristine-tar quilt python3-yaml fakeroot dpkg-dev libalgorithm-merge-perl python3-launchpadlib python3-github python3-gitlab libdistro-info-perl
 RUN brz branch lp:brz-debian /opt/brz-debian
 # Check out debian-janitor
 RUN git clone --recurse-submodules https://salsa.debian.org/jelmer/debian-janitor /opt/debian-janitor
