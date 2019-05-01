@@ -295,7 +295,7 @@ SELECT DISTINCT ON (package, command)
 FROM
   run
 WHERE build_distribution = %s
-ORDER BY package, result_code = 'success' DESC, start_time DESC
+ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """, (suite,))
     return cur.fetchall()
 
