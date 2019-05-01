@@ -231,7 +231,7 @@ class NewUpstreamWorker(SubWorker):
                 "%s%s" % (e.retcode, e.stderr, e.extra))
             error_code = 'quilt-error'
             raise WorkerFailure(error_code, error_description)
-        except UpstreamBranchUnknown as e:
+        except UpstreamBranchUnknown:
             error_description = (
                 'The location of the upstream branch is unknown.')
             error_code = 'upstream-branch-unknown'
