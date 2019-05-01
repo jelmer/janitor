@@ -45,6 +45,7 @@ from silver_platter.debian.upstream import (
     UpstreamMergeConflicted,
     UpstreamBranchUnavailable,
     UpstreamBranchUnknown,
+    PackageIsNative,
     PreviousVersionTagMissing,
     PristineTarError,
     QuiltError,
@@ -235,6 +236,11 @@ class NewUpstreamWorker(SubWorker):
             error_description = (
                 'The location of the upstream branch is unknown.')
             error_code = 'upstream-branch-unknown'
+            raise WorkerFailure(error_code, error_description)
+        except PackageIsNative:
+            error_description = (
+                'Package is native; unable to merge upstream.')
+            error_code = 'native-package'
             raise WorkerFailure(error_code, error_description)
         else:
             report_context(upstream_version)
