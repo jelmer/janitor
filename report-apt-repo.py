@@ -7,36 +7,11 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state, udd  # noqa: E402
+from janitor.site import format_rst_table  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-apt-repo')
 parser.add_argument("suite")
 args = parser.parse_args()
-
-
-def format_rst_table(f, header, data):
-    def separator(lengths):
-        for i, length in enumerate(lengths):
-            if i > 0:
-                f.write(' ')
-            f.write('=' * length)
-        f.write('\n')
-    lengths = [
-        max([len(str(x[i])) for x in [header] + data])
-        for i in range(len(header))]
-    separator(lengths)
-    for i, (column, length) in enumerate(zip(header, lengths)):
-        if i > 0:
-            f.write(' ')
-        f.write(column + (' ' * (length - len(column))))
-    f.write('\n')
-    separator(lengths)
-    for row in data:
-        for i, (column, length) in enumerate(zip(row, lengths)):
-            if i > 0:
-                f.write(' ')
-            f.write(str(column) + (' ' * (length - len(str(column)))))
-        f.write('\n')
-    separator(lengths)
 
 
 def get_unstable_versions(present):
@@ -75,8 +50,8 @@ def gather_package_status_table():
         'New Upstream Version',
         ]
     present = {}
-    for source, build_version, result_code, context, start_time, log_id in (
-            state.iter_last_runs(args.suite)):
+    for (source, command, build_version, result_code, context,
+         start_time, log_id) in state.iter_last_successes(args.suite):
         present[source] = (
             build_version, result_code, context, start_time, log_id)
     unstable = get_unstable_versions(present)

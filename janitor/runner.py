@@ -612,22 +612,25 @@ async def process_one(
                         pkg, log_id, description=str(e),
                         code='permission-denied',
                         worker_result=worker_result)
+
+                if result.proposal and result.is_new:
+                    open_mps_per_maintainer.setdefault(maintainer_email, 0)
+                    open_mps_per_maintainer[maintainer_email] += 1
+                    open_proposal_count.labels(
+                        maintainer=maintainer_email).inc()
+
+                if result.proposal:
+                    note('%s: %s: %s', result.package, result.description,
+                         result.proposal.url)
+                else:
+                    note('%s: %s', result.package, result.description)
+
             if vcs_result_dir:
                 publish_vcs_dir(
                     ws, vcs_result_dir, pkg, subrunner.branch_name,
                     additional_colocated_branches=(
                         ws.additional_colocated_branches))
 
-        if result.proposal and result.is_new:
-            open_mps_per_maintainer.setdefault(maintainer_email, 0)
-            open_mps_per_maintainer[maintainer_email] += 1
-            open_proposal_count.labels(maintainer=maintainer_email).inc()
-
-        if result.proposal:
-            note('%s: %s: %s', result.package, result.description,
-                 result.proposal.url)
-        else:
-            note('%s: %s', result.package, result.description)
         if result.changes_filename:
             changes_path = os.path.join(
                 output_directory, result.changes_filename)
