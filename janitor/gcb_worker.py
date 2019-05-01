@@ -31,6 +31,9 @@ def gcb_run_build(http, bearer, args):
     for key in ['PACKAGE', 'COMMITTER']:
         if key in os.environ:
             env[key] = os.environ[key]
+    if 'COMMITTER' not in env:
+        from breezy.config import GlobalStack
+        env['COMMITTER'] = GlobalStack().get('email')
     request = {
         "steps": [{
             "name": "gcr.io/$PROJECT_ID/worker",
