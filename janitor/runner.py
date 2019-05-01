@@ -23,6 +23,7 @@ import os
 import shutil
 import sys
 import tempfile
+import urllib.parse
 import uuid
 
 from debian.deb822 import Changes
@@ -346,8 +347,9 @@ async def process_one(
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
         if mode not in ('push', 'build-only'):
+            netloc = urllib.parse.urlparse(main_branch.user_url).netloc
             return JanitorResult(
-                pkg, log_id, description='Hoster unsupported.',
+                pkg, log_id, description='Hoster unsupported: %s.' % netloc,
                 code='hoster-unsupported')
         # We can't figure out what branch to resume from when there's no hoster
         # that can tell us.
