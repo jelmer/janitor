@@ -106,7 +106,7 @@ class LintianBrushWorker(SubWorker):
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
         subparser = argparse.ArgumentParser(prog='lintian-brush')
-        subparser.add_argument("fixers", nargs='*')
+        subparser.add_argument("tags", nargs='*')
         subparser.add_argument(
             '--no-update-changelog', action="store_false", default=None,
             dest="update_changelog", help="do not update the changelog")
@@ -123,9 +123,8 @@ class LintianBrushWorker(SubWorker):
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata):
-        # TODO(jelmer): 'fixers' is wrong; it's actually tags.
         fixers = get_fixers(
-            available_lintian_fixers(), tags=self.args.fixers)
+            available_lintian_fixers(), tags=self.args.tags)
 
         with local_tree.lock_write():
             applied, failed = run_lintian_fixers(
