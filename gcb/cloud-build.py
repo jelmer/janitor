@@ -8,12 +8,9 @@ import sys
 import time
 import urllib.parse
 import urllib3
-from google.cloud import storage
-from google.cloud import pubsub
 
 
 BUCKET_NAME = 'results.janitor.debian.net'
-
 
 # In theory, we should be able to use pubsub to be notified when our build finishes..
 #     subscriber = pubsub.SubscriberClient()
@@ -36,7 +33,10 @@ def gcb_run_build(http, bearer, args):
     request = {
         "steps": [{
             "name": "gcr.io/$PROJECT_ID/worker",
-            "args": ['--output-directory=/workspace'] + args,
+            "args": [
+                '--build-command='
+                'sbuild -A -s -v -d$$DISTRIBUTION -c unstable-amd64-sbuild',
+                ] + args,
             "env": ['%s=%s' % item for item in env.items()],
         }],
         "artifacts": {
@@ -58,20 +58,27 @@ def gcb_run_build(http, bearer, args):
     return build_id
 
 
-def get_blob(client, url):
+def get_blob(http, bearer, url):
     result = urllib.parse.urlparse(url)
-    bucket = client.get_bucket(result.netloc)
-    return bucket.get_blob(result.path.lstrip('/'))
+    r = http.request(
+        'GET',
+        "https://www.googleapis.com/storage/v1/b/%(bucket_id)s/o/%(object_name)s?alt=media" % {
+            'object_name': urllib.parse.quote(result.path.lstrip('/'), ''),
+            'bucket_id': result.netloc,
+        },
+        headers={'Authorization': "Bearer %s" % bearer})
+    return r
 
 
-def download_results(client, manifest_url, output_directory):
-    blob = get_blob(client, manifest_url)
-    for line in blob.download_as_string().splitlines():
+def download_results(http, bearer, manifest_url, output_directory):
+    blob = get_blob(http, bearer, manifest_url)
+    for line in blob.data.splitlines():
         manifest = json.loads(line)
-        blob = get_blob(client, manifest['location'])
-        blob.download_to_filename(
-            os.path.join(output_directory, os.path.basename(blob.name)),
-            client)
+        blob = get_blob(http, bearer, manifest['location'])
+        name = urllib.parse.urlparse(manifest['location']).path
+        path = os.path.join(output_directory, os.path.basename(name))
+        with open(path, 'wb') as f:
+            f.write(blob.data)
 
 
 def main(argv=None):
@@ -101,10 +108,15 @@ def main(argv=None):
         if ops['status'] == 'SUCCESS':
             break
     artifact_manifest_url = ops['results']['artifactManifest']
-    client = storage.Client()
-    download_results(client, artifact_manifest_url, args.output_directory)
-    blob = get_blob(client, ops['logsBucket'] + '/log-%s.txt' % build_id)
-    sys.stdout.buffer.write(blob.download_as_string())
+    download_results(
+        http, bearer, artifact_manifest_url, args.output_directory)
+    blob = get_blob(http, bearer, ops['logsBucket'] + '/log-%s.txt' % build_id)
+    sys.stdout.buffer.write(blob.data)
+    tgz_name = os.environ['PACKAGE'] + '.tgz'
+    if os.path.exists(os.path.join(args.output_directory, tgz_name)):
+        subprocess.check_call(
+            ['tar', 'xfz', tgz_name],
+            cwd=args.output_directory)
 
 
 if __name__ == '__main__':

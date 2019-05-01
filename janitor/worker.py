@@ -389,7 +389,7 @@ def process_package(vcs_url, env, command, output_directory,
 
         if tgz_repo:
             subprocess.check_call([
-                'tar', 'cz', os.path.join(output_directory, pkg + '.tgz'),
+                'tar', 'czf', os.path.join(output_directory, pkg + '.tgz'),
                 os.path.join(output_directory, pkg)])
         else:
             ws.defer_destroy()

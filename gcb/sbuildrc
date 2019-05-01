@@ -1,16 +1,8 @@
 $build_arch_all = 1;
+$run_lintian = 1;
+$run_piuparts = 1;
+$piuparts_opts = ['--schroot', '%r-%a-sbuild'];
 $distribution = 'unstable';
-$external_commands = {
-  'post-build-commands' => [
-    [
-      'autopkgtest', '%d', # '%c',
-      '--', 'schroot', 'unstable-%a-sbuild;',
-
-      # if autopkgtest's exit code is 8 then the package had no tests
-      # but this isn't a failure, so catch it
-      'aptexit=$?;',
-      'if', 'test', '$aptexit', '=', '8;', 'then',
-      'exit', '0;', 'else', 'exit', '$aptexit;', 'fi'
-    ],
-  ],
-};
+$run_autopkgtest = 1;
+$autopkgtest_root_args = [];
+$autopkgtest_opts = [ '--', 'schroot', '%r-%a-sbuild' ];
