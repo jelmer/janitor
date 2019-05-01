@@ -181,6 +181,8 @@ class JanitorResult(object):
         self.build_distribution = build_distribution
         self.build_version = build_version
         self.changes_filename = changes_filename
+        self.branch_name = None
+        self.revision = None
         if worker_result:
             self.context = worker_result.context
             if self.code is None:
@@ -610,6 +612,7 @@ async def process_one(
                 code='result-branch-unavailable',
                 worker_result=worker_result)
 
+        result.revision = local_branch.last_revision()
         enable_tag_pushing(local_branch)
         if mode != 'build-only':
             try:
@@ -634,6 +637,7 @@ async def process_one(
                 vcs_result_dir, pkg, subrunner.branch_name(),
                 additional_colocated_branches=(
                     ADDITIONAL_COLOCATED_BRANCHES))
+            result.branch_name = subrunner.branch_name()
 
         if result.changes_filename:
             changes_path = os.path.join(
@@ -683,7 +687,9 @@ async def process_queue(
             result.code,
             result.proposal.url if result.proposal else None,
             build_version=result.build_version,
-            build_distribution=result.build_distribution)
+            build_distribution=result.build_distribution,
+            result.branch_name,
+            result.revision)
 
         state.drop_queue_item(queue_id)
         last_success_gauge.set_to_current_time()
