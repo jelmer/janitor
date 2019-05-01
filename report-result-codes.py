@@ -34,7 +34,13 @@ for code, items in by_code.items():
 
 with open('result-codes/index.rst', 'w') as f:
     header = ['Code', 'Count']
+
+    def label(n):
+        if os.path.exists("result-codes/%s.rst" % n):
+            return "`%s <%s.html>`_" % (n, n)
+        else:
+            return "`%s <%s-list.html>`_" % (n, n)
     data = sorted(
-        [[name, len(by_code[name])] for name in by_code],
-        key=operator.itemgetter(1))
+        [[label(name), len(by_code[name])] for name in by_code],
+        key=operator.itemgetter(1), reverse=True)
     format_rst_table(f, header, data)
