@@ -290,14 +290,14 @@ class WorkerResult(object):
 
 
 async def invoke_subprocess_worker(
-        main_branch, env, command, output_directory, resume_branch=None,
-        pre_check=None, post_check=None, build_command=None,
-        log_path=None):
+        worker_module, main_branch, env, command, output_directory,
+        resume_branch=None, pre_check=None, post_check=None,
+        build_command=None, log_path=None):
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
             subprocess_env[k] = v
-    args = [sys.executable, '-m', 'janitor.worker',
+    args = [sys.executable, '-m', worker_module,
             '--branch-url=%s' % main_branch.user_url,
             '--output-directory=%s' % output_directory]
     if resume_branch:
@@ -394,7 +394,7 @@ def publish_vcs_dir(ws, vcs_result_dir, pkg, name,
 
 
 async def process_one(
-        vcs_url, mode, env, command,
+        worker_module, vcs_url, mode, env, command,
         max_mps_per_maintainer,
         build_command, open_mps_per_maintainer,
         refresh=False, pre_check=None, post_check=None,
@@ -480,7 +480,7 @@ async def process_one(
 
     with tempfile.TemporaryDirectory() as output_directory:
         retcode = await invoke_subprocess_worker(
-                main_branch, env, command, output_directory,
+                worker_module, main_branch, env, command, output_directory,
                 resume_branch=resume_branch, pre_check=pre_check,
                 post_check=post_check, build_command=build_command,
                 log_path=os.path.join(output_directory, 'worker.log'))
@@ -616,7 +616,7 @@ async def export_queue_length():
 
 
 async def process_queue(
-        max_mps_per_maintainer,
+        worker_module, max_mps_per_maintainer,
         build_command, open_mps_per_maintainer,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
@@ -629,7 +629,7 @@ async def process_queue(
             break
         start_time = datetime.now()
         result = await process_one(
-            vcs_url, mode, env, command,
+            worker_module, vcs_url, mode, env, command,
             max_mps_per_maintainer=max_mps_per_maintainer,
             open_mps_per_maintainer=open_mps_per_maintainer,
             refresh=refresh, pre_check=pre_check,
@@ -713,6 +713,11 @@ def main(argv=None):
     parser.add_argument(
         '--vcs-result-dir', type=str,
         help='Directory to store VCS repositories in.')
+    parser.add_argument(
+        '--worker', type=str,
+        default='janitor.worker',
+        choices=['janitor.worker', 'janitor.gcb_worker'],
+        help='Worker to use.')
 
     args = parser.parse_args()
 
@@ -723,6 +728,7 @@ def main(argv=None):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(process_queue(
+            args.worker,
             args.max_mps_per_maintainer,
             args.build_command, open_mps_per_maintainer,
             args.refresh, args.pre_check, args.post_check,
