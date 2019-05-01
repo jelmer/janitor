@@ -41,6 +41,11 @@ from .policy import (
 )
 from .udd import UDD
 
+# These are result codes that suggest some part of the system failed, but
+# not what exactly. Recent versions of the janitor will hopefully
+# give a better result code.
+VAGUE_RESULT_CODES = [None, 'worker-failure', 'worker-exception']
+
 
 def get_ubuntu_package_url(launchpad, package):
     ubuntu = launchpad.distributions['ubuntu']
@@ -236,6 +241,7 @@ def determine_priority(package, command, mode, context=None, priority=0):
     CONTEXT_PROCESSED_PENALTY = 1000
 
     LAST_SUCCESSFUL_BONUS = 90
+    LAST_VAGUE_BONUS = 30
 
     NO_CONTEXT_REFRESH_FREQUENCY = 7
     NO_CONTEXT_REFRESH_BONUS = 50
@@ -244,7 +250,7 @@ def determine_priority(package, command, mode, context=None, priority=0):
         state.iter_previous_runs(package, command))
     if previous_runs:
         (last_start_time, last_duration, last_context,
-         last_main_branch_revision, last_successful) = (
+         last_main_branch_revision, last_result_code) = (
              previous_runs[0])
         if last_context and last_context == context:
             priority -= CONTEXT_PROCESSED_PENALTY
@@ -252,8 +258,10 @@ def determine_priority(package, command, mode, context=None, priority=0):
             age = (last_start_time - datetime.now())
             if age.days > NO_CONTEXT_REFRESH_FREQUENCY:
                 priority += NO_CONTEXT_REFRESH_BONUS
-        if last_successful:
+        if last_result_code == 'success':
             priority += LAST_SUCCESSFUL_BONUS
+        elif last_result_code in VAGUE_RESULT_CODES:
+            priority += LAST_VAGUE_BONUS
     else:
         priority += FIRST_RUN_BONUS
     return priority

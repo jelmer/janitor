@@ -273,7 +273,7 @@ SELECT
   (finish_time - start_time) AS duration,
   context,
   main_branch_revision,
-  (result_code = 'success') AS successful
+  result_code
 FROM
   run
 WHERE
