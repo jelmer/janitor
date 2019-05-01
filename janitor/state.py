@@ -40,7 +40,7 @@ def _ensure_package(cur, name, vcs_url, maintainer_email):
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
               command, description, context, main_branch_revision,
               result_code, merge_proposal_url,
-              build_version, build_distribution):
+              build_version, build_distribution, branch_name, revision):
     """Store a run.
 
     :param run_id: Run id
@@ -57,6 +57,8 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param merge_proposal_url: Optional merge proposal URL
     :param build_version: Version that was built
     :param build_distribution: Build distribution
+    :param branch_name: Resulting branch name
+    :param revision: Resulting revision id
     """
     cur = conn.cursor()
     _ensure_package(cur, name, vcs_url, maintainer_email)
@@ -71,12 +73,12 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     cur.execute(
         "INSERT INTO run (id, command, description, result_code, start_time, "
         "finish_time, package, context, merge_proposal_url, build_version, "
-        "build_distribution, main_branch_revision) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
+        "build_distribution, main_branch_revision, branch_name, revision) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
             run_id, ' '.join(command), description, result_code,
             start_time, finish_time, name, context, merge_proposal_url,
             str(build_version) if build_version else None, build_distribution,
-            main_branch_revision))
+            main_branch_revision, branch_name, revision))
     conn.commit()
 
 
