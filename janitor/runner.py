@@ -464,8 +464,14 @@ async def process_one(
         main_branch = open_branch(
             vcs_url, possible_transports=possible_transports)
     except BranchUnavailable as e:
+        if str(e).startswith('Unsupported protocol for url '):
+            code = 'unsupported-vcs-protocol'
+        elif 'http code 429: Too Many Requests' in str(e):
+            code = 'too-many-requests'
+        else:
+            code = 'branch-unavailable'
         return JanitorResult(
-            pkg, log_id=log_id, description=str(e), code='branch-unavailable')
+            pkg, log_id=log_id, description=str(e), code=code)
     except KeyError as e:
         if e.args == ('www-authenticate not found',):
             return JanitorResult(
