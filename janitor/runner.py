@@ -202,13 +202,17 @@ class WorkerResult(object):
 
 
 async def invoke_subprocess_worker(
-        worker_module, main_branch, env, command, output_directory,
+        worker_kind, main_branch, env, command, output_directory,
         resume_branch=None, pre_check=None, post_check=None,
         build_command=None, log_path=None):
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
             subprocess_env[k] = v
+    worker_module = {
+        'local': 'janitor.worker',
+        'gcb': 'janitor.gcb_worker',
+        }
     args = [sys.executable, '-m', worker_module,
             '--branch-url=%s' % main_branch.user_url,
             '--output-directory=%s' % output_directory]
@@ -306,7 +310,7 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
 
 
 async def process_one(
-        worker_module, vcs_url, mode, env, command,
+        worker_kind, vcs_url, mode, env, command,
         build_command, publisher,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
@@ -376,11 +380,12 @@ async def process_one(
         resume_branch = None
 
     with tempfile.TemporaryDirectory() as output_directory:
+        log_path = os.path.join(output_directory, 'worker.log')
         retcode = await invoke_subprocess_worker(
-                worker_module, main_branch, env, command, output_directory,
+                worker_kind, main_branch, env, command, output_directory,
                 resume_branch=resume_branch, pre_check=pre_check,
                 post_check=post_check, build_command=build_command,
-                log_path=os.path.join(output_directory, 'worker.log'))
+                log_path=log_path)
 
         if retcode != 0:
             return JanitorResult(
@@ -473,7 +478,7 @@ async def export_queue_length():
 
 
 async def process_queue(
-        worker_module, build_command, publisher,
+        worker_kind, build_command, publisher,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None):
@@ -485,7 +490,7 @@ async def process_queue(
             break
         start_time = datetime.now()
         result = await process_one(
-            worker_module, vcs_url, mode, env, command,
+            worker_kind, vcs_url, mode, env, command,
             refresh=refresh, pre_check=pre_check,
             build_command=build_command, publisher=publisher,
             post_check=post_check,
@@ -573,7 +578,7 @@ def main(argv=None):
     parser.add_argument(
         '--worker', type=str,
         default='janitor.worker',
-        choices=['janitor.worker', 'janitor.gcb_worker'],
+        choices=['local', 'gcb'],
         help='Worker to use.')
 
     args = parser.parse_args()

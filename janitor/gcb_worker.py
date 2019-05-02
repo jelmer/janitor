@@ -88,7 +88,7 @@ def download_results(http, bearer, manifest_url, output_directory):
             f.write(blob.data)
 
 
-async def run_gcb_worker(output_directory, args, timeout=None):
+async def run_gcb_worker(logf, output_directory, args, timeout=None):
     http = urllib3.PoolManager()
     bearer = subprocess.check_output(
         ["gcloud", "config", "config-helper",
@@ -112,7 +112,7 @@ async def run_gcb_worker(output_directory, args, timeout=None):
     download_results(
         http, bearer, artifact_manifest_url, args.output_directory)
     blob = get_blob(http, bearer, ops['logsBucket'] + '/log-%s.txt' % build_id)
-    sys.stdout.buffer.write(blob.data)
+    logf.write(blob.data)
     tgz_name = os.environ['PACKAGE'] + '.tgz'
     tgz_path = os.path.join(args.output_directory, tgz_name)
     if os.path.exists(tgz_path):
@@ -134,8 +134,9 @@ def main(argv=None):
         help='Build timeout (in seconds)', default=3600)
     args, unknown = parser.parse_known_args()
 
-    return asyncio.run(
-        run_gcb_worker(args.output_directory, unknown, args.timeout))
+    asyncio.run(run_gcb_worker(
+        sys.stdout.buffer, args.output_directory, unknown, args.timeout))
+    return 0
 
 
 if __name__ == '__main__':
