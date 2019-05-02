@@ -498,20 +498,21 @@ async def process_queue(
             debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
             log_dir=log_dir)
         finish_time = datetime.now()
-        state.store_run(
-            result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
-            start_time, finish_time, command,
-            result.description,
-            result.context,
-            result.main_branch_revision,
-            result.code,
-            result.proposal.url if result.proposal else None,
-            build_version=result.build_version,
-            build_distribution=result.build_distribution,
-            branch_name=result.branch_name,
-            revision=result.revision)
+        if not dry_run:
+            state.store_run(
+                result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
+                start_time, finish_time, command,
+                result.description,
+                result.context,
+                result.main_branch_revision,
+                result.code,
+                result.proposal.url if result.proposal else None,
+                build_version=result.build_version,
+                build_distribution=result.build_distribution,
+                branch_name=result.branch_name,
+                revision=result.revision)
 
-        state.drop_queue_item(queue_id)
+            state.drop_queue_item(queue_id)
         last_success_gauge.set_to_current_time()
 
 
