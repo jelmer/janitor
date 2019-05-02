@@ -518,20 +518,21 @@ async def process_queue(
         last_success_gauge.set_to_current_time()
 
     started = set()
-    todo = []
+    todo = set()
     for item in state.iter_queue(limit=concurrency):
-        todo.append(process_queue_item(item))
+        todo.add(process_queue_item(item))
         started.add(item[0])
     while True:
         done, pending = await asyncio.wait(
             todo, return_when='FIRST_COMPLETED')
         for task in done:
             task.result()
+        todo = pending
         for i in enumerate(done):
             for item in state.iter_queue(limit=concurrency):
                 if item[0] in started:
                     continue
-                todo.append(process_queue_item(item))
+                todo.add(process_queue_item(item))
                 started.add(item[0])
 
 
