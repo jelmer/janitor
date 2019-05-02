@@ -94,7 +94,7 @@ async def run_gcb_worker(logf, output_directory, args, timeout=None):
         ["gcloud", "config", "config-helper",
          "--format=value(credential.access_token)"]).decode().strip("\n")
 
-    build_id = gcb_start_build(http, bearer, args, args.timeout)
+    build_id = gcb_start_build(http, bearer, args, timeout)
 
     while True:
         # Urgh
