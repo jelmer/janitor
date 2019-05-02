@@ -1,11 +1,11 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 import json
 import os
 import subprocess
 import sys
-import time
 import urllib.parse
 import urllib3
 
@@ -26,7 +26,7 @@ BUCKET_NAME = 'results.janitor.debian.net'
 #    future.result()
 
 
-def gcb_run_build(http, bearer, args, timeout=3600):
+def gcb_start_build(http, bearer, args, timeout=None):
     env = {}
     for key in ['PACKAGE', 'COMMITTER']:
         if key in os.environ:
@@ -49,8 +49,9 @@ def gcb_run_build(http, bearer, args, timeout=3600):
              'paths': ["*"],
           }
         },
-        'timeout': '%ds' % timeout,
     }
+    if timeout is not None:
+        request['timeout'] = '%ds' % timeout
 
     r = http.request(
         'POST',
@@ -87,28 +88,17 @@ def download_results(http, bearer, manifest_url, output_directory):
             f.write(blob.data)
 
 
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        prog='janitor-worker',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument(
-        '--output-directory', type=str,
-        help='Output directory', default='.')
-    parser.add_argument(
-        '--timeout', type=int,
-        help='Build timeout (in seconds)', default=3600)
-    args, unknown = parser.parse_known_args()
-
+async def run_gcb_worker(output_directory, args, timeout=None):
     http = urllib3.PoolManager()
     bearer = subprocess.check_output(
         ["gcloud", "config", "config-helper",
          "--format=value(credential.access_token)"]).decode().strip("\n")
 
-    build_id = gcb_run_build(http, bearer, unknown, args.timeout)
+    build_id = gcb_start_build(http, bearer, args, args.timeout)
 
     while True:
         # Urgh
-        time.sleep(10)
+        await asyncio.sleep(10)
         r = http.request(
             'GET',
             'https://cloudbuild.googleapis.com/v1/projects/'
@@ -130,6 +120,22 @@ def main(argv=None):
             ['tar', 'xfz', tgz_name],
             cwd=args.output_directory)
         os.unlink(tgz_path)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        prog='janitor-worker',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '--output-directory', type=str,
+        help='Output directory', default='.')
+    parser.add_argument(
+        '--timeout', type=int,
+        help='Build timeout (in seconds)', default=3600)
+    args, unknown = parser.parse_known_args()
+
+    return asyncio.run(
+        run_gcb_worker(args.output_directory, unknown, args.timeout))
 
 
 if __name__ == '__main__':
