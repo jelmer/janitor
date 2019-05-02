@@ -182,71 +182,72 @@ class NewUpstreamWorker(SubWorker):
             error_code = 'before-quilt-error'
             raise WorkerFailure(error_code, error_description)
 
-        try:
-            old_upstream_version, upstream_version = merge_upstream(
-                tree=local_tree, snapshot=self.args.snapshot,
-                committer=self.committer)
-        except UpstreamAlreadyImported as e:
-            report_context(e.version)
-            metadata['upstream_version'] = e.version
-            error_description = (
-                "Upstream version %s already imported." % (e.version))
-            raise WorkerFailure(
-                'upstream-already-imported', error_description)
-        except UpstreamAlreadyMerged as e:
-            error_description = "Last upstream version %s already merged." % (
-                e.version)
-            error_code = 'nothing-to-do'
-            report_context(e.version)
-            metadata['upstream_version'] = e.version
-            raise WorkerFailure(error_code, error_description)
-        except NewUpstreamMissing:
-            error_description = "Unable to find new upstream source."
-            error_code = 'new-upstream-missing'
-            raise WorkerFailure(error_code, error_description)
-        except UpstreamBranchUnavailable:
-            error_description = "The upsteam branch was unavailable."
-            error_code = 'upstream-branch-unavailable'
-            raise WorkerFailure(error_code, error_description)
-        except UpstreamMergeConflicted as e:
-            error_description = "Upstream version %s conflicted." % (
-                e.version)
-            error_code = 'upstream-merged-conflicts'
-            upstream_version = e.version
-            report_context(e.version)
-            metadata['upstream_version'] = e.version
-            raise WorkerFailure(error_code, error_description)
-        except PreviousVersionTagMissing as e:
-            error_description = (
-                 "Previous upstream version %s missing (tag: %s)" %
-                 (e.version, e.tag_name))
-            error_code = 'previous-upstream-missing'
-            raise WorkerFailure(error_code, error_description)
-        except PristineTarError as e:
-            error_description = ('Error from pristine-tar: %s' % e)
-            error_code = 'pristine-tar-error'
-            raise WorkerFailure(error_code, error_description)
-        except QuiltError as e:
-            error_description = (
-                "An error (%d) occurred running quilt: "
-                "%s%s" % (e.retcode, e.stderr, e.extra))
-            error_code = 'quilt-error'
-            raise WorkerFailure(error_code, error_description)
-        except UpstreamBranchUnknown:
-            error_description = (
-                'The location of the upstream branch is unknown.')
-            error_code = 'upstream-branch-unknown'
-            raise WorkerFailure(error_code, error_description)
-        except PackageIsNative:
-            error_description = (
-                'Package is native; unable to merge upstream.')
-            error_code = 'native-package'
-            raise WorkerFailure(error_code, error_description)
-        else:
-            report_context(upstream_version)
-            metadata['old_upstream_version'] = old_upstream_version
-            metadata['upstream_version'] = upstream_version
-            return "Merged new upstream version %s" % upstream_version
+        with local_tree.lock_write():
+            try:
+                old_upstream_version, upstream_version = merge_upstream(
+                    tree=local_tree, snapshot=self.args.snapshot,
+                    committer=self.committer)
+            except UpstreamAlreadyImported as e:
+                report_context(e.version)
+                metadata['upstream_version'] = e.version
+                error_description = (
+                    "Upstream version %s already imported." % (e.version))
+                raise WorkerFailure(
+                    'upstream-already-imported', error_description)
+            except UpstreamAlreadyMerged as e:
+                error_description = (
+                    "Last upstream version %s already merged." % e.version)
+                error_code = 'nothing-to-do'
+                report_context(e.version)
+                metadata['upstream_version'] = e.version
+                raise WorkerFailure(error_code, error_description)
+            except NewUpstreamMissing:
+                error_description = "Unable to find new upstream source."
+                error_code = 'new-upstream-missing'
+                raise WorkerFailure(error_code, error_description)
+            except UpstreamBranchUnavailable:
+                error_description = "The upsteam branch was unavailable."
+                error_code = 'upstream-branch-unavailable'
+                raise WorkerFailure(error_code, error_description)
+            except UpstreamMergeConflicted as e:
+                error_description = "Upstream version %s conflicted." % (
+                    e.version)
+                error_code = 'upstream-merged-conflicts'
+                upstream_version = e.version
+                report_context(e.version)
+                metadata['upstream_version'] = e.version
+                raise WorkerFailure(error_code, error_description)
+            except PreviousVersionTagMissing as e:
+                error_description = (
+                     "Previous upstream version %s missing (tag: %s)" %
+                     (e.version, e.tag_name))
+                error_code = 'previous-upstream-missing'
+                raise WorkerFailure(error_code, error_description)
+            except PristineTarError as e:
+                error_description = ('Error from pristine-tar: %s' % e)
+                error_code = 'pristine-tar-error'
+                raise WorkerFailure(error_code, error_description)
+            except QuiltError as e:
+                error_description = (
+                    "An error (%d) occurred running quilt: "
+                    "%s%s" % (e.retcode, e.stderr, e.extra))
+                error_code = 'quilt-error'
+                raise WorkerFailure(error_code, error_description)
+            except UpstreamBranchUnknown:
+                error_description = (
+                    'The location of the upstream branch is unknown.')
+                error_code = 'upstream-branch-unknown'
+                raise WorkerFailure(error_code, error_description)
+            except PackageIsNative:
+                error_description = (
+                    'Package is native; unable to merge upstream.')
+                error_code = 'native-package'
+                raise WorkerFailure(error_code, error_description)
+            else:
+                report_context(upstream_version)
+                metadata['old_upstream_version'] = old_upstream_version
+                metadata['upstream_version'] = upstream_version
+                return "Merged new upstream version %s" % upstream_version
 
     def build_suite(self):
         if self.args.snapshot:
