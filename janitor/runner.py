@@ -315,7 +315,7 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
 async def process_one(
         worker_kind, vcs_url, mode, env, command,
         build_command, publisher,
-        refresh=False, pre_check=None, post_check=None,
+        pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
         possible_transports=None, possible_hosters=None):
@@ -379,9 +379,6 @@ async def process_one(
                     code='project-not-found')
             resume_branch = None
             existing_proposal = None
-
-    if refresh:
-        resume_branch = None
 
     with tempfile.TemporaryDirectory() as output_directory:
         log_path = os.path.join(output_directory, 'worker.log')
@@ -483,7 +480,7 @@ async def export_queue_length():
 
 async def process_queue(
         worker_kind, build_command, publisher,
-        refresh=False, pre_check=None, post_check=None,
+        pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
         concurrency=1):
@@ -492,7 +489,7 @@ async def process_queue(
         start_time = datetime.now()
         result = await process_one(
             worker_kind, vcs_url, mode, env, command,
-            refresh=refresh, pre_check=pre_check,
+            pre_check=pre_check,
             build_command=build_command, publisher=publisher,
             post_check=post_check,
             dry_run=dry_run, incoming=incoming,
@@ -565,10 +562,6 @@ def main(argv=None):
         type=int,
         help='Maximum number of open merge proposals per maintainer.')
     parser.add_argument(
-        '--refresh',
-        help='Discard old branch and apply fixers from scratch.',
-        action='store_true')
-    parser.add_argument(
         '--pre-check',
         help='Command to run to check whether to process package.',
         type=str)
@@ -614,7 +607,7 @@ def main(argv=None):
         loop.create_task(process_queue(
             args.worker,
             args.build_command, publisher,
-            args.refresh, args.pre_check, args.post_check,
+            args.pre_check, args.post_check,
             args.dry_run, args.incoming, args.log_dir,
             args.debsign_keyid,
             args.vcs_result_dir,
