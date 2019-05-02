@@ -30,7 +30,7 @@ from debian.deb822 import Changes
 
 from breezy.branch import Branch
 from breezy.controldir import ControlDir, format_registry
-from breezy.errors import NotBranchError
+from breezy.errors import NotBranchError, NoRepositoryPresent
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -293,7 +293,9 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('bzr')())
-        if not vcs_result_controldir.has_repository():
+        try:
+            vcs_result_controldir.has_repository()
+        except NoRepositoryPresent:
             vcs_result_controldir.create_repository(shared=True)
         for (from_branch, target_branch_name) in [
                 (local_branch, name),
