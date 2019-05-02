@@ -294,7 +294,7 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('bzr')())
         try:
-            vcs_result_controldir.has_repository()
+            vcs_result_controldir.open_repository()
         except NoRepositoryPresent:
             vcs_result_controldir.create_repository(shared=True)
         for (from_branch, target_branch_name) in [
