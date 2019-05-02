@@ -293,7 +293,8 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('bzr')())
-        vcs_result_controldir.create_repository(shared=True)
+        if not vcs_result_controldir.has_repository():
+            vcs_result_controldir.create_repository(shared=True)
         for (from_branch, target_branch_name) in [
                 (local_branch, name),
                 (main_branch, 'master')]:
