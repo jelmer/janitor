@@ -212,7 +212,7 @@ async def invoke_subprocess_worker(
     worker_module = {
         'local': 'janitor.worker',
         'gcb': 'janitor.gcb_worker',
-        }
+        }[worker_kind]
     args = [sys.executable, '-m', worker_module,
             '--branch-url=%s' % main_branch.user_url,
             '--output-directory=%s' % output_directory]
