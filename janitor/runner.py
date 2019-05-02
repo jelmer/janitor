@@ -83,6 +83,24 @@ class NoChangesFile(Exception):
     """No changes file found."""
 
 
+def get_vcs_abbreviation(branch):
+    vcs = getattr(branch.repository, 'vcs', None)
+    if vcs:
+        return vcs.abbreviation
+    return 'bzr'
+
+
+def get_own_resume_branch(vcs_type, package, branch_name):
+    if vcs_type == 'git':
+        url = 'https://janitor.debian.net/git/%s,branch=%s' % (pkg, branch_name)
+    elif vcs_type == 'bzr':
+        url = 'https://janitor.debian.net/bzr/%s/%s' % (pkg, branch_name)
+    try:
+        return Branch.open(url)
+    except NotBranchError:
+        return None
+
+
 class LintianBrushRunner(object):
 
     def __init__(self, args):
@@ -252,8 +270,8 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
      * upstream - the upstream branch (optional)
      * pristine-tar the pristine tar packaging branch (optional)
     """
-    vcs = getattr(main_branch.repository, 'vcs', None)
-    if vcs and vcs.abbreviation == 'git':
+    vcs = get_vcs_abbreviation(main_branch)
+    if vcs == 'git':
         path = os.path.join(vcs_result_dir, 'git', pkg)
         os.makedirs(path, exist_ok=True)
         try:
@@ -285,7 +303,7 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
                 target_branch = vcs_result_controldir.create_branch(
                     name=branch_name)
             from_branch.push(target_branch, overwrite=True)
-    elif not vcs:
+    elif vcs == 'bzr':
         path = os.path.join(vcs_result_dir, 'bzr', pkg)
         os.makedirs(path, exist_ok=True)
         try:
@@ -351,6 +369,8 @@ async def process_one(
                 code='401-without-www-authenticate')
         else:
             raise
+
+    branch_name = subrunner.branch_name()
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
@@ -370,7 +390,7 @@ async def process_one(
         try:
             (resume_branch, overwrite, existing_proposal) = (
                 find_existing_proposed(
-                    main_branch, hoster, subrunner.branch_name()))
+                    main_branch, hoster, branch_name))
         except NoSuchProject as e:
             if mode not in ('push', 'build-only'):
                 return JanitorResult(
@@ -379,6 +399,10 @@ async def process_one(
                     code='project-not-found')
             resume_branch = None
             existing_proposal = None
+
+    if resume_branch is None:
+        resume_branch = get_own_resume_branch(
+            get_vcs_abbreviation(main_branch), pkg, branch_name)
 
     with tempfile.TemporaryDirectory() as output_directory:
         log_path = os.path.join(output_directory, 'worker.log')
@@ -457,10 +481,10 @@ async def process_one(
         if vcs_result_dir:
             copy_vcs_dir(
                 main_branch, local_branch,
-                vcs_result_dir, pkg, subrunner.branch_name(),
+                vcs_result_dir, pkg, branch_name,
                 additional_colocated_branches=(
                     ADDITIONAL_COLOCATED_BRANCHES))
-            result.branch_name = subrunner.branch_name()
+            result.branch_name = branch_name
 
         if result.changes_filename:
             changes_path = os.path.join(
