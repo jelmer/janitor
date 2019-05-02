@@ -196,7 +196,7 @@ class NewUpstreamWorker(SubWorker):
         except UpstreamAlreadyMerged as e:
             error_description = "Last upstream version %s already merged." % (
                 e.version)
-            error_code = 'upstream-already-merged'
+            error_code = 'nothing-to-do'
             report_context(e.version)
             metadata['upstream_version'] = e.version
             raise WorkerFailure(error_code, error_description)
