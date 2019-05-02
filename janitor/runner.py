@@ -319,6 +319,7 @@ async def process_one(
         possible_transports=None, possible_hosters=None):
     maintainer_email = env['MAINTAINER_EMAIL']
     pkg = env['PACKAGE']
+    note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
 
