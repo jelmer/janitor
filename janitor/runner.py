@@ -482,13 +482,10 @@ async def process_queue(
         worker_kind, build_command, publisher,
         refresh=False, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None, vcs_result_dir=None):
-    while True:
-        try:
-            (queue_id, vcs_url, mode, env, command) = next(
-                state.iter_queue(limit=1))
-        except StopIteration:
-            break
+        debsign_keyid=None, vcs_result_dir=None,
+        concurrency=1):
+    async def process_queue_item(item):
+        (queue_id, vcs_url, mode, env, command) = item
         start_time = datetime.now()
         result = await process_one(
             worker_kind, vcs_url, mode, env, command,
@@ -501,7 +498,8 @@ async def process_queue(
         finish_time = datetime.now()
         if not dry_run:
             state.store_run(
-                result.log_id, env['PACKAGE'], vcs_url, env['MAINTAINER_EMAIL'],
+                result.log_id, env['PACKAGE'], vcs_url,
+                env['MAINTAINER_EMAIL'],
                 start_time, finish_time, command,
                 result.description,
                 result.context,
@@ -515,6 +513,23 @@ async def process_queue(
 
             state.drop_queue_item(queue_id)
         last_success_gauge.set_to_current_time()
+
+    started = set()
+    todo = []
+    for item in state.iter_queue(limit=concurrency):
+        todo.append(process_queue_item(item))
+        started.add(item[0])
+    while True:
+        done, pending = await asyncio.wait(
+            todo, return_when='FIRST_COMPLETED')
+        for task in done:
+            task.result()
+        for i in enumerate(done):
+            for item in state.iter_queue(limit=concurrency):
+                if item[0] in started:
+                    continue
+                todo.append(process_queue_item(item))
+                started.add(item[0])
 
 
 async def run_web_server(listen_addr, port):
@@ -582,6 +597,9 @@ def main(argv=None):
         default='janitor.worker',
         choices=['local', 'gcb'],
         help='Worker to use.')
+    parser.add_argument(
+        '--concurrency', type=int, default=1,
+        help='Number of workers to run in parallel.')
 
     args = parser.parse_args()
 
@@ -595,7 +613,8 @@ def main(argv=None):
             args.refresh, args.pre_check, args.post_check,
             args.dry_run, args.incoming, args.log_dir,
             args.debsign_keyid,
-            args.vcs_result_dir)),
+            args.vcs_result_dir,
+            args.concurrency)),
         loop.create_task(export_queue_length()),
         loop.create_task(run_web_server(args.listen_address, args.port)),
         ))
