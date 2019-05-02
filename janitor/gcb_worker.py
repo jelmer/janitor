@@ -110,15 +110,15 @@ async def run_gcb_worker(logf, output_directory, args, timeout=None):
     assert ops['status'] == 'SUCCESS', ops['status']
     artifact_manifest_url = ops['results']['artifactManifest']
     download_results(
-        http, bearer, artifact_manifest_url, args.output_directory)
+        http, bearer, artifact_manifest_url, output_directory)
     blob = get_blob(http, bearer, ops['logsBucket'] + '/log-%s.txt' % build_id)
     logf.write(blob.data)
     tgz_name = os.environ['PACKAGE'] + '.tgz'
-    tgz_path = os.path.join(args.output_directory, tgz_name)
+    tgz_path = os.path.join(output_directory, tgz_name)
     if os.path.exists(tgz_path):
         subprocess.check_call(
             ['tar', 'xfz', tgz_name],
-            cwd=args.output_directory)
+            cwd=output_directory)
         os.unlink(tgz_path)
 
 
