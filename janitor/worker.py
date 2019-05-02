@@ -358,7 +358,7 @@ def process_package(vcs_url, env, command, output_directory,
 
         if build_command:
             add_dummy_changelog_entry(
-                ws.local_tree.basedir, subworker.build_version_suffix,
+                ws.local_tree.basedir, '~' + subworker.build_version_suffix,
                 build_suite, 'Build for debian-janitor apt repository.')
             build_log_path = os.path.join(output_directory, 'build.log')
             with open(build_log_path, 'w') as f:
