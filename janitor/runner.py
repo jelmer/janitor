@@ -21,6 +21,7 @@ from datetime import datetime
 import json
 import os
 import shutil
+import signal
 import sys
 import tempfile
 import urllib.parse
@@ -30,7 +31,12 @@ from debian.deb822 import Changes
 
 from breezy.branch import Branch
 from breezy.controldir import ControlDir, format_registry
-from breezy.errors import NotBranchError, NoRepositoryPresent
+from breezy.errors import (
+    NotBranchError,
+    NoRepositoryPresent,
+    InvalidHttpResponse,
+    )
+from breezy.git.remote import RemoteGitError
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -92,12 +98,18 @@ def get_vcs_abbreviation(branch):
 
 def get_own_resume_branch(vcs_type, package, branch_name):
     if vcs_type == 'git':
-        url = 'https://janitor.debian.net/git/%s,branch=%s' % (pkg, branch_name)
+        url = 'https://janitor.debian.net/git/%s,branch=%s' % (package, branch_name)
     elif vcs_type == 'bzr':
-        url = 'https://janitor.debian.net/bzr/%s/%s' % (pkg, branch_name)
+        url = 'https://janitor.debian.net/bzr/%s/%s' % (package, branch_name)
+    else:
+        raise AssertionError('unknown vcs type %r' % vcs_type)
     try:
         return Branch.open(url)
     except NotBranchError:
+        return None
+    except RemoteGitError:
+        return None
+    except InvalidHttpResponse:
         return None
 
 
@@ -404,6 +416,9 @@ async def process_one(
         resume_branch = get_own_resume_branch(
             get_vcs_abbreviation(main_branch), pkg, branch_name)
 
+    if resume_branch is not None:
+        note('Resuming from %s', resume_branch.user_url)
+
     with tempfile.TemporaryDirectory() as output_directory:
         log_path = os.path.join(output_directory, 'worker.log')
         retcode = await invoke_subprocess_worker(
@@ -543,18 +558,30 @@ async def process_queue(
     for item in state.iter_queue(limit=concurrency):
         todo.add(process_queue_item(item))
         started.add(item[0])
-    while True:
-        done, pending = await asyncio.wait(
-            todo, return_when='FIRST_COMPLETED')
-        for task in done:
-            task.result()
-        todo = pending
-        for i in enumerate(done):
-            for item in state.iter_queue(limit=concurrency):
-                if item[0] in started:
-                    continue
-                todo.add(process_queue_item(item))
-                started.add(item[0])
+
+    def handle_sigterm():
+        global concurrency
+        concurrency = None
+        note('Received SIGTERM; not starting new jobs.')
+
+    loop = asyncio.get_event_loop()
+    loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
+    try:
+        while True:
+            done, pending = await asyncio.wait(
+                todo, return_when='FIRST_COMPLETED')
+            for task in done:
+                task.result()
+            todo = pending
+            if concurrency:
+                for i in enumerate(done):
+                    for item in state.iter_queue(limit=concurrency):
+                        if item[0] in started:
+                            continue
+                        todo.add(process_queue_item(item))
+                        started.add(item[0])
+    finally:
+        loop.remove_signal_handler(signal.SIGTERM)
 
 
 async def run_web_server(listen_addr, port):
