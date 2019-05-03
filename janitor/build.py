@@ -77,3 +77,32 @@ def build(local_tree, outf, build_command='build', result_dir=None,
             env=env)
     except subprocess.CalledProcessError:
         raise BuildFailedError()
+
+
+def parse_sbuild_log(f):
+    paragraphs = {}
+    title = None
+    sep = '+' + ('-' * 78) + '+'
+    l = f.readline()
+    while l:
+        if l.strip() == sep:
+            l1 = f.readline()
+            l2 = f.readline()
+            if (l1[0] == '|' and
+                l1.strip()[-1] == '|' and l2.strip() == sep):
+                title = l1[1:-1].strip()
+                paragraphs[title] = []
+            else:
+                paragraphs[title].extend([l, l1, l2])
+        else:
+            paragraphs[title].append(l)
+        l = f.readline()
+    return paragraphs
+
+
+def find_failed_stage(ls):
+    for l in ls:
+        if not l.startswith('Fail-Stage: '):
+            continue
+        (key, value) = l.split(': ', 1)
+        return value.strip()
