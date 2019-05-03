@@ -1,8 +1,8 @@
 $build_arch_all = 1;
 $run_lintian = 1;
 $run_piuparts = 1;
-$piuparts_opts = ['--schroot', '%r-%a-sbuild'];
+$piuparts_opts = ['--schroot', 'unstable-%a-sbuild'];
 $distribution = 'unstable';
 $run_autopkgtest = 1;
 $autopkgtest_root_args = [];
-$autopkgtest_opts = [ '--', 'schroot', '%r-%a-sbuild' ];
+$autopkgtest_opts = [ '--', 'schroot', 'unstable-%a-sbuild' ];
