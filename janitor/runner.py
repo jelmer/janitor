@@ -370,6 +370,9 @@ async def process_one(
             code = 'unsupported-vcs-protocol'
         elif 'http code 429: Too Many Requests' in str(e):
             code = 'too-many-requests'
+        elif str(e).startswith('Branch does not exist: Not a branch: '
+                               '"https://anonscm.debian.org'):
+            code = 'hosted-on-alioth'
         else:
             code = 'branch-unavailable'
         return JanitorResult(
