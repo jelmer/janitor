@@ -66,6 +66,8 @@ from .build import (
     get_latest_changelog_version,
     changes_filename,
     get_build_architecture,
+    parse_sbuild_log,
+    find_failed_stage,
 )
 from .trace import (
     note,
@@ -362,17 +364,26 @@ def process_package(vcs_url, env, command, output_directory,
                 ws.local_tree.basedir, '~' + subworker.build_version_suffix,
                 build_suite, 'Build for debian-janitor apt repository.')
             build_log_path = os.path.join(output_directory, 'build.log')
-            with open(build_log_path, 'w') as f:
-                try:
+            try:
+                with open(build_log_path, 'w') as f:
                     build(ws.local_tree, outf=f, build_command=build_command,
                           result_dir=output_directory,
                           distribution=build_suite)
-                except BuildFailedError:
-                    raise WorkerFailure('build-failed', 'build failed')
-                except MissingUpstreamTarball:
+            except BuildFailedError:
+                with open(build_log_path, 'r') as f:
+                    sbuild_log_paragraphs = parse_sbuild_log(f)
+                failed_stage = find_failed_stage(
+                    sbuild_log_paragraphs.get('Summary', []))
+                if failed_stage is not None:
                     raise WorkerFailure(
-                        'build-missing-upstream-source',
-                        'unable to find upstream source')
+                        'build-failed-stage-%s' % failed_stage,
+                        'build failed stage %s' % failed_stage)
+                else:
+                    raise WorkerFailure('build-failed', 'build failed')
+            except MissingUpstreamTarball:
+                raise WorkerFailure(
+                    'build-missing-upstream-source',
+                    'unable to find upstream source')
 
             (cl_package, cl_version) = get_latest_changelog_version(
                 ws.local_tree)
