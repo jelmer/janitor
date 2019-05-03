@@ -80,7 +80,7 @@ def build(local_tree, outf, build_command='build', result_dir=None,
 
 
 def parse_sbuild_log(f):
-    paragraphs = {}
+    paragraphs = {None: []}
     title = None
     sep = '+' + ('-' * 78) + '+'
     l = f.readline()
