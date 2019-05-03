@@ -645,7 +645,7 @@ def main(argv=None):
         help='Directory to store VCS repositories in.')
     parser.add_argument(
         '--worker', type=str,
-        default='janitor.worker',
+        default='local',
         choices=['local', 'gcb'],
         help='Worker to use.')
     parser.add_argument(
