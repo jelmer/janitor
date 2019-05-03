@@ -234,9 +234,9 @@ Package Index
             for (run_id, (start_time, finish_time), command, description,
                     package_name, merge_proposal_url, build_version,
                     build_distro, result_code) in runs_by_pkg.get(name, []):
-                kind = command.split(' ')[0]
                 f.write('* `%s: %s <%s/>`_' % (
-                    finish_time.isoformat(timespec='minutes'), kind, run_id))
+                    finish_time.isoformat(timespec='minutes'), command,
+                    run_id))
                 if merge_proposal_url:
                     f.write(' (`merge proposal <%s>`_)' % merge_proposal_url)
                 if result_code:
