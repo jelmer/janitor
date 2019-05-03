@@ -90,7 +90,7 @@ def parse_sbuild_log(f):
             l2 = f.readline()
             if (l1[0] == '|' and
                 l1.strip()[-1] == '|' and l2.strip() == sep):
-                title = l1[1:-1].strip()
+                title = l1.rstrip()[1:-1].strip()
                 paragraphs[title] = []
             else:
                 paragraphs[title].extend([l, l1, l2])
