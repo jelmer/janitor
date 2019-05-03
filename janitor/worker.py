@@ -374,6 +374,10 @@ def process_package(vcs_url, env, command, output_directory,
                     sbuild_log_paragraphs = parse_sbuild_log(f)
                 failed_stage = find_failed_stage(
                     sbuild_log_paragraphs.get('Summary', []))
+                if failed_stage == 'run-post-build-commands':
+                    # We used to run autopkgtest as the only post build
+                    # command.
+                    failed_stage = 'autopkgtest'
                 if failed_stage is not None:
                     raise WorkerFailure(
                         'build-failed-stage-%s' % failed_stage,
