@@ -52,6 +52,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'E   ImportError: No module named mock'], 1)
 
+    def test_python2_import(self):
+        self.run_test(['ImportError: No module named pytz'], 1)
+
     def test_python3_import(self):
         self.run_test([
             'ModuleNotFoundError: No module named \'django_crispy_forms\''], 1)
