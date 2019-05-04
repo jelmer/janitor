@@ -83,26 +83,26 @@ def parse_sbuild_log(f):
     paragraphs = {None: []}
     title = None
     sep = '+' + ('-' * 78) + '+'
-    l = f.readline()
-    while l:
-        if l.strip() == sep:
+    line = f.readline()
+    while line:
+        if line.strip() == sep:
             l1 = f.readline()
             l2 = f.readline()
             if (l1[0] == '|' and
-                l1.strip()[-1] == '|' and l2.strip() == sep):
+                    l1.strip()[-1] == '|' and l2.strip() == sep):
                 title = l1.rstrip()[1:-1].strip()
                 paragraphs[title] = []
             else:
-                paragraphs[title].extend([l, l1, l2])
+                paragraphs[title].extend([line, l1, l2])
         else:
-            paragraphs[title].append(l)
-        l = f.readline()
+            paragraphs[title].append(line)
+        line = f.readline()
     return paragraphs
 
 
-def find_failed_stage(ls):
-    for l in ls:
-        if not l.startswith('Fail-Stage: '):
+def find_failed_stage(lines):
+    for line in lines:
+        if not line.startswith('Fail-Stage: '):
             continue
-        (key, value) = l.split(': ', 1)
+        (key, value) = line.split(': ', 1)
         return value.strip()
