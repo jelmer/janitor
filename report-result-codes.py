@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.site import format_rst_table  # noqa: E402
+from janitor.site.rst import format_table  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-result-codes')
 parser.add_argument(
@@ -31,7 +31,7 @@ for code, items in by_code.items():
             command,
             '`%s </pkg/%s/%s>`_' % (description, source, log_id)))
     with open(os.path.join(args.path, '%s-list.rst' % code), 'w') as f:
-        format_rst_table(f, header, data)
+        format_table(f, header, data)
 
 
 with open(os.path.join(args.path, 'index.rst'), 'w') as f:
@@ -45,4 +45,4 @@ with open(os.path.join(args.path, 'index.rst'), 'w') as f:
     data = sorted(
         [[label(name), len(by_code[name])] for name in by_code],
         key=operator.itemgetter(1), reverse=True)
-    format_rst_table(f, header, data)
+    format_table(f, header, data)

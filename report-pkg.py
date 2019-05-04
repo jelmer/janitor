@@ -15,6 +15,10 @@ from janitor.build import (
     find_failed_stage,
     find_build_failure_description,
 )  # noqa: E402
+from janitor.site.rst import (
+    include_console_log,
+    include_console_log_tail,
+    )
 from janitor.trace import warning  # noqa: E402
 
 FAIL_BUILD_LOG_LEN = 15
@@ -31,35 +35,6 @@ def changes_get_binaries(changes_path):
     with open(changes_path, "r") as cf:
         changes = Changes(cf)
         return changes['Binary'].split(' ')
-
-
-def include_console_log(f, log_path, include_lines=None, highlight_lines=None):
-    f.write('.. literalinclude:: %s\n' % os.path.basename(log_path))
-    f.write('  :language: console\n')
-    f.write('  :linenos:\n')
-    if include_lines:
-        f.write('  :lines: ')
-        if include_lines[0] is not None:
-            f.write('%d' % include_lines[0])
-        f.write('-')
-        if include_lines[1] is not None:
-            f.write('%d' % include_lines[1])
-        f.write('\n')
-    if highlight_lines:
-        f.write('   :emphasize-lines: ')
-        for line in highlight_lines[:-1]:
-            f.write('%d,' % line)
-        f.write('%d\n' % highlight_lines[-1])
-    f.write('\n')
-
-
-def include_console_log_tail(f, log_path, tail):
-    with open(log_path, 'r') as logf:
-        linecount = logf.read().count('\n')
-    if linecount > tail:
-        include_console_log(f, log_path, include_lines=(linecount-tail, None))
-    else:
-        include_console_log(f, log_path)
 
 
 def include_build_log_failure(f, log_path, length):
