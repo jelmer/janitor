@@ -7,7 +7,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state, udd  # noqa: E402
-from janitor.site import format_rst_table  # noqa: E402
+from janitor.site.rst import format_table  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-apt-repo')
 parser.add_argument("suite")
@@ -77,9 +77,9 @@ def gather_package_status_table():
 
 with open(os.path.join(args.suite, 'package-list.rst'), 'w') as f:
     (header, data) = gather_package_list_table()
-    format_rst_table(f, header, data)
+    format_table(f, header, data)
 
 
 with open(os.path.join(args.suite, 'package-status.rst'), 'w') as f:
     (header, data) = gather_package_status_table()
-    format_rst_table(f, header, data)
+    format_table(f, header, data)
