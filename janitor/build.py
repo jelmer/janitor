@@ -121,7 +121,7 @@ build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'(.*)\'\.  Stop\.'),
     r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
-    (r'distutils.errors.DistutilsError: '
+    (r'(distutils.errors.DistutilsError|error): '
         r'Could not find suitable distribution '
         r'for Requirement.parse\(\'.*\'\)'),
     'E   ImportError: cannot import name (.*)',
