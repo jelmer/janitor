@@ -18,8 +18,7 @@ from janitor.build import (
 from janitor.site.rst import (
     format_duration,
     include_console_log,
-    include_console_log_tail,
-    )
+)  # noqa: E402
 from janitor.trace import warning  # noqa: E402
 
 FAIL_BUILD_LOG_LEN = 15

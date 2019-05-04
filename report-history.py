@@ -1,14 +1,14 @@
 #!/usr/bin/python3
 
+import argparse
 import os
 import sys
 import time
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.site.rst import format_table, format_duration
+from janitor.site.rst import format_table, format_duration  # noqa: E402
 
-import argparse
 parser = argparse.ArgumentParser('report-history')
 parser.add_argument('--limit', type=int, help='Number of entries to display',
                     default=100)
@@ -38,7 +38,7 @@ for (run_id, times, command, description, package, proposal_url,
         ]
     if proposal_url:
         row.append('%s `Merge proposal <%s>`_\n' %
-            result_code, proposal_url)
+                   (result_code, proposal_url))
     else:
         row.append(result_code or '')
     data.append(row)
