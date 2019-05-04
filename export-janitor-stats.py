@@ -58,11 +58,13 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-for package_name, command, result_code, log_id, description, run_duration in state.iter_last_runs():
+for package_name, command, result_code, log_id, description, run_duration in (
+        state.iter_last_runs()):
     run_count.labels(command=command).inc()
     run_result_count.labels(command=command, result_code=result_code).inc()
-    duration.labels(command=command, package=package_name,
-            result_code=result_code).observe(run_duration.total_seconds())
+    duration.labels(
+        command=command, package=package_name,
+        result_code=result_code).observe(run_duration.total_seconds())
 
 
 last_success_gauge.set_to_current_time()
