@@ -21,37 +21,32 @@ import unittest
 
 class FindBuildFailureDescriptionTests(unittest.TestCase):
 
-    def run_test(self, lines, line):
+    def run_test(self, lines, lineno):
         self.assertEqual(
-            line, find_build_failure_description(lines))
+            (lineno, lines[lineno-1]), find_build_failure_description(lines))
 
     def test_make_missing_rule(self):
         self.run_test([
             'make[1]: *** No rule to make target \'nno.autopgen.bin\', '
             'needed by \'dan-nno.autopgen.bin\'.  Stop.'],
-            'make[1]: *** No rule to make target \'nno.autopgen.bin\', '
-            'needed by \'dan-nno.autopgen.bin\'.  Stop.')
+            1)
 
     def test_installdocs_missing(self):
         self.run_test([
             'dh_installdocs: Cannot find (any matches for) "README.txt" '
             '(tried in ., debian/tmp)'],
-            'dh_installdocs: Cannot find (any matches for) "README.txt" '
-            '(tried in ., debian/tmp)')
+            1)
 
     def test_distutils_missing(self):
         self.run_test([
             'distutils.errors.DistutilsError: Could not find suitable '
             'distribution for Requirement.parse(\'pytest-runner\')'],
-            'distutils.errors.DistutilsError: Could not find suitable '
-            'distribution for Requirement.parse(\'pytest-runner\')')
+            1)
 
     def test_pytest_import(self):
         self.run_test([
-            'E   ImportError: cannot import name cmod'],
-            'E   ImportError: cannot import name cmod')
+            'E   ImportError: cannot import name cmod'], 1)
 
     def test_python3_import(self):
         self.run_test([
-            'ModuleNotFoundError: No module named \'django_crispy_forms\''],
-            'ModuleNotFoundError: No module named \'django_crispy_forms\'')
+            'ModuleNotFoundError: No module named \'django_crispy_forms\''], 1)

@@ -81,24 +81,32 @@ def build(local_tree, outf, build_command='build', result_dir=None,
 
 
 def parse_sbuild_log(f):
-    paragraphs = {None: []}
+    begin_offset = 1
+    lines = []
     title = None
     sep = '+' + ('-' * 78) + '+'
+    lineno = 0
     line = f.readline()
+    lineno += 1
     while line:
         if line.strip() == sep:
             l1 = f.readline()
             l2 = f.readline()
+            lineno += 2
             if (l1[0] == '|' and
                     l1.strip()[-1] == '|' and l2.strip() == sep):
+                if lines:
+                    yield title, (begin_offset, lineno), lines
                 title = l1.rstrip()[1:-1].strip()
-                paragraphs[title] = []
+                lines = []
+                begin_offset = lineno
             else:
-                paragraphs[title].extend([line, l1, l2])
+                lines.extend([line, l1, l2])
         else:
-            paragraphs[title].append(line)
+            lines.append(line)
         line = f.readline()
-    return paragraphs
+        lineno += 1
+    yield title, (begin_offset, lineno), lines
 
 
 def find_failed_stage(lines):
@@ -125,9 +133,10 @@ compiled_build_failure_regexps = [
 
 
 def find_build_failure_description(lines):
-    for i, line in enumerate(lines[-15:]):
+    OFFSET = 15
+    for i, line in enumerate(lines[-OFFSET:], 1):
         line = line.strip('\n')
         for regexp in compiled_build_failure_regexps:
             if regexp.match(line):
-                return line
-    return None
+                return max(len(lines) - OFFSET, 0) + i, line
+    return None, None
