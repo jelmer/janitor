@@ -26,7 +26,9 @@ from janitor import state  # noqa: E402
 parser = argparse.ArgumentParser('report-queue')
 parser.add_argument(
     '--command', type=str, help='Only display queue for specified command')
-
+parser.add_argument(
+    '--limit', type=int, help='Limit to this number of entries',
+    default=100)
 args = parser.parse_args()
 
 
@@ -35,7 +37,7 @@ sys.stdout.write("=====\n")
 sys.stdout.write("\n")
 
 for i, (queue_id, branch_url, mode, env, command) in enumerate(
-        state.iter_queue(), 1):
+        state.iter_queue(limit=args.limit), 1):
     if args.command is not None and command != args.command:
         continue
     expecting = None
