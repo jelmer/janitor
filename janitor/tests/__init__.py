@@ -22,6 +22,7 @@ import unittest
 
 def test_suite():
     names = [
+        'build',
         ]
     module_names = [__name__ + '.test_' + name for name in names]
     loader = unittest.TestLoader()

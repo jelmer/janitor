@@ -316,3 +316,26 @@ FROM
 ORDER BY package, command, start_time DESC
 """)
     return cur.fetchall()
+
+
+def iter_build_failures():
+    cur = conn.cursor()
+    cur.execute("""
+SELECT
+  package,
+  id,
+  result_code,
+  description
+FROM run
+WHERE
+  (result_code = 'build-failed' OR result_code LIKE 'build-failed-stage-%')
+""")
+    return cur.fetchall()
+
+
+def update_run_result(log_id, code, description):
+    cur = conn.cursor()
+    cur.execute(
+        'UPDATE run SET result_code = %s, description = %s WHERE id = %s',
+        (code, description, log_id))
+    cur.commit()

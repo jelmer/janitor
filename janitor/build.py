@@ -23,6 +23,7 @@ __all__ = [
 ]
 
 import os
+import re
 import subprocess
 
 from debian.changelog import Changelog
@@ -106,3 +107,26 @@ def find_failed_stage(lines):
             continue
         (key, value) = line.split(': ', 1)
         return value.strip()
+
+
+build_failure_regexps = [
+    (r'make\[1\]: \*\*\* No rule to make target '
+        r'\'(.*)\', needed by \'(.*)\'\.  Stop\.'),
+    r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
+    (r'distutils.errors.DistutilsError: '
+        r'Could not find suitable distribution '
+        r'for Requirement.parse\(\'.*\'\)'),
+    'E   ImportError: cannot import name (.*)',
+]
+
+compiled_build_failure_regexps = [
+    re.compile(regexp) for regexp in build_failure_regexps]
+
+
+def find_build_failure_description(lines):
+    for i, line in enumerate(lines[-15:]):
+        line = line.strip('\n')
+        for regexp in compiled_build_failure_regexps:
+            if regexp.match(line):
+                return line
+    return None

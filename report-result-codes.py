@@ -10,7 +10,8 @@ from janitor import state  # noqa: E402
 from janitor.site import format_rst_table  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-result-codes')
-parser.add_argument('path', type=str, default='result-codes', help='Output path')
+parser.add_argument(
+    'path', type=str, default='result-codes', help='Output path')
 args = parser.parse_args()
 
 by_code = {}

@@ -67,6 +67,7 @@ from .build import (
     get_latest_changelog_version,
     changes_filename,
     get_build_architecture,
+    find_build_failure_description,
     parse_sbuild_log,
     find_failed_stage,
 )
@@ -283,6 +284,30 @@ class WorkerFailure(Exception):
         self.description = description
 
 
+def worker_failure_from_sbuild_log(build_log_path):
+    with open(build_log_path, 'r') as f:
+        sbuild_log_paragraphs = parse_sbuild_log(f)
+    failed_stage = find_failed_stage(
+        sbuild_log_paragraphs.get('Summary', []))
+    if failed_stage == 'run-post-build-commands':
+        # We used to run autopkgtest as the only post build
+        # command.
+        failed_stage = 'autopkgtest'
+    description = None
+    if failed_stage == 'build':
+        description = find_build_failure_description(
+            sbuild_log_paragraphs.get('Build', []))
+    if description is None and failed_stage is not None:
+        description = 'build failed stage %s' % failed_stage
+    if description is None:
+        description = 'build failed'
+    if failed_stage is not None:
+        code = 'build-failed-stage-%s' % failed_stage
+    else:
+        code = 'build-failed'
+    return WorkerFailure(code, description)
+
+
 debian_info = distro_info.DebianDistroInfo()
 
 
@@ -372,20 +397,7 @@ def process_package(vcs_url, env, command, output_directory,
                           result_dir=output_directory,
                           distribution=build_suite)
             except BuildFailedError:
-                with open(build_log_path, 'r') as f:
-                    sbuild_log_paragraphs = parse_sbuild_log(f)
-                failed_stage = find_failed_stage(
-                    sbuild_log_paragraphs.get('Summary', []))
-                if failed_stage == 'run-post-build-commands':
-                    # We used to run autopkgtest as the only post build
-                    # command.
-                    failed_stage = 'autopkgtest'
-                if failed_stage is not None:
-                    raise WorkerFailure(
-                        'build-failed-stage-%s' % failed_stage,
-                        'build failed stage %s' % failed_stage)
-                else:
-                    raise WorkerFailure('build-failed', 'build failed')
+                raise worker_failure_from_sbuild_log(build_log_path)
             except MissingUpstreamTarball:
                 raise WorkerFailure(
                     'build-missing-upstream-source',
