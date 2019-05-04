@@ -117,6 +117,7 @@ build_failure_regexps = [
         r'Could not find suitable distribution '
         r'for Requirement.parse\(\'.*\'\)'),
     'E   ImportError: cannot import name (.*)',
+    'ModuleNotFoundError: No module named \'(.*)\'',
 ]
 
 compiled_build_failure_regexps = [

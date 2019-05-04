@@ -50,3 +50,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'E   ImportError: cannot import name cmod'],
             'E   ImportError: cannot import name cmod')
+
+    def test_python3_import(self):
+        self.run_test([
+            'ModuleNotFoundError: No module named \'django_crispy_forms\''],
+            'ModuleNotFoundError: No module named \'django_crispy_forms\'')
