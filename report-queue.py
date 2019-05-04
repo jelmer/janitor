@@ -56,7 +56,7 @@ for i, (queue_id, branch_url, mode, env, command) in enumerate(
         description = expecting
     elif expecting is not None:
         description += ", " + expecting
-    sys.stdout.write("%d. `%s <pkg/%s>`_" % (
+    sys.stdout.write("%d. `%s </pkg/%s>`_" % (
         i, env["PACKAGE"], env["PACKAGE"]))
     if description:
         sys.stdout.write(" (%s)" % description)
