@@ -22,6 +22,7 @@ import sys
 from prometheus_client import (
     Counter,
     Gauge,
+    Histogram,
     push_to_gateway,
     REGISTRY,
 )
@@ -49,7 +50,7 @@ run_with_build_count = Counter(
 run_with_proposal_count = Counter(
     'run_with_proposal_count', 'Number of total runs with merge proposal.',
     labelnames=('command', ))
-duration = Gauge(
+duration = Histogram(
     'duration', 'Build duration',
     labelnames=('package', 'command', 'result_code'))
 last_success_gauge = Gauge(
@@ -57,18 +58,11 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-for (run_id, (start_time, finish_time), command, description, package_name,
-        merge_proposal_url, build_version,
-        build_distribution, result_code) in state.iter_runs():
-    command = command.split(' ')[0]
+for package_name, command, result_code, log_id, description, run_duration in state.iter_last_runs():
     run_count.labels(command=command).inc()
     run_result_count.labels(command=command, result_code=result_code).inc()
-    duration.labels(command=command, package=package,
-            result_code=result_code).set((finish_time - start_time).total_seconds)
-    if build_version:
-        run_with_build_count.labels(command=command).inc()
-    if merge_proposal_url:
-        run_with_proposal_count.labels(command=command).inc()
+    duration.labels(command=command, package=package_name,
+            result_code=result_code).observe(run_duration.total_seconds())
 
 
 last_success_gauge.set_to_current_time()
