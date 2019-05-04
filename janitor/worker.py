@@ -35,6 +35,7 @@ from silver_platter.debian.lintian import (
     run_lintian_fixers,
     has_nontrivial_changes,
     DEFAULT_ADDON_FIXERS,
+    GeneratedControlFile,
 )
 from silver_platter.debian.upstream import (
     check_quilt_patches_apply,
@@ -130,11 +131,17 @@ class LintianBrushWorker(SubWorker):
             available_lintian_fixers(), tags=self.args.tags)
 
         with local_tree.lock_write():
-            applied, failed = run_lintian_fixers(
-                    local_tree, fixers,
-                    committer=self.committer,
-                    update_changelog=self.args.update_changelog,
-                    compat_release=self.args.compat_release)
+            try:
+                applied, failed = run_lintian_fixers(
+                        local_tree, fixers,
+                        committer=self.committer,
+                        update_changelog=self.args.update_changelog,
+                        compat_release=self.args.compat_release)
+            except GeneratedControlFile as e:
+                raise WorkerFailure(
+                    'control-file-is-generated',
+                    'A control file is generated: %s' % e.path)
+
         if failed:
             note('some fixers failed to run: %r', failed)
 
@@ -329,11 +336,6 @@ def process_package(vcs_url, env, command, output_directory,
             raise WorkerFailure(
                 'missing-control-file',
                 'missing control file: debian/control')
-
-        if ws.local_tree.has_filename('debian/control.in'):
-            raise WorkerFailure(
-                'control-file-is-generated',
-                'A control file is generated: debian/control.in')
 
         try:
             run_pre_check(ws.local_tree, pre_check_command)
