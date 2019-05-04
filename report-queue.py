@@ -30,26 +30,34 @@ parser.add_argument(
 args = parser.parse_args()
 
 
-print("Queue")
-print("=====")
-print("")
+sys.stdout.write("Queue\n")
+sys.stdout.write("=====\n")
+sys.stdout.write("\n")
 
 for i, (queue_id, branch_url, mode, env, command) in enumerate(
         state.iter_queue(), 1):
     if args.command is not None and command != args.command:
         continue
+    expecting = None
     if command[0] == 'new-upstream':
         if '--snapshot' in command:
             description = 'New upstream snapshot'
         else:
             description = 'New upstream'
             if env.get('CONTEXT'):
-                description += ', expecting to merge %s' % env['CONTEXT']
+                expecting = 'expecting to merge %s' % env['CONTEXT']
     elif command[0] == 'lintian-brush':
         description = 'Lintian fixes'
         if env.get('CONTEXT'):
-            description += ', expecting to fix: %s' % env['CONTEXT']
+            expecting = 'expecting to fix: %s' % env['CONTEXT']
     else:
         raise AssertionError('invalid command %s' % command)
-    print("%d. `%s <pkg/%s>`_ (%s)" % (
-        i, env["PACKAGE"], env["PACKAGE"], description))
+    if args.command is not None:
+        description = expecting
+    else:
+        description += ", " + expecting
+    sys.stdout.write("%d. `%s <pkg/%s>`_" % (
+        i, env["PACKAGE"], env["PACKAGE"]))
+    if description:
+        sys.stdout.write(" (%s)" % description)
+    sys.stdout.write("\n")
