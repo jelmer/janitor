@@ -26,7 +26,7 @@ pkg:
 history.rst:
 	python3 ../report-history.py > $@
 
-queue.rst:
+cupboard/queue.rst:
 	python3 ../report-queue.py > $@
 
 upstream-releases:

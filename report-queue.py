@@ -15,12 +15,19 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import argparse
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+
+parser = argparse.ArgumentParser('report-queue')
+parser.add_argument(
+    '--command', type=str, help='Only display queue for specified command')
+
+args = parser.parse_args()
 
 
 print("Queue")
@@ -29,6 +36,8 @@ print("")
 
 for i, (queue_id, branch_url, mode, env, command) in enumerate(
         state.iter_queue(), 1):
+    if args.command is not None and command != args.command:
+        continue
     if command[0] == 'new-upstream':
         if '--snapshot' in command:
             description = 'New upstream snapshot'
