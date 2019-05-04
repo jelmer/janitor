@@ -1,3 +1,3 @@
 check:
 	flake8
-	python3 setup.py test
+	PYTHONPATH=.:silver-platter:lintian-brush python3 setup.py test

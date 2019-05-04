@@ -15,6 +15,8 @@ from janitor.build import (
 from janitor.trace import warning  # noqa: E402
 
 FAIL_BUILD_LOG_LEN = 15
+GIT_BASE_URL = 'https://janitor.debian.net/git'
+BZR_BASE_URL = 'https://janitor.debian.net/bzr'
 
 parser = argparse.ArgumentParser(prog='report-pkg')
 parser.add_argument("directory")
@@ -97,9 +99,13 @@ for run in state.iter_runs():
         g.write('============' + (len(kind) + len(package_name)) * '=' + '\n')
 
         g.write('* Package: `%s <..>`_\n' % package_name)
-        g.write('* Start time: %s\n' % start_time)
-        g.write('* Finish time: %s\n' % finish_time)
-        g.write('* Run time: %s\n' % (finish_time - start_time))
+        g.write('* Start time: %s\n' %
+                start_time.isoformat(timespec='minutes'))
+        g.write('* Finish time: %s\n' %
+                finish_time.isoformat(timespec='minutes'))
+        duration = (finish_time - start_time)
+        g.write('* Duration: %dm%d\n' % (
+            duration.seconds / 60, duration.seconds % 60))
         g.write('* Description: %s\n' % description)
         if build_version:
             changes_name = changes_filename(
@@ -133,12 +139,12 @@ for run in state.iter_runs():
                 raise AssertionError
             g.write('Merge these changes::\n\n')
             if os.path.exists('../vcs/git/%s' % package_name):
-                g.write('\tgit pull https://janitor.debian.net/git/%s %s\n' % (
-                    package_name, branch_name))
+                g.write('\tgit pull %s/%s %s\n' % (
+                    GIT_BASE_URL, package_name, branch_name))
             elif os.path.exists('../vcs/bzr/%s' % package_name):
                 g.write(
-                    '\tbrz merge https://janitor.debian.net/bzr/%s/%s\n' % (
-                       package_name, branch_name))
+                    '\tbrz merge %s/%s/%s\n' % (
+                       BZR_BASE_URL, package_name, branch_name))
             g.write('\n')
         build_log_path = 'build.log'
         worker_log_path = 'worker.log'
