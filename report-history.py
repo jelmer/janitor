@@ -6,6 +6,13 @@ import time
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+from janitor.site.rst import format_table, format_duration
+
+import argparse
+parser = argparse.ArgumentParser('report-history')
+parser.add_argument('--limit', type=int, help='Number of entries to display',
+                    default=100)
+args = parser.parse_args()
 
 
 sys.stdout.write("""\
@@ -14,23 +21,30 @@ History
 
 """)
 
+if args.limit:
+    sys.stdout.write('Last %d runs:\n\n' % args.limit)
 
+
+header = ['Package', 'Command', 'Duration', 'Result']
+data = []
 for (run_id, times, command, description, package, proposal_url,
-        changes_filename, build_distro, result_code) in state.iter_runs():
-    sys.stdout.write(
-        '- `%(package)s <pkg/%(package)s>`_: '
-        'Run `%(command)s <pkg/%(package)s/%(run_id)s/>`_.' %
-        {'run_id': run_id,
-         'package': package,
-         'command': command.split(' ')[0]})
-    if result_code:
-        sys.stdout.write(' => %s' % result_code)
-    sys.stdout.write('\n')
+        changes_filename, build_distro, result_code) in state.iter_runs(
+                limit=args.limit):
+    row = [
+        '`%s <pkg/%s>`_' % (package, package),
+        '`%s <pkg/%s/%s/>`_.' % (
+            command, package, run_id),
+        '%s' % format_duration(times[1] - times[0]),
+        ]
     if proposal_url:
-        sys.stdout.write(
-            '  `Merge proposal <%(proposal_url)s>`_\n' %
-            {'proposal_url': proposal_url})
-    sys.stdout.write('\n')
+        row.append('%s `Merge proposal <%s>`_\n' %
+            result_code, proposal_url)
+    else:
+        row.append(result_code or '')
+    data.append(row)
+
+
+format_table(sys.stdout, header, data)
 
 sys.stdout.write("\n")
 sys.stdout.write("*Last Updated: " + time.asctime() + "*\n")

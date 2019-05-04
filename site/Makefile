@@ -23,7 +23,7 @@ status.rst:
 pkg:
 	python3 ../report-pkg.py pkg/
 
-history.rst:
+cupboard/history.rst:
 	python3 ../report-history.py > $@
 
 cupboard/queue.rst:
