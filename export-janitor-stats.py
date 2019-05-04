@@ -49,6 +49,9 @@ run_with_build_count = Counter(
 run_with_proposal_count = Counter(
     'run_with_proposal_count', 'Number of total runs with merge proposal.',
     labelnames=('command', ))
+duration = Gauge(
+    'duration', 'Build duration',
+    labelnames=('package', 'command', 'result_code'))
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
@@ -60,6 +63,8 @@ for (run_id, (start_time, finish_time), command, description, package_name,
     command = command.split(' ')[0]
     run_count.labels(command=command).inc()
     run_result_count.labels(command=command, result_code=result_code).inc()
+    duration.labels(command=command, package=package,
+            result_code=result_code).set((finish_time - start_time).total_seconds)
     if build_version:
         run_with_build_count.labels(command=command).inc()
     if merge_proposal_url:
