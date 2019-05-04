@@ -102,7 +102,7 @@ def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
         yield (
             vcs_url, mode,
             {'COMMITTER': committer, 'PACKAGE': package.name},
-            command)
+            command, 0)
 
 
 def schedule_udd_new_upstreams(policy, packages, shuffle=False):
@@ -145,7 +145,7 @@ def schedule_udd_new_upstreams(policy, packages, shuffle=False):
              'PACKAGE': package.name,
              'CONTEXT': upstream_version,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            command)
+            command, 0)
 
 
 def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
@@ -185,7 +185,7 @@ def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
              'PACKAGE': package.name,
              'CONTEXT': None,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            command)
+            command, 0)
 
 
 def schedule_udd(policy, propose_addon_only, packages, available_fixers,
@@ -197,8 +197,7 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
 
     for package, tags in udd.iter_source_packages_by_lintian(
             available_fixers, packages if packages else None, shuffle=shuffle):
-        # TODO(jelmer): skip if "lintian-brush $tags" has already been
-        # processed for $package
+        priority = 0
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:
@@ -223,6 +222,9 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
         else:
             raise ValueError(
                 "Invalid value %r for update_changelog" % update_changelog)
+        if not (set(tags) - set(propose_addon_only)):
+            # Penalty for whitespace-only fixes
+            priority -= 200
         context = ' '.join(sorted(tags))
         yield (
             vcs_url, mode,
@@ -230,7 +232,7 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
              'PACKAGE': package.name,
              'CONTEXT': context,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            command)
+            command, priority)
 
 
 def determine_priority(package, command, mode, context=None, priority=0):
@@ -271,8 +273,8 @@ def determine_priority(package, command, mode, context=None, priority=0):
 
 
 def add_to_queue(todo, dry_run=False, default_priority=0):
-    for vcs_url, mode, env, command in todo:
-        priority = default_priority + determine_priority(
+    for vcs_url, mode, env, command, priority in todo:
+        priority = default_priority + priority + determine_priority(
             env['PACKAGE'], command, mode, env.get('CONTEXT'))
         if not dry_run:
             added = state.add_to_queue(
