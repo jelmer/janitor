@@ -128,6 +128,7 @@ build_failure_regexps = [
     'E   ImportError: No module named (.*)',
     'ModuleNotFoundError: No module named \'(.*)\'',
     '.*: cannot find package "(.*)" in any of:',
+    'ImportError: No module named (.*)',
 ]
 
 compiled_build_failure_regexps = [
