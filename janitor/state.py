@@ -338,4 +338,4 @@ def update_run_result(log_id, code, description):
     cur.execute(
         'UPDATE run SET result_code = %s, description = %s WHERE id = %s',
         (code, description, log_id))
-    cur.commit()
+    conn.commit()
