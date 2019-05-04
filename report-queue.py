@@ -54,7 +54,7 @@ for i, (queue_id, branch_url, mode, env, command) in enumerate(
         raise AssertionError('invalid command %s' % command)
     if args.command is not None:
         description = expecting
-    else:
+    elif expecting is not None:
         description += ", " + expecting
     sys.stdout.write("%d. `%s <pkg/%s>`_" % (
         i, env["PACKAGE"], env["PACKAGE"]))
