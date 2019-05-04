@@ -42,6 +42,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'distutils.errors.DistutilsError: Could not find suitable '
             'distribution for Requirement.parse(\'pytest-runner\')'],
             1)
+        self.run_test([
+            'error: Could not find suitable distribution for '
+            'Requirement.parse(\'gitlab\')'], 1)
 
     def test_pytest_import(self):
         self.run_test([
@@ -50,6 +53,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
     def test_python3_import(self):
         self.run_test([
             'ModuleNotFoundError: No module named \'django_crispy_forms\''], 1)
+        self.run_test([
+            'ModuleNotFoundError: No module named \'distro\''], 1)
 
     def test_go_missing(self):
         self.run_test([
