@@ -98,9 +98,11 @@ def get_vcs_abbreviation(branch):
 
 def get_own_resume_branch(vcs_type, package, branch_name):
     if vcs_type == 'git':
-        url = 'https://janitor.debian.net/git/%s,branch=%s' % (package, branch_name)
+        url = 'https://janitor.debian.net/git/%s,branch=%s' % (
+            package, branch_name)
     elif vcs_type == 'bzr':
-        url = 'https://janitor.debian.net/bzr/%s/%s' % (package, branch_name)
+        url = 'https://janitor.debian.net/bzr/%s/%s' % (
+            package, branch_name)
     else:
         raise AssertionError('unknown vcs type %r' % vcs_type)
     try:
