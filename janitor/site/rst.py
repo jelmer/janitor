@@ -47,7 +47,7 @@ def include_console_log_tail(f, log_path, tail):
         include_console_log(f, log_path)
 
 
-def format_rst_table(f, header, data):
+def format_table(f, header, data):
     def separator(lengths):
         for i, length in enumerate(lengths):
             if i > 0:
@@ -71,3 +71,7 @@ def format_rst_table(f, header, data):
             f.write(str(column) + (' ' * (length - len(str(column)))))
         f.write('\n')
     separator(lengths)
+
+
+def format_duration(duration):
+    return '%dm%02ds' % (duration.seconds / 60, duration.seconds % 60)

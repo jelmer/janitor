@@ -16,6 +16,7 @@ from janitor.build import (
     find_build_failure_description,
 )  # noqa: E402
 from janitor.site.rst import (
+    format_duration,
     include_console_log,
     include_console_log_tail,
     )
@@ -91,8 +92,7 @@ for run in state.iter_runs():
         g.write('* Finish time: %s\n' %
                 finish_time.isoformat(timespec='minutes'))
         duration = (finish_time - start_time)
-        g.write('* Duration: %dm%02ds\n' % (
-            duration.seconds / 60, duration.seconds % 60))
+        g.write('* Duration: %s\n' % format_duration(duration))
         g.write('* Description: %s\n' % description)
         if build_version:
             changes_name = changes_filename(

@@ -96,7 +96,7 @@ ORDER BY name ASC
     return cur.fetchall()
 
 
-def iter_runs(package=None):
+def iter_runs(package=None, limit=None):
     """Iterate over runs.
 
     Args:
@@ -121,6 +121,8 @@ LEFT JOIN package ON package.name = run.package
         query += " WHERE package.name = %s "
         args += (package,)
     query += "ORDER BY start_time DESC"
+    if limit:
+        query += " LIMIT %d" % limit
     cur.execute(query, args)
     row = cur.fetchone()
     while row:
