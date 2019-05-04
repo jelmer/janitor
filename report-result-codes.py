@@ -10,6 +10,7 @@ from janitor import state  # noqa: E402
 from janitor.site import format_rst_table  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-result-codes')
+parser.add_argument('path', type=str, default='result-codes', help='Output path')
 args = parser.parse_args()
 
 by_code = {}
@@ -28,15 +29,15 @@ for code, items in by_code.items():
             '`%s </pkg/%s/>`_' % (source, source),
             command,
             '`%s </pkg/%s/%s>`_' % (description, source, log_id)))
-    with open('result-codes/%s-list.rst' % code, 'w') as f:
+    with open(os.path.join(args.path, '%s-list.rst' % code), 'w') as f:
         format_rst_table(f, header, data)
 
 
-with open('result-codes/index.rst', 'w') as f:
+with open(os.path.join(args.path, 'index.rst'), 'w') as f:
     header = ['Code', 'Count']
 
     def label(n):
-        if os.path.exists("result-codes/%s.rst" % n):
+        if os.path.exists(os.path.join(args.path, "%s.rst" % n)):
             return "`%s <%s.html>`_" % (n, n)
         else:
             return "`%s <%s-list.html>`_" % (n, n)
