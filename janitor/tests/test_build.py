@@ -49,6 +49,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
     def test_pytest_import(self):
         self.run_test([
             'E   ImportError: cannot import name cmod'], 1)
+        self.run_test([
+            'E   ImportError: No module named mock'], 1)
 
     def test_python3_import(self):
         self.run_test([
