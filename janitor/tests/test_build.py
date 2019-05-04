@@ -50,3 +50,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
     def test_python3_import(self):
         self.run_test([
             'ModuleNotFoundError: No module named \'django_crispy_forms\''], 1)
+
+    def test_go_missing(self):
+        self.run_test([
+            'src/github.com/vuls/config/config.go:30:2: cannot find package '
+            '"golang.org/x/xerrors" in any of:'], 1)
