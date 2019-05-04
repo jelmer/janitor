@@ -126,6 +126,7 @@ build_failure_regexps = [
         r'for Requirement.parse\(\'.*\'\)'),
     'E   ImportError: cannot import name (.*)',
     'ModuleNotFoundError: No module named \'(.*)\'',
+    '.*: cannot find package "(.*)" in any of:',
 ]
 
 compiled_build_failure_regexps = [
