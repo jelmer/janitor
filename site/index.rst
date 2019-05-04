@@ -14,7 +14,6 @@ At the moment, Debian Janitor is available as an opt-in service.
    :hidden:
 
    apt
-   queue
    history
    pkg
    status
