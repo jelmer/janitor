@@ -285,18 +285,20 @@ class WorkerFailure(Exception):
 
 
 def worker_failure_from_sbuild_log(build_log_path):
+    paragraphs = {}
     with open(build_log_path, 'r') as f:
-        sbuild_log_paragraphs = parse_sbuild_log(f)
+        for title, offsets, lines in parse_sbuild_log(f):
+            paragraphs[title] = lines
     failed_stage = find_failed_stage(
-        sbuild_log_paragraphs.get('Summary', []))
+        paragraphs.get('Summary', []))
     if failed_stage == 'run-post-build-commands':
         # We used to run autopkgtest as the only post build
         # command.
         failed_stage = 'autopkgtest'
     description = None
     if failed_stage == 'build':
-        description = find_build_failure_description(
-            sbuild_log_paragraphs.get('Build', []))
+        offset, description = find_build_failure_description(
+            paragraphs.get('Build', []))
     if description is None and failed_stage is not None:
         description = 'build failed stage %s' % failed_stage
     if description is None:

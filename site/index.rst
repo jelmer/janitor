@@ -71,7 +71,7 @@ What kind of changes are made?
 
 The janitor currently proposes changes that can be made by the `lintian-brush <https://salsa.debian.org/jelmer/lintian-brush>`_ tool. This includes fixes for the following issues flagged by lintian:
 
-.. include:: lintian-brush-tags.txt
+.. include:: lintian-brush/tags.txt
 
 Won't this mean I get a pull request for each bit of trailing whitespace?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

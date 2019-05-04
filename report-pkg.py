@@ -11,6 +11,9 @@ from janitor import state  # noqa: E402
 from janitor.build import (
     changes_filename,
     get_build_architecture,
+    parse_sbuild_log,
+    find_failed_stage,
+    find_build_failure_description,
 )  # noqa: E402
 from janitor.trace import warning  # noqa: E402
 
@@ -30,18 +33,23 @@ def changes_get_binaries(changes_path):
         return changes['Binary'].split(' ')
 
 
-def include_console_log(f, log_path, lines=None):
+def include_console_log(f, log_path, include_lines=None, highlight_lines=None):
     f.write('.. literalinclude:: %s\n' % os.path.basename(log_path))
     f.write('  :language: console\n')
     f.write('  :linenos:\n')
-    if lines:
+    if include_lines:
         f.write('  :lines: ')
-        if lines[0] is not None:
-            f.write('%d' % lines[0])
+        if include_lines[0] is not None:
+            f.write('%d' % include_lines[0])
         f.write('-')
-        if lines[1] is not None:
-            f.write('%d' % lines[1])
+        if include_lines[1] is not None:
+            f.write('%d' % include_lines[1])
         f.write('\n')
+    if highlight_lines:
+        f.write('   :emphasize-lines: ')
+        for line in highlight_lines[:-1]:
+            f.write('%d,' % line)
+        f.write('%d\n' % highlight_lines[-1])
     f.write('\n')
 
 
@@ -49,32 +57,36 @@ def include_console_log_tail(f, log_path, tail):
     with open(log_path, 'r') as logf:
         linecount = logf.read().count('\n')
     if linecount > tail:
-        include_console_log(f, log_path, lines=(linecount-tail, None))
+        include_console_log(f, log_path, include_lines=(linecount-tail, None))
     else:
         include_console_log(f, log_path)
 
 
 def include_build_log_failure(f, log_path, length):
-    build_end = None
+    offsets = {}
     linecount = 0
-    autopkgtest_end = None
+    paragraphs = {}
+    line_count = 0
     with open(log_path, 'r') as logf:
-        for i, line in enumerate(logf, 1):
-            if line.startswith('Build finished at '):
-                build_end = i
-            if line.startswith('E: Command \'autopkgtest '):
-                autopkgtest_end = i
-            if line == 'Fail-Stage: build\n' and build_end is not None:
-                include_console_log(f, log_path, (build_end-length, build_end))
-                return
-            if (line == 'Fail-Stage: run-post-build-commands\n' and
-                    autopkgtest_end is not None):
-                include_console_log(
-                    f, log_path, (autopkgtest_end-length, autopkgtest_end))
-                return
-            linecount += 1
+        for title, offset, lines in parse_sbuild_log(logf):
+            paragraphs[title] = lines
+            line_count = max(offset[1], line_count)
+            offsets[title] = offset
+    highlight_lines = []
+    include_lines = None
+    failed_stage = find_failed_stage(paragraphs.get('Summary', []))
+    if failed_stage is not None and failed_stage in offsets:
+        include_lines = (max(1, offsets[failed_stage][1]-length))
+    else:
+        include_lines = (linecount-length, None)
+    if failed_stage == 'build':
+        offset, unused_line = find_build_failure_description(
+            paragraphs.get('Build', []))
+        if offset is not None:
+            highlight_lines = [offsets['Build'][1] + offset]
 
-    include_console_log(f, log_path, (linecount-length, None))
+    include_console_log(
+        f, log_path, lines=include_lines, highlight_lines=highlight_lines)
 
 
 if not os.path.isdir(dir):
@@ -104,7 +116,7 @@ for run in state.iter_runs():
         g.write('* Finish time: %s\n' %
                 finish_time.isoformat(timespec='minutes'))
         duration = (finish_time - start_time)
-        g.write('* Duration: %dm%d\n' % (
+        g.write('* Duration: %dm%02ds\n' % (
             duration.seconds / 60, duration.seconds % 60))
         g.write('* Description: %s\n' % description)
         if build_version:
