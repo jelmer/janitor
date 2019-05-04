@@ -38,7 +38,7 @@ upstream-snapshots:
 lintian-fixes:
 	python3 ../report-apt-repo.py lintian-fixes
 
-result-codes:
+cupboard/result-codes:
 	python3 ../report-result-codes.py
 
 logs:
