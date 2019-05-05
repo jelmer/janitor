@@ -275,9 +275,10 @@ def determine_priority(package, command, mode, previous_runs, context=None,
 
 def add_to_queue(todo, dry_run=False, default_priority=0):
     for vcs_url, mode, env, command, priority in todo:
+        package = env['PACKAGE']
         previous_runs = list(state.iter_previous_runs(package, command))
         priority = default_priority + priority + determine_priority(
-            env['PACKAGE'], command, mode, previous_runs, env.get('CONTEXT'))
+            package, command, mode, previous_runs, env.get('CONTEXT'))
         estimated_duration = None
         if previous_runs:
             for (last_start_time, last_duration, last_context,
@@ -292,5 +293,5 @@ def add_to_queue(todo, dry_run=False, default_priority=0):
         else:
             added = True
         if added:
-            trace.note('Scheduling %s (%s) with priority %d', env['PACKAGE'],
-                       mode, priority)
+            trace.note('Scheduling %s (%s) with priority %d',
+                       package, mode, priority)
