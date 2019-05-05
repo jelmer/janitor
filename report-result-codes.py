@@ -17,7 +17,7 @@ args = parser.parse_args()
 by_code = {}
 
 for (source, command, result_code, log_id,
-     description) in state.iter_last_runs():
+     description, duration) in state.iter_last_runs():
     by_code.setdefault(result_code, []).append(
         (source, command, log_id, description))
 
