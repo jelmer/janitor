@@ -201,10 +201,14 @@ class MissingPython2Module(object):
             other.minimum_version == self.minimum_version
 
     def __str__(self):
-        return "Missing python 2 module: %s" % self.module
+        if self.minimum_version:
+            return "Missing python 2 module: %s (>= %s)" % (
+                self.module, self.minimum_version)
+        else:
+            return "Missing python 2 module: %s" % self.module
 
     def __repr__(self):
-        return "%s(%r, %r)" % (
+        return "%s(%r, minimum_version=%r)" % (
             type(self).__name__, self.module, self.minimum_version)
 
 
