@@ -156,8 +156,13 @@ def parse_sbuild_log(f):
             lineno += 2
             if (l1[0] == '|' and
                     l1.strip()[-1] == '|' and l2.strip() == sep):
+                end_offset = lineno-3
+                # Drop trailing empty lines
+                while lines[-1] == '\n':
+                    lines.pop(-1)
+                    end_offset -= 1
                 if lines:
-                    yield title, (begin_offset, lineno), lines
+                    yield title, (begin_offset, end_offset), lines
                 title = l1.rstrip()[1:-1].strip()
                 lines = []
                 begin_offset = lineno
