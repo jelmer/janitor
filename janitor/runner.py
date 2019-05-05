@@ -381,7 +381,12 @@ async def process_one(
                                '"https://anonscm.debian.org'):
             code = 'hosted-on-alioth'
         else:
-            code = 'branch-unavailable'
+            if urllib.parse.urlparse(vcs_url).netloc in (
+                'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
+                'bzr.debian.org', 'git.debian.org'):
+                code = 'hosted-on-alioth'
+            else:
+                code = 'branch-unavailable'
         return JanitorResult(
             pkg, log_id=log_id, description=str(e), code=code)
     except KeyError as e:
