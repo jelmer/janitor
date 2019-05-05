@@ -61,7 +61,7 @@ def include_build_log_failure(f, log_path, length):
             highlight_lines = [offsets['Build'][1] + offset]
 
     include_console_log(
-        f, log_path, lines=include_lines, highlight_lines=highlight_lines)
+        f, log_path, include_lines=include_lines, highlight_lines=highlight_lines)
 
 
 if not os.path.isdir(dir):
