@@ -252,14 +252,14 @@ def add_to_queue(vcs_url, mode, env, command, priority=0,
     _ensure_package(cur, package, vcs_url, maintainer_email)
     cur.execute(
         "INSERT INTO queue "
-        "(package, command, committer, mode, priority, context, "
+        "(branch_url, package, command, committer, mode, priority, context, "
         "estimated_duration) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
         "ON CONFLICT (package, command, mode) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "estimated_duration = EXCLUDED.estimated_duration "
         "WHERE queue.priority <= EXCLUDED.priority", (
-            package, ' '.join(command), committer, mode,
+            branch_url, package, ' '.join(command), committer, mode,
             priority, context, estimated_duration))
     conn.commit()
     return True

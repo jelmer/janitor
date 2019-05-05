@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS publish (
 );
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
+   branch_url text not null,
    package text not null,
    command text not null,
    committer text null,
