@@ -28,8 +28,8 @@ if args.limit:
 header = ['Package', 'Command', 'Duration', 'Result']
 data = []
 for (run_id, times, command, description, package, proposal_url,
-        changes_filename, build_distro, result_code) in state.iter_runs(
-                limit=args.limit):
+        changes_filename, build_distro, result_code,
+        branch_name) in state.iter_runs(limit=args.limit):
     row = [
         '`%s <pkg/%s>`_' % (package, package),
         '`%s <pkg/%s/%s/>`_.' % (

@@ -105,13 +105,14 @@ def iter_runs(package=None, limit=None):
       iterator over (
         run_id, (start_time, finish_time), command, description,
         package_name, merge_proposal_url, build_version, build_distribution,
-        result_code)
+        result_code, branch_name)
     """
     cur = conn.cursor()
     query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
-    run.merge_proposal_url, build_version, build_distribution, result_code
+    run.merge_proposal_url, build_version, build_distribution, result_code,
+    branch_name
 FROM
     run
 LEFT JOIN package ON package.name = run.package
@@ -130,7 +131,7 @@ LEFT JOIN package ON package.name = run.package
                (row[2], row[3]),
                row[1], row[4], row[5], row[6],
                Version(row[7]) if row[7] else None, row[8],
-               row[9] if row[9] else None)
+               row[9] if row[9] else None, row[10])
         row = cur.fetchone()
 
 
