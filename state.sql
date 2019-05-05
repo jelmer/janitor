@@ -55,11 +55,10 @@ CREATE TABLE IF NOT EXISTS queue (
    package text not null,
    command text not null,
    committer text null,
-   mode publish_mode not null,
    priority integer default 0 not null,
    foreign key (package) references package(name),
    -- Some subworker-specific indication of what we are expecting to do.
    context text,
    estimated_duration interval,
-   unique(package, command, mode)
+   unique(package, command)
 );
