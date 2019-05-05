@@ -267,7 +267,7 @@ def determine_priority(package, command, mode, context=None, priority=0):
             priority += LAST_SUCCESSFUL_BONUS
         elif last_result_code in VAGUE_RESULT_CODES:
             priority += LAST_VAGUE_BONUS
-        priority -= (last_duration.total_seconds / 60) / 10
+        priority -= (last_duration.total_seconds() / 60) / 10
     else:
         priority += FIRST_RUN_BONUS
     return priority
