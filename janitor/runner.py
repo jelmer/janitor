@@ -196,9 +196,11 @@ class JanitorResult(object):
             if self.description is None:
                 self.description = worker_result.description
             self.main_branch_revision = worker_result.main_branch_revision
+            self.subworker_result = worker_result.subworker
         else:
             self.context = None
             self.main_branch_revision = None
+            self.subworker_result = None
 
 
 def find_changes(path, package):
@@ -564,7 +566,8 @@ async def process_queue(
                 build_version=result.build_version,
                 build_distribution=result.build_distribution,
                 branch_name=result.branch_name,
-                revision=result.revision)
+                revision=result.revision,
+                subworker_result=result.subworker_result)
 
             state.drop_queue_item(queue_id)
         last_success_gauge.set_to_current_time()

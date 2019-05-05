@@ -18,6 +18,7 @@
 from debian.changelog import Version
 import shlex
 import psycopg2
+from psycopg2.extras import Json
 
 
 conn = psycopg2.connect(
@@ -40,7 +41,8 @@ def _ensure_package(cur, name, vcs_url, maintainer_email):
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
               command, description, context, main_branch_revision,
               result_code, merge_proposal_url,
-              build_version, build_distribution, branch_name, revision):
+              build_version, build_distribution, branch_name, revision,
+              subworker_result):
     """Store a run.
 
     :param run_id: Run id
@@ -59,6 +61,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param build_distribution: Build distribution
     :param branch_name: Resulting branch name
     :param revision: Resulting revision id
+    :param subworker_result: Subworker-specific result data (as json)
     """
     cur = conn.cursor()
     _ensure_package(cur, name, vcs_url, maintainer_email)
@@ -73,12 +76,14 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     cur.execute(
         "INSERT INTO run (id, command, description, result_code, start_time, "
         "finish_time, package, context, merge_proposal_url, build_version, "
-        "build_distribution, main_branch_revision, branch_name, revision) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
+        "build_distribution, main_branch_revision, branch_name, revision, "
+        "result) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
             run_id, ' '.join(command), description, result_code,
             start_time, finish_time, name, context, merge_proposal_url,
             str(build_version) if build_version else None, build_distribution,
-            main_branch_revision, branch_name, revision))
+            main_branch_revision, branch_name, revision,
+            Json(subworker_result) if subworker_result else None))
     conn.commit()
 
 
