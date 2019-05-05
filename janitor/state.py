@@ -242,7 +242,8 @@ def drop_queue_item(queue_id):
     conn.commit()
 
 
-def add_to_queue(vcs_url, mode, env, command, priority=0):
+def add_to_queue(vcs_url, mode, env, command, priority=0,
+                 estimated_duration=None):
     package = env['PACKAGE']
     maintainer_email = env.get('MAINTAINER_EMAIL')
     context = env.get('CONTEXT')
@@ -251,13 +252,15 @@ def add_to_queue(vcs_url, mode, env, command, priority=0):
     _ensure_package(cur, package, vcs_url, maintainer_email)
     cur.execute(
         "INSERT INTO queue "
-        "(package, command, committer, mode, priority, context) "
-        "VALUES (%s, %s, %s, %s, %s, %s) "
+        "(package, command, committer, mode, priority, context, "
+        "estimated_duration) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s) "
         "ON CONFLICT (package, command, mode) DO UPDATE SET "
-        "context = EXCLUDED.context, priority = EXCLUDED.priority "
+        "context = EXCLUDED.context, priority = EXCLUDED.priority, "
+        "estimated_duration = EXCLUDED.estimated_duration "
         "WHERE queue.priority < EXCLUDED.priority", (
             package, ' '.join(command), committer, mode,
-            priority, context))
+            priority, context, estimated_duration))
     conn.commit()
     return True
 
