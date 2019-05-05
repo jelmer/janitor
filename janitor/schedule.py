@@ -246,7 +246,7 @@ def determine_priority(package, command, mode, context=None, priority=0):
     LAST_VAGUE_BONUS = 30
 
     NO_CONTEXT_FAILURE_PENALTY = 30
-    NO_CONTEXT_REFRESH_FREQUENCY = 7
+    NO_CONTEXT_REFRESH_FREQUENCY = 14
     NO_CONTEXT_REFRESH_BONUS = 50
 
     previous_runs = list(
@@ -257,15 +257,16 @@ def determine_priority(package, command, mode, context=None, priority=0):
              previous_runs[0])
         if last_context and last_context == context:
             priority -= CONTEXT_PROCESSED_PENALTY
-        elif last_context is None:
+        elif context is None:
             age = (datetime.now() - last_start_time)
             if age.days > NO_CONTEXT_REFRESH_FREQUENCY:
                 priority += NO_CONTEXT_REFRESH_BONUS
             elif last_result_code != 'success':
                 priority -= NO_CONTEXT_FAILURE_PENALTY
-        if last_result_code == 'success':
-            priority += LAST_SUCCESSFUL_BONUS
-        elif last_result_code in VAGUE_RESULT_CODES:
+        else:
+            if last_result_code == 'success':
+                priority += LAST_SUCCESSFUL_BONUS
+        if last_result_code in VAGUE_RESULT_CODES:
             priority += LAST_VAGUE_BONUS
         priority -= (last_duration.total_seconds() / 60) / 10
     else:
