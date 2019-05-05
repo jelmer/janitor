@@ -201,21 +201,53 @@ class MissingPython2Module(object):
             other.minimum_version == self.minimum_version
 
     def __str__(self):
-        return "Missing python 2 module: %(module)s" % self.module
+        return "Missing python 2 module: %s" % self.module
 
 
 def python2_module_not_found(m):
     return MissingPython2Module(m.group(1))
 
 
+def python2_reqs_not_found(m):
+    expr = m.group(2)
+    if ' ' not in expr:
+        return MissingPython2Module(expr)
+    if ' >= ' in expr:
+        pkg, minimum = expr.split(' >= ')
+        return MissingPython2Module(pkg, minimum)
+    # Hmm
+    return None
+
+
+class MissingFile(object):
+
+    kind = 'missing-file'
+
+    def __init__(self, path):
+        self.path = path
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            self.path == other.path
+
+    def __str__(self):
+        return "Missing file: %s" % self.path
+
+
+def file_not_found(m):
+    if m.group(1).startswith('/'):
+        return MissingFile(m.group(1))
+    return None
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
-        r'\'(.*)\', needed by \'(.*)\'\.  Stop\.', None),
+        r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
     (r'(distutils.errors.DistutilsError|error): '
         r'Could not find suitable distribution '
-        r'for Requirement.parse\(\'.*\'\)', None),
+        r'for Requirement.parse\(\'(.*)\'\)', python2_reqs_not_found),
     ('E   ImportError: cannot import name (.*)', python2_module_not_found),
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'', None),

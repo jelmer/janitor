@@ -18,6 +18,7 @@
 from janitor.build import (
     find_build_failure_description,
     MissingPython2Module,
+    MissingFile,
     )
 import unittest
 
@@ -39,6 +40,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'make[1]: *** No rule to make target \'nno.autopgen.bin\', '
             'needed by \'dan-nno.autopgen.bin\'.  Stop.'],
             1)
+        self.run_test([
+            'make[1]: *** No rule to make target \'/usr/share/blah/blah\', '
+            'needed by \'dan-nno.autopgen.bin\'.  Stop.'],
+            1, MissingFile('/usr/share/blah/blah'))
 
     def test_installdocs_missing(self):
         self.run_test([
@@ -50,10 +55,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'distutils.errors.DistutilsError: Could not find suitable '
             'distribution for Requirement.parse(\'pytest-runner\')'],
-            1)
+            1, MissingPython2Module('pytest-runner'))
         self.run_test([
             'error: Could not find suitable distribution for '
-            'Requirement.parse(\'gitlab\')'], 1)
+            'Requirement.parse(\'gitlab\')'], 1,
+            MissingPython2Module('gitlab'))
 
     def test_pytest_import(self):
         self.run_test([

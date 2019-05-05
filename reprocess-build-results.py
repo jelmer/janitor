@@ -13,7 +13,9 @@ from janitor.trace import note  # noqa: E402
 for package, log_id, result_code, description in state.iter_build_failures():
     build_log_path = os.path.join('site', 'pkg', package, log_id, 'build.log')
     failure = worker_failure_from_sbuild_log(build_log_path)
-    if failure.stage:
+    if failure.error:
+        new_code = '%s-%s' % (failure.stage, failure.error.kind)
+    elif failure.stage:
         new_code = 'build-failed-stage-%s' % failure.stage
     else:
         new_code = 'build-failed'
