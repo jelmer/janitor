@@ -222,12 +222,6 @@ class NewUpstreamWorker(SubWorker):
                 error_description = ('Error from pristine-tar: %s' % e)
                 error_code = 'pristine-tar-error'
                 raise WorkerFailure(error_code, error_description)
-            except QuiltError as e:
-                error_description = (
-                    "An error (%d) occurred running quilt: "
-                    "%s%s" % (e.retcode, e.stderr, e.extra))
-                error_code = 'quilt-error'
-                raise WorkerFailure(error_code, error_description)
             except UpstreamBranchUnknown:
                 error_description = (
                     'The location of the upstream branch is unknown.')
