@@ -382,8 +382,8 @@ async def process_one(
             code = 'hosted-on-alioth'
         else:
             if urllib.parse.urlparse(vcs_url).netloc in (
-                'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
-                'bzr.debian.org', 'git.debian.org'):
+                    'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
+                    'bzr.debian.org', 'git.debian.org'):
                 code = 'hosted-on-alioth'
             else:
                 code = 'branch-unavailable'

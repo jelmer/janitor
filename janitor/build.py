@@ -49,9 +49,10 @@ class MissingChangesFile(Exception):
 class SbuildFailure(Exception):
     """Sbuild failed to run."""
 
-    def __init__(self, stage, description):
+    def __init__(self, stage, description, error=None):
         self.stage = stage
         self.description = description
+        self.error = error
 
 
 def worker_failure_from_sbuild_log(build_log_path):
@@ -66,14 +67,17 @@ def worker_failure_from_sbuild_log(build_log_path):
         # command.
         failed_stage = 'autopkgtest'
     description = None
+    error = None
     if failed_stage == 'build':
-        offset, description = find_build_failure_description(
+        offset, description, error = find_build_failure_description(
             paragraphs.get('Build', []))
+        if error:
+            description = str(error)
     if description is None and failed_stage is not None:
         description = 'build failed stage %s' % failed_stage
     if description is None:
         description = 'build failed'
-    return SbuildFailure(failed_stage, description)
+    return SbuildFailure(failed_stage, description, error=error)
 
 
 def add_dummy_changelog_entry(directory, suffix, suite, message):
@@ -183,29 +187,61 @@ def find_failed_stage(lines):
         return value.strip()
 
 
+class MissingPython2Module(object):
+
+    kind = 'missing-python2-dep'
+
+    def __init__(self, module, minimum_version=None):
+        self.module = module
+        self.minimum_version = minimum_version
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            other.module == self.module and \
+            other.minimum_version == self.minimum_version
+
+    def __str__(self):
+        return "Missing python 2 module: %(module)s" % self.module
+
+
+def python2_module_not_found(m):
+    return MissingPython2Module(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
-        r'\'(.*)\', needed by \'(.*)\'\.  Stop\.'),
-    r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
+        r'\'(.*)\', needed by \'(.*)\'\.  Stop\.', None),
+    (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
+     None),
     (r'(distutils.errors.DistutilsError|error): '
         r'Could not find suitable distribution '
-        r'for Requirement.parse\(\'.*\'\)'),
-    'E   ImportError: cannot import name (.*)',
-    'E   ImportError: No module named (.*)',
-    'ModuleNotFoundError: No module named \'(.*)\'',
-    '.*: cannot find package "(.*)" in any of:',
-    'ImportError: No module named (.*)',
+        r'for Requirement.parse\(\'.*\'\)', None),
+    ('E   ImportError: cannot import name (.*)', python2_module_not_found),
+    ('E   ImportError: No module named (.*)', python2_module_not_found),
+    ('ModuleNotFoundError: No module named \'(.*)\'', None),
+    ('.*: cannot find package "(.*)" in any of:', None),
+    ('ImportError: No module named (.*)', python2_module_not_found),
 ]
 
 compiled_build_failure_regexps = [
-    re.compile(regexp) for regexp in build_failure_regexps]
+    (re.compile(regexp), cb) for (regexp, cb) in build_failure_regexps]
 
 
 def find_build_failure_description(lines):
+    """Find the key failure line in build output.
+
+    Returns:
+      tuple with (line offset, line, error object)
+    """
     OFFSET = 20
     for i, line in enumerate(lines[-OFFSET:], 1):
         line = line.strip('\n')
-        for regexp in compiled_build_failure_regexps:
-            if regexp.match(line):
-                return max(len(lines) - OFFSET, 0) + i, line
-    return None, None
+        for regexp, cb in compiled_build_failure_regexps:
+            m = regexp.match(line)
+            if m:
+                if cb:
+                    err = cb(m)
+                else:
+                    err = None
+                return max(len(lines) - OFFSET, 0) + i, line, err
+    return None, None, None
