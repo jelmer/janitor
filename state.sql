@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS run (
    main_branch_revision text,
    branch_name text,
    revision text,
+   result json,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );

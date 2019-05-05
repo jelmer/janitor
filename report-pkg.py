@@ -60,7 +60,8 @@ def include_build_log_failure(f, log_path, length):
             highlight_lines = [offsets['Build'][1] + offset]
 
     include_console_log(
-        f, log_path, include_lines=include_lines, highlight_lines=highlight_lines)
+        f, log_path, include_lines=include_lines,
+        highlight_lines=highlight_lines)
 
 
 if not os.path.isdir(dir):
@@ -104,7 +105,8 @@ for run in state.iter_runs():
         g.write('debian-svp %s %s' % (command, package_name))
         g.write('\n\n')
         if (os.path.exists('../vcs/git/%s' % package_name) or
-                os.path.exists('../vcs/bzr/%s' % package_name)):
+            os.path.exists('../vcs/bzr/%s' % package_name)) \
+                and branch_name:
             g.write('Merge these changes::\n\n')
             if os.path.exists('../vcs/git/%s' % package_name):
                 g.write('\tgit pull %s/%s %s\n' % (
