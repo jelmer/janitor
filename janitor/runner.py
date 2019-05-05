@@ -283,8 +283,7 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
 
 
 async def process_one(
-        worker_kind, vcs_url, mode, env, command,
-        build_command,
+        worker_kind, vcs_url, env, command, build_command,
         pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
@@ -444,10 +443,10 @@ async def process_queue(
         debsign_keyid=None, vcs_result_dir=None,
         concurrency=1):
     async def process_queue_item(item):
-        (queue_id, vcs_url, mode, env, command) = item
+        (queue_id, vcs_url, env, command) = item
         start_time = datetime.now()
         result = await process_one(
-            worker_kind, vcs_url, mode, env, command,
+            worker_kind, vcs_url, env, command,
             pre_check=pre_check,
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,

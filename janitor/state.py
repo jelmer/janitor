@@ -207,7 +207,6 @@ SELECT
     package.name,
     queue.committer,
     queue.command,
-    queue.mode,
     queue.context,
     queue.id
 FROM
@@ -222,14 +221,14 @@ queue.id ASC
     cur.execute(query)
     for row in cur.fetchall():
         (branch_url, maintainer_email, package, committer,
-            command, mode, context, queue_id) = row
+            command, context, queue_id) = row
         env = {
             'PACKAGE': package,
             'MAINTAINER_EMAIL': maintainer_email,
             'COMMITTER': committer or None,
             'CONTEXT': context,
         }
-        yield (queue_id, branch_url, mode, env, shlex.split(command))
+        yield (queue_id, branch_url, env, shlex.split(command))
 
 
 def drop_queue_item(queue_id):
