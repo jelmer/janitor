@@ -338,7 +338,8 @@ SELECT DISTINCT ON (package, command)
   command,
   result_code,
   id,
-  description
+  description,
+  finish_time - start_time
 FROM
   run
 ORDER BY package, command, start_time DESC
