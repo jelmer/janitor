@@ -138,7 +138,7 @@ def build_incrementally(
     changes_path = os.path.join(output_directory, changes_name)
     if not os.path.exists(changes_path):
         raise MissingChangesFile(changes_name)
-    return changes_name
+    return (changes_name, cl_version)
 
 
 def parse_sbuild_log(f):

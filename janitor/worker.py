@@ -356,7 +356,7 @@ def process_package(vcs_url, env, command, output_directory,
 
         if build_command:
             try:
-                changes_name = build_incrementally(
+                (changes_name, cl_version) = build_incrementally(
                     ws.local_tree, '~' + subworker.build_version_suffix,
                     build_suite, output_directory,
                     build_command)

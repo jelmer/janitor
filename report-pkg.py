@@ -207,7 +207,8 @@ Package Index
 
             for (run_id, (start_time, finish_time), command, description,
                     package_name, merge_proposal_url, build_version,
-                    build_distro, result_code) in runs_by_pkg.get(name, []):
+                    build_distro, result_code,
+                    branch_name) in runs_by_pkg.get(name, []):
                 f.write('* `%s: %s <%s/>`_' % (
                     finish_time.isoformat(timespec='minutes'), command,
                     run_id))
