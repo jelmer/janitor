@@ -86,11 +86,11 @@ def store_publish(package, branch_name, main_branch_revision, revision, mode,
                   result_code, description, merge_proposal_url=None):
     cur = conn.cursor()
     cur.execute("""
-INSERT INTO publish (package, branch_name, main_branch_revision, revision, mode,
-result_code, description, merge_proposal_url) values (%s, %s, %s, %s, %s, %s, %s, %s)
-""",
-        (package, branch_name, main_branch_revision, revision, mode,
-         result_code, description, merge_proposal_url))
+INSERT INTO publish (package, branch_name, main_branch_revision, revision,
+mode, result_code, description, merge_proposal_url) values (%s, %s, %s, %s, %s,
+%s, %s, %s)
+""", (package, branch_name, main_branch_revision, revision, mode, result_code,
+      description, merge_proposal_url))
     conn.commit()
 
 

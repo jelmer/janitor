@@ -490,7 +490,7 @@ async def process_one(
                     dry_run=dry_run, log_id=log_id,
                     existing_proposal=existing_proposal)
             except PublishFailure as e:
-                store_publish(
+                state.store_publish(
                     pkg, branch_name, worker_result.main_branch_revision,
                     result.revision, mode, e.code,
                     e.description,
@@ -502,7 +502,7 @@ async def process_one(
                     description=e.description,
                     worker_result=worker_result)
             else:
-                store_publish(
+                state.store_publish(
                     pkg, branch_name, worker_result.main_branch_revision,
                     result.revision, mode, 'success',
                     'Success',

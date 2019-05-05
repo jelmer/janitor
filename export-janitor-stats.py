@@ -63,7 +63,8 @@ for package_name, command, result_code, log_id, description, run_duration in (
     run_count.labels(command=command).inc()
     run_result_count.labels(command=command, result_code=result_code).inc()
     duration.labels(
-        command=command, result_code=result_code).observe(run_duration.total_seconds())
+        command=command,
+        result_code=result_code).observe(run_duration.total_seconds())
 
 
 last_success_gauge.set_to_current_time()
