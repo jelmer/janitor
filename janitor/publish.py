@@ -17,22 +17,42 @@
 
 """Publishing VCS changes."""
 
+import os
+import sys
+import urllib.parse
+
+from prometheus_client import (
+    Gauge,
+    push_to_gateway,
+    REGISTRY,
+)
 
 from silver_platter.proposal import (
     publish_changes as publish_changes_from_workspace,
     propose_changes,
     push_changes,
+    find_existing_proposed,
     get_hoster,
     hosters,
     NoSuchProject,
     PermissionDenied,
+    UnsupportedHoster,
     )
-
-from prometheus_client import (
-    Gauge,
+from silver_platter.debian.lintian import (
+    create_mp_description,
+    parse_mp_description,
+    update_proposal_commit_message,
+    )
+from silver_platter.utils import (
+    open_branch,
+    BranchUnavailable,
     )
 
 from . import state
+from .policy import (
+    read_policy,
+    apply_policy,
+    )
 from .trace import note, warning
 
 
@@ -57,6 +77,12 @@ ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
 open_proposal_count = Gauge(
     'open_proposal_count', 'Number of open proposals.',
     labelnames=('maintainer',))
+merge_proposal_count = Gauge(
+    'merge_proposal_count', 'Number of merge proposals by status.',
+    labelnames=('status',))
+last_success_gauge = Gauge(
+    'job_last_success_unixtime',
+    'Last time a batch job successfully finished')
 
 
 def strip_janitor_blurb(text):
@@ -151,6 +177,7 @@ class BranchWorkspace(object):
 
 
 class Publisher(object):
+    """Publishes results made to a VCS, by pushing/proposing."""
 
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
@@ -225,7 +252,238 @@ class Publisher(object):
             if proposal and is_new:
                 self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
                 self._open_mps_per_maintainer[maintainer_email] += 1
+                merge_proposal_count.labels(status='open').inc()
                 open_proposal_count.labels(
                     maintainer=maintainer_email).inc()
 
         return proposal, is_new
+
+
+class LintianBrushPublisher(object):
+
+    def __init__(self, args):
+        self.args = args
+
+    def branch_name(self):
+        return "lintian-fixes"
+
+    def get_proposal_description(self, existing_description):
+        if existing_description:
+            existing_lines = parse_mp_description(existing_description)
+        else:
+            existing_lines = []
+        return create_mp_description(
+            existing_lines + [l['summary'] for l in self.applied])
+
+    def get_proposal_commit_message(self, existing_commit_message):
+        fixed_tags = set()
+        for result in self.applied:
+            fixed_tags.update(result['fixed_lintian_tags'])
+        return update_proposal_commit_message(
+            existing_commit_message, fixed_tags)
+
+    def read_worker_result(self, result):
+        self.applied = result['applied']
+        self.failed = result['failed']
+        self.add_on_only = result['add_on_only']
+
+    def allow_create_proposal(self):
+        return self.applied and not self.add_on_only
+
+
+class NewUpstreamPublisher(object):
+
+    def __init__(self, args):
+        self.args = args
+
+    def branch_name(self):
+        if '--snapshot' in self.args:
+            return "new-upstream-snapshot"
+        else:
+            return "new-upstream"
+
+    def read_worker_result(self, result):
+        self._upstream_version = result['upstream_version']
+
+    def get_proposal_description(self, existing_description):
+        return "New upstream version %s" % self._upstream_version
+
+    def get_proposal_commit_message(self, existing_commit_message):
+        return self.get_proposal_description(None)
+
+    def allow_create_proposal(self):
+        # No upstream release too small...
+        return True
+
+
+def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
+                mode, log_id, maintainer_email, vcs_directory, branch_name,
+                dry_run=False, possible_hosters=None,
+                possible_transports=None):
+    if os.path.exists(os.path.join(vcs_directory, 'git', pkg)):
+        local_branch = open_branch(
+            'file:%s,branch=%s' % (
+                os.path.join(vcs_directory, 'git', pkg), branch_name))
+    elif os.path.exists(os.path.join(vcs_directory, 'bzr', pkg)):
+        local_branch = open_branch(
+            os.path.join(vcs_directory, 'bzr', pkg, branch_name))
+    else:
+        raise AssertionError('can not find local branch')
+
+    if command[0] == 'new-upstream':
+        subrunner = NewUpstreamPublisher(command)
+    elif command[0] == 'lintian-brush':
+        subrunner = LintianBrushPublisher(command)
+    else:
+        raise AssertionError('unknown command %r' % command)
+
+    try:
+        main_branch = open_branch(
+            main_branch_url, possible_transports=possible_transports)
+    except BranchUnavailable as e:
+        raise PublishFailure('branch-unavailable', str(e))
+
+    subrunner.read_worker_result(subworker_result)
+
+    try:
+        hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
+    except UnsupportedHoster as e:
+        if mode not in ('push', 'build-only'):
+            netloc = urllib.parse.urlparse(main_branch.user_url).netloc
+            raise PublishFailure(
+                description='Hoster unsupported: %s.' % netloc,
+                code='hoster-unsupported')
+        # We can't figure out what branch to resume from when there's no hoster
+        # that can tell us.
+        resume_branch = None
+        existing_proposal = None
+        if mode == 'push':
+            warning('Unsupported hoster (%s), will attempt to push to %s',
+                    e, main_branch.user_url)
+    else:
+        try:
+            (resume_branch, overwrite, existing_proposal) = (
+                find_existing_proposed(
+                    main_branch, hoster, subrunner.branch_name()))
+        except NoSuchProject as e:
+            if mode not in ('push', 'build-only'):
+                raise PublishFailure(
+                    description='Project %s not found.' % e.project,
+                    code='project-not-found')
+            resume_branch = None
+            existing_proposal = None
+
+    publisher.publish(
+        pkg, maintainer_email, subrunner, mode, hoster,
+        main_branch, local_branch, resume_branch=resume_branch,
+        dry_run=dry_run, log_id=log_id, existing_proposal=existing_proposal)
+
+    proposal, is_new = publisher.publish(
+        pkg, maintainer_email,
+        subrunner, mode, hoster, main_branch, local_branch,
+        resume_branch,
+        dry_run=dry_run, log_id=log_id,
+        existing_proposal=existing_proposal)
+
+    return proposal
+
+
+def publish_pending(publisher, policy, vcs_directory, dry_run=False):
+    possible_hosters = []
+    possible_transports = []
+
+    for (pkg, command, build_version, result_code, context,
+         start_time, log_id, revision,
+         subworker_result, branch_name, maintainer_email,
+         main_branch_url, main_branch_revision) in state.iter_publish_ready():
+        # TODO(jelmer): uploader_emails ??
+        uploader_emails = None
+        if command == ['new-upstream']:
+            policy_name = 'new_upstream_releases'
+        elif command == ['lintian-brush']:
+            policy_name = 'lintian_brush'
+        elif command == ['new-upstream', '--snapshot']:
+            policy_name = 'new_upstream_snapshots'
+        else:
+            raise AssertionError('unknown command %r' % command)
+
+        mode, unused_update_changelog, unused_committer = apply_policy(
+            policy, policy_name, pkg, maintainer_email,
+            uploader_emails)
+        if mode in ('build-only', 'skip'):
+            continue
+        if state.already_published(main_branch_url, revision, mode):
+            continue
+        try:
+            proposal, branch_name = publish_one(
+                pkg, publisher, command, subworker_result,
+                main_branch_url, mode, log_id, maintainer_email,
+                vcs_directory, branch_name,
+                dry_run=dry_run,
+                possible_hosters=possible_hosters,
+                possible_transports=possible_transports)
+        except PublishFailure as e:
+            code = e.code
+            description = e.description
+            branch_name = None
+        else:
+            code = 'success'
+            description = 'Success'
+        state.store_publish(
+            pkg, branch_name, main_branch_revision,
+            revision, mode, code, description,
+            proposal.url if proposal else None)
+
+
+def update_proposal_status():
+    for name, hoster_cls in hosters.items():
+        for instance in hoster_cls.iter_instances():
+            note('Checking merge proposals on %r...', instance)
+            for status in ['open', 'merged', 'closed']:
+                for mp in instance.iter_my_proposals(status=status):
+                    state.set_proposal_status(mp.url, status)
+                    merge_proposal_count.labels(status=status).inc()
+
+
+def main(argv=None):
+    import argparse
+    parser = argparse.ArgumentParser(prog='janitor.publish')
+    parser.add_argument(
+        '--max-mps-per-maintainer',
+        default=0,
+        type=int,
+        help='Maximum number of open merge proposals per maintainer.')
+    parser.add_argument(
+        "--dry-run",
+        help="Create branches but don't push or propose anything.",
+        action="store_true", default=False)
+    parser.add_argument(
+        '--vcs-result-dir', type=str,
+        help='Directory to store VCS repositories in.')
+    parser.add_argument(
+        "--policy",
+        help="Policy file to read.", type=str,
+        default='policy.conf')
+
+    args = parser.parse_args()
+
+    with open(args.policy, 'r') as f:
+        policy = read_policy(f)
+
+    publisher = Publisher(args.max_mps_per_maintainer)
+
+    publish_pending(
+        publisher, policy, dry_run=args.dry_run,
+        vcs_directory=args.vcs_directory)
+
+    update_proposal_status()
+
+    last_success_gauge.set_to_current_time()
+    if args.prometheus:
+        push_to_gateway(
+            args.prometheus, job='janitor.publish',
+            registry=REGISTRY)
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))

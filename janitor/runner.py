@@ -49,11 +49,6 @@ from prometheus_client import (
     CONTENT_TYPE_LATEST,
 )
 
-from silver_platter.debian.lintian import (
-    create_mp_description,
-    parse_mp_description,
-    update_proposal_commit_message,
-    )
 from silver_platter.proposal import (
     find_existing_proposed,
     enable_tag_pushing,
@@ -67,10 +62,6 @@ from silver_platter.utils import (
     )
 
 from . import state
-from .publish import (
-    PublishFailure,
-    Publisher,
-    )
 from .trace import note, warning
 
 packages_processed_count = Counter(
@@ -118,74 +109,16 @@ def get_own_resume_branch(vcs_type, package, branch_name):
         return None
 
 
-class LintianBrushRunner(object):
-
-    def __init__(self, args):
-        self.args = args
-
-    def branch_name(self):
-        return "lintian-fixes"
-
-    def get_proposal_description(self, existing_description):
-        if existing_description:
-            existing_lines = parse_mp_description(existing_description)
-        else:
-            existing_lines = []
-        return create_mp_description(
-            existing_lines + [l['summary'] for l in self.applied])
-
-    def get_proposal_commit_message(self, existing_commit_message):
-        fixed_tags = set()
-        for result in self.applied:
-            fixed_tags.update(result['fixed_lintian_tags'])
-        return update_proposal_commit_message(
-            existing_commit_message, fixed_tags)
-
-    def read_worker_result(self, result):
-        self.applied = result['applied']
-        self.failed = result['failed']
-        self.add_on_only = result['add_on_only']
-
-    def allow_create_proposal(self):
-        return self.applied and not self.add_on_only
-
-
-class NewUpstreamRunner(object):
-
-    def __init__(self, args):
-        self.args = args
-
-    def branch_name(self):
-        if '--snapshot' in self.args:
-            return "new-upstream-snapshot"
-        else:
-            return "new-upstream"
-
-    def read_worker_result(self, result):
-        self._upstream_version = result['upstream_version']
-
-    def get_proposal_description(self, existing_description):
-        return "New upstream version %s" % self._upstream_version
-
-    def get_proposal_commit_message(self, existing_commit_message):
-        return self.get_proposal_description(None)
-
-    def allow_create_proposal(self):
-        # No upstream release too small...
-        return True
-
-
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, description=None,
-                 code=None, proposal=None, is_new=None,
+                 code=None, is_new=None,
                  build_distribution=None, build_version=None,
                  changes_filename=None, worker_result=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
         self.code = code
-        self.proposal = proposal
         self.is_new = is_new
         self.build_distribution = build_distribution
         self.build_version = build_version
@@ -351,21 +284,23 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
 
 async def process_one(
         worker_kind, vcs_url, mode, env, command,
-        build_command, publisher,
+        build_command,
         pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
         possible_transports=None, possible_hosters=None):
-    maintainer_email = env['MAINTAINER_EMAIL']
     pkg = env['PACKAGE']
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
 
-    if command[0] == "new-upstream":
-        subrunner = NewUpstreamRunner(command[1:])
-    elif command[0] == "lintian-brush":
-        subrunner = LintianBrushRunner(command[1:])
+    # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
+    if command == ["new-upstream"]:
+        branch_name = 'new-upstream'
+    elif command == ["new-upstream", "--snapshot"]:
+        branch_name = 'new-upstream-snapshot'
+    elif command == ["lintian-brush"]:
+        branch_name = "lintian-fixes"
     else:
         raise AssertionError('Unknown command %s' % command[0])
 
@@ -397,35 +332,21 @@ async def process_one(
         else:
             raise
 
-    branch_name = subrunner.branch_name()
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
-        if mode not in ('push', 'build-only'):
-            netloc = urllib.parse.urlparse(main_branch.user_url).netloc
-            return JanitorResult(
-                pkg, log_id, description='Hoster unsupported: %s.' % netloc,
-                code='hoster-unsupported')
         # We can't figure out what branch to resume from when there's no hoster
         # that can tell us.
         resume_branch = None
-        existing_proposal = None
-        if mode == 'push':
-            warning('Unsupported hoster (%s), will attempt to push to %s',
-                    e, main_branch.user_url)
+        warning('Unsupported hoster (%s)', e)
     else:
         try:
-            (resume_branch, overwrite, existing_proposal) = (
+            (resume_branch, unused_overwrite, unused_existing_proposal) = (
                 find_existing_proposed(
                     main_branch, hoster, branch_name))
         except NoSuchProject as e:
-            if mode not in ('push', 'build-only'):
-                return JanitorResult(
-                    pkg, log_id,
-                    description='Project %s not found.' % e.project,
-                    code='project-not-found')
+            warning('Project %s not found', e.project)
             resume_branch = None
-            existing_proposal = None
 
     if resume_branch is None:
         resume_branch = get_own_resume_branch(
@@ -462,8 +383,6 @@ async def process_one(
             worker_result = WorkerResult(
                 'worker-missing-result',
                 'Worker failed and did not write a result file.')
-        if worker_result.subworker:
-            subrunner.read_worker_result(worker_result.subworker)
 
         if worker_result.code is not None:
             return JanitorResult(
@@ -492,32 +411,6 @@ async def process_one(
 
         result.revision = local_branch.last_revision().decode('utf-8')
         enable_tag_pushing(local_branch)
-        if mode != 'build-only':
-            try:
-                result.proposal, result.is_new = publisher.publish(
-                    pkg, maintainer_email,
-                    subrunner, mode, hoster, main_branch, local_branch,
-                    resume_branch,
-                    dry_run=dry_run, log_id=log_id,
-                    existing_proposal=existing_proposal)
-            except PublishFailure as e:
-                state.store_publish(
-                    pkg, branch_name, worker_result.main_branch_revision,
-                    result.revision, mode, e.code,
-                    e.description,
-                    result.proposal.url if result.proposal else None)
-
-                return JanitorResult(
-                    pkg, log_id,
-                    code=e.code,
-                    description=e.description,
-                    worker_result=worker_result)
-            else:
-                state.store_publish(
-                    pkg, branch_name, worker_result.main_branch_revision,
-                    result.revision, mode, 'success',
-                    'Success',
-                    result.proposal.url if result.proposal else None)
 
         if vcs_result_dir:
             copy_vcs_dir(
@@ -545,7 +438,7 @@ async def export_queue_length():
 
 
 async def process_queue(
-        worker_kind, build_command, publisher,
+        worker_kind, build_command,
         pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
@@ -556,8 +449,7 @@ async def process_queue(
         result = await process_one(
             worker_kind, vcs_url, mode, env, command,
             pre_check=pre_check,
-            build_command=build_command, publisher=publisher,
-            post_check=post_check,
+            build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
             debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
             log_dir=log_dir)
@@ -571,7 +463,6 @@ async def process_queue(
                 result.context,
                 result.main_branch_revision,
                 result.code,
-                result.proposal.url if result.proposal else None,
                 build_version=result.build_version,
                 build_distribution=result.build_distribution,
                 branch_name=result.branch_name,
@@ -636,11 +527,6 @@ def main(argv=None):
         '--port', type=int,
         help='Listen port', default=9911)
     parser.add_argument(
-        '--max-mps-per-maintainer',
-        default=0,
-        type=int,
-        help='Maximum number of open merge proposals per maintainer.')
-    parser.add_argument(
         '--pre-check',
         help='Command to run to check whether to process package.',
         type=str)
@@ -679,13 +565,11 @@ def main(argv=None):
 
     args = parser.parse_args()
 
-    publisher = Publisher(args.max_mps_per_maintainer)
-
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(process_queue(
             args.worker,
-            args.build_command, publisher,
+            args.build_command,
             args.pre_check, args.post_check,
             args.dry_run, args.incoming, args.log_dir,
             args.debsign_keyid,

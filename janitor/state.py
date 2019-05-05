@@ -40,9 +40,8 @@ def _ensure_package(cur, name, vcs_url, maintainer_email):
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
               command, description, context, main_branch_revision,
-              result_code, merge_proposal_url,
-              build_version, build_distribution, branch_name, revision,
-              subworker_result):
+              result_code, build_version, build_distribution, branch_name,
+              revision, subworker_result):
     """Store a run.
 
     :param run_id: Run id
@@ -56,7 +55,6 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param context: Subworker-specific context
     :param main_branch_revision: Main branch revision
     :param result_code: Result code (as constant string)
-    :param merge_proposal_url: Optional merge proposal URL
     :param build_version: Version that was built
     :param build_distribution: Build distribution
     :param branch_name: Resulting branch name
@@ -65,22 +63,14 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     """
     cur = conn.cursor()
     _ensure_package(cur, name, vcs_url, maintainer_email)
-    if merge_proposal_url:
-        cur.execute(
-            "INSERT INTO merge_proposal (url, package, status) "
-            "VALUES (%s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
-            "package = EXCLUDED.package",
-            (merge_proposal_url, name))
-    else:
-        merge_proposal_url = None
     cur.execute(
         "INSERT INTO run (id, command, description, result_code, start_time, "
-        "finish_time, package, context, merge_proposal_url, build_version, "
+        "finish_time, package, context, build_version, "
         "build_distribution, main_branch_revision, branch_name, revision, "
         "result) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (run_id, ' '.join(command), description, result_code,
-         start_time, finish_time, name, context, merge_proposal_url,
+         start_time, finish_time, name, context,
          str(build_version) if build_version else None, build_distribution,
          main_branch_revision, branch_name, revision,
          Json(subworker_result) if subworker_result else None))
@@ -90,6 +80,12 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
 def store_publish(package, branch_name, main_branch_revision, revision, mode,
                   result_code, description, merge_proposal_url=None):
     cur = conn.cursor()
+    if merge_proposal_url:
+        cur.execute(
+            "INSERT INTO merge_proposal (url, package, status) "
+            "VALUES (%s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
+            "package = EXCLUDED.package",
+            (merge_proposal_url, package))
     cur.execute("""
 INSERT INTO publish (package, branch_name, main_branch_revision, revision,
 mode, result_code, description, merge_proposal_url) values (%s, %s, %s, %s, %s,
@@ -311,9 +307,10 @@ ORDER BY start_time DESC
     return cur.fetchall()
 
 
-def iter_last_successes(suite):
+def iter_last_successes(suite=None):
     cur = conn.cursor()
-    cur.execute("""
+    args = []
+    query = """
 SELECT DISTINCT ON (package, command)
   package,
   command,
@@ -324,9 +321,14 @@ SELECT DISTINCT ON (package, command)
   id
 FROM
   run
-WHERE build_distribution = %s
+"""
+    if suite is not None:
+        query += " WHERE build_distribution = %s"
+        args.append(suite)
+    query += """
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
-""", (suite,))
+"""
+    cur.execute(query, args)
     return cur.fetchall()
 
 
@@ -370,3 +372,45 @@ def update_run_result(log_id, code, description):
         'UPDATE run SET result_code = %s, description = %s WHERE id = %s',
         (code, description, log_id))
     conn.commit()
+
+
+def already_published(main_branch_url, revision, mode):
+    cur = conn.cursor()
+    cur.execute("""\
+SELECT * FROM publish
+WHERE mode = %s AND revision = %s AND main_branch_url = %s
+""", (main_branch_url, revision, mode))
+    if cur.fetchone():
+        return True
+    return False
+
+
+def iter_publish_ready():
+    cur = conn.cursor()
+    args = []
+    query = """
+SELECT DISTINCT ON (package, command)
+  package.name,
+  run.command,
+  run.build_version,
+  run.result_code,
+  run.context,
+  run.start_time,
+  run.id,
+  run.revision,
+  run.result,
+  run.branch_name,
+  package.maintainer_email,
+  package.branch_url,
+  main_branch_revision
+FROM
+  run
+LEFT JOIN package ON package.name = run.package
+WHERE result_code = 'success'
+ORDER BY
+  package,
+  command,
+  finish_time DESC
+"""
+    cur.execute(query, args)
+    return cur.fetchall()
