@@ -72,7 +72,7 @@ runs_by_pkg = {}
 for run in state.iter_runs():
     (run_id, (start_time, finish_time), command, description,
         package_name, merge_proposal_url, build_version,
-        build_distro, result_code) = run
+        build_distro, result_code, branch_name) = run
 
     runs_by_pkg.setdefault(package_name, []).append(run)
 
@@ -101,27 +101,10 @@ for run in state.iter_runs():
                     % (changes_name, build_distro, changes_name))
         g.write('\n')
         g.write('Try this locally::\n\n\t')
-        # TODO(jelmer): Don't put lintian-fixer specific code here
-        svp_args = command.split(' ')
-        if svp_args[0] == 'lintian-brush':
-            g.write('debian-svp lintian-brush %s %s' % (
-                package_name, ' '.join(
-                    ['--fixers=%s' % f for f in svp_args[1:]])))
-        elif svp_args[0] == 'new-upstream':
-            g.write('debian-svp new-upstream')
-            g.write(''.join([' ' + arg for arg in svp_args[1:]]))
-            g.write(' ' + package_name)
-        else:
-            raise AssertionError
+        g.write('debian-svp %s %s' % (command, package_name))
         g.write('\n\n')
         if (os.path.exists('../vcs/git/%s' % package_name) or
                 os.path.exists('../vcs/bzr/%s' % package_name)):
-            if svp_args[0] == 'lintian-brush':
-                branch_name = 'lintian-fixes'
-            elif svp_args[0] == 'new-upstream':
-                branch_name = 'new-upstream'
-            else:
-                raise AssertionError
             g.write('Merge these changes::\n\n')
             if os.path.exists('../vcs/git/%s' % package_name):
                 g.write('\tgit pull %s/%s %s\n' % (
@@ -207,10 +190,10 @@ Package Index
 
             f.write('Recent package builds\n')
             f.write('---------------------\n')
-            runs = list(state.iter_runs(name))
             for (run_id, (start_time, finish_time), command, description,
                     package_name, merge_proposal_url, build_version,
-                    build_distro, result_code) in runs_by_pkg.get(name, []):
+                    build_distro, result_code,
+                    branch_name) in runs_by_pkg.get(name, []):
                 if build_version is None:
                     continue
                 f.write('* %s (for %s)' % (build_version, build_distro))
