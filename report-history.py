@@ -31,8 +31,8 @@ for (run_id, times, command, description, package, proposal_url,
         changes_filename, build_distro, result_code,
         branch_name) in state.iter_runs(limit=args.limit):
     row = [
-        '`%s <pkg/%s>`_' % (package, package),
-        '`%s <pkg/%s/%s/>`_.' % (
+        '`%s </pkg/%s>`_' % (package, package),
+        '`%s </pkg/%s/%s/>`_' % (
             command, package, run_id),
         '%s' % format_duration(times[1] - times[0]),
         ]
