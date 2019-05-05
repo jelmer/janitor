@@ -36,7 +36,7 @@ sys.stdout.write("Queue\n")
 sys.stdout.write("=====\n")
 sys.stdout.write("\n")
 
-for i, (queue_id, branch_url, mode, env, command) in enumerate(
+for i, (queue_id, branch_url, env, command) in enumerate(
         state.iter_queue(limit=args.limit), 1):
     if args.command is not None and command != args.command:
         continue
