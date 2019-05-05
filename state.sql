@@ -2,7 +2,7 @@ CREATE TABLE IF NOT EXISTS package (
    name text not null,
    branch_url text not null,
    maintainer_email text not null,
-   primary key(name),
+   primary key(name)
 );
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged');
 CREATE TABLE IF NOT EXISTS merge_proposal (
@@ -36,6 +36,18 @@ CREATE TABLE IF NOT EXISTS run (
    foreign key (merge_proposal_url) references merge_proposal(url)
 );
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only');
+CREATE TABLE IF NOT EXISTS publish (
+   package text not null,
+   branch_name text not null,
+   main_branch_revision text not null,
+   revision text not null,
+   mode publish_mode not null,
+   merge_proposal_url text,
+   result_code text,
+   description text,
+   foreign key (package) references package(name),
+   foreign key (merge_proposal_url) references merge_proposal(url)
+);
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    package text not null,
