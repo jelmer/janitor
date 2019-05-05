@@ -31,7 +31,7 @@ def include_console_log(f, log_path, include_lines=None, highlight_lines=None):
             f.write('%d' % include_lines[1])
         f.write('\n')
     if highlight_lines:
-        f.write('   :emphasize-lines: ')
+        f.write('  :emphasize-lines: ')
         for line in highlight_lines[:-1]:
             f.write('%d,' % line)
         f.write('%d\n' % highlight_lines[-1])
