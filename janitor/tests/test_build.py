@@ -17,7 +17,8 @@
 
 from janitor.build import (
     find_build_failure_description,
-    MissingPython2Module,
+    MissingPythonModule,
+    MissingGoPackage,
     MissingFile,
     )
 import unittest
@@ -55,36 +56,39 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'distutils.errors.DistutilsError: Could not find suitable '
             'distribution for Requirement.parse(\'pytest-runner\')'],
-            1, MissingPython2Module('pytest-runner'))
+            1, MissingPythonModule('pytest-runner', 2))
         self.run_test([
             "distutils.errors.DistutilsError: Could not find suitable "
             "distribution for Requirement.parse('certifi>=2019.3.9')"],
-            1, MissingPython2Module('certifi', '2019.3.9'))
+            1, MissingPythonModule('certifi', 2, '2019.3.9'))
         self.run_test([
             'error: Could not find suitable distribution for '
             'Requirement.parse(\'gitlab\')'], 1,
-            MissingPython2Module('gitlab'))
+            MissingPythonModule('gitlab', 2))
 
     def test_pytest_import(self):
         self.run_test([
             'E   ImportError: cannot import name cmod'], 1,
-            MissingPython2Module('cmod'))
+            MissingPythonModule('cmod', 2))
         self.run_test([
             'E   ImportError: No module named mock'], 1,
-            MissingPython2Module('mock'))
+            MissingPythonModule('mock', 2))
 
     def test_python2_import(self):
         self.run_test(
                 ['ImportError: No module named pytz'], 1,
-                MissingPython2Module('pytz'))
+                MissingPythonModule('pytz', 2))
 
     def test_python3_import(self):
         self.run_test([
-            'ModuleNotFoundError: No module named \'django_crispy_forms\''], 1)
+            'ModuleNotFoundError: No module named \'django_crispy_forms\''], 1,
+            MissingPythonModule('django_crispy_forms', 3))
         self.run_test([
-            'ModuleNotFoundError: No module named \'distro\''], 1)
+            'ModuleNotFoundError: No module named \'distro\''], 1,
+            MissingPythonModule('distro', 3))
 
     def test_go_missing(self):
         self.run_test([
             'src/github.com/vuls/config/config.go:30:2: cannot find package '
-            '"golang.org/x/xerrors" in any of:'], 1)
+            '"golang.org/x/xerrors" in any of:'], 1,
+            MissingGoPackage('golang.org/x/xerrors'))
