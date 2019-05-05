@@ -176,15 +176,6 @@ class NewUpstreamWorker(SubWorker):
 
     def make_changes(self, local_tree, report_context, metadata):
         # Make sure that the quilt patches applied in the first place..
-        try:
-            check_quilt_patches_apply(local_tree)
-        except QuiltError as e:
-            error_description = (
-                "An error (%d) occurred running quilt before the merge: "
-                "%s%s" % (e.retcode, e.stderr, e.extra))
-            error_code = 'before-quilt-error'
-            raise WorkerFailure(error_code, error_description)
-
         with local_tree.lock_write():
             try:
                 old_upstream_version, upstream_version = merge_upstream(
@@ -335,6 +326,14 @@ def process_package(vcs_url, env, command, output_directory,
             run_pre_check(ws.local_tree, pre_check_command)
         except PreCheckFailed as e:
             raise WorkerFailure('pre-check-failed', str(e))
+
+        try:
+            check_quilt_patches_apply(ws.local_tree)
+        except QuiltError as e:
+            error_description = (
+                "An error (%d) occurred running quilt in the original tree: "
+                "%s%s" % (e.retcode, e.stderr, e.extra))
+            raise WorkerFailure('before-quilt-error', error_description)
 
         metadata['subworker'] = {}
 
