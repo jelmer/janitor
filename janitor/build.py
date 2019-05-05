@@ -203,6 +203,10 @@ class MissingPython2Module(object):
     def __str__(self):
         return "Missing python 2 module: %s" % self.module
 
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.module, self.minimum_version)
+
 
 def python2_module_not_found(m):
     return MissingPython2Module(m.group(1))
@@ -210,11 +214,11 @@ def python2_module_not_found(m):
 
 def python2_reqs_not_found(m):
     expr = m.group(2)
+    if '>=' in expr:
+        pkg, minimum = expr.split('>=')
+        return MissingPython2Module(pkg.strip(), minimum.strip())
     if ' ' not in expr:
         return MissingPython2Module(expr)
-    if ' >= ' in expr:
-        pkg, minimum = expr.split(' >= ')
-        return MissingPython2Module(pkg, minimum)
     # Hmm
     return None
 
@@ -232,6 +236,9 @@ class MissingFile(object):
 
     def __str__(self):
         return "Missing file: %s" % self.path
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.path)
 
 
 def file_not_found(m):

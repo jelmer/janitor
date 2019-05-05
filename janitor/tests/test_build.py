@@ -57,6 +57,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'distribution for Requirement.parse(\'pytest-runner\')'],
             1, MissingPython2Module('pytest-runner'))
         self.run_test([
+            "distutils.errors.DistutilsError: Could not find suitable "
+            "distribution for Requirement.parse('certifi>=2019.3.9')"],
+            1, MissingPython2Module('certifi', '2019.3.9'))
+        self.run_test([
             'error: Could not find suitable distribution for '
             'Requirement.parse(\'gitlab\')'], 1,
             MissingPython2Module('gitlab'))
