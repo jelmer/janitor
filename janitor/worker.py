@@ -233,14 +233,15 @@ class NewUpstreamWorker(SubWorker):
                 error_code = 'native-package'
                 raise WorkerFailure(error_code, error_description)
 
-            try:
-                refresh_quilt_patches(local_tree, committer=committer)
-            except QuiltError as e:
-                error_description = (
-                    "An error (%d) occurred refreshing quilt patches: "
-                    "%s%s" % (e.retcode, e.stderr, e.extra))
-                error_code = 'quilt-refresh-error'
-                raise WorkerFailure(error_code, error_description)
+            if local_tree.has_filename('debian/patches/series'):
+                try:
+                    refresh_quilt_patches(local_tree, committer=self.committer)
+                except QuiltError as e:
+                    error_description = (
+                        "An error (%d) occurred refreshing quilt patches: "
+                        "%s%s" % (e.retcode, e.stderr, e.extra))
+                    error_code = 'quilt-refresh-error'
+                    raise WorkerFailure(error_code, error_description)
 
             report_context(upstream_version)
             metadata['old_upstream_version'] = old_upstream_version
