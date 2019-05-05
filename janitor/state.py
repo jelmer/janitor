@@ -356,7 +356,9 @@ SELECT
   description
 FROM run
 WHERE
-  (result_code = 'build-failed' OR result_code LIKE 'build-failed-stage-%')
+  (result_code = 'build-failed' OR
+   result_code LIKE 'build-failed-stage-%' OR
+   result_code LIKE 'build-%')
 """)
     return cur.fetchall()
 
