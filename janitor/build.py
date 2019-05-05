@@ -39,6 +39,43 @@ from silver_platter.debian import BuildFailedError
 from .trace import note
 
 
+class MissingChangesFile(Exception):
+    """Expected changes file was not written."""
+
+    def __init__(self, filename):
+        self.filename = filename
+
+
+class SbuildFailure(Exception):
+    """Sbuild failed to run."""
+
+    def __init__(self, stage, description):
+        self.stage = stage
+        self.description = description
+
+
+def worker_failure_from_sbuild_log(build_log_path):
+    paragraphs = {}
+    with open(build_log_path, 'r') as f:
+        for title, offsets, lines in parse_sbuild_log(f):
+            paragraphs[title] = lines
+    failed_stage = find_failed_stage(
+        paragraphs.get('Summary', []))
+    if failed_stage == 'run-post-build-commands':
+        # We used to run autopkgtest as the only post build
+        # command.
+        failed_stage = 'autopkgtest'
+    description = None
+    if failed_stage == 'build':
+        offset, description = find_build_failure_description(
+            paragraphs.get('Build', []))
+    if description is None and failed_stage is not None:
+        description = 'build failed stage %s' % failed_stage
+    if description is None:
+        description = 'build failed'
+    return SbuildFailure(failed_stage, description)
+
+
 def add_dummy_changelog_entry(directory, suffix, suite, message):
     """Add a dummy changelog entry to a package.
 
@@ -78,6 +115,30 @@ def build(local_tree, outf, build_command='build', result_dir=None,
             env=env)
     except subprocess.CalledProcessError:
         raise BuildFailedError()
+
+
+def build_incrementally(
+        local_tree, suffix, build_suite, output_directory, build_command,
+        build_changelog_entry='Build for debian-janitor apt repository.'):
+    add_dummy_changelog_entry(
+        local_tree.basedir, suffix,
+        build_suite, build_changelog_entry)
+    build_log_path = os.path.join(output_directory, 'build.log')
+    try:
+        with open(build_log_path, 'w') as f:
+            build(local_tree, outf=f, build_command=build_command,
+                  result_dir=output_directory,
+                  distribution=build_suite)
+    except BuildFailedError:
+        raise worker_failure_from_sbuild_log(build_log_path)
+
+    (cl_package, cl_version) = get_latest_changelog_version(local_tree)
+    changes_name = changes_filename(
+        cl_package, cl_version, get_build_architecture())
+    changes_path = os.path.join(output_directory, changes_name)
+    if not os.path.exists(changes_path):
+        raise MissingChangesFile(changes_name)
+    return changes_name
 
 
 def parse_sbuild_log(f):

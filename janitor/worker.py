@@ -25,7 +25,6 @@ import subprocess
 from breezy.config import GlobalStack
 
 from silver_platter.debian import (
-    BuildFailedError,
     MissingUpstreamTarball,
     Workspace,
 )
@@ -62,18 +61,12 @@ from silver_platter.utils import (
 )
 
 from .build import (
-    build,
-    add_dummy_changelog_entry,
-    get_latest_changelog_version,
-    changes_filename,
-    get_build_architecture,
-    find_build_failure_description,
-    parse_sbuild_log,
-    find_failed_stage,
+    build_incrementally,
+    MissingChangesFile,
+    SbuildFailure,
 )
 from .trace import (
     note,
-    warning,
 )
 
 
@@ -284,32 +277,6 @@ class WorkerFailure(Exception):
         self.description = description
 
 
-def worker_failure_from_sbuild_log(build_log_path):
-    paragraphs = {}
-    with open(build_log_path, 'r') as f:
-        for title, offsets, lines in parse_sbuild_log(f):
-            paragraphs[title] = lines
-    failed_stage = find_failed_stage(
-        paragraphs.get('Summary', []))
-    if failed_stage == 'run-post-build-commands':
-        # We used to run autopkgtest as the only post build
-        # command.
-        failed_stage = 'autopkgtest'
-    description = None
-    if failed_stage == 'build':
-        offset, description = find_build_failure_description(
-            paragraphs.get('Build', []))
-    if description is None and failed_stage is not None:
-        description = 'build failed stage %s' % failed_stage
-    if description is None:
-        description = 'build failed'
-    if failed_stage is not None:
-        code = 'build-failed-stage-%s' % failed_stage
-    else:
-        code = 'build-failed'
-    return WorkerFailure(code, description)
-
-
 debian_info = distro_info.DebianDistroInfo()
 
 
@@ -388,33 +355,26 @@ def process_package(vcs_url, env, command, output_directory,
             raise WorkerFailure('post-check-failed', str(e))
 
         if build_command:
-            add_dummy_changelog_entry(
-                ws.local_tree.basedir, '~' + subworker.build_version_suffix,
-                build_suite, 'Build for debian-janitor apt repository.')
-            build_log_path = os.path.join(output_directory, 'build.log')
             try:
-                with open(build_log_path, 'w') as f:
-                    build(ws.local_tree, outf=f, build_command=build_command,
-                          result_dir=output_directory,
-                          distribution=build_suite)
-            except BuildFailedError:
-                raise worker_failure_from_sbuild_log(build_log_path)
+                changes_name = build_incrementally(
+                    ws.local_tree, '~' + subworker.build_version_suffix,
+                    build_suite, output_directory,
+                    build_command)
             except MissingUpstreamTarball:
                 raise WorkerFailure(
                     'build-missing-upstream-source',
                     'unable to find upstream source')
-
-            (cl_package, cl_version) = get_latest_changelog_version(
-                ws.local_tree)
-            changes_name = changes_filename(
-                cl_package, cl_version, get_build_architecture())
-            changes_path = os.path.join(
-                output_directory, changes_name)
-            if not os.path.exists(changes_path):
+            except MissingChangesFile as e:
                 raise WorkerFailure(
                     'build-missing-changes',
-                    'Expected changes path %s does not exist.' % changes_path)
-            note('Built %s', changes_path)
+                    'Expected changes path %s does not exist.' % e.filename)
+            except SbuildFailure as e:
+                if e.stage is not None:
+                    code = 'build-failed-stage-%s' % e.stage
+                else:
+                    code = 'build-failed'
+                raise WorkerFailure(code, e.description)
+            note('Built %s', changes_name)
         else:
             build_suite = None
             changes_name = None
