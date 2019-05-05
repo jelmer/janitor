@@ -271,9 +271,14 @@ ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
     conn.commit()
 
 
-def queue_length():
+def queue_length(minimum_priority=None):
     cur = conn.cursor()
-    cur.execute('SELECT COUNT(*) FROM queue')
+    args = []
+    query = 'SELECT COUNT(*) FROM queue'
+    if minimum_priority is not None:
+        query += ' WHERE priority >= %s'
+        args.append(minimum_priority)
+    cur.execute(query, args)
     return cur.fetchone()[0]
 
 

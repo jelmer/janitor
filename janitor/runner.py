@@ -77,6 +77,9 @@ packages_processed_count = Counter(
     'package_count', 'Number of packages processed.')
 queue_length = Gauge(
     'queue_length', 'Number of items in the queue.')
+positive_queue_length = Gauge(
+    'positive_queue_length',
+    'Number of items in the queue with priority >= 0')
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
@@ -532,6 +535,7 @@ async def process_one(
 async def export_queue_length():
     while True:
         queue_length.set(state.queue_length())
+        positive_queue_length.set(state.queue_length(0))
         await asyncio.sleep(60)
 
 
