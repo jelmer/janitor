@@ -385,7 +385,6 @@ def process_package(vcs_url, env, command, output_directory,
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
         except PostCheckFailed as e:
-            note('%s: post-check failed')
             raise WorkerFailure('post-check-failed', str(e))
 
         if build_command:
@@ -412,13 +411,10 @@ def process_package(vcs_url, env, command, output_directory,
             changes_path = os.path.join(
                 output_directory, changes_name)
             if not os.path.exists(changes_path):
-                warning('Expected changes path %s does not exist.',
-                        changes_path)
-                build_suite = None
-                changes_name = None
-                cl_version = None
-            else:
-                note('Built %s', changes_path)
+                raise WorkerFailure(
+                    'build-missing-changes',
+                    'Expected changes path %s does not exist.' % changes_path)
+            note('Built %s', changes_path)
         else:
             build_suite = None
             changes_name = None
