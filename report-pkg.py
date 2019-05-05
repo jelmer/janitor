@@ -41,11 +41,10 @@ def include_build_log_failure(f, log_path, length):
     offsets = {}
     linecount = 0
     paragraphs = {}
-    line_count = 0
     with open(log_path, 'r') as logf:
         for title, offset, lines in parse_sbuild_log(logf):
             paragraphs[title] = lines
-            line_count = max(offset[1], line_count)
+            linecount = max(offset[1], linecount)
             offsets[title] = offset
     highlight_lines = []
     include_lines = None
