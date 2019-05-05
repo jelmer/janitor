@@ -202,7 +202,7 @@ compiled_build_failure_regexps = [
 
 
 def find_build_failure_description(lines):
-    OFFSET = 15
+    OFFSET = 20
     for i, line in enumerate(lines[-OFFSET:], 1):
         line = line.strip('\n')
         for regexp in compiled_build_failure_regexps:
