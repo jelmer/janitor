@@ -51,16 +51,23 @@ def include_build_log_failure(f, log_path, length):
     highlight_lines = []
     include_lines = None
     failed_stage = find_failed_stage(paragraphs.get('summary', []))
-    if failed_stage is not None and failed_stage in offsets:
-        include_lines = (max(1, offsets[failed_stage][1]-length),
-                         offsets[failed_stage][1])
+    focus_section = {
+        'build': 'build',
+        'run-post-build-commands': 'post build commands',
+        'install-deps': 'install package build dependencies',
+    }.get(failed_stage)
+    if focus_section not in paragraphs:
+        focus_section = None
+    if focus_section:
+        include_lines = (max(1, offsets[focus_section][1]-length),
+                         offsets[focus_section][1])
     else:
         include_lines = (linecount-length, None)
-    if failed_stage == 'build':
+    if focus_section == 'build':
         offset, unused_line = find_build_failure_description(
-            paragraphs.get(failed_stage, []))
+            paragraphs.get(focus_section, []))
         if offset is not None:
-            highlight_lines = [offsets[failed_stage][0] + offset]
+            highlight_lines = [offsets[focus_section][0] + offset]
         # Strip off unuseful tail
         for i, line in enumerate(paragraphs.get('build', [])[-15:]):
             if line.startswith('Build finished at '):
