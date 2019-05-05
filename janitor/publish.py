@@ -106,8 +106,14 @@ def get_open_mps_per_maintainer():
     open_proposals = []
     for name, hoster_cls in hosters.items():
         for instance in hoster_cls.iter_instances():
-            note('Checking open merge proposals on %r...', instance)
-            open_proposals.extend(instance.iter_my_proposals(status='open'))
+            note('Checking merge proposals on %r...', instance)
+            for status in ['open', 'merged', 'closed']:
+                for mp in instance.iter_my_proposals(status=status):
+                    state.set_proposal_status(mp.url, status)
+                    merge_proposal_count.labels(status=status).inc()
+                    if status == 'open':
+                        open_proposals.append(mp)
+
 
     open_mps_per_maintainer = {}
     for proposal in open_proposals:
@@ -328,11 +334,12 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
         local_branch = open_branch(
             os.path.join(vcs_directory, 'bzr', pkg, branch_name))
     else:
-        raise AssertionError('can not find local branch')
+        raise PublishFailure(
+            'result-branch-not-found', 'can not find local branch')
 
-    if command[0] == 'new-upstream':
+    if command.startswith('new-upstream'):
         subrunner = NewUpstreamPublisher(command)
-    elif command[0] == 'lintian-brush':
+    elif command == 'lintian-brush':
         subrunner = LintianBrushPublisher(command)
     else:
         raise AssertionError('unknown command %r' % command)
@@ -397,12 +404,12 @@ def publish_pending(publisher, policy, vcs_directory, dry_run=False):
          subworker_result, branch_name, maintainer_email,
          main_branch_url, main_branch_revision) in state.iter_publish_ready():
         # TODO(jelmer): uploader_emails ??
-        uploader_emails = None
-        if command == ['new-upstream']:
+        uploader_emails = []
+        if command == 'new-upstream':
             policy_name = 'new_upstream_releases'
-        elif command == ['lintian-brush']:
+        elif command == 'lintian-brush':
             policy_name = 'lintian_brush'
-        elif command == ['new-upstream', '--snapshot']:
+        elif command == 'new-upstream --snapshot':
             policy_name = 'new_upstream_snapshots'
         else:
             raise AssertionError('unknown command %r' % command)
@@ -412,20 +419,22 @@ def publish_pending(publisher, policy, vcs_directory, dry_run=False):
             uploader_emails)
         if mode in ('build-only', 'skip'):
             continue
-        if state.already_published(main_branch_url, revision, mode):
+        if state.already_published(main_branch_url, branch_name, revision, mode):
             continue
+        note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
             proposal, branch_name = publish_one(
                 pkg, publisher, command, subworker_result,
                 main_branch_url, mode, log_id, maintainer_email,
-                vcs_directory, branch_name,
-                dry_run=dry_run,
-                possible_hosters=possible_hosters,
+                vcs_directory=vcs_directory, branch_name=branch_name,
+                dry_run=dry_run, possible_hosters=possible_hosters,
                 possible_transports=possible_transports)
         except PublishFailure as e:
             code = e.code
             description = e.description
             branch_name = None
+            proposal = None
+            note('Failed(%s): %s', code, description)
         else:
             code = 'success'
             description = 'Success'
@@ -433,16 +442,6 @@ def publish_pending(publisher, policy, vcs_directory, dry_run=False):
             pkg, branch_name, main_branch_revision,
             revision, mode, code, description,
             proposal.url if proposal else None)
-
-
-def update_proposal_status():
-    for name, hoster_cls in hosters.items():
-        for instance in hoster_cls.iter_instances():
-            note('Checking merge proposals on %r...', instance)
-            for status in ['open', 'merged', 'closed']:
-                for mp in instance.iter_my_proposals(status=status):
-                    state.set_proposal_status(mp.url, status)
-                    merge_proposal_count.labels(status=status).inc()
 
 
 def main(argv=None):
@@ -459,11 +458,15 @@ def main(argv=None):
         action="store_true", default=False)
     parser.add_argument(
         '--vcs-result-dir', type=str,
-        help='Directory to store VCS repositories in.')
+        help='Directory to store VCS repositories in.',
+        default='vcs')
     parser.add_argument(
         "--policy",
         help="Policy file to read.", type=str,
         default='policy.conf')
+    parser.add_argument(
+        '--prometheus', type=str,
+        help='Prometheus push gateway to export to.')
 
     args = parser.parse_args()
 
@@ -474,9 +477,7 @@ def main(argv=None):
 
     publish_pending(
         publisher, policy, dry_run=args.dry_run,
-        vcs_directory=args.vcs_directory)
-
-    update_proposal_status()
+        vcs_directory=args.vcs_result_dir)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
