@@ -235,7 +235,8 @@ def schedule_udd(policy, propose_addon_only, packages, available_fixers,
             command, priority)
 
 
-def determine_priority(package, command, mode, context=None, priority=0):
+def determine_priority(package, command, mode, previous_runs, context=None,
+                       priority=0):
     # Priority increase for packages that have never been processed before
     FIRST_RUN_BONUS = 100
 
@@ -249,8 +250,6 @@ def determine_priority(package, command, mode, context=None, priority=0):
     NO_CONTEXT_REFRESH_FREQUENCY = 14
     NO_CONTEXT_REFRESH_BONUS = 50
 
-    previous_runs = list(
-        state.iter_previous_runs(package, command))
     if previous_runs:
         (last_start_time, last_duration, last_context,
          last_main_branch_revision, last_result_code) = (
@@ -276,11 +275,20 @@ def determine_priority(package, command, mode, context=None, priority=0):
 
 def add_to_queue(todo, dry_run=False, default_priority=0):
     for vcs_url, mode, env, command, priority in todo:
+        previous_runs = list(state.iter_previous_runs(package, command))
         priority = default_priority + priority + determine_priority(
-            env['PACKAGE'], command, mode, env.get('CONTEXT'))
+            env['PACKAGE'], command, mode, previous_runs, env.get('CONTEXT'))
+        estimated_duration = None
+        if previous_runs:
+            for (last_start_time, last_duration, last_context,
+                 last_main_branch_revision, last_result_code) in previous_runs:
+                if last_result_code == 'success':
+                    estimated_duration = last_duration
+                    break
         if not dry_run:
             added = state.add_to_queue(
-                vcs_url, mode, env, command, priority=priority)
+                vcs_url, mode, env, command, priority=priority,
+                estimated_duration=estimated_duration)
         else:
             added = True
         if added:

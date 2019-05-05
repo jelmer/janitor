@@ -59,5 +59,6 @@ CREATE TABLE IF NOT EXISTS queue (
    foreign key (package) references package(name),
    -- Some subworker-specific indication of what we are expecting to do.
    context text,
+   estimated_duration integer,
    unique(package, command, mode)
 );
