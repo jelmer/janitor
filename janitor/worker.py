@@ -39,6 +39,7 @@ from silver_platter.debian.lintian import (
 from silver_platter.debian.upstream import (
     check_quilt_patches_apply,
     merge_upstream,
+    refresh_quilt_patches,
     NewUpstreamMissing,
     UpstreamAlreadyImported,
     UpstreamAlreadyMerged,
@@ -237,11 +238,20 @@ class NewUpstreamWorker(SubWorker):
                     'Package is native; unable to merge upstream.')
                 error_code = 'native-package'
                 raise WorkerFailure(error_code, error_description)
-            else:
-                report_context(upstream_version)
-                metadata['old_upstream_version'] = old_upstream_version
-                metadata['upstream_version'] = upstream_version
-                return "Merged new upstream version %s" % upstream_version
+
+            try:
+                refresh_quilt_patches(local_tree, committer=committer)
+            except QuiltError as e:
+                error_description = (
+                    "An error (%d) occurred refreshing quilt patches: "
+                    "%s%s" % (e.retcode, e.stderr, e.extra))
+                error_code = 'quilt-refresh-error'
+                raise WorkerFailure(error_code, error_description)
+
+            report_context(upstream_version)
+            metadata['old_upstream_version'] = old_upstream_version
+            metadata['upstream_version'] = upstream_version
+            return "Merged new upstream version %s" % upstream_version
 
     def build_suite(self):
         if self.args.snapshot:
