@@ -438,7 +438,8 @@ async def process_one(
                 code='worker-failure',
                 description='Worker exited with return code %d' % retcode)
 
-        for name in [n.endswith('.log') for n in os.listdir(output_directory)]:
+        for name in [
+                n for n in os.listdir(output_directory) if n.endswith('.log')]:
             src_build_log_path = os.path.join(output_directory, name)
             dest_build_log_path = os.path.join(log_dir, pkg, log_id)
             os.makedirs(dest_build_log_path, exist_ok=True)
