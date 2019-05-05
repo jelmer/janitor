@@ -39,9 +39,9 @@ CREATE TABLE IF NOT EXISTS run (
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only');
 CREATE TABLE IF NOT EXISTS publish (
    package text not null,
-   branch_name text not null,
-   main_branch_revision text not null,
-   revision text not null,
+   branch_name text,
+   main_branch_revision text,
+   revision text,
    mode publish_mode not null,
    merge_proposal_url text,
    result_code text,

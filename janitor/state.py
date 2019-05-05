@@ -374,12 +374,12 @@ def update_run_result(log_id, code, description):
     conn.commit()
 
 
-def already_published(main_branch_url, revision, mode):
+def already_published(package, branch_name, revision, mode):
     cur = conn.cursor()
     cur.execute("""\
 SELECT * FROM publish
-WHERE mode = %s AND revision = %s AND main_branch_url = %s
-""", (main_branch_url, revision, mode))
+WHERE mode = %s AND revision = %s AND package = %s AND branch_name = %s
+""", (mode, revision, package, branch_name))
     if cur.fetchone():
         return True
     return False
@@ -406,7 +406,7 @@ SELECT DISTINCT ON (package, command)
 FROM
   run
 LEFT JOIN package ON package.name = run.package
-WHERE result_code = 'success'
+WHERE result_code = 'success' AND result IS NOT NULL
 ORDER BY
   package,
   command,
