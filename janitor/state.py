@@ -78,12 +78,12 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         "finish_time, package, context, merge_proposal_url, build_version, "
         "build_distribution, main_branch_revision, branch_name, revision, "
         "result) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", (
-            run_id, ' '.join(command), description, result_code,
-            start_time, finish_time, name, context, merge_proposal_url,
-            str(build_version) if build_version else None, build_distribution,
-            main_branch_revision, branch_name, revision,
-            Json(subworker_result) if subworker_result else None))
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        (run_id, ' '.join(command), description, result_code,
+         start_time, finish_time, name, context, merge_proposal_url,
+         str(build_version) if build_version else None, build_distribution,
+         main_branch_revision, branch_name, revision,
+         Json(subworker_result) if subworker_result else None))
     conn.commit()
 
 
@@ -259,7 +259,7 @@ def add_to_queue(vcs_url, mode, env, command, priority=0,
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "estimated_duration = EXCLUDED.estimated_duration "
         "WHERE queue.priority <= EXCLUDED.priority", (
-            branch_url, package, ' '.join(command), committer, mode,
+            vcs_url, package, ' '.join(command), committer, mode,
             priority, context, estimated_duration))
     conn.commit()
     return True

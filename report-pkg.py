@@ -64,7 +64,7 @@ def include_build_log_failure(f, log_path, length):
     else:
         include_lines = (linecount-length, None)
     if focus_section == 'build':
-        offset, unused_line = find_build_failure_description(
+        offset, unused_line, unused_err = find_build_failure_description(
             paragraphs.get(focus_section, []))
         if offset is not None:
             highlight_lines = [offsets[focus_section][0] + offset]

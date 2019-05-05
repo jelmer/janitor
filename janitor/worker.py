@@ -373,7 +373,9 @@ def process_package(vcs_url, env, command, output_directory,
                     'build-missing-changes',
                     'Expected changes path %s does not exist.' % e.filename)
             except SbuildFailure as e:
-                if e.stage is not None:
+                if e.error is not None:
+                    code = '%s-%s' % (e.stage, e.error.kind)
+                elif e.stage is not None:
                     code = 'build-failed-stage-%s' % e.stage
                 else:
                     code = 'build-failed'

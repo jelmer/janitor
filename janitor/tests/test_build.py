@@ -15,15 +15,24 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.build import find_build_failure_description
+from janitor.build import (
+    find_build_failure_description,
+    MissingPython2Module,
+    )
 import unittest
 
 
 class FindBuildFailureDescriptionTests(unittest.TestCase):
 
-    def run_test(self, lines, lineno):
-        self.assertEqual(
-            (lineno, lines[lineno-1]), find_build_failure_description(lines))
+    def run_test(self, lines, lineno, err=None):
+        (offset, actual_line, actual_err) = find_build_failure_description(
+            lines)
+        self.assertEqual(actual_line, lines[lineno-1])
+        self.assertEqual(lineno, offset)
+        if err:
+            self.assertEqual(actual_err, err)
+        else:
+            self.assertIs(None, actual_err)
 
     def test_make_missing_rule(self):
         self.run_test([
@@ -48,12 +57,16 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
 
     def test_pytest_import(self):
         self.run_test([
-            'E   ImportError: cannot import name cmod'], 1)
+            'E   ImportError: cannot import name cmod'], 1,
+            MissingPython2Module('cmod'))
         self.run_test([
-            'E   ImportError: No module named mock'], 1)
+            'E   ImportError: No module named mock'], 1,
+            MissingPython2Module('mock'))
 
     def test_python2_import(self):
-        self.run_test(['ImportError: No module named pytz'], 1)
+        self.run_test(
+                ['ImportError: No module named pytz'], 1,
+                MissingPython2Module('pytz'))
 
     def test_python3_import(self):
         self.run_test([
