@@ -14,7 +14,7 @@ At the moment, Debian Janitor is available as an opt-in service.
    :hidden:
 
    apt
-   history
+   cupboard/history
    pkg
    status
    credentials
