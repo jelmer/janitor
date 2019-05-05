@@ -50,14 +50,15 @@ def include_build_log_failure(f, log_path, length):
     include_lines = None
     failed_stage = find_failed_stage(paragraphs.get('summary', []))
     if failed_stage is not None and failed_stage in offsets:
-        include_lines = (max(1, offsets[failed_stage][1]-length))
+        include_lines = (max(1, offsets[failed_stage][1]-length),
+                         offsets[failed_stage[1])
     else:
         include_lines = (linecount-length, None)
     if failed_stage == 'build':
         offset, unused_line = find_build_failure_description(
             paragraphs.get(failed_stage, []))
         if offset is not None:
-            highlight_lines = [offsets[failed_stage][1] + offset]
+            highlight_lines = [offsets[failed_stage][0] + offset]
 
     include_console_log(
         f, log_path, include_lines=include_lines,
