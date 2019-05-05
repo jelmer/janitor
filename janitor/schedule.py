@@ -288,7 +288,7 @@ def add_to_queue(todo, dry_run=False, default_priority=0):
                     break
         if not dry_run:
             added = state.add_to_queue(
-                vcs_url, mode, env, command, priority=priority,
+                vcs_url, env, command, priority=priority,
                 estimated_duration=estimated_duration)
         else:
             added = True
