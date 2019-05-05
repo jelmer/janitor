@@ -43,15 +43,17 @@ def include_build_log_failure(f, log_path, length):
     paragraphs = {}
     with open(log_path, 'r') as logf:
         for title, offset, lines in parse_sbuild_log(logf):
-            paragraphs[title.lower()] = lines
+            if title is not None:
+                title = title.lower()
+            paragraphs[title] = lines
             linecount = max(offset[1], linecount)
-            offsets[title.lower()] = offset
+            offsets[title] = offset
     highlight_lines = []
     include_lines = None
     failed_stage = find_failed_stage(paragraphs.get('summary', []))
     if failed_stage is not None and failed_stage in offsets:
         include_lines = (max(1, offsets[failed_stage][1]-length),
-                         offsets[failed_stage[1])
+                         offsets[failed_stage][1])
     else:
         include_lines = (linecount-length, None)
     if failed_stage == 'build':
@@ -59,6 +61,11 @@ def include_build_log_failure(f, log_path, length):
             paragraphs.get(failed_stage, []))
         if offset is not None:
             highlight_lines = [offsets[failed_stage][0] + offset]
+        # Strip off unuseful tail
+        for i, line in enumerate(paragraphs.get('build', [])[-15:]):
+            if line.startswith('Build finished at '):
+                include_lines = (max(1, include_lines[0]-i-1),
+                                 max(1, include_lines[1]-i-1))
 
     include_console_log(
         f, log_path, include_lines=include_lines,
