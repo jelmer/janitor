@@ -438,13 +438,11 @@ async def process_one(
                 code='worker-failure',
                 description='Worker exited with return code %d' % retcode)
 
-        for name in ['build.log', 'worker.log', 'result.json']:
+        for name in [n.endswith('.log') for n in os.listdir(output_directory)]:
             src_build_log_path = os.path.join(output_directory, name)
-            if os.path.exists(src_build_log_path):
-                dest_build_log_path = os.path.join(
-                    log_dir, pkg, log_id)
-                os.makedirs(dest_build_log_path, exist_ok=True)
-                shutil.copy(src_build_log_path, dest_build_log_path)
+            dest_build_log_path = os.path.join(log_dir, pkg, log_id)
+            os.makedirs(dest_build_log_path, exist_ok=True)
+            shutil.copy(src_build_log_path, dest_build_log_path)
 
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
@@ -492,11 +490,23 @@ async def process_one(
                     dry_run=dry_run, log_id=log_id,
                     existing_proposal=existing_proposal)
             except PublishFailure as e:
+                store_publish(
+                    pkg, branch_name, worker_result.main_branch_revision,
+                    result.revision, mode, e.code,
+                    e.description,
+                    result.proposal.url if result.proposal else None)
+
                 return JanitorResult(
                     pkg, log_id,
                     code=e.code,
                     description=e.description,
                     worker_result=worker_result)
+            else:
+                store_publish(
+                    pkg, branch_name, worker_result.main_branch_revision,
+                    result.revision, mode, 'success',
+                    'Success',
+                    result.proposal.url if result.proposal else None)
 
         if vcs_result_dir:
             copy_vcs_dir(

@@ -82,6 +82,18 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     conn.commit()
 
 
+def store_publish(package, branch_name, main_branch_revision, revision, mode,
+                  result_code, description, merge_proposal_url=None):
+    cur = conn.cursor()
+    cur.execute("""
+INSERT INTO publish (package, branch_name, main_branch_revision, revision, mode,
+result_code, description, merge_proposal_url) values (%s, %s, %s, %s, %s, %s, %s, %s)
+""",
+        (package, branch_name, main_branch_revision, revision, mode,
+         result_code, description, merge_proposal_url))
+    conn.commit()
+
+
 def iter_packages():
     cur = conn.cursor()
     cur.execute("""
