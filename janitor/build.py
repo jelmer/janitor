@@ -187,25 +187,31 @@ def find_failed_stage(lines):
         return value.strip()
 
 
-class MissingPython2Module(object):
+class MissingPythonModule(object):
 
-    kind = 'missing-python2-dep'
+    kind = 'missing-python-dep'
 
-    def __init__(self, module, minimum_version=None):
+    def __init__(self, module, python_version=None, minimum_version=None):
         self.module = module
+        self.python_version = python_version
         self.minimum_version = minimum_version
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and \
             other.module == self.module and \
+            other.python_version == self.python_version and \
             other.minimum_version == self.minimum_version
 
     def __str__(self):
-        if self.minimum_version:
-            return "Missing python 2 module: %s (>= %s)" % (
-                self.module, self.minimum_version)
+        if self.python_version:
+            ret = "Missing python %d module: " % self.python_version
         else:
-            return "Missing python 2 module: %s" % self.module
+            ret = "Missing python module: "
+        ret += self.module
+        if self.minimum_version:
+            return ret + " (>= %s)" % self.minimum_version
+        else:
+            return ret
 
     def __repr__(self):
         return "%s(%r, minimum_version=%r)" % (
@@ -213,16 +219,20 @@ class MissingPython2Module(object):
 
 
 def python2_module_not_found(m):
-    return MissingPython2Module(m.group(1))
+    return MissingPythonModule(m.group(1), python_version=2)
+
+
+def python3_module_not_found(m):
+    return MissingPythonModule(m.group(1), python_version=3)
 
 
 def python2_reqs_not_found(m):
     expr = m.group(2)
     if '>=' in expr:
         pkg, minimum = expr.split('>=')
-        return MissingPython2Module(pkg.strip(), minimum.strip())
+        return MissingPythonModule(pkg.strip(), 2, minimum.strip())
     if ' ' not in expr:
-        return MissingPython2Module(expr)
+        return MissingPythonModule(expr, 2)
     # Hmm
     return None
 
@@ -251,6 +261,28 @@ def file_not_found(m):
     return None
 
 
+class MissingGoPackage(object):
+
+    kind = 'missing-go-package'
+
+    def __init__(self, package):
+        self.package = package
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            self.package == other.package
+
+    def __str__(self):
+        return "Missing Go package: %s" % self.package
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.package)
+
+
+def missing_go_package(m):
+    return MissingGoPackage(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -261,8 +293,9 @@ build_failure_regexps = [
         r'for Requirement.parse\(\'(.*)\'\)', python2_reqs_not_found),
     ('E   ImportError: cannot import name (.*)', python2_module_not_found),
     ('E   ImportError: No module named (.*)', python2_module_not_found),
-    ('ModuleNotFoundError: No module named \'(.*)\'', None),
-    ('.*: cannot find package "(.*)" in any of:', None),
+    ('ModuleNotFoundError: No module named \'(.*)\'',
+     python3_module_not_found),
+    ('.*: cannot find package "(.*)" in any of:', missing_go_package),
     ('ImportError: No module named (.*)', python2_module_not_found),
 ]
 
