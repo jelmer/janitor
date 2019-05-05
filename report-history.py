@@ -32,15 +32,14 @@ for (run_id, times, command, description, package, proposal_url,
         branch_name) in state.iter_runs(limit=args.limit):
     row = [
         '`%s </pkg/%s>`_' % (package, package),
-        '`%s </pkg/%s/%s/>`_' % (
-            command, package, run_id),
+        command,
         '%s' % format_duration(times[1] - times[0]),
         ]
     if proposal_url:
         row.append('%s `Merge proposal <%s>`_\n' %
                    (result_code, proposal_url))
     else:
-        row.append(result_code or '')
+        row.append('`%s </pkg/%s/%s/>`_' % (result_code, package, run_id))
     data.append(row)
 
 
