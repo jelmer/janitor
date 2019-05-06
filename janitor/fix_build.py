@@ -149,21 +149,6 @@ def get_package_for_python_module(module, python_version):
     return get_package_for_paths(paths, regex)
 
 
-def add_build_dependency_for_path(
-        tree, path, minimum_version=None,
-        committer=None, regex=False):
-    if not isinstance(path, list):
-        paths = [path]
-    else:
-        paths = path
-    package = get_package_for_paths(paths)
-    if package is None:
-        return False
-    return add_build_dependency(
-            tree, package, minimum_version=minimum_version,
-            committer=committer)
-
-
 def fix_missing_python_module(tree, error, committer=None):
     with tree.get_file('debian/control') as f:
         control = Deb822(f)
@@ -209,9 +194,14 @@ def fix_missing_python_module(tree, error, committer=None):
 
 
 def fix_missing_c_header(tree, error, committer=None):
-    return add_build_dependency_for_path(
-        tree, [os.path.join('/usr/include', error.header)],
-        committer=committer, regex=True)
+    package = get_package_for_paths(
+        [os.path.join('/usr/include', error.header)], regex=False)
+    if package is None:
+        package = get_package_for_paths(
+            [os.path.join('/usr/include', '.*', error.header)], regex=True)
+    if package is None:
+        return False
+    return add_build_dependency(tree, package, committer=committer)
 
 
 FIXERS = [
