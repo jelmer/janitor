@@ -32,6 +32,7 @@ from lintian_brush.control import (
     )
 from silver_platter.debian import (
     debcommit,
+    DEFAULT_BUILDER,
     )
 
 from .build import attempt_build
@@ -107,9 +108,11 @@ def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser('janitor.fix_build')
     parser.add_argument('--suffix', type=str,
-                        help="Suffix to use for test builds.")
+                        help="Suffix to use for test builds.",
+                        default='fixbuild1')
     parser.add_argument('--suite', type=str,
-                        help="Suite to target.")
+                        help="Suite to target.",
+                        default='unstable')
     parser.add_argument('--output-directory', type=str,
                         help="Output directory.", default=None)
     parser.add_argument('--committer', type=str,
@@ -118,7 +121,7 @@ def main(argv=None):
     parser.add_argument(
         '--build-command', type=str,
         help='Build command',
-        default='sbuild -A -s -v -d$DISTRIBUTION')
+        default=(DEFAULT_BUILDER + ' -A -s -v -d$DISTRIBUTION'))
 
     args = parser.parse_args()
     from breezy.workingtree import WorkingTree

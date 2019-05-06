@@ -34,6 +34,7 @@ from breezy.plugins.debian.util import (
     )
 from silver_platter.debian import (
     BuildFailedError,
+    DEFAULT_BUILDER,
     )
 
 from .sbuild_log import (
@@ -72,7 +73,7 @@ def get_latest_changelog_version(local_tree):
         return cl.package, cl.version
 
 
-def build(local_tree, outf, build_command='sbuild', result_dir=None,
+def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
           distribution=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if result_dir:
