@@ -240,7 +240,7 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
 
     def get_popcon_score(self, package):
         cursor = self._conn.cursor()
-        query = "SELECT insts FROM sources_popcon WHERE name = ?"
+        query = "SELECT insts FROM sources_popcon WHERE name = %s"
         cursor.execute(query, (package,))
         row = cursor.fetchone()
         if row:
@@ -250,9 +250,9 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
     def binary_package_exists(self, package, suite=None):
         cursor = self._conn.cursor()
         args = [package]
-        query = "SELECT package FROM packages WHERE package = ?"
+        query = "SELECT package FROM packages WHERE package = %s"
         if suite:
-            query += " AND release = ?"
+            query += " AND release = %s"
             args.append(suite)
         cursor.execute(query, args)
         return (cursor.fetchone() is not None)
