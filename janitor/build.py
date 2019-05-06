@@ -55,22 +55,32 @@ class SbuildFailure(Exception):
         self.error = error
 
 
+SBUILD_FOCUS_SECTION = {
+    'build': 'build',
+    'run-post-build-commands': 'post build commands',
+    'install-deps': 'install package build dependencies',
+}
+
+
 def worker_failure_from_sbuild_log(build_log_path):
     paragraphs = {}
     with open(build_log_path, 'r') as f:
         for title, offsets, lines in parse_sbuild_log(f):
+            if title is not None:
+                title = title.lower()
             paragraphs[title] = lines
     failed_stage = find_failed_stage(
-        paragraphs.get('Summary', []))
+        paragraphs.get('summary', []))
+    focus_section = SBUILD_FOCUS_SECTION.get(failed_stage)
     if failed_stage == 'run-post-build-commands':
         # We used to run autopkgtest as the only post build
         # command.
         failed_stage = 'autopkgtest'
     description = None
     error = None
-    if failed_stage == 'build':
+    if failed_stage in ('build', 'autopkgtest'):
         offset, description, error = find_build_failure_description(
-            paragraphs.get('Build', []))
+            paragraphs.get(focus_section, []))
         if error:
             description = str(error)
     if description is None and failed_stage is not None:

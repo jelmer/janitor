@@ -14,6 +14,7 @@ from janitor.build import (
     parse_sbuild_log,
     find_failed_stage,
     find_build_failure_description,
+    SBUILD_FOCUS_SECTION,
 )  # noqa: E402
 from janitor.site.rst import (
     format_duration,
@@ -51,11 +52,7 @@ def include_build_log_failure(f, log_path, length):
     highlight_lines = []
     include_lines = None
     failed_stage = find_failed_stage(paragraphs.get('summary', []))
-    focus_section = {
-        'build': 'build',
-        'run-post-build-commands': 'post build commands',
-        'install-deps': 'install package build dependencies',
-    }.get(failed_stage)
+    focus_section = SBUILD_FOCUS_SECTION.get(failed_stage)
     if focus_section not in paragraphs:
         focus_section = None
     if focus_section:
