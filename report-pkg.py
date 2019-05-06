@@ -11,6 +11,8 @@ from janitor import state  # noqa: E402
 from janitor.build import (
     changes_filename,
     get_build_architecture,
+)  # noqa: E402
+from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
     find_build_failure_description,

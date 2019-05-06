@@ -15,11 +15,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.build import (
+from janitor.sbuild_log import (
     find_build_failure_description,
+    MissingCHeader,
     MissingPythonModule,
     MissingGoPackage,
     MissingFile,
+    MissingNodeModule,
     )
 import unittest
 
@@ -92,3 +94,14 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'src/github.com/vuls/config/config.go:30:2: cannot find package '
             '"golang.org/x/xerrors" in any of:'], 1,
             MissingGoPackage('golang.org/x/xerrors'))
+
+    def test_c_header_missing(self):
+        self.run_test([
+            'cdhit-common.h:39:9: fatal error: zlib.h: No such file '
+            'or directory'], 1,
+            MissingCHeader('zlib.h'))
+
+    def test_node_module_missing(self):
+        self.run_test([
+            'Error: Cannot find module \'tape\''], 1,
+            MissingNodeModule('tape'))
