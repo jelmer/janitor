@@ -40,6 +40,7 @@ from .sbuild_log import (
     MissingPythonModule,
     SbuildFailure,
     )
+from .udd import UDD
 
 
 def add_build_dependency(tree, package, minimum_version=None,
@@ -74,9 +75,33 @@ def add_build_dependency(tree, package, minimum_version=None,
         return True
 
 
+def add_build_dependency_options(
+        tree, package_candidates, minimum_version=None,
+        committer=None):
+    udd = UDD.public_udd_mirror()
+    package = None
+    for candidate in package_candidates:
+        # TODO(jelmer): Check if this exists in the archive
+        if udd.binary_package_exists(candidate):
+            package = candidate
+            break
+    else:
+        return False
+    return add_build_dependency(
+            tree, package, minimum_version=minimum_version,
+            committer=committer)
+
+
 def resolve_error(tree, error, committer=None):
     if isinstance(error, MissingPythonModule):
         if error.python_version == 2:
+            candidates = [
+                "python-%s" % (
+                    error.module.split('.')[:i]
+                    for i in range(1, error.module.count('.')))]
+            if error.module.startswith('py'):
+                candidates.append('python-%s' % error.module[2:])
+            candidates.append(error.module)
             # Check if python-X, X or python-X.lstrip('py') exists
             return add_build_dependency(
                 tree, 'python-%s' % error.module, error.minimum_version,

@@ -246,3 +246,13 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
         if row:
             return row[0]
         return None
+
+    def binary_package_exists(self, package, suite=None):
+        cursor = self._conn.cursor()
+        args = [package]
+        query = "SELECT package FROM packages WHERE package = ?"
+        if suite:
+            query += " AND release = ?"
+            args.append(suite)
+        cursor.execute(query, args)
+        return (cursor.fetchone() is not None)
