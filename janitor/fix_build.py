@@ -167,30 +167,28 @@ def fix_missing_python_module(tree, error, committer=None):
     pypy_pkg = get_package_for_python_module(error.module, 'pypy')
     py2_pkg = get_package_for_python_module(error.module, 'python2')
     py3_pkg = get_package_for_python_module(error.module, 'python3')
+
+    extra_build_deps = []
     if error.python_version == 2:
-        ret = True
         if has_pypy_build_deps:
-            ret = ret and add_build_dependency(
-                tree, pypy_pkg, error.minimum_version, committer=committer)
+            extra_build_deps.append(pypy_pkg)
         if has_cpy2_build_deps or default:
-            ret = ret and add_build_dependency(
-                tree, py2_pkg, error.minimum_version, committer=committer)
-        return ret
+            extra_build_deps.append(py2_pkg)
     elif error.python_version == 3:
-        return add_build_dependency(
-            tree, py3_pkg, error.minimum_version, committer=committer)
+        extra_build_deps.append(py3_pkg)
     else:
-        ret = True
         if has_cpy3_build_deps or default:
-            ret = ret and add_build_dependency(
-                tree, py3_pkg, error.minimum_version, committer=committer)
+            extra_build_deps(py3_pkg)
         if has_cpy2_build_deps or default:
-            ret = ret and add_build_dependency(
-                tree, py2_pkg, error.minimum_version, committer=committer)
+            extra_build_deps(py2_pkg)
         if has_pypy_build_deps:
-            ret = ret and add_build_dependency(
-                tree, pypy_pkg, error.minimum_version, committer=committer)
-        return ret
+            extra_build_deps.append(pypy_pkg)
+
+    for dep_pkg in extra_build_deps:
+        if not add_build_dependency(
+                tree, dep_pkg, error.minimum_version, committer=committer):
+            return False
+    return True
 
 
 def fix_missing_c_header(tree, error, committer=None):
