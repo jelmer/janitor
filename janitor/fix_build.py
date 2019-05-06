@@ -23,6 +23,11 @@ import os
 import subprocess
 import sys
 
+from debian.deb822 import (
+    Deb822,
+    PkgRelation,
+    )
+
 from breezy.commit import PointlessCommit
 from lintian_brush import reset_tree
 from lintian_brush.control import (
@@ -41,7 +46,7 @@ from .sbuild_log import (
     MissingCHeader,
     SbuildFailure,
     )
-from .trace import note, warning, show_error
+from .trace import note, warning
 
 
 DEFAULT_MAX_ITERATIONS = 10
@@ -116,37 +121,93 @@ def add_build_dependency_for_path(
             committer=committer)
 
 
-def resolve_error(tree, error, committer=None):
-    if isinstance(error, MissingPythonModule):
-        if error.python_version == 2:
-            paths = [
-                os.path.join(
-                    '/usr/lib/python2.*/dist-packages',
-                    error.module.replace('.', '/'),
-                    '__init__.py'),
-                os.path.join(
-                    '/usr/lib/python2.*/dist-packages',
-                    error.module.replace('.', '/') + '.py')]
-            return add_build_dependency_for_path(
-                tree, paths, error.minimum_version, committer=committer,
+def fix_missing_python_module(tree, error, committer=None):
+    with tree.get_file('debian/control') as f:
+        control = Deb822(f)
+    build_depends = PkgRelation.parse_relations(
+        control.get('Build-Depends', ''))
+    all_build_deps = set()
+    for or_deps in build_depends:
+        all_build_deps.update(or_dep['name'] for or_dep in or_deps)
+    has_pypy_build_deps = any(x.startswith('pypy') for x in all_build_deps)
+    has_cpy2_build_deps = any(x.startswith('python-') for x in all_build_deps)
+    has_cpy3_build_deps = any(x.startswith('python3-') for x in all_build_deps)
+    default = (not has_pypy_build_deps and
+               not has_cpy2_build_deps and
+               not has_cpy3_build_deps)
+    python2_paths = [
+        os.path.join(
+            '/usr/lib/python2.*/dist-packages',
+            error.module.replace('.', '/'),
+            '__init__.py'),
+        os.path.join(
+            '/usr/lib/python2.*/dist-packages',
+            error.module.replace('.', '/') + '.py')]
+    python3_paths = [
+        os.path.join(
+            '/usr/lib/python3.*/dist-packages',
+            error.module.replace('.', '/'),
+            '__init__.py'),
+        os.path.join(
+            '/usr/lib/python3.*/dist-packages',
+            error.module.replace('.', '/') + '.py')]
+    pypy2_paths = [
+        os.path.join(
+            '/usr/lib/pypy/dist-packages',
+            error.module.replace('.', '/'),
+            '__init__.py'),
+        os.path.join(
+            '/usr/lib/pypy/dist-packages',
+            error.module.replace('.', '/') + '.py')]
+    if error.python_version == 2:
+        ret = True
+        if has_pypy_build_deps:
+            ret = ret and add_build_dependency_for_path(
+                tree, pypy2_paths, error.minimum_version, committer=committer,
                 regex=True)
-        elif error.python_version == 3:
-            paths = [
-                os.path.join(
-                    '/usr/lib/python3.*/dist-packages',
-                    error.module.replace('.', '/'),
-                    '__init__.py'),
-                os.path.join(
-                    '/usr/lib/python3.*/dist-packages',
-                    error.module.replace('.', '/') + '.py')]
-            return add_build_dependency_for_path(
-                tree, paths, error.minimum_version, committer=committer,
-                regex=True)
-    elif isinstance(error, MissingCHeader):
+        if has_cpy2_build_deps or default:
+            ret = ret and add_build_dependency_for_path(
+                tree, python2_paths, error.minimum_version,
+                committer=committer, regex=True)
+        return ret
+    elif error.python_version == 3:
         return add_build_dependency_for_path(
-            tree, [os.path.join('/usr/include', error.header)],
-            committer=committer, regex=True)
+            tree, python3_paths, error.minimum_version, committer=committer,
+            regex=True)
+    else:
+        ret = True
+        if has_cpy3_build_deps or default:
+            ret = ret and add_build_dependency_for_path(
+                tree, python3_paths, error.minimum_version,
+                committer=committer, regex=True)
+        if has_cpy2_build_deps or default:
+            ret = ret and add_build_dependency_for_path(
+                tree, python2_paths, error.minimum_version,
+                committer=committer, regex=True)
+        if has_pypy_build_deps:
+            ret = ret and add_build_dependency_for_path(
+                tree, python2_paths, error.minimum_version,
+                committer=committer, regex=True)
+        return ret
 
+
+def fix_missing_c_header(tree, error, committer=None):
+    return add_build_dependency_for_path(
+        tree, [os.path.join('/usr/include', error.header)],
+        committer=committer, regex=True)
+
+
+FIXERS = [
+    (MissingPythonModule, fix_missing_python_module),
+    (MissingCHeader, fix_missing_c_header),
+]
+
+
+def resolve_error(tree, error, committer=None):
+    for error_cls, fixer in FIXERS:
+        if isinstance(error, error_cls):
+            return fixer(tree, error, committer)
+    warning('No fixer found for %r', error)
     return False
 
 
@@ -167,7 +228,7 @@ def build_incrementally(
                 raise
             if max_iterations is not None \
                     and len(fixed_errors) > max_iterations:
-                show_error('Last fix did not address the issue. Giving up.')
+                warning('Last fix did not address the issue. Giving up.')
                 raise
             reset_tree(local_tree)
             if not resolve_error(local_tree, e.error, committer=committer):
