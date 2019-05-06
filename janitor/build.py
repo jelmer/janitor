@@ -31,11 +31,13 @@ from breezy.plugins.debian.util import (
     changes_filename,
     get_build_architecture,
     )
+from silver_platter.debian import (
+    BuildFailedError,
+    )
 
-from silver_platter.debian import BuildFailedError
-
-
-from .sbuild_log import worker_failure_from_sbuild_log
+from .sbuild_log import (
+    worker_failure_from_sbuild_log,
+    )
 from .trace import note
 
 
@@ -68,7 +70,7 @@ def get_latest_changelog_version(local_tree):
         return cl.package, cl.version
 
 
-def build(local_tree, outf, build_command='build', result_dir=None,
+def build(local_tree, outf, build_command='sbuild', result_dir=None,
           distribution=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if result_dir:
@@ -87,18 +89,16 @@ def build(local_tree, outf, build_command='build', result_dir=None,
         raise BuildFailedError()
 
 
-def build_incrementally(
+def attempt_build(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.'):
     add_dummy_changelog_entry(
-        local_tree.basedir, suffix,
-        build_suite, build_changelog_entry)
+        local_tree.basedir, suffix, build_suite, build_changelog_entry)
     build_log_path = os.path.join(output_directory, 'build.log')
     try:
         with open(build_log_path, 'w') as f:
             build(local_tree, outf=f, build_command=build_command,
-                  result_dir=output_directory,
-                  distribution=build_suite)
+                  result_dir=output_directory, distribution=build_suite)
     except BuildFailedError:
         raise worker_failure_from_sbuild_log(build_log_path)
 
