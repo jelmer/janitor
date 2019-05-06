@@ -150,13 +150,13 @@ def python3_module_not_found(m):
     return MissingPythonModule(m.group(1), python_version=3)
 
 
-def python2_reqs_not_found(m):
+def python_reqs_not_found(m):
     expr = m.group(2)
     if '>=' in expr:
         pkg, minimum = expr.split('>=')
-        return MissingPythonModule(pkg.strip(), 2, minimum.strip())
+        return MissingPythonModule(pkg.strip(), None, minimum.strip())
     if ' ' not in expr:
-        return MissingPythonModule(expr, 2)
+        return MissingPythonModule(expr, None)
     # Hmm
     return None
 
@@ -258,7 +258,7 @@ build_failure_regexps = [
      None),
     (r'(distutils.errors.DistutilsError|error): '
         r'Could not find suitable distribution '
-        r'for Requirement.parse\(\'(.*)\'\)', python2_reqs_not_found),
+        r'for Requirement.parse\(\'(.*)\'\)', python_reqs_not_found),
     ('E   ImportError: cannot import name (.*)', python2_module_not_found),
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
