@@ -40,6 +40,7 @@ from .sbuild_log import (
     MissingPythonModule,
     SbuildFailure,
     )
+from .trace import note
 from .udd import UDD
 
 
@@ -64,6 +65,7 @@ def add_build_dependency(tree, package, minimum_version=None,
     else:
         desc = package
 
+    note("Adding build dependency: %s", desc)
     subprocess.check_call(
         ["dch", "Add missing dependency on %s." % desc],
         cwd=tree.basedir, stderr=subprocess.DEVNULL)
