@@ -20,6 +20,7 @@ __all__ = [
     'get_build_architecture',
     'add_dummy_changelog_entry',
     'build',
+    'SbuildFailure',
 ]
 
 import os
@@ -37,6 +38,7 @@ from silver_platter.debian import (
 
 from .sbuild_log import (
     worker_failure_from_sbuild_log,
+    SbuildFailure,
     )
 from .trace import note
 
