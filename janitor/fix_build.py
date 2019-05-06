@@ -38,10 +38,10 @@ from silver_platter.debian import (
 from .build import attempt_build
 from .sbuild_log import (
     MissingPythonModule,
+    MissingCHeader,
     SbuildFailure,
     )
-from .trace import note
-from .udd import UDD
+from .trace import note, warning, show_error
 
 
 DEFAULT_MAX_ITERATIONS = 10
@@ -80,53 +80,72 @@ def add_build_dependency(tree, package, minimum_version=None,
         return True
 
 
-def add_build_dependency_options(
-        tree, package_candidates, minimum_version=None,
-        committer=None):
-    udd = UDD.public_udd_mirror()
-    for candidate in package_candidates:
-        if udd.binary_package_exists(candidate):
-            break
+def search_apt_file(path, regex=False):
+    args = ['/usr/bin/apt-file', 'search', '-l']
+    if regex:
+        args.append('-x')
+    args.append(path)
+    try:
+        return subprocess.check_output(args).decode().splitlines()
+    except subprocess.CalledProcessError:
+        return []
+
+
+def add_build_dependency_for_path(
+        tree, path, minimum_version=None,
+        committer=None, regex=False):
+    if not isinstance(path, list):
+        paths = [path]
     else:
+        paths = path
+    candidates = set()
+    for path in paths:
+        candidates.update(search_apt_file(path, regex=regex))
+    if len(candidates) == 0:
+        warning('No packages found that contain %r', path)
         return False
+    if len(candidates) > 1:
+        warning('More than 1 packages found that contain %r: %r',
+                path, candidates)
+        # Euhr. Pick the one with the shortest name?
+        package = sorted(candidates, key=len)[0]
+    else:
+        package = candidates.pop()
     return add_build_dependency(
-            tree, candidate, minimum_version=minimum_version,
+            tree, package, minimum_version=minimum_version,
             committer=committer)
-
-
-# TODO(jelmer): Obtain this dictionary elsewhere
-PYTHON2_DEBIAN_PACKAGES = {
-    'enum': 'python-enum34',
-    'pytz': 'python-tz',
-}
-
-PYTHON3_DEBIAN_PACKAGES = {
-    'pytz': 'python3-tz',
-}
 
 
 def resolve_error(tree, error, committer=None):
     if isinstance(error, MissingPythonModule):
         if error.python_version == 2:
-            debian_package = PYTHON2_DEBIAN_PACKAGES.get(error.module)
-            candidates = [
-                "python-%s" % '.'.join(error.module.split('.')[:i])
-                for i in range(error.module.count('.')+1, 0, -1)]
-            if debian_package:
-                candidates.insert(0, debian_package)
-            # Check if python-X, X or python-X.lstrip('py') exists
-            return add_build_dependency_options(
-                tree, candidates, error.minimum_version, committer=committer)
+            paths = [
+                os.path.join(
+                    '/usr/lib/python2.*/dist-packages',
+                    error.module.replace('.', '/'),
+                    '__init__.py'),
+                os.path.join(
+                    '/usr/lib/python2.*/dist-packages',
+                    error.module.replace('.', '/') + '.py')]
+            return add_build_dependency_for_path(
+                tree, paths, error.minimum_version, committer=committer,
+                regex=True)
         elif error.python_version == 3:
-            debian_package = PYTHON3_DEBIAN_PACKAGES.get(error.module)
-            candidates = [
-                "python3-%s" % '.'.join(error.module.split('.')[:i])
-                for i in range(error.module.count('.')+1, 0, -1)]
-            if debian_package:
-                candidates.insert(0, debian_package)
-            # Check if python-X, X or python-X.lstrip('py') exists
-            return add_build_dependency_options(
-                tree, candidates, error.minimum_version, committer=committer)
+            paths = [
+                os.path.join(
+                    '/usr/lib/python3.*/dist-packages',
+                    error.module.replace('.', '/'),
+                    '__init__.py'),
+                os.path.join(
+                    '/usr/lib/python3.*/dist-packages',
+                    error.module.replace('.', '/') + '.py')]
+            return add_build_dependency_for_path(
+                tree, paths, error.minimum_version, committer=committer,
+                regex=True)
+    elif isinstance(error, MissingCHeader):
+        return add_build_dependency_for_path(
+            tree, [os.path.join('/usr/include', error.header)],
+            committer=committer, regex=True)
 
     return False
 
@@ -148,6 +167,7 @@ def build_incrementally(
                 raise
             if max_iterations is not None \
                     and len(fixed_errors) > max_iterations:
+                show_error('Last fix did not address the issue. Giving up.')
                 raise
             reset_tree(local_tree)
             if not resolve_error(local_tree, e.error, committer=committer):
