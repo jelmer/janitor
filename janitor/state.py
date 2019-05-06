@@ -39,9 +39,9 @@ def _ensure_package(cur, name, vcs_url, maintainer_email):
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, instigated_context, context, main_branch_revision,
-              result_code, build_version, build_distribution, branch_name,
-              revision, subworker_result):
+              command, description, instigated_context, context,
+              main_branch_revision, result_code, build_version,
+              build_distribution, branch_name, revision, subworker_result):
     """Store a run.
 
     :param run_id: Run id
@@ -295,6 +295,7 @@ def iter_previous_runs(package, command):
 SELECT
   start_time,
   (finish_time - start_time) AS duration,
+  instigated_context,
   context,
   main_branch_revision,
   result_code
