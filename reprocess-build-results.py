@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.build import worker_failure_from_sbuild_log  # noqa: E402
+from janitor.sbuild_log import worker_failure_from_sbuild_log  # noqa: E402
 from janitor.trace import note  # noqa: E402
 
 

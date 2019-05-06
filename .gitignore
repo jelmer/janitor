@@ -1,6 +1,9 @@
 __pycache__
 .plugins
 _build/*
+*.pyc
+*.rej
+*.orig
 *~
 site/_build
 state.db
