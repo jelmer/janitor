@@ -459,6 +459,7 @@ async def process_queue(
                 env['MAINTAINER_EMAIL'],
                 start_time, finish_time, command,
                 result.description,
+                env.get('CONTEXT'),
                 result.context,
                 result.main_branch_revision,
                 result.code,

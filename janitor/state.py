@@ -39,7 +39,7 @@ def _ensure_package(cur, name, vcs_url, maintainer_email):
 
 
 def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, context, main_branch_revision,
+              command, description, instigated_context, context, main_branch_revision,
               result_code, build_version, build_distribution, branch_name,
               revision, subworker_result):
     """Store a run.
@@ -52,6 +52,7 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param finish_time: Finish time
     :param command: Command
     :param description: A human-readable description
+    :param instigated_context: Context that instigated this run
     :param context: Subworker-specific context
     :param main_branch_revision: Main branch revision
     :param result_code: Result code (as constant string)
@@ -65,12 +66,12 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     _ensure_package(cur, name, vcs_url, maintainer_email)
     cur.execute(
         "INSERT INTO run (id, command, description, result_code, start_time, "
-        "finish_time, package, context, build_version, "
+        "finish_time, package, instigated_context, context, build_version, "
         "build_distribution, main_branch_revision, branch_name, revision, "
         "result) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         (run_id, ' '.join(command), description, result_code,
-         start_time, finish_time, name, context,
+         start_time, finish_time, name, instigated_context, context,
          str(build_version) if build_version else None, build_distribution,
          main_branch_revision, branch_name, revision,
          Json(subworker_result) if subworker_result else None))
