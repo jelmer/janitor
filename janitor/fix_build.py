@@ -92,8 +92,9 @@ def build_incrementally(
     last_fixed = None
     while True:
         try:
-            attempt_build(local_tree, suffix, build_suite, output_directory,
-                          build_command, build_changelog_entry)
+            return attempt_build(
+                local_tree, suffix, build_suite, output_directory,
+                build_command, build_changelog_entry)
         except SbuildFailure as e:
             if e.error is None:
                 raise
