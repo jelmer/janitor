@@ -34,6 +34,7 @@ from lintian_brush.control import (
     add_dependency,
     ensure_minimum_version,
     update_control,
+    FormattingUnpreservable,
     )
 from silver_platter.debian import (
     debcommit,
@@ -236,8 +237,13 @@ def build_incrementally(
                 warning('Last fix did not address the issue. Giving up.')
                 raise
             reset_tree(local_tree)
-            if not resolve_error(local_tree, e.error, committer=committer):
-                raise
+            try:
+                if not resolve_error(local_tree, e.error, committer=committer):
+                    raise
+            except FormattingUnpreservable:
+                warning('Unable to fix %r, control format unpreservable',
+                        e.error)
+                raise e
             fixed_errors.append(e.error)
             if os.path.exists(os.path.join(output_directory, 'build.log')):
                 i = 1
