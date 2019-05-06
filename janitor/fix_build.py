@@ -21,6 +21,7 @@ __all__ = [
 
 import os
 import subprocess
+import sys
 
 from breezy.commit import PointlessCommit
 from lintian_brush import reset_tree
@@ -100,3 +101,32 @@ def build_incrementally(
             if not resolve_error(local_tree, e.error, committer=committer):
                 raise
             last_fixed = e.error
+
+
+def main(argv=None):
+    import argparse
+    parser = argparse.ArgumentParser('janitor.fix_build')
+    parser.add_argument('--suffix', type=str,
+                        help="Suffix to use for test builds.")
+    parser.add_argument('--suite', type=str,
+                        help="Suite to target.")
+    parser.add_argument('--output-directory', type=str,
+                        help="Output directory.", default=None)
+    parser.add_argument('--committer', type=str,
+                        help='Committer string (name and email)',
+                        default=None)
+    parser.add_argument(
+        '--build-command', type=str,
+        help='Build command',
+        default='sbuild -A -s -v -d$DISTRIBUTION')
+
+    args = parser.parse_args()
+    from breezy.workingtree import WorkingTree
+    tree = WorkingTree.open('.')
+    build_incrementally(
+        tree, args.suffix, args.suite, args.output_directory,
+        args.build_command, committer=args.committer)
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
