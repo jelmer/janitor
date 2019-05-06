@@ -44,6 +44,9 @@ from .trace import note
 from .udd import UDD
 
 
+DEFAULT_MAX_ITERATIONS = 10
+
+
 def add_build_dependency(tree, package, minimum_version=None,
                          committer=None):
     # TODO(jelmer): Make sure "package" actually exists in Debian
@@ -97,15 +100,28 @@ PYTHON2_DEBIAN_PACKAGES = {
     'pytz': 'python-tz',
 }
 
+PYTHON3_DEBIAN_PACKAGES = {
+    'pytz': 'python3-tz',
+}
+
 
 def resolve_error(tree, error, committer=None):
     if isinstance(error, MissingPythonModule):
         if error.python_version == 2:
             debian_package = PYTHON2_DEBIAN_PACKAGES.get(error.module)
             candidates = [
-                "python-%s" % (
-                    error.module.split('.')[:i]
-                    for i in range(1, error.module.count('.')))]
+                "python-%s" % '.'.join(error.module.split('.')[:i])
+                for i in range(error.module.count('.')+1, 0, -1)]
+            if debian_package:
+                candidates.insert(0, debian_package)
+            # Check if python-X, X or python-X.lstrip('py') exists
+            return add_build_dependency_options(
+                tree, candidates, error.minimum_version, committer=committer)
+        elif error.python_version == 3:
+            debian_package = PYTHON3_DEBIAN_PACKAGES.get(error.module)
+            candidates = [
+                "python3-%s" % '.'.join(error.module.split('.')[:i])
+                for i in range(error.module.count('.')+1, 0, -1)]
             if debian_package:
                 candidates.insert(0, debian_package)
             # Check if python-X, X or python-X.lstrip('py') exists
@@ -118,7 +134,7 @@ def resolve_error(tree, error, committer=None):
 def build_incrementally(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
-        committer=None, max_iterations=5):
+        committer=None, max_iterations=DEFAULT_MAX_ITERATIONS):
     fixed_errors = []
     while True:
         try:
