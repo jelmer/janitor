@@ -1,7 +1,8 @@
 $build_arch_all = 1;
 $run_lintian = 1;
-$run_piuparts = 1;
-$piuparts_require_success = 1;
+# TODO(jelmer): piuparts currently needs root :(
+$run_piuparts = 0;
+$piuparts_require_success = 0;
 $piuparts_root_args = '';
 $piuparts_opts = ['--schroot', 'unstable-%a-sbuild'];
 $distribution = 'unstable';
