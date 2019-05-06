@@ -36,6 +36,7 @@ class SbuildFailure(Exception):
 SBUILD_FOCUS_SECTION = {
     'build': 'build',
     'run-post-build-commands': 'post build commands',
+    'post-build': 'post build',
     'install-deps': 'install package build dependencies',
 }
 
@@ -50,7 +51,7 @@ def worker_failure_from_sbuild_log(build_log_path):
     failed_stage = find_failed_stage(
         paragraphs.get('summary', []))
     focus_section = SBUILD_FOCUS_SECTION.get(failed_stage)
-    if failed_stage == 'run-post-build-commands':
+    if failed_stage in ('run-post-build-commands', 'post-build'):
         # We used to run autopkgtest as the only post build
         # command.
         failed_stage = 'autopkgtest'
