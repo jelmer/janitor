@@ -96,6 +96,59 @@ def search_apt_file(path, regex=False):
         return []
 
 
+def get_package_for_paths(paths, regex=False):
+    candidates = set()
+    for path in paths:
+        candidates.update(search_apt_file(path, regex=regex))
+    if len(candidates) == 0:
+        warning('No packages found that contain %r', path)
+        return None
+    if len(candidates) > 1:
+        warning('More than 1 packages found that contain %r: %r',
+                path, candidates)
+        # Euhr. Pick the one with the shortest name?
+        return sorted(candidates, key=len)[0]
+    else:
+        return candidates.pop()
+
+
+def get_package_for_python_module(module, python_version):
+    if python_version == 'python3':
+        paths = [
+            os.path.join(
+                '/usr/lib/python3.*/dist-packages',
+                module.replace('.', '/'),
+                '__init__.py'),
+            os.path.join(
+                '/usr/lib/python3.*/dist-packages',
+                module.replace('.', '/') + '.py')]
+        regex = True
+    elif python_version == 'python2':
+        paths = [
+            os.path.join(
+                '/usr/lib/python2.*/dist-packages',
+                module.replace('.', '/'),
+                '__init__.py'),
+            os.path.join(
+                '/usr/lib/python2.*/dist-packages',
+                module.replace('.', '/') + '.py')]
+        regex = True
+    elif python_version == 'pypy':
+        paths = [
+            os.path.join(
+                '/usr/lib/pypy/dist-packages',
+                module.replace('.', '/'),
+                '__init__.py'),
+            os.path.join(
+                '/usr/lib/pypy/dist-packages',
+                module.replace('.', '/') + '.py')]
+        regex = False
+    else:
+        raise AssertionError(
+            'unknown python version %r' % python_version)
+    return get_package_for_paths(paths, regex)
+
+
 def add_build_dependency_for_path(
         tree, path, minimum_version=None,
         committer=None, regex=False):
@@ -103,19 +156,9 @@ def add_build_dependency_for_path(
         paths = [path]
     else:
         paths = path
-    candidates = set()
-    for path in paths:
-        candidates.update(search_apt_file(path, regex=regex))
-    if len(candidates) == 0:
-        warning('No packages found that contain %r', path)
+    package = get_package_for_paths(paths)
+    if package is None:
         return False
-    if len(candidates) > 1:
-        warning('More than 1 packages found that contain %r: %r',
-                path, candidates)
-        # Euhr. Pick the one with the shortest name?
-        package = sorted(candidates, key=len)[0]
-    else:
-        package = candidates.pop()
     return add_build_dependency(
             tree, package, minimum_version=minimum_version,
             committer=committer)
@@ -135,59 +178,33 @@ def fix_missing_python_module(tree, error, committer=None):
     default = (not has_pypy_build_deps and
                not has_cpy2_build_deps and
                not has_cpy3_build_deps)
-    python2_paths = [
-        os.path.join(
-            '/usr/lib/python2.*/dist-packages',
-            error.module.replace('.', '/'),
-            '__init__.py'),
-        os.path.join(
-            '/usr/lib/python2.*/dist-packages',
-            error.module.replace('.', '/') + '.py')]
-    python3_paths = [
-        os.path.join(
-            '/usr/lib/python3.*/dist-packages',
-            error.module.replace('.', '/'),
-            '__init__.py'),
-        os.path.join(
-            '/usr/lib/python3.*/dist-packages',
-            error.module.replace('.', '/') + '.py')]
-    pypy2_paths = [
-        os.path.join(
-            '/usr/lib/pypy/dist-packages',
-            error.module.replace('.', '/'),
-            '__init__.py'),
-        os.path.join(
-            '/usr/lib/pypy/dist-packages',
-            error.module.replace('.', '/') + '.py')]
+
+    pypy_pkg = get_package_for_python_module(error.module, 'pypy')
+    py2_pkg = get_package_for_python_module(error.module, 'python2')
+    py3_pkg = get_package_for_python_module(error.module, 'python3')
     if error.python_version == 2:
         ret = True
         if has_pypy_build_deps:
-            ret = ret and add_build_dependency_for_path(
-                tree, pypy2_paths, error.minimum_version, committer=committer,
-                regex=True)
+            ret = ret and add_build_dependency(
+                tree, pypy_pkg, error.minimum_version, committer=committer)
         if has_cpy2_build_deps or default:
-            ret = ret and add_build_dependency_for_path(
-                tree, python2_paths, error.minimum_version,
-                committer=committer, regex=True)
+            ret = ret and add_build_dependency(
+                tree, py2_pkg, error.minimum_version, committer=committer)
         return ret
     elif error.python_version == 3:
-        return add_build_dependency_for_path(
-            tree, python3_paths, error.minimum_version, committer=committer,
-            regex=True)
+        return add_build_dependency(
+            tree, py3_pkg, error.minimum_version, committer=committer)
     else:
         ret = True
         if has_cpy3_build_deps or default:
-            ret = ret and add_build_dependency_for_path(
-                tree, python3_paths, error.minimum_version,
-                committer=committer, regex=True)
+            ret = ret and add_build_dependency(
+                tree, py3_pkg, error.minimum_version, committer=committer)
         if has_cpy2_build_deps or default:
-            ret = ret and add_build_dependency_for_path(
-                tree, python2_paths, error.minimum_version,
-                committer=committer, regex=True)
+            ret = ret and add_build_dependency(
+                tree, py2_pkg, error.minimum_version, committer=committer)
         if has_pypy_build_deps:
-            ret = ret and add_build_dependency_for_path(
-                tree, python2_paths, error.minimum_version,
-                committer=committer, regex=True)
+            ret = ret and add_build_dependency(
+                tree, pypy_pkg, error.minimum_version, committer=committer)
         return ret
 
 
