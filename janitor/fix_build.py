@@ -77,6 +77,7 @@ def add_build_dependency(tree, package, minimum_version=None,
 def resolve_error(tree, error, committer=None):
     if isinstance(error, MissingPythonModule):
         if error.python_version == 2:
+            # Check if python-X, X or python-X.lstrip('py') exists
             return add_build_dependency(
                 tree, 'python-%s' % error.module, error.minimum_version,
                 committer=committer)
