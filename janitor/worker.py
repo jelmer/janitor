@@ -73,8 +73,6 @@ from .trace import (
 
 class SubWorker(object):
 
-    build_version_suffix = None
-
     def __init__(self, command, env):
         """Initialize a subworker.
 
@@ -96,11 +94,12 @@ class SubWorker(object):
         """Returns the name of the suite to build for."""
         raise NotImplementedError(self.build_suite)
 
+    def build_version_suffix(self):
+        raise NotImplementedError(self.build_version_suffix)
+
 
 class LintianBrushWorker(SubWorker):
     """Janitor-specific Lintian Fixer."""
-
-    build_version_suffix = 'janitor+lintian'
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
@@ -161,10 +160,11 @@ class LintianBrushWorker(SubWorker):
     def build_suite(self):
         return 'lintian-fixes'
 
+    def build_version_suffix(self):
+        return 'janitor+lintian'
+
 
 class NewUpstreamWorker(SubWorker):
-
-    build_version_suffix = 'janitor+newupstream'
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
@@ -253,6 +253,12 @@ class NewUpstreamWorker(SubWorker):
             return 'upstream-snapshots'
         else:
             return 'upstream-releases'
+
+    def build_version_suffix(self):
+        if self.args.snapshot:
+            return 'janitor+newupstream'
+        else:
+            return 'janitor+newupstream'
 
 
 class WorkerResult(object):
@@ -361,7 +367,7 @@ def process_package(vcs_url, env, command, output_directory,
         if build_command:
             try:
                 (changes_name, cl_version) = build_incrementally(
-                    ws.local_tree, '~' + subworker.build_version_suffix,
+                    ws.local_tree, '~' + subworker.build_version_suffix(),
                     build_suite, output_directory,
                     build_command, committer=env.get('COMMITTER'))
             except MissingUpstreamTarball:
