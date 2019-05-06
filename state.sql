@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS run (
    -- Distribution the package was built for (e.g. "lintian-fixes")
    build_distribution text,
    result_code text,
+   instigated_context text,
    -- Some subworker-specific indication of what we attempted to do
    context text,
    -- Main branch revision
