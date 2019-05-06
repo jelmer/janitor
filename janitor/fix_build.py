@@ -89,20 +89,26 @@ def add_build_dependency_options(
             committer=committer)
 
 
+# TODO(jelmer): Obtain this dictionary elsewhere
+PYTHON2_DEBIAN_PACKAGES = {
+    'enum': 'python-enum34',
+    'pytz': 'python-tz',
+}
+
+
 def resolve_error(tree, error, committer=None):
     if isinstance(error, MissingPythonModule):
         if error.python_version == 2:
+            debian_package = PYTHON2_DEBIAN_PACKAGES.get(error.module)
             candidates = [
                 "python-%s" % (
                     error.module.split('.')[:i]
                     for i in range(1, error.module.count('.')))]
-            if error.module.startswith('py'):
-                candidates.append('python-%s' % error.module[2:])
-            candidates.append(error.module)
+            if debian_package:
+                candidates.insert(0, debian_package)
             # Check if python-X, X or python-X.lstrip('py') exists
             return add_build_dependency_options(
-                tree, candidates, error.minimum_version,
-                committer=committer)
+                tree, candidates, error.minimum_version, committer=committer)
 
     return False
 
@@ -110,8 +116,8 @@ def resolve_error(tree, error, committer=None):
 def build_incrementally(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
-        committer=None):
-    last_fixed = None
+        committer=None, max_iterations=5):
+    fixed_errors = []
     while True:
         try:
             return attempt_build(
@@ -120,12 +126,15 @@ def build_incrementally(
         except SbuildFailure as e:
             if e.error is None:
                 raise
-            if last_fixed == e.error:
+            if e.error in fixed_errors:
+                raise
+            if max_iterations is not None \
+                    and len(fixed_errors) > max_iterations:
                 raise
             reset_tree(local_tree)
             if not resolve_error(local_tree, e.error, committer=committer):
                 raise
-            last_fixed = e.error
+            fixed_errors.append(e.error)
             if os.path.exists(os.path.join(output_directory, 'build.log')):
                 i = 1
                 while os.path.exists(
