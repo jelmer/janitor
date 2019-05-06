@@ -65,7 +65,7 @@ def add_build_dependency(tree, package, minimum_version=None,
         desc = package
 
     subprocess.check_call(
-        ["dch", "Add missing dependency on %s" % desc],
+        ["dch", "Add missing dependency on %s." % desc],
         cwd=tree.basedir, stderr=subprocess.DEVNULL)
     try:
         debcommit(tree, committer=committer)
@@ -79,16 +79,13 @@ def add_build_dependency_options(
         tree, package_candidates, minimum_version=None,
         committer=None):
     udd = UDD.public_udd_mirror()
-    package = None
     for candidate in package_candidates:
-        # TODO(jelmer): Check if this exists in the archive
         if udd.binary_package_exists(candidate):
-            package = candidate
             break
     else:
         return False
     return add_build_dependency(
-            tree, package, minimum_version=minimum_version,
+            tree, candidate, minimum_version=minimum_version,
             committer=committer)
 
 
@@ -103,8 +100,8 @@ def resolve_error(tree, error, committer=None):
                 candidates.append('python-%s' % error.module[2:])
             candidates.append(error.module)
             # Check if python-X, X or python-X.lstrip('py') exists
-            return add_build_dependency(
-                tree, 'python-%s' % error.module, error.minimum_version,
+            return add_build_dependency_options(
+                tree, candidates, error.minimum_version,
                 committer=committer)
 
     return False
@@ -129,6 +126,13 @@ def build_incrementally(
             if not resolve_error(local_tree, e.error, committer=committer):
                 raise
             last_fixed = e.error
+            if os.path.exists(os.path.join(output_directory, 'build.log')):
+                i = 1
+                while os.path.exists(
+                        os.path.join(output_directory, 'build.log.%d' % i)):
+                    i += 1
+                os.rename(os.path.join(output_directory, 'build.log'),
+                          os.path.join(output_directory, 'build.log.%d' % i))
 
 
 def main(argv=None):
