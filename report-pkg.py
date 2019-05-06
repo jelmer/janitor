@@ -70,8 +70,8 @@ def include_build_log_failure(f, log_path, length):
         # Strip off unuseful tail
         for i, line in enumerate(paragraphs.get('build', [])[-15:]):
             if line.startswith('Build finished at '):
-                include_lines = (max(1, include_lines[0]-i-1),
-                                 max(1, include_lines[1]-i-1))
+                include_lines = (max(1, include_lines[0]-(15-i)),
+                                 max(1, include_lines[1]-(15-i)))
 
     include_console_log(
         f, log_path, include_lines=include_lines,
