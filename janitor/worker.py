@@ -61,8 +61,8 @@ from silver_platter.utils import (
     BranchUnavailable,
 )
 
+from .fix_build import build_incrementally
 from .build import (
-    build_incrementally,
     MissingChangesFile,
     SbuildFailure,
 )
@@ -363,7 +363,7 @@ def process_package(vcs_url, env, command, output_directory,
                 (changes_name, cl_version) = build_incrementally(
                     ws.local_tree, '~' + subworker.build_version_suffix,
                     build_suite, output_directory,
-                    build_command)
+                    build_command, committer=env.get('COMMITTER'))
             except MissingUpstreamTarball:
                 raise WorkerFailure(
                     'build-missing-upstream-source',
