@@ -251,10 +251,12 @@ def determine_priority(package, command, mode, previous_runs, context=None,
     NO_CONTEXT_REFRESH_BONUS = 50
 
     if previous_runs:
-        (last_start_time, last_duration, last_context,
-         last_main_branch_revision, last_result_code) = (
-             previous_runs[0])
-        if last_context and last_context == context:
+        (last_start_time, last_duration, last_instigated_context,
+         last_context, last_main_branch_revision, last_result_code) = (
+            previous_runs[0])
+        # TODO(jelmer): Should last_context and last_instigated_context be
+        # treated differently?
+        if context and context in (last_context, last_instigated_context):
             priority -= CONTEXT_PROCESSED_PENALTY
         elif context is None:
             age = (datetime.now() - last_start_time)
@@ -281,8 +283,9 @@ def add_to_queue(todo, dry_run=False, default_priority=0):
             package, command, mode, previous_runs, env.get('CONTEXT'))
         estimated_duration = None
         if previous_runs:
-            for (last_start_time, last_duration, last_context,
-                 last_main_branch_revision, last_result_code) in previous_runs:
+            for (last_start_time, last_duration, last_instigated_context,
+                 last_context, last_main_branch_revision,
+                 last_result_code) in previous_runs:
                 if last_result_code == 'success':
                     estimated_duration = last_duration
                     break

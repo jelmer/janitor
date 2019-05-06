@@ -114,7 +114,6 @@ def get_open_mps_per_maintainer():
                     if status == 'open':
                         open_proposals.append(mp)
 
-
     open_mps_per_maintainer = {}
     for proposal in open_proposals:
         maintainer_email = state.get_maintainer_email(proposal.url)
@@ -419,7 +418,8 @@ def publish_pending(publisher, policy, vcs_directory, dry_run=False):
             uploader_emails)
         if mode in ('build-only', 'skip'):
             continue
-        if state.already_published(main_branch_url, branch_name, revision, mode):
+        if state.already_published(
+                main_branch_url, branch_name, revision, mode):
             continue
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
