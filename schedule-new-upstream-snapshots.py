@@ -53,10 +53,6 @@ parser.add_argument('--default-priority', default=-10, type=int,
                     help='Default priority.')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
-parser.add_argument(
-    '--max-mps-per-maintainer',
-    default=0,
-    type=int, help='Maximum number of open merge proposals per maintainer.')
 args = parser.parse_args()
 
 

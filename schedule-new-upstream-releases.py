@@ -51,10 +51,6 @@ parser.add_argument('--shuffle',
                     action='store_true')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
-parser.add_argument(
-    '--max-mps-per-maintainer',
-    default=0,
-    type=int, help='Maximum number of open merge proposals per maintainer.')
 args = parser.parse_args()
 
 
