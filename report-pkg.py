@@ -158,13 +158,25 @@ for run in state.iter_runs():
         else:
             include_console_log(
                 g, os.path.join(run_dir, worker_log_path))
+        log_line_started = False
         if os.path.exists(os.path.join(run_dir, build_log_path)):
-            g.write('`Full build log <%s>`_\n' %
+            g.write('`Full build log <%s>`_' %
                     build_log_path)
-        elif os.path.exists(
+            log_line_started = True
+            i = 1
+            while os.path.exists(os.path.join(
+                    run_dir, build_log_path + '.%d' % i)):
+                g.write('`(%d) <%s.%d>`_' % (i, build_log_path, i))
+                i += 1
+        if os.path.exists(
                 os.path.join(run_dir, worker_log_path)):
-            g.write('`Full worker log <%s>`_\n' %
+            if log_line_started:
+                g.write(' ')
+            g.write('`Full worker log <%s>`_' %
                     worker_log_path)
+            log_line_started = True
+        if log_line_started:
+            g.write('\n')
         g.write("\n")
         g.write("*Last Updated: " + time.asctime() + "*\n")
 
