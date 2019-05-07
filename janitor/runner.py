@@ -282,6 +282,12 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
         raise AssertionError('unsupported vcs %s' % vcs.abbreviation)
 
 
+def is_alioth_url(url):
+    return urllib.parse.urlparse(url).netloc in (
+        'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
+        'bzr.debian.org', 'git.debian.org')
+
+
 async def process_one(
         worker_kind, vcs_url, env, command, build_command,
         pre_check=None, post_check=None,
@@ -315,9 +321,7 @@ async def process_one(
                                '"https://anonscm.debian.org'):
             code = 'hosted-on-alioth'
         else:
-            if urllib.parse.urlparse(vcs_url).netloc in (
-                    'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
-                    'bzr.debian.org', 'git.debian.org'):
+            if is_alioth_url(vcs_url):
                 code = 'hosted-on-alioth'
             else:
                 code = 'branch-unavailable'
