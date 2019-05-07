@@ -145,9 +145,9 @@ for run in state.iter_runs():
                 g.write('`apt repository <../../../>`_ enabled) '
                         'by running one of::\n\n')
                 for binary in changes_get_binaries(changes_path):
-                    g.write(
-                        '\tapt install -t upstream-releases %s\n' %
-                        binary)
+                    if build_distro:
+                        g.write('\tapt install -t %s %s\n' %
+                                (build_distro, binary))
                     g.write('\tapt install %s=%s\n' % (
                             binary, build_version))
             g.write('\n\n')
