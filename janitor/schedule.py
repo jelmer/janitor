@@ -44,7 +44,9 @@ from .udd import UDD
 # These are result codes that suggest some part of the system failed, but
 # not what exactly. Recent versions of the janitor will hopefully
 # give a better result code.
-VAGUE_RESULT_CODES = [None, 'worker-failure', 'worker-exception']
+VAGUE_RESULT_CODES = [
+    None, 'worker-failure', 'worker-exception',
+    'build-failed-stage-explain-bd-uninstallable']
 
 
 def get_ubuntu_package_url(launchpad, package):
