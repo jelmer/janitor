@@ -287,10 +287,14 @@ class MissingPkgConfig(object):
             self.minimum_version == other.minimum_version
 
     def __str__(self):
-        return "Missing pkg-config module: %s" % self.module
+        if self.minimum_version:
+            return "%s (>= %s)" % (self.module, self.minimum_version)
+        else:
+            return self.module
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.module)
+        return "%s(%r, minimum_version=%r)" % (
+            type(self).__name__, self.module, self.minimum_version)
 
 
 def pkg_config_missing(m):
@@ -336,9 +340,16 @@ def find_build_failure_description(lines):
     Returns:
       tuple with (line offset, line, error object)
     """
+    try:
+        end_offset = lines.index('==> config.log <==\n')
+    except ValueError:
+        end_offset = len(lines)
     OFFSET = 20
-    for i, line in enumerate(lines[-OFFSET:], 1):
-        line = line.strip('\n')
+    for i in range(1, OFFSET):
+        lineno = end_offset - i
+        if lineno < 0:
+            break
+        line = lines[lineno].strip('\n')
         for regexp, cb in compiled_build_failure_regexps:
             m = regexp.match(line)
             if m:
@@ -346,7 +357,7 @@ def find_build_failure_description(lines):
                     err = cb(m)
                 else:
                     err = None
-                return max(len(lines) - OFFSET, 0) + i, line, err
+                return lineno + 1, line, err
     return None, None, None
 
 
