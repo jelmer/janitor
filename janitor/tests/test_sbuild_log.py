@@ -23,6 +23,7 @@ from janitor.sbuild_log import (
     MissingFile,
     MissingNodeModule,
     MissingCommand,
+    MissingPkgConfig,
     )
 import unittest
 
@@ -111,3 +112,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             './ylwrap: line 176: yacc: command not found'], 1,
             MissingCommand('yacc'))
+
+    def test_pkg_config_missing(self):
+        self.run_test([
+            'configure: error: Package requirements '
+            '(apertium-3.2 >= 3.2.0) were not met:'],
+            1, MissingPkgConfig('apertium-3.2', '3.2.0'))

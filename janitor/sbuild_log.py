@@ -273,6 +273,37 @@ def command_missing(m):
     return MissingCommand(m.group(1))
 
 
+class MissingPkgConfig(object):
+
+    kind = 'pkg-config-missing'
+
+    def __init__(self, module, minimum_version=None):
+        self.module = module
+        self.minimum_version = minimum_version
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            self.module == other.module and \
+            self.minimum_version == other.minimum_version
+
+    def __str__(self):
+        return "Missing pkg-config module: %s" % self.module
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.module)
+
+
+def pkg_config_missing(m):
+    expr = m.group(1)
+    if '>=' in expr:
+        pkg, minimum = expr.split('>=')
+        return MissingPkgConfig(pkg.strip(), minimum.strip())
+    if ' ' not in expr:
+        return MissingPkgConfig(expr)
+    # Hmm
+    return None
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -291,6 +322,8 @@ build_failure_regexps = [
      c_header_missing),
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
+    (r'configure: error: Package requirements \((.*)\) were not met:',
+     pkg_config_missing),
 ]
 
 compiled_build_failure_regexps = [
