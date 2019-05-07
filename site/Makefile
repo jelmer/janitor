@@ -12,7 +12,7 @@ BUILDDIR      = _build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-prereqs: lintian-brush/tags.txt status.rst
+prereqs: lintian-brush/tags.txt status.rst fresh-releases fresh-snapshots lintian-fixes
 
 lintian-brush/tags.txt::
 	lintian-brush --list-tags 2>&1 | sed -e 's/^\(.*\)/\* `\1 <https:\/\/lintian.debian.org\/tags\/\1.html>`_/' > $@
@@ -29,11 +29,11 @@ cupboard/history.rst:
 cupboard/queue.rst:
 	python3 ../report-queue.py > $@
 
-upstream-releases:
-	python3 ../report-apt-repo.py upstream-releases
+fresh-releases:
+	python3 ../report-apt-repo.py fresh-releases
 
-upstream-snapshots:
-	python3 ../report-apt-repo.py upstream-snapshots
+fresh-snapshots:
+	python3 ../report-apt-repo.py fresh-snapshots
 
 lintian-fixes:
 	python3 ../report-apt-repo.py lintian-fixes
@@ -44,7 +44,7 @@ cupboard/result-codes:
 logs:
 	for I in $$(find pkg -name '*.log' -o -name 'result.json'); do { mkdir -p _build/html/$$(dirname $$I); ln -f $$I _build/html/$$I; } done
 
-.PHONY: help Makefile pkg upstream-releases upstream-snapshots
+.PHONY: help Makefile pkg fresh-releases fresh-snapshots
 
 # Catch-all target: route all unknown targets to Sphinx using the new
 # "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).

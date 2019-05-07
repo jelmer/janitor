@@ -161,7 +161,7 @@ class LintianBrushWorker(SubWorker):
         return 'lintian-fixes'
 
     def build_version_suffix(self):
-        return 'janitor+lintian'
+        return 'jan+lint'
 
 
 class NewUpstreamWorker(SubWorker):
@@ -250,15 +250,15 @@ class NewUpstreamWorker(SubWorker):
 
     def build_suite(self):
         if self.args.snapshot:
-            return 'upstream-snapshots'
+            return 'fresh-snapshots'
         else:
-            return 'upstream-releases'
+            return 'fresh-releases'
 
     def build_version_suffix(self):
         if self.args.snapshot:
-            return 'janitor+newupstream'
+            return 'jan+nus'
         else:
-            return 'janitor+newupstream'
+            return 'jan+nur'
 
 
 class WorkerResult(object):
