@@ -112,6 +112,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             './ylwrap: line 176: yacc: command not found'], 1,
             MissingCommand('yacc'))
+        self.run_test([
+            '/bin/sh: 1: cmake: not found'], 1,
+            MissingCommand('cmake'))
 
     def test_pkg_config_missing(self):
         self.run_test([
