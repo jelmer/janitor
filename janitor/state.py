@@ -281,6 +281,24 @@ def queue_length(minimum_priority=None):
     return cur.fetchone()[0]
 
 
+def queue_duration(minimum_priority=None):
+    cur = conn.cursor()
+    args = []
+    query = """
+SELECT
+  SUM(estimated_duration)
+FROM
+  queue
+WHERE
+  estimated_duration IS NOT NULL
+"""
+    if minimum_priority is not None:
+        query += ' AND priority >= %s'
+        args.append(minimum_priority)
+    cur.execute(query, args)
+    return cur.fetchone()[0]
+
+
 def iter_published_packages(suite):
     cur = conn.cursor()
     cur.execute("""
