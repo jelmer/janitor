@@ -45,6 +45,8 @@ from .build import attempt_build
 from .sbuild_log import (
     MissingPythonModule,
     MissingCHeader,
+    MissingPkgConfig,
+    MissingCommand,
     SbuildFailure,
     )
 from .trace import note, warning
@@ -205,9 +207,32 @@ def fix_missing_c_header(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_pkg_config(tree, error, committer=None):
+    package = get_package_for_paths(
+        [os.path.join('/usr/lib/pkgconfig', error.module + '.pc')])
+    if package is None:
+        package = get_package_for_paths(
+            [os.path.join('/usr/lib', '.*', 'pkgconfig',
+                          error.module + '.pc')],
+            regex=True)
+    if package is None:
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
+def fix_missing_command(tree, error, committer=None):
+    package = get_package_for_paths(
+        [os.path.join('/usr/bin', error.command)])
+    if package is None:
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingCHeader, fix_missing_c_header),
+    (MissingPkgConfig, fix_missing_pkg_config),
+    (MissingCommand, fix_missing_command),
 ]
 
 
