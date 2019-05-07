@@ -251,6 +251,28 @@ def node_module_missing(m):
     return MissingNodeModule(m.group(1))
 
 
+class MissingCommand(object):
+
+    kind = 'command-missing'
+
+    def __init__(self, command):
+        self.command = command
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            self.command == other.command
+
+    def __str__(self):
+        return "Missing command: %s" % self.command
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.command)
+
+
+def command_missing(m):
+    return MissingCommand(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -268,6 +290,7 @@ build_failure_regexps = [
     (r'.*:\d+:\d+: fatal error: (.*\.h): No such file or directory',
      c_header_missing),
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
+    (r'.*: line \d+: ([^ ]+): command not found', command_missing),
 ]
 
 compiled_build_failure_regexps = [

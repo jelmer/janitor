@@ -22,6 +22,7 @@ from janitor.sbuild_log import (
     MissingGoPackage,
     MissingFile,
     MissingNodeModule,
+    MissingCommand,
     )
 import unittest
 
@@ -105,3 +106,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'Error: Cannot find module \'tape\''], 1,
             MissingNodeModule('tape'))
+
+    def test_command_missing(self):
+        self.run_test([
+            './ylwrap: line 176: yacc: command not found'], 1,
+            MissingCommand('yacc'))
