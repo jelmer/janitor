@@ -101,6 +101,8 @@ def get_package_for_paths(paths, regex=False):
     candidates = set()
     for path in paths:
         candidates.update(search_apt_file(path, regex=regex))
+        if candidates:
+            break
     if len(candidates) == 0:
         warning('No packages found that contain %r', path)
         return None
@@ -179,9 +181,9 @@ def fix_missing_python_module(tree, error, committer=None):
         extra_build_deps.append(py3_pkg)
     else:
         if has_cpy3_build_deps or default:
-            extra_build_deps(py3_pkg)
+            extra_build_deps.append(py3_pkg)
         if has_cpy2_build_deps or default:
-            extra_build_deps(py2_pkg)
+            extra_build_deps.append(py2_pkg)
         if has_pypy_build_deps:
             extra_build_deps.append(pypy_pkg)
 
