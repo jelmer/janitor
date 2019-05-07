@@ -326,6 +326,7 @@ build_failure_regexps = [
      c_header_missing),
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
+    (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
 ]
