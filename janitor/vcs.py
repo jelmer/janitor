@@ -80,7 +80,7 @@ def open_branch_ext(vcs_url, possible_transports=None):
 
 def mirror_branches(vcs_result_dir, pkg, branch_map,
                     public_master_branch=None):
-    vcses = set(get_vcs_abbreviation(br) for br in branch_map.values())
+    vcses = set(get_vcs_abbreviation(br) for name, br in branch_map)
     if len(vcses) == 0:
         return
     if len(vcses) > 1:
