@@ -61,7 +61,7 @@ def include_build_log_failure(f, log_path, length):
     if focus_section:
         include_lines = (max(1, offsets[focus_section][1]-length),
                          offsets[focus_section][1])
-    else:
+    elif length < linecount:
         include_lines = (linecount-length, None)
     if focus_section == 'build':
         lines = paragraphs.get(focus_section, [])
