@@ -441,12 +441,27 @@ def iter_unscanned_branches(last_scanned_minimum):
 SELECT
   name,
   'master',
-  branch_url
+  branch_url,
+  last_scanned
 FROM package
 LEFT JOIN branch ON package.branch_url = branch.url
 WHERE
   last_scanned is null or now() - last_scanned > %s
 """, (last_scanned_minimum, ))
+    return cur.fetchall()
+
+
+def iter_package_branches():
+    cur = conn.cursor()
+    cur.execute("""
+SELECT
+  name,
+  branch_url,
+  revision
+FROM
+  package
+LEFT JOIN branch ON package.branch_url = branch.url
+""")
     return cur.fetchall()
 
 
