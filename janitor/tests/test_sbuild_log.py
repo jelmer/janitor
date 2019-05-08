@@ -106,6 +106,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'cdhit-common.h:39:9: fatal error: zlib.h: No such file '
             'or directory'], 1,
             MissingCHeader('zlib.h'))
+        self.run_test([
+            '/<<PKGBUILDDIR>>/Kernel/Operation_Vector.cpp:15:10: '
+            'fatal error: petscvec.h: No such file or directory'], 1,
+            MissingCHeader('petscvec.h'))
 
     def test_node_module_missing(self):
         self.run_test([
