@@ -119,6 +119,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             '/bin/sh: 1: cmake: not found'], 1,
             MissingCommand('cmake'))
+        self.run_test([
+            'sh: 1: git: not found'], 1,
+            MissingCommand('git'))
 
     def test_pkg_config_missing(self):
         self.run_test([
