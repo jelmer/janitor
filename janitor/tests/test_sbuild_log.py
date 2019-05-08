@@ -24,6 +24,7 @@ from janitor.sbuild_log import (
     MissingNodeModule,
     MissingCommand,
     MissingPkgConfig,
+    DhWithOrderIncorrect,
     )
 import unittest
 
@@ -121,3 +122,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'configure: error: Package requirements '
             '(apertium-3.2 >= 3.2.0) were not met:'],
             1, MissingPkgConfig('apertium-3.2', '3.2.0'))
+
+    def test_dh_with_order(self):
+        self.run_test([
+            'dh: Unknown sequence --with '
+            '(options should not come before the sequence)'], 1,
+            DhWithOrderIncorrect())

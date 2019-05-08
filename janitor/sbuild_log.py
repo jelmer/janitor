@@ -308,6 +308,18 @@ def pkg_config_missing(m):
     return None
 
 
+class DhWithOrderIncorrect(object):
+
+    kind = 'debhelper-argument-order'
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+
+def dh_with_order(m):
+    return DhWithOrderIncorrect()
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -329,6 +341,8 @@ build_failure_regexps = [
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
+    (r'dh: Unknown sequence --with '
+     r'\(options should not come before the sequence\)', dh_with_order),
 ]
 
 compiled_build_failure_regexps = [
