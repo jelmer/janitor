@@ -122,6 +122,8 @@ def main(argv=None):
                 last_scanned_minimum=timedelta(days=7))):
         note('Processing %s', package)
         netloc = urllib.parse.urlparse(branch_url).netloc
+        # TODO(jelmer): scan prefetch hosts too, just after a much longer
+        # period (1 month?)
         if netloc in prefetch_hosts and last_scanned:
             continue
         try:
