@@ -19,8 +19,8 @@
 
 from datetime import datetime, timedelta
 
-import os
 import sys
+import time
 
 from prometheus_client import (
     Gauge,
@@ -78,7 +78,7 @@ def main(argv=None):
                 branch_url, last_scanned=datetime.now(), status='success',
                 revision=branch.last_revision())
         if args.delay:
-            os.sleep(args.delay)
+            time.sleep(args.delay)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
