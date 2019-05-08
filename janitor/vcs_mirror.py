@@ -19,6 +19,7 @@
 
 from datetime import datetime, timedelta
 
+import os
 import sys
 
 from prometheus_client import (
@@ -51,6 +52,10 @@ def main(argv=None):
     parser.add_argument(
         '--vcs-result-dir', type=str,
         help='Directory to store VCS repositories in.')
+    parser.add_argument(
+        '--delay', type=int,
+        help='Number of seconds to wait in between repositories.',
+        default=None)
 
     args = parser.parse_args()
 
@@ -71,6 +76,8 @@ def main(argv=None):
             state.update_branch_status(
                 branch_url, last_scanned=datetime.now(), status='success',
                 revision=branch.last_revision())
+        if args.delay:
+            os.sleep(args.delay)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
