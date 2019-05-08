@@ -361,6 +361,9 @@ def strip_useless_build_tail(lines):
     for i, line in enumerate(lines[-15:]):
         if line.startswith('Build finished at '):
             lines = lines[:len(lines)-(15-i)]
+            if lines and lines[-1] == ('-' * 80 + '\n'):
+                lines = lines[:-1]
+            break
     try:
         end_offset = lines.index('==> config.log <==\n')
     except ValueError:
