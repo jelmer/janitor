@@ -48,6 +48,7 @@ from .sbuild_log import (
     MissingPkgConfig,
     MissingCommand,
     MissingFile,
+    MissingGoPackage,
     SbuildFailure,
     )
 from .trace import note, warning
@@ -197,6 +198,15 @@ def fix_missing_python_module(tree, error, committer=None):
     return True
 
 
+def fix_missing_go_package(tree, error, committer=None):
+    package = get_package_for_paths(
+        [os.path.join('/usr/share/gocode/src', error.package)],
+        regex=False)
+    if package is None:
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 def fix_missing_c_header(tree, error, committer=None):
     package = get_package_for_paths(
         [os.path.join('/usr/include', error.header)], regex=False)
@@ -242,6 +252,7 @@ FIXERS = [
     (MissingPkgConfig, fix_missing_pkg_config),
     (MissingCommand, fix_missing_command),
     (MissingFile, fix_missing_file),
+    (MissingGoPackage, fix_missing_go_package),
 ]
 
 
