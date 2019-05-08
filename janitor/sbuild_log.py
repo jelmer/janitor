@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # Copyright (C) 2019 Jelmer Vernooij <jelmer@jelmer.uk>
+# encoding: utf-8
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -339,15 +340,21 @@ build_failure_regexps = [
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
+    ('E   ModuleNotFoundError: No module named \'(.*)\'',
+     python3_module_not_found),
     (r'/usr/bin/python3: No module named (.*)', python3_module_not_found),
     ('.*: cannot find package "(.*)" in any of:', missing_go_package),
     ('ImportError: No module named (.*)', python2_module_not_found),
-    (r'.*:\d+:\d+: fatal error: (.*\.h): No such file or directory',
+    (r'[^:]+:\d+:\d+: fatal error: (.+\.h): No such file or directory',
      c_header_missing),
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
+    (r'/usr/bin/env: ‘(.*)’: No such file or directory',
+     command_missing),
+    (r'/usr/bin/env: \'(.*)\': No such file or directory',
+     command_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
     (r'dh: Unknown sequence --with '

@@ -96,6 +96,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'ModuleNotFoundError: No module named \'distro\''], 1,
             MissingPythonModule('distro', 3))
         self.run_test([
+            'E   ModuleNotFoundError: No module named \'twisted\''], 1,
+            MissingPythonModule('twisted', 3))
+        self.run_test([
             '/usr/bin/python3: No module named sphinx'], 1,
             MissingPythonModule('sphinx', 3))
 
@@ -130,6 +133,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'sh: 1: git: not found'], 1,
             MissingCommand('git'))
+        self.run_test([
+            '/usr/bin/env: ‘python3’: No such file or directory'], 1,
+            MissingCommand('python3'))
 
     def test_pkg_config_missing(self):
         self.run_test([
