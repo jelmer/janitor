@@ -44,6 +44,8 @@ SBUILD_FOCUS_SECTION = {
 
 class DpkgSourceLocalChanges(object):
 
+    kind = 'unexpected-local-upstream-changes'
+
     def __str__(self):
         return "Tree has local changes."
 
@@ -60,7 +62,7 @@ def worker_failure_from_sbuild_log(build_log_path):
                 'dpkg-source: error: aborting due to unexpected upstream '
                 'changes, see '):
             return SbuildFailure(
-                'unexpected-upstream-changes', 'unexpected upstream changes',
+                'unpack', 'unexpected upstream changes',
                 DpkgSourceLocalChanges())
 
     failed_stage = find_failed_stage(
