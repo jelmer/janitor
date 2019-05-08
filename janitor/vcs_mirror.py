@@ -61,8 +61,9 @@ def update_gitlab_branches(vcs_result_dir, host):
     for project in salsa.projects.list(
             order_by='updated_at', archived=False, visibility='public',
             as_list=False):
-        if (datetime.fromisoformat(project.last_activity_at[:-1]) -
-                datetime.now() > timedelta(days=5)):
+        if (datetime.now() -
+                datetime.fromisoformat(project.last_activity_at[:-1])
+                > timedelta(days=5)):
             break
         for branch_name, last_revision in branches_per_repo.get(
                 project.http_url_to_repo, {}).items():
@@ -78,7 +79,8 @@ def update_gitlab_branches(vcs_result_dir, host):
                 url = '%s,branch=%s' % (project.http_url_to_repo, branch_name)
             else:
                 url = project.http_url_to_repo
-            note('Updating %s', url)
+            note('Updating %s (last activity: %s)', url,
+                 project.last_activity_at)
             suite = 'master'
             try:
                 branch = open_branch_ext(url)
