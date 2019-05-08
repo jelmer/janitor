@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 
 import sys
 import time
+import urllib.parse
 
 from prometheus_client import (
     Gauge,
@@ -46,35 +47,53 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-def update_salsa_branches():
+def update_gitlab_branches(vcs_result_dir, host):
+    package_per_repo = {}
     branches_per_repo = {}
-    for name, unused_maintainer, branch_url in state.iter_packages():
-        if branch_url.startswith('https://salsa.debian.org/'):
+    for name, branch_url, revision in state.iter_package_branches():
+        if branch_url.startswith('https://%s/' % host):
             url, params = urlutils.split_segment_parameters(branch_url)
-            branches_per_repo.setdefault(url, []).append(params.get('branch'))
+            branches_per_repo.setdefault(url, {})
+            branches_per_repo[url][params.get('branch')] = revision
+            package_per_repo[url] = name
 
-    salsa = connect_gitlab('salsa.debian.org')
+    salsa = connect_gitlab(host)
     for project in salsa.projects.list(
             order_by='updated_at', archived=False, visibility='public',
             as_list=False):
         if (datetime.fromisoformat(project.last_activity_at[:-1]) -
-                datetime.now() < timedelta(days=5)):
+                datetime.now() > timedelta(days=5)):
             break
-        for branch_name in branches_per_repo.get(project.http_url_to_repo, []):
+        for branch_name, last_revision in branches_per_repo.get(
+                project.http_url_to_repo, {}).items():
             if branch_name is None:
                 branch = project.branches.get(project.default_branch)
             else:
                 branch = project.branches.get(branch_name)
             commit_id = branch.commit['id']
             revision = 'git-v1:%s' % commit_id
+            if revision == last_revision:
+                continue
             if branch_name:
                 url = '%s,branch=%s' % (project.http_url_to_repo, branch_name)
             else:
                 url = project.http_url_to_repo
             note('Updating %s', url)
-            state.update_branch_status(
-                url, last_scanned=datetime.now(), status='success',
-                revision=revision)
+            suite = 'master'
+            try:
+                branch = open_branch_ext(url)
+            except BranchOpenFailure as e:
+                state.update_branch_status(
+                    url, last_scanned=datetime.now(), status=e.code,
+                    revision=None)
+            else:
+                mirror_branches(
+                    vcs_result_dir, package_per_repo[project.http_url_to_repo],
+                    [(suite, branch)], public_master_branch=branch)
+
+                state.update_branch_status(
+                    url, last_scanned=datetime.now(), status='success',
+                    revision=revision.encode('utf-8'))
 
 
 def main(argv=None):
@@ -94,12 +113,16 @@ def main(argv=None):
 
     args = parser.parse_args()
 
-    update_salsa_branches()
+    prefetch_hosts = ['salsa.debian.org']
+    for host in prefetch_hosts:
+        update_gitlab_branches(args.vcs_result_dir, host)
 
-    for package, suite, branch_url in state.iter_unscanned_branches(
-            last_scanned_minimum=timedelta(days=7)):
+    for package, suite, branch_url, last_scanned in (
+            state.iter_unscanned_branches(
+                last_scanned_minimum=timedelta(days=7))):
         note('Processing %s', package)
-        if branch_url.startswith('https://salsa.debian.org/'):
+        netloc = urllib.parse.urlparse(branch_url).netloc
+        if netloc in prefetch_hosts and last_scanned:
             continue
         try:
             branch = open_branch_ext(branch_url)
