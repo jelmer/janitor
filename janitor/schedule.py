@@ -46,7 +46,7 @@ from .udd import UDD
 # give a better result code.
 VAGUE_RESULT_CODES = [
     None, 'worker-failure', 'worker-exception',
-    'build-failed-stage-explain-bd-uninstallable']
+    'build-failed-stage-explain-bd-uninstallable', 'build-failed']
 
 
 def get_ubuntu_package_url(launchpad, package):

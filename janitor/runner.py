@@ -371,18 +371,18 @@ async def process_one(
                 post_check=post_check, build_command=build_command,
                 log_path=log_path)
 
-        if retcode != 0:
-            return JanitorResult(
-                pkg, log_id=log_id,
-                code='worker-failure',
-                description='Worker exited with return code %d' % retcode)
-
         for name in [
                 n for n in os.listdir(output_directory) if n.endswith('.log')]:
             src_build_log_path = os.path.join(output_directory, name)
             dest_build_log_path = os.path.join(log_dir, pkg, log_id)
             os.makedirs(dest_build_log_path, exist_ok=True)
             shutil.copy(src_build_log_path, dest_build_log_path)
+
+        if retcode != 0:
+            return JanitorResult(
+                pkg, log_id=log_id,
+                code='worker-failure',
+                description='Worker exited with return code %d' % retcode)
 
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
