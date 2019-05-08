@@ -17,6 +17,8 @@
 
 """Import VCS branches."""
 
+from breezy import urlutils
+
 from datetime import datetime, timedelta
 
 import sys
@@ -28,6 +30,7 @@ from prometheus_client import (
     push_to_gateway,
     )
 
+from breezy.plugins.propose.gitlabs import connect_gitlab
 
 from . import state
 from .vcs import (
@@ -41,6 +44,37 @@ from .trace import note
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
+
+
+def update_salsa_branches():
+    branches_per_repo = {}
+    for name, unused_maintainer, branch_url in state.iter_packages():
+        if branch_url.startswith('https://salsa.debian.org/'):
+            url, params = urlutils.split_segment_parameters(branch_url)
+            branches_per_repo.setdefault(url, []).append(params.get('branch'))
+
+    salsa = connect_gitlab('salsa.debian.org')
+    for project in salsa.projects.list(
+            order_by='updated_at', archived=False, visibility='public',
+            as_list=False):
+        if (datetime.fromisoformat(project.last_activity_at[:-1]) -
+                datetime.now() < timedelta(days=5)):
+            break
+        for branch_name in branches_per_repo.get(project.http_url_to_repo, []):
+            if branch_name is None:
+                branch = project.branches.get(project.default_branch)
+            else:
+                branch = project.branches.get(branch_name)
+            commit_id = branch.commit['id']
+            revision = 'git-v1:%s' % commit_id
+            if branch_name:
+                url = '%s,branch=%s' % (project.http_url_to_repo, branch_name)
+            else:
+                url = project.http_url_to_repo
+            note('Updating %s', url)
+            state.update_branch_status(
+                url, last_scanned=datetime.now(), status='success',
+                revision=revision)
 
 
 def main(argv=None):
@@ -60,10 +94,13 @@ def main(argv=None):
 
     args = parser.parse_args()
 
-    # TODO(jelmer): Special handling for salsa
+    update_salsa_branches()
+
     for package, suite, branch_url in state.iter_unscanned_branches(
             last_scanned_minimum=timedelta(days=7)):
         note('Processing %s', package)
+        if branch_url.startswith('https://salsa.debian.org/'):
+            continue
         try:
             branch = open_branch_ext(branch_url)
         except BranchOpenFailure as e:
