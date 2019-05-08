@@ -317,6 +317,9 @@ class DhWithOrderIncorrect(object):
     def __eq__(self, other):
         return isinstance(other, type(self))
 
+    def __str__(self):
+        return "dh argument order is incorrect"
+
 
 def dh_with_order(m):
     return DhWithOrderIncorrect()
