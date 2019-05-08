@@ -94,7 +94,7 @@ def mirror_branches(vcs_result_dir, pkg, branch_map,
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('git-bare')())
-        for (target_branch_name, from_branch) in branch_map.items():
+        for (target_branch_name, from_branch) in branch_map:
             try:
                 target_branch = vcs_result_controldir.open_branch(
                     name=target_branch_name)
@@ -115,7 +115,7 @@ def mirror_branches(vcs_result_dir, pkg, branch_map,
             vcs_result_controldir.open_repository()
         except NoRepositoryPresent:
             vcs_result_controldir.create_repository(shared=True)
-        for (target_branch_name, from_branch) in branch_map.items():
+        for (target_branch_name, from_branch) in branch_map:
             target_branch_path = os.path.join(path, target_branch_name)
             try:
                 target_branch = Branch.open(target_branch_path)
@@ -139,10 +139,10 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
      * upstream - the upstream branch (optional)
      * pristine-tar the pristine tar packaging branch (optional)
     """
-    branch_map = {
-        name: local_branch,
-        'master': main_branch,
-        }
+    branch_map = [
+        (name, local_branch),
+        ('master', main_branch),
+    ]
     if get_vcs_abbreviation(local_branch) == 'git':
         for branch_name in (additional_colocated_branches or []):
             try:
@@ -150,12 +150,12 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
                     name=branch_name)
             except NotBranchError:
                 continue
-            branch_map[branch_name] = from_branch
+            branch_map.append((branch_name, from_branch))
     mirror_branches(
         vcs_result_dir, pkg, branch_map, public_master_branch=main_branch)
 
 
-def get_cached_resume_branch(vcs_type, package, branch_name):
+def get_cached_branch(vcs_type, package, branch_name):
     if vcs_type == 'git':
         url = 'https://janitor.debian.net/git/%s,branch=%s' % (
             package, branch_name)
