@@ -345,6 +345,7 @@ build_failure_regexps = [
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
+    (r'sh: \d+: ([^ ]+): not found', command_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
     (r'dh: Unknown sequence --with '
