@@ -58,8 +58,10 @@ def worker_failure_from_sbuild_log(build_log_path):
     description = None
     error = None
     if failed_stage in ('build', 'autopkgtest'):
+        section_lines = paragraphs.get(focus_section, [])
+        section_lines = strip_useless_build_tail(section_lines)
         offset, description, error = find_build_failure_description(
-            paragraphs.get(focus_section, []))
+            section_lines)
         if error:
             description = str(error)
     if description is None and failed_stage is not None:
@@ -350,19 +352,30 @@ compiled_build_failure_regexps = [
     (re.compile(regexp), cb) for (regexp, cb) in build_failure_regexps]
 
 
+def strip_useless_build_tail(lines):
+    # Strip off unuseful tail
+    for i, line in enumerate(lines[-15:]):
+        if line.startswith('Build finished at '):
+            lines = lines[:len(lines)-(15-i)]
+    try:
+        end_offset = lines.index('==> config.log <==\n')
+    except ValueError:
+        pass
+    else:
+        lines = lines[:end_offset]
+
+    return lines
+
+
 def find_build_failure_description(lines):
     """Find the key failure line in build output.
 
     Returns:
       tuple with (line offset, line, error object)
     """
-    try:
-        end_offset = lines.index('==> config.log <==\n')
-    except ValueError:
-        end_offset = len(lines)
     OFFSET = 20
     for i in range(1, OFFSET):
-        lineno = end_offset - i
+        lineno = len(lines) - i
         if lineno < 0:
             break
         line = lines[lineno].strip('\n')
@@ -404,8 +417,9 @@ def main(argv=None):
         print('Failed stage: %s (focus section: %s)' % (
             failed_stage, focus_section))
     if failed_stage in ('build', 'autopkgtest'):
-        offset, line, error = find_build_failure_description(
-            section_lines.get(focus_section, []))
+        lines = section_lines.get(focus_section, [])
+        lines = strip_useless_build_tail(lines)
+        offset, line, error = find_build_failure_description(lines)
         if offset:
             print('Failed line: %d:' %
                   (section_offsets[focus_section][0] + offset))

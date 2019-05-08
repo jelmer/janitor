@@ -17,6 +17,7 @@ from janitor.sbuild_log import (
     find_failed_stage,
     find_build_failure_description,
     SBUILD_FOCUS_SECTION,
+    strip_useless_build_tail,
 )  # noqa: E402
 from janitor.site.rst import (
     format_duration,
@@ -63,15 +64,13 @@ def include_build_log_failure(f, log_path, length):
     else:
         include_lines = (linecount-length, None)
     if focus_section == 'build':
-        offset, unused_line, unused_err = find_build_failure_description(
-            paragraphs.get(focus_section, []))
+        lines = paragraphs.get(focus_section, [])
+        lines = strip_useless_build_tail(lines)
+        include_lines = (max(1, offsets[focus_section][0] + len(lines)-length),
+                         offsets[focus_section][0] + len(lines))
+        offset, unused_line, unused_err = find_build_failure_description(lines)
         if offset is not None:
             highlight_lines = [offsets[focus_section][0] + offset]
-        # Strip off unuseful tail
-        for i, line in enumerate(paragraphs.get('build', [])[-15:]):
-            if line.startswith('Build finished at '):
-                include_lines = (max(1, include_lines[0]-(15-i)),
-                                 max(1, include_lines[1]-(15-i)))
 
     include_console_log(
         f, log_path, include_lines=include_lines,
