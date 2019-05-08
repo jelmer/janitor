@@ -85,7 +85,7 @@ def update_gitlab_branches(vcs_result_dir, host):
             except BranchOpenFailure as e:
                 state.update_branch_status(
                     url, last_scanned=datetime.now(), status=e.code,
-                    revision=None)
+                    revision=None, description=e.description)
             else:
                 mirror_branches(
                     vcs_result_dir, package_per_repo[project.http_url_to_repo],
@@ -131,7 +131,7 @@ def main(argv=None):
         except BranchOpenFailure as e:
             state.update_branch_status(
                 branch_url, last_scanned=datetime.now(), status=e.code,
-                revision=None)
+                revision=None, description=e.description)
         else:
             mirror_branches(
                 args.vcs_result_dir, package, [(suite, branch)],

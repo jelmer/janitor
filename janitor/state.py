@@ -466,15 +466,17 @@ LEFT JOIN branch ON package.branch_url = branch.url
 
 
 def update_branch_status(
-        branch_url, last_scanned=None, status=None, revision=None):
+        branch_url, last_scanned=None, status=None, revision=None,
+        description=None):
     cur = conn.cursor()
     cur.execute("""\
-INSERT INTO branch (url, status, revision, last_scanned)
-VALUES (%s, %s, %s, %s)
+INSERT INTO branch (url, status, revision, last_scanned, description)
+VALUES (%s, %s, %s, %s, %s)
 ON CONFLICT (url) DO UPDATE SET
   status = EXCLUDED.status,
   revision = EXCLUDED.revision,
-  last_scanned = EXCLUDED.last_scanned
+  last_scanned = EXCLUDED.last_scanned,
+  description = EXCLUDED.description
 """, (branch_url, status, revision.decode('utf-8') if revision else None,
-      last_scanned))
+      last_scanned, description))
     conn.commit()
