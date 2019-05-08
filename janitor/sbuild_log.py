@@ -328,6 +328,8 @@ def dh_with_order(m):
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
+    (r'[^:]+:\d+: (.*): No such file or directory',
+        file_not_found),
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
     (r'(distutils.errors.DistutilsError|error): '
