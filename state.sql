@@ -63,3 +63,9 @@ CREATE TABLE IF NOT EXISTS queue (
    estimated_duration interval,
    unique(package, command)
 );
+CREATE TABLE IF NOT EXISTS branch (
+   url text not null primary key,
+   last_revision text,
+   last_scanned timestamp,
+   status text
+);
