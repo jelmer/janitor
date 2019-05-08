@@ -91,6 +91,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'ModuleNotFoundError: No module named \'distro\''], 1,
             MissingPythonModule('distro', 3))
+        self.run_test([
+            '/usr/bin/python3: No module named sphinx'], 1,
+            MissingPythonModule('sphinx', 3))
 
     def test_go_missing(self):
         self.run_test([

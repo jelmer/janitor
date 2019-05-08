@@ -332,6 +332,7 @@ build_failure_regexps = [
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
+    (r'/usr/bin/python3: No module named (.*)', python3_module_not_found),
     ('.*: cannot find package "(.*)" in any of:', missing_go_package),
     ('ImportError: No module named (.*)', python2_module_not_found),
     (r'.*:\d+:\d+: fatal error: (.*\.h): No such file or directory',
