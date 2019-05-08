@@ -67,5 +67,6 @@ CREATE TABLE IF NOT EXISTS branch (
    url text not null primary key,
    revision text,
    last_scanned timestamp,
-   status text
+   status text,
+   description text
 );
