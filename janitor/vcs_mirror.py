@@ -51,7 +51,8 @@ def main(argv=None):
         help='Prometheus push gateway to export to.')
     parser.add_argument(
         '--vcs-result-dir', type=str,
-        help='Directory to store VCS repositories in.')
+        help='Directory to store VCS repositories in.',
+        default='vcs')
     parser.add_argument(
         '--delay', type=int,
         help='Number of seconds to wait in between repositories.',
