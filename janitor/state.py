@@ -433,3 +433,28 @@ ORDER BY
 """
     cur.execute(query, args)
     return cur.fetchall()
+
+
+def iter_unscanned_branches(last_scanned_minimum):
+    cur = conn.cursor()
+    cur.execute("""
+SELECT
+  name,
+  'master',
+  branch_url
+FROM package
+INNER JOIN branch ON package.branch_url = branch.url
+WHERE
+  last_scanned is null or now() - last_scanned > %s
+""", (last_scanned_minimum, ))
+    return cur.fetchall()
+
+
+def update_branch_status(
+        branch_url, last_scanned=None, status=None, revision=None):
+    cur = conn.cursor()
+    cur.execute("""\
+UPDATE branch SET status = %s, revision = %s, last_scanned = %s
+WHERE url = %s
+""", (status, revision, last_scanned, branch_url))
+    conn.commit()
