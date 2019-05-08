@@ -57,9 +57,15 @@ from .trace import note, warning
 DEFAULT_MAX_ITERATIONS = 10
 
 
+class CircularDependency(Exception):
+    """Adding dependency would introduce cycle."""
+
+    def __init__(self, package):
+        self.package = package
+
+
 def add_build_dependency(tree, package, minimum_version=None,
                          committer=None):
-    # TODO(jelmer): Make sure "package" actually exists in Debian
     def add_build_dep(control):
         if minimum_version:
             control["Build-Depends"] = ensure_minimum_version(
@@ -69,8 +75,13 @@ def add_build_dependency(tree, package, minimum_version=None,
             control["Build-Depends"] = add_dependency(
                 control["Build-Depends"], package)
 
+    def check_binary_pkg(binary):
+        if binary["Package"] == package:
+            raise CircularDependency(package)
+
     update_control(
         source_package_cb=add_build_dep,
+        binary_package_cb=check_binary_pkg,
         path=os.path.join(tree.basedir, 'debian/control'))
 
     if minimum_version:
@@ -290,6 +301,10 @@ def build_incrementally(
             except FormattingUnpreservable:
                 warning('Unable to fix %r, control format unpreservable',
                         e.error)
+                raise e
+            except CircularDependency:
+                warning('Unable to fix %r; it would introduce a circular '
+                        'dependency.', e.error)
                 raise e
             fixed_errors.append(e.error)
             if os.path.exists(os.path.join(output_directory, 'build.log')):
