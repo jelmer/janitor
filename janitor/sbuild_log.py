@@ -157,8 +157,9 @@ class MissingPythonModule(object):
             return ret
 
     def __repr__(self):
-        return "%s(%r, minimum_version=%r)" % (
-            type(self).__name__, self.module, self.minimum_version)
+        return "%s(%r, python_version=%r, minimum_version=%r)" % (
+            type(self).__name__, self.module, self.python_version,
+            self.minimum_version)
 
 
 def python_module_not_found(m):
@@ -180,6 +181,17 @@ def python_reqs_not_found(m):
         return MissingPythonModule(pkg.strip(), None, minimum.strip())
     if ' ' not in expr:
         return MissingPythonModule(expr, None)
+    # Hmm
+    return None
+
+
+def python2_reqs_not_found(m):
+    expr = m.group(1)
+    if '>=' in expr:
+        pkg, minimum = expr.split('>=')
+        return MissingPythonModule(pkg.strip(), 2, minimum.strip())
+    if ' ' not in expr:
+        return MissingPythonModule(expr, 2)
     # Hmm
     return None
 
@@ -356,6 +368,10 @@ build_failure_regexps = [
     (r'(distutils.errors.DistutilsError|error): '
         r'Could not find suitable distribution '
         r'for Requirement.parse\(\'(.*)\'\)', python_reqs_not_found),
+    (r'pluggy.manager.PluginValidationError: '
+     r'Plugin \'.*\' could not be loaded: '
+     r'\(.* \(/usr/lib/python2.7/dist-packages\), '
+     r'Requirement.parse\(\'(.*)\'\)\)\!', python2_reqs_not_found),
     ('E   ImportError: cannot import name ([^ ]+)', python_module_not_found),
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',

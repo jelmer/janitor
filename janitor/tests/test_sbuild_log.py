@@ -78,10 +78,16 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
     def test_pytest_import(self):
         self.run_test([
             'E   ImportError: cannot import name cmod'], 1,
-            MissingPythonModule('cmod', 2))
+            MissingPythonModule('cmod'))
         self.run_test([
             'E   ImportError: No module named mock'], 1,
             MissingPythonModule('mock', 2))
+        self.run_test([
+            'pluggy.manager.PluginValidationError: '
+            'Plugin \'xdist.looponfail\' could not be loaded: '
+            '(pytest 3.10.1 (/usr/lib/python2.7/dist-packages), '
+            'Requirement.parse(\'pytest>=4.4.0\'))!'], 1,
+            MissingPythonModule('pytest', 2, '4.4.0'))
 
     def test_python2_import(self):
         self.run_test(
