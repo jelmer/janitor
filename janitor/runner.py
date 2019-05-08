@@ -24,17 +24,10 @@ import shutil
 import signal
 import sys
 import tempfile
-import urllib.parse
 import uuid
 
 from debian.deb822 import Changes
 
-from breezy.branch import Branch
-from breezy.errors import (
-    NotBranchError,
-    NoRepositoryPresent,
-    InvalidHttpResponse,
-    )
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -225,7 +218,7 @@ async def process_one(
             vcs_url, possible_transports=possible_transports)
     except BranchOpenFailure as e:
         return JanitorResult(
-            pkg, log_id=log_id, description=e.description, code=code)
+            pkg, log_id=log_id, description=e.description, code=e.code)
 
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)

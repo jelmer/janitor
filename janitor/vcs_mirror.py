@@ -34,6 +34,7 @@ from .vcs import (
     BranchOpenFailure,
     mirror_branches,
     )
+from .trace import note
 
 
 last_success_gauge = Gauge(
@@ -56,6 +57,7 @@ def main(argv=None):
     # TODO(jelmer): Special handling for salsa
     for package, suite, branch_url in state.iter_unscanned_branches(
             last_scanned_minimum=timedelta(days=7)):
+        note('Processing %s', package)
         try:
             branch = open_branch_ext(branch_url)
         except BranchOpenFailure as e:

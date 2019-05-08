@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS queue (
 );
 CREATE TABLE IF NOT EXISTS branch (
    url text not null primary key,
-   last_revision text,
+   revision text,
    last_scanned timestamp,
    status text
 );
