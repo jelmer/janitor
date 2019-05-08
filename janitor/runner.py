@@ -66,7 +66,7 @@ from .vcs import (
     open_branch_ext,
     copy_vcs_dir,
     BranchOpenFailure,
-    get_cached_resume_branch,
+    get_cached_branch,
     )
 
 packages_processed_count = Counter(
@@ -157,7 +157,8 @@ class WorkerResult(object):
 
 async def invoke_subprocess_worker(
         worker_kind, main_branch, env, command, output_directory,
-        resume_branch=None, pre_check=None, post_check=None,
+        resume_branch=None, cached_branch=None,
+        pre_check=None, post_check=None,
         build_command=None, log_path=None):
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
@@ -172,6 +173,8 @@ async def invoke_subprocess_worker(
             '--output-directory=%s' % output_directory]
     if resume_branch:
         args.append('--resume-branch-url=%s' % resume_branch.user_url)
+    if cached_branch:
+        args.append('--cached-branch-url=%s' % cached_branch.user_url)
     if pre_check:
         args.append('--pre-check=%s' % pre_check)
     if post_check:
@@ -241,19 +244,25 @@ async def process_one(
             resume_branch = None
 
     if resume_branch is None:
-        resume_branch = get_cached_resume_branch(
+        resume_branch = get_cached_branch(
             get_vcs_abbreviation(main_branch), pkg, branch_name)
 
     if resume_branch is not None:
         note('Resuming from %s', resume_branch.user_url)
 
+    cached_branch = get_cached_branch(
+        get_vcs_abbreviation(main_branch), pkg, 'master')
+
+    if cached_branch is not None:
+        note('Using cached branch %s', cached_branch.user_url)
+
     with tempfile.TemporaryDirectory() as output_directory:
         log_path = os.path.join(output_directory, 'worker.log')
         retcode = await invoke_subprocess_worker(
                 worker_kind, main_branch, env, command, output_directory,
-                resume_branch=resume_branch, pre_check=pre_check,
-                post_check=post_check, build_command=build_command,
-                log_path=log_path)
+                resume_branch=resume_branch, cached_branch=cached_branch,
+                pre_check=pre_check, post_check=post_check,
+                build_command=build_command, log_path=log_path)
 
         for name in [
                 n for n in os.listdir(output_directory) if n.endswith('.log')]:

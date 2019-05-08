@@ -68,6 +68,7 @@ from .build import (
 )
 from .trace import (
     note,
+    warning,
 )
 
 
@@ -286,7 +287,7 @@ def process_package(vcs_url, env, command, output_directory,
                     metadata, build_command=None, pre_check_command=None,
                     post_check_command=None, possible_transports=None,
                     possible_hosters=None, resume_branch_url=None,
-                    tgz_repo=False):
+                    cached_branch_url=None, tgz_repo=False):
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg
@@ -313,6 +314,17 @@ def process_package(vcs_url, env, command, output_directory,
     except BranchUnavailable as e:
         raise WorkerFailure('worker-branch-unavailable', str(e))
 
+    if cached_branch_url:
+        try:
+            cached_branch = open_branch(
+                cached_branch_url,
+                possible_transports=possible_transports)
+        except BranchUnavailable as e:
+            warning('Cached branch URL unavailable: %s', e)
+            cached_branch = None
+    else:
+        cached_branch = None
+
     if resume_branch_url:
         try:
             resume_branch = open_branch(
@@ -324,6 +336,7 @@ def process_package(vcs_url, env, command, output_directory,
         resume_branch = None
 
     with Workspace(main_branch, resume_branch=resume_branch,
+                   cached_branch=cached_branch,
                    path=os.path.join(output_directory, pkg)) as ws:
         metadata['main_branch_revision'] = (
             ws.main_branch.last_revision().decode())
@@ -419,6 +432,9 @@ def main(argv=None):
         '--resume-branch-url', type=str,
         help='URL of resume branch to continue on (if any).')
     parser.add_argument(
+        '--cached-branch-url', type=str,
+        help='URL of cached branch to start from.')
+    parser.add_argument(
         '--pre-check',
         help='Command to run to check whether to process package.',
         type=str)
@@ -457,6 +473,7 @@ def main(argv=None):
             build_command=args.build_command, pre_check_command=args.pre_check,
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,
+            cached_branch_url=args.cached_branch_url,
             tgz_repo=args.tgz_repo)
     except WorkerFailure as e:
         metadata['code'] = e.code
