@@ -50,6 +50,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'make[1]: *** No rule to make target \'/usr/share/blah/blah\', '
             'needed by \'dan-nno.autopgen.bin\'.  Stop.'],
             1, MissingFile('/usr/share/blah/blah'))
+        self.run_test([
+            'debian/rules:4: /usr/share/openstack-pkg-tools/pkgos.make: '
+            'No such file or directory'], 1,
+            MissingFile('/usr/share/openstack-pkg-tools/pkgos.make'))
 
     def test_installdocs_missing(self):
         self.run_test([
