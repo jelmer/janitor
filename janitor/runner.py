@@ -30,13 +30,11 @@ import uuid
 from debian.deb822 import Changes
 
 from breezy.branch import Branch
-from breezy.controldir import ControlDir, format_registry
 from breezy.errors import (
     NotBranchError,
     NoRepositoryPresent,
     InvalidHttpResponse,
     )
-from breezy.git.remote import RemoteGitError
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -63,6 +61,13 @@ from silver_platter.utils import (
 
 from . import state
 from .trace import note, warning
+from .vcs import (
+    get_vcs_abbreviation,
+    open_branch_ext,
+    copy_vcs_dir,
+    BranchOpenFailure,
+    get_cached_resume_branch,
+    )
 
 packages_processed_count = Counter(
     'package_count', 'Number of packages processed.')
@@ -86,32 +91,6 @@ ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
 
 class NoChangesFile(Exception):
     """No changes file found."""
-
-
-def get_vcs_abbreviation(branch):
-    vcs = getattr(branch.repository, 'vcs', None)
-    if vcs:
-        return vcs.abbreviation
-    return 'bzr'
-
-
-def get_own_resume_branch(vcs_type, package, branch_name):
-    if vcs_type == 'git':
-        url = 'https://janitor.debian.net/git/%s,branch=%s' % (
-            package, branch_name)
-    elif vcs_type == 'bzr':
-        url = 'https://janitor.debian.net/bzr/%s/%s' % (
-            package, branch_name)
-    else:
-        raise AssertionError('unknown vcs type %r' % vcs_type)
-    try:
-        return Branch.open(url)
-    except NotBranchError:
-        return None
-    except RemoteGitError:
-        return None
-    except InvalidHttpResponse:
-        return None
 
 
 class JanitorResult(object):
@@ -217,82 +196,6 @@ async def invoke_subprocess_worker(
         return await p.wait()
 
 
-def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
-                 additional_colocated_branches=None):
-    """Publish resulting changes in VCS form.
-
-    This creates a repository with the following branches:
-     * master - the original Debian packaging branch
-     * KIND - whatever command was run
-     * upstream - the upstream branch (optional)
-     * pristine-tar the pristine tar packaging branch (optional)
-    """
-    vcs = get_vcs_abbreviation(main_branch)
-    if vcs == 'git':
-        path = os.path.join(vcs_result_dir, 'git', pkg)
-        os.makedirs(path, exist_ok=True)
-        try:
-            vcs_result_controldir = ControlDir.open(path)
-        except NotBranchError:
-            vcs_result_controldir = ControlDir.create(
-                path, format=format_registry.get('git-bare')())
-        for (from_branch, target_branch_name) in [
-                (main_branch, 'master'),
-                (local_branch, name)]:
-            try:
-                target_branch = vcs_result_controldir.open_branch(
-                    name=target_branch_name)
-            except NotBranchError:
-                target_branch = vcs_result_controldir.create_branch(
-                    name=target_branch_name)
-            # TODO(jelmer): Set depth
-            from_branch.push(target_branch, overwrite=True)
-        for branch_name in (additional_colocated_branches or []):
-            try:
-                from_branch = local_branch.controldir.open_branch(
-                    name=branch_name)
-            except NotBranchError:
-                continue
-            try:
-                target_branch = vcs_result_controldir.open_branch(
-                    name=branch_name)
-            except NotBranchError:
-                target_branch = vcs_result_controldir.create_branch(
-                    name=branch_name)
-            from_branch.push(target_branch, overwrite=True)
-    elif vcs == 'bzr':
-        path = os.path.join(vcs_result_dir, 'bzr', pkg)
-        os.makedirs(path, exist_ok=True)
-        try:
-            vcs_result_controldir = ControlDir.open(path)
-        except NotBranchError:
-            vcs_result_controldir = ControlDir.create(
-                path, format=format_registry.get('bzr')())
-        try:
-            vcs_result_controldir.open_repository()
-        except NoRepositoryPresent:
-            vcs_result_controldir.create_repository(shared=True)
-        for (from_branch, target_branch_name) in [
-                (local_branch, name),
-                (main_branch, 'master')]:
-            target_branch_path = os.path.join(path, target_branch_name)
-            try:
-                target_branch = Branch.open(target_branch_path)
-            except NotBranchError:
-                target_branch = ControlDir.create_branch_convenience(
-                    target_branch_path)
-            target_branch.set_stacked_on_url(main_branch.user_url)
-            from_branch.push(target_branch, overwrite=True)
-    else:
-        raise AssertionError('unsupported vcs %s' % vcs.abbreviation)
-
-
-def is_alioth_url(url):
-    return urllib.parse.urlparse(url).netloc in (
-        'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
-        'bzr.debian.org', 'git.debian.org')
-
-
 async def process_one(
         worker_kind, vcs_url, env, command, build_command,
         pre_check=None, post_check=None,
@@ -315,30 +218,11 @@ async def process_one(
         raise AssertionError('Unknown command %s' % command[0])
 
     try:
-        main_branch = open_branch(
+        main_branch = open_branch_ext(
             vcs_url, possible_transports=possible_transports)
-    except BranchUnavailable as e:
-        if str(e).startswith('Unsupported protocol for url '):
-            code = 'unsupported-vcs-protocol'
-        elif 'http code 429: Too Many Requests' in str(e):
-            code = 'too-many-requests'
-        elif str(e).startswith('Branch does not exist: Not a branch: '
-                               '"https://anonscm.debian.org'):
-            code = 'hosted-on-alioth'
-        else:
-            if is_alioth_url(vcs_url):
-                code = 'hosted-on-alioth'
-            else:
-                code = 'branch-unavailable'
+    except BranchOpenFailure as e:
         return JanitorResult(
-            pkg, log_id=log_id, description=str(e), code=code)
-    except KeyError as e:
-        if e.args == ('www-authenticate not found',):
-            return JanitorResult(
-                pkg, log_id=log_id, description=str(e),
-                code='401-without-www-authenticate')
-        else:
-            raise
+            pkg, log_id=log_id, description=e.description, code=code)
 
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
@@ -357,7 +241,7 @@ async def process_one(
             resume_branch = None
 
     if resume_branch is None:
-        resume_branch = get_own_resume_branch(
+        resume_branch = get_cached_resume_branch(
             get_vcs_abbreviation(main_branch), pkg, branch_name)
 
     if resume_branch is not None:
