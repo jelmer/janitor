@@ -21,6 +21,7 @@ import urllib.parse
 from breezy.branch import Branch
 from breezy.errors import (
     NotBranchError,
+    NoSuchRevision,
     NoRepositoryPresent,
     InvalidHttpResponse,
     )
@@ -78,6 +79,14 @@ def open_branch_ext(vcs_url, possible_transports=None):
             raise
 
 
+class MirrorFailure(Exception):
+    """Branch failed to mirror."""
+
+    def __init__(self, branch_name, reason):
+        self.branch_name = branch_name
+        self.reason = reason
+
+
 def mirror_branches(vcs_result_dir, pkg, branch_map,
                     public_master_branch=None):
     vcses = set(get_vcs_abbreviation(br) for name, br in branch_map)
@@ -102,7 +111,10 @@ def mirror_branches(vcs_result_dir, pkg, branch_map,
                 target_branch = vcs_result_controldir.create_branch(
                     name=target_branch_name)
             # TODO(jelmer): Set depth
-            from_branch.push(target_branch, overwrite=True)
+            try:
+                from_branch.push(target_branch, overwrite=True)
+            except NoSuchRevision as e:
+                raise MirrorFailure(target_branch_name, e)
     elif vcs == 'bzr':
         path = os.path.join(vcs_result_dir, 'bzr', pkg)
         os.makedirs(path, exist_ok=True)
@@ -124,7 +136,10 @@ def mirror_branches(vcs_result_dir, pkg, branch_map,
                     target_branch_path)
             if public_master_branch:
                 target_branch.set_stacked_on_url(public_master_branch.user_url)
-            from_branch.push(target_branch, overwrite=True)
+            try:
+                from_branch.push(target_branch, overwrite=True)
+            except NoSuchRevision as e:
+                raise MirrorFailure(target_branch_name, e)
     else:
         raise AssertionError('unsupported vcs %s' % vcs.abbreviation)
 
