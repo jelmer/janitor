@@ -38,6 +38,7 @@ from .vcs import (
     open_branch_ext,
     BranchOpenFailure,
     mirror_branches,
+    MirrorFailure,
     )
 from .trace import note
 
@@ -89,9 +90,14 @@ def update_gitlab_branches(vcs_result_dir, host):
                     url, last_scanned=datetime.now(), status=e.code,
                     revision=None, description=e.description)
             else:
-                mirror_branches(
-                    vcs_result_dir, package_per_repo[project.http_url_to_repo],
-                    [(suite, branch)], public_master_branch=branch)
+                try:
+                    mirror_branches(
+                        vcs_result_dir,
+                        package_per_repo[project.http_url_to_repo],
+                        [(suite, branch)], public_master_branch=branch)
+                except MirrorFailure as e:
+                    # For now, just ignore
+                    note('Failed to mirror %s: %s', e.branch_name, e.reason)
 
                 state.update_branch_status(
                     url, last_scanned=datetime.now(), status='success',
@@ -135,9 +141,13 @@ def main(argv=None):
                 branch_url, last_scanned=datetime.now(), status=e.code,
                 revision=None, description=e.description)
         else:
-            mirror_branches(
-                args.vcs_result_dir, package, [(suite, branch)],
-                public_master_branch=branch)
+            try:
+                mirror_branches(
+                    args.vcs_result_dir, package, [(suite, branch)],
+                    public_master_branch=branch)
+            except MirrorFailure as e:
+                # For now, just ignore
+                note('Failed to mirror %s: %s', e.branch_name, e.reason)
             state.update_branch_status(
                 branch_url, last_scanned=datetime.now(), status='success',
                 revision=branch.last_revision())
