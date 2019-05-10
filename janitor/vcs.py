@@ -20,6 +20,7 @@ import os
 import urllib.parse
 from breezy.branch import Branch
 from breezy.errors import (
+    ConnectionError,
     NotBranchError,
     NoSuchRevision,
     NoRepositoryPresent,
@@ -31,6 +32,8 @@ from silver_platter.utils import (
     open_branch,
     BranchUnavailable,
     )
+
+from .trace import note
 
 
 class BranchOpenFailure(Exception):
@@ -186,4 +189,7 @@ def get_cached_branch(vcs_type, package, branch_name):
     except RemoteGitError:
         return None
     except InvalidHttpResponse:
+        return None
+    except ConnectionError as e:
+        note('Unable to reach cache server: %s', e)
         return None
