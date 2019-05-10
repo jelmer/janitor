@@ -152,6 +152,7 @@ def main(argv=None):
                 branch_url, last_scanned=datetime.now(), status='success',
                 revision=branch.last_revision())
         if args.delay:
+            note('Sleeping for %d seconds', args.delay)
             time.sleep(args.delay)
 
     last_success_gauge.set_to_current_time()
