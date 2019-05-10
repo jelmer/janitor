@@ -72,6 +72,11 @@ from .trace import (
 )
 
 
+# Whether to trust packages enough to run code from them,
+# e.g. when guessing repo location.
+TRUST_PACKAGE = False
+
+
 class SubWorker(object):
 
     def __init__(self, command, env):
@@ -131,7 +136,8 @@ class LintianBrushWorker(SubWorker):
                         local_tree, fixers,
                         committer=self.committer,
                         update_changelog=self.args.update_changelog,
-                        compat_release=self.args.compat_release)
+                        compat_release=self.args.compat_release,
+                        trust_package=TRUST_PACKAGE)
             except GeneratedControlFile as e:
                 raise WorkerFailure(
                     'control-file-is-generated',
@@ -182,7 +188,7 @@ class NewUpstreamWorker(SubWorker):
             try:
                 old_upstream_version, upstream_version = merge_upstream(
                     tree=local_tree, snapshot=self.args.snapshot,
-                    committer=self.committer)
+                    committer=self.committer, trust_package=TRUST_PACKAGE)
             except UpstreamAlreadyImported as e:
                 report_context(e.version)
                 metadata['upstream_version'] = e.version
