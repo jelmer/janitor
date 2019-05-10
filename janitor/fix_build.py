@@ -195,12 +195,15 @@ def fix_missing_python_module(tree, error, committer=None):
     elif error.python_version == 3:
         extra_build_deps.append(py3_pkg)
     else:
-        if has_cpy3_build_deps or default:
+        if py3_pkg and (has_cpy3_build_deps or default):
             extra_build_deps.append(py3_pkg)
-        if has_cpy2_build_deps or default:
+        if py2_pkg and (has_cpy2_build_deps or default):
             extra_build_deps.append(py2_pkg)
-        if has_pypy_build_deps:
+        if pypy_pkg and has_pypy_build_deps:
             extra_build_deps.append(pypy_pkg)
+
+    if not extra_build_deps:
+        return False
 
     for dep_pkg in extra_build_deps:
         if not add_build_dependency(
