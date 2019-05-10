@@ -125,10 +125,12 @@ def main(argv=None):
     for host in prefetch_hosts:
         update_gitlab_branches(args.vcs_result_dir, host)
 
-    for package, suite, branch_url, last_scanned in (
-            state.iter_unscanned_branches(
-                last_scanned_minimum=timedelta(days=7))):
-        note('Processing %s', package)
+    unscanned_branches = state.iter_unscanned_branches(
+            last_scanned_minimum=timedelta(days=7))
+
+    for i, (package, suite, branch_url, last_scanned) in enumerate(
+            unscanned_branches):
+        note('[%d/%s] Processing %s', i, len(unscanned_branches), package)
         netloc = urllib.parse.urlparse(branch_url).netloc
         # TODO(jelmer): scan prefetch hosts too, just after a much longer
         # period (1 month?)
