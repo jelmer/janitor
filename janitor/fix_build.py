@@ -31,7 +31,7 @@ from debian.deb822 import (
 from breezy.commit import PointlessCommit
 from lintian_brush import reset_tree
 from lintian_brush.control import (
-    add_dependency,
+    ensure_some_version,
     ensure_minimum_version,
     update_control,
     FormattingUnpreservable,
@@ -72,7 +72,7 @@ def add_build_dependency(tree, package, minimum_version=None,
                 control["Build-Depends"],
                 package, minimum_version)
         else:
-            control["Build-Depends"] = add_dependency(
+            control["Build-Depends"] = ensure_some_version(
                 control["Build-Depends"], package)
 
     def check_binary_pkg(binary):
