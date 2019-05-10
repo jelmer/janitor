@@ -10,3 +10,4 @@ $run_autopkgtest = 1;
 $autopkgtest_require_success = 1;
 $autopkgtest_root_args = '';
 $autopkgtest_opts = [ '--', 'schroot', 'unstable-%a-sbuild' ];
+$lintian_opts = ['--suppress-tags', 'bad-distribution-in-changes-file,changelog-should-mention-nmu,changelog-should-mention-nmu'];
