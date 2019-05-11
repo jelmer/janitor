@@ -28,6 +28,8 @@ import uuid
 
 from debian.deb822 import Changes
 
+from breezy.config import GlobalStack
+
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
