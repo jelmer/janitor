@@ -19,6 +19,8 @@
 
 from breezy import urlutils
 
+from breezy.config import GlobalStack
+
 from datetime import datetime, timedelta
 
 import sys
