@@ -105,6 +105,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'E   ModuleNotFoundError: No module named \'twisted\''], 1,
             MissingPythonModule('twisted', 3))
         self.run_test([
+            'E   ImportError: cannot import name \'async_poller\' '
+            'from \'msrest.polling\' '
+            '(/usr/lib/python3/dist-packages/msrest/polling/__init__.py)'], 1,
+            MissingPythonModule('msrest.polling'))
+        self.run_test([
             '/usr/bin/python3: No module named sphinx'], 1,
             MissingPythonModule('sphinx', 3))
 

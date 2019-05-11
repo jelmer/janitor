@@ -163,7 +163,10 @@ class MissingPythonModule(object):
 
 
 def python_module_not_found(m):
-    return MissingPythonModule(m.group(1), python_version=None)
+    try:
+        return MissingPythonModule(m.group(2), python_version=None)
+    except IndexError:
+        return MissingPythonModule(m.group(1), python_version=None)
 
 
 def python2_module_not_found(m):
@@ -372,7 +375,9 @@ build_failure_regexps = [
      r'Plugin \'.*\' could not be loaded: '
      r'\(.* \(/usr/lib/python2.7/dist-packages\), '
      r'Requirement.parse\(\'(.*)\'\)\)\!', python2_reqs_not_found),
-    ('E   ImportError: cannot import name ([^ ]+)', python_module_not_found),
+    ('E   ImportError: cannot import name \'(.*)\' from \'(.*)\'',
+     python_module_not_found),
+    ('E   ImportError: cannot import name ([^\']+)', python_module_not_found),
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
