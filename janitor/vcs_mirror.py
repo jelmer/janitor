@@ -121,6 +121,9 @@ def main(argv=None):
 
     args = parser.parse_args()
 
+    global_config = GlobalStack()
+    global_config.set('branch.fetch_tags', True)
+
     prefetch_hosts = ['salsa.debian.org']
     for host in prefetch_hosts:
         update_gitlab_branches(args.vcs_result_dir, host)
