@@ -396,7 +396,7 @@ build_failure_regexps = [
      command_missing),
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
      command_missing),
-    (r'make\[\d+\]: (.*): Command not found', command_missing),
+    (r'make\[\d+\]: ([^\.].*): Command not found', command_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
     (r'dh: Unknown sequence --with '
