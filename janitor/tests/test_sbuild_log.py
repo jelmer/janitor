@@ -147,6 +147,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             '/usr/bin/env: ‘python3’: No such file or directory'], 1,
             MissingCommand('python3'))
+        self.run_test([
+            'make[1]: docker: Command not found'], 1,
+            MissingCommand('docker'))
 
     def test_pkg_config_missing(self):
         self.run_test([
