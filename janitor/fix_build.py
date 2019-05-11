@@ -66,6 +66,8 @@ class CircularDependency(Exception):
 
 def add_build_dependency(tree, package, minimum_version=None,
                          committer=None):
+    if not isinstance(package, str):
+        raise TypeError(package)
     def add_build_dep(control):
         if minimum_version:
             control["Build-Depends"] = ensure_minimum_version(
@@ -189,10 +191,19 @@ def fix_missing_python_module(tree, error, committer=None):
     extra_build_deps = []
     if error.python_version == 2:
         if has_pypy_build_deps:
-            extra_build_deps.append(pypy_pkg)
+            if not pypy_pkg:
+                warning('no pypy package found for %s', error.module)
+            else:
+                extra_build_deps.append(pypy_pkg)
         if has_cpy2_build_deps or default:
+            if not py2_pkg:
+                warning('no python 2 package found for %s', error.module)
+                return False
             extra_build_deps.append(py2_pkg)
     elif error.python_version == 3:
+        if not py3_pkg:
+            warning('no python 3 package found for %s', error.module)
+            return False
         extra_build_deps.append(py3_pkg)
     else:
         if py3_pkg and (has_cpy3_build_deps or default):
@@ -206,6 +217,7 @@ def fix_missing_python_module(tree, error, committer=None):
         return False
 
     for dep_pkg in extra_build_deps:
+        assert dep_pkg is not None
         if not add_build_dependency(
                 tree, dep_pkg, error.minimum_version, committer=committer):
             return False
