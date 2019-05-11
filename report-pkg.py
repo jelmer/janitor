@@ -45,7 +45,7 @@ def include_build_log_failure(f, log_path, length):
     offsets = {}
     linecount = 0
     paragraphs = {}
-    with open(log_path, 'r') as logf:
+    with open(log_path, 'rb') as logf:
         for title, offset, lines in parse_sbuild_log(logf):
             if title is not None:
                 title = title.lower()

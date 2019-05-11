@@ -52,7 +52,7 @@ class DpkgSourceLocalChanges(object):
 
 def worker_failure_from_sbuild_log(build_log_path):
     paragraphs = {}
-    with open(build_log_path, 'r') as f:
+    with open(build_log_path, 'rb') as f:
         for title, offsets, lines in parse_sbuild_log(f):
             if title is not None:
                 title = title.lower()
@@ -92,7 +92,7 @@ def parse_sbuild_log(f):
     begin_offset = 1
     lines = []
     title = None
-    sep = '+' + ('-' * 78) + '+'
+    sep = b'+' + (b'-' * 78) + b'+'
     lineno = 0
     line = f.readline()
     lineno += 1
@@ -101,8 +101,8 @@ def parse_sbuild_log(f):
             l1 = f.readline()
             l2 = f.readline()
             lineno += 2
-            if (l1[0] == '|' and
-                    l1.strip()[-1] == '|' and l2.strip() == sep):
+            if (l1.startswith(b'|') and
+                    l1.strip().endswith(b'|') and l2.strip() == sep):
                 end_offset = lineno-3
                 # Drop trailing empty lines
                 while lines and lines[-1] == '\n':
@@ -110,13 +110,16 @@ def parse_sbuild_log(f):
                     end_offset -= 1
                 if lines:
                     yield title, (begin_offset, end_offset), lines
-                title = l1.rstrip()[1:-1].strip()
+                title = l1.rstrip()[1:-1].strip().decode(errors='replace')
                 lines = []
                 begin_offset = lineno
             else:
-                lines.extend([line, l1, l2])
+                lines.extend([
+                    line.decode(errors='replace'),
+                    l1.decode(errors='replace'),
+                    l2.decode(errors='replace')])
         else:
-            lines.append(line)
+            lines.append(line.decode(errors='replace'))
         line = f.readline()
         lineno += 1
     yield title, (begin_offset, lineno), lines
@@ -456,7 +459,7 @@ def main(argv=None):
 
     section_offsets = {}
     section_lines = {}
-    with open(args.path, 'r') as f:
+    with open(args.path, 'rb') as f:
         for title, offsets, lines in parse_sbuild_log(f):
             print('Section %s (lines %d-%d)' % (
                 title, offsets[0], offsets[1]))
