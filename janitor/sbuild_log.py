@@ -285,7 +285,7 @@ class MissingNodeModule(object):
         return "Missing Node Module: %s" % self.module
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.module)
+        return "%s(%r)" % (type(self).__name__, self.module)
 
 
 def node_module_missing(m):
@@ -307,7 +307,7 @@ class MissingCommand(object):
         return "Missing command: %s" % self.command
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.command)
+        return "%s(%r)" % (type(self).__name__, self.command)
 
 
 def command_missing(m):
