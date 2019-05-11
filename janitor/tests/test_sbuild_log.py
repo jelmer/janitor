@@ -34,8 +34,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
     def run_test(self, lines, lineno, err=None):
         (offset, actual_line, actual_err) = find_build_failure_description(
             lines)
-        self.assertEqual(actual_line, lines[lineno-1])
-        self.assertEqual(lineno, offset)
+        if lineno is not None:
+            self.assertEqual(actual_line, lines[lineno-1])
+            self.assertEqual(lineno, offset)
+        else:
+            self.assertIs(actual_line, None)
+            self.assertIs(offset, None)
         if err:
             self.assertEqual(actual_err, err)
         else:
@@ -150,6 +154,7 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'make[1]: docker: Command not found'], 1,
             MissingCommand('docker'))
+        self.run_test(['make[1]: ./docker: Command not found'], None)
 
     def test_pkg_config_missing(self):
         self.run_test([
