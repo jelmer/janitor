@@ -11,8 +11,11 @@ Design
 
 The janitor is made up out of multiple components:
 
+* a *vcs_mirrorer* that keeps a current mirror of remote VCS repositories
 * a *scheduler* that determines what packages are ready for processing
   based on lintian data, and queues them.
+* a *publisher* that propose or pushes changes that have been successfully
+  created and built previously
 * a *runner* that processes the queue, kicks off workers for
   each package and publishes changes.
 * one or more *workers* which are responsible for actual generating and
@@ -23,7 +26,7 @@ to create branches and they build the resulting branches. The runner
 then fetches the results from each run and (if the run was successful)
 uploads the .debs and optionally proposes a change.
 
-The runner is also responsible for enforcing rate limiting, i.e. making sure
+The publisher is responsible for enforcing rate limiting, i.e. making sure
 that there are no more than X pull requests open per maintainer.
 
 Web site
