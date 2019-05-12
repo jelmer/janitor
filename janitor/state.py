@@ -184,15 +184,21 @@ LEFT JOIN package ON merge_proposal.package = package.name
     return cur.fetchall()
 
 
-def iter_all_proposals():
+def iter_all_proposals(branch_name=None):
     cur = conn.cursor()
-    cur.execute("""
+    args = []
+    query = """
 SELECT
     merge_proposal.url, merge_proposal.status, package.name
 FROM
     merge_proposal
 LEFT JOIN package ON merge_proposal.package = package.name
-""")
+LEFT JOIN publish ON publish.merge_proposal_url = merge_proposal.url
+"""
+    if branch_name:
+        query += " WHERE branch_name = %s"
+        args.append(branch_name)
+    cur.execute(query, args)
     row = cur.fetchone()
     while row:
         yield row

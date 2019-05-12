@@ -6,13 +6,18 @@ import time
 import os
 sys.path.insert(0, os.path.dirname(__file__))
 
+import argparse
+parser = argparse.ArgumentParser('report-state')
+parser.add_argument('name', type=str)
+args = parser.parse_args()
+
 from janitor import state  # noqa: E402
 
 
 def write_report(f, open_proposals, merged_proposals, closed_proposals):
     f.write("""\
-Status
-======
+Merge Proposal Status
+=====================
 
 """)
 
@@ -57,13 +62,11 @@ cherry-pick.
     for url in closed_proposals:
         f.write('- %s\n' % url)
 
-    print("*Last Updated: " + time.asctime() + "*")
-
 
 proposals_by_status = {}
 
 
-for url, status, package in state.iter_all_proposals():
+for url, status, package in state.iter_all_proposals(branch_name=args.name):
     proposals_by_status.setdefault(status, []).append(url)
 
 
