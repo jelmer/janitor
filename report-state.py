@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import argparse
 parser = argparse.ArgumentParser('report-state')
-parser.add_argument('name', type=str)
+parser.add_argument('name', nargs='?', type=str, default=None)
 args = parser.parse_args()
 
 from janitor import state  # noqa: E402

@@ -12,7 +12,7 @@ BUILDDIR      = _build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-prereqs: lintian-brush/tags.txt status.rst fresh-releases fresh-snapshots lintian-fixes
+prereqs: lintian-brush/tags.txt merge-proposals.rst fresh-releases fresh-snapshots lintian-fixes
 
 lintian-brush/tags.txt::
 	lintian-brush --list-tags 2>&1 | sed -e 's/^\(.*\)/\* `\1 <https:\/\/lintian.debian.org\/tags\/\1.html>`_/' > $@
