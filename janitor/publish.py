@@ -386,11 +386,6 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
             resume_branch = None
             existing_proposal = None
 
-    publisher.publish(
-        pkg, maintainer_email, subrunner, mode, hoster,
-        main_branch, local_branch, resume_branch=resume_branch,
-        dry_run=dry_run, log_id=log_id, existing_proposal=existing_proposal)
-
     proposal, is_new = publisher.publish(
         pkg, maintainer_email,
         subrunner, mode, hoster, main_branch, local_branch,
