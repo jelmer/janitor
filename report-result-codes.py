@@ -35,6 +35,10 @@ for code, items in by_code.items():
 
 
 with open(os.path.join(args.path, 'index.rst'), 'w') as f:
+    f.write('Result Codes\n')
+    f.write('============\n')
+    f.write('\n')
+
     header = ['Code', 'Count']
 
     def label(n):

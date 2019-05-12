@@ -11,6 +11,7 @@ These packages are currently only available for amd64.
    from a human.
 
 .. toctree::
+   :maxdepth: 1
    package-status
    merge-proposals
 
@@ -51,4 +52,4 @@ Package list
 The following source packages with new upstream releases merged are currently
 available:
 
-.. include:: package-list.rst
+.. include:: package-list.txt

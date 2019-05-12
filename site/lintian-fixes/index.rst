@@ -9,7 +9,7 @@ The resulting changes can be accessed on this site, or the Janitor can
 automatically propose them as merge requests on supported hosting sites (Salsa,
 GitHub, GitLab, Launchpad).
 
-For a current list of open requests, see `merge-proposals <merge-proposals>`_.
+For a current list of open requests, see `merge-proposals <merge-proposals.html>`_.
 
 .. toctree::
    :maxdepth: 1

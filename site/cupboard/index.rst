@@ -6,5 +6,5 @@ The Debian Janitor
 
    queue
    history
-   result-codes
+   result-codes/index
 
