@@ -422,7 +422,7 @@ def publish_pending(publisher, policy, vcs_directory, dry_run=False):
         if mode in ('build-only', 'skip'):
             continue
         if state.already_published(
-                main_branch_url, branch_name, revision, mode):
+                pkg, branch_name, revision, mode):
             continue
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
