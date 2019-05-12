@@ -10,6 +10,10 @@ These packages are currently only available for amd64.
    The packages in this repository were created automatically, without review
    from a human.
 
+.. toctree::
+   package-status
+   merge-proposals
+
 Using the repository
 ~~~~~~~~~~~~~~~~~~~~
 

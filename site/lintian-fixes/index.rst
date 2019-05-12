@@ -18,7 +18,6 @@ For a current list of open requests, see `merge-proposals <merge-proposals>`_.
    apt
    pkg
    merge-proposals
-   credentials
 
 FAQ
 ***
