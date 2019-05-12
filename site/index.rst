@@ -7,4 +7,7 @@ It finds repositories associated with packages in the Debian archive, runs a set
 
 The goal is to reduce the overhead for simple archive-wide changes to the point that maintainers just have to click *_Merge_* in a web UI.
 
- * `lintian-fixes <lintian-fixes/>`_
+.. toctree::
+   :maxdepth: 1
+
+   lintian-fixes
