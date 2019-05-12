@@ -357,6 +357,7 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
         raise PublishFailure('branch-unavailable', str(e))
 
     subrunner.read_worker_result(subworker_result)
+    branch_name = subrunner.branch_name()
 
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
@@ -377,7 +378,7 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
         try:
             (resume_branch, overwrite, existing_proposal) = (
                 find_existing_proposed(
-                    main_branch, hoster, subrunner.branch_name()))
+                    main_branch, hoster, branch_name))
         except NoSuchProject as e:
             if mode not in ('push', 'build-only'):
                 raise PublishFailure(
@@ -393,7 +394,7 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
         dry_run=dry_run, log_id=log_id,
         existing_proposal=existing_proposal)
 
-    return proposal
+    return proposal, branch_name
 
 
 def publish_pending(publisher, policy, vcs_directory, dry_run=False):
