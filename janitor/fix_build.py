@@ -68,6 +68,7 @@ def add_build_dependency(tree, package, minimum_version=None,
                          committer=None):
     if not isinstance(package, str):
         raise TypeError(package)
+
     def add_build_dep(control):
         if minimum_version:
             control["Build-Depends"] = ensure_minimum_version(

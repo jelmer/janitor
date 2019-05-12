@@ -1,12 +1,11 @@
 #!/usr/bin/python3
 
+import argparse
 import sys
-import time
-
 import os
+
 sys.path.insert(0, os.path.dirname(__file__))
 
-import argparse
 parser = argparse.ArgumentParser('report-state')
 parser.add_argument('name', nargs='?', type=str, default=None)
 args = parser.parse_args()
