@@ -81,3 +81,10 @@ with open(os.path.join(args.suite, 'package-list.rst'), 'w') as f:
 with open(os.path.join(args.suite, 'package-status.rst'), 'w') as f:
     (header, data) = gather_package_status_table()
     format_table(f, header, data)
+
+
+with open(os.path.join(args.suite, 'apt-stats.rst'), 'w') as f:
+    i = 0
+    for source, version in state.iter_published_packages(args.suite):
+        i += 1
+    f.write('There are *%d* packages in this repository.' % i)
