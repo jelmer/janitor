@@ -27,6 +27,10 @@ from prometheus_client import (
     REGISTRY,
 )
 
+from breezy.plugins.propose.propose import (
+    MergeProposalExists,
+    )
+
 from silver_platter.proposal import (
     publish_changes as publish_changes_from_workspace,
     propose_changes,
@@ -253,6 +257,9 @@ class Publisher(object):
             except PermissionDenied as e:
                 raise PublishFailure(
                     description=str(e), code='permission-denied')
+            except MergeProposalExists as e:
+                raise PublishFailure(
+                    description=str(e), code='merge-proposal-exists')
 
             if proposal and is_new:
                 self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
