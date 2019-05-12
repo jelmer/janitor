@@ -51,4 +51,4 @@ Package list
 The following source packages with new upstream snapshots merged are currently
 available:
 
-.. include:: package-list.rst
+.. include:: package-list.txt
