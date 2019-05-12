@@ -30,13 +30,11 @@ def gather_package_list_table():
 
     unstable = get_unstable_versions(present)
 
-    header = ['Package', 'Version', 'Upstream Version in Unstable',
-              'New Upstream Version']
+    header = ['Package', 'Version', 'Upstream Version in Unstable']
     data = []
     for source in sorted(present):
         data.append(
-            (source, present[source],
-             present[source].upstream_version,
+            (source, present[source].upstream_version,
              unstable[source].upstream_version
              if source in unstable else ''))
 

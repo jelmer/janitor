@@ -10,7 +10,6 @@ These packages are currently only available for amd64.
    The packages in this repository were created automatically, without review
    from a human.
 
-
 Using the repository
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -26,6 +25,10 @@ automatically update to packages in them unless explicitly requested to do so.
 To e.g. install the version of *cifs-utils* that's in this repository, run::
 
    apt install -t fresh-releases cifs-utils
+
+The packages are also versioned in such a way that if the new upstream version
+gets uploaded to the official Debian APT repository, it will replace the package
+in this archive.
 
 Pinning
 ~~~~~~~
