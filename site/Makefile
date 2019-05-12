@@ -17,8 +17,14 @@ prereqs: lintian-brush/tags.txt status.rst fresh-releases fresh-snapshots lintia
 lintian-brush/tags.txt::
 	lintian-brush --list-tags 2>&1 | sed -e 's/^\(.*\)/\* `\1 <https:\/\/lintian.debian.org\/tags\/\1.html>`_/' > $@
 
-status.rst:
+merge-proposals.rst:
 	python3 ../report-state.py > $@
+
+lintian-fixes/merge-proposals.rst:
+	python3 ../report-state.py lintian-fixes > $@
+
+fresh-upstreams/merge-proposals.rst:
+	python3 ../report-state.py new-upstream > $@
 
 pkg:
 	python3 ../report-pkg.py pkg/

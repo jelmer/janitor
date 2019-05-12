@@ -16,7 +16,7 @@ GitHub, GitLab, Launchpad).
    apt
    cupboard/history
    pkg
-   status
+   merge-proposals
    credentials
 
 FAQ
