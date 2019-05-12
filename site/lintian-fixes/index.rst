@@ -136,6 +136,3 @@ in packages.
 `Lintian-brush <https://salsa.debian.org/jelmer/lintian-brush>`_ is responsible for actually making changes to the packages.
 
 `Silver-Platter <https://jelmer.uk/code/silver-platter>`_ ties this all together; it trawls UDD to find packages that are affected by lintian tags that lintian-brush knows how to fix, clones the packaging branches, invokes lintian-brush and pushes back or creates merge proposals.
-
-* :ref:`genindex`
-* :ref:`search`
