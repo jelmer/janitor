@@ -12,10 +12,10 @@ BUILDDIR      = _build
 help:
 	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
-prereqs: lintian-brush/tags.txt merge-proposals.rst fresh-releases fresh-snapshots lintian-fixes
+prereqs: lintian-fixes/tags.txt merge-proposals.rst fresh-releases fresh-snapshots lintian-fixes
 
-lintian-brush/tags.txt::
-	lintian-brush --list-tags 2>&1 | sed -e 's/^\(.*\)/\* `\1 <https:\/\/lintian.debian.org\/tags\/\1.html>`_/' > $@
+lintian-fixes/tags.txt::
+	PYTHONPATH=../lintian-brush python3 -m lintian_brush --list-tags 2>&1 | sed -e 's/^\(.*\)/\* `\1 <https:\/\/lintian.debian.org\/tags\/\1.html>`_/' > $@
 
 merge-proposals.rst:
 	python3 ../report-state.py > $@
@@ -23,7 +23,7 @@ merge-proposals.rst:
 lintian-fixes/merge-proposals.rst:
 	python3 ../report-state.py lintian-fixes > $@
 
-fresh-upstreams/merge-proposals.rst:
+fresh-releases/merge-proposals.rst:
 	python3 ../report-state.py new-upstream > $@
 
 pkg:

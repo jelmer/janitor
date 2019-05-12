@@ -9,12 +9,13 @@ The resulting changes can be accessed on this site, or the Janitor can
 automatically propose them as merge requests on supported hosting sites (Salsa,
 GitHub, GitLab, Launchpad).
 
+For a current list of open requests, see `merge-proposals <merge-proposals>`_.
+
 .. toctree::
    :maxdepth: 1
    :hidden:
 
    apt
-   cupboard/history
    pkg
    merge-proposals
    credentials
@@ -71,7 +72,7 @@ What kind of changes are made?
 
 The janitor currently proposes changes that can be made by the `lintian-brush <https://salsa.debian.org/jelmer/lintian-brush>`_ tool. This includes fixes for the following issues flagged by lintian:
 
-.. include:: lintian-brush/tags.txt
+.. include:: tags.txt
 
 Won't this mean I get a pull request for each bit of trailing whitespace?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
