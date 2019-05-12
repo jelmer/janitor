@@ -10,4 +10,4 @@ The goal is to reduce the overhead for simple archive-wide changes to the point 
 .. toctree::
    :maxdepth: 1
 
-   lintian-fixes
+   lintian-fixes/index

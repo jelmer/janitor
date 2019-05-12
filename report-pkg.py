@@ -4,7 +4,6 @@ import argparse
 from debian.deb822 import Changes
 import os
 import sys
-import time
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
