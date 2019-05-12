@@ -27,6 +27,10 @@ To e.g. install the version of *cifs-utils* that's in this repository, run::
 
    apt install -t fresh-snapshots cifs-utils
 
+The packages are also versioned in such a way that if the new upstream version
+gets uploaded to the official Debian APT repository, it will replace the package
+in this archive.
+
 Pinning
 ~~~~~~~
 
