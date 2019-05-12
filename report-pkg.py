@@ -175,8 +175,6 @@ for run in state.iter_runs():
             log_line_started = True
         if log_line_started:
             g.write('\n')
-        g.write("\n")
-        g.write("*Last Updated: " + time.asctime() + "*\n")
 
 
 merge_proposals = {}
@@ -243,6 +241,3 @@ Package Index
                 if result_code:
                     f.write(' => %s' % result_code)
                 f.write('\n')
-
-    indexf.write("\n")
-    indexf.write("*Last Updated: " + time.asctime() + "*\n")
