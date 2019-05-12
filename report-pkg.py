@@ -24,10 +24,12 @@ from janitor.site.rst import (
     include_console_log,
 )  # noqa: E402
 from janitor.trace import warning  # noqa: E402
+from janitor.vcs import (
+    CACHE_URL_BZR,
+    CACHE_URL_GIT,
+)  # noqa: E402
 
 FAIL_BUILD_LOG_LEN = 15
-GIT_BASE_URL = 'https://janitor.debian.net/git'
-BZR_BASE_URL = 'https://janitor.debian.net/bzr'
 
 parser = argparse.ArgumentParser(prog='report-pkg')
 parser.add_argument("directory")
@@ -122,12 +124,12 @@ for run in state.iter_runs():
                 and branch_name:
             g.write('Merge these changes::\n\n')
             if os.path.exists('../vcs/git/%s' % package_name):
-                g.write('\tgit pull %s/%s %s\n' % (
-                    GIT_BASE_URL, package_name, branch_name))
+                g.write('\tgit pull %s%s %s\n' % (
+                    CACHE_URL_GIT, package_name, branch_name))
             elif os.path.exists('../vcs/bzr/%s' % package_name):
                 g.write(
-                    '\tbrz merge %s/%s/%s\n' % (
-                       BZR_BASE_URL, package_name, branch_name))
+                    '\tbrz merge %s%s/%s\n' % (
+                       CACHE_URL_BZR, package_name, branch_name))
             g.write('\n')
         build_log_path = 'build.log'
         worker_log_path = 'worker.log'

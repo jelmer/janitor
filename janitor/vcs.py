@@ -35,6 +35,9 @@ from silver_platter.utils import (
 
 from .trace import note
 
+CACHE_URL_BZR = 'https://janitor.debian.net/bzr/'
+CACHE_URL_GIT = 'https://janitor.debian.net/git/'
+
 
 class BranchOpenFailure(Exception):
     """Failure to open a branch."""
@@ -175,11 +178,11 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
 
 def get_cached_branch(vcs_type, package, branch_name):
     if vcs_type == 'git':
-        url = 'https://janitor.debian.net/git/%s,branch=%s' % (
-            package, branch_name)
+        url = '%s%s,branch=%s' % (
+            CACHE_URL_GIT, package, branch_name)
     elif vcs_type == 'bzr':
-        url = 'https://janitor.debian.net/bzr/%s/%s' % (
-            package, branch_name)
+        url = '%s%s/%s' % (
+            CACHE_URL_BZR, package, branch_name)
     else:
         raise AssertionError('unknown vcs type %r' % vcs_type)
     try:
