@@ -43,6 +43,7 @@ fresh-snapshots:
 
 lintian-fixes:
 	python3 ../report-apt-repo.py lintian-fixes
+	python3 ../report-lintian-fixes-pkg.py lintian-fixes/pkg
 
 cupboard/result-codes:
 	python3 ../report-result-codes.py $@
