@@ -6,7 +6,7 @@
 	url = https://jelmer.uk/code/silver-platter
 [submodule "breezy"]
 	path = breezy
-	url = git://github.com/breezy-team/breezy
+	url = git://github.com/jelmer/breezy
 [submodule "breezy-debian"]
 	path = breezy-debian
 	url = git://github.com/breezy-team/breezy-debian
