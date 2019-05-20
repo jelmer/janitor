@@ -24,7 +24,8 @@ version_string = '.'.join(map(str, version_info))
 
 
 def user_agent():
-    return "Debian-Janitor/%s (+https://janitor.debian.net/)" % version_string
+    return "Debian-Janitor/%s Bot (+https://janitor.debian.net/contact/)" % (
+        version_string)
 
 
 _mod_http.default_user_agent = user_agent
