@@ -370,11 +370,11 @@ SELECT DISTINCT ON (package, command)
   finish_time - start_time
 FROM
   run
-ORDER BY package, command, start_time DESC
 """
     if command:
         query += " WHERE command = %s"
         args.append(command)
+    query += " ORDER BY package, command, start_time DESC"
     cur.execute(query, args)
     return cur.fetchall()
 
