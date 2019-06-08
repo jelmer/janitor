@@ -357,9 +357,10 @@ ORDER BY package, command, result_code = 'success' DESC, start_time DESC
     return cur.fetchall()
 
 
-def iter_last_runs():
+def iter_last_runs(command=None):
     cur = conn.cursor()
-    cur.execute("""
+    args = []
+    query = """
 SELECT DISTINCT ON (package, command)
   package,
   command,
@@ -369,8 +370,12 @@ SELECT DISTINCT ON (package, command)
   finish_time - start_time
 FROM
   run
-ORDER BY package, command, start_time DESC
-""")
+"""
+    if command:
+        query += " WHERE command = %s"
+        args.append(command)
+    query += " ORDER BY package, command, start_time DESC"
+    cur.execute(query, args)
     return cur.fetchall()
 
 

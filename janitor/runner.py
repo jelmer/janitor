@@ -197,7 +197,8 @@ async def process_one(
         pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
-        possible_transports=None, possible_hosters=None):
+        possible_transports=None, possible_hosters=None,
+        use_cached_only=False):
     pkg = env['PACKAGE']
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
@@ -213,41 +214,55 @@ async def process_one(
     else:
         raise AssertionError('Unknown command %s' % command[0])
 
-    try:
-        main_branch = open_branch_ext(
-            vcs_url, possible_transports=possible_transports)
-    except BranchOpenFailure as e:
-        return JanitorResult(
-            pkg, log_id=log_id, description=e.description, code=e.code)
-
-    try:
-        hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
-    except UnsupportedHoster as e:
-        # We can't figure out what branch to resume from when there's no hoster
-        # that can tell us.
-        resume_branch = None
-        warning('Unsupported hoster (%s)', e)
-    else:
+    if not use_cached_only:
         try:
-            (resume_branch, unused_overwrite, unused_existing_proposal) = (
-                find_existing_proposed(
-                    main_branch, hoster, branch_name))
-        except NoSuchProject as e:
-            warning('Project %s not found', e.project)
+            main_branch = open_branch_ext(
+                vcs_url, possible_transports=possible_transports)
+        except BranchOpenFailure as e:
+            return JanitorResult(
+                pkg, log_id=log_id, description=e.description, code=e.code)
+
+        try:
+            hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
+        except UnsupportedHoster as e:
+            # We can't figure out what branch to resume from when there's no hoster
+            # that can tell us.
             resume_branch = None
+            warning('Unsupported hoster (%s)', e)
+        else:
+            try:
+                (resume_branch, unused_overwrite, unused_existing_proposal) = (
+                    find_existing_proposed(
+                        main_branch, hoster, branch_name))
+            except NoSuchProject as e:
+                warning('Project %s not found', e.project)
+                resume_branch = None
 
-    if resume_branch is None:
-        resume_branch = get_cached_branch(
-            get_vcs_abbreviation(main_branch), pkg, branch_name)
+        if resume_branch is None:
+            resume_branch = get_cached_branch(
+                get_vcs_abbreviation(main_branch), pkg, branch_name)
 
-    if resume_branch is not None:
-        note('Resuming from %s', resume_branch.user_url)
+        if resume_branch is not None:
+            note('Resuming from %s', resume_branch.user_url)
 
-    cached_branch = get_cached_branch(
-        get_vcs_abbreviation(main_branch), pkg, 'master')
+        cached_branch = get_cached_branch(
+            get_vcs_abbreviation(main_branch), pkg, 'master')
 
-    if cached_branch is not None:
-        note('Using cached branch %s', cached_branch.user_url)
+        if cached_branch is not None:
+            note('Using cached branch %s', cached_branch.user_url)
+    else:
+        for vcs_abbrev in ['git', 'bzr']:
+            main_branch = get_cached_branch(vcs_abbrev, pkg, 'master')
+            if main_branch is not None:
+                break
+        else:
+            return JanitorResult(
+                pkg, log_id=log_id,
+                code='cached-branch-missing',
+                description='Missing cache branch for %s' % pkg)
+        note('Using cached branch %s', main_branch.user_url)
+        resume_branch = get_cached_branch(vcs_abbrev, pkg, branch_name)
+        cached_branch = None
 
     with tempfile.TemporaryDirectory() as output_directory:
         log_path = os.path.join(output_directory, 'worker.log')
@@ -338,7 +353,7 @@ async def process_queue(
         pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
-        concurrency=1):
+        concurrency=1, use_cached_only=False):
     async def process_queue_item(item):
         (queue_id, vcs_url, env, command) = item
         start_time = datetime.now()
@@ -348,7 +363,7 @@ async def process_queue(
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
             debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
-            log_dir=log_dir)
+            log_dir=log_dir, use_cached_only=use_cached_only)
         finish_time = datetime.now()
         if not dry_run:
             state.store_run(
@@ -459,6 +474,9 @@ def main(argv=None):
     parser.add_argument(
         '--concurrency', type=int, default=1,
         help='Number of workers to run in parallel.')
+    parser.add_argument(
+        '--use-cached-only', action='store_true',
+        help='Use cached branches only.')
 
     args = parser.parse_args()
 
@@ -471,7 +489,8 @@ def main(argv=None):
             args.dry_run, args.incoming, args.log_dir,
             args.debsign_keyid,
             args.vcs_result_dir,
-            args.concurrency)),
+            args.concurrency,
+            args.use_cached_only)),
         loop.create_task(export_queue_length()),
         loop.create_task(run_web_server(args.listen_address, args.port)),
         ))
