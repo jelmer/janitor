@@ -51,7 +51,9 @@ for i, (queue_id, branch_url, env, command) in enumerate(
     elif command[0] == 'lintian-brush':
         description = 'Lintian fixes'
         if env.get('CONTEXT'):
-            expecting = 'expecting to fix: %s' % env['CONTEXT']
+            expecting = 'expecting to fix: ' + ', '.join([
+                '`%s <https://lintian.debian.org/tags/%s.html>`_' % (tag, tag)
+                for tag in env['CONTEXT'].split(' ')])
     else:
         raise AssertionError('invalid command %s' % command)
     if args.command is not None:
