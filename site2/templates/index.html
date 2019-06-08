@@ -1,0 +1,13 @@
+{% extends "layout.html" %}
+{% block page_title %}Index{% endblock %}
+{% block body %}
+  <div class="section" id="the-debian-janitor">
+<h1>The Debian Janitor<a class="headerlink" href="#the-debian-janitor" title="Permalink to this headline">¶</a></h1>
+<p>The Debian janitor is a project to automatically propose fixes for common and trivial to fix problems in Debian packages.</p>
+<p>It finds repositories associated with packages in the Debian archive, runs a set of standard modifications over them, builds the resulting package and then creates a pull request with the resulting changes.</p>
+<p>The ultimate goal is to reduce the overhead for simple archive-wide changes to the point that maintainers just have to click <em>Merge</em> in a web UI.</p>
+<ul>
+	<li><a href="lintian-fixes">Lintian Fixes</a></li>
+</ul>
+  </div>
+{% endblock %}
