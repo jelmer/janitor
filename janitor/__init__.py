@@ -16,9 +16,16 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+from breezy.transport import http as _mod_http
+
+
 version_info = (0, 1, 0)
 version_string = '.'.join(map(str, version_info))
 
 
 def user_agent():
-    return "Debian-Janitor/%s (+https://janitor.debian.net/)" % version_string
+    return "Debian-Janitor/%s Bot (+https://janitor.debian.net/contact/)" % (
+        version_string)
+
+
+_mod_http.default_user_agent = user_agent

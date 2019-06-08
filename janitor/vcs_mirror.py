@@ -60,6 +60,7 @@ def update_gitlab_branches(vcs_result_dir, host):
             branches_per_repo[url][params.get('branch')] = revision
             package_per_repo[url] = name
 
+    possible_transports = []
     salsa = connect_gitlab(host)
     for project in salsa.projects.list(
             order_by='updated_at', archived=False, visibility='public',
@@ -86,7 +87,8 @@ def update_gitlab_branches(vcs_result_dir, host):
                  project.last_activity_at)
             suite = 'master'
             try:
-                branch = open_branch_ext(url)
+                branch = open_branch_ext(
+                    url, possible_transports=possible_transports)
             except BranchOpenFailure as e:
                 state.update_branch_status(
                     url, last_scanned=datetime.now(), status=e.code,
@@ -126,12 +128,16 @@ def main(argv=None):
     global_config = GlobalStack()
     global_config.set('branch.fetch_tags', True)
 
-    prefetch_hosts = ['salsa.debian.org']
+    prefetch_hosts = []
+    # Unfortunately the project activity branch is very slow :(
+    # prefetch_hosts = ['salsa.debian.org']
     for host in prefetch_hosts:
         update_gitlab_branches(args.vcs_result_dir, host)
 
     unscanned_branches = state.iter_unscanned_branches(
             last_scanned_minimum=timedelta(days=7))
+
+    possible_transports = []
 
     for i, (package, suite, branch_url, last_scanned) in enumerate(
             unscanned_branches):
@@ -142,7 +148,8 @@ def main(argv=None):
         if netloc in prefetch_hosts and last_scanned:
             continue
         try:
-            branch = open_branch_ext(branch_url)
+            branch = open_branch_ext(
+                branch_url, possible_transports=possible_transports)
         except BranchOpenFailure as e:
             state.update_branch_status(
                 branch_url, last_scanned=datetime.now(), status=e.code,
