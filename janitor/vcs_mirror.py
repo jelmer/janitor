@@ -121,7 +121,7 @@ def main(argv=None):
     parser.add_argument(
         '--delay', type=int,
         help='Number of seconds to wait in between repositories.',
-        default=None)
+        default=300)
 
     args = parser.parse_args()
 
