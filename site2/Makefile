@@ -1,9 +1,9 @@
-all: html html/index.html
+all: html/index.html html/contact/index.html
 
 html:
 	mkdir -p $@
 
-html/index.html: templates/index.html templates/layout.html
+html/index.html html/contact/index.html: templates/index.html templates/layout.html
 	python3 generate.py
 
 .PHONY: all
