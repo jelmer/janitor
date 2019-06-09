@@ -30,7 +30,7 @@ html/cupboard/queue.html: templates/layout.html templates/queue.html
 	mkdir -p $(@D)
 	PYTHONPATH=.. python3 report-queue.py > $@
 
-html/cupboard/result-code/index.html: templates/layout.html templates/result-code-index.html
+html/cupboard/result-codes/index.html: templates/layout.html templates/result-code-index.html
 	mkdir -p $(@D)
 	PYTHONPATH=.. python3 report-result-codes.py $(@D)
 
