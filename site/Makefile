@@ -1,61 +1,41 @@
-# Minimal makefile for Sphinx documentation
-#
+all: html/index.html html/contact/index.html html/credentials/index.html html/apt/index.html html/lintian-fixes/index.html html/lintian-fixes/merge-proposals.html html/fresh-releases/merge-proposals.html html/fresh-releases/index.html html/fresh-snapshots/index.html html/cupboard/index.html html/cupboard/history.html html/cupboard/queue.html html/cupboard/result-codes/index.html html/cupboard/pkg
 
-# You can set these variables from the command line.
-SPHINXOPTS    =
-SPHINXBUILD   = sphinx-build
-SPHINXPROJ    = debian-janitor
-SOURCEDIR     = .
-BUILDDIR      = _build
+html:
+	mkdir -p $@
 
-# Put it first so that "make" without argument is like "make help".
-help:
-	@$(SPHINXBUILD) -M help "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+html/index.html html/cupboard/index.html html/apt/index.html html/contact/index.html html/credentials/index.html html/lintian-fixes/index.html: templates/index.html templates/apt.html templates/contact.html templates/credentials.html templates/layout.html templates/lintian-fixes.html templates/cupboard.html
+	python3 generate.py
 
-prereqs: lintian-fixes/tags.txt merge-proposals.rst fresh-releases fresh-snapshots lintian-fixes
+html/lintian-fixes/merge-proposals.html: templates/layout.html templates/merge-proposals.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-merge-proposals.py lintian-fixes > $@
 
-lintian-fixes/tags.txt::
-	PYTHONPATH=../lintian-brush python3 -m lintian_brush --list-tags 2>&1 | sed -e 's/^\(.*\)/\* `\1 <https:\/\/lintian.debian.org\/tags\/\1.html>`_/' > $@
+html/fresh-releases/merge-proposals.html: templates/layout.html templates/merge-proposals.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-merge-proposals.py fresh-releases > $@
 
-merge-proposals.rst:
-	python3 ../report-state.py > $@
+html/fresh-releases/index.html: templates/layout.html templates/fresh-releases.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-apt-repo.py fresh-releases > $@
 
-lintian-fixes/merge-proposals.rst:
-	python3 ../report-state.py lintian-fixes > $@
+html/fresh-snapshots/index.html: templates/layout.html templates/fresh-snapshots.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-apt-repo.py fresh-snapshots > $@
 
-fresh-releases/merge-proposals.rst:
-	python3 ../report-state.py new-upstream > $@
+html/cupboard/history.html: templates/layout.html templates/history.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-history.py > $@
 
-pkg:
-	python3 ../report-pkg.py pkg/
+html/cupboard/queue.html: templates/layout.html templates/queue.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-queue.py > $@
 
-cupboard/history.rst:
-	python3 ../report-history.py > $@
+html/cupboard/result-codes/index.html: templates/layout.html templates/result-code-index.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-result-codes.py $(@D)
 
-cupboard/queue.rst:
-	python3 ../report-queue.py > $@
+html/cupboard/pkg:
+	mkdir -p $@
+	PYTHONPATH=..:../silver-platter python3 report-pkg.py $@
 
-fresh-releases:
-	python3 ../report-apt-repo.py fresh-releases
-	python3 ../report-new-upstream-pkg.py fresh-releases/pkg
-
-fresh-snapshots:
-	python3 ../report-apt-repo.py fresh-snapshots
-	python3 ../report-new-upstream-pkg.py --snapshot fresh-snapshots/pkg
-
-lintian-fixes:
-	python3 ../report-apt-repo.py lintian-fixes
-	python3 ../report-lintian-fixes-pkg.py lintian-fixes/pkg
-
-cupboard/result-codes:
-	python3 ../report-result-codes.py $@
-
-logs:
-	for I in $$(find pkg -name '*.log' -o -name 'result.json'); do { mkdir -p _build/html/$$(dirname $$I); ln -f $$I _build/html/$$I; } done
-
-.PHONY: help Makefile pkg fresh-releases fresh-snapshots
-
-# Catch-all target: route all unknown targets to Sphinx using the new
-# "make mode" option.  $(O) is meant as a shortcut for $(SPHINXOPTS).
-%: Makefile
-	@$(SPHINXBUILD) -M $@ "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
+.PHONY: all html/cupboard/pkg
