@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block page_title %}Package Overview - {{ package }}{% endblock %}
+{% block body %}
+<div class="section" id="{{ package }}">
+<h1>{{ package }}</h1>
+<ul class="simple">
+<li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
+<li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+<li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
+</ul>
+
+{% if merge_proposals %}
+<div class="section" id="recent-merge-proposals">
+<h2>Recent merge proposals</h2>
+<ul>
+{% for url, status in merge_proposals %}
+<li><a href="{{ url }}">{{ url }}</a> ({{ status }})</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+<div class="section" id="recent-package-builds">
+<h2>Recent package builds</h2>
+<ul class="simple">
+{% for (run_id, (start_time, finish_time), command, description, package_name, merge_proposal_url, build_version, build_distro, result_code, branch_name) in builds %}
+<li>{{ build_version }} (for {{ build_distro }}): {{ result_code }}</li>
+{% endfor %}
+</ul>
+</div>
+<div class="section" id="recent-runs">
+<h2>Recent runs<a class="headerlink" href="#recent-runs" title="Permalink to this headline">¶</a></h2>
+<ul class="simple">
+{% for (run_id, (start_time, finish_time), command, description, package_name, merge_proposal_url, build_version, build_distro, result_code, branch_name) in runs %}
+<li><a class="reference external" href="{{ run_id }}/">{{ finish_time }} {{ command }}</a>: {{ result_code }}</li>
+{% endfor %}
+</ul>
+</div>
+</div>
+
+</div>
+{% endblock %}
