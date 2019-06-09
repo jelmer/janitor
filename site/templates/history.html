@@ -22,7 +22,7 @@
 {% for package, command, duration, run_id, result_code, proposal_url in history %}
 <tr class="row-even"><td><a class="reference external" href="/cupboard/pkg/{{ package }}">{{ package }}</a></td>
 <td>{{ command }}</td>
-<td>{{ duration }}</td>
+<td>{{ format_duration(duration) }}</td>
 <td><a class="reference external" href="/pkg/{{ package }}/{{ run_id }}">{{ result_code }}</a></td>
 </tr>
 {% endfor %}

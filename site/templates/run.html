@@ -23,7 +23,7 @@
 <li>Package: <a class="reference external" href="..">{{ package }}</a></li>
 <li>Start time: {{ start_time}}</li>
 <li>Finish time: {{ finish_time }}</li>
-<li>Duration: {{ finish_time - start_time }}</li>
+<li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Description: {{ description }}</li>
 {% if changes_name %}
 <li>Changes filename: <a class="reference external" href="../../../{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></li>
