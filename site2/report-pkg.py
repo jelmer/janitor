@@ -49,7 +49,7 @@ def changes_get_binaries(changes_path):
         return changes['Binary'].split(' ')
 
 
-def include_build_log_failure(f, log_path, length):
+def include_build_log_failure(log_path, length):
     offsets = {}
     linecount = 0
     paragraphs = {}
@@ -80,9 +80,7 @@ def include_build_log_failure(f, log_path, length):
         if offset is not None:
             highlight_lines = [offsets[focus_section][0] + offset]
 
-    include_console_log(
-        f, log_path, include_lines=include_lines,
-        highlight_lines=highlight_lines)
+    return (include_lines, highlight_lines)
 
 
 if not os.path.isdir(dir):
@@ -130,7 +128,7 @@ for run in state.iter_runs():
     kwargs['binary_packages'] = []
     if kwargs['changes_name']:
         changes_path = os.path.join(
-            "../public_html", build_distro, kwargs['changes_name'])
+            "../../public_html", build_distro, kwargs['changes_name'])
         if not os.path.exists(changes_path):
             warning('Missing changes path %r', changes_path)
         else:
@@ -140,13 +138,6 @@ for run in state.iter_runs():
     build_log_path = 'build.log'
     worker_log_path = 'worker.log'
     if os.path.exists(os.path.join(run_dir, build_log_path)):
-        include_build_log_failure(
-            g, os.path.join(run_dir, build_log_path),
-            FAIL_BUILD_LOG_LEN)
-    else:
-        include_console_log(
-            g, os.path.join(run_dir, worker_log_path))
-    if os.path.exists(os.path.join(run_dir, build_log_path)):
         kwargs['build_log_path'] = build_log_path
         kwargs['earlier_build_log_paths'] = []
         i = 1
@@ -154,6 +145,11 @@ for run in state.iter_runs():
                 run_dir, build_log_path + '.%d' % i)):
             kwargs['earlier_build_log_paths'].append((i, '%s.%d' % (build_log_path, i)))
             i += 1
+
+    # TODO:
+    # include_lines, highlight_lines = include_build_log_failure(
+    # os.path.join(run_dir, build_log_path),
+    # FAIL_BUILD_LOG_LEN)
 
     if os.path.exists(
             os.path.join(run_dir, worker_log_path)):
