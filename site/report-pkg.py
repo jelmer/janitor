@@ -80,7 +80,7 @@ def find_build_log_failure(log_path, length):
         if offset is not None:
             highlight_lines = [offsets[focus_section][0] + offset]
 
-    return (include_lines, highlight_lines)
+    return (linecount, include_lines, highlight_lines)
 
 
 def in_line_boundaries(boundaries, i):
@@ -122,6 +122,8 @@ for run in state.iter_runs():
     kwargs['result_code'] = result_code
     kwargs['branch_name'] = branch_name
     kwargs['format_duration'] = format_duration
+    kwargs['enumerate'] = enumerate
+    kwargs['max'] = max
     def read_file(p):
         with open(p, 'r') as f:
             return list(f.readlines())
@@ -166,8 +168,11 @@ for run in state.iter_runs():
                 (i, '%s.%d' % (build_log_name, i)))
             i += 1
 
-        include_lines, highlight_lines = find_build_log_failure(
+        line_count, include_lines, highlight_lines = find_build_log_failure(
             build_log_path, FAIL_BUILD_LOG_LEN)
+        kwargs['build_log_line_count'] = line_count
+        kwargs['build_log_include_lines'] = include_lines
+        kwargs['build_log_highlight_lines'] = highlight_lines
 
     worker_log_path = os.path.join(log_directory, worker_log_name)
     if os.path.exists(worker_log_path):

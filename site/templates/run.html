@@ -41,7 +41,7 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ cache_url_bzr }}{{ package }}/{{ branch_name }}</pre></div></div>
 {% else %}
 {% if build_log_path %}
-{{ include_console_log(build_log_path) }}
+{{ include_console_log(build_log_path, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
 {% elif worker_log_path %}
 {{ include_console_log(worker_log_path) }}
 {% else %}
