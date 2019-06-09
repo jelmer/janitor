@@ -8,12 +8,14 @@ env = Environment(
     autoescape=select_autoescape(['html', 'xml'])
 )
 
-template = env.get_template('index.html')
-with open('html/index.html', 'w') as f:
-    f.write(template.render())
+simple_render = {
+    'index.html': 'index.html',
+    'contact/index.html': 'contact.html',
+    'credentials/index.html': 'credentials.html',
+    }
 
-os.makedirs('html/contact', exist_ok=True)
-
-template = env.get_template('contact.html')
-with open('html/contact/index.html', 'w') as f:
-    f.write(template.render())
+for dest, src in simple_render.items():
+    template = env.get_template(src)
+    os.makedirs(os.path.join('html', os.path.dirname(dest)), exist_ok=True)
+    with open(os.path.join('html', dest), 'w') as f:
+        f.write(template.render())
