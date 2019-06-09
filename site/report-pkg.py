@@ -37,6 +37,7 @@ env = Environment(
 FAIL_BUILD_LOG_LEN = 15
 
 parser = argparse.ArgumentParser(prog='report-pkg')
+parser.add_argument("logdirectory")
 parser.add_argument("directory")
 args = parser.parse_args()
 dir = args.directory
@@ -48,7 +49,7 @@ def changes_get_binaries(changes_path):
         return changes['Binary'].split(' ')
 
 
-def include_build_log_failure(log_path, length):
+def find_build_log_failure(log_path, length):
     offsets = {}
     linecount = 0
     paragraphs = {}
@@ -146,22 +147,27 @@ for run in state.iter_runs():
             for binary in changes_get_binaries(changes_path):
                 kwargs['binary_packages'].append(binary)
 
-    build_log_path = 'build.log'
-    worker_log_path = 'worker.log'
-    if os.path.exists(os.path.join(run_dir, build_log_path)):
+    build_log_name = 'build.log'
+    worker_log_name = 'worker.log'
+    log_directory = os.path.join(args.logdirectory, package_name, run_id)
+    build_log_path = os.path.join(log_directory, build_log_name)
+    if os.path.exists(build_log_path):
+        kwargs['build_log_filename'] = build_log_name
         kwargs['build_log_path'] = build_log_path
-        kwargs['earlier_build_log_paths'] = []
+        kwargs['earlier_build_log_names'] = []
         i = 1
         while os.path.exists(os.path.join(
-                run_dir, build_log_path + '.%d' % i)):
-            kwargs['earlier_build_log_paths'].append(
-                (i, '%s.%d' % (build_log_path, i)))
+                log_directory, build_log_name + '.%d' % i)):
+            kwargs['earlier_build_log_names'].append(
+                (i, '%s.%d' % (build_log_name, i)))
             i += 1
 
-    include_lines, highlight_lines = include_build_log_failure(
-        os.path.join(run_dir, build_log_path), FAIL_BUILD_LOG_LEN)
+        include_lines, highlight_lines = find_build_log_failure(
+            build_log_path, FAIL_BUILD_LOG_LEN)
 
-    if os.path.exists(os.path.join(run_dir, worker_log_path)):
+    worker_log_path = os.path.join(log_directory, worker_log_name)
+    if os.path.exists(worker_log_path):
+        kwargs['worker_log_name'] = worker_log_name
         kwargs['worker_log_path'] = worker_log_path
 
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
