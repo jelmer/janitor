@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block page_title %}Result Codes{% endblock %}
+{% block body %}
+<div class="section" id="result-codes">
+<h1>Result Codes</h1>
+<table class="docutils" border="1">
+<colgroup>
+<col width="95%">
+<col width="5%">
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Code</th>
+<th class="head">Count</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for code, count in result_codes %}
+<tr class="row-even"><td><a class="reference external" href="{{ code }}.html">{{ code }}</a></td>
+<td>{{ count }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}
