@@ -13,6 +13,7 @@ simple_render = {
     'contact/index.html': 'contact.html',
     'credentials/index.html': 'credentials.html',
     'apt/index.html': 'apt.html',
+    'cupboard/index.html': 'cupboard.html',
     }
 
 for dest, src in simple_render.items():
