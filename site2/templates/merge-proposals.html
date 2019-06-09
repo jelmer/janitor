@@ -1,0 +1,46 @@
+{% extends "layout.html" %}
+{% block page_title %}Merge Proposal Status{% endblock %}
+{% block body %}
+<div class="section" id="merge-proposal-status">
+<h1>Merge Proposal Status<a class="headerlink" href="#merge-proposal-status" title="Permalink to this headline">¶</a></h1>
+
+{% if open_proposals %}
+<div class="section" id="open-proposals">
+<h2>Open Proposals<a class="headerlink" href="#open-proposals" title="Permalink to this headline">¶</a></h2>
+<p>These proposals are currently waiting for review.</p>
+<ul class="simple">
+{% for url in open_proposals %}
+<li><a class="reference external" href="{{ url }}">{{ url }}</a></li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+{% if merged_proposals %}
+<div class="section" id="merged-proposals">
+<h2>Merged Proposals<a class="headerlink" href="#merged-proposals" title="Permalink to this headline">¶</a></h2>
+<p>These proposals have been merged in the past.</p>
+<ul class="simple">
+{% for url in merged_proposals %}
+<li><a class="reference external" href="{{ url }}">{{ url }}</a></li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+{% if closed_proposals %}
+<div class="section" id="closed-proposals">
+<h2>Closed Proposals<a class="headerlink" href="#closed-proposals" title="Permalink to this headline">¶</a></h2>
+<p>Proposals can be closed without being merged for a number of reasons - a
+similar change has already been applied, the change was rejected or the change
+was merged without history being referenced (i.e. in the case of a
+cherry-pick.</p>
+<ul class="simple">
+{% for url in closed_proposals %}
+<li><a class="reference external" href="{{ url }}">{{ url }}</a></li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+</div>
+
+{% endblock %}
