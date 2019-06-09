@@ -122,6 +122,10 @@ for run in state.iter_runs():
     kwargs['result_code'] = result_code
     kwargs['branch_name'] = branch_name
     kwargs['format_duration'] = format_duration
+    def read_file(p):
+        with open(p, 'r') as f:
+            return list(f.readlines())
+    kwargs['read_file'] = read_file
     if build_version:
         kwargs['changes_name'] = changes_filename(
             package_name, build_version,
