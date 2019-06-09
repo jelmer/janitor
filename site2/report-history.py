@@ -25,16 +25,13 @@ for (run_id, times, command, description, package, proposal_url,
         changes_filename, build_distro, result_code,
         branch_name) in state.iter_runs(limit=args.limit):
     row = [
-        '<a href="/pkg/%s">%s</a>' % (package, package),
+        package,
         command,
         '%s' % format_duration(times[1] - times[0]),
+        run_id,
+        result_code,
+        proposal_url,
         ]
-    if proposal_url:
-        row.append('%s <a href="%s">Merge proposal</a>' %
-                   (result_code, proposal_url))
-    else:
-        row.append('<a href="/pkg/%s/%s/">%s</a>' % (
-            package, run_id, result_code))
     data.append(row)
 
 
