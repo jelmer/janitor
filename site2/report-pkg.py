@@ -128,7 +128,7 @@ for run in state.iter_runs():
     kwargs['binary_packages'] = []
     if kwargs['changes_name']:
         changes_path = os.path.join(
-            "../../public_html", build_distro, kwargs['changes_name'])
+            "../public_html", build_distro, kwargs['changes_name'])
         if not os.path.exists(changes_path):
             warning('Missing changes path %r', changes_path)
         else:
