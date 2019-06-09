@@ -1,13 +1,13 @@
 {% macro include_console_log(path, include_lines=None, highlight_lines=None) %}
 {% with lines = open(path, 'r').readlines() %}
 <div class="highlight-console notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv">
-<pre>{% for i, line in enumerate(lines, 1) %}{{ i }}
-{% endfor %}
+<pre>{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}{{ i }}
+{% endif %}{% endfor %}
 </pre></div></td><td class="code"><div class="highlight">
 <pre>
-{% for i, line in enumerate(lines) %}
+{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}
 <span class="go">{{ line }}</span>
-{% endfor %}
+{% endif %}{% endfor %}
 </pre></div>
 </td></tr></table></div>
 {% endwith %}
@@ -44,6 +44,8 @@
 {{ include_console_log(build_log_path) }}
 {% elif worker_log_path %}
 {{ include_console_log(worker_log_path) }}
+{% else %}
+<!-- No logs to display :( -->
 {% endif %}
 {% endif %}
 
