@@ -83,7 +83,7 @@ def find_build_log_failure(log_path, length):
     return (linecount, include_lines, highlight_lines)
 
 
-def in_line_boundaries(boundaries, i):
+def in_line_boundaries(i, boundaries):
     if boundaries is None:
         return True
     if boundaries[0] is not None and i < boundaries[0]:
