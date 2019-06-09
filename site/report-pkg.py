@@ -18,7 +18,7 @@ from janitor.sbuild_log import (
     SBUILD_FOCUS_SECTION,
     strip_useless_build_tail,
 )  # noqa: E402
-from janitor.site.rst import (
+from janitor.site import (
     format_duration,
 )  # noqa: E402
 from janitor.trace import warning  # noqa: E402
@@ -120,6 +120,7 @@ for run in state.iter_runs():
     kwargs['build_distro'] = build_distro
     kwargs['result_code'] = result_code
     kwargs['branch_name'] = branch_name
+    kwargs['format_duration'] = format_duration
     if build_version:
         kwargs['changes_name'] = changes_filename(
             package_name, build_version,

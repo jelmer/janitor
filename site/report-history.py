@@ -6,7 +6,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.site.rst import format_duration  # noqa: E402
+from janitor.site import format_duration  # noqa: E402
 from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 env = Environment(
     loader=FileSystemLoader('templates'),
@@ -27,7 +27,7 @@ for (run_id, times, command, description, package, proposal_url,
     row = [
         package,
         command,
-        '%s' % format_duration(times[1] - times[0]),
+        times[1] - times[0],
         run_id,
         result_code,
         proposal_url,
@@ -36,4 +36,4 @@ for (run_id, times, command, description, package, proposal_url,
 
 
 template = env.get_template('history.html')
-sys.stdout.write(template.render(count=args.limit, history=data))
+sys.stdout.write(template.render(count=args.limit, history=data, format_duration=format_duration))
