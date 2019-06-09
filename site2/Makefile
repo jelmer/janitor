@@ -1,4 +1,4 @@
-all: html/index.html html/contact/index.html html/credentials/index.html html/apt/index.html html/lintian-fixes/index.html html/lintian-fixes/merge-proposals.html html/fresh-releases/merge-proposals.html html/fresh-releases/index.html html/fresh-snapshots/index.html html/cupboard/index.html html/cupboard/history.html html/cupboard/queue.html
+all: html/index.html html/contact/index.html html/credentials/index.html html/apt/index.html html/lintian-fixes/index.html html/lintian-fixes/merge-proposals.html html/fresh-releases/merge-proposals.html html/fresh-releases/index.html html/fresh-snapshots/index.html html/cupboard/index.html html/cupboard/history.html html/cupboard/queue.html html/cupboard/result-code/index.html
 
 html:
 	mkdir -p $@
@@ -29,5 +29,9 @@ html/cupboard/history.html: templates/layout.html templates/history.html
 html/cupboard/queue.html: templates/layout.html templates/queue.html
 	mkdir -p $(@D)
 	PYTHONPATH=.. python3 report-queue.py > $@
+
+html/cupboard/result-code/index.html: templates/layout.html templates/result-code-index.html
+	mkdir -p $(@D)
+	PYTHONPATH=.. python3 report-result-codes.py $(@D)
 
 .PHONY: all
