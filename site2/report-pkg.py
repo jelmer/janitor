@@ -20,7 +20,6 @@ from janitor.sbuild_log import (
 )  # noqa: E402
 from janitor.site.rst import (
     format_duration,
-    include_console_log,
 )  # noqa: E402
 from janitor.trace import warning  # noqa: E402
 from janitor.vcs import (
@@ -83,6 +82,16 @@ def include_build_log_failure(log_path, length):
     return (include_lines, highlight_lines)
 
 
+def in_line_boundaries(boundaries, i):
+    if boundaries is None:
+        return True
+    if boundaries[0] is not None and i < boundaries[0]:
+        return False
+    if boundaries[1] is not None and i > boundaries[1]:
+        return False
+    return True
+
+
 if not os.path.isdir(dir):
     os.mkdir(dir)
 
@@ -126,6 +135,7 @@ for run in state.iter_runs():
     kwargs['cache_url_git'] = CACHE_URL_GIT
     kwargs['cache_url_bzr'] = CACHE_URL_BZR
     kwargs['binary_packages'] = []
+    kwargs['in_line_boundaries'] = in_line_boundaries
     if kwargs['changes_name']:
         changes_path = os.path.join(
             "../public_html", build_distro, kwargs['changes_name'])
@@ -143,16 +153,14 @@ for run in state.iter_runs():
         i = 1
         while os.path.exists(os.path.join(
                 run_dir, build_log_path + '.%d' % i)):
-            kwargs['earlier_build_log_paths'].append((i, '%s.%d' % (build_log_path, i)))
+            kwargs['earlier_build_log_paths'].append(
+                (i, '%s.%d' % (build_log_path, i)))
             i += 1
 
-    # TODO:
-    # include_lines, highlight_lines = include_build_log_failure(
-    # os.path.join(run_dir, build_log_path),
-    # FAIL_BUILD_LOG_LEN)
+    include_lines, highlight_lines = include_build_log_failure(
+        os.path.join(run_dir, build_log_path), FAIL_BUILD_LOG_LEN)
 
-    if os.path.exists(
-            os.path.join(run_dir, worker_log_path)):
+    if os.path.exists(os.path.join(run_dir, worker_log_path)):
         kwargs['worker_log_path'] = worker_log_path
 
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
