@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block page_title %}Contact{% endblock %}
+{% block body %}
+<div class="section" id="{{ run_id }}">
+<h1>Run of {{ kind }} for {{ package }}</h1>
+
+<ul class="simple">
+<li>Package: <a class="reference external" href="..">{{ package }}</a></li>
+<li>Start time: {{ start_time}}</li>
+<li>Finish time: {{ finish_time }}</li>
+<li>Duration: {{ finish_time - start_time }}</li>
+<li>Description: {{ description }}</li>
+{% if changes_name %}
+<li>Changes filename: <a class="reference external" href="../../../{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></li>
+{% endif %}
+</ul>
+
+<p>Try this locally:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
+
+{% if vcs == 'git' and branch_name %}
+<p>Merge these changes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>git pull {{ cache_url_git }}{{ package }} {{ branch_name }}</pre></div></div>
+{% elif vcs == 'bzr' and branch_name %}
+<p>Merge these changes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ cache_url_bzr }}{{ package }}/{{ branch_name }}</pre></div></div>
+{% endif %}
+
+{% if binary_packages %}
+<p>Install this package (if you have the <a class="reference external" href="../../../">apt repository</a> enabled) by running one of:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>
+{% for binary_package in binary_packages %}
+apt install -t {{ build_distro }} {{ binary_package }}
+{% endfor %}
+</pre></div></div>
+{% endif %}
+
+<p>{% if build_log_path %}<a class="reference external" href="{{ build_log_path }}">Full build log</a>{% for i, path in earlier_build_log_paths %}<a href="{{ path }}">{{ i }}</a>{% endfor %} {% endif %}{% if worker_log_path %}<a class="reference external" href="{{ worker_log_path }}">Full worker log</a>{% endif %}</p>
+
+</div>
+{% endblock %}
