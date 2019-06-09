@@ -1,3 +1,18 @@
+{% macro include_console_log(path, include_lines=None, highlight_lines=None) %}
+{% with lines = open(path, 'r').readlines() %}
+<div class="highlight-console notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv">
+<pre>{% for i, line in enumerate(lines, 1) %}{{ i }}
+{% endfor %}
+</pre></div></td><td class="code"><div class="highlight">
+<pre>
+{% for i, line in enumerate(lines) %}
+<span class="go">{{ line }}</span>
+{% endfor %}
+</pre></div>
+</td></tr></table></div>
+{% endwith %}
+{% endmacro %}
+
 {% extends "layout.html" %}
 {% block page_title %}Contact{% endblock %}
 {% block body %}
@@ -24,6 +39,12 @@
 {% elif vcs == 'bzr' and branch_name %}
 <p>Merge these changes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ cache_url_bzr }}{{ package }}/{{ branch_name }}</pre></div></div>
+{% else %}
+{% if build_log_path %}
+{{ include_console_log(build_log_path) }}
+{% elif worker_log_path %}
+{{ include_console_log(worker_log_path) }}
+{% endif %}
 {% endif %}
 
 {% if binary_packages %}
