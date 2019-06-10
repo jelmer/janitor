@@ -225,8 +225,8 @@ async def process_one(
         try:
             hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
         except UnsupportedHoster as e:
-            # We can't figure out what branch to resume from when there's no hoster
-            # that can tell us.
+            # We can't figure out what branch to resume from when there's no
+            # hoster that can tell us.
             resume_branch = None
             warning('Unsupported hoster (%s)', e)
         else:

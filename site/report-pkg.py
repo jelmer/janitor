@@ -130,7 +130,7 @@ for run in state.iter_runs():
 
     def read_file(p):
         with open(p, 'rb') as f:
-            return list(f.readlines())
+            return [l.decode('utf-8', 'replace') for l in f.readlines()]
     kwargs['read_file'] = read_file
     if build_version:
         kwargs['changes_name'] = changes_filename(

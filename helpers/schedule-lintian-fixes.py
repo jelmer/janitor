@@ -64,4 +64,4 @@ else:
             args.policy, args.propose_addon_only, args.packages,
             available_fixers, args.shuffle)
 for entry in schedule_iter:
-        print(entry)
+    print(entry)
