@@ -5,7 +5,7 @@
 <h1>Queue</h1>
 <ol class="arabic simple">
 {% for pkg, description in queue %}
-<li><a class="reference external" href="/pkg/{{ pkg }}">{{ pkg }}</a> {% if description %}({{ description|safe }}){% endif %}</li>
+<li><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a> {% if description %}({{ description|safe }}){% endif %}</li>
 {% endfor %}
 </ol>
 </div>
