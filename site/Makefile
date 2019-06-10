@@ -38,6 +38,6 @@ $(OUTPUT_DIR)/cupboard/result-codes/index.html: templates/layout.html templates/
 
 $(OUTPUT_DIR)/cupboard/pkg:
 	mkdir -p $@
-	PYTHONPATH=..:../silver-platter python3 report-pkg.py $(OUTPUT_DIR)/pkg $@
+	PYTHONPATH=..:../silver-platter python3 report-pkg.py $(abspath pkg) $@
 
 .PHONY: all $(OUTPUT_DIR)/cupboard/pkg

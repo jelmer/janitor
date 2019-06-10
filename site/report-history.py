@@ -3,11 +3,13 @@
 import argparse
 import os
 import sys
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
 from janitor.site import format_duration  # noqa: E402
-from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 env = Environment(
     loader=FileSystemLoader('templates'),
     autoescape=select_autoescape(['html', 'xml'])
@@ -36,4 +38,7 @@ for (run_id, times, command, description, package, proposal_url,
 
 
 template = env.get_template('history.html')
-sys.stdout.write(template.render(count=args.limit, history=data, format_duration=format_duration))
+sys.stdout.write(template.render(
+    count=args.limit,
+    history=data,
+    format_duration=format_duration))

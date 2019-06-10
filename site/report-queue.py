@@ -19,10 +19,11 @@ import argparse
 import os
 import sys
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from jinja2 import Environment, FileSystemLoader, select_autoescape  # noqa: E402
 
 parser = argparse.ArgumentParser('report-queue')
 parser.add_argument(
@@ -50,8 +51,8 @@ for queue_id, branch_url, env, command in state.iter_queue(limit=args.limit):
         description = 'Lintian fixes'
         if env.get('CONTEXT'):
             expecting = 'expecting to fix: ' + ', '.join([
-                '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' % (tag, tag)
-                for tag in env['CONTEXT'].split(' ')])
+                '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' %
+                (tag, tag) for tag in env['CONTEXT'].split(' ')])
     else:
         raise AssertionError('invalid command %s' % command)
     if args.command is not None:

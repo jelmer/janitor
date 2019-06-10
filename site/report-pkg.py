@@ -4,6 +4,9 @@ import argparse
 from debian.deb822 import Changes
 import os
 import sys
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
@@ -27,7 +30,6 @@ from janitor.vcs import (
     CACHE_URL_GIT,
 )  # noqa: E402
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 env = Environment(
     loader=FileSystemLoader('templates'),
     autoescape=select_autoescape(['html', 'xml'])
@@ -125,6 +127,7 @@ for run in state.iter_runs():
     kwargs['format_duration'] = format_duration
     kwargs['enumerate'] = enumerate
     kwargs['max'] = max
+
     def read_file(p):
         with open(p, 'rb') as f:
             return list(f.readlines())
