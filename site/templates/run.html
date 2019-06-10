@@ -57,7 +57,7 @@ apt install -t {{ build_distro }} {{ binary_package }}
 </pre></div></div>
 {% endif %}
 
-<p>{% if build_log_path %}<a class="reference external" href="/pkg/{{ package }}/{{ run_id }}/{{ build_log_name }}">Full build log</a>{% for i, name in earlier_build_log_names %}<a href="/pkg/{{ package }}/{{ run_id }}/{{ name }}">{{ i }}</a>{% endfor %} {% endif %}{% if worker_log_name %}<a class="reference external" href="/pkg/{{ package }}/{{ run_id }}/{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
+<p>{% if build_log_path %}<a class="reference external" href="../pkg/{{ package }}/{{ run_id }}/{{ build_log_name }}">Full build log</a>{% for i, name in earlier_build_log_names %}<a href="../pkg/{{ package }}/{{ run_id }}/{{ name }}">{{ i }}</a>{% endfor %} {% endif %}{% if worker_log_name %}<a class="reference external" href="../pkg/{{ package }}/{{ run_id }}/{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
 
 </div>
 {% endblock %}
