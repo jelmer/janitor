@@ -126,7 +126,7 @@ for run in state.iter_runs():
     kwargs['enumerate'] = enumerate
     kwargs['max'] = max
     def read_file(p):
-        with open(p, 'r') as f:
+        with open(p, 'rb') as f:
             return list(f.readlines())
     kwargs['read_file'] = read_file
     if build_version:
