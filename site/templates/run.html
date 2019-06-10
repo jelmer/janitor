@@ -5,8 +5,7 @@
 {% endif %}{% endfor %}
 </pre></div></td><td class="code"><div class="highlight">
 <pre>
-{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}
-<span class="go">{{ line }}</span>
+{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}<span class="go">{{ line }}</span>
 {% endif %}{% endfor %}
 </pre></div>
 </td></tr></table></div>
