@@ -110,6 +110,7 @@ for run in state.iter_runs():
     os.makedirs(run_dir, exist_ok=True)
 
     kwargs = {}
+    kwargs['run_id'] = run_id
     kwargs['kind'] = command.split(' ')[0]
     kwargs['command'] = command
     kwargs['description'] = description

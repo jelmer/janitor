@@ -46,4 +46,4 @@ with open(os.path.join(args.path, 'index.html'), 'w') as f:
     data = sorted(
         [[name, len(by_code[name])] for name in by_code],
         key=operator.itemgetter(1), reverse=True)
-    template.render(result_codes=data)
+    f.write(template.render(result_codes=data))
