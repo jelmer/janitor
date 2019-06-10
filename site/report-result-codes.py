@@ -4,6 +4,9 @@ import argparse
 import operator
 import os
 import sys
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
@@ -13,7 +16,6 @@ parser.add_argument(
     'path', type=str, default='result-codes', help='Output path')
 args = parser.parse_args()
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 env = Environment(
     loader=FileSystemLoader('templates'),
     autoescape=select_autoescape(['html', 'xml'])
