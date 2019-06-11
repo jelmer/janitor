@@ -1,3 +1,4 @@
+{% extends "layout.html" %}
 {% macro include_console_log(path, include_lines=None, highlight_lines=None) %}
 {% with lines = read_file(path) %}
 <div class="highlight-console notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv">
@@ -9,8 +10,6 @@
 </td></tr></table></div>
 {% endwith %}
 {% endmacro %}
-
-{% extends "layout.html" %}
 {% block page_title %}Contact{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
