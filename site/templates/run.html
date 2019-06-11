@@ -5,7 +5,7 @@
 <pre>{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}{{ i }}
 {% endif %}{% endfor %}</pre></div></td><td class="code"><div class="highlight">
 <pre>
-{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}<span class="go{{ 'hll' if highlight_lines and in_line_boundaries(i, highlight_lines) else ''">{{ line.rstrip('\n') }}</span>
+{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}<span class="go{{ 'hll' if highlight_lines and in_line_boundaries(i, highlight_lines) else '' }}">{{ line.rstrip('\n') }}</span>
 {% endif %}{% endfor %}</pre></div>
 </td></tr></table></div>
 {% endwith %}
