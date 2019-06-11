@@ -2,12 +2,10 @@
 {% with lines = read_file(path) %}
 <div class="highlight-console notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv">
 <pre>{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}{{ i }}
-{% endif %}{% endfor %}
-</pre></div></td><td class="code"><div class="highlight">
+{% endif %}{% endfor %}</pre></div></td><td class="code"><div class="highlight">
 <pre>
-{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}<span class="go">{{ line.rstrip('\n') }}</span>
-{% endif %}{% endfor %}
-</pre></div>
+{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}<span class="go{{ 'hll' if highlight_lines and in_line_boundaries(i, highlight_lines) else ''">{{ line.rstrip('\n') }}</span>
+{% endif %}{% endfor %}</pre></div>
 </td></tr></table></div>
 {% endwith %}
 {% endmacro %}
