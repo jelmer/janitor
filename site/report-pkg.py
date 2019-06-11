@@ -162,14 +162,17 @@ for run in state.iter_runs():
     log_directory = os.path.join(args.logdirectory, package_name, run_id)
     build_log_path = os.path.join(log_directory, build_log_name)
     if os.path.exists(build_log_path):
-        kwargs['build_log_filename'] = build_log_name
+        os.symlink(build_log_path, os.path.join(run_dir, 'build.log'))
+        kwargs['build_log_name'] = build_log_name
         kwargs['build_log_path'] = build_log_path
         kwargs['earlier_build_log_names'] = []
         i = 1
         while os.path.exists(os.path.join(
                 log_directory, build_log_name + '.%d' % i)):
-            kwargs['earlier_build_log_names'].append(
-                (i, '%s.%d' % (build_log_name, i)))
+            log_name = '%s.%d' % (build_log_name, i)
+            kwargs['earlier_build_log_names'].append((i, log_name))
+            os.symlink(os.path.join(log_directory, log_name),
+                       os.path.join(run_dir, log_name))
             i += 1
 
         line_count, include_lines, highlight_lines = find_build_log_failure(
@@ -180,6 +183,7 @@ for run in state.iter_runs():
 
     worker_log_path = os.path.join(log_directory, worker_log_name)
     if os.path.exists(worker_log_path):
+        os.symlink(worker_log_path, os.path.join(run_dir, 'worker.log'))
         kwargs['worker_log_name'] = worker_log_name
         kwargs['worker_log_path'] = worker_log_path
 
