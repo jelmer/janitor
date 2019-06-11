@@ -17,9 +17,9 @@
 </thead>
 <tbody valign="top">
 {% for pkg, run_id, command, description in entries %}
-<tr class="row-even"><td><a class="reference external" href="/pkg/{{ pkg }}/">{{ pkg }}</a></td>
+<tr class="row-even"><td><a class="reference external" href="../pkg/{{ pkg }}/">{{ pkg }}</a></td>
 <td>{{ command }}</td>
-<td><a class="reference external" href="/pkg/{{ pkg }}/{{ run_id }}">{{ description }}</a></td>
+<td><a class="reference external" href="../pkg/{{ pkg }}/{{ run_id }}">{{ description }}</a></td>
 </tr>
 {% endfor %}
 </tbody>
