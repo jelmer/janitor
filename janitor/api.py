@@ -9,14 +9,14 @@ from janitor import state
 async def handle_policy(request):
     package = request.match_info['package']
     # TODO(jelmer)
-    response_obj = { 'status' : 'success: ' + package }
+    response_obj = {'status': 'success', 'package': package}
     return web.Response(text=json.dumps(response_obj))
 
 
 async def handle_publish(request):
     package = request.match_info['package']
     # TODO(jelmer)
-    response_obj = { 'status' : 'success' }
+    response_obj = {'status': 'success', 'package': package}
     return web.Response(text=json.dumps(response_obj))
 
 
@@ -24,7 +24,11 @@ async def handle_reschedule(request):
     package = request.match_info['package']
     command = request.match_info['command']
     # TODO(jelmer)
-    response_obj = { 'status' : 'success' }
+    response_obj = {
+        'status': 'success',
+        'package': package,
+        'command': command,
+        }
     return web.Response(text=json.dumps(response_obj))
 
 
@@ -35,7 +39,8 @@ async def handle_package_list(request):
             'name': name,
             'maintainer_email': maintainer_email,
             'branch_url': branch_url})
-    return web.Response(text=json.dumps(response_obj, sort_keys=True, indent=4))
+    return web.Response(
+        text=json.dumps(response_obj, sort_keys=True, indent=4))
 
 
 async def handle_merge_proposal_list(request):
@@ -46,7 +51,8 @@ async def handle_merge_proposal_list(request):
             'package': package,
             'url': url,
             'status': status})
-    return web.Response(text=json.dumps(response_obj, sort_keys=True, indent=4))
+    return web.Response(
+        text=json.dumps(response_obj, sort_keys=True, indent=4))
 
 
 async def handle_queue(request):
@@ -59,7 +65,8 @@ async def handle_queue(request):
             'branch_url': branch_url,
             'env': env,
             'command': command})
-    return web.Response(text=json.dumps(response_obj, sort_keys=True, indent=4))
+    return web.Response(
+        text=json.dumps(response_obj, sort_keys=True, indent=4))
 
 
 async def handle_run(request):
@@ -68,8 +75,8 @@ async def handle_run(request):
     package = request.match_info.get('package')
     response_obj = []
     for (run_id, (start_time, finish_time), command, description,
-        package_name, merge_proposal_url, build_version, build_distribution,
-        result_code, branch_name) in state.iter_runs(package, limit=limit):
+         package_name, merge_proposal_url, build_version, build_distribution,
+         result_code, branch_name) in state.iter_runs(package, limit=limit):
         response_obj.append({
             'run_id': run_id,
             'start_time': start_time.isoformat(),
@@ -83,7 +90,8 @@ async def handle_run(request):
             'result_code': result_code,
             'branch_name': branch_name,
             })
-    return web.Response(text=json.dumps(response_obj, sort_keys=True, indent=4))
+    return web.Response(
+        text=json.dumps(response_obj, sort_keys=True, indent=4))
 
 
 async def handle_package_branch(request):
@@ -94,7 +102,8 @@ async def handle_package_branch(request):
             'branch_url': branch_url,
             'revision': revision,
             })
-    return web.Response(text=json.dumps(response_obj, sort_keys=True, indent=4))
+    return web.Response(
+        text=json.dumps(response_obj, sort_keys=True, indent=4))
 
 
 app = web.Application()
