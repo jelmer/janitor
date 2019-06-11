@@ -304,7 +304,7 @@ WHERE
         args.append(minimum_priority)
     cur.execute(query, args)
     ret = cur.fetchone()[0]
-    if ret is not None:
+    if ret is None:
         return datetime.timedelta()
     return ret
 
