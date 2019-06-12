@@ -1,15 +1,5 @@
 {% extends "layout.html" %}
-{% macro include_console_log(path, include_lines=None, highlight_lines=None) %}
-{% with lines = read_file(path) %}
-<div class="highlight-console notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv">
-<pre>{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}{{ i }}
-{% endif %}{% endfor %}</pre></div></td><td class="code"><div class="highlight">
-<pre>
-{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}<span class="go{{ 'hll' if highlight_lines and i in highlight_lines else '' }}">{{ line.rstrip('\n') }}</span>
-{% endif %}{% endfor %}</pre></div>
-</td></tr></table></div>
-{% endwith %}
-{% endmacro %}
+{% from "codeblock.html" import include_console_log %}
 {% block page_title %}Contact{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -18,16 +8,15 @@
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a></li>
 <li>Start time: {{ start_time}}</li>
-<li>Finish time: {{ finish_time }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Description: {{ description }}</li>
-{% if changes_name %}
-<li>Changes filename: <a class="reference external" href="../../../{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></li>
-{% endif %}
 </ul>
 
 <p>Try this locally:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
+
+<!-- TODO(jelmer): Include button to propose merging -->
+<!-- TODO(jelmer): Include button to retry -->
 
 {% if vcs == 'git' and branch_name %}
 <p>Merge these changes:</p>
@@ -45,6 +34,10 @@
 {% endif %}
 {% endif %}
 
+{% if changes_name %}
+<h2>Resulting package</h2>
+<p>Changes filename: <a class="reference external" href="../../../{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></p>
+
 {% if binary_packages %}
 <p>Install this package (if you have the <a class="reference external" href="../../../">apt repository</a> enabled) by running one of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
@@ -52,6 +45,7 @@
 apt install -t {{ build_distro }} {{ binary_package }}
 {% endfor %}
 </pre></div></div>
+{% endif %}
 {% endif %}
 
 <p>{% if build_log_path %}<a class="reference external" href="{{ build_log_name }}">Full build log</a>{% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}</a>{% endfor %} {% endif %}{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
