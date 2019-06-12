@@ -31,7 +31,7 @@ for dest, src in simple_render.items():
         f.write(template.render())
 
 
-template = env.get_template('lintian-fixes.html')
+template = env.get_template('lintian-fixes-start.html')
 lintian_fixes_dir = os.path.join(args.directory, 'lintian-fixes')
 os.makedirs(lintian_fixes_dir, exist_ok=True)
 with open(os.path.join(lintian_fixes_dir, 'index.html'), 'w') as f:
