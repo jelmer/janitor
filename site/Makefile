@@ -5,7 +5,7 @@ all: $(OUTPUT_DIR)/index.html $(OUTPUT_DIR)/contact/index.html $(OUTPUT_DIR)/cre
 html:
 	mkdir -p $@
 
-$(OUTPUT_DIR)/index.html $(OUTPUT_DIR)/cupboard/index.html $(OUTPUT_DIR)/apt/index.html $(OUTPUT_DIR)/contact/index.html $(OUTPUT_DIR)/credentials/index.html $(OUTPUT_DIR)/lintian-fixes/index.html: templates/index.html templates/apt.html templates/contact.html templates/credentials.html templates/layout.html templates/lintian-fixes.html templates/cupboard.html
+$(OUTPUT_DIR)/index.html $(OUTPUT_DIR)/cupboard/index.html $(OUTPUT_DIR)/apt/index.html $(OUTPUT_DIR)/contact/index.html $(OUTPUT_DIR)/credentials/index.html $(OUTPUT_DIR)/lintian-fixes/index.html: templates/index.html templates/apt.html templates/contact.html templates/credentials.html templates/layout.html templates/lintian-fixes-start.html templates/cupboard.html
 	python3 generate.py $(OUTPUT_DIR)
 
 $(OUTPUT_DIR)/lintian-fixes/merge-proposals.html: templates/layout.html templates/merge-proposals.html
