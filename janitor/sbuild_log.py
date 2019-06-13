@@ -39,6 +39,7 @@ SBUILD_FOCUS_SECTION = {
     'run-post-build-commands': 'post build commands',
     'post-build': 'post build',
     'install-deps': 'install package build dependencies',
+    'explain-bd-uninstallable': 'install package build dependencies',
 }
 
 
