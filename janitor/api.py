@@ -141,7 +141,7 @@ async def handle_published_packages(request):
 
 async def handle_index(request):
     template = jinja2_env.get_template('api-index.html')
-    return web.Response(content_type='text/html', text=template.render())
+    return web.Response(content_type='text/html', text=await template.render_async())
 
 
 async def handle_global_policy(request):
@@ -152,7 +152,8 @@ async def handle_global_policy(request):
 from jinja2 import Environment, PackageLoader, select_autoescape
 jinja2_env = Environment(
     loader=PackageLoader('janitor', 'templates'),
-    autoescape=select_autoescape(['html', 'xml'])
+    autoescape=select_autoescape(['html', 'xml']),
+    enable_async=True,
 )
 
 app = web.Application()
