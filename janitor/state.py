@@ -110,7 +110,7 @@ FROM
     args = []
     if package:
         query += " WHERE name = %s"
-        args.append(name)
+        args.append(package)
     query += " ORDER BY name ASC"
     cur.execute(query, args)
     return cur.fetchall()
