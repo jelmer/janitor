@@ -113,7 +113,8 @@ async def handle_run(request):
 
 async def handle_package_branch(request):
     response_obj = []
-    for (name, branch_url, revision) in state.iter_package_branches():
+    for (name, branch_url, revision, last_scanned, description) in (
+            state.iter_package_branches()):
         response_obj.append({
             'name': name,
             'branch_url': branch_url,
