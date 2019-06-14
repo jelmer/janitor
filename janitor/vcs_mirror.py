@@ -53,7 +53,8 @@ last_success_gauge = Gauge(
 def update_gitlab_branches(vcs_result_dir, host):
     package_per_repo = {}
     branches_per_repo = {}
-    for name, branch_url, revision in state.iter_package_branches():
+    for name, branch_url, revision, last_scanned, description in (
+            state.iter_package_branches()):
         if branch_url.startswith('https://%s/' % host):
             url, params = urlutils.split_segment_parameters(branch_url)
             branches_per_repo.setdefault(url, {})

@@ -484,7 +484,9 @@ def iter_package_branches():
 SELECT
   name,
   branch_url,
-  revision
+  revision,
+  last_scanned,
+  description
 FROM
   package
 LEFT JOIN branch ON package.branch_url = branch.url
