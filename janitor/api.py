@@ -12,7 +12,7 @@ async def handle_policy(request):
     # TODO(jelmer)
     response_obj = {'status': 'success', 'package': package}
     return web.Response(
-        text=json.dumps(response_obj), content_type='text/json')
+        text=json.dumps(response_obj), content_type='application/json')
 
 
 async def handle_publish(request):
@@ -20,7 +20,7 @@ async def handle_publish(request):
     # TODO(jelmer)
     response_obj = {'status': 'success', 'package': package}
     return web.Response(
-        text=json.dumps(response_obj), content_type='text/json')
+        text=json.dumps(response_obj), content_type='application/json')
 
 
 async def handle_reschedule(request):
@@ -33,7 +33,7 @@ async def handle_reschedule(request):
         'command': command,
         }
     return web.Response(
-        text=json.dumps(response_obj), content_type='text/json')
+        text=json.dumps(response_obj), content_type='application/json')
 
 
 async def handle_package_list(request):
@@ -45,7 +45,7 @@ async def handle_package_list(request):
             'branch_url': branch_url})
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='text/json')
+        content_type='application/json')
 
 
 async def handle_merge_proposal_list(request):
@@ -72,7 +72,7 @@ async def handle_queue(request):
             'command': command})
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='text/json')
+        content_type='application/json')
 
 
 async def handle_run(request):
@@ -98,7 +98,7 @@ async def handle_run(request):
             })
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='text/json')
+        content_type='application/json')
 
 
 async def handle_package_branch(request):
@@ -111,7 +111,7 @@ async def handle_package_branch(request):
             })
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='text/json')
+        content_type='application/json')
 
 
 app = web.Application()
