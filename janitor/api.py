@@ -114,10 +114,21 @@ async def handle_package_branch(request):
         content_type='application/json')
 
 
+async def handle_index(request):
+    template = jinja2_env.get_template('api-index')
+    return web.Response(content_type='text/html', text=template.render())
+
+
+from jinja2 import Environment, PackageLoader, select_autoescape
+env = Environment(
+    loader=PackageLoader('janitor', 'templates'),
+    autoescape=select_autoescape(['html', 'xml'])
+)
+
 app = web.Application()
 app.router.add_get('/pkg', handle_package_list)
 app.router.add_get('/merge-proposals', handle_merge_proposal_list)
-app.router.add_get('/merge-proposals/{package}', handle_merge_proposal_list)
+app.router.add_get('/pkg/{package}/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/pkg/{package}/policy', handle_policy)
 app.router.add_get('/pkg/{package}/publish', handle_publish)
 app.router.add_get('/pkg/{package}/schedule/{command}', handle_reschedule)
