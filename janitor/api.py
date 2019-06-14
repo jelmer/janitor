@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import argparse
 from aiohttp import web
 import json
 
@@ -125,4 +126,8 @@ app.router.add_get('/package-branch', handle_package_branch)
 # TODO(jelmer): Publish ready (iter_publish_ready)
 # TODO(jelmer): Unscanned branches (iter_unscanned_branches)
 
-web.run_app(app)
+parser = argparse.ArgumentParser()
+parser.add_argument('--host', type=str, help='Host to listen on')
+args = parser.parse_args()
+
+web.run_app(app, host=args.host)
