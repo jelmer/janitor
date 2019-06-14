@@ -37,8 +37,10 @@ async def handle_reschedule(request):
 
 
 async def handle_package_list(request):
+    package = request.match_info['package']
     response_obj = []
-    for name, maintainer_email, branch_url in state.iter_packages():
+    for name, maintainer_email, branch_url in state.iter_packages(
+            package=package):
         response_obj.append({
             'name': name,
             'maintainer_email': maintainer_email,
@@ -135,11 +137,12 @@ jinja2_env = Environment(
 
 app = web.Application()
 app.router.add_get('/pkg', handle_package_list)
-app.router.add_get('/merge-proposals', handle_merge_proposal_list)
+app.router.add_get('/pkg/{package}', handle_package_list)
 app.router.add_get('/pkg/{package}/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/pkg/{package}/policy', handle_policy)
 app.router.add_get('/pkg/{package}/publish', handle_publish)
 app.router.add_get('/pkg/{package}/schedule/{command}', handle_reschedule)
+app.router.add_get('/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/queue', handle_queue)
 app.router.add_get('/run', handle_run)
 app.router.add_get('/run/{run_id}', handle_run)

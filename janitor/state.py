@@ -97,17 +97,22 @@ mode, result_code, description, merge_proposal_url) values (%s, %s, %s, %s, %s,
     conn.commit()
 
 
-def iter_packages():
+def iter_packages(package=None):
     cur = conn.cursor()
-    cur.execute("""
+    query = """
 SELECT
   name,
   maintainer_email,
   branch_url
 FROM
   package
-ORDER BY name ASC
-""")
+"""
+    args = []
+    if package:
+        query += " WHERE name = %s"
+        args.append(name)
+    query += " ORDER BY name ASC"
+    cur.execute(query, args)
     return cur.fetchall()
 
 
