@@ -37,7 +37,7 @@ async def handle_reschedule(request):
 
 
 async def handle_package_list(request):
-    package = request.match_info['package']
+    package = request.match_info.get('package')
     response_obj = []
     for name, maintainer_email, branch_url in state.iter_packages(
             package=package):
