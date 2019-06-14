@@ -23,7 +23,7 @@ async def handle_publish(request):
         text=json.dumps(response_obj), content_type='application/json')
 
 
-async def handle_reschedule(request):
+async def handle_schedule(request):
     package = request.match_info['package']
     command = request.match_info['command']
     # TODO(jelmer)
@@ -127,9 +127,26 @@ async def handle_package_branch(request):
         content_type='application/json')
 
 
+async def handle_published_packages(request):
+    suite = request.match_info['suite']
+    response_obj = []
+    for package, build_version in state.iter_published_packages(suite):
+        response_obj.append({
+            'package': package,
+            'build_version': build_version})
+    return web.Response(
+        text=json.dumps(response_obj, sort_keys=True, indent=4),
+        content_type='application/json')
+
+
 async def handle_index(request):
     template = jinja2_env.get_template('api-index.html')
     return web.Response(content_type='text/html', text=template.render())
+
+
+async def handle_global_policy(request):
+    with open('policy.conf', 'r') as f:
+        return web.Response(content_type='text/protobuf', text=f.read())
 
 
 from jinja2 import Environment, PackageLoader, select_autoescape
@@ -144,7 +161,7 @@ app.router.add_get('/pkg/{package}', handle_package_list)
 app.router.add_get('/pkg/{package}/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/pkg/{package}/policy', handle_policy)
 app.router.add_get('/pkg/{package}/publish', handle_publish)
-app.router.add_get('/pkg/{package}/schedule/{command}', handle_reschedule)
+app.router.add_get('/pkg/{package}/schedule/{suite}', handle_schedule)
 app.router.add_get('/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/queue', handle_queue)
 app.router.add_get('/run', handle_run)
@@ -153,13 +170,13 @@ app.router.add_get('/pkg/{package}/run', handle_run)
 app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
 app.router.add_get('/package-branch', handle_package_branch)
 app.router.add_get('/', handle_index)
-# TODO(jelmer): Published packages (iter_published_packages)
+app.router.add_get('/apt/{suite}/published-packages', handle_published_packages)
+app.router.add_get('/policy', handle_global_policy)
 # TODO(jelmer): Previous runs (iter_previous_runs)
 # TODO(jelmer): Last successes (iter_last_successes)
 # TODO(jelmer): Last runs (iter_last_runs)
 # TODO(jelmer): Build failures (iter_build_failures)
 # TODO(jelmer): Publish ready (iter_publish_ready)
-# TODO(jelmer): Unscanned branches (iter_unscanned_branches)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--host', type=str, help='Host to listen on')
