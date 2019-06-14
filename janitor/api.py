@@ -57,7 +57,8 @@ async def handle_merge_proposal_list(request):
             'url': url,
             'status': status})
     return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4))
+        text=json.dumps(response_obj, sort_keys=True, indent=4),
+        content_type='application/json')
 
 
 async def handle_queue(request):
@@ -115,12 +116,12 @@ async def handle_package_branch(request):
 
 
 async def handle_index(request):
-    template = jinja2_env.get_template('api-index')
+    template = jinja2_env.get_template('api-index.html')
     return web.Response(content_type='text/html', text=template.render())
 
 
 from jinja2 import Environment, PackageLoader, select_autoescape
-env = Environment(
+jinja2_env = Environment(
     loader=PackageLoader('janitor', 'templates'),
     autoescape=select_autoescape(['html', 'xml'])
 )
@@ -136,6 +137,7 @@ app.router.add_get('/queue', handle_queue)
 app.router.add_get('/run', handle_run)
 app.router.add_get('/pkg/{package}/run', handle_run)
 app.router.add_get('/package-branch', handle_package_branch)
+app.router.add_get('/', handle_index)
 # TODO(jelmer): Published packages (iter_published_packages)
 # TODO(jelmer): Previous runs (iter_previous_runs)
 # TODO(jelmer): Last successes (iter_last_successes)
