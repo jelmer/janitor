@@ -118,6 +118,8 @@ async def handle_package_branch(request):
             'name': name,
             'branch_url': branch_url,
             'revision': revision,
+            'last_scanned': last_scanned.isoformat() if last_scanned else None,
+            'description': description,
             })
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
