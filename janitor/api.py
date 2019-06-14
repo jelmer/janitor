@@ -11,14 +11,16 @@ async def handle_policy(request):
     package = request.match_info['package']
     # TODO(jelmer)
     response_obj = {'status': 'success', 'package': package}
-    return web.Response(text=json.dumps(response_obj))
+    return web.Response(
+        text=json.dumps(response_obj), content_type='text/json')
 
 
 async def handle_publish(request):
     package = request.match_info['package']
     # TODO(jelmer)
     response_obj = {'status': 'success', 'package': package}
-    return web.Response(text=json.dumps(response_obj))
+    return web.Response(
+        text=json.dumps(response_obj), content_type='text/json')
 
 
 async def handle_reschedule(request):
@@ -30,7 +32,8 @@ async def handle_reschedule(request):
         'package': package,
         'command': command,
         }
-    return web.Response(text=json.dumps(response_obj))
+    return web.Response(
+        text=json.dumps(response_obj), content_type='text/json')
 
 
 async def handle_package_list(request):
@@ -41,7 +44,8 @@ async def handle_package_list(request):
             'maintainer_email': maintainer_email,
             'branch_url': branch_url})
     return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4))
+        text=json.dumps(response_obj, sort_keys=True, indent=4),
+        content_type='text/json')
 
 
 async def handle_merge_proposal_list(request):
@@ -67,7 +71,8 @@ async def handle_queue(request):
             'env': env,
             'command': command})
     return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4))
+        text=json.dumps(response_obj, sort_keys=True, indent=4),
+        content_type='text/json')
 
 
 async def handle_run(request):
@@ -92,7 +97,8 @@ async def handle_run(request):
             'branch_name': branch_name,
             })
     return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4))
+        text=json.dumps(response_obj, sort_keys=True, indent=4),
+        content_type='text/json')
 
 
 async def handle_package_branch(request):
@@ -104,7 +110,8 @@ async def handle_package_branch(request):
             'revision': revision,
             })
     return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4))
+        text=json.dumps(response_obj, sort_keys=True, indent=4),
+        content_type='text/json')
 
 
 app = web.Application()
