@@ -142,7 +142,7 @@ LEFT JOIN package ON package.name = run.package
         else:
             query += " WHERE "
         query += " run.id = %s "
-        args.append(run_id)
+        args += (run_id,)
     query += "ORDER BY start_time DESC"
     if limit:
         query += " LIMIT %d" % limit
