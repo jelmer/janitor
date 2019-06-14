@@ -111,7 +111,7 @@ ORDER BY name ASC
     return cur.fetchall()
 
 
-def iter_runs(package=None, limit=None):
+def iter_runs(package=None, run_id=None, limit=None):
     """Iterate over runs.
 
     Args:
@@ -136,6 +136,13 @@ LEFT JOIN package ON package.name = run.package
     if package is not None:
         query += " WHERE package.name = %s "
         args += (package,)
+    if run_id is not None:
+        if args:
+            query += " AND "
+        else:
+            query += " WHERE "
+        query += " run.id = %s "
+        args.append(run_id)
     query += "ORDER BY start_time DESC"
     if limit:
         query += " LIMIT %d" % limit

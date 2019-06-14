@@ -80,10 +80,18 @@ async def handle_run(request):
     # TODO(jelmer): support limit argument
     limit = None
     package = request.match_info.get('package')
+    run_id = request.match_info.get('run_id')
     response_obj = []
     for (run_id, (start_time, finish_time), command, description,
          package_name, merge_proposal_url, build_version, build_distribution,
-         result_code, branch_name) in state.iter_runs(package, limit=limit):
+         result_code, branch_name) in state.iter_runs(
+                 package, run_id=run_id, limit=limit):
+        if build_version:
+            build_info = {
+                'version': str(build_version),
+                'distribution': build_distribution}
+        else:
+            build_info = None
         response_obj.append({
             'run_id': run_id,
             'start_time': start_time.isoformat(),
@@ -92,8 +100,7 @@ async def handle_run(request):
             'description': description,
             'package': package_name,
             'merge_proposal_url': merge_proposal_url,
-            'build_version': str(build_version) if build_version else None,
-            'build_distribution': build_distribution,
+            'build_info': build_info,
             'result_code': result_code,
             'branch_name': branch_name,
             })
@@ -136,6 +143,7 @@ app.router.add_get('/pkg/{package}/schedule/{command}', handle_reschedule)
 app.router.add_get('/queue', handle_queue)
 app.router.add_get('/run', handle_run)
 app.router.add_get('/pkg/{package}/run', handle_run)
+app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
 app.router.add_get('/package-branch', handle_package_branch)
 app.router.add_get('/', handle_index)
 # TODO(jelmer): Published packages (iter_published_packages)
