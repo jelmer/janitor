@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 import os
 import sys
 
@@ -31,9 +32,9 @@ def get_unstable_versions(present):
     return unstable
 
 
-def gather_package_list():
+async def gather_package_list():
     present = {}
-    for source, version in state.iter_published_packages(args.suite):
+    for source, version in await state.iter_published_packages(args.suite):
         present[source] = Version(version)
 
     unstable = get_unstable_versions(present)
@@ -47,4 +48,6 @@ def gather_package_list():
 
 
 template = env.get_template(args.suite + '.html')
-sys.stdout.write(template.render(packages=gather_package_list()))
+loop = asyncio.get_event_loop()
+sys.stdout.write(
+    template.render(packages=loop.run_until_complete(gather_package_list())))

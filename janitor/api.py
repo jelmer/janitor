@@ -4,6 +4,7 @@ import argparse
 from aiohttp import web
 import json
 
+from jinja2 import Environment, PackageLoader, select_autoescape
 from janitor import state
 
 
@@ -39,7 +40,7 @@ async def handle_schedule(request):
 async def handle_package_list(request):
     package = request.match_info.get('package')
     response_obj = []
-    for name, maintainer_email, branch_url in state.iter_packages(
+    for name, maintainer_email, branch_url in await state.iter_packages(
             package=package):
         response_obj.append({
             'name': name,
@@ -52,7 +53,7 @@ async def handle_package_list(request):
 
 async def handle_merge_proposal_list(request):
     response_obj = []
-    for package, url, status in state.iter_proposals(
+    for package, url, status in await state.iter_proposals(
             request.match_info.get('package')):
         response_obj.append({
             'package': package,
@@ -67,7 +68,8 @@ async def handle_queue(request):
     # TODO(jelmer): support limit argument
     limit = None
     response_obj = []
-    for (queue_id, branch_url, env, command) in state.iter_queue(limit=limit):
+    for (queue_id, branch_url, env, command) in await state.iter_queue(
+            limit=limit):
         response_obj.append({
             'queue_id': queue_id,
             'branch_url': branch_url,
@@ -86,7 +88,7 @@ async def handle_run(request):
     response_obj = []
     for (run_id, (start_time, finish_time), command, description,
          package_name, merge_proposal_url, build_version, build_distribution,
-         result_code, branch_name) in state.iter_runs(
+         result_code, branch_name) in await state.iter_runs(
                  package, run_id=run_id, limit=limit):
         if build_version:
             build_info = {
@@ -114,7 +116,7 @@ async def handle_run(request):
 async def handle_package_branch(request):
     response_obj = []
     for (name, branch_url, revision, last_scanned, description) in (
-            state.iter_package_branches()):
+            await state.iter_package_branches()):
         response_obj.append({
             'name': name,
             'branch_url': branch_url,
@@ -130,7 +132,7 @@ async def handle_package_branch(request):
 async def handle_published_packages(request):
     suite = request.match_info['suite']
     response_obj = []
-    for package, build_version in state.iter_published_packages(suite):
+    for package, build_version in await state.iter_published_packages(suite):
         response_obj.append({
             'package': package,
             'build_version': build_version})
@@ -141,7 +143,8 @@ async def handle_published_packages(request):
 
 async def handle_index(request):
     template = jinja2_env.get_template('api-index.html')
-    return web.Response(content_type='text/html', text=await template.render_async())
+    return web.Response(
+        content_type='text/html', text=await template.render_async())
 
 
 async def handle_global_policy(request):
@@ -149,7 +152,6 @@ async def handle_global_policy(request):
         return web.Response(content_type='text/protobuf', text=f.read())
 
 
-from jinja2 import Environment, PackageLoader, select_autoescape
 jinja2_env = Environment(
     loader=PackageLoader('janitor', 'templates'),
     autoescape=select_autoescape(['html', 'xml']),
@@ -159,7 +161,9 @@ jinja2_env = Environment(
 app = web.Application()
 app.router.add_get('/pkg', handle_package_list)
 app.router.add_get('/pkg/{package}', handle_package_list)
-app.router.add_get('/pkg/{package}/merge-proposals', handle_merge_proposal_list)
+app.router.add_get(
+    '/pkg/{package}/merge-proposals',
+    handle_merge_proposal_list)
 app.router.add_get('/pkg/{package}/policy', handle_policy)
 app.router.add_get('/pkg/{package}/publish', handle_publish)
 app.router.add_get('/pkg/{package}/schedule/{suite}', handle_schedule)
@@ -171,7 +175,8 @@ app.router.add_get('/pkg/{package}/run', handle_run)
 app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
 app.router.add_get('/package-branch', handle_package_branch)
 app.router.add_get('/', handle_index)
-app.router.add_get('/apt/{suite}/published-packages', handle_published_packages)
+app.router.add_get(
+    '/apt/{suite}/published-packages', handle_published_packages)
 app.router.add_get('/policy', handle_global_policy)
 # TODO(jelmer): Previous runs (iter_previous_runs)
 # TODO(jelmer): Last successes (iter_last_successes)

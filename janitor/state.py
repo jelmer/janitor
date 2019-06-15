@@ -17,32 +17,44 @@
 
 import datetime
 from debian.changelog import Version
+import json
 import shlex
-import psycopg2
-from psycopg2.extras import Json
+import asyncpg
+import asyncio
 
 
-conn = psycopg2.connect(
-    database="janitor",
-    user="janitor",
-    port=5432,
-    host="brangwain.vpn.jelmer.uk")
-conn.set_client_encoding('UTF8')
+async def connect():
+    conn = await asyncpg.connect(
+        database="janitor",
+        user="janitor",
+        port=5432,
+        host="brangwain.vpn.jelmer.uk")
+    await conn.set_type_codec(
+                'json',
+                encoder=json.dumps,
+                decoder=json.loads,
+                schema='pg_catalog'
+            )
+    return conn
+
+loop = asyncio.get_event_loop()
+conn = loop.run_until_complete(connect())
 
 
-def _ensure_package(cur, name, vcs_url, maintainer_email):
-    cur.execute(
+async def _ensure_package(name, vcs_url, maintainer_email):
+    await conn.execute(
         "INSERT INTO package (name, branch_url, maintainer_email) "
-        "VALUES (%s, %s, %s) ON CONFLICT (name) DO UPDATE SET "
+        "VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "maintainer_email = EXCLUDED.maintainer_email",
         (name, vcs_url, maintainer_email))
 
 
-def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
-              command, description, instigated_context, context,
-              main_branch_revision, result_code, build_version,
-              build_distribution, branch_name, revision, subworker_result):
+async def store_run(
+        run_id, name, vcs_url, maintainer_email, start_time, finish_time,
+        command, description, instigated_context, context,
+        main_branch_revision, result_code, build_version,
+        build_distribution, branch_name, revision, subworker_result):
     """Store a run.
 
     :param run_id: Run id
@@ -63,42 +75,39 @@ def store_run(run_id, name, vcs_url, maintainer_email, start_time, finish_time,
     :param revision: Resulting revision id
     :param subworker_result: Subworker-specific result data (as json)
     """
-    cur = conn.cursor()
-    _ensure_package(cur, name, vcs_url, maintainer_email)
-    cur.execute(
+    await _ensure_package(name, vcs_url, maintainer_email)
+    await conn.execute(
         "INSERT INTO run (id, command, description, result_code, start_time, "
         "finish_time, package, instigated_context, context, build_version, "
         "build_distribution, main_branch_revision, branch_name, revision, "
         "result) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14"
+        ", $15)",
         (run_id, ' '.join(command), description, result_code,
          start_time, finish_time, name, instigated_context, context,
          str(build_version) if build_version else None, build_distribution,
          main_branch_revision, branch_name, revision,
-         Json(subworker_result) if subworker_result else None))
-    conn.commit()
+         subworker_result if subworker_result else None))
 
 
-def store_publish(package, branch_name, main_branch_revision, revision, mode,
-                  result_code, description, merge_proposal_url=None):
-    cur = conn.cursor()
+async def store_publish(package, branch_name, main_branch_revision, revision,
+                        mode, result_code, description,
+                        merge_proposal_url=None):
     if merge_proposal_url:
-        cur.execute(
+        await conn.execute(
             "INSERT INTO merge_proposal (url, package, status) "
-            "VALUES (%s, %s, 'open') ON CONFLICT (url) DO UPDATE SET "
+            "VALUES ($1, $2, 'open') ON CONFLICT (url) DO UPDATE SET "
             "package = EXCLUDED.package",
             (merge_proposal_url, package))
-    cur.execute("""
+    await conn.execute("""
 INSERT INTO publish (package, branch_name, main_branch_revision, revision,
-mode, result_code, description, merge_proposal_url) values (%s, %s, %s, %s, %s,
-%s, %s, %s)
+mode, result_code, description, merge_proposal_url) values ($1, $2, $3, $4, $5,
+$6, $7, $8)
 """, (package, branch_name, main_branch_revision, revision, mode, result_code,
       description, merge_proposal_url))
-    conn.commit()
 
 
-def iter_packages(package=None):
-    cur = conn.cursor()
+async def iter_packages(package=None):
     query = """
 SELECT
   name,
@@ -109,14 +118,13 @@ FROM
 """
     args = []
     if package:
-        query += " WHERE name = %s"
+        query += " WHERE name = $1"
         args.append(package)
     query += " ORDER BY name ASC"
-    cur.execute(query, args)
-    return cur.fetchall()
+    return await conn.fetch(query, *args)
 
 
-def iter_runs(package=None, run_id=None, limit=None):
+async def iter_runs(package=None, run_id=None, limit=None):
     """Iterate over runs.
 
     Args:
@@ -127,7 +135,6 @@ def iter_runs(package=None, run_id=None, limit=None):
         package_name, merge_proposal_url, build_version, build_distribution,
         result_code, branch_name)
     """
-    cur = conn.cursor()
     query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
@@ -139,49 +146,41 @@ LEFT JOIN package ON package.name = run.package
 """
     args = ()
     if package is not None:
-        query += " WHERE package.name = %s "
+        query += " WHERE package.name = $1 "
         args += (package,)
     if run_id is not None:
         if args:
-            query += " AND "
+            query += " AND run.id = $2 "
         else:
-            query += " WHERE "
-        query += " run.id = %s "
+            query += " WHERE run.id = $1 "
         args += (run_id,)
     query += "ORDER BY start_time DESC"
     if limit:
         query += " LIMIT %d" % limit
-    cur.execute(query, args)
-    row = cur.fetchone()
-    while row:
-        yield (row[0],
-               (row[2], row[3]),
-               row[1], row[4], row[5], row[6],
-               Version(row[7]) if row[7] else None, row[8],
-               row[9] if row[9] else None, row[10])
-        row = cur.fetchone()
+    async with conn.transaction():
+        cur = await conn.cursor(query, *args)
+        row = await cur.fetchrow()
+        while row:
+            yield (row[0],
+                   (row[2], row[3]),
+                   row[1], row[4], row[5], row[6],
+                   Version(row[7]) if row[7] else None, row[8],
+                   row[9] if row[9] else None, row[10])
+            row = await cur.fetchrow()
 
 
-def get_maintainer_email(vcs_url):
-    cur = conn.cursor()
-    cur.execute(
-        """
+async def get_maintainer_email(vcs_url):
+    return await conn.fetchval("""
 SELECT
     maintainer_email
 FROM
     package
 LEFT JOIN merge_proposal ON merge_proposal.package = package.name
 WHERE
-    merge_proposal.url = %s""",
-        (vcs_url, ))
-    row = cur.fetchone()
-    if row:
-        return row[0]
-    return None
+    merge_proposal.url = $1""", (vcs_url, ))
 
 
-def iter_proposals(package=None):
-    cur = conn.cursor()
+async def iter_proposals(package=None):
     args = []
     query = """
 SELECT
@@ -192,13 +191,11 @@ LEFT JOIN package ON merge_proposal.package = package.name
 """
     if package:
         args.append(package)
-        query += " WHERE package = %s"
-    cur.execute(query, args)
-    return cur.fetchall()
+        query += " WHERE package = $1"
+    return await conn.fetch(query, *args)
 
 
-def iter_all_proposals(branch_name=None):
-    cur = conn.cursor()
+async def iter_all_proposals(branch_name=None):
     args = []
     query = """
 SELECT
@@ -209,17 +206,12 @@ LEFT JOIN package ON merge_proposal.package = package.name
 LEFT JOIN publish ON publish.merge_proposal_url = merge_proposal.url
 """
     if branch_name:
-        query += " WHERE branch_name = %s"
+        query += " WHERE branch_name = $1"
         args.append(branch_name)
-    cur.execute(query, args)
-    row = cur.fetchone()
-    while row:
-        yield row
-        row = cur.fetchone()
+    return await conn.fetch(query, *args)
 
 
-def iter_queue(limit=None):
-    cur = conn.cursor()
+async def iter_queue(limit=None):
     query = """
 SELECT
     package.branch_url,
@@ -238,8 +230,7 @@ queue.id ASC
 """
     if limit:
         query += " LIMIT %d" % limit
-    cur.execute(query)
-    for row in cur.fetchall():
+    for row in await conn.fetch(query):
         (branch_url, maintainer_email, package, committer,
             command, context, queue_id) = row
         env = {
@@ -251,57 +242,48 @@ queue.id ASC
         yield (queue_id, branch_url, env, shlex.split(command))
 
 
-def drop_queue_item(queue_id):
-    cur = conn.cursor()
-    cur.execute("DELETE FROM queue WHERE id = %s", (queue_id,))
-    conn.commit()
+async def drop_queue_item(queue_id):
+    await conn.execute("DELETE FROM queue WHERE id = $1", (queue_id,))
 
 
-def add_to_queue(vcs_url, env, command, priority=0,
-                 estimated_duration=None):
+async def add_to_queue(vcs_url, env, command, priority=0,
+                       estimated_duration=None):
     package = env['PACKAGE']
     maintainer_email = env.get('MAINTAINER_EMAIL')
     context = env.get('CONTEXT')
     committer = env.get('COMMITTER')
-    cur = conn.cursor()
-    _ensure_package(cur, package, vcs_url, maintainer_email)
-    cur.execute(
+    await _ensure_package(package, vcs_url, maintainer_email)
+    await conn.execute(
         "INSERT INTO queue "
         "(branch_url, package, command, committer, priority, context, "
         "estimated_duration) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7) "
         "ON CONFLICT (package, command) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "estimated_duration = EXCLUDED.estimated_duration "
         "WHERE queue.priority <= EXCLUDED.priority", (
             vcs_url, package, ' '.join(command), committer,
             priority, context, estimated_duration))
-    conn.commit()
     return True
 
 
-def set_proposal_status(url, status):
-    cur = conn.cursor()
-    cur.execute("""
-INSERT INTO merge_proposal (url, status) VALUES (%s, %s)
+async def set_proposal_status(url, status):
+    await conn.execute("""
+INSERT INTO merge_proposal (url, status) VALUES ($1, $2)
 ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
 """, (url, status))
-    conn.commit()
 
 
-def queue_length(minimum_priority=None):
-    cur = conn.cursor()
+async def queue_length(minimum_priority=None):
     args = []
     query = 'SELECT COUNT(*) FROM queue'
     if minimum_priority is not None:
-        query += ' WHERE priority >= %s'
+        query += ' WHERE priority >= $1'
         args.append(minimum_priority)
-    cur.execute(query, args)
-    return cur.fetchone()[0]
+    return await conn.fetchval(query, *args)
 
 
-def queue_duration(minimum_priority=None):
-    cur = conn.cursor()
+async def queue_duration(minimum_priority=None):
     args = []
     query = """
 SELECT
@@ -312,26 +294,22 @@ WHERE
   estimated_duration IS NOT NULL
 """
     if minimum_priority is not None:
-        query += ' AND priority >= %s'
+        query += ' AND priority >= $1'
         args.append(minimum_priority)
-    cur.execute(query, args)
-    ret = cur.fetchone()[0]
+    ret = await conn.fetchrow(query, *args)[0]
     if ret is None:
         return datetime.timedelta()
     return ret
 
 
-def iter_published_packages(suite):
-    cur = conn.cursor()
-    cur.execute("""
-select distinct package, build_version from run where build_distribution = %s
+async def iter_published_packages(suite):
+    return await conn.fetch("""
+select distinct package, build_version from run where build_distribution = $1
 """, (suite, ))
-    return cur.fetchall()
 
 
-def iter_previous_runs(package, command):
-    cur = conn.cursor()
-    cur.execute("""
+async def iter_previous_runs(package, command):
+    return await conn.fetch("""
 SELECT
   start_time,
   (finish_time - start_time) AS duration,
@@ -342,14 +320,12 @@ SELECT
 FROM
   run
 WHERE
-  package = %s AND command = %s
+  package = $1 AND command = $2
 ORDER BY start_time DESC
 """, (package, ' '.join(command)))
-    return cur.fetchall()
 
 
-def iter_last_successes(suite=None):
-    cur = conn.cursor()
+async def iter_last_successes(suite=None):
     args = []
     query = """
 SELECT DISTINCT ON (package, command)
@@ -364,17 +340,15 @@ FROM
   run
 """
     if suite is not None:
-        query += " WHERE build_distribution = %s"
+        query += " WHERE build_distribution = $1"
         args.append(suite)
     query += """
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """
-    cur.execute(query, args)
-    return cur.fetchall()
+    return await conn.fetch(query, *args)
 
 
-def iter_last_runs(command=None):
-    cur = conn.cursor()
+async def iter_last_runs(command=None):
     args = []
     query = """
 SELECT DISTINCT ON (package, command)
@@ -388,16 +362,14 @@ FROM
   run
 """
     if command:
-        query += " WHERE command = %s"
+        query += " WHERE command = $1"
         args.append(command)
     query += " ORDER BY package, command, start_time DESC"
-    cur.execute(query, args)
-    return cur.fetchall()
+    return await conn.fetch(query, *args)
 
 
-def iter_build_failures():
-    cur = conn.cursor()
-    cur.execute("""
+async def iter_build_failures():
+    return await conn.fetch("""
 SELECT
   package,
   id,
@@ -409,30 +381,25 @@ WHERE
    result_code LIKE 'build-failed-stage-%' OR
    result_code LIKE 'build-%')
 """)
-    return cur.fetchall()
 
 
-def update_run_result(log_id, code, description):
-    cur = conn.cursor()
-    cur.execute(
-        'UPDATE run SET result_code = %s, description = %s WHERE id = %s',
+async def update_run_result(log_id, code, description):
+    await conn.execute(
+        'UPDATE run SET result_code = $1, description = $2 WHERE id = $3',
         (code, description, log_id))
-    conn.commit()
 
 
-def already_published(package, branch_name, revision, mode):
-    cur = conn.cursor()
-    cur.execute("""\
+async def already_published(package, branch_name, revision, mode):
+    row = await conn.fetchrow("""\
 SELECT * FROM publish
-WHERE mode = %s AND revision = %s AND package = %s AND branch_name = %s
+WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
 """, (mode, revision, package, branch_name))
-    if cur.fetchone():
+    if row:
         return True
     return False
 
 
-def iter_publish_ready():
-    cur = conn.cursor()
+async def iter_publish_ready():
     args = []
     query = """
 SELECT DISTINCT ON (package, command)
@@ -458,13 +425,11 @@ ORDER BY
   command,
   finish_time DESC
 """
-    cur.execute(query, args)
-    return cur.fetchall()
+    return await conn.fetch(query, *args)
 
 
-def iter_unscanned_branches(last_scanned_minimum):
-    cur = conn.cursor()
-    cur.execute("""
+async def iter_unscanned_branches(last_scanned_minimum):
+    return await conn.fetch("""
 SELECT
   name,
   'master',
@@ -473,14 +438,12 @@ SELECT
 FROM package
 LEFT JOIN branch ON package.branch_url = branch.url
 WHERE
-  last_scanned is null or now() - last_scanned > %s
+  last_scanned is null or now() - last_scanned > $1
 """, (last_scanned_minimum, ))
-    return cur.fetchall()
 
 
-def iter_package_branches():
-    cur = conn.cursor()
-    cur.execute("""
+async def iter_package_branches():
+    return await conn.fetch("""
 SELECT
   name,
   branch_url,
@@ -491,16 +454,14 @@ FROM
   package
 LEFT JOIN branch ON package.branch_url = branch.url
 """)
-    return cur.fetchall()
 
 
-def update_branch_status(
+async def update_branch_status(
         branch_url, last_scanned=None, status=None, revision=None,
         description=None):
-    cur = conn.cursor()
-    cur.execute("""\
+    await conn.execute("""\
 INSERT INTO branch (url, status, revision, last_scanned, description)
-VALUES (%s, %s, %s, %s, %s)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (url) DO UPDATE SET
   status = EXCLUDED.status,
   revision = EXCLUDED.revision,
@@ -508,4 +469,3 @@ ON CONFLICT (url) DO UPDATE SET
   description = EXCLUDED.description
 """, (branch_url, status, revision.decode('utf-8') if revision else None,
       last_scanned, description))
-    conn.commit()

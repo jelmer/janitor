@@ -1,8 +1,11 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 import os
 import sys
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 sys.path.insert(0, os.path.dirname(__file__))
 
@@ -13,10 +16,18 @@ parser.add_argument("directory")
 args = parser.parse_args()
 dir = os.path.abspath(args.directory)
 
+env = Environment(
+    loader=FileSystemLoader('templates'),
+    autoescape=select_autoescape(['html', 'xml'])
+)
+
+loop = asyncio.get_event_loop()
+
 if not os.path.exists(dir):
     os.mkdir(dir)
 
-with open(os.path.join(dir, 'index.rst'), 'w') as indexf:
+with open(os.path.join(dir, 'index.html'), 'w') as indexf:
+    template = env.get_template('lintian-fixes-run.html')
     indexf.write("""\
 Package Index
 =============
@@ -24,7 +35,8 @@ Package Index
 """)
 
     for (name, command, result_code, log_id, description,
-         duration) in state.iter_last_runs(command='lintian-brush'):
+         duration) in loop.run_until_complete(
+             state.iter_last_runs(command='lintian-brush')):
         indexf.write(
             '- `%s <%s>`_\n' % (name, name))
 
