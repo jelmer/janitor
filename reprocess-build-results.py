@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import asyncio
 import os
 import sys
 
@@ -11,7 +12,11 @@ from janitor.sbuild_log import worker_failure_from_sbuild_log  # noqa: E402
 from janitor.trace import note  # noqa: E402
 
 
-for package, log_id, result_code, description in state.iter_build_failures():
+loop = asyncio.get_event_loop()
+
+
+for package, log_id, result_code, description in loop.run_until_complete(
+        state.iter_build_failures()):
     build_log_path = os.path.join('site', 'pkg', package, log_id, 'build.log')
     failure = worker_failure_from_sbuild_log(build_log_path)
     if failure.error:

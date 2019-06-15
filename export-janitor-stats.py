@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import argparse
+import asyncio
 import os
 import sys
 
@@ -57,9 +58,10 @@ last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
 
+loop = asyncio.get_event_loop()
 
 for package_name, command, result_code, log_id, description, run_duration in (
-        state.iter_last_runs()):
+        loop.run_until_complete(state.iter_last_runs())):
     run_count.labels(command=command).inc()
     run_result_count.labels(command=command, result_code=result_code).inc()
     duration.labels(

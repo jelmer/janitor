@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import argparse
+import asyncio
 import os
 import sys
 
@@ -33,10 +34,12 @@ parser.add_argument(
     default=100)
 args = parser.parse_args()
 
+loop = asyncio.get_event_loop()
 
 data = []
 
-for queue_id, branch_url, env, command in state.iter_queue(limit=args.limit):
+for queue_id, branch_url, env, command in loop.run_until_complete(
+        state.iter_queue(limit=args.limit)):
     if args.command is not None and command != args.command:
         continue
     expecting = None

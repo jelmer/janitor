@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 from debian.deb822 import Changes
 import os
 import sys
@@ -43,6 +44,8 @@ parser.add_argument("logdirectory")
 parser.add_argument("directory")
 args = parser.parse_args()
 dir = args.directory
+
+loop = asyncio.get_event_loop()
 
 
 def changes_get_binaries(changes_path):
@@ -101,7 +104,7 @@ if not os.path.isdir(dir):
 
 runs_by_pkg = {}
 
-for run in state.iter_runs():
+for run in loop.run_until_complete(state.iter_runs()):
     (run_id, (start_time, finish_time), command, description,
         package_name, merge_proposal_url, build_version,
         build_distro, result_code, branch_name) = run
@@ -196,12 +199,13 @@ for run in state.iter_runs():
 
 
 merge_proposals = {}
-for package, url, status in state.iter_proposals():
+for package, url, status in loop.run_until_complete(state.iter_proposals()):
     merge_proposals.setdefault(package, []).append((url, status))
 
 
 packages = []
-for (name, maintainer_email, branch_url) in state.iter_packages():
+for (name, maintainer_email, branch_url) in loop.run_until_complete(
+        state.iter_packages()):
     packages.append(name)
 
     pkg_dir = os.path.join(dir, name)

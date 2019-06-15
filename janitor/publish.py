@@ -17,6 +17,7 @@
 
 """Publishing VCS changes."""
 
+import asyncio
 import os
 import sys
 import urllib.parse
@@ -99,7 +100,7 @@ def add_janitor_blurb(text, pkg, log_id):
     return text
 
 
-def get_open_mps_per_maintainer():
+async def get_open_mps_per_maintainer():
     """Retrieve the number of open merge proposals by maintainer.
 
     Returns:
@@ -113,14 +114,14 @@ def get_open_mps_per_maintainer():
             note('Checking merge proposals on %r...', instance)
             for status in ['open', 'merged', 'closed']:
                 for mp in instance.iter_my_proposals(status=status):
-                    state.set_proposal_status(mp.url, status)
+                    await state.set_proposal_status(mp.url, status)
                     merge_proposal_count.labels(status=status).inc()
                     if status == 'open':
                         open_proposals.append(mp)
 
     open_mps_per_maintainer = {}
     for proposal in open_proposals:
-        maintainer_email = state.get_maintainer_email(proposal.url)
+        maintainer_email = await state.get_maintainer_email(proposal.url)
         if maintainer_email is None:
             warning('No maintainer email known for %s', proposal.url)
             continue
@@ -190,7 +191,9 @@ class Publisher(object):
 
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
-        self._open_mps_per_maintainer = get_open_mps_per_maintainer()
+        loop = asyncio.get_event_loop()
+        self._open_mps_per_maintainer = loop.run_until_complete(
+            get_open_mps_per_maintainer())
 
     def _check_limit(self, maintainer_email):
         return self._max_mps_per_maintainer and \
@@ -397,14 +400,14 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
     return proposal, branch_name
 
 
-def publish_pending(publisher, policy, vcs_directory, dry_run=False):
+async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
     possible_hosters = []
     possible_transports = []
 
     for (pkg, command, build_version, result_code, context,
          start_time, log_id, revision,
-         subworker_result, branch_name, maintainer_email,
-         main_branch_url, main_branch_revision) in state.iter_publish_ready():
+         subworker_result, branch_name, maintainer_email, main_branch_url,
+         main_branch_revision) in await state.iter_publish_ready():
         # TODO(jelmer): uploader_emails ??
         uploader_emails = []
         if command == 'new-upstream':
@@ -421,7 +424,7 @@ def publish_pending(publisher, policy, vcs_directory, dry_run=False):
             uploader_emails)
         if mode in ('build-only', 'skip'):
             continue
-        if state.already_published(
+        if await state.already_published(
                 pkg, branch_name, revision, mode):
             continue
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
@@ -441,7 +444,7 @@ def publish_pending(publisher, policy, vcs_directory, dry_run=False):
         else:
             code = 'success'
             description = 'Success'
-        state.store_publish(
+        await state.store_publish(
             pkg, branch_name, main_branch_revision,
             revision, mode, code, description,
             proposal.url if proposal else None)
@@ -478,9 +481,9 @@ def main(argv=None):
 
     publisher = Publisher(args.max_mps_per_maintainer)
 
-    publish_pending(
+    asyncio.run_until_complete(publish_pending(
         publisher, policy, dry_run=args.dry_run,
-        vcs_directory=args.vcs_result_dir)
+        vcs_directory=args.vcs_result_dir))
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 import os
 import sys
 
@@ -21,6 +22,8 @@ dir = os.path.abspath(args.directory)
 if not os.path.exists(dir):
     os.mkdir(dir)
 
+loop = asyncio.get_event_loop()
+
 with open(os.path.join(dir, 'index.rst'), 'w') as indexf:
     indexf.write("""\
 Package Index
@@ -29,7 +32,8 @@ Package Index
 """)
 
     for (name, command, result_code, log_id, description,
-         duration) in state.iter_last_runs(command=command):
+         duration) in loop.run_until_complete(
+                 state.iter_last_runs(command=command)):
         indexf.write(
             '- `%s <%s>`_\n' % (name, name))
 

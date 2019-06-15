@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 import sys
 import os
 
@@ -19,9 +20,11 @@ env = Environment(
     autoescape=select_autoescape(['html', 'xml'])
 )
 
+loop = asyncio.get_event_loop()
 
 proposals_by_status = {}
-for url, status, package in state.iter_all_proposals(branch_name=args.name):
+for url, status, package in loop.run_until_complete(
+        state.iter_all_proposals(branch_name=args.name)):
     proposals_by_status.setdefault(status, []).append(url)
 
 

@@ -341,10 +341,11 @@ async def process_one(
 
 async def export_queue_length():
     while True:
-        queue_length.set(state.queue_length())
-        positive_queue_length.set(state.queue_length(0))
-        queue_duration.set(state.queue_duration().total_seconds())
-        positive_queue_duration.set(state.queue_duration(0).total_seconds())
+        queue_length.set(await state.queue_length())
+        positive_queue_length.set(await state.queue_length(0))
+        queue_duration.set(await state.queue_duration().total_seconds())
+        positive_queue_duration.set(
+            await state.queue_duration(0).total_seconds())
         await asyncio.sleep(60)
 
 
@@ -366,7 +367,7 @@ async def process_queue(
             log_dir=log_dir, use_cached_only=use_cached_only)
         finish_time = datetime.now()
         if not dry_run:
-            state.store_run(
+            await state.store_run(
                 result.log_id, env['PACKAGE'], vcs_url,
                 env['MAINTAINER_EMAIL'],
                 start_time, finish_time, command,
@@ -381,12 +382,12 @@ async def process_queue(
                 revision=result.revision,
                 subworker_result=result.subworker_result)
 
-            state.drop_queue_item(queue_id)
+            await state.drop_queue_item(queue_id)
         last_success_gauge.set_to_current_time()
 
     started = set()
     todo = set()
-    for item in state.iter_queue(limit=concurrency):
+    for item in await state.iter_queue(limit=concurrency):
         todo.add(process_queue_item(item))
         started.add(item[0])
 
@@ -406,7 +407,7 @@ async def process_queue(
             todo = pending
             if concurrency:
                 for i in enumerate(done):
-                    for item in state.iter_queue(limit=concurrency):
+                    for item in await state.iter_queue(limit=concurrency):
                         if item[0] in started:
                             continue
                         todo.add(process_queue_item(item))

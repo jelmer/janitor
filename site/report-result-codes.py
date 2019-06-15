@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 import operator
 import os
 import sys
@@ -16,6 +17,8 @@ parser.add_argument(
     'path', type=str, default='result-codes', help='Output path')
 args = parser.parse_args()
 
+loop = asyncio.get_event_loop()
+
 env = Environment(
     loader=FileSystemLoader('templates'),
     autoescape=select_autoescape(['html', 'xml'])
@@ -24,7 +27,8 @@ env = Environment(
 by_code = {}
 
 for (source, command, result_code, log_id,
-     description, duration) in state.iter_last_runs():
+     description, duration) in loop.run_until_complete(
+         state.iter_last_runs()):
     by_code.setdefault(result_code, []).append(
         (source, command, log_id, description))
 

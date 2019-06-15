@@ -23,6 +23,7 @@ from breezy.config import GlobalStack
 
 from datetime import datetime, timedelta
 
+import asyncio
 import sys
 import time
 import urllib.parse
@@ -50,11 +51,11 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-def update_gitlab_branches(vcs_result_dir, host):
+async def update_gitlab_branches(vcs_result_dir, host):
     package_per_repo = {}
     branches_per_repo = {}
     for name, branch_url, revision, last_scanned, description in (
-            state.iter_package_branches()):
+            await state.iter_package_branches()):
         if branch_url.startswith('https://%s/' % host):
             url, params = urlutils.split_segment_parameters(branch_url)
             branches_per_repo.setdefault(url, {})
@@ -91,7 +92,7 @@ def update_gitlab_branches(vcs_result_dir, host):
                 branch = open_branch_ext(
                     url, possible_transports=possible_transports)
             except BranchOpenFailure as e:
-                state.update_branch_status(
+                await state.update_branch_status(
                     url, last_scanned=datetime.now(), status=e.code,
                     revision=None, description=e.description)
             else:
@@ -104,7 +105,7 @@ def update_gitlab_branches(vcs_result_dir, host):
                     # For now, just ignore
                     note('Failed to mirror %s: %s', e.branch_name, e.reason)
 
-                state.update_branch_status(
+                await state.update_branch_status(
                     url, last_scanned=datetime.now(), status='success',
                     revision=revision.encode('utf-8'))
 
@@ -129,11 +130,14 @@ def main(argv=None):
     global_config = GlobalStack()
     global_config.set('branch.fetch_tags', True)
 
+    loop = asyncio.get_event_loop()
+
     prefetch_hosts = []
     # Unfortunately the project activity branch is very slow :(
     # prefetch_hosts = ['salsa.debian.org']
     for host in prefetch_hosts:
-        update_gitlab_branches(args.vcs_result_dir, host)
+        loop.run_until_complete(
+            update_gitlab_branches(args.vcs_result_dir, host))
 
     unscanned_branches = state.iter_unscanned_branches(
             last_scanned_minimum=timedelta(days=7))

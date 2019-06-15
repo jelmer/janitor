@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import asyncio
 import os
 import sys
 
@@ -20,12 +21,14 @@ parser.add_argument('--limit', type=int, help='Number of entries to display',
                     default=100)
 args = parser.parse_args()
 
+loop = asyncio.get_event_loop()
 
 header = ['Package', 'Command', 'Duration', 'Result']
 data = []
 for (run_id, times, command, description, package, proposal_url,
         changes_filename, build_distro, result_code,
-        branch_name) in state.iter_runs(limit=args.limit):
+        branch_name) in loop.run_until_complete(
+            state.iter_runs(limit=args.limit)):
     row = [
         package,
         command,
