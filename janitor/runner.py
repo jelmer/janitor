@@ -387,7 +387,7 @@ async def process_queue(
 
     started = set()
     todo = set()
-    for item in await state.iter_queue(limit=concurrency):
+    async for item in state.iter_queue(limit=concurrency):
         todo.add(process_queue_item(item))
         started.add(item[0])
 

@@ -22,26 +22,29 @@ import shlex
 import asyncpg
 import asyncio
 
-
-async def connect():
-    conn = await asyncpg.connect(
-        database="janitor",
-        user="janitor",
-        port=5432,
-        host="brangwain.vpn.jelmer.uk")
-    await conn.set_type_codec(
-                'json',
-                encoder=json.dumps,
-                decoder=json.loads,
-                schema='pg_catalog'
-            )
-    return conn
-
 loop = asyncio.get_event_loop()
-conn = loop.run_until_complete(connect())
+pool = loop.run_until_complete(asyncpg.create_pool(
+    database="janitor",
+    user="janitor",
+    port=5432,
+    host="brangwain.vpn.jelmer.uk"))
 
 
-async def _ensure_package(name, vcs_url, maintainer_email):
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def get_connection():
+    async with pool.acquire() as conn:
+        await conn.set_type_codec(
+                    'json',
+                    encoder=json.dumps,
+                    decoder=json.loads,
+                    schema='pg_catalog'
+                )
+        yield conn
+
+
+async def _ensure_package(conn, name, vcs_url, maintainer_email):
     await conn.execute(
         "INSERT INTO package (name, branch_url, maintainer_email) "
         "VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET "
@@ -75,31 +78,33 @@ async def store_run(
     :param revision: Resulting revision id
     :param subworker_result: Subworker-specific result data (as json)
     """
-    await _ensure_package(name, vcs_url, maintainer_email)
-    await conn.execute(
-        "INSERT INTO run (id, command, description, result_code, start_time, "
-        "finish_time, package, instigated_context, context, build_version, "
-        "build_distribution, main_branch_revision, branch_name, revision, "
-        "result) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14"
-        ", $15)",
-        (run_id, ' '.join(command), description, result_code,
-         start_time, finish_time, name, instigated_context, context,
-         str(build_version) if build_version else None, build_distribution,
-         main_branch_revision, branch_name, revision,
-         subworker_result if subworker_result else None))
+    async with get_connection() as conn:
+        await _ensure_package(conn, name, vcs_url, maintainer_email)
+        await conn.execute(
+            "INSERT INTO run (id, command, description, result_code, start_time, "
+            "finish_time, package, instigated_context, context, build_version, "
+            "build_distribution, main_branch_revision, branch_name, revision, "
+            "result) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14"
+            ", $15)",
+            (run_id, ' '.join(command), description, result_code,
+             start_time, finish_time, name, instigated_context, context,
+             str(build_version) if build_version else None, build_distribution,
+             main_branch_revision, branch_name, revision,
+             subworker_result if subworker_result else None))
 
 
 async def store_publish(package, branch_name, main_branch_revision, revision,
                         mode, result_code, description,
                         merge_proposal_url=None):
-    if merge_proposal_url:
-        await conn.execute(
-            "INSERT INTO merge_proposal (url, package, status) "
-            "VALUES ($1, $2, 'open') ON CONFLICT (url) DO UPDATE SET "
-            "package = EXCLUDED.package",
-            (merge_proposal_url, package))
-    await conn.execute("""
+    async with get_connection() as conn:
+        if merge_proposal_url:
+            await conn.execute(
+                "INSERT INTO merge_proposal (url, package, status) "
+                "VALUES ($1, $2, 'open') ON CONFLICT (url) DO UPDATE SET "
+                "package = EXCLUDED.package",
+                (merge_proposal_url, package))
+        await conn.execute("""
 INSERT INTO publish (package, branch_name, main_branch_revision, revision,
 mode, result_code, description, merge_proposal_url) values ($1, $2, $3, $4, $5,
 $6, $7, $8)
@@ -121,7 +126,8 @@ FROM
         query += " WHERE name = $1"
         args.append(package)
     query += " ORDER BY name ASC"
-    return await conn.fetch(query, *args)
+    async with get_connection() as conn:
+        return await conn.fetch(query, *args)
 
 
 async def iter_runs(package=None, run_id=None, limit=None):
@@ -157,7 +163,7 @@ LEFT JOIN package ON package.name = run.package
     query += "ORDER BY start_time DESC"
     if limit:
         query += " LIMIT %d" % limit
-    async with conn.transaction():
+    async with get_connection() as conn:
         cur = await conn.cursor(query, *args)
         row = await cur.fetchrow()
         while row:
@@ -170,7 +176,8 @@ LEFT JOIN package ON package.name = run.package
 
 
 async def get_maintainer_email(vcs_url):
-    return await conn.fetchval("""
+    async with get_connection() as conn:
+        return await conn.fetchval("""
 SELECT
     maintainer_email
 FROM
@@ -192,7 +199,8 @@ LEFT JOIN package ON merge_proposal.package = package.name
     if package:
         args.append(package)
         query += " WHERE package = $1"
-    return await conn.fetch(query, *args)
+    async with get_connection() as conn:
+        return await conn.fetch(query, *args)
 
 
 async def iter_all_proposals(branch_name=None):
@@ -208,7 +216,8 @@ LEFT JOIN publish ON publish.merge_proposal_url = merge_proposal.url
     if branch_name:
         query += " WHERE branch_name = $1"
         args.append(branch_name)
-    return await conn.fetch(query, *args)
+    async with get_connection() as conn:
+        return await conn.fetch(query, *args)
 
 
 async def iter_queue(limit=None):
@@ -230,20 +239,22 @@ queue.id ASC
 """
     if limit:
         query += " LIMIT %d" % limit
-    for row in await conn.fetch(query):
-        (branch_url, maintainer_email, package, committer,
-            command, context, queue_id) = row
-        env = {
-            'PACKAGE': package,
-            'MAINTAINER_EMAIL': maintainer_email,
-            'COMMITTER': committer or None,
-            'CONTEXT': context,
-        }
-        yield (queue_id, branch_url, env, shlex.split(command))
+    async with get_connection() as conn:
+        for row in await conn.fetch(query):
+            (branch_url, maintainer_email, package, committer,
+                command, context, queue_id) = row
+            env = {
+                'PACKAGE': package,
+                'MAINTAINER_EMAIL': maintainer_email,
+                'COMMITTER': committer or None,
+                'CONTEXT': context,
+            }
+            yield (queue_id, branch_url, env, shlex.split(command))
 
 
 async def drop_queue_item(queue_id):
-    await conn.execute("DELETE FROM queue WHERE id = $1", (queue_id,))
+    async with get_connection() as conn:
+        await conn.execute("DELETE FROM queue WHERE id = $1", (queue_id,))
 
 
 async def add_to_queue(vcs_url, env, command, priority=0,
@@ -252,19 +263,20 @@ async def add_to_queue(vcs_url, env, command, priority=0,
     maintainer_email = env.get('MAINTAINER_EMAIL')
     context = env.get('CONTEXT')
     committer = env.get('COMMITTER')
-    await _ensure_package(package, vcs_url, maintainer_email)
-    await conn.execute(
-        "INSERT INTO queue "
-        "(branch_url, package, command, committer, priority, context, "
-        "estimated_duration) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7) "
-        "ON CONFLICT (package, command) DO UPDATE SET "
-        "context = EXCLUDED.context, priority = EXCLUDED.priority, "
-        "estimated_duration = EXCLUDED.estimated_duration "
-        "WHERE queue.priority <= EXCLUDED.priority", (
-            vcs_url, package, ' '.join(command), committer,
-            priority, context, estimated_duration))
-    return True
+    async with get_connection() as conn:
+        await _ensure_package(conn, package, vcs_url, maintainer_email)
+        await conn.execute(
+            "INSERT INTO queue "
+            "(branch_url, package, command, committer, priority, context, "
+            "estimated_duration) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7) "
+            "ON CONFLICT (package, command) DO UPDATE SET "
+            "context = EXCLUDED.context, priority = EXCLUDED.priority, "
+            "estimated_duration = EXCLUDED.estimated_duration "
+            "WHERE queue.priority <= EXCLUDED.priority", (
+                vcs_url, package, ' '.join(command), committer,
+                priority, context, estimated_duration))
+        return True
 
 
 async def set_proposal_status(url, status):
@@ -280,7 +292,8 @@ async def queue_length(minimum_priority=None):
     if minimum_priority is not None:
         query += ' WHERE priority >= $1'
         args.append(minimum_priority)
-    return await conn.fetchval(query, *args)
+    async with get_connection() as conn:
+        return await conn.fetchval(query, *args)
 
 
 async def queue_duration(minimum_priority=None):
@@ -296,20 +309,23 @@ WHERE
     if minimum_priority is not None:
         query += ' AND priority >= $1'
         args.append(minimum_priority)
-    ret = await conn.fetchrow(query, *args)[0]
-    if ret is None:
-        return datetime.timedelta()
-    return ret
+    async with get_connection() as conn:
+        ret = await conn.fetchrow(query, *args)[0]
+        if ret is None:
+            return datetime.timedelta()
+        return ret
 
 
 async def iter_published_packages(suite):
-    return await conn.fetch("""
+    async with get_connection() as conn:
+        return await conn.fetch("""
 select distinct package, build_version from run where build_distribution = $1
 """, (suite, ))
 
 
 async def iter_previous_runs(package, command):
-    return await conn.fetch("""
+    async with get_connection() as conn:
+        return await conn.fetch("""
 SELECT
   start_time,
   (finish_time - start_time) AS duration,
@@ -345,7 +361,8 @@ FROM
     query += """
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """
-    return await conn.fetch(query, *args)
+    async with get_connection() as conn:
+        return await conn.fetch(query, *args)
 
 
 async def iter_last_runs(command=None):
@@ -365,11 +382,13 @@ FROM
         query += " WHERE command = $1"
         args.append(command)
     query += " ORDER BY package, command, start_time DESC"
-    return await conn.fetch(query, *args)
+    async with get_connection() as conn:
+        return await conn.fetch(query, *args)
 
 
 async def iter_build_failures():
-    return await conn.fetch("""
+    async with get_connection() as conn:
+        return await conn.fetch("""
 SELECT
   package,
   id,
@@ -384,19 +403,21 @@ WHERE
 
 
 async def update_run_result(log_id, code, description):
-    await conn.execute(
+    async with get_connection() as conn:
+        await conn.execute(
         'UPDATE run SET result_code = $1, description = $2 WHERE id = $3',
         (code, description, log_id))
 
 
 async def already_published(package, branch_name, revision, mode):
-    row = await conn.fetchrow("""\
+    async with get_connection() as conn:
+        row = await conn.fetchrow("""\
 SELECT * FROM publish
 WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
 """, (mode, revision, package, branch_name))
-    if row:
-        return True
-    return False
+        if row:
+            return True
+        return False
 
 
 async def iter_publish_ready():
@@ -425,11 +446,13 @@ ORDER BY
   command,
   finish_time DESC
 """
-    return await conn.fetch(query, *args)
+    async with get_connection() as conn:
+        return await conn.fetch(query, *args)
 
 
 async def iter_unscanned_branches(last_scanned_minimum):
-    return await conn.fetch("""
+    async with get_connection() as conn:
+        return await conn.fetch("""
 SELECT
   name,
   'master',
@@ -443,7 +466,8 @@ WHERE
 
 
 async def iter_package_branches():
-    return await conn.fetch("""
+    async with get_connection() as conn:
+        return await conn.fetch("""
 SELECT
   name,
   branch_url,
@@ -459,7 +483,8 @@ LEFT JOIN branch ON package.branch_url = branch.url
 async def update_branch_status(
         branch_url, last_scanned=None, status=None, revision=None,
         description=None):
-    await conn.execute("""\
+    async with get_connection() as conn:
+        await conn.execute("""\
 INSERT INTO branch (url, status, revision, last_scanned, description)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (url) DO UPDATE SET
