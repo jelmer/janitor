@@ -58,7 +58,7 @@ def get_ubuntu_package_url(launchpad, package):
     return lp_repo.git_ssh_url
 
 
-def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
+async def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
     from breezy.plugins.launchpad.lp_api import (
         Launchpad,
         get_cache_directory,
@@ -70,12 +70,12 @@ def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
         'bzr', 'production', cache_directory, proxy_info=proxy_info,
         version='devel')
 
-    udd = UDD.public_udd_mirror()
+    udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
-    for package in udd.iter_ubuntu_source_packages(
+    async for package in udd.iter_ubuntu_source_packages(
             packages if packages else None, shuffle=shuffle):
         mode, update_changelog, committer = apply_policy(
             policy, 'lintian_brush', package.name, package.maintainer_email,
@@ -107,13 +107,13 @@ def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
             command, 0)
 
 
-def schedule_udd_new_upstreams(policy, packages, shuffle=False):
-    udd = UDD.public_udd_mirror()
+async def schedule_udd_new_upstreams(policy, packages, shuffle=False):
+    udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
-    for package, upstream_version in udd.iter_packages_with_new_upstream(
+    async for package, upstream_version in udd.iter_packages_with_new_upstream(
             packages or None):
         # TODO(jelmer): skip if "new-upstream $upstream_version" has already
         # been processed
@@ -150,13 +150,13 @@ def schedule_udd_new_upstreams(policy, packages, shuffle=False):
             command, 0)
 
 
-def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
-    udd = UDD.public_udd_mirror()
+async def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
+    udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
-    for package in udd.iter_source_packages_with_vcs(packages or None):
+    async for package in udd.iter_source_packages_with_vcs(packages or None):
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:
@@ -190,14 +190,14 @@ def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
             command, 0)
 
 
-def schedule_udd(policy, propose_addon_only, packages, available_fixers,
+async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
                  shuffle=False):
-    udd = UDD.public_udd_mirror()
+    udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
-    for package, tags in udd.iter_source_packages_by_lintian(
+    async for package, tags in udd.iter_source_packages_by_lintian(
             available_fixers, packages if packages else None, shuffle=shuffle):
         priority = 0
         try:

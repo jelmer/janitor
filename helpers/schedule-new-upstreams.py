@@ -16,6 +16,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncio
 from janitor.udd import (
     UDD,
     )
@@ -25,6 +26,8 @@ parser = argparse.ArgumentParser(prog='propose-new-upstreams')
 parser.add_argument("packages", nargs='*')
 args = parser.parse_args()
 
-udd = UDD.public_udd_mirror()
-for package in udd.iter_packages_with_new_upstream(args.packages or None):
+loop = asyncio.get_event_loop()
+udd = loop.run_until_complete(UDD.public_udd_mirror())
+for package in loop.run_until_complete(
+        udd.iter_packages_with_new_upstream(args.packages or None)):
     print("%s %s" % (package.name, package.version))

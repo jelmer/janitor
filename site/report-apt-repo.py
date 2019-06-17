@@ -23,10 +23,10 @@ parser.add_argument("suite")
 args = parser.parse_args()
 
 
-def get_unstable_versions(present):
+async def get_unstable_versions(present):
     unstable = {}
     if present:
-        for package in udd.UDD.public_udd_mirror().get_source_packages(
+        async for package in udd.UDD.public_udd_mirror().get_source_packages(
                 packages=list(present), release='sid'):
             unstable[package.name] = Version(package.version)
     return unstable
@@ -37,7 +37,7 @@ async def gather_package_list():
     for source, version in await state.iter_published_packages(args.suite):
         present[source] = Version(version)
 
-    unstable = get_unstable_versions(present)
+    unstable = await get_unstable_versions(present)
 
     for source in sorted(present):
         yield (

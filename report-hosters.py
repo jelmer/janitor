@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+import asyncio
+
 import operator
 
 import matplotlib.pyplot as plt
@@ -8,7 +10,7 @@ from urllib.parse import urlparse
 
 from silver_platter.debian import vcs_field_to_bzr_url_converters
 
-from silver_platter.debian.udd import UDD
+from janitor.udd import UDD
 
 renames = {
     'launchpad.net': 'launchpad',
@@ -27,13 +29,13 @@ renames = {
     'svn.code.sf.net': 'sourceforge',
 }
 
-udd = UDD.public_udd_mirror()
-cursor = udd._conn.cursor()
-cursor.execute(
-    "SELECT source, vcs, url FROM vcswatch GROUP by 1, 2, 3")
+loop = asyncio.get_event_loop()
+udd = loop.run_until_complete(UDD.public_udd_mirror())
+all = loop.run_until_complete(udd._conn.fetch(
+    "SELECT source, vcs, url FROM vcswatch GROUP by 1, 2, 3"))
 hosters = {}
 url_converters = dict(vcs_field_to_bzr_url_converters)
-for row in cursor.fetchall():
+for row in all:
     try:
         converter = url_converters[row[1]]
     except KeyError:
