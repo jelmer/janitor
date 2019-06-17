@@ -343,9 +343,9 @@ async def export_queue_length():
     while True:
         queue_length.set(await state.queue_length())
         positive_queue_length.set(await state.queue_length(0))
-        queue_duration.set(await state.queue_duration().total_seconds())
+        queue_duration.set((await state.queue_duration()).total_seconds())
         positive_queue_duration.set(
-            await state.queue_duration(0).total_seconds())
+            (await state.queue_duration(0)).total_seconds())
         await asyncio.sleep(60)
 
 

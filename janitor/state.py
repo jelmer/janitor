@@ -310,7 +310,7 @@ WHERE
         query += ' AND priority >= $1'
         args.append(minimum_priority)
     async with get_connection() as conn:
-        ret = await conn.fetchrow(query, *args)[0]
+        ret = (await conn.fetchrow(query, *args))[0]
         if ret is None:
             return datetime.timedelta()
         return ret
