@@ -50,7 +50,7 @@ async def _ensure_package(conn, name, vcs_url, maintainer_email):
         "VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "maintainer_email = EXCLUDED.maintainer_email",
-        (name, vcs_url, maintainer_email))
+        name, vcs_url, maintainer_email)
 
 
 async def store_run(
@@ -87,11 +87,11 @@ async def store_run(
             "result) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14"
             ", $15)",
-            (run_id, ' '.join(command), description, result_code,
-             start_time, finish_time, name, instigated_context, context,
-             str(build_version) if build_version else None, build_distribution,
-             main_branch_revision, branch_name, revision,
-             subworker_result if subworker_result else None))
+            run_id, ' '.join(command), description, result_code,
+            start_time, finish_time, name, instigated_context, context,
+            str(build_version) if build_version else None, build_distribution,
+            main_branch_revision, branch_name, revision,
+            subworker_result if subworker_result else None)
 
 
 async def store_publish(package, branch_name, main_branch_revision, revision,
@@ -103,13 +103,13 @@ async def store_publish(package, branch_name, main_branch_revision, revision,
                 "INSERT INTO merge_proposal (url, package, status) "
                 "VALUES ($1, $2, 'open') ON CONFLICT (url) DO UPDATE SET "
                 "package = EXCLUDED.package",
-                (merge_proposal_url, package))
+                merge_proposal_url, package)
         await conn.execute("""
 INSERT INTO publish (package, branch_name, main_branch_revision, revision,
 mode, result_code, description, merge_proposal_url) values ($1, $2, $3, $4, $5,
 $6, $7, $8)
-""", (package, branch_name, main_branch_revision, revision, mode, result_code,
-      description, merge_proposal_url))
+""", package, branch_name, main_branch_revision, revision, mode, result_code,
+     description, merge_proposal_url)
 
 
 async def iter_packages(package=None):
@@ -254,7 +254,7 @@ queue.id ASC
 
 async def drop_queue_item(queue_id):
     async with get_connection() as conn:
-        await conn.execute("DELETE FROM queue WHERE id = $1", (queue_id,))
+        await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
 async def add_to_queue(vcs_url, env, command, priority=0,
@@ -273,9 +273,9 @@ async def add_to_queue(vcs_url, env, command, priority=0,
             "ON CONFLICT (package, command) DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration "
-            "WHERE queue.priority <= EXCLUDED.priority", (
+            "WHERE queue.priority <= EXCLUDED.priority",
                 vcs_url, package, ' '.join(command), committer,
-                priority, context, estimated_duration))
+                priority, context, estimated_duration)
         return True
 
 
@@ -283,7 +283,7 @@ async def set_proposal_status(url, status):
     await conn.execute("""
 INSERT INTO merge_proposal (url, status) VALUES ($1, $2)
 ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
-""", (url, status))
+""", url, status)
 
 
 async def queue_length(minimum_priority=None):
@@ -338,7 +338,7 @@ FROM
 WHERE
   package = $1 AND command = $2
 ORDER BY start_time DESC
-""", (package, ' '.join(command)))
+""", package, ' '.join(command))
 
 
 async def iter_last_successes(suite=None):
@@ -406,7 +406,7 @@ async def update_run_result(log_id, code, description):
     async with get_connection() as conn:
         await conn.execute(
         'UPDATE run SET result_code = $1, description = $2 WHERE id = $3',
-        (code, description, log_id))
+        code, description, log_id)
 
 
 async def already_published(package, branch_name, revision, mode):
@@ -414,7 +414,7 @@ async def already_published(package, branch_name, revision, mode):
         row = await conn.fetchrow("""\
 SELECT * FROM publish
 WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
-""", (mode, revision, package, branch_name))
+""", mode, revision, package, branch_name)
         if row:
             return True
         return False
@@ -462,7 +462,7 @@ FROM package
 LEFT JOIN branch ON package.branch_url = branch.url
 WHERE
   last_scanned is null or now() - last_scanned > $1
-""", (last_scanned_minimum, ))
+""", last_scanned_minimum)
 
 
 async def iter_package_branches():
@@ -492,5 +492,5 @@ ON CONFLICT (url) DO UPDATE SET
   revision = EXCLUDED.revision,
   last_scanned = EXCLUDED.last_scanned,
   description = EXCLUDED.description
-""", (branch_url, status, revision.decode('utf-8') if revision else None,
-      last_scanned, description))
+""", branch_url, status, revision.decode('utf-8') if revision else None,
+     last_scanned, description)
