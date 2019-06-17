@@ -63,10 +63,12 @@ last_success_gauge = Gauge(
 
 
 note('Querying UDD...')
-todo = schedule_udd_new_upstream_snapshots(
-    args.policy, args.packages, shuffle=args.shuffle)
-
 loop = asyncio.get_event_loop()
+
+todo = loop.run_until_complete(
+    schedule_udd_new_upstream_snapshots(
+        args.policy, args.packages, shuffle=args.shuffle))
+
 loop.run_until_complete(
     add_to_queue(
         todo, dry_run=args.dry_run, default_priority=args.default_priority))

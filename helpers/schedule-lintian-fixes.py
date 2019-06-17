@@ -16,6 +16,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncio
 from janitor.schedule import (
     schedule_udd,
     schedule_ubuntu,
@@ -55,6 +56,7 @@ available_fixers = set(fixer_scripts)
 if args.fixers:
     available_fixers = available_fixers.intersection(set(args.fixers))
 
+loop = asyncio.get_event_loop()
 if args.ubuntu:
     schedule_iter = schedule_ubuntu(
             args.policy, args.propose_addon_only, args.packages,
@@ -63,5 +65,5 @@ else:
     schedule_iter = schedule_udd(
             args.policy, args.propose_addon_only, args.packages,
             available_fixers, args.shuffle)
-for entry in schedule_iter:
+for entry in loop.run_until_complete(schedule_iter):
     print(entry)

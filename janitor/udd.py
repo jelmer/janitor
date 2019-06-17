@@ -20,7 +20,7 @@
 from __future__ import absolute_import
 
 from email.utils import parseaddr
-import psycopg2
+import asyncpg
 
 import distro_info
 
@@ -37,16 +37,14 @@ class PackageData(object):
         self.uploader_emails = uploader_emails
 
 
-def connect_udd_mirror():
+async def connect_udd_mirror():
     """Connect to the public UDD mirror."""
-    conn = psycopg2.connect(
+    return await asyncpg.connect(
         database="udd",
         user="udd-mirror",
         password="udd-mirror",
         port=5432,
         host="udd-mirror.debian.net")
-    conn.set_client_encoding('UTF8')
-    return conn
 
 
 def extract_uploader_emails(uploaders):
@@ -57,75 +55,61 @@ def extract_uploader_emails(uploaders):
 class UDD(object):
 
     @classmethod
-    def public_udd_mirror(cls):
-        return cls(connect_udd_mirror())
+    async def public_udd_mirror(cls):
+        return cls(await connect_udd_mirror())
 
     def __init__(self, conn):
         self._conn = conn
 
-    def get_source_packages(self, packages, release=None):
-        cursor = self._conn.cursor()
+    async def get_source_packages(self, packages, release=None):
         args = [tuple(packages)]
         query = (
             "SELECT DISTINCT ON (source) "
             "source, version, vcs_type, vcs_url, "
             "maintainer_email, uploaders "
-            "FROM sources WHERE source IN %s")
+            "FROM sources WHERE source IN $1")
         if release:
-            query += " AND release = %s"
+            query += " AND release = $2"
             args.append(release)
         query += " ORDER BY source, version DESC"
-        cursor.execute(query, args)
-        row = cursor.fetchone()
         uploader_emails = extract_uploader_emails(row[5])
-        row = cursor.fetchone()
-        while row:
+        async for row in self._conn.fetch(query, *args):
             yield PackageData(
                     name=row[0], version=row[1], vcs_type=row[2],
                     vcs_url=row[3], maintainer_email=row[4],
                     uploader_emails=uploader_emails)
-            row = cursor.fetchone()
 
-    def iter_ubuntu_source_packages(self, packages=None, shuffle=False):
+    async def iter_ubuntu_source_packages(self, packages=None, shuffle=False):
         # TODO(jelmer): Support shuffle
         if shuffle:
             raise NotImplementedError(self.iter_ubuntu_source_packages)
         release = distro_info.UbuntuDistroInfo().devel()
-        cursor = self._conn.cursor()
-        cursor.execute("""
+        query = """
 SELECT
     DISTINCT ON (source)
     source, version, vcs_type, vcs_url, maintainer_email, uploaders
     FROM ubuntu_sources WHERE vcs_type != '' AND
-release = %s AND version LIKE '%%ubuntu%%' AND
+release = $1 AND version LIKE '%%ubuntu%%' AND
 NOT EXISTS (SELECT * FROM sources WHERE
-source = ubuntu_sources.source)""" + (
-                " AND source IN %s" if packages is not None else ""),
-                ((release, ) +
-                    ((tuple(packages),) if packages is not None else ())) +
-                """ ORDER BY source, version DESC""")
-        row = cursor.fetchone()
-        while row:
+source = ubuntu_sources.source)"""
+        args = [release]
+        if packages:
+            query += " AND source IN $2"
+            args.append(packages)
+        query += """ ORDER BY source, version DESC"""
+        async for row in self._conn.fetch(query, *args):
             uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
                 maintainer_email=row[4],
                 uploader_emails=uploader_emails)
-            row = cursor.fetchone()
 
-    def iter_source_packages_by_lintian(self, tags, packages=None,
+    async def iter_source_packages_by_lintian(self, tags, packages=None,
                                         shuffle=False):
         """Iterate over all of the packages affected by a set of tags."""
         package_rows = {}
         package_tags = {}
-        cursor = self._conn.cursor()
 
-        def process(cursor):
-            row = cursor.fetchone()
-            while row:
-                package_rows[row[0]] = row[:6]
-                package_tags.setdefault((row[0], row[1]), []).append(row[6])
-                row = cursor.fetchone()
         args = [tuple(tags)]
         query = """
 SELECT DISTINCT ON (sources.source)
@@ -142,14 +126,15 @@ INNER JOIN sources ON
     sources.source = lintian.package AND
     sources.version = lintian.package_version AND
     sources.release = 'sid'
-WHERE tag IN %s AND package_type = 'source' AND vcs_type != ''
+WHERE tag IN %$1AND package_type = 'source' AND vcs_type != ''
 """
         if packages is not None:
-            query += " AND sources.source IN %s"
+            query += " AND sources.source IN $2"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        cursor.execute(query, args)
-        process(cursor)
+        async for row in self._conn.fetch(query, *args):
+            package_rows[row[0]] = row[:6]
+            package_tags.setdefault((row[0], row[1]), []).append(row[6])
         args = [tuple(tags)]
         query = """\
 SELECT DISTINCT ON (sources.source)
@@ -166,14 +151,15 @@ INNER JOIN packages ON packages.package = lintian.package \
 and packages.version = lintian.package_version \
 inner join sources on sources.version = packages.version and \
 sources.source = packages.source and sources.release = 'sid' \
-where lintian.tag in %s and lintian.package_type = 'binary' \
+where lintian.tag in $1 and lintian.package_type = 'binary' \
 and vcs_type != ''"""
         if packages is not None:
-            query += " AND sources.source IN %s"
+            query += " AND sources.source IN $2"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        cursor.execute(query, args)
-        process(cursor)
+        async for row in self._conn.fetch(query, *args):
+            package_rows[row[0]] = row[:6]
+            package_tags.setdefault((row[0], row[1]), []).append(row[6])
         package_values = package_rows.values()
         if shuffle:
             package_values = list(package_values)
@@ -186,9 +172,7 @@ and vcs_type != ''"""
                 maintainer_email=row[4], uploader_emails=uploader_emails),
                 package_tags[row[0], row[1]])
 
-    def iter_packages_with_new_upstream(self, packages=None):
-        cursor = self._conn.cursor()
-
+    async def iter_packages_with_new_upstream(self, packages=None):
         args = []
         query = """\
 SELECT DISTINCT ON (sources.source)
@@ -201,22 +185,17 @@ status = 'newer package available' AND \
 sources.vcs_url != '' \
 """
         if packages is not None:
-            query += " AND upstream.source IN %s"
+            query += " AND upstream.source IN $1"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        cursor.execute(query, args)
-        row = cursor.fetchone()
-        while row:
+        async for row in self._conn.fetch(query, *args):
             uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
                 maintainer_email=row[4], uploader_emails=uploader_emails
                 ), row[6]
-            row = cursor.fetchone()
 
-    def iter_source_packages_with_vcs(self, packages=None):
-        cursor = self._conn.cursor()
-
+    async def iter_source_packages_with_vcs(self, packages=None):
         args = []
         query = """\
 SELECT DISTINCT ON (sources.source)
@@ -225,34 +204,28 @@ sources.maintainer_email, sources.uploaders from sources
 where sources.vcs_url != '' and position('-' in sources.version) > 0
 """
         if packages is not None:
-            query += " AND sources.source IN %s"
+            query += " AND sources.source IN $1"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        cursor.execute(query, args)
-        row = cursor.fetchone()
-        while row:
+        async for row in self._conn.fetch(query, *args):
             uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
                 maintainer_email=row[4], uploader_emails=uploader_emails
                 )
-            row = cursor.fetchone()
 
-    def get_popcon_score(self, package):
-        cursor = self._conn.cursor()
-        query = "SELECT insts FROM sources_popcon WHERE name = %s"
-        cursor.execute(query, (package,))
-        row = cursor.fetchone()
+    async def get_popcon_score(self, package):
+        query = "SELECT insts FROM sources_popcon WHERE name = $1"
+        row = await self._conn.fetchrow(query, package)
         if row:
             return row[0]
         return None
 
-    def binary_package_exists(self, package, suite=None):
-        cursor = self._conn.cursor()
+    async def binary_package_exists(self, package, suite=None):
         args = [package]
-        query = "SELECT package FROM packages WHERE package = %s"
+        query = "SELECT package FROM packages WHERE package = $1"
         if suite:
-            query += " AND release = %s"
+            query += " AND release = $2"
             args.append(suite)
-        cursor.execute(query, args)
-        return (cursor.fetchone() is not None)
+        row = await self._conn.fetchrow(query, *args)
+        return (row is not None)
