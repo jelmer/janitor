@@ -73,7 +73,7 @@ class UDD(object):
             args.append(release)
         query += " ORDER BY source, version DESC"
         uploader_emails = extract_uploader_emails(row[5])
-        async for row in self._conn.fetch(query, *args):
+        for row in await self._conn.fetch(query, *args):
             yield PackageData(
                     name=row[0], version=row[1], vcs_type=row[2],
                     vcs_url=row[3], maintainer_email=row[4],
@@ -97,7 +97,7 @@ source = ubuntu_sources.source)"""
             query += " AND source IN $2"
             args.append(packages)
         query += """ ORDER BY source, version DESC"""
-        async for row in self._conn.fetch(query, *args):
+        for row in await self._conn.fetch(query, *args):
             uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
@@ -157,7 +157,7 @@ and vcs_type != ''"""
             query += " AND sources.source IN $2"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        async for row in self._conn.fetch(query, *args):
+        for row in await self._conn.fetch(query, *args):
             package_rows[row[0]] = row[:6]
             package_tags.setdefault((row[0], row[1]), []).append(row[6])
         package_values = package_rows.values()
@@ -188,7 +188,7 @@ sources.vcs_url != '' \
             query += " AND upstream.source = any($1::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        async for row in self._conn.fetch(query, *args):
+        for row in await self._conn.fetch(query, *args):
             uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
@@ -207,7 +207,7 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
             query += " AND sources.source = any($1::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        async for row in self._conn.fetch(query, *args):
+        for row in await self._conn.fetch(query, *args):
             uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
                 name=row[0], version=row[1], vcs_type=row[2], vcs_url=row[3],
