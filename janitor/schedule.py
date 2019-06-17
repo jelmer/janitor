@@ -237,20 +237,22 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
             command, priority)
 
 
-def determine_priority(package, command, mode, previous_runs, context=None,
-                       priority=0):
+priority_per_tag = {
     # Priority increase for packages that have never been processed before
-    FIRST_RUN_BONUS = 100
-
+    'first_run': 100,
+    'last_successful_bonus': 90,
+    'last_vague_bonus': 30,
+    'no_context_failure': -30,
     # Penalty if the context has already been processed
-    CONTEXT_PROCESSED_PENALTY = 1000
+    'context_processed': -1000,
+    'no_context_refresh_bonus': 50,
+    }
 
-    LAST_SUCCESSFUL_BONUS = 90
-    LAST_VAGUE_BONUS = 30
 
-    NO_CONTEXT_FAILURE_PENALTY = 30
+def determine_tags(package, command, mode, previous_runs, context=None,
+                       priority=0):
+
     NO_CONTEXT_REFRESH_FREQUENCY = 14
-    NO_CONTEXT_REFRESH_BONUS = 50
 
     if previous_runs:
         (last_start_time, last_duration, last_instigated_context,
@@ -259,30 +261,31 @@ def determine_priority(package, command, mode, previous_runs, context=None,
         # TODO(jelmer): Should last_context and last_instigated_context be
         # treated differently?
         if context and context in (last_context, last_instigated_context):
-            priority -= CONTEXT_PROCESSED_PENALTY
+            yield 'context_processed'
         elif context is None:
             age = (datetime.now() - last_start_time)
             if age.days > NO_CONTEXT_REFRESH_FREQUENCY:
-                priority += NO_CONTEXT_REFRESH_BONUS
+                yield 'no_context_refresh_bonus'
             elif last_result_code != 'success':
-                priority -= NO_CONTEXT_FAILURE_PENALTY
+                yield 'no_context_failure'
         else:
             if last_result_code == 'success':
-                priority += LAST_SUCCESSFUL_BONUS
+                yield 'last_successful_bonus'
         if last_result_code in VAGUE_RESULT_CODES:
-            priority += LAST_VAGUE_BONUS
+            yield 'last_vague_bonus'
         priority -= (last_duration.total_seconds() / 60) / 10
     else:
-        priority += FIRST_RUN_BONUS
-    return priority
+        yield 'first_run'
 
 
 async def add_to_queue(todo, dry_run=False, default_priority=0):
     for vcs_url, mode, env, command, priority in todo:
         package = env['PACKAGE']
         previous_runs = list(await state.iter_previous_runs(package, command))
-        priority = default_priority + priority + determine_priority(
+        tags = determine_tags(
             package, command, mode, previous_runs, env.get('CONTEXT'))
+        priority = default_priority + priority + sum(
+            priority_per_tag[t] for t in tags)
         estimated_duration = None
         if previous_runs:
             for (last_start_time, last_duration, last_instigated_context,
