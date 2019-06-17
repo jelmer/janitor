@@ -17,6 +17,7 @@
 
 
 import argparse
+import asyncio
 import os
 
 from prometheus_client import (
@@ -86,7 +87,8 @@ todo = schedule_udd(
     args.policy, args.propose_addon_only, args.packages,
     available_fixers, args.shuffle)
 
-add_to_queue(todo, dry_run=args.dry_run)
+loop = asyncio.get_event_loop()
+loop.run_until_complete(add_to_queue(todo, dry_run=args.dry_run))
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
