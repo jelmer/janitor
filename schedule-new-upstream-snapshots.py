@@ -65,12 +65,13 @@ last_success_gauge = Gauge(
 note('Querying UDD...')
 loop = asyncio.get_event_loop()
 
-todo = schedule_udd_new_upstream_snapshots(
-        args.policy, args.packages, shuffle=args.shuffle)
-
-loop.run_until_complete(
-    add_to_queue(
+async def main():
+    todo = [x async for x in schedule_udd_new_upstream_snapshots(
+            args.policy, args.packages, shuffle=args.shuffle)]
+    await add_to_queue(
         todo, dry_run=args.dry_run, default_priority=args.default_priority))
+
+loop.run_until_complete(main())
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:

@@ -67,7 +67,7 @@ class UDD(object):
             "SELECT DISTINCT ON (source) "
             "source, version, vcs_type, vcs_url, "
             "maintainer_email, uploaders "
-            "FROM sources WHERE source IN $1")
+            "FROM sources WHERE source = any($1::text[])")
         if release:
             query += " AND release = $2"
             args.append(release)
@@ -105,7 +105,7 @@ source = ubuntu_sources.source)"""
                 uploader_emails=uploader_emails)
 
     async def iter_source_packages_by_lintian(self, tags, packages=None,
-                                        shuffle=False):
+                                              shuffle=False):
         """Iterate over all of the packages affected by a set of tags."""
         package_rows = {}
         package_tags = {}
@@ -126,13 +126,13 @@ INNER JOIN sources ON
     sources.source = lintian.package AND
     sources.version = lintian.package_version AND
     sources.release = 'sid'
-WHERE tag IN %$1AND package_type = 'source' AND vcs_type != ''
+WHERE tag = any($1::text[]) and package_type = 'source' AND vcs_type != ''
 """
         if packages is not None:
-            query += " AND sources.source IN $2"
+            query += " AND sources.source = any($2::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        async for row in self._conn.fetch(query, *args):
+        for row in await self._conn.fetch(query, *args):
             package_rows[row[0]] = row[:6]
             package_tags.setdefault((row[0], row[1]), []).append(row[6])
         args = [tuple(tags)]
@@ -151,7 +151,7 @@ INNER JOIN packages ON packages.package = lintian.package \
 and packages.version = lintian.package_version \
 inner join sources on sources.version = packages.version and \
 sources.source = packages.source and sources.release = 'sid' \
-where lintian.tag in $1 and lintian.package_type = 'binary' \
+where lintian.tag = any($1::text[]) and lintian.package_type = 'binary' \
 and vcs_type != ''"""
         if packages is not None:
             query += " AND sources.source IN $2"
@@ -185,7 +185,7 @@ status = 'newer package available' AND \
 sources.vcs_url != '' \
 """
         if packages is not None:
-            query += " AND upstream.source IN $1"
+            query += " AND upstream.source = any($1::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
         async for row in self._conn.fetch(query, *args):
@@ -204,7 +204,7 @@ sources.maintainer_email, sources.uploaders from sources
 where sources.vcs_url != '' and position('-' in sources.version) > 0
 """
         if packages is not None:
-            query += " AND sources.source IN $1"
+            query += " AND sources.source = any($1::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
         async for row in self._conn.fetch(query, *args):
