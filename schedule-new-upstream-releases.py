@@ -17,6 +17,7 @@
 
 
 import argparse
+import asyncio
 import os
 
 from prometheus_client import (
@@ -63,7 +64,9 @@ note('Querying UDD...')
 todo = schedule_udd_new_upstreams(
     args.policy, args.packages, shuffle=args.shuffle)
 
-add_to_queue(todo, dry_run=args.dry_run)
+loop = asyncio.get_event_loop()
+loop.run_until_complete(
+    add_to_queue(todo, dry_run=args.dry_run))
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
