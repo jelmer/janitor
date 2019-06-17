@@ -82,13 +82,15 @@ if args.fixers:
 fixer_count.inc(len(available_fixers))
 
 
-note('Querying UDD...')
-loop = asyncio.get_event_loop()
-todo = schedule_udd(
-    args.policy, args.propose_addon_only, args.packages,
-    available_fixers, args.shuffle)
+async def main():
+    note('Querying UDD...')
+    todo = [x async for x in schedule_udd(
+        args.policy, args.propose_addon_only, args.packages,
+        available_fixers, args.shuffle)]
+    await add_to_queue(todo, dry_run=args.dry_run)
 
-loop.run_until_complete(add_to_queue(todo, dry_run=args.dry_run))
+loop = asyncio.get_event_loop()
+loop.run_until_complete(main())
 
 last_success_gauge.set_to_current_time()
 if args.prometheus:
