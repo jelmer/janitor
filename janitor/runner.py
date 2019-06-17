@@ -407,7 +407,7 @@ async def process_queue(
             todo = pending
             if concurrency:
                 for i in enumerate(done):
-                    for item in await state.iter_queue(limit=concurrency):
+                    async for item in state.iter_queue(limit=concurrency):
                         if item[0] in started:
                             continue
                         todo.add(process_queue_item(item))
