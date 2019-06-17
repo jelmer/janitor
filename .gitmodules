@@ -9,5 +9,4 @@
 	url = git://github.com/breezy-team/breezy-debian
 [submodule "breezy"]
 	path = breezy
-	url = https://github.com/jelmer/breezy
-	branch = debian-janitor
+	url = https://github.com/breezy-team/breezy
