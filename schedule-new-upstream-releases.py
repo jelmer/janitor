@@ -66,7 +66,7 @@ loop = asyncio.get_event_loop()
 
 async def main():
     todo = [x async for x in schedule_udd_new_upstreams(
-            args.policy, args.packages, shuffle=args.shuffle)
+            args.policy, args.packages, shuffle=args.shuffle)]
     await add_to_queue(todo, dry_run=args.dry_run)
 
 loop.run_until_complete(main())
