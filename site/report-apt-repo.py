@@ -34,7 +34,7 @@ async def get_unstable_versions(present):
 
 async def gather_package_list():
     present = {}
-    for source, version in await state.iter_published_packages(args.suite):
+    async for source, version in state.iter_published_packages(args.suite):
         present[source] = Version(version)
 
     unstable = await get_unstable_versions(present)
