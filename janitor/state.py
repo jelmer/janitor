@@ -164,15 +164,12 @@ LEFT JOIN package ON package.name = run.package
     if limit:
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
-        cur = await conn.cursor(query, *args)
-        row = await cur.fetchrow()
-        while row:
+        for row in await conn.fetch(query, *args):
             yield (row[0],
                    (row[2], row[3]),
                    row[1], row[4], row[5], row[6],
                    Version(row[7]) if row[7] else None, row[8],
                    row[9] if row[9] else None, row[10])
-            row = await cur.fetchrow()
 
 
 async def get_maintainer_email(vcs_url):
@@ -320,7 +317,7 @@ async def iter_published_packages(suite):
     async with get_connection() as conn:
         return await conn.fetch("""
 select distinct package, build_version from run where build_distribution = $1
-""", (suite, ))
+""", suite, )
 
 
 async def iter_previous_runs(package, command):

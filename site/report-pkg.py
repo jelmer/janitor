@@ -25,7 +25,7 @@ from janitor.sbuild_log import (
 from janitor.site import (
     format_duration,
 )  # noqa: E402
-from janitor.trace import warning  # noqa: E402
+from janitor.trace import note, warning  # noqa: E402
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
@@ -33,7 +33,8 @@ from janitor.vcs import (
 
 env = Environment(
     loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml'])
+    autoescape=select_autoescape(['html', 'xml']),
+    enable_async=True,
 )
 
 
@@ -102,14 +103,10 @@ if not os.path.isdir(dir):
     os.mkdir(dir)
 
 
-runs_by_pkg = {}
-
-for run in loop.run_until_complete(state.iter_runs()):
-    (run_id, (start_time, finish_time), command, description,
-        package_name, merge_proposal_url, build_version,
-        build_distro, result_code, branch_name) = run
-
-    runs_by_pkg.setdefault(package_name, []).append(run)
+async def write_run_file(run_id, times, command, description,
+            package_name, merge_proposal_url, build_version,
+            build_distro, result_code, branch_name):
+    (start_time, finish_time) = times
 
     run_dir = os.path.join(dir, package_name, run_id)
     os.makedirs(run_dir, exist_ok=True)
@@ -195,7 +192,24 @@ for run in loop.run_until_complete(state.iter_runs()):
 
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
         template = env.get_template('run.html')
-        f.write(template.render(**kwargs))
+        f.write(await template.render_async(**kwargs))
+    note('Wrote %s', run_dir)
+
+
+async def write_run_files():
+    runs_by_pkg = {}
+
+    jobs = []
+    async for run in state.iter_runs():
+        package_name = run[4]
+        jobs.append(write_run_file(*run))
+        runs_by_pkg.setdefault(package_name, []).append(run)
+    await asyncio.gather(*jobs)
+
+    return runs_by_pkg
+
+
+runs_by_pkg = loop.run_until_complete(write_run_files())
 
 
 merge_proposals = {}
@@ -203,11 +217,8 @@ for package, url, status in loop.run_until_complete(state.iter_proposals()):
     merge_proposals.setdefault(package, []).append((url, status))
 
 
-packages = []
-for (name, maintainer_email, branch_url) in loop.run_until_complete(
-        state.iter_packages()):
-    packages.append(name)
-
+async def write_pkg_file(name, merge_proposals, maintainer_email, branch_url,
+                         runs):
     pkg_dir = os.path.join(dir, name)
     if not os.path.isdir(pkg_dir):
         os.mkdir(pkg_dir)
@@ -216,13 +227,29 @@ for (name, maintainer_email, branch_url) in loop.run_until_complete(
     kwargs['package'] = name
     kwargs['maintainer_email'] = maintainer_email
     kwargs['vcs_url'] = branch_url
-    kwargs['merge_proposals'] = merge_proposals.get(name, [])
-    kwargs['builds'] = [run for run in runs_by_pkg.get(name, []) if run[6]]
-    kwargs['runs'] = runs_by_pkg.get(name, [])
+    kwargs['merge_proposals'] = merge_proposals
+    kwargs['builds'] = [run for run in runs if run[6]]
+    kwargs['runs'] = runs
 
     with open(os.path.join(pkg_dir, 'index.html'), 'w') as f:
         template = env.get_template('package-overview.html')
-        f.write(template.render(**kwargs))
+        f.write(await template.render_async(**kwargs))
+
+
+async def write_pkg_files():
+    jobs = []
+    packages = []
+    for (name, maintainer_email, branch_url) in await state.iter_packages():
+        packages.append(name)
+        jobs.append(write_pkg_file(
+            name, merge_proposals.get(name, []),
+            maintainer_email, branch_url, runs_by_pkg.get(name, [])))
+
+    await asyncio.gather(*jobs)
+
+    return packages
+
+packages = loop.run_until_complete(write_pkg_files())
 
 
 with open(os.path.join(dir, 'index.html'), 'w') as f:
