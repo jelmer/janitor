@@ -21,7 +21,8 @@ loop = asyncio.get_event_loop()
 
 env = Environment(
     loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml'])
+    autoescape=select_autoescape(['html', 'xml']),
+    enable_async=True,
 )
 
 by_code = {}
@@ -32,9 +33,8 @@ for (source, command, result_code, log_id,
     by_code.setdefault(result_code, []).append(
         (source, command, log_id, description))
 
-template = env.get_template('result-code.html')
-
-for code, items in by_code.items():
+async def write_result_code_page(code, items):
+    template = env.get_template('result-code.html')
     data = []
     for (source, command, log_id, description) in items:
         data.append((
@@ -43,13 +43,19 @@ for code, items in by_code.items():
             command,
             description))
     with open(os.path.join(args.path, '%s.html' % code), 'w') as f:
-        f.write(template.render(code=code, entries=data))
+        f.write(await template.render_async(code=code, entries=data))
+
+async def write_result_code_index(by_code):
+    with open(os.path.join(args.path, 'index.html'), 'w') as f:
+        template = env.get_template('result-code-index.html')
+
+        data = sorted(
+            [[name, len(by_code[name])] for name in by_code],
+            key=operator.itemgetter(1), reverse=True)
+        f.write(await template.render_async(result_codes=data))
 
 
-with open(os.path.join(args.path, 'index.html'), 'w') as f:
-    template = env.get_template('result-code-index.html')
-
-    data = sorted(
-        [[name, len(by_code[name])] for name in by_code],
-        key=operator.itemgetter(1), reverse=True)
-    f.write(template.render(result_codes=data))
+jobs = [write_result_code_index(by_code)]
+for code, items in by_code.items():
+    jobs.append(write_result_code_page(code, items))
+loop.run_until_complete(asyncio.gather(*jobs))

@@ -36,33 +36,36 @@ args = parser.parse_args()
 
 loop = asyncio.get_event_loop()
 
-data = []
+async def get_queue():
+    data = []
 
-for queue_id, branch_url, env, command in loop.run_until_complete(
-        state.iter_queue(limit=args.limit)):
-    if args.command is not None and command != args.command:
-        continue
-    expecting = None
-    if command[0] == 'new-upstream':
-        if '--snapshot' in command:
-            description = 'New upstream snapshot'
-        else:
-            description = 'New upstream'
+    async for queue_id, branch_url, env, command in (
+            state.iter_queue(limit=args.limit)):
+        if args.command is not None and command != args.command:
+            continue
+        expecting = None
+        if command[0] == 'new-upstream':
+            if '--snapshot' in command:
+                description = 'New upstream snapshot'
+            else:
+                description = 'New upstream'
+                if env.get('CONTEXT'):
+                    expecting = 'expecting to merge %s' % env['CONTEXT']
+        elif command[0] == 'lintian-brush':
+            description = 'Lintian fixes'
             if env.get('CONTEXT'):
-                expecting = 'expecting to merge %s' % env['CONTEXT']
-    elif command[0] == 'lintian-brush':
-        description = 'Lintian fixes'
-        if env.get('CONTEXT'):
-            expecting = 'expecting to fix: ' + ', '.join([
-                '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' %
-                (tag, tag) for tag in env['CONTEXT'].split(' ')])
-    else:
-        raise AssertionError('invalid command %s' % command)
-    if args.command is not None:
-        description = expecting
-    elif expecting is not None:
-        description += ", " + expecting
-    data.append((env['PACKAGE'], description))
+                expecting = 'expecting to fix: ' + ', '.join([
+                    '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' %
+                    (tag, tag) for tag in env['CONTEXT'].split(' ')])
+        else:
+            raise AssertionError('invalid command %s' % command)
+        if args.command is not None:
+            description = expecting
+        elif expecting is not None:
+            description += ", " + expecting
+        data.append((env['PACKAGE'], description))
+
+    return data
 
 
 env = Environment(
@@ -70,4 +73,4 @@ env = Environment(
     autoescape=select_autoescape(['html', 'xml'])
 )
 template = env.get_template('queue.html')
-sys.stdout.write(template.render(queue=data))
+sys.stdout.write(template.render(queue=loop.run_until_complete(get_queue())))

@@ -72,8 +72,8 @@ class UDD(object):
             query += " AND release = $2"
             args.append(release)
         query += " ORDER BY source, version DESC"
-        uploader_emails = extract_uploader_emails(row[5])
         for row in await self._conn.fetch(query, *args):
+            uploader_emails = extract_uploader_emails(row[5])
             yield PackageData(
                     name=row[0], version=row[1], vcs_type=row[2],
                     vcs_url=row[3], maintainer_email=row[4],
