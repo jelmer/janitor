@@ -29,3 +29,4 @@ def user_agent():
 
 
 _mod_http.default_user_agent = user_agent
+_mod_http.AbstractHTTPHandler._default_headers['User-agent'] = user_agent()
