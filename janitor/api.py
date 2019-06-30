@@ -5,13 +5,35 @@ from aiohttp import web
 import json
 
 from jinja2 import Environment, PackageLoader, select_autoescape
+from janitor.policy import read_policy, apply_policy
 from janitor import state
+
+DEFAULT_SCHEDULE_PRIORITY = 1000
+SUITE_TO_COMMAND = {
+    'lintian-fixes': 'lintian-brush',
+    'fresh-releases': 'merge-upstream',
+    'fresh-snapshots': 'merge-upstream --snapshot',
+    }
+SUITE_TO_POLICY_FIELD = {
+    'lintian-fixes': 'lintian_brush',
+    'fresh-releases': 'new_upstream_releases',
+    'fresh-snapshots': 'new_upstream_snapshots',
+}
 
 
 async def handle_policy(request):
     package = request.match_info['package']
-    # TODO(jelmer)
-    response_obj = {'status': 'success', 'package': package}
+    try:
+        (name, maintainer_email, vcs_url) = next(await state.iter_packages(package=package))
+    except StopIteration:
+        raise web.HTTPNotFound(
+            text=json.dumps({'reason': 'Package not found'}),
+            content_type='application/json')
+    suite_policies = {}
+    # TODO(jelmer): Package uploaders?
+    for suite, field in SUITE_TO_POLICY_FIELD.items():
+        suite_policies[suite] = apply_policy(policy_config, field, name, maintainer_email, [])
+    response_obj = {'by_suite': suite_policies}
     return web.Response(
         text=json.dumps(response_obj), content_type='application/json')
 
@@ -26,12 +48,26 @@ async def handle_publish(request):
 
 async def handle_schedule(request):
     package = request.match_info['package']
-    command = request.match_info['command']
-    # TODO(jelmer)
+    suite = request.match_info['suite']
+    command = SUITE_TO_COMMAND[suite]
+    priority = request.query.get('priority', DEFAULT_SCHEDULE_PRIORITY)
+    try:
+        (name, maintainer_email, vcs_url) = next(await state.iter_packages(package=package))
+    except StopIteration:
+        raise web.HTTPNotFound(
+            text=json.dumps({'reason': 'Package not found'}),
+            content_type='application/json')
+    env = {
+        'PACKAGE': name,
+        'MAINTAINER_EMAIL': maintainer_email,
+    }
+
+    await state.add_to_queue(vcs_url, env, command, priority)
     response_obj = {
-        'status': 'success',
         'package': package,
         'command': command,
+        'suite': suite,
+        'priority': priority,
         }
     return web.Response(
         text=json.dumps(response_obj), content_type='application/json')
@@ -65,8 +101,7 @@ async def handle_merge_proposal_list(request):
 
 
 async def handle_queue(request):
-    # TODO(jelmer): support limit argument
-    limit = None
+    limit = request.query.get('limit')
     response_obj = []
     for (queue_id, branch_url, env, command) in await state.iter_queue(
             limit=limit):
@@ -81,10 +116,9 @@ async def handle_queue(request):
 
 
 async def handle_run(request):
-    # TODO(jelmer): support limit argument
-    limit = None
     package = request.match_info.get('package')
     run_id = request.match_info.get('run_id')
+    limit = request.query.get('limit')
     response_obj = []
     for (run_id, (start_time, finish_time), command, description,
          package_name, merge_proposal_url, build_version, build_distribution,
@@ -186,6 +220,12 @@ app.router.add_get('/policy', handle_global_policy)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--host', type=str, help='Host to listen on')
+parser.add_argument("--policy",
+                    help="Policy file to read.", type=str,
+                    default=os.path.join(os.path.dirname(__file__), '..', 'policy.conf'))
 args = parser.parse_args()
+
+with open(args.policy, 'r') as f:
+    policy_config = read_policy()
 
 web.run_app(app, host=args.host)
