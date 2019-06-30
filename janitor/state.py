@@ -181,7 +181,7 @@ FROM
     package
 LEFT JOIN merge_proposal ON merge_proposal.package = package.name
 WHERE
-    merge_proposal.url = $1""", (vcs_url, ))
+    merge_proposal.url = $1""", vcs_url)
 
 
 async def iter_proposals(package=None):
@@ -277,7 +277,8 @@ async def add_to_queue(vcs_url, env, command, priority=0,
 
 
 async def set_proposal_status(url, status):
-    await conn.execute("""
+    async with get_connection() as conn:
+        await conn.execute("""
 INSERT INTO merge_proposal (url, status) VALUES ($1, $2)
 ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
 """, url, status)
