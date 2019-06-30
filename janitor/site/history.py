@@ -1,23 +1,9 @@
 #!/usr/bin/python3
 
-import argparse
-import asyncio
 import os
-import sys
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
-sys.path.insert(0, os.path.dirname(__file__))
-
-from janitor import state  # noqa: E402
-from janitor.site import env, format_duration  # noqa: E402
-
-parser = argparse.ArgumentParser('report-history')
-parser.add_argument('--limit', type=int, help='Number of entries to display',
-                    default=100)
-args = parser.parse_args()
-
-loop = asyncio.get_event_loop()
+from janitor import state
+from janitor.site import env, format_duration
 
 async def get_history():
     data = []
@@ -38,10 +24,19 @@ async def get_history():
 
 async def write_history():
     template = env.get_template('history.html')
-    sys.stdout.write(await template.render_async(
+    return await template.render_async(
         count=args.limit,
         history=await get_history(),
-        format_duration=format_duration))
+        format_duration=format_duration)
 
 
-loop.run_until_complete(write_history())
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+    import sys
+    parser = argparse.ArgumentParser('report-history')
+    parser.add_argument('--limit', type=int, help='Number of entries to display',
+                        default=100)
+    args = parser.parse_args()
+    loop = asyncio.get_event_loop()
+    sys.stdout.write(loop.run_until_complete(write_history()))

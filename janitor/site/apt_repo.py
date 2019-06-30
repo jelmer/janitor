@@ -7,14 +7,8 @@ import sys
 
 from debian.changelog import Version
 
-sys.path.insert(0, os.path.dirname(__file__))
-
-from janitor import state, udd  # noqa: E402
-from janitor.site import env  # noqa: E402
-
-parser = argparse.ArgumentParser(prog='report-apt-repo')
-parser.add_argument("suite")
-args = parser.parse_args()
+from janitor import state, udd
+from janitor.site import env
 
 
 async def get_unstable_versions(present):
@@ -46,8 +40,13 @@ async def gather_package_list():
 
 async def write_apt_repo(suite):
     template = env.get_template(suite + '.html')
-    sys.stdout.write(
-        await template.render_async(packages=await gather_package_list()))
+    return await template.render_async(packages=await gather_package_list())
 
-loop = asyncio.get_event_loop()
-loop.run_until_complete(write_apt_repo(args.suite))
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog='report-apt-repo')
+    parser.add_argument("suite")
+    args = parser.parse_args()
+
+    loop = asyncio.get_event_loop()
+    sys.stdout.write(loop.run_until_complete(write_apt_repo(args.suite)))

@@ -20,20 +20,9 @@ import asyncio
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
+from janitor import state
+from janitor.site import env
 
-from janitor import state  # noqa: E402
-from janitor.site import env  # noqa: E402
-
-parser = argparse.ArgumentParser('report-queue')
-parser.add_argument(
-    '--command', type=str, help='Only display queue for specified command')
-parser.add_argument(
-    '--limit', type=int, help='Limit to this number of entries',
-    default=100)
-args = parser.parse_args()
-
-loop = asyncio.get_event_loop()
 
 async def get_queue():
     data = []
@@ -69,6 +58,17 @@ async def get_queue():
 
 async def write_queue():
     template = env.get_template('queue.html')
-    sys.stdout.write(await template.render_async(queue=await get_queue()))
+    return await template.render_async(queue=await get_queue())
 
-loop.run_until_complete(write_queue())
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('report-queue')
+    parser.add_argument(
+        '--command', type=str, help='Only display queue for specified command')
+    parser.add_argument(
+        '--limit', type=int, help='Limit to this number of entries',
+        default=100)
+    args = parser.parse_args()
+
+    loop = asyncio.get_event_loop()
+    sys.stdout.write(loop.run_until_complete(write_queue()))
