@@ -26,5 +26,9 @@
     <li>/apt/{suite}/published-packages</li>
     <li>/policy</li>
 </ul>
+<p>E.g. to schedule a new run of <i>lintian-brush</i> for <i>cowsay</i>:
+
+<code>curl -X POST https://janitor.debian.net/api/pkg/cowsay/schedule/lintian-fixes</code>
+</p>
 </body>
 </html>
