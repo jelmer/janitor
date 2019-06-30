@@ -11,9 +11,9 @@ from janitor import state
 
 DEFAULT_SCHEDULE_PRIORITY = 1000
 SUITE_TO_COMMAND = {
-    'lintian-fixes': 'lintian-brush',
-    'fresh-releases': 'merge-upstream',
-    'fresh-snapshots': 'merge-upstream --snapshot',
+    'lintian-fixes': ['lintian-brush'],
+    'fresh-releases': ['merge-upstream'],
+    'fresh-snapshots': ['merge-upstream', '--snapshot'],
     }
 SUITE_TO_POLICY_FIELD = {
     'lintian-fixes': 'lintian_brush',
