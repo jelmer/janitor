@@ -172,7 +172,7 @@ LEFT JOIN package ON package.name = run.package
                    row[9] if row[9] else None, row[10])
 
 
-async def get_maintainer_email(vcs_url):
+async def get_maintainer_email_for_proposal(vcs_url):
     async with get_connection() as conn:
         return await conn.fetchval("""
 SELECT
