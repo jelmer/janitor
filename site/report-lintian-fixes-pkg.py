@@ -5,21 +5,16 @@ import asyncio
 import os
 import sys
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+from janitor.site import env  # noqa: E402
+
 
 parser = argparse.ArgumentParser(prog='report-lintian-fixes-pkg')
 parser.add_argument("directory")
 args = parser.parse_args()
 dir = os.path.abspath(args.directory)
-
-env = Environment(
-    loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml'])
-)
 
 loop = asyncio.get_event_loop()
 

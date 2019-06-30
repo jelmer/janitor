@@ -1,3 +1,5 @@
+PYTHONPATH=..:../lintian-brush:../silver-platter:../breezy
+export PYTHONPATH
 OUTPUT_DIR = ../public_html
 
 all: $(OUTPUT_DIR)/index.html $(OUTPUT_DIR)/contact/index.html $(OUTPUT_DIR)/credentials/index.html $(OUTPUT_DIR)/apt/index.html $(OUTPUT_DIR)/lintian-fixes/index.html $(OUTPUT_DIR)/lintian-fixes/merge-proposals.html $(OUTPUT_DIR)/fresh-releases/merge-proposals.html $(OUTPUT_DIR)/fresh-releases/index.html $(OUTPUT_DIR)/fresh-snapshots/index.html $(OUTPUT_DIR)/cupboard/index.html $(OUTPUT_DIR)/cupboard/history.html $(OUTPUT_DIR)/cupboard/queue.html $(OUTPUT_DIR)/cupboard/result-codes/index.html $(OUTPUT_DIR)/cupboard/pkg
@@ -10,34 +12,34 @@ $(OUTPUT_DIR)/index.html $(OUTPUT_DIR)/cupboard/index.html $(OUTPUT_DIR)/apt/ind
 
 $(OUTPUT_DIR)/lintian-fixes/merge-proposals.html: templates/layout.html templates/merge-proposals.html
 	mkdir -p $(@D)
-	PYTHONPATH=.. python3 report-merge-proposals.py lintian-fixes > $@
+	python3 report-merge-proposals.py lintian-fixes > $@
 
 $(OUTPUT_DIR)/fresh-releases/merge-proposals.html: templates/layout.html templates/merge-proposals.html
 	mkdir -p $(@D)
-	PYTHONPATH=.. python3 report-merge-proposals.py fresh-releases > $@
+	python3 report-merge-proposals.py fresh-releases > $@
 
 $(OUTPUT_DIR)/fresh-releases/index.html: templates/layout.html templates/fresh-releases.html
 	mkdir -p $(@D)
-	PYTHONPATH=.. python3 report-apt-repo.py fresh-releases > $@
+	python3 report-apt-repo.py fresh-releases > $@
 
 $(OUTPUT_DIR)/fresh-snapshots/index.html: templates/layout.html templates/fresh-snapshots.html
 	mkdir -p $(@D)
-	PYTHONPATH=.. python3 report-apt-repo.py fresh-snapshots > $@
+	python3 report-apt-repo.py fresh-snapshots > $@
 
 $(OUTPUT_DIR)/cupboard/history.html: templates/layout.html templates/history.html
 	mkdir -p $(@D)
-	PYTHONPATH=.. python3 report-history.py > $@
+	python3 report-history.py > $@
 
 $(OUTPUT_DIR)/cupboard/queue.html: templates/layout.html templates/queue.html
 	mkdir -p $(@D)
-	PYTHONPATH=.. python3 report-queue.py > $@
+	python3 report-queue.py > $@
 
 $(OUTPUT_DIR)/cupboard/result-codes/index.html: templates/layout.html templates/result-code-index.html
 	mkdir -p $(@D)
-	PYTHONPATH=.. python3 report-result-codes.py $(@D)
+	python3 report-result-codes.py $(@D)
 
 $(OUTPUT_DIR)/cupboard/pkg:
 	mkdir -p $@
-	PYTHONPATH=..:../silver-platter python3 report-pkg.py $(abspath pkg) $@
+	python3 report-pkg.py $(abspath pkg) $@
 
 .PHONY: all $(OUTPUT_DIR)/cupboard/pkg

@@ -20,11 +20,10 @@ import asyncio
 import os
 import sys
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+from janitor.site import env  # noqa: E402
 
 parser = argparse.ArgumentParser('report-queue')
 parser.add_argument(
@@ -57,7 +56,7 @@ async def get_queue():
                 expecting = 'expecting to fix: ' + ', '.join([
                     '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' %
                     (tag, tag) for tag in env['CONTEXT'].split(' ')])
-        else:
+        else
             raise AssertionError('invalid command %s' % command)
         if args.command is not None:
             description = expecting
@@ -68,9 +67,8 @@ async def get_queue():
     return data
 
 
-env = Environment(
-    loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml'])
-)
-template = env.get_template('queue.html')
-sys.stdout.write(template.render(queue=loop.run_until_complete(get_queue())))
+async def write_queue():
+    template = env.get_template('queue.html')
+    sys.stdout.write(await template.render_async(queue=await get_queue()))
+
+loop.run_until_complete(write_queue())

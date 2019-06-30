@@ -6,17 +6,11 @@ import os
 import sys
 
 from debian.changelog import Version
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state, udd  # noqa: E402
-
-env = Environment(
-    loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml'])
-)
-
+from janitor.site import env  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-apt-repo')
 parser.add_argument("suite")
@@ -50,7 +44,10 @@ async def gather_package_list():
     return ret
 
 
-template = env.get_template(args.suite + '.html')
+async def write_apt_repo(suite):
+    template = env.get_template(suite + '.html')
+    sys.stdout.write(
+        await template.render_async(packages=await gather_package_list()))
+
 loop = asyncio.get_event_loop()
-sys.stdout.write(
-    template.render(packages=loop.run_until_complete(gather_package_list())))
+loop.run_until_complete(write_apt_repo(args.suite))
