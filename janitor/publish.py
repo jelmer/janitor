@@ -291,11 +291,10 @@ class LintianBrushPublisher(object):
             existing_lines + [l['summary'] for l in self.applied])
 
     def get_proposal_commit_message(self, existing_commit_message):
-        fixed_tags = set()
+        applied = []
         for result in self.applied:
-            fixed_tags.update(result['fixed_lintian_tags'])
-        return update_proposal_commit_message(
-            existing_commit_message, fixed_tags)
+            applied.append((result['fixed_lintian_tags'], result['summary']))
+        return update_proposal_commit_message(existing_commit_message, applied)
 
     def read_worker_result(self, result):
         self.applied = result['applied']
@@ -481,7 +480,8 @@ def main(argv=None):
 
     publisher = Publisher(args.max_mps_per_maintainer)
 
-    asyncio.run_until_complete(publish_pending(
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(publish_pending(
         publisher, policy, dry_run=args.dry_run,
         vcs_directory=args.vcs_result_dir))
 
