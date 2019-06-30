@@ -56,7 +56,7 @@ async def get_queue():
                 expecting = 'expecting to fix: ' + ', '.join([
                     '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' %
                     (tag, tag) for tag in env['CONTEXT'].split(' ')])
-        else
+        else:
             raise AssertionError('invalid command %s' % command)
         if args.command is not None:
             description = expecting
