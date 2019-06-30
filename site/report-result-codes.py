@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
+from janitor.site import env  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='report-result-codes')
 parser.add_argument(
@@ -18,12 +19,6 @@ parser.add_argument(
 args = parser.parse_args()
 
 loop = asyncio.get_event_loop()
-
-env = Environment(
-    loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml']),
-    enable_async=True,
-)
 
 by_code = {}
 

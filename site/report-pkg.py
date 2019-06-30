@@ -6,8 +6,6 @@ from debian.deb822 import Changes
 import os
 import sys
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
-
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
@@ -25,18 +23,12 @@ from janitor.sbuild_log import (
 from janitor.site import (
     format_duration,
 )  # noqa: E402
+from janitor.site import env  # noqa: E402
 from janitor.trace import note, warning  # noqa: E402
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
 )  # noqa: E402
-
-env = Environment(
-    loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml']),
-    enable_async=True,
-)
-
 
 FAIL_BUILD_LOG_LEN = 15
 

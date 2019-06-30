@@ -16,5 +16,15 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+
 def format_duration(duration):
     return '%dm%02ds' % (duration.seconds / 60, duration.seconds % 60)
+
+
+env = Environment(
+    loader=FileSystemLoader('templates'),
+    autoescape=select_autoescape(['html', 'xml']),
+    enable_async=True,
+)

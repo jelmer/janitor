@@ -1,19 +1,13 @@
 #!/usr/bin/python3
 
 import os
-
 import argparse
-from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-env = Environment(
-    loader=FileSystemLoader('templates'),
-    autoescape=select_autoescape(['html', 'xml'])
-)
+from janitor.site import env  # noqa: E402
 
 parser = argparse.ArgumentParser(prog='generate')
 parser.add_argument("directory")
 args = parser.parse_args()
-
 
 simple_render = {
     'index.html': 'index.html',
