@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, PackageLoader, select_autoescape
 
 
 def format_duration(duration):
@@ -24,7 +24,7 @@ def format_duration(duration):
 
 
 env = Environment(
-    loader=FileSystemLoader('templates'),
+    loader=PackageLoader('janitor.site', 'templates'),
     autoescape=select_autoescape(['html', 'xml']),
     enable_async=True,
 )

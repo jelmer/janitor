@@ -1,45 +1,31 @@
 #!/usr/bin/python3
 
-import argparse
-import asyncio
 from debian.deb822 import Changes
 import os
-import sys
 
-sys.path.insert(0, os.path.dirname(__file__))
-
-from janitor import state  # noqa: E402
+from janitor import state
 from janitor.build import (
     changes_filename,
     get_build_architecture,
-)  # noqa: E402
+)
 from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
     find_build_failure_description,
     SBUILD_FOCUS_SECTION,
     strip_useless_build_tail,
-)  # noqa: E402
+)
 from janitor.site import (
     format_duration,
-)  # noqa: E402
-from janitor.site import env  # noqa: E402
-from janitor.trace import note, warning  # noqa: E402
+)
+from janitor.site import env
+from janitor.trace import note, warning
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
-)  # noqa: E402
+)
 
 FAIL_BUILD_LOG_LEN = 15
-
-parser = argparse.ArgumentParser(prog='report-pkg')
-parser.add_argument("logdirectory")
-parser.add_argument("directory")
-args = parser.parse_args()
-dir = args.directory
-
-loop = asyncio.get_event_loop()
-
 
 def changes_get_binaries(changes_path):
     with open(changes_path, "r") as cf:
@@ -91,11 +77,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-if not os.path.isdir(dir):
-    os.mkdir(dir)
-
-
-async def write_run_file(run_id, times, command, description,
+async def write_run_file(logdirectory, dir, run_id, times, command, description,
             package_name, merge_proposal_url, build_version,
             build_distro, result_code, branch_name):
     (start_time, finish_time) = times
@@ -151,7 +133,7 @@ async def write_run_file(run_id, times, command, description,
 
     build_log_name = 'build.log'
     worker_log_name = 'worker.log'
-    log_directory = os.path.join(args.logdirectory, package_name, run_id)
+    log_directory = os.path.join(logdirectory, package_name, run_id)
     build_log_path = os.path.join(log_directory, build_log_name)
     if os.path.exists(build_log_path):
         if not os.path.exists(os.path.join(run_dir, build_log_name)):
@@ -188,28 +170,20 @@ async def write_run_file(run_id, times, command, description,
     note('Wrote %s', run_dir)
 
 
-async def write_run_files():
+async def write_run_files(logdirectory, dir):
     runs_by_pkg = {}
 
     jobs = []
     async for run in state.iter_runs():
         package_name = run[4]
-        jobs.append(write_run_file(*run))
+        jobs.append(write_run_file(logdirectory, dir, *run))
         runs_by_pkg.setdefault(package_name, []).append(run)
     await asyncio.gather(*jobs)
 
     return runs_by_pkg
 
 
-runs_by_pkg = loop.run_until_complete(write_run_files())
-
-
-merge_proposals = {}
-for package, url, status in loop.run_until_complete(state.iter_proposals()):
-    merge_proposals.setdefault(package, []).append((url, status))
-
-
-async def write_pkg_file(name, merge_proposals, maintainer_email, branch_url,
+async def write_pkg_file(dir, name, merge_proposals, maintainer_email, branch_url,
                          runs):
     pkg_dir = os.path.join(dir, name)
     if not os.path.isdir(pkg_dir):
@@ -228,22 +202,40 @@ async def write_pkg_file(name, merge_proposals, maintainer_email, branch_url,
         f.write(await template.render_async(**kwargs))
 
 
-async def write_pkg_files():
+async def write_pkg_files(dir):
+    merge_proposals = {}
+    for package, url, status in await state.iter_proposals():
+        merge_proposals.setdefault(package, []).append((url, status))
+
     jobs = []
     packages = []
     for (name, maintainer_email, branch_url) in await state.iter_packages():
         packages.append(name)
         jobs.append(write_pkg_file(
-            name, merge_proposals.get(name, []),
+            dir, name, merge_proposals.get(name, []),
             maintainer_email, branch_url, runs_by_pkg.get(name, [])))
 
     await asyncio.gather(*jobs)
 
     return packages
 
-packages = loop.run_until_complete(write_pkg_files())
+
+async def write_pkg_list(dir, packages):
+    with open(os.path.join(dir, 'index.html'), 'w') as f:
+        template = env.get_template('package-name-list.html')
+        f.write(await template.render_async(packages=packages))
 
 
-with open(os.path.join(dir, 'index.html'), 'w') as f:
-    template = env.get_template('package-name-list.html')
-    f.write(template.render(packages=packages))
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+    parser = argparse.ArgumentParser(prog='report-pkg')
+    parser.add_argument("logdirectory")
+    parser.add_argument("directory")
+    args = parser.parse_args()
+    if not os.path.isdir(args.directory):
+        os.mkdir(args.directory)
+    loop = asyncio.get_event_loop()
+    runs_by_pkg = loop.run_until_complete(write_run_files(args.logdirectory, args.directory))
+    packages = loop.run_until_complete(write_pkg_files(args.directory))
+    loop.run_until_complete(write_pkg_list(args.directory, packages))

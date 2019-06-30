@@ -20,20 +20,21 @@ from debian.changelog import Version
 import json
 import shlex
 import asyncpg
-import asyncio
 
-loop = asyncio.get_event_loop()
-pool = loop.run_until_complete(asyncpg.create_pool(
-    database="janitor",
-    user="janitor",
-    port=5432,
-    host="brangwain.vpn.jelmer.uk"))
-
+pool = None
 
 from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def get_connection():
+    global pool
+    if pool is None:
+        pool = await asyncpg.create_pool(
+            database="janitor",
+            user="janitor",
+            port=5432,
+            host="brangwain.vpn.jelmer.uk")
+
     async with pool.acquire() as conn:
         await conn.set_type_codec(
                     'json',
