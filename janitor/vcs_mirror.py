@@ -69,7 +69,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
             'ordered_by': 'updated_at',
             'visibility': 'public',
             }
-    path = '/projects?' + ';'.join(['%s=%s' % item for item in parameters.items()])
+    path = 'projects?' + ';'.join(['%s=%s' % item for item in parameters.items()])
     for project in salsa._api_request('GET', path):
         if (datetime.now() -
                 datetime.fromisoformat(project['last_activity_at'][:-1])
@@ -79,7 +79,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
                 project['http_url_to_repo'], {}).items():
             if branch_name is None:
                 branch_name = project['default_branch']
-            branch_path = '/projects/:%s/repository/branches/:%s' % (
+            branch_path = 'projects/%s/repository/branches/%s' % (
                 project['id'], urlutils.quote(branch_name))
             branch = salsa._api_request('GET', branch_path)
             commit_id = branch['commit']['id']
