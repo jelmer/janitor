@@ -400,6 +400,10 @@ async def process_queue(
     loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
     try:
         while True:
+            if not todo:
+                note('Nothing to do. Sleeping for 60s.')
+                await asyncio.sleep(60)
+                continue
             done, pending = await asyncio.wait(
                 todo, return_when='FIRST_COMPLETED')
             for task in done:
