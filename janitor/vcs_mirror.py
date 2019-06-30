@@ -34,7 +34,7 @@ from prometheus_client import (
     push_to_gateway,
     )
 
-from breezy.plugins.propose.gitlabs import connect_gitlab
+from breezy.plugins.propose.gitlabs import GitLab
 
 from . import state
 from .vcs import (
@@ -63,30 +63,35 @@ async def update_gitlab_branches(vcs_result_dir, host):
             package_per_repo[url] = name
 
     possible_transports = []
-    salsa = connect_gitlab(host)
-    for project in salsa.projects.list(
-            order_by='updated_at', archived=False, visibility='public',
-            as_list=False):
+    salsa = GitLab.probe_from_url('https://%s' % host, possible_transports=possible_transports)
+    parameters = {
+            'simple': True,
+            'ordered_by': 'updated_at',
+            'visibility': 'public',
+            }
+    path = '/projects?' + ';'.join(['%s=%s' % item for item in parameters.items()])
+    for project in salsa._api_request('GET', path):
         if (datetime.now() -
-                datetime.fromisoformat(project.last_activity_at[:-1])
+                datetime.fromisoformat(project['last_activity_at'][:-1])
                 > timedelta(days=5)):
             break
         for branch_name, last_revision in branches_per_repo.get(
-                project.http_url_to_repo, {}).items():
+                project['http_url_to_repo'], {}).items():
             if branch_name is None:
-                branch = project.branches.get(project.default_branch)
-            else:
-                branch = project.branches.get(branch_name)
-            commit_id = branch.commit['id']
+                branch_name = project['default_branch']
+            branch_path = '/projects/:%s/repository/branches/:%s' % (
+                project['id'], urlutils.quote(branch_name))
+            branch = salsa._api_request('GET', branch_path)
+            commit_id = branch['commit']['id']
             revision = 'git-v1:%s' % commit_id
             if revision == last_revision:
                 continue
             if branch_name:
-                url = '%s,branch=%s' % (project.http_url_to_repo, branch_name)
+                url = '%s,branch=%s' % (project['http_url_to_repo'], branch_name)
             else:
-                url = project.http_url_to_repo
+                url = project['http_url_to_repo']
             note('Updating %s (last activity: %s)', url,
-                 project.last_activity_at)
+                 project['last_activity_at'])
             suite = 'master'
             try:
                 branch = open_branch_ext(
@@ -99,7 +104,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
                 try:
                     mirror_branches(
                         vcs_result_dir,
-                        package_per_repo[project.http_url_to_repo],
+                        package_per_repo[project['http_url_to_repo']],
                         [(suite, branch)], public_master_branch=branch)
                 except MirrorFailure as e:
                     # For now, just ignore
@@ -110,7 +115,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
                     revision=revision.encode('utf-8'))
 
 
-def main(argv=None):
+async def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.vcs_mirror')
     parser.add_argument(
@@ -130,20 +135,16 @@ def main(argv=None):
     global_config = GlobalStack()
     global_config.set('branch.fetch_tags', True)
 
-    loop = asyncio.get_event_loop()
-
     prefetch_hosts = []
     # Unfortunately the project activity branch is very slow :(
     # prefetch_hosts = ['salsa.debian.org']
     for host in prefetch_hosts:
-        loop.run_until_complete(
-            update_gitlab_branches(args.vcs_result_dir, host))
+        await update_gitlab_branches(args.vcs_result_dir, host)
 
-    unscanned_branches = state.iter_unscanned_branches(
+    unscanned_branches = await state.iter_unscanned_branches(
             last_scanned_minimum=timedelta(days=7))
 
     possible_transports = []
-
     for i, (package, suite, branch_url, last_scanned) in enumerate(
             unscanned_branches):
         note('[%d/%s] Processing %s', i, len(unscanned_branches), package)
@@ -156,7 +157,7 @@ def main(argv=None):
             branch = open_branch_ext(
                 branch_url, possible_transports=possible_transports)
         except BranchOpenFailure as e:
-            state.update_branch_status(
+            await state.update_branch_status(
                 branch_url, last_scanned=datetime.now(), status=e.code,
                 revision=None, description=e.description)
         else:
@@ -167,12 +168,12 @@ def main(argv=None):
             except MirrorFailure as e:
                 # For now, just ignore
                 note('Failed to mirror %s: %s', e.branch_name, e.reason)
-            state.update_branch_status(
+            await state.update_branch_status(
                 branch_url, last_scanned=datetime.now(), status='success',
                 revision=branch.last_revision())
         if args.delay:
             note('Sleeping for %d seconds', args.delay)
-            time.sleep(args.delay)
+            await asyncio.sleep(args.delay)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
@@ -182,4 +183,5 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    loop = asyncio.get_event_loop()
+    sys.exit(loop.run_until_complete(main(sys.argv)))

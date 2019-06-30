@@ -279,7 +279,7 @@ def determine_tags(package, command, mode, previous_runs, context=None,
 
 
 async def add_to_queue(todo, dry_run=False, default_priority=0):
-    async for vcs_url, mode, env, command, priority in todo:
+    for vcs_url, mode, env, command, priority in todo:
         package = env['PACKAGE']
         previous_runs = list(await state.iter_previous_runs(package, command))
         tags = determine_tags(
