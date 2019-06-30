@@ -3,6 +3,7 @@
 import argparse
 from aiohttp import web
 import json
+import os
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 from janitor.policy import read_policy, apply_policy
@@ -24,15 +25,20 @@ SUITE_TO_POLICY_FIELD = {
 async def handle_policy(request):
     package = request.match_info['package']
     try:
-        (name, maintainer_email, vcs_url) = next(await state.iter_packages(package=package))
-    except StopIteration:
+        (name, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
+    except IndexError:
         raise web.HTTPNotFound(
             text=json.dumps({'reason': 'Package not found'}),
             content_type='application/json')
     suite_policies = {}
     # TODO(jelmer): Package uploaders?
     for suite, field in SUITE_TO_POLICY_FIELD.items():
-        suite_policies[suite] = apply_policy(policy_config, field, name, maintainer_email, [])
+        (publish_policy, changelog_policy, committer) = apply_policy(
+            policy_config, field, name, maintainer_email, [])
+        suite_policies[suite] = {
+            'publish_policy': publish_policy,
+            'changelog_policy': changelog_policy,
+            'committer': committer}
     response_obj = {'by_suite': suite_policies}
     return web.Response(
         text=json.dumps(response_obj), content_type='application/json')
@@ -50,10 +56,11 @@ async def handle_schedule(request):
     package = request.match_info['package']
     suite = request.match_info['suite']
     command = SUITE_TO_COMMAND[suite]
-    priority = request.query.get('priority', DEFAULT_SCHEDULE_PRIORITY)
+    post = await request.post()
+    priority = post.get('priority', DEFAULT_SCHEDULE_PRIORITY)
     try:
-        (name, maintainer_email, vcs_url) = next(await state.iter_packages(package=package))
-    except StopIteration:
+        (name, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
+    except IndexError:
         raise web.HTTPNotFound(
             text=json.dumps({'reason': 'Package not found'}),
             content_type='application/json')
@@ -102,8 +109,10 @@ async def handle_merge_proposal_list(request):
 
 async def handle_queue(request):
     limit = request.query.get('limit')
+    if limit is not None:
+        limit = int(limit)
     response_obj = []
-    for (queue_id, branch_url, env, command) in await state.iter_queue(
+    async for (queue_id, branch_url, env, command) in state.iter_queue(
             limit=limit):
         response_obj.append({
             'queue_id': queue_id,
@@ -119,10 +128,12 @@ async def handle_run(request):
     package = request.match_info.get('package')
     run_id = request.match_info.get('run_id')
     limit = request.query.get('limit')
+    if limit is not None:
+        limit = int(limit)
     response_obj = []
-    for (run_id, (start_time, finish_time), command, description,
+    async for (run_id, (start_time, finish_time), command, description,
          package_name, merge_proposal_url, build_version, build_distribution,
-         result_code, branch_name) in await state.iter_runs(
+         result_code, branch_name) in state.iter_runs(
                  package, run_id=run_id, limit=limit):
         if build_version:
             build_info = {
@@ -199,8 +210,8 @@ app.router.add_get(
     '/pkg/{package}/merge-proposals',
     handle_merge_proposal_list)
 app.router.add_get('/pkg/{package}/policy', handle_policy)
-app.router.add_get('/pkg/{package}/publish', handle_publish)
-app.router.add_get('/pkg/{package}/schedule/{suite}', handle_schedule)
+app.router.add_post('/pkg/{package}/publish', handle_publish)
+app.router.add_post('/pkg/{package}/schedule/{suite}', handle_schedule)
 app.router.add_get('/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/queue', handle_queue)
 app.router.add_get('/run', handle_run)
@@ -226,6 +237,6 @@ parser.add_argument("--policy",
 args = parser.parse_args()
 
 with open(args.policy, 'r') as f:
-    policy_config = read_policy()
+    policy_config = read_policy(f)
 
 web.run_app(app, host=args.host)
