@@ -28,6 +28,7 @@ import uuid
 
 from debian.deb822 import Changes
 
+from breezy import debug
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -484,6 +485,8 @@ def main(argv=None):
         help='Use cached branches only.')
 
     args = parser.parse_args()
+
+    debug.set_debug_flags_from_config()
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
