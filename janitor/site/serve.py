@@ -112,7 +112,7 @@ if __name__ == '__main__':
         ('/contact', 'contact.html'),
         ('/credentials', 'credentials.html'),
         ('/apt', 'apt.html'),
-        ('/cupboard', 'cupboard.html')]:
+        ('/cupboard/', 'cupboard.html')]:
         app.router.add_get(path, functools.partial(handle_simple, templatename))
     app.router.add_get('/lintian-fixes/', handle_lintian_fixes)
     for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
