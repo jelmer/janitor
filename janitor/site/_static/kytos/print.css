@@ -1,0 +1,85 @@
+* {
+    background-color: white !important;
+    color: black !important;
+}
+
+body {
+  counter-reset: chapter;
+}
+
+p {
+    font-size: 1.2em;
+    margin-bottom: 1em;
+
+}
+
+aside {
+    margin-bottom: 20px !important;
+    padding-bottom: 0px !important;
+}
+
+.related, #searchbox * {
+    display: none;
+}
+
+.features-content h1 {
+    font-size: 1em !important;
+}
+
+h1 {
+    text-align: center;
+    font-size: 1.6em;
+    margin-bottom: 40px;
+    margin-top: 0px;
+}
+
+h2 {
+    text-align: left;
+    font-size: 1.5em;
+    margin-bottom: 40px;
+    border-bottom: 1px black solid;
+}
+
+h2:before {
+    content: counter(chapter) ". ";
+    counter-increment: chapter 1;
+}
+
+h3 { font-size: 1.3em !important; }
+
+h3:before {
+    content: counter(chapter) "." counter(section) ". ";
+    counter-increment: section 1;
+}
+
+h4 { font-size: 1.2em; }
+
+div.body > .section > .compound > .section {
+    page-break-before: always;
+    counter-reset: section;
+}
+
+table.docutils th,
+table.docutils td {
+    border: 1px solid black;
+}
+
+th {
+    font-weight: bold;
+}
+
+.highlight { 
+padding: 1px !important;
+border: 1px solid black;
+}
+
+.highlight pre { 
+padding: 10px !important;
+}
+
+footer,
+.sidebar-header,
+.prev-next-nav,
+.back-to-top {
+    display: none !important;
+}
