@@ -16,10 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-
 if __name__ == '__main__':
     import argparse
     import functools
+    import os
     from aiohttp import web
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
@@ -117,6 +117,7 @@ if __name__ == '__main__':
     app.router.add_get('/pkg/', handle_pkg_list)
     app.router.add_get('/pkg/{pkg}/', handle_pkg)
     app.router.add_get('/pkg/{pkg}/{run_id}/', handle_run)
+    app.router.add_static('/_static', os.path.join(os.path.dirname(__file__), '_static'))
     from janitor.api import app as api_app
     app.add_subapp('/api', api_app)
     web.run_app(app, host=args.host)
