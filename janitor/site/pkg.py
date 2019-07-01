@@ -135,7 +135,7 @@ async def generate_run_file(logdirectory, run_id, times, command, description,
     build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
     if os.path.exists(build_log_path):
         kwargs['build_log_name'] = BUILD_LOG_NAME
-        Kwargs['build_log_path'] = build_log_path
+        kwargs['build_log_path'] = build_log_path
         kwargs['earlier_build_log_names'] = []
         i = 1
         while os.path.exists(os.path.join(
@@ -156,7 +156,7 @@ async def generate_run_file(logdirectory, run_id, times, command, description,
     worker_log_path = os.path.join(log_directory, WORKER_LOG_NAME)
     if os.path.exists(worker_log_path):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
-        Kwargs['worker_log_path'] = worker_log_path
+        kwargs['worker_log_path'] = worker_log_path
 
     template = env.get_template('run.html')
     text = await template.render_async(**kwargs)
