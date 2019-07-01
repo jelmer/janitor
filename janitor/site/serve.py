@@ -96,6 +96,15 @@ if __name__ == '__main__':
         text = await generate_run_file(args.logdirectory, *run)
         return web.Response(content_type='text/html', text=text)
 
+    async def handle_log(request):
+        pkg = request.match_info['pkg']
+        run_id = request.match_info['run_id']
+        filename = request.match_info['log']
+        with open(os.path.join(args.logdirectory, pkg, run_id, filename), 'r') as f:
+            text = f.read()
+        return web.Response(content_type='text/plain', text=text)
+
+
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
@@ -117,6 +126,7 @@ if __name__ == '__main__':
     app.router.add_get('/pkg/', handle_pkg_list)
     app.router.add_get('/pkg/{pkg}/', handle_pkg)
     app.router.add_get('/pkg/{pkg}/{run_id}/', handle_run)
+    app.router.add_get('/pkg/{pkg}/{run_id}/{log:.*\\.log}', handle_log)
     app.router.add_static('/_static', os.path.join(os.path.dirname(__file__), '_static'))
     from janitor.api import app as api_app
     app.add_subapp('/api', api_app)
