@@ -117,8 +117,8 @@ if __name__ == '__main__':
     app.router.add_get('/lintian-fixes/', handle_lintian_fixes)
     for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
         app.router.add_get('/%s/merge-proposals' % suite, functools.partial(handle_merge_proposals, suite))
-    for suite in ['fresh-releases/', 'fresh-snapshots/']:
-        app.router.add_get('/%s' % suite, functools.partial(handle_apt_repo, suite))
+    for suite in ['fresh-releases', 'fresh-snapshots']:
+        app.router.add_get('/%s/' % suite, functools.partial(handle_apt_repo, suite))
     app.router.add_get('/cupboard/history', handle_history)
     app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
