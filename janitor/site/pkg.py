@@ -27,6 +27,10 @@ from janitor.vcs import (
 
 FAIL_BUILD_LOG_LEN = 15
 
+BUILD_LOG_NAME = 'build.log'
+WORKER_LOG_NAME = 'worker.log'
+
+
 def changes_get_binaries(changes_path):
     with open(changes_path, "r") as cf:
         changes = Changes(cf)
@@ -77,14 +81,10 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def write_run_file(logdirectory, dir, run_id, times, command, description,
-            package_name, merge_proposal_url, build_version,
-            build_distro, result_code, branch_name):
+async def generate_run_file(logdirectory, run_id, times, command, description,
+        package_name, merge_proposal_url, build_version,
+        build_distro, result_code, branch_name):
     (start_time, finish_time) = times
-
-    run_dir = os.path.join(dir, package_name, run_id)
-    os.makedirs(run_dir, exist_ok=True)
-
     kwargs = {}
     kwargs['run_id'] = run_id
     kwargs['kind'] = command.split(' ')[0]
@@ -131,20 +131,16 @@ async def write_run_file(logdirectory, dir, run_id, times, command, description,
             for binary in changes_get_binaries(changes_path):
                 kwargs['binary_packages'].append(binary)
 
-    build_log_name = 'build.log'
-    worker_log_name = 'worker.log'
     log_directory = os.path.join(logdirectory, package_name, run_id)
-    build_log_path = os.path.join(log_directory, build_log_name)
+    build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
     if os.path.exists(build_log_path):
-        if not os.path.exists(os.path.join(run_dir, build_log_name)):
-            os.symlink(build_log_path, os.path.join(run_dir, build_log_name))
-        kwargs['build_log_name'] = build_log_name
-        kwargs['build_log_path'] = build_log_path
+        kwargs['build_log_name'] = BUILD_LOG_NAME
+        Kwargs['build_log_path'] = build_log_path
         kwargs['earlier_build_log_names'] = []
         i = 1
         while os.path.exists(os.path.join(
-                log_directory, build_log_name + '.%d' % i)):
-            log_name = '%s.%d' % (build_log_name, i)
+                log_directory, BUILD_LOG_NAME + '.%d' % i)):
+            log_name = '%s.%d' % (BUILD_LOG_NAME, i)
             kwargs['earlier_build_log_names'].append((i, log_name))
             if not os.path.exists(os.path.join(run_dir, log_name)):
                 os.symlink(os.path.join(log_directory, log_name),
@@ -157,16 +153,35 @@ async def write_run_file(logdirectory, dir, run_id, times, command, description,
         kwargs['build_log_include_lines'] = include_lines
         kwargs['build_log_highlight_lines'] = highlight_lines
 
-    worker_log_path = os.path.join(log_directory, worker_log_name)
+    worker_log_path = os.path.join(log_directory, WORKER_LOG_NAME)
     if os.path.exists(worker_log_path):
-        if not os.path.exists(os.path.join(run_dir, worker_log_name)):
-            os.symlink(worker_log_path, os.path.join(run_dir, worker_log_name))
-        kwargs['worker_log_name'] = worker_log_name
-        kwargs['worker_log_path'] = worker_log_path
+        kwargs['worker_log_name'] = WORKER_LOG_NAME
+        Kwargs['worker_log_path'] = worker_log_path
+
+    template = env.get_template('run.html')
+    text = await template.render_async(**kwargs)
+    return text
+
+
+async def write_run_file(logdirectory, dir, run_id, times, command, description,
+            package_name, merge_proposal_url, build_version,
+            build_distro, result_code, branch_name):
+    run_dir = os.path.join(dir, package_name, run_id)
+    os.makedirs(run_dir, exist_ok=True)
+
+    log_directory = os.path.join(logdirectory, package_name, run_id)
+    build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
+    if not os.path.exists(os.path.join(run_dir, BUILD_LOG_NAME)) and os.path.exists(build_log_path):
+        os.symlink(build_log_path, os.path.join(run_dir, BUILD_LOG_NAME))
+
+    worker_log_path = os.path.join(log_directory, WORKER_LOG_NAME)
+    if not os.path.exists(os.path.join(run_dir, WORKER_LOG_NAME)) and os.path.exists(worker_log_path):
+        os.symlink(worker_log_path, os.path.join(run_dir, WORKER_LOG_NAME))
 
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
-        template = env.get_template('run.html')
-        f.write(await template.render_async(**kwargs))
+        f.write(await generate_run_file(logdirectory, run_id, times, command, description,
+            package_name, merge_proposal_url, build_version, build_distro,
+            result_code, branch_name))
     note('Wrote %s', run_dir)
 
 
@@ -183,12 +198,7 @@ async def write_run_files(logdirectory, dir):
     return runs_by_pkg
 
 
-async def write_pkg_file(dir, name, merge_proposals, maintainer_email, branch_url,
-                         runs):
-    pkg_dir = os.path.join(dir, name)
-    if not os.path.isdir(pkg_dir):
-        os.mkdir(pkg_dir)
-
+async def generate_pkg_file(name, merge_proposals, maintainer_email, branch_url, runs):
     kwargs = {}
     kwargs['package'] = name
     kwargs['maintainer_email'] = maintainer_email
@@ -196,10 +206,18 @@ async def write_pkg_file(dir, name, merge_proposals, maintainer_email, branch_ur
     kwargs['merge_proposals'] = merge_proposals
     kwargs['builds'] = [run for run in runs if run[6]]
     kwargs['runs'] = runs
+    template = env.get_template('package-overview.html')
+    return await template.render_async(**kwargs)
+
+
+async def write_pkg_file(dir, name, merge_proposals, maintainer_email, branch_url,
+                         runs):
+    pkg_dir = os.path.join(dir, name)
+    if not os.path.isdir(pkg_dir):
+        os.mkdir(pkg_dir)
 
     with open(os.path.join(pkg_dir, 'index.html'), 'w') as f:
-        template = env.get_template('package-overview.html')
-        f.write(await template.render_async(**kwargs))
+        f.write(await generate_pkg_file(name, merge_proposals, maintainer_email, branch_url, runs))
 
 
 async def write_pkg_files(dir):
@@ -220,10 +238,14 @@ async def write_pkg_files(dir):
     return packages
 
 
+async def generate_pkg_list(packages):
+    template = env.get_template('package-name-list.html')
+    return await template.render_async(packages=packages)
+
+
 async def write_pkg_list(dir, packages):
     with open(os.path.join(dir, 'index.html'), 'w') as f:
-        template = env.get_template('package-name-list.html')
-        f.write(await template.render_async(packages=packages))
+        f.write(await generate_pkg_list(packages))
 
 
 if __name__ == '__main__':

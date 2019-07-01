@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 import os
-import argparse
 
 from janitor.site import env
 
@@ -14,27 +13,30 @@ simple_render = {
     }
 
 
-async def render_simple(src, dest, directory):
+async def render_simple(src):
     template = env.get_template(src)
-    os.makedirs(
-        os.path.join(directory, os.path.dirname(dest)), exist_ok=True)
-    with open(os.path.join(directory, dest), 'w') as f:
-        f.write(await template.render_async())
+    return await template.render_async()
 
 
-async def render_lintian_fixes(directory):
+async def render_lintian_fixes():
     template = env.get_template('lintian-fixes-start.html')
-    lintian_fixes_dir = os.path.join(directory, 'lintian-fixes')
-    os.makedirs(lintian_fixes_dir, exist_ok=True)
-    with open(os.path.join(lintian_fixes_dir, 'index.html'), 'w') as f:
-        import lintian_brush
-        f.write(await template.render_async({'lintian_brush': lintian_brush}))
+    import lintian_brush
+    return await template.render_async({'lintian_brush': lintian_brush})
 
 
 if __name__ == '__main__':
+    import argparse
+    import asyncio
     parser = argparse.ArgumentParser(prog='generate')
     parser.add_argument("directory")
     args = parser.parse_args()
+    loop = asyncio.get_event_loop()
     for dest, src in simple_render.items():
-        loop.run_until_complete(render_simple(src, dest, args.directory))
-    loop.run_until_complete(render_lintian_fixes(args.directory))
+        os.makedirs(
+            os.path.join(args.directory, os.path.dirname(dest)), exist_ok=True)
+        with open(os.path.join(args.directory, dest), 'w') as f:
+            f.write(loop.run_until_complete(render_simple(src)))
+    lintian_fixes_dir = os.path.join(args.directory, 'lintian-fixes')
+    os.makedirs(lintian_fixes_dir, exist_ok=True)
+    with open(os.path.join(lintian_fixes_dir, 'index.html'), 'w') as f:
+        f.write(loop.run_until_complete(render_lintian_fixes()))

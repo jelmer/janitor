@@ -229,14 +229,16 @@ app.router.add_get('/policy', handle_global_policy)
 # TODO(jelmer): Build failures (iter_build_failures)
 # TODO(jelmer): Publish ready (iter_publish_ready)
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--host', type=str, help='Host to listen on')
-parser.add_argument("--policy",
-                    help="Policy file to read.", type=str,
-                    default=os.path.join(os.path.dirname(__file__), '..', 'policy.conf'))
-args = parser.parse_args()
 
-with open(args.policy, 'r') as f:
-    policy_config = read_policy(f)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--host', type=str, help='Host to listen on')
+    parser.add_argument("--policy",
+                        help="Policy file to read.", type=str,
+                        default=os.path.join(os.path.dirname(__file__), '..', 'policy.conf'))
+    args = parser.parse_args()
 
-web.run_app(app, host=args.host)
+    with open(args.policy, 'r') as f:
+        policy_config = read_policy(f)
+
+    web.run_app(app, host=args.host)

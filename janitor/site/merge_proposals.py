@@ -6,10 +6,10 @@ import os
 from janitor import state
 from janitor.site import env
 
-async def write_merge_proposals():
+async def write_merge_proposals(name):
     proposals_by_status = {}
     for url, status, package in await state.iter_all_proposals(
-            branch_name=args.name):
+            branch_name=name):
         proposals_by_status.setdefault(status, []).append(url)
 
     template = env.get_template('merge-proposals.html')
@@ -26,4 +26,4 @@ if __name__ == '__main__':
     parser.add_argument('name', nargs='?', type=str, default=None)
     args = parser.parse_args()
     loop = asyncio.get_event_loop()
-    sys.stdout.write(loop.run_until_complete(write_merge_proposals()))
+    sys.stdout.write(loop.run_until_complete(write_merge_proposals(args.name)))
