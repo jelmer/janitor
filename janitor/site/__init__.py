@@ -28,3 +28,4 @@ env = Environment(
     autoescape=select_autoescape(['html', 'xml']),
     enable_async=True,
 )
+

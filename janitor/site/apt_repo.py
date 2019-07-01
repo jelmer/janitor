@@ -21,9 +21,9 @@ async def get_unstable_versions(present):
     return unstable
 
 
-async def gather_package_list():
+async def gather_package_list(suite):
     present = {}
-    for source, version in await state.iter_published_packages(args.suite):
+    for source, version in await state.iter_published_packages(suite):
         present[source] = Version(version)
 
     unstable = await get_unstable_versions(present)
@@ -40,7 +40,7 @@ async def gather_package_list():
 
 async def write_apt_repo(suite):
     template = env.get_template(suite + '.html')
-    return await template.render_async(packages=await gather_package_list())
+    return await template.render_async(packages=await gather_package_list(suite))
 
 
 if __name__ == '__main__':

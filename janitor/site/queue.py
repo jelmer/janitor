@@ -24,12 +24,12 @@ from janitor import state
 from janitor.site import env
 
 
-async def get_queue():
+async def get_queue(only_command=None, limit=None):
     data = []
 
     async for queue_id, branch_url, env, command in (
-            state.iter_queue(limit=args.limit)):
-        if args.command is not None and command != args.command:
+            state.iter_queue(limit=limit)):
+        if only_command is not None and command != only_command:
             continue
         expecting = None
         if command[0] == 'new-upstream':
@@ -47,7 +47,7 @@ async def get_queue():
                     (tag, tag) for tag in env['CONTEXT'].split(' ')])
         else:
             raise AssertionError('invalid command %s' % command)
-        if args.command is not None:
+        if only_command is not None:
             description = expecting
         elif expecting is not None:
             description += ", " + expecting
@@ -56,9 +56,9 @@ async def get_queue():
     return data
 
 
-async def write_queue():
+async def write_queue(only_command=None, limit=None):
     template = env.get_template('queue.html')
-    return await template.render_async(queue=await get_queue())
+    return await template.render_async(queue=await get_queue(only_command, limit))
 
 
 if __name__ == '__main__':
