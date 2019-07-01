@@ -21,6 +21,7 @@ if __name__ == '__main__':
     import argparse
     import functools
     from aiohttp import web
+    from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, help='Host to listen on')
     parser.add_argument('--logdirectory', type=str, help='Logs directory path.', default='site/pkg')
@@ -95,7 +96,8 @@ if __name__ == '__main__':
         text = await generate_run_file(args.logdirectory, *run)
         return web.Response(content_type='text/html', text=text)
 
-    app = web.Application()
+    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+    app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
         ('/', 'index.html'),
         ('/contact', 'contact.html'),
@@ -103,18 +105,18 @@ if __name__ == '__main__':
         ('/apt', 'apt.html'),
         ('/cupboard', 'cupboard.html')]:
         app.router.add_get(path, functools.partial(handle_simple, templatename))
-    app.router.add_get('/lintian-fixes', handle_lintian_fixes)
+    app.router.add_get('/lintian-fixes/', handle_lintian_fixes)
     for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
         app.router.add_get('/%s/merge-proposals' % suite, functools.partial(handle_merge_proposals, suite))
-    for suite in ['fresh-releases', 'fresh-snapshots']:
+    for suite in ['fresh-releases/', 'fresh-snapshots/']:
         app.router.add_get('/%s' % suite, functools.partial(handle_apt_repo, suite))
     app.router.add_get('/cupboard/history', handle_history)
     app.router.add_get('/cupboard/queue', handle_queue)
-    app.router.add_get('/cupboard/result-codes', handle_result_codes)
+    app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
-    app.router.add_get('/pkg', handle_pkg_list)
-    app.router.add_get('/pkg/{pkg}', handle_pkg)
-    app.router.add_get('/pkg/{pkg}/{run_id}', handle_run)
+    app.router.add_get('/pkg/', handle_pkg_list)
+    app.router.add_get('/pkg/{pkg}/', handle_pkg)
+    app.router.add_get('/pkg/{pkg}/{run_id}/', handle_run)
     from janitor.api import app as api_app
     app.add_subapp('/api', api_app)
     web.run_app(app, host=args.host)
