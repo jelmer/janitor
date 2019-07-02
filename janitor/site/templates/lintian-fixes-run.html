@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "codeblock.html" import include_console_log with context %}
-{% block page_title %}Run details - {{ package }}{% endblock %}
+{% block page_title %}Contact{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
 <h1>Run of {{ kind }} for {{ package }}</h1>
@@ -8,6 +8,7 @@
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a></li>
 <li>Start time: {{ start_time}}</li>
+<li>Finish time: {{ finish_time }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Description: {{ description }}</li>
 </ul>
@@ -15,10 +16,11 @@
 <p>Try this locally:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
 
+{% if vcs == 'git' and branch_name %}
+
 <!-- TODO(jelmer): Include button to propose merging -->
 <!-- TODO(jelmer): Include button to retry -->
 
-{% if vcs == 'git' and branch_name %}
 <p>Merge these changes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>git pull {{ cache_url_git }}{{ package }} {{ branch_name }}</pre></div></div>
 {% elif vcs == 'bzr' and branch_name %}
@@ -35,7 +37,7 @@
 {% endif %}
 
 {% if changes_name %}
-<h2>Resulting package</h2>
+<h2>Built Package</h2>
 <p>Changes filename: <a class="reference external" href="../../../{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></p>
 
 {% if binary_packages %}

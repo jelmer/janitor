@@ -1,11 +1,10 @@
 {% extends "layout.html" %}
-{% block page_title %}Contact{% endblock %}
+{% block page_title %}Package list{% endblock %}
 {% block body %}
 <div class="section" id="package-list-by-name">
 <h1>Packages by Name</h1>
 <ul>
-{% for package in packages %}
-<li><a href="{{ package }}">{{ package }}</a></li>
+{% for package in packages %}<li><a href="{{ package }}">{{ package }}</a></li>
 {% endfor %}
 </ul>
 </div>

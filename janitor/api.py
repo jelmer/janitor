@@ -12,8 +12,8 @@ from janitor import state
 DEFAULT_SCHEDULE_PRIORITY = 1000
 SUITE_TO_COMMAND = {
     'lintian-fixes': ['lintian-brush'],
-    'fresh-releases': ['merge-upstream'],
-    'fresh-snapshots': ['merge-upstream', '--snapshot'],
+    'fresh-releases': ['new-upstream'],
+    'fresh-snapshots': ['new-upstream', '--snapshot'],
     }
 SUITE_TO_POLICY_FIELD = {
     'lintian-fixes': 'lintian_brush',
@@ -55,7 +55,12 @@ async def handle_publish(request):
 async def handle_schedule(request):
     package = request.match_info['package']
     suite = request.match_info['suite']
-    command = SUITE_TO_COMMAND[suite]
+    try:
+        command = SUITE_TO_COMMAND[suite]
+    except KeyError:
+        raise web.HTTPBadRequest(
+            text=json.dumps({'error': 'Unknown suite', 'suite': suite}),
+            content_type='application/json')
     post = await request.post()
     priority = post.get('priority', DEFAULT_SCHEDULE_PRIORITY)
     try:
