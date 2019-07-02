@@ -228,7 +228,7 @@ async def write_pkg_files(dir):
     jobs = []
     packages = []
     for (name, maintainer_email, branch_url) in await state.iter_packages():
-        packages.append(name)
+        packages.append((name, maintainer_email))
         jobs.append(write_pkg_file(
             dir, name, merge_proposals.get(name, []),
             maintainer_email, branch_url, runs_by_pkg.get(name, [])))
@@ -240,7 +240,15 @@ async def write_pkg_files(dir):
 
 async def generate_pkg_list(packages):
     template = env.get_template('package-name-list.html')
-    return await template.render_async(packages=packages)
+    return await template.render_async(packages=[name for (name, maintainer) in packages])
+
+
+async def generate_maintainer_list(packages):
+    template = env.get_template('by-maintainer-package-list.html')
+    by_maintainer = {}
+    for name, maintainer in packages:
+        by_maintainer.setdefault(maintainer, []).append(name)
+    return await template.render_async(by_maintainer=by_maintainer)
 
 
 async def write_pkg_list(dir, packages):

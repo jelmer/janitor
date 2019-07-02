@@ -66,14 +66,21 @@ if __name__ == '__main__':
         if not code:
             text = await generate_result_code_index(by_code)
         else:
-            text = await generate_result_code_page(code, by_code[code])
+            text = await generate_result_code_page(code, by_code.get(code, []))
         return web.Response(content_type='text/html', text=text)
 
     async def handle_pkg_list(request):
         from .pkg import generate_pkg_list
         from .. import state
-        packages = [item[0] for item in await state.iter_packages()]
+        packages = [(item[0], item[1]) for item in await state.iter_packages()]
         text = await generate_pkg_list(packages)
+        return web.Response(content_type='text/html', text=text)
+
+    async def handle_maintainer_list(request):
+        from .pkg import generate_maintainer_list
+        from .. import state
+        packages = [(item[0], item[1]) for item in await state.iter_packages()]
+        text = await generate_maintainer_list(packages)
         return web.Response(content_type='text/html', text=text)
 
     async def handle_pkg(request):
@@ -92,7 +99,12 @@ if __name__ == '__main__':
         from .. import state
         run_id = request.match_info['run_id']
         pkg = request.match_info.get('pkg')
-        run = [x async for x in state.iter_runs(run_id=run_id, package=pkg)][0]
+        try:
+            run = [x async for x in state.iter_runs(run_id=run_id, package=pkg)][0]
+        except IndexError:
+            raise web.HTTPNotFound(
+                text='No run with id %r' % run_id,
+                content_type='text/plain')
         text = await generate_run_file(args.logdirectory, *run)
         return web.Response(content_type='text/html', text=text)
 
@@ -123,10 +135,12 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
+    app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
+    app.router.add_get('/cupboard/pkg/', handle_pkg_list)
+    app.router.add_get('/cupboard/pkg/{pkg}/', handle_pkg)
+    app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/', handle_run)
+    app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log}', handle_log)
     app.router.add_get('/pkg/', handle_pkg_list)
-    app.router.add_get('/pkg/{pkg}/', handle_pkg)
-    app.router.add_get('/pkg/{pkg}/{run_id}/', handle_run)
-    app.router.add_get('/pkg/{pkg}/{run_id}/{log:.*\\.log}', handle_log)
     app.router.add_static('/_static', os.path.join(os.path.dirname(__file__), '_static'))
     from janitor.api import app as api_app
     app.add_subapp('/api', api_app)

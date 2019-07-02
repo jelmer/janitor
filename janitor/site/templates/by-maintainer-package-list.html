@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block page_title %}Package list by maintainer{% endblock %}
+{% block body %}
+<div class="section" id="package-list-by-maintainer">
+<h1>Packages by Maintainer</h1>
+{% for maintainer, packages in by_maintainer.items() %}
+<h2>{{ maintainer }}</h2>
+<ul>
+{% for package in packages %}
+<li><a href="pkg/{{ package }}">{{ package }}</a></li>
+{% endfor %}
+</ul>
+{% endfor %}
+</div>
+{% endblock %}
