@@ -340,6 +340,27 @@ ORDER BY start_time DESC
 """, package, ' '.join(command))
 
 
+async def get_last_success(package, suite):
+    args = []
+    query = """
+SELECT
+  command,
+  build_version,
+  result_code,
+  context,
+  start_time,
+  id,
+  result
+FROM
+  run
+WHERE package = $1 AND build_distribution = $2
+ORDER BY package, command, result_code = 'success' DESC, start_time DESC
+"""
+    args = [package, suite]
+    async with get_connection() as conn:
+        return await conn.fetchrow(query, *args)
+
+
 async def iter_last_successes(suite=None):
     args = []
     query = """
@@ -419,7 +440,7 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
         return False
 
 
-async def iter_publish_ready():
+async def iter_publish_ready(suite=None):
     args = []
     query = """
 SELECT DISTINCT ON (package, command)
@@ -440,6 +461,12 @@ FROM
   run
 LEFT JOIN package ON package.name = run.package
 WHERE result_code = 'success' AND result IS NOT NULL
+"""
+    if suite is not None:
+        query += " AND build_distribution = $1 "
+        args.append(suite)
+
+    query += """
 ORDER BY
   package,
   command,

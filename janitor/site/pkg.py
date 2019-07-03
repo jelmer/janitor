@@ -256,6 +256,12 @@ async def write_pkg_list(dir, packages):
         f.write(await generate_pkg_list(packages))
 
 
+async def generate_ready_list(suite):
+    template = env.get_template('ready-list.html')
+    runs = list(await state.iter_publish_ready(suite=suite))
+    return await template.render_async(runs=runs, suite=suite)
+
+
 if __name__ == '__main__':
     import argparse
     import asyncio

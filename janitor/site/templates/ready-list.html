@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% from "lintian-fixes-util.html" import lintian_brush_summary %}
+{% block page_title %}Changes ready to publish{% if suite %} - {{ suite }}{% endif %}{% endblock %}
+{% block body %}
+ <div class="section" id="history">
+<h1>Ready to publish</h1>
+<ul>
+{% for package_name, command, build_version, result_code, context, start_time, run_id, run_revision, run_result, run_branch_name, maintainer_email, branch_url, main_branch_revision in runs %}
+<li><a href="pkg/{{ package_name }}">{{ package_name }}</a>{% if command == 'lintian-brush' %}
+{{ lintian_brush_summary(run_result['applied']) }}
+{% elif command == 'new-upstream' %}: Merge new upstream release <b>{{ run_result['upstream_version'] }}</b>
+{% elif command == 'new-upstream --snapshot' %}: Merge new upstream snapshot <b>{{ run_result['upstream_version'] }}</b>
+{% else %}: Unknown command {{ command }}
+{% endif %}
+</li>
+{% endfor %}
+</ul>
+</tbody>
+</table>
+{% endblock %}

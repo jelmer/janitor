@@ -1,0 +1,10 @@
+{% macro lintian_tag_link(tag) %}<a href="https://lintian.debian.org/tags/{{tag}}.html">{{tag}}</a>{% endmacro %}
+
+{% macro lintian_brush_summary(result) %}
+<ul>
+    {% for applied in result %}
+    <li>{{ applied['summary'] }} ({% for tag in applied['fixed_lintian_tags'] %}{{ lintian_tag_link(tag) }} {% endfor %})</li>
+    {% endfor %}
+</ul>
+{% endmacro %}
+

@@ -1,0 +1,16 @@
+{% macro local_command(command, package) %}
+<p>Try this locally:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
+{% endmacro %}
+
+{% macro merge_command(package, branch_name) %}
+{% if vcs == 'git' %}
+<p>Merge these changes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>git pull {{ cache_url_git }}{{ package }} {{ branch_name }}</pre></div></div>
+{% elif vcs == 'bzr' %}
+<p>Merge these changes:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ cache_url_bzr }}{{ package }}/{{ branch_name }}</pre></div></div>
+{% else %}
+<!-- Unknown vcs: {{ vcs }} -->
+{% endif %}
+{% endmacro %}

@@ -116,6 +116,15 @@ if __name__ == '__main__':
             text = f.read()
         return web.Response(content_type='text/plain', text=text)
 
+    async def handle_ready_proposals(suite, request):
+        from .pkg import generate_ready_list
+        text = await generate_ready_list(suite)
+        return web.Response(content_type='text/html', text=text)
+
+    async def handle_lintian_fixes_pkg(request):
+        from .lintian_fixes import generate_pkg_file
+        text = await generate_pkg_file(request.match_info['pkg'])
+        return web.Response(content_type='text/html', text=text)
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -129,6 +138,9 @@ if __name__ == '__main__':
     app.router.add_get('/lintian-fixes/', handle_lintian_fixes)
     for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
         app.router.add_get('/%s/merge-proposals' % suite, functools.partial(handle_merge_proposals, suite))
+        app.router.add_get('/%s/ready' % suite, functools.partial(handle_ready_proposals, suite))
+        app.router.add_get('/%s/pkg/' % suite, handle_pkg_list)
+    app.router.add_get('/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get('/%s/' % suite, functools.partial(handle_apt_repo, suite))
     app.router.add_get('/cupboard/history', handle_history)
@@ -136,6 +148,7 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
     app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
+    app.router.add_get('/cupboard/ready', functools.partial(handle_ready_proposals, None))
     app.router.add_get('/cupboard/pkg/', handle_pkg_list)
     app.router.add_get('/cupboard/pkg/{pkg}/', handle_pkg)
     app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/', handle_run)

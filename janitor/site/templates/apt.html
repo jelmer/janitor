@@ -7,10 +7,10 @@
 <p>For each changes that the janitor makes successfully, it publishes the
 resulting Debian package.</p>
 <p>To use the apt repository, e.g. for lintian fixes, run:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">echo</span> <span class="n">deb</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">janitor</span><span class="o">.</span><span class="n">debian</span><span class="o">.</span><span class="n">net</span><span class="o">/</span><span class="n">apt</span> <span class="n">lintian</span><span class="o">-</span><span class="n">fixes</span><span class="o">/</span> <span class="o">&gt;</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">apt</span><span class="o">/</span><span class="n">sources</span><span class="o">.</span><span class="n">list</span><span class="o">.</span><span class="n">d</span><span class="o">/</span><span class="n">janitor</span><span class="o">.</span><span class="n">list</span>
-<span class="n">gpg</span> <span class="o">--</span><span class="n">recv</span><span class="o">-</span><span class="n">keys</span> <span class="mi">6</span><span class="n">F915003D1998D6A</span>
-<span class="n">gpg</span> <span class="o">--</span><span class="n">export</span> <span class="mi">6</span><span class="n">F915003D1998D6A</span> <span class="o">|</span> <span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">key</span> <span class="n">add</span> <span class="o">-</span>
-<span class="n">apt</span> <span class="n">update</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb https://janitor.debian.net/apt lintian-fixes/ &gt; /etc/apt/sources.list.d/janitor.list
+gpg --recv-keys <span class="mi">6</span>F915003D1998D6A
+gpg --export <span class="mi">6</span>F915003D1998D6A | sudo apt-key add -
+apt update
 </pre></div>
 </div>
 <p>Available sections are:</p>
@@ -23,7 +23,7 @@ if you are the maintainer.</li>
 <p>The repositories are marked as <code class="docutils literal notranslate"><span class="pre">experimental</span></code>, meaning that apt won’t
 automatically update to packages in them unless explicitly requested to do so.
 To e.g. install the version of <em>offlineimap</em> that’s in the <strong>lintian-fixes</strong> repository, run:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apt</span> <span class="n">install</span> <span class="o">-</span><span class="n">t</span> <span class="n">lintian</span><span class="o">-</span><span class="n">fixes</span> <span class="n">offlineimap</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre>apt install -t lintian-fixes offlineimap
 </pre></div>
 </div>
 <div class="section" id="pinning">
@@ -31,9 +31,9 @@ To e.g. install the version of <em>offlineimap</em> that’s in the <strong>lint
 <p>Optionally, if you want to track a given package from one of the janitor’s
 repositories, add the following to <code class="docutils literal notranslate"><span class="pre">/etc/apt/preferences</span></code> (and see
 <a class="reference external" href="https://wiki.debian.orgaptpreferences/">the documentation about apt preferences</a>):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Package</span><span class="p">:</span> <span class="n">offlineimap</span>
-<span class="n">Pin</span><span class="p">:</span> <span class="n">release</span> <span class="n">a</span><span class="o">=</span><span class="n">upstream</span><span class="o">-</span><span class="n">releases</span>
-<span class="n">Pin</span><span class="o">-</span><span class="n">Priority</span><span class="p">:</span> <span class="mi">800</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre>Package: offlineimap
+Pin: release a=upstream-releases
+Pin-Priority: <span class="mi">800</span>
 </pre></div>
 </div>
 </div>
