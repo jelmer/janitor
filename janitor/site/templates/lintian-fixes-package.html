@@ -1,0 +1,56 @@
+{% extends "layout.html" %}
+{% from "run_util.html" import local_command, merge_command with context %}
+{% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
+{% block page_title %}Lintian Fixes - {{ package }}{% endblock %}
+{% block body %}
+<div class="section" id="{{ package }}">
+<h1>{{ package }}</h1>
+<ul class="simple">
+<li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
+<li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+<li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
+</ul>
+
+{% if merge_proposals %}
+<div class="section" id="recent-merge-proposals">
+<h2>Recent merge proposals</h2>
+<ul>
+{% for url, status in merge_proposals %}
+<li><a href="{{ url }}">{{ url }}</a> ({{ status }})</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+<h2>Ready changes</h2>
+
+{{ merge_command(package, branch_name) }}
+
+<h3>Summary</h3>
+
+{{ lintian_brush_summary(result['applied']) }}
+
+{% if result['failed'] %}
+
+<h3>Diff</h3>
+
+<h3>Failed tags:</h3>
+<ul>
+{% for tag in result['failed'] %}
+   <li>{{ lintian_tag_link(tag) }}</li>
+{% endfor %}
+</ul>
+
+{% endif %}
+
+<h3>More details</h3>
+
+{{ local_command(command, package) }}
+
+<p><a href="/cupboard/{{ package }}/{{ run_id }}">Full run details</a></p>
+
+<!-- TODOJRV: Provide button to create merge proposal -->
+<!-- TODOJRV: Show diff -->
+
+</div>
+{% endblock %}

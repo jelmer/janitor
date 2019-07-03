@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
-{% from "codeblock.html" import include_console_log with context %}
+{% from "codeblock.html" import include_console_log %}
+{% from "run_util.html" import local_command %}
 {% block page_title %}Contact{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -13,19 +14,14 @@
 <li>Description: {{ description }}</li>
 </ul>
 
-<p>Try this locally:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
+{{ local_command(command, package) }}
 
-{% if vcs == 'git' and branch_name %}
 
 <!-- TODO(jelmer): Include button to propose merging -->
 <!-- TODO(jelmer): Include button to retry -->
 
-<p>Merge these changes:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>git pull {{ cache_url_git }}{{ package }} {{ branch_name }}</pre></div></div>
-{% elif vcs == 'bzr' and branch_name %}
-<p>Merge these changes:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ cache_url_bzr }}{{ package }}/{{ branch_name }}</pre></div></div>
+{% if branch_name %}
+{{ merge_command(package, branch_name) }}
 {% else %}
 {% if build_log_path %}
 {{ include_console_log(build_log_path, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}

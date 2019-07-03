@@ -1,0 +1,46 @@
+#!/usr/bin/python3
+
+import argparse
+import asyncio
+import os
+import sys
+
+from janitor import state
+from janitor.site import env
+
+
+async def generate_pkg_file(package):
+    try:
+        (package, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
+    except IndexError:
+        raise KeyError(package)
+    # TODO(jelmer): Filter out proposals not for this suite.
+    merge_proposals = [
+        (url, status)
+        for (package, url, status) in await state.iter_proposals(package)]
+    (command, build_version, result_code,
+     context, start_time, run_id, result) = await state.get_last_success(package, 'lintian-fixes')
+    kwargs = {
+        'package': package,
+        'merge_proposals': merge_proposals,
+        'maintainer_email': maintainer_email,
+        'vcs_url': vcs_url,
+        'command': command,
+        'build_version': build_version,
+        'result_code': result_code,
+        'context': context,
+        'start_time': start_time,
+        'run_id': run_id,
+        'result': result,
+        }
+    template = env.get_template('lintian-fixes-package.html')
+    return await template.render_async(**kwargs)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(prog='report-lintian-fixes-pkg')
+    parser.add_argument("package")
+    args = parser.parse_args()
+
+    loop = asyncio.get_event_loop()
+    sys.stdout.write(loop.run_until_complete(generate_pkg_file(args.package)))

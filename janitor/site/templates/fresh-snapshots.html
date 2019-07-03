@@ -2,7 +2,7 @@
 {% block page_title %}Fresh Snapshots{% endblock %}
 {% block body %}
   <div class="section" id="upstream-snapshots">
-<h1>Upstream Snapshots<a class="headerlink" href="#upstream-snapshots" title="Permalink to this headline">¶</a></h1>
+<h1>Upstream Snapshots</h1>
 <p>This repository contains packages from Debian unstable for which it is possible
 to automatically merge in a new upstream snapshot (i.e. the latest revision in
 Git).</p>
@@ -15,18 +15,18 @@ from a human.</p>
 <div class="toctree-wrapper compound">
 </div>
 <div class="section" id="using-the-repository">
-<h2>Using the repository<a class="headerlink" href="#using-the-repository" title="Permalink to this headline">¶</a></h2>
+<h2>Using the repository</h2>
 <p>To use the apt repository, run something like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">echo</span> <span class="n">deb</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">janitor</span><span class="o">.</span><span class="n">debian</span><span class="o">.</span><span class="n">net</span><span class="o">/</span> <span class="n">fresh</span><span class="o">-</span><span class="n">snapshots</span><span class="o">/</span> <span class="o">&gt;</span> <span class="o">/</span><span class="n">etc</span><span class="o">/</span><span class="n">apt</span><span class="o">/</span><span class="n">sources</span><span class="o">.</span><span class="n">list</span><span class="o">.</span><span class="n">d</span><span class="o">/</span><span class="n">janitor</span><span class="o">.</span><span class="n">list</span>
-<span class="n">gpg</span> <span class="o">--</span><span class="n">recv</span><span class="o">-</span><span class="n">keys</span> <span class="mi">6</span><span class="n">F915003D1998D6A</span>
-<span class="n">gpg</span> <span class="o">--</span><span class="n">export</span> <span class="mi">6</span><span class="n">F915003D1998D6A</span> <span class="o">|</span> <span class="n">sudo</span> <span class="n">apt</span><span class="o">-</span><span class="n">key</span> <span class="n">add</span> <span class="o">-</span>
-<span class="n">apt</span> <span class="n">update</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb https://janitor.debian.net/ fresh-snapshots/ &gt; /etc/apt/sources.list.d/janitor.list
+gpg --recv-keys <span class="mi">6</span>F915003D1998D6A
+gpg --export <span class="mi">6</span>F915003D1998D6A | sudo apt-key add -
+apt update
 </pre></div>
 </div>
 <p>The repository is marked as <code class="docutils literal notranslate"><span class="pre">experimental</span></code>, meaning that apt won’t
 automatically update to packages in them unless explicitly requested to do so.
 To e.g. install the version of <em>cifs-utils</em> that’s in this repository, run:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">apt</span> <span class="n">install</span> <span class="o">-</span><span class="n">t</span> <span class="n">fresh</span><span class="o">-</span><span class="n">snapshots</span> <span class="n">cifs</span><span class="o">-</span><span class="n">utils</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre>apt install -t fresh-snapshots cifs-utils
 </pre></div>
 </div>
 <p>The packages are also versioned in such a way that if the new upstream version
@@ -34,18 +34,18 @@ gets uploaded to the official Debian APT repository, it will replace the package
 in this archive.</p>
 </div>
 <div class="section" id="pinning">
-<h2>Pinning<a class="headerlink" href="#pinning" title="Permalink to this headline">¶</a></h2>
+<h2>Pinning</h2>
 <p>Optionally, if you want to track a given package so upgrades happen automatically,
 add the following to <code class="docutils literal notranslate"><span class="pre">/etc/apt/preferences</span></code> (and see
 <a class="reference external" href="https://wiki.debian.org/AptPreferences">the documentation about apt preferences</a>):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">Package</span><span class="p">:</span> <span class="n">cifs</span><span class="o">-</span><span class="n">utils</span>
-<span class="n">Pin</span><span class="p">:</span> <span class="n">release</span> <span class="n">a</span><span class="o">=</span><span class="n">fresh</span><span class="o">-</span><span class="n">snapshots</span>
-<span class="n">Pin</span><span class="o">-</span><span class="n">Priority</span><span class="p">:</span> <span class="mi">800</span>
+<div class="highlight-default notranslate"><div class="highlight"><pre>Package: cifs-utils
+Pin: release a=fresh-snapshots
+Pin-Priority: <span class="mi">800</span>
 </pre></div>
 </div>
 </div>
 <div class="section" id="package-list">
-<h2>Package list<a class="headerlink" href="#package-list" title="Permalink to this headline">¶</a></h2>
+<h2>Package list</h2>
 <p>The following source packages with new upstream snapshots merged are currently
 available:</p>
 <table class="docutils" border="1">

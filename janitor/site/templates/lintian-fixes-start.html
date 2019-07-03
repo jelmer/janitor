@@ -9,7 +9,7 @@ archive that maintained in Git.</p>
 <p>The resulting changes can be accessed on this site, or the Janitor can
 automatically propose them as merge requests on supported hosting sites (Salsa,
 GitHub, GitLab, Launchpad).</p>
-<p>For a current list of open requests, see <a class="reference external" href="/lintian-fixes/merge-proposals">merge-proposals</a>.</p>
+<p>For a current list of open requests, see <a href="merge-proposals">merge-proposals</a>. For a list of changes ready to be proposed or pushed, see <a href="ready">ready</a>.</p>
 <div class="toctree-wrapper compound">
 </div>
 <div class="section" id="faq">
@@ -34,23 +34,23 @@ GitHub, GitLab, Launchpad).</p>
 </div>
 <div class="section" id="how-do-i-opt-in">
 <h3><a class="toc-backref" href="#id7">How do I opt in?</a></h3>
-<p>Propose a change to the <a class="reference external" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> that adds an entry for the relevant maintainer or package.</p>
-<p>Alternatively, you can send me an e-mail (<a class="reference external" href="mailto:jelmer%40debian.org">jelmer<span>@</span>debian<span>.</span>org</a>).</p>
+<p>Propose a change to the <a class="reference" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> that adds an entry for the relevant maintainer or package.</p>
+<p>Alternatively, you can send me an e-mail (<a class="reference external" href="mailto:jelmer%40debian.org">jelmer@debian.org</a>).</p>
 </div>
 <div class="section" id="i-dont-find-this-useful-how-do-i-stop-it">
 <h3><a class="toc-backref" href="#id8">I don’t find this useful. How do I stop it?</a></h3>
-<p>You can send me a short message with the maintainer e-mail address 
-(this can be a team or an individual) for which to stop the merge 
+<p>You can send me a short message with the maintainer e-mail address
+(this can be a team or an individual) for which to stop the merge
 proposals. You can reach me via one of the following mediums:</p>
 <ul class="simple">
-<li>E-mail: <a class="reference external" href="mailto:jelmer%40debian.org">jelmer<span>@</span>debian<span>.</span>org</a></li>
+<li>E-mail: <a class="reference external" href="mailto:jelmer%40debian.org">jelmer@debian.org</a></li>
 <li>on IRC: <em>jelmer</em> on <em>irc.oftc.net</em></li>
 <li>XMPP: <em>jelmer@jelmer.uk</em></li>
 </ul>
-<p>It would be great if you can also give me an idea of what 
-specifically you don’t appreciate about these merge proposals, and if 
+<p>It would be great if you can also give me an idea of what
+specifically you don’t appreciate about these merge proposals, and if
 there’s anything I can do to improve them.</p>
-<p>Alternatively, propose a change to the <a class="reference external" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> on Salsa.</p>
+<p>Alternatively, propose a change to the <a class="reference" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> on Salsa.</p>
 </div>
 <div class="section" id="this-is-great-how-do-i-get-it-to-automatically-push-improvements-to-my-repository">
 <h3><a class="toc-backref" href="#id9">This is great. How do I get it to automatically push improvements to my repository?</a></h3>
@@ -68,8 +68,8 @@ there’s anything I can do to improve them.</p>
 <li><a class="reference external" href="https://github.com/">GitHub</a></li>
 <li><a class="reference external" href="https://launchpad.net/">Launchpad</a> (both <a class="reference external" href="https://bazaar-vcs.org/">Bazaar</a> and <a class="reference external" href="https://git-scm.com/">Git</a> repositories)</li>
 </ul>
-<p>Work is under way to also support Mercurial. Subversion support may 
-also be an option, though I have yet to work out what the equivalent of 
+<p>Work is under way to also support Mercurial. Subversion support may
+also be an option, though I have yet to work out what the equivalent of
 pull requests in Subversion would be.</p>
 </div>
 <div class="section" id="what-kind-of-changes-are-made">
@@ -129,14 +129,14 @@ for these merge proposals to be merged and they do not yet appear on the
 in packages.</p>
 <p><a class="reference external" href="https://wiki.debian.org/UltimateDebianDatabase/">UDD</a> is used to find package VCS URLs and to retrieve the lintian results.</p>
 <p><a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
- provides abstractions over the version control system (Git, Bazaar, 
-Mercurial, Subversion) and the supported hosting platforms (GitHub, 
+ provides abstractions over the version control system (Git, Bazaar,
+Mercurial, Subversion) and the supported hosting platforms (GitHub,
 GitLab, Launchpad).</p>
 <p><a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">Lintian-brush</a> is responsible for actually making changes to the packages.</p>
 <p><a class="reference external" href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
- ties this all together; it trawls UDD to find packages that are 
+ ties this all together; it trawls UDD to find packages that are
 affected by lintian tags that lintian-brush knows how to fix, clones the
- packaging branches, invokes lintian-brush and pushes back or creates 
+ packaging branches, invokes lintian-brush and pushes back or creates
 merge proposals.</p>
 </div>
 </div>
