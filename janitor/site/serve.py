@@ -148,7 +148,7 @@ if __name__ == '__main__':
     app.router.add_get('/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get('/%s/' % suite, functools.partial(handle_apt_repo, suite))
-        app.router.add_get('/%s/pkg/{pkg}/', functools.partial(handle_new_upstream_pkg, suite))
+        app.router.add_get('/%s/pkg/{pkg}/' % suite, functools.partial(handle_new_upstream_pkg, suite))
     app.router.add_get('/cupboard/history', handle_history)
     app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
