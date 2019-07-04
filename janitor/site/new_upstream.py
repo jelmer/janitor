@@ -9,8 +9,7 @@ from janitor import state
 from janitor.site import env
 
 
-async def generate_pkg_file(package):
-    suite = 'lintian-fixes'
+async def generate_pkg_file(package, suite):
     try:
         (package, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
     except IndexError:
@@ -35,12 +34,12 @@ async def generate_pkg_file(package):
         'result': result,
         'suite': suite,
         }
-    template = env.get_template('lintian-fixes-package.html')
+    template = env.get_template('new-upstream-package.html')
     return await template.render_async(**kwargs)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(prog='report-lintian-fixes-pkg')
+    parser = argparse.ArgumentParser(prog='report-new-upstream-pkg')
     parser.add_argument("package")
     args = parser.parse_args()
 

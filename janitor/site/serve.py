@@ -126,6 +126,11 @@ if __name__ == '__main__':
         text = await generate_pkg_file(request.match_info['pkg'])
         return web.Response(content_type='text/html', text=text)
 
+    async def handle_new_upstream_pkg(suite, request):
+        from .new_upstream import generate_pkg_file
+        text = await generate_pkg_file(request.match_info['pkg'], suite)
+        return web.Response(content_type='text/html', text=text)
+
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
@@ -143,6 +148,7 @@ if __name__ == '__main__':
     app.router.add_get('/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get('/%s/' % suite, functools.partial(handle_apt_repo, suite))
+        app.router.add_get('/%s/pkg/{pkg}/', functools.partial(handle_new_upstream_pkg, suite))
     app.router.add_get('/cupboard/history', handle_history)
     app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)

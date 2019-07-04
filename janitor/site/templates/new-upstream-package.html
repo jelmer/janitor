@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+{% from "run_util.html" import local_command, merge_command with context %}
+{% block page_title %}New Upstream - {{ package }}{% endblock %}
+{% block body %}
+<div class="section" id="{{ package }}">
+<h1>{{ package }}</h1>
+
+<p><a href="/cupboard/{{ package }}/{{ run_id }}">Full run details</a></p>
+
+</div>
+{% endblock %}
