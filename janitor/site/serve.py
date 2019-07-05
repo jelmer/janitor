@@ -151,6 +151,20 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_lintian_fixes_tag_list(request):
+        from .lintian_fixes import generate_tag_list
+        text = await generate_tag_list()
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
+    async def handle_lintian_fixes_tag_page(request):
+        from .lintian_fixes import generate_tag_page
+        text = await generate_tag_page(request.match_info['tag'])
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_new_upstream_pkg(suite, request):
         from .new_upstream import generate_pkg_file
         text = await generate_pkg_file(request.match_info['pkg'], suite)
@@ -173,6 +187,8 @@ if __name__ == '__main__':
         app.router.add_get('/%s/ready' % suite, functools.partial(handle_ready_proposals, suite))
         app.router.add_get('/%s/pkg/' % suite, handle_pkg_list)
     app.router.add_get('/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
+    app.router.add_get('/lintian-fixes/by-tag/', handle_lintian_fixes_tag_list)
+    app.router.add_get('/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page)
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get('/%s/' % suite, functools.partial(handle_apt_repo, suite))
         app.router.add_get('/%s/pkg/{pkg}/' % suite, functools.partial(handle_new_upstream_pkg, suite))

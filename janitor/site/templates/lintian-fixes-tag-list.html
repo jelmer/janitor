@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
+{% block page_title %}Lintian Fixes - by tag{% endblock %}
+{% block body %}
+<div class="section" id="fixed-tag-list">
+<h1>Runs by lintian tag fixed</h1>
+
+<ul>
+{% for tag in tags %}
+	<li><a href="{{ tag }}">{{ tag }}</a></li>
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}
