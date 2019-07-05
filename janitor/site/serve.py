@@ -24,64 +24,79 @@ if __name__ == '__main__':
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, help='Host to listen on')
-    parser.add_argument('--logdirectory', type=str, help='Logs directory path.', default='site/pkg')
+    parser.add_argument('--logdirectory', type=str,
+                        help='Logs directory path.', default='site/pkg')
     args = parser.parse_args()
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
         return web.Response(
-            content_type='text/html', text=await render_simple(templatename))
+            content_type='text/html', text=await render_simple(templatename),
+            headers={'Cache-Control': 'max-age=3600'})
 
     async def handle_lintian_fixes(request):
         from .generate import render_lintian_fixes
         return web.Response(
-            content_type='text/html', text=await render_lintian_fixes())
+            content_type='text/html', text=await render_lintian_fixes(),
+            headers={'Cache-Control': 'max-age=3600'})
 
     async def handle_merge_proposals(suite, request):
         from .merge_proposals import write_merge_proposals
         return web.Response(
-            content_type='text/html', text=await write_merge_proposals(suite))
+            content_type='text/html', text=await write_merge_proposals(suite),
+            headers={'Cache-Control': 'max-age=60'})
 
     async def handle_apt_repo(suite, request):
         from .apt_repo import write_apt_repo
         return web.Response(
-            content_type='text/html', text=await write_apt_repo(suite))
+            content_type='text/html', text=await write_apt_repo(suite),
+            headers={'Cache-Control': 'max-age=60'})
 
     async def handle_history(request):
         limit = int(request.query.get('limit', '100'))
         from .history import write_history
         return web.Response(
-            content_type='text/html', text=await write_history(limit=limit))
+            content_type='text/html', text=await write_history(limit=limit),
+            headers={'Cache-Control': 'max-age=60'})
 
     async def handle_queue(request):
         limit = int(request.query.get('limit', '100'))
         from .queue import write_queue
         return web.Response(
-            content_type='text/html', text=await write_queue(limit=limit))
+            content_type='text/html', text=await write_queue(limit=limit),
+            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_result_codes(request):
-        from .result_codes import get_results_by_code, generate_result_code_index, generate_result_code_page
+        from .result_codes import (
+            get_results_by_code, generate_result_code_index,
+            generate_result_code_page)
         code = request.match_info.get('code')
         by_code = await get_results_by_code()
         if not code:
             text = await generate_result_code_index(by_code)
         else:
             text = await generate_result_code_page(code, by_code.get(code, []))
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_pkg_list(request):
         from .pkg import generate_pkg_list
         from .. import state
         packages = [(item[0], item[1]) for item in await state.iter_packages()]
         text = await generate_pkg_list(packages)
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_maintainer_list(request):
         from .pkg import generate_maintainer_list
         from .. import state
         packages = [(item[0], item[1]) for item in await state.iter_packages()]
         text = await generate_maintainer_list(packages)
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_pkg(request):
         from .pkg import generate_pkg_file
@@ -92,7 +107,9 @@ if __name__ == '__main__':
             merge_proposals.append((url, status))
         runs = [x async for x in state.iter_runs(package=name)]
         text = await generate_pkg_file(name, merge_proposals, maintainer_email, branch_url, runs)
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_run(request):
         from .pkg import generate_run_file
@@ -106,7 +123,9 @@ if __name__ == '__main__':
                 text='No run with id %r' % run_id,
                 content_type='text/plain')
         text = await generate_run_file(args.logdirectory, *run)
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=3600'})
 
     async def handle_log(request):
         pkg = request.match_info['pkg']
@@ -114,22 +133,30 @@ if __name__ == '__main__':
         filename = request.match_info['log']
         with open(os.path.join(args.logdirectory, pkg, run_id, filename), 'r') as f:
             text = f.read()
-        return web.Response(content_type='text/plain', text=text)
+        return web.Response(
+            content_type='text/plain', text=text,
+            headers={'Cache-Control': 'max-age=3600'})
 
     async def handle_ready_proposals(suite, request):
         from .pkg import generate_ready_list
         text = await generate_ready_list(suite)
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_lintian_fixes_pkg(request):
         from .lintian_fixes import generate_pkg_file
         text = await generate_pkg_file(request.match_info['pkg'])
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_new_upstream_pkg(suite, request):
         from .new_upstream import generate_pkg_file
         text = await generate_pkg_file(request.match_info['pkg'], suite)
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
