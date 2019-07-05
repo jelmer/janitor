@@ -39,6 +39,18 @@ async def generate_pkg_file(package):
     return await template.render_async(**kwargs)
 
 
+async def generate_tag_list():
+    tags = sorted(await state.iter_lintian_tags())
+    template = env.get_template('lintian-fixes-tag-list.html')
+    return await template.render_async(tags=tags)
+
+
+async def generate_tag_page(tag):
+    template = env.get_template('lintian-fixes-tag.html')
+    packages = list(await state.iter_last_successes_by_lintian_tag(tag))
+    return await template.render_async(tag=tag, packages=packages)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='report-lintian-fixes-pkg')
     parser.add_argument("package")
