@@ -81,6 +81,11 @@ if __name__ == '__main__':
             headers={'Cache-Control': 'max-age=600'})
 
     async def handle_pkg_list(request):
+        # TODO(jelmer): The javascript plugin thingy should just redirect to
+        # the right URL, not rely on query parameters here.
+        pkg = request.query.get('package')
+        if pkg:
+            return web.HTTPFound(pkg)
         from .pkg import generate_pkg_list
         from .. import state
         packages = [(item[0], item[1]) for item in await state.iter_packages()]
@@ -119,9 +124,7 @@ if __name__ == '__main__':
         try:
             run = [x async for x in state.iter_runs(run_id=run_id, package=pkg)][0]
         except IndexError:
-            raise web.HTTPNotFound(
-                text='No run with id %r' % run_id,
-                content_type='text/plain')
+            raise web.HTTPNotFound(text='No run with id %r' % run_id)
         text = await generate_run_file(args.logdirectory, *run)
         return web.Response(
             content_type='text/html', text=text,
@@ -146,7 +149,11 @@ if __name__ == '__main__':
 
     async def handle_lintian_fixes_pkg(request):
         from .lintian_fixes import generate_pkg_file
-        text = await generate_pkg_file(request.match_info['pkg'])
+        pkg = request.match_info['pkg']
+        try:
+            text = await generate_pkg_file(pkg)
+        except KeyError:
+            raise web.HTTPNotFound()
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
