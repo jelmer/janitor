@@ -177,7 +177,10 @@ if __name__ == '__main__':
 
     async def handle_new_upstream_pkg(suite, request):
         from .new_upstream import generate_pkg_file
-        text = await generate_pkg_file(request.match_info['pkg'], suite)
+        try:
+            text = await generate_pkg_file(request.match_info['pkg'], suite)
+        except KeyError:
+            raise web.HTTPNotFound()
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
