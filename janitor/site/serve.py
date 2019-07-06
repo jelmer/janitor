@@ -19,6 +19,7 @@
 if __name__ == '__main__':
     import argparse
     import functools
+    from gzip import GzipFile
     import os
     from aiohttp import web
     from aiohttp.web_middlewares import normalize_path_middleware
@@ -27,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--logdirectory', type=str,
                         help='Logs directory path.', default='site/pkg')
     args = parser.parse_args()
+
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
@@ -134,8 +136,13 @@ if __name__ == '__main__':
         pkg = request.match_info['pkg']
         run_id = request.match_info['run_id']
         filename = request.match_info['log']
-        with open(os.path.join(args.logdirectory, pkg, run_id, filename), 'r') as f:
-            text = f.read()
+        basepath = os.path.join(args.logdirectory, pkg, run_id, filename)
+        try:
+            with open(basepath, 'r') as f:
+                text = f.read()
+        except FileNotFoundError:
+            with GzipFile(basepath + '.gz') as f:
+                text = f.read()
         return web.Response(
             content_type='text/plain', text=text,
             headers={'Cache-Control': 'max-age=3600'})
