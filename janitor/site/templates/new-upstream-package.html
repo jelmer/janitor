@@ -48,5 +48,9 @@ apt install -t {{ build_distro }} {{ binary_package }}
 
 {% endif %}
 
+{{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
+
+<div id="commandResult"></div>
+
 </div>
 {% endblock %}

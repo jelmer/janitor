@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "codeblock.html" import include_console_log with context %}
-{% from "run_util.html" import local_command, merge_command %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button %}
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -15,24 +15,11 @@
 
 {{ local_command(command, package) }}
 
-<button id="reschedule">Reschedule</button>
-
-<script src="/_static/jquery.js"></script>
-<script>
-$(function() {
-  $("#reschedule").click(function() {
-    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {}, function(data) {
-      console.log('Scheduled: ' + data.priority);
-      $("#commandResult").append("Scheduled new run with priority " + data.priority + ".<br/>");
-    }, 'json');
-  });
-});
-</script>
+{{ reschedule_button(suite, package, "Reschedule", "#commandResult") }}
 
 <div id="commandResult"></div>
 
 <!-- TODO(jelmer): Include button to propose merging -->
-<!-- TODO(jelmer): Include button to retry -->
 
 {% if branch_name %}
 {{ merge_command(package, branch_name) }}

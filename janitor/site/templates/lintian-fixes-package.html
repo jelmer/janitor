@@ -11,6 +11,10 @@
 <li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
 </ul>
 
+{{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
+
+<div id="commandResult"></div>
+
 {% if not result_code %}
 
 No recent runs for {{ package }}
