@@ -137,14 +137,15 @@ class LintianBrushWorker(SubWorker):
                         committer=self.committer,
                         update_changelog=self.args.update_changelog,
                         compat_release=self.args.compat_release,
-                        trust_package=TRUST_PACKAGE)
+                        trust_package=TRUST_PACKAGE,
+                        verbose=True)
             except GeneratedControlFile as e:
                 raise WorkerFailure(
                     'control-file-is-generated',
                     'A control file is generated: %s' % e.path)
 
         if failed:
-            note('some fixers failed to run: %r', failed)
+            note('some fixers failed to run: %r', set(failed))
 
         metadata['applied'] = [{
             'summary': summary,
@@ -152,7 +153,7 @@ class LintianBrushWorker(SubWorker):
             'fixed_lintian_tags': result.fixed_lintian_tags,
             'certainty': result.certainty}
             for result, summary in applied]
-        metadata['failed'] = failed
+        metadata['failed'] = {name: e.errors for (name, e) in failed.items()}
         metadata['add_on_only'] = not has_nontrivial_changes(
             applied, self.args.propose_addon_only)
 
