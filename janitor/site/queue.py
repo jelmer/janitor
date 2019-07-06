@@ -17,17 +17,21 @@
 
 import argparse
 import asyncio
-import os
 import sys
 
 from janitor import state
 from janitor.site import env
 
 
+def lintian_tag_link(tag):
+    return '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' % (
+        tag, tag)
+
+
 async def get_queue(only_command=None, limit=None):
     data = []
 
-    async for queue_id, branch_url, env, command in (
+    async for queue_id, branch_url, run_env, command in (
             state.iter_queue(limit=limit)):
         if only_command is not None and command != only_command:
             continue
@@ -37,28 +41,29 @@ async def get_queue(only_command=None, limit=None):
                 description = 'New upstream snapshot'
             else:
                 description = 'New upstream'
-                if env.get('CONTEXT'):
-                    expecting = 'expecting to merge %s' % env['CONTEXT']
+                if run_env.get('CONTEXT'):
+                    expecting = 'expecting to merge %s' % run_env['CONTEXT']
         elif command[0] == 'lintian-brush':
             description = 'Lintian fixes'
-            if env.get('CONTEXT'):
-                expecting = 'expecting to fix: ' + ', '.join([
-                    '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' %
-                    (tag, tag) for tag in env['CONTEXT'].split(' ')])
+            if run_env.get('CONTEXT'):
+                expecting = (
+                    'expecting to fix: ' +
+                    ', '.join(map(lintian_tag_link, run_env['CONTEXT'].split(' '))))
         else:
             raise AssertionError('invalid command %s' % command)
         if only_command is not None:
             description = expecting
         elif expecting is not None:
             description += ", " + expecting
-        data.append((env['PACKAGE'], description))
+        data.append((run_env['PACKAGE'], description))
 
     return data
 
 
 async def write_queue(only_command=None, limit=None):
     template = env.get_template('queue.html')
-    return await template.render_async(queue=await get_queue(only_command, limit))
+    return await template.render_async(
+        queue=await get_queue(only_command, limit))
 
 
 if __name__ == '__main__':

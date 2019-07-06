@@ -65,6 +65,7 @@ last_success_gauge = Gauge(
 note('Querying UDD...')
 loop = asyncio.get_event_loop()
 
+
 async def main():
     todo = [x async for x in schedule_udd_new_upstream_snapshots(
             args.policy, args.packages, shuffle=args.shuffle)]

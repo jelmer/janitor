@@ -121,7 +121,8 @@ async def get_open_mps_per_maintainer():
 
     open_mps_per_maintainer = {}
     for proposal in open_proposals:
-        maintainer_email = await state.get_maintainer_email_for_proposal(proposal.url)
+        maintainer_email = await state.get_maintainer_email_for_proposal(
+            proposal.url)
         if maintainer_email is None:
             warning('No maintainer email known for %s', proposal.url)
             continue

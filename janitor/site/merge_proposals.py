@@ -1,10 +1,10 @@
 #!/usr/bin/python3
 
 import sys
-import os
 
 from janitor import state
 from janitor.site import env
+
 
 async def write_merge_proposals(name):
     proposals_by_status = {}

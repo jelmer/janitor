@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from debian.deb822 import Changes
+import functools
 import os
 
 from janitor import state
@@ -81,13 +82,13 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(logfile_manager, run_id, times, command, description,
+async def generate_run_file(
+        logfile_manager, run_id, times, command, description,
         package_name, merge_proposal_url, build_version,
         build_distro, result_code, branch_name):
     (start_time, finish_time) = times
     kwargs = {}
     kwargs['run_id'] = run_id
-    kwargs['kind'] = command.split(' ')[0]
     kwargs['command'] = command
     kwargs['description'] = description
     kwargs['package'] = package_name
@@ -101,6 +102,10 @@ async def generate_run_file(logfile_manager, run_id, times, command, description
     kwargs['format_duration'] = format_duration
     kwargs['enumerate'] = enumerate
     kwargs['max'] = max
+    kwargs['suite'] = {
+        'lintian-brush': 'lintian-fixes',
+        'merge-upstream': 'fresh-releases',
+        'merge-upstream --snapshot': 'fresh-snapshots'}.get(command)
 
     def read_file(p):
         with open(p, 'rb') as f:
@@ -131,7 +136,8 @@ async def generate_run_file(logfile_manager, run_id, times, command, description
             for binary in changes_get_binaries(changes_path):
                 kwargs['binary_packages'].append(binary)
 
-    kwargs['get_log'] = lambda n: logfile_manager.get_log(package_name, run_id, n)
+    kwargs['get_log'] = functools.partial(
+        logfile_manager.get_log, package_name, run_id)
     if logfile_manager.has_log(package_name, run_id, BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
         kwargs['earlier_build_log_names'] = []
@@ -157,24 +163,28 @@ async def generate_run_file(logfile_manager, run_id, times, command, description
     return text
 
 
-async def write_run_file(logdirectory, dir, run_id, times, command, description,
-            package_name, merge_proposal_url, build_version,
-            build_distro, result_code, branch_name):
+async def write_run_file(
+        logdirectory, dir, run_id, times, command, description, package_name,
+        merge_proposal_url, build_version, build_distro, result_code,
+        branch_name):
     run_dir = os.path.join(dir, package_name, run_id)
     os.makedirs(run_dir, exist_ok=True)
 
     log_directory = os.path.join(logdirectory, package_name, run_id)
     build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
-    if not os.path.exists(os.path.join(run_dir, BUILD_LOG_NAME)) and os.path.exists(build_log_path):
+    if (not os.path.exists(os.path.join(run_dir, BUILD_LOG_NAME)) and
+            os.path.exists(build_log_path)):
         os.symlink(build_log_path, os.path.join(run_dir, BUILD_LOG_NAME))
 
     worker_log_path = os.path.join(log_directory, WORKER_LOG_NAME)
-    if not os.path.exists(os.path.join(run_dir, WORKER_LOG_NAME)) and os.path.exists(worker_log_path):
+    if (not os.path.exists(os.path.join(run_dir, WORKER_LOG_NAME)) and
+            os.path.exists(worker_log_path)):
         os.symlink(worker_log_path, os.path.join(run_dir, WORKER_LOG_NAME))
 
     logfile_manager = LogFileManager(logdirectory)
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
-        f.write(await generate_run_file(logfile_manager, run_id, times, command, description,
+        f.write(await generate_run_file(
+            logfile_manager, run_id, times, command, description,
             package_name, merge_proposal_url, build_version, build_distro,
             result_code, branch_name))
     note('Wrote %s', run_dir)
@@ -193,7 +203,8 @@ async def write_run_files(logdirectory, dir):
     return runs_by_pkg
 
 
-async def generate_pkg_file(name, merge_proposals, maintainer_email, branch_url, runs):
+async def generate_pkg_file(
+        name, merge_proposals, maintainer_email, branch_url, runs):
     kwargs = {}
     kwargs['package'] = name
     kwargs['maintainer_email'] = maintainer_email
@@ -205,14 +216,15 @@ async def generate_pkg_file(name, merge_proposals, maintainer_email, branch_url,
     return await template.render_async(**kwargs)
 
 
-async def write_pkg_file(dir, name, merge_proposals, maintainer_email, branch_url,
-                         runs):
+async def write_pkg_file(dir, name, merge_proposals, maintainer_email,
+                         branch_url, runs):
     pkg_dir = os.path.join(dir, name)
     if not os.path.isdir(pkg_dir):
         os.mkdir(pkg_dir)
 
     with open(os.path.join(pkg_dir, 'index.html'), 'w') as f:
-        f.write(await generate_pkg_file(name, merge_proposals, maintainer_email, branch_url, runs))
+        f.write(await generate_pkg_file(
+            name, merge_proposals, maintainer_email, branch_url, runs))
 
 
 async def write_pkg_files(dir):
@@ -235,7 +247,8 @@ async def write_pkg_files(dir):
 
 async def generate_pkg_list(packages):
     template = env.get_template('package-name-list.html')
-    return await template.render_async(packages=[name for (name, maintainer) in packages])
+    return await template.render_async(
+        packages=[name for (name, maintainer) in packages])
 
 
 async def generate_maintainer_list(packages):
@@ -267,6 +280,7 @@ if __name__ == '__main__':
     if not os.path.isdir(args.directory):
         os.mkdir(args.directory)
     loop = asyncio.get_event_loop()
-    runs_by_pkg = loop.run_until_complete(write_run_files(args.logdirectory, args.directory))
+    runs_by_pkg = loop.run_until_complete(
+        write_run_files(args.logdirectory, args.directory))
     packages = loop.run_until_complete(write_pkg_files(args.directory))
     loop.run_until_complete(write_pkg_list(args.directory, packages))

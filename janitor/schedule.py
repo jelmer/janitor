@@ -191,7 +191,7 @@ async def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
 
 
 async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
-                 shuffle=False):
+                       shuffle=False):
     udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
@@ -250,7 +250,7 @@ priority_per_tag = {
 
 
 def determine_tags(package, command, mode, previous_runs, context=None,
-                       priority=0):
+                   priority=0):
 
     NO_CONTEXT_REFRESH_FREQUENCY = 14
 

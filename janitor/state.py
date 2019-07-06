@@ -20,10 +20,11 @@ from debian.changelog import Version
 import json
 import shlex
 import asyncpg
+from contextlib import asynccontextmanager
+
 
 pool = None
 
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def get_connection():
@@ -82,12 +83,12 @@ async def store_run(
     async with get_connection() as conn:
         await _ensure_package(conn, name, vcs_url, maintainer_email)
         await conn.execute(
-            "INSERT INTO run (id, command, description, result_code, start_time, "
-            "finish_time, package, instigated_context, context, build_version, "
-            "build_distribution, main_branch_revision, branch_name, revision, "
-            "result) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14"
-            ", $15)",
+            "INSERT INTO run (id, command, description, result_code, "
+            "start_time, finish_time, package, instigated_context, context, "
+            "build_version, build_distribution, main_branch_revision, "
+            "branch_name, revision, result) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
+            "$14, $15)",
             run_id, ' '.join(command), description, result_code,
             start_time, finish_time, name, instigated_context, context,
             str(build_version) if build_version else None, build_distribution,
@@ -110,7 +111,7 @@ INSERT INTO publish (package, branch_name, main_branch_revision, revision,
 mode, result_code, description, merge_proposal_url) values ($1, $2, $3, $4, $5,
 $6, $7, $8)
 """, package, branch_name, main_branch_revision, revision, mode, result_code,
-     description, merge_proposal_url)
+description, merge_proposal_url)
 
 
 async def iter_packages(package=None):
@@ -272,8 +273,8 @@ async def add_to_queue(vcs_url, env, command, priority=0,
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration "
             "WHERE queue.priority <= EXCLUDED.priority",
-                vcs_url, package, ' '.join(command), committer,
-                priority, context, estimated_duration)
+            vcs_url, package, ' '.join(command), committer,
+            priority, context, estimated_duration)
         return True
 
 
@@ -349,6 +350,7 @@ SELECT
   result_code,
   context,
   start_time,
+  finish_time,
   id,
   result
 FROM
@@ -425,8 +427,8 @@ WHERE
 async def update_run_result(log_id, code, description):
     async with get_connection() as conn:
         await conn.execute(
-        'UPDATE run SET result_code = $1, description = $2 WHERE id = $3',
-        code, description, log_id)
+            'UPDATE run SET result_code = $1, description = $2 WHERE id = $3',
+            code, description, log_id)
 
 
 async def already_published(package, branch_name, revision, mode):
@@ -519,14 +521,23 @@ ON CONFLICT (url) DO UPDATE SET
   last_scanned = EXCLUDED.last_scanned,
   description = EXCLUDED.description
 """, branch_url, status, revision.decode('utf-8') if revision else None,
-     last_scanned, description)
+last_scanned, description)
 
 
 async def iter_lintian_tags():
     async with get_connection() as conn:
         return await conn.fetch("""
 select tag, count(tag) from (
-select distinct on (package) package, json_array_elements(json_array_elements(result->'applied')->'fixed_lintian_tags') #>> '{}' as tag from run where build_distribution = 'lintian-fixes' order by package, start_time desc) as bypackage group by 1;
+    select distinct on (package)
+      package,
+      json_array_elements(
+        json_array_elements(
+          result->'applied')->'fixed_lintian_tags') #>> '{}' as tag
+    from
+      run
+    where
+      build_distribution = 'lintian-fixes'
+    order by package, start_time desc) as bypackage group by 1
 """)
 
 
@@ -542,5 +553,13 @@ select
   context,
   start_time,
   id,
-  (json_array_elements(json_array_elements(result->'applied')->'fixed_lintian_tags') #>> '{}') as tag from run where build_distribution  = 'lintian-fixes' and result_code = 'success') as package where tag = $1 order by package, start_time desc
+  (json_array_elements(
+     json_array_elements(
+       result->'applied')->'fixed_lintian_tags') #>> '{}') as tag
+from
+  run
+where
+  build_distribution  = 'lintian-fixes' and
+  result_code = 'success'
+) as package where tag = $1 order by package, start_time desc
 """, tag)

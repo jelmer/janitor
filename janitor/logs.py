@@ -38,7 +38,7 @@ class LogFileManager(object):
             if not os.path.exists(path):
                 continue
             if path.endswith('.gz'):
-                return GzipFile(path, 'rb')
+                return GzipFile(path, mode='rb')
             else:
                 return open(path, 'rb')
         raise FileNotFoundError(name)
@@ -49,8 +49,5 @@ class LogFileManager(object):
         with open(orig_path, 'rb') as inf:
             dest_path = os.path.join(
                 dest_dir, os.path.basename(orig_path) + '.gz')
-            with GzipFile(dest_path, 'wb') as outf:
+            with GzipFile(dest_path, mode='wb') as outf:
                 outf.write(inf.read())
-
-
-

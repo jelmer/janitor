@@ -25,7 +25,6 @@ from datetime import datetime, timedelta
 
 import asyncio
 import sys
-import time
 import urllib.parse
 
 from prometheus_client import (
@@ -63,13 +62,15 @@ async def update_gitlab_branches(vcs_result_dir, host):
             package_per_repo[url] = name
 
     possible_transports = []
-    salsa = GitLab.probe_from_url('https://%s' % host, possible_transports=possible_transports)
+    salsa = GitLab.probe_from_url(
+        'https://%s' % host, possible_transports=possible_transports)
     parameters = {
             'simple': True,
             'ordered_by': 'updated_at',
             'visibility': 'public',
             }
-    path = 'projects?' + ';'.join(['%s=%s' % item for item in parameters.items()])
+    path = 'projects?' + ';'.join(
+        ['%s=%s' % item for item in parameters.items()])
     for project in salsa._api_request('GET', path):
         if (datetime.now() -
                 datetime.fromisoformat(project['last_activity_at'][:-1])
@@ -87,7 +88,8 @@ async def update_gitlab_branches(vcs_result_dir, host):
             if revision == last_revision:
                 continue
             if branch_name:
-                url = '%s,branch=%s' % (project['http_url_to_repo'], branch_name)
+                url = '%s,branch=%s' % (
+                    project['http_url_to_repo'], branch_name)
             else:
                 url = project['http_url_to_repo']
             note('Updating %s (last activity: %s)', url,
