@@ -49,7 +49,7 @@ async def handle_publish(request):
         return web.json_response(
             {'error': 'Invalid mode', 'mode': mode}, status=400)
     # TODO(jelmer): And now?
-    response_obj = {'status': 'success', 'package': package}
+    response_obj = {'status': 'success', 'package': package, 'mode': mode}
     return web.json_response(response_obj)
 
 
@@ -135,12 +135,12 @@ async def handle_diff(request):
     package = request.match_info.get('package')
     run_id = request.match_info['run_id']
     try:
-        run = list(await state.iter_runs(package=package, run_id=run_id))[0]
+        run = [r async for r in state.iter_runs(package=package, run_id=run_id)][0]
     except IndexError:
         raise web.HTTPNotFoundError()
-    f = get_run_diff(run)
+    text = get_run_diff(run)
     return web.Response(
-            content_type='text/x-diff', text=f.getvalue(),
+            content_type='text/x-diff', body=text,
             headers={'Cache-Control': 'max-age=3600'})
 
 

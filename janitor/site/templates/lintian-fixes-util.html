@@ -3,7 +3,7 @@
 {% macro lintian_brush_summary(result) %}
 <ul>
     {% for applied in result %}
-    <li>{{ applied['summary'] }}{% if applied['fixed_lintian_tags'] %} ({% for tag in applied['fixed_lintian_tags'] %}{{ lintian_tag_link(tag) }} {% endfor %}){% endif %}</li>
+    <li>{{ applied['summary'] }}{% if applied['fixed_lintian_tags'] %} ({% for tag in applied['fixed_lintian_tags'] %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}){% endif %}</li>
     {% endfor %}
 </ul>
 {% endmacro %}

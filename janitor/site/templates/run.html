@@ -11,6 +11,7 @@
 <li>Start time: {{ start_time}}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Description: {{ description }}</li>
+<li>Diff: <a href="/api/run/{{ run_id }}/diff">Raw diff</a></li>
 </ul>
 
 {{ local_command(command, package) }}
@@ -40,13 +41,13 @@
 
 {% if changes_name %}
 <h2>Resulting package</h2>
-<p>Changes filename: <a class="reference external" href="/{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></p>
+<p>Changes filename: <a class="reference external" href="/{{ build_distribution }}/{{ changes_name }}">{{ changes_name }}</a></p>
 
 {% if binary_packages %}
-<p>Install this package (if you have the <a class="reference external" href="/{{ build_distro }}">apt repository</a> enabled) by running one of:</p>
+<p>Install this package (if you have the <a class="reference external" href="/{{ build_distribution }}">apt repository</a> enabled) by running one of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 {% for binary_package in binary_packages %}
-apt install -t {{ build_distro }} {{ binary_package }}
+apt install -t {{ build_distribution }} {{ binary_package }}
 {% endfor %}
 </pre></div></div>
 {% endif %}

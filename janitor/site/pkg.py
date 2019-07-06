@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-from debian.deb822 import Changes
 import functools
 import os
 
@@ -19,24 +18,20 @@ from janitor.sbuild_log import (
 )
 from janitor.site import (
     format_duration,
+    get_changes_path,
 )
-from janitor.site import env
+from janitor.site import env, get_local_vcs_repo, get_changes_path, changes_get_binaries
 from janitor.trace import note, warning
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
+    get_vcs_abbreviation,
 )
 
 FAIL_BUILD_LOG_LEN = 15
 
 BUILD_LOG_NAME = 'build.log'
 WORKER_LOG_NAME = 'worker.log'
-
-
-def changes_get_binaries(changes_path):
-    with open(changes_path, "r") as cf:
-        changes = Changes(cf)
-        return changes['Binary'].split(' ')
 
 
 def find_build_log_failure(logf, length):
@@ -83,7 +78,7 @@ def in_line_boundaries(i, boundaries):
 
 
 async def generate_run_file(logfile_manager, run):
-    (start_time, finish_time) = times
+    (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run_id'] = run.id
     kwargs['command'] = run.command
@@ -93,7 +88,7 @@ async def generate_run_file(logfile_manager, run):
     kwargs['finish_time'] = run.times[1]
     kwargs['merge_proposal_url'] = run.merge_proposal_url
     kwargs['build_version'] = run.build_version
-    kwargs['build_distro'] = run.build_distribution
+    kwargs['build_distribution'] = run.build_distribution
     kwargs['result_code'] = run.result_code
     kwargs['branch_name'] = run.branch_name
     kwargs['format_duration'] = format_duration
@@ -114,10 +109,9 @@ async def generate_run_file(logfile_manager, run):
             get_build_architecture())
     else:
         kwargs['changes_name'] = None
-    if os.path.exists('../vcs/git/%s' % run.package):
-        kwargs['vcs'] = 'git'
-    elif os.path.exists('../vcs/bzr/%s' % run.package):
-        kwargs['vcs'] = 'bzr'
+    repo = get_local_vcs_repo(run.package)
+    if repo:
+        kwargs['vcs'] = get_vcs_abbreviation(repo)
     else:
         kwargs['vcs'] = None
     kwargs['cache_url_git'] = CACHE_URL_GIT
@@ -125,16 +119,15 @@ async def generate_run_file(logfile_manager, run):
     kwargs['binary_packages'] = []
     kwargs['in_line_boundaries'] = in_line_boundaries
     if kwargs['changes_name']:
-        changes_path = os.path.join(
-            "../public_html", run.build_distribution, kwargs['changes_name'])
-        if not os.path.exists(changes_path):
+        changes_path = get_changes_path(run, kwargs['changes_name'])
+        if not changes_path:
             warning('Missing changes path %r', changes_path)
         else:
             for binary in changes_get_binaries(changes_path):
                 kwargs['binary_packages'].append(binary)
 
     kwargs['get_log'] = functools.partial(
-        logfile_manager.get_log, run.package, run_id)
+        logfile_manager.get_log, run.package, run.id)
     if logfile_manager.has_log(run.package, run.id, BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
         kwargs['earlier_build_log_names'] = []

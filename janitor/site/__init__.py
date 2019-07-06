@@ -15,8 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-
+from debian.deb822 import Changes
 from jinja2 import Environment, PackageLoader, select_autoescape
+import os
 
 
 def format_duration(duration):
@@ -30,15 +31,47 @@ env = Environment(
 )
 
 
-def get_run_diff(run):
+def get_local_vcs_repo(package):
+    import breezy.git
+    import breezy.bzr
     from breezy.repository import Repository
-    from breezy.diff import show_diff_trees
-    import os
-    from io import StringIO
     for vcs in ['git', 'bzr']:
-        repo = Repository.open(os.path.join('..', 'vcs', vcs, run.package))
-    f = StringIO()
+        path = os.path.join(os.path.dirname(__file__), '..', '..', 'vcs', vcs, package)
+        if not os.path.exists(path):
+            continue
+        return Repository.open(path)
+    return None
+
+
+def get_run_diff(run):
+    from breezy.diff import show_diff_trees
+    from io import BytesIO
+
+    f = BytesIO()
+    repo = get_local_vcs_repo(run.package)
     old_tree = repo.revision_tree(run.main_branch_revision)
     new_tree = repo.revision_tree(run.revision)
     show_diff_trees(old_tree, new_tree, to_file=f)
-    return f
+    return f.getvalue()
+
+
+def highlight_diff(diff):
+    from pygments import highlight
+    from pygments.lexers.diff import DiffLexer
+    from pygments.formatters import HtmlFormatter
+    return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
+
+
+def get_changes_path(run, changes_name):
+    path = os.path.join(
+            os.path.dirname(__file__), '..', '..',
+            "public_html", run.build_distribution, changes_name)
+    if not os.path.exists(path):
+        return None
+    return path
+
+
+def changes_get_binaries(changes_path):
+    with open(changes_path, "r") as cf:
+        changes = Changes(cf)
+        return changes['Binary'].split(' ')

@@ -5,7 +5,7 @@ import asyncio
 import sys
 
 from janitor import state
-from janitor.site import env, format_duration, get_run_diff
+from janitor.site import env, format_duration, get_run_diff, highlight_diff
 
 
 async def generate_pkg_file(package):
@@ -31,8 +31,14 @@ async def generate_pkg_file(package):
         run_id = None
         result = None
     else:
-        (command, build_version, result_code,
-         context, start_time, finish_time, run_id, result) = run
+        command = run.command
+        build_version = run.build_version
+        result_code = run.result_code
+        context = run.context
+        start_time = run.times[0]
+        finish_time = run.times[1]
+        run_id = run.id
+        result = run.result
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
@@ -48,7 +54,8 @@ async def generate_pkg_file(package):
         'result': result,
         'suite': suite,
         'format_duration': format_duration,
-        'show_diff': lambda: get_run_diff(run),
+        'show_diff': lambda: get_run_diff(run).decode('utf-8'),
+        'highlight_diff': highlight_diff,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)

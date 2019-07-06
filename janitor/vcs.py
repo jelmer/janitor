@@ -47,8 +47,8 @@ class BranchOpenFailure(Exception):
         self.description = description
 
 
-def get_vcs_abbreviation(branch):
-    vcs = getattr(branch.repository, 'vcs', None)
+def get_vcs_abbreviation(repository):
+    vcs = getattr(repository, 'vcs', None)
     if vcs:
         return vcs.abbreviation
     return 'bzr'
@@ -95,7 +95,7 @@ class MirrorFailure(Exception):
 
 def mirror_branches(vcs_result_dir, pkg, branch_map,
                     public_master_branch=None):
-    vcses = set(get_vcs_abbreviation(br) for name, br in branch_map)
+    vcses = set(get_vcs_abbreviation(br.repository) for name, br in branch_map)
     if len(vcses) == 0:
         return
     if len(vcses) > 1:
@@ -164,7 +164,7 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
         (name, local_branch),
         ('master', main_branch),
     ]
-    if get_vcs_abbreviation(local_branch) == 'git':
+    if get_vcs_abbreviation(local_branch.repository) == 'git':
         for branch_name in (additional_colocated_branches or []):
             try:
                 from_branch = local_branch.controldir.open_branch(

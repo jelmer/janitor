@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "run_util.html" import local_command, merge_command with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons with context %}
 {% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
 {% block page_title %}Lintian Fixes - {{ package }}{% endblock %}
 {% block body %}
@@ -34,6 +34,8 @@ No recent runs for {{ package }}
 
 <h2>Ready changes</h2>
 
+{{ publish_buttons(suite, package, "#commandResult") }}
+
 {{ merge_command(package, branch_name) }}
 
 <h3>Summary</h3>
@@ -44,13 +46,13 @@ No recent runs for {{ package }}
 
 <h3>Diff</h3>
 
-{{ show_diff() }}
+{{ highlight_diff(show_diff())|safe }}
 
 {% if result['failed'] %}
 
 <h3>Failed fixers:</h3>
 <ul>
-{% for tag, details in result['failed'].items() %}
+{% for tag in result['failed'] %}
    <li>{{ lintian_tag_link(tag) }}</li>
 {% endfor %}
 </ul>
@@ -59,10 +61,11 @@ No recent runs for {{ package }}
 
 {% endif %}
 
-<h3>More details</h3>
+<h3>Run locally</h3>
 
 {{ local_command(command, package) }}
 
+<h3>More details</h3>
 <p><a href="/cupboard/pkg/{{ package }}/{{ run_id }}">Full run details</a></p>
 
 {% endif %}

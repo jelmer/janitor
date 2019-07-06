@@ -136,35 +136,52 @@ class Run(object):
 
     __slots__ = [
             'id', 'times', 'command', 'description', 'package',
-            'merge_proposal_url', 'version', 'build_version',
+            'merge_proposal_url', 'build_version',
             'build_distribution', 'result_code', 'branch_name',
-            'main_branch_revision', 'revision']
+            'main_branch_revision', 'revision', 'context', 'result']
 
     def __init__(self, run_id, times, command, description, package,
-                 merge_proposal_url, version, build_version, build_distribution,
-                 result_code, branch_name, main_branch_revision, revision):
-        self.run_id = run_id
+                 merge_proposal_url, build_version,
+                 build_distribution, result_code, branch_name,
+                 main_branch_revision, revision, context, result):
+        self.id = run_id
         self.times = times
         self.command = command
         self.description = description
         self.package = package
         self.merge_proposal_url = merge_proposal_url
-        self.version = version
         self.build_version = build_version
         self.build_distribution = build_distribution
         self.result_code = result_code
         self.branch_name = branch_name
         self.main_branch_revision = main_branch_revision
         self.revision = revision
+        self.context = context
+        self.result = result
+
+    @classmethod
+    def from_row(cls, row):
+        return cls(run_id=row[0],
+                   times=(row[2], row[3]),
+                   command=row[1], description=row[4], package=row[5],
+                   merge_proposal_url=row[6],
+                   build_version=Version(row[7]) if row[7] else None,
+                   build_distribution=row[8],
+                   result_code=(row[9] if row[9] else None),
+                   branch_name=row[10],
+                   main_branch_revision=(row[11].encode('utf-8') if row[11] else None),
+                   revision=(row[12].encode('utf-8') if row[12] else None),
+                   context=row[13], result=row[14])
 
     def __len__(self):
         return len(self.__slots__)
 
     def __tuple__(self):
         return (self.run_id, self.times, self.command, self.description,
-                self.package, self.merge_proposal_url, self.version,
+                self.package, self.merge_proposal_url,
                 self.build_version, self.build_distribution, self.result_code,
-                self.branch_name, self.main_branch_revision, self.revision):
+                self.branch_name, self.main_branch_revision, self.revision,
+                self.context, self.result)
 
     def __eq__(self, other):
         if isinstance(other, Run):
@@ -194,7 +211,7 @@ async def iter_runs(package=None, run_id=None, limit=None):
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
     run.merge_proposal_url, build_version, build_distribution, result_code,
-    branch_name, main_branch_revision, revision
+    branch_name, main_branch_revision, revision, context, result
 FROM
     run
 LEFT JOIN package ON package.name = run.package
@@ -214,13 +231,7 @@ LEFT JOIN package ON package.name = run.package
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
         for row in await conn.fetch(query, *args):
-            yield Run(row[0],
-                   (row[2], row[3]),
-                   row[1], row[4], row[5], row[6],
-                   Version(row[7]) if row[7] else None, row[8],
-                   row[9] if row[9] else None, row[10],
-                   row[11].encode('utf-8') if row[11] else None,
-                   row[12].encode('utf-8') if row[12] else None)
+            yield Run.from_row(row)
 
 
 async def get_maintainer_email_for_proposal(vcs_url):
@@ -394,13 +405,20 @@ async def get_last_success(package, suite):
     args = []
     query = """
 SELECT
+  run.id,
   command,
-  build_version,
-  result_code,
-  context,
   start_time,
   finish_time,
-  id,
+  description,
+  package,
+  merge_proposal_url,
+  build_version,
+  build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
   result
 FROM
   run
@@ -409,7 +427,10 @@ ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """
     args = [package, suite]
     async with get_connection() as conn:
-        return await conn.fetchrow(query, *args)
+        row = await conn.fetchrow(query, *args)
+        if row is None:
+            return None
+        return Run.from_row(row)
 
 
 async def iter_last_successes(suite=None):
