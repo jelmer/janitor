@@ -6,7 +6,7 @@ import os
 
 from janitor.policy import read_policy, apply_policy
 from janitor import state
-from . import env
+from . import env, get_run_diff
 
 DEFAULT_SCHEDULE_PRIORITY = 1000
 SUITE_TO_COMMAND = {
@@ -131,6 +131,19 @@ async def handle_queue(request):
         response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
+async def handle_diff(request):
+    package = request.match_info.get('package')
+    run_id = request.match_info['run_id']
+    try:
+        run = list(await state.iter_runs(package=package, run_id=run_id))[0]
+    except IndexError:
+        raise web.HTTPNotFoundError()
+    f = get_run_diff(run)
+    return web.Response(
+            content_type='text/x-diff', text=f.getvalue(),
+            headers={'Cache-Control': 'max-age=3600'})
+
+
 async def handle_run(request):
     package = request.match_info.get('package')
     run_id = request.match_info.get('run_id')
@@ -138,28 +151,25 @@ async def handle_run(request):
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async for (run_id, (start_time, finish_time), command, description,
-               package_name, merge_proposal_url, build_version,
-               build_distribution, result_code,
-               branch_name) in state.iter_runs(
+    async for run in state.iter_runs(
                 package, run_id=run_id, limit=limit):
-        if build_version:
+        if run.build_version:
             build_info = {
-                'version': str(build_version),
-                'distribution': build_distribution}
+                'version': str(run.build_version),
+                'distribution': run.build_distribution}
         else:
             build_info = None
+        (start_time, finish_time) = run.times
         response_obj.append({
-            'run_id': run_id,
+            'run_id': run.id,
             'start_time': start_time.isoformat(),
             'finish_time': finish_time.isoformat(),
-            'command': command,
-            'description': description,
-            'package': package_name,
-            'merge_proposal_url': merge_proposal_url,
-            'build_info': build_info,
-            'result_code': result_code,
-            'branch_name': branch_name,
+            'command': run.command,
+            'description': run.description,
+            'package': run.package_name,
+            'build_info': run.build_info,
+            'result_code': run.result_code,
+            'branch_name': run.branch_name,
             })
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=600'})
@@ -218,8 +228,10 @@ app.router.add_get('/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/queue', handle_queue)
 app.router.add_get('/run', handle_run)
 app.router.add_get('/run/{run_id}', handle_run)
+app.router.add_get('/run/{run_id}/diff', handle_diff)
 app.router.add_get('/pkg/{package}/run', handle_run)
 app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
+app.router.add_get('/pkg/{package}/run/{run_id}/diff', handle_diff)
 app.router.add_get('/package-branch', handle_package_branch)
 app.router.add_get('/', handle_index)
 app.router.add_get(

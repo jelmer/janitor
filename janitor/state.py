@@ -132,22 +132,69 @@ FROM
         return await conn.fetch(query, *args)
 
 
+class Run(object):
+
+    __slots__ = [
+            'id', 'times', 'command', 'description', 'package',
+            'merge_proposal_url', 'version', 'build_version',
+            'build_distribution', 'result_code', 'branch_name',
+            'main_branch_revision', 'revision']
+
+    def __init__(self, run_id, times, command, description, package,
+                 merge_proposal_url, version, build_version, build_distribution,
+                 result_code, branch_name, main_branch_revision, revision):
+        self.run_id = run_id
+        self.times = times
+        self.command = command
+        self.description = description
+        self.package = package
+        self.merge_proposal_url = merge_proposal_url
+        self.version = version
+        self.build_version = build_version
+        self.build_distribution = build_distribution
+        self.result_code = result_code
+        self.branch_name = branch_name
+        self.main_branch_revision = main_branch_revision
+        self.revision = revision
+
+    def __len__(self):
+        return len(self.__slots__)
+
+    def __tuple__(self):
+        return (self.run_id, self.times, self.command, self.description,
+                self.package, self.merge_proposal_url, self.version,
+                self.build_version, self.build_distribution, self.result_code,
+                self.branch_name, self.main_branch_revision, self.revision):
+
+    def __eq__(self, other):
+        if isinstance(other, Run):
+            return tuple(self) == tuple(other)
+        if isinstance(other, tuple):
+            return tuple(self) == other
+        return False
+
+    def __lt__(self, other):
+        return tuple(self) < tuple(other)
+
+    def __getitem__(self, i):
+        if isinstance(i, slice):
+            return tuple(self).__getitem__(i)
+        return getattr(self, self.__slots__[i])
+
+
 async def iter_runs(package=None, run_id=None, limit=None):
     """Iterate over runs.
 
     Args:
       package: package to restrict to
     Returns:
-      iterator over (
-        run_id, (start_time, finish_time), command, description,
-        package_name, merge_proposal_url, build_version, build_distribution,
-        result_code, branch_name)
+      iterator over Run objects
     """
     query = """
 SELECT
     run.id, command, start_time, finish_time, description, package.name,
     run.merge_proposal_url, build_version, build_distribution, result_code,
-    branch_name
+    branch_name, main_branch_revision, revision
 FROM
     run
 LEFT JOIN package ON package.name = run.package
@@ -167,11 +214,13 @@ LEFT JOIN package ON package.name = run.package
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
         for row in await conn.fetch(query, *args):
-            yield (row[0],
+            yield Run(row[0],
                    (row[2], row[3]),
                    row[1], row[4], row[5], row[6],
                    Version(row[7]) if row[7] else None, row[8],
-                   row[9] if row[9] else None, row[10])
+                   row[9] if row[9] else None, row[10],
+                   row[11].encode('utf-8') if row[11] else None,
+                   row[12].encode('utf-8') if row[12] else None)
 
 
 async def get_maintainer_email_for_proposal(vcs_url):
