@@ -50,7 +50,7 @@ class LogFileManager(object):
             dest_path = os.path.join(
                 dest_dir, os.path.basename(orig_path) + '.gz')
             with GzipFile(dest_path, 'wb') as outf:
-                outf.write(inf)
+                outf.write(inf.read())
 
 
 
