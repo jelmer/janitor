@@ -11,6 +11,12 @@
 <li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
 </ul>
 
+{% if not result_code %}
+
+No recent runs for {{ package }}
+
+{% else %}
+
 {% if merge_proposals %}
 <div class="section" id="recent-merge-proposals">
 <h2>Recent merge proposals</h2>
@@ -52,6 +58,8 @@
 {{ local_command(command, package) }}
 
 <p><a href="/cupboard/pkg/{{ package }}/{{ run_id }}">Full run details</a></p>
+
+{% endif %}
 
 <!-- TODOJRV: Provide button to create merge proposal -->
 

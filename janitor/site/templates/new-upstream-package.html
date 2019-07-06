@@ -5,6 +5,12 @@
 <div class="section" id="{{ package }}">
 <h1>{{ package }}</h1>
 
+{% if not result_code %}
+
+No recent runs for {{ package }}
+
+{% else %}
+
 {% if merge_proposals %}
 <div class="section" id="recent-merge-proposals">
 <h2>Recent merge proposals</h2>
@@ -39,6 +45,8 @@ apt install -t {{ build_distro }} {{ binary_package }}
 <p><a href="/cupboard/pkg/{{ package }}/{{ run_id }}">Full run details</a></p>
 
 </div>
+
+{% endif %}
 
 </div>
 {% endblock %}

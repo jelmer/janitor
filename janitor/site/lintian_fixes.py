@@ -21,9 +21,17 @@ async def generate_pkg_file(package):
         for (package, url, status) in await state.iter_proposals(package)]
     run = await state.get_last_success(package, suite)
     if run is None:
-        pass # TODO(jelmer)
-    (command, build_version, result_code,
-     context, start_time, run_id, result) = run
+        # No runs recorded
+        command = None
+        build_version = None
+        result_code = None
+        context = None
+        start_time = None
+        run_id = None
+        result = None
+    else:
+        (command, build_version, result_code,
+         context, start_time, run_id, result) = run
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
