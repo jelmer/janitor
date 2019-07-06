@@ -81,7 +81,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(logdirectory, run_id, times, command, description,
+async def generate_run_file(logfile_manager, run_id, times, command, description,
         package_name, merge_proposal_url, build_version,
         build_distro, result_code, branch_name):
     (start_time, finish_time) = times
@@ -131,7 +131,6 @@ async def generate_run_file(logdirectory, run_id, times, command, description,
             for binary in changes_get_binaries(changes_path):
                 kwargs['binary_packages'].append(binary)
 
-    logfile_manager = LogFileManager(logdirectory)
     kwargs['get_log'] = lambda n: logfile_manager.get_log(package_name, run_id, n)
     if logfile_manager.has_log(package_name, run_id, BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
@@ -173,8 +172,9 @@ async def write_run_file(logdirectory, dir, run_id, times, command, description,
     if not os.path.exists(os.path.join(run_dir, WORKER_LOG_NAME)) and os.path.exists(worker_log_path):
         os.symlink(worker_log_path, os.path.join(run_dir, WORKER_LOG_NAME))
 
+    logfile_manager = LogFileManager(logdirectory)
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
-        f.write(await generate_run_file(logdirectory, run_id, times, command, description,
+        f.write(await generate_run_file(logfile_manager, run_id, times, command, description,
             package_name, merge_proposal_url, build_version, build_distro,
             result_code, branch_name))
     note('Wrote %s', run_dir)

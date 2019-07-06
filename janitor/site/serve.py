@@ -29,6 +29,7 @@ if __name__ == '__main__':
                         help='Logs directory path.', default='site/pkg')
     args = parser.parse_args()
 
+    logfile_manager = LogFileManager(args.logdirectory)
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
@@ -127,7 +128,7 @@ if __name__ == '__main__':
             run = [x async for x in state.iter_runs(run_id=run_id, package=pkg)][0]
         except IndexError:
             raise web.HTTPNotFound(text='No run with id %r' % run_id)
-        text = await generate_run_file(args.logdirectory, *run)
+        text = await generate_run_file(logfile_manager, *run)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=3600'})
@@ -136,13 +137,8 @@ if __name__ == '__main__':
         pkg = request.match_info['pkg']
         run_id = request.match_info['run_id']
         filename = request.match_info['log']
-        basepath = os.path.join(args.logdirectory, pkg, run_id, filename)
-        try:
-            with open(basepath, 'r') as f:
-                text = f.read()
-        except FileNotFoundError:
-            with GzipFile(basepath + '.gz') as f:
-                text = f.read()
+        with logfile_manager.get_log(pkg, run_id, filename) as f:
+            text = f.read()
         return web.Response(
             content_type='text/plain', text=text,
             headers={'Cache-Control': 'max-age=3600'})
