@@ -3,15 +3,29 @@
 {% block body %}
 <div class="section" id="the-debian-janitor">
 <h1>The Debian Janitor</h1>
-<p>The Debian janitor is a project to automatically propose fixes for common
-and trivial to fix problems in Debian packages.</p> <p>It finds repositories
-associated with packages in the Debian archive, runs a set of standard
-modifications over them, builds the resulting package and then creates a pull
-request with the resulting changes.</p> <p>The ultimate goal is to reduce the
-overhead for simple archive-wide changes to the point that maintainers just
-have to click <em>Merge</em> in a web UI.</p>
+<p>The Debian janitor is a project to automatically make changes to Debian
+packages.</p>
+
+<p>It finds VCS repositories associated with packages in the Debian archive, runs a
+set of predefined operations on them, builds the resulting package and then
+publishes the result (both as a VCS repository and as a Debian package).
+</p>
+
+<p>The overall goal is to reduce the manual effort that is need
+to maintain a Debian package, allowing maintainers to just click <em>Merge</em>
+in a web UI and allowing users to try out newer upstream versions of packages
+without the involvement of a developer.</p>
+
+<h2>Developers</h2>
 <ul>
-  <li><a href="lintian-fixes">Lintian Fixes</a></li>
+  <li><a href="lintian-fixes">Fixes for common issues reported by Lintian</a></li>
 </ul>
+
+<h2>Users</h2>
+<ul>
+  <li><a href="fresh-releases">Packages of new upstream releases</a></li>
+  <li><a href="fresh-snapshots">Packages of new upstream snapshots</a></li>
+</ul>
+
 </div>
 {% endblock %}
