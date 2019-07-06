@@ -21,10 +21,14 @@
 {% if branch_name %}
 {{ merge_command(package, branch_name) }}
 {% else %}
-{% if build_log_path %}
-{{ include_console_log(build_log_path, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
-{% elif worker_log_path %}
-{{ include_console_log(worker_log_path) }}
+{% if build_log_name %}
+{% with f = get_log(build_log_name) %}
+{{ include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
+{% endwith %}
+{% elif worker_log_name %}
+{% with f = get_log(worker_log_name) %}
+{{ include_console_log(f) }}
+{% endwith %}
 {% else %}
 <!-- No logs to display :( -->
 {% endif %}

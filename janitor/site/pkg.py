@@ -8,6 +8,7 @@ from janitor.build import (
     changes_filename,
     get_build_architecture,
 )
+from janitor.logs import LogFileManager
 from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
@@ -37,17 +38,16 @@ def changes_get_binaries(changes_path):
         return changes['Binary'].split(' ')
 
 
-def find_build_log_failure(log_path, length):
+def find_build_log_failure(logf, length):
     offsets = {}
     linecount = 0
     paragraphs = {}
-    with open(log_path, 'rb') as logf:
-        for title, offset, lines in parse_sbuild_log(logf):
-            if title is not None:
-                title = title.lower()
-            paragraphs[title] = lines
-            linecount = max(offset[1], linecount)
-            offsets[title] = offset
+    for title, offset, lines in parse_sbuild_log(logf):
+        if title is not None:
+            title = title.lower()
+        paragraphs[title] = lines
+        linecount = max(offset[1], linecount)
+        offsets[title] = offset
     highlight_lines = []
     include_lines = None
     failed_stage = find_failed_stage(paragraphs.get('summary', []))
@@ -131,32 +131,27 @@ async def generate_run_file(logdirectory, run_id, times, command, description,
             for binary in changes_get_binaries(changes_path):
                 kwargs['binary_packages'].append(binary)
 
-    log_directory = os.path.join(logdirectory, package_name, run_id)
-    build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
-    if os.path.exists(build_log_path):
+    logfile_manager = LogFileManager(logdirectory)
+    kwargs['get_log'] = lambda n: logfile_manager.get_log(package_name, run_id, n)
+    if logfile_manager.has_log(package_name, run_id, BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
-        kwargs['build_log_path'] = build_log_path
         kwargs['earlier_build_log_names'] = []
         i = 1
-        while os.path.exists(os.path.join(
-                log_directory, BUILD_LOG_NAME + '.%d' % i)):
+        while logfile_manager.has_log(
+                package_name, run_id, BUILD_LOG_NAME + '.%d' % i):
             log_name = '%s.%d' % (BUILD_LOG_NAME, i)
             kwargs['earlier_build_log_names'].append((i, log_name))
-            if not os.path.exists(os.path.join(run_dir, log_name)):
-                os.symlink(os.path.join(log_directory, log_name),
-                           os.path.join(run_dir, log_name))
             i += 1
 
         line_count, include_lines, highlight_lines = find_build_log_failure(
-            build_log_path, FAIL_BUILD_LOG_LEN)
+            logfile_manager.get_log(package_name, run_id, BUILD_LOG_NAME),
+            FAIL_BUILD_LOG_LEN)
         kwargs['build_log_line_count'] = line_count
         kwargs['build_log_include_lines'] = include_lines
         kwargs['build_log_highlight_lines'] = highlight_lines
 
-    worker_log_path = os.path.join(log_directory, WORKER_LOG_NAME)
-    if os.path.exists(worker_log_path):
+    if logfile_manager.has_log(package_name, run_id, WORKER_LOG_NAME):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
-        kwargs['worker_log_path'] = worker_log_path
 
     template = env.get_template('run.html')
     text = await template.render_async(**kwargs)
