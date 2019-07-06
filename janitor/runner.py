@@ -54,6 +54,7 @@ from silver_platter.utils import (
     )
 
 from . import state
+from .logs import LogFileManager
 from .trace import note, warning
 from .vcs import (
     get_vcs_abbreviation,
@@ -204,6 +205,7 @@ async def process_one(
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
+    logfile_manager = LogFileManager(log_dir)
 
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if command == ["new-upstream"]:
@@ -276,9 +278,7 @@ async def process_one(
         for name in [
                 n for n in os.listdir(output_directory) if n.endswith('.log')]:
             src_build_log_path = os.path.join(output_directory, name)
-            dest_build_log_path = os.path.join(log_dir, pkg, log_id)
-            os.makedirs(dest_build_log_path, exist_ok=True)
-            shutil.copy(src_build_log_path, dest_build_log_path)
+            logfile_manager.import_log(pkg, log_id, src_build_log_path)
 
         if retcode != 0:
             return JanitorResult(

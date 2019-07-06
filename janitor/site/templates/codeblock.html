@@ -1,5 +1,4 @@
-{% macro include_console_log(path, include_lines=None, highlight_lines=None) %}
-{% with lines = read_file(path) %}
+{% macro include_console_log(f, include_lines=None, highlight_lines=None) %}
 <div class="highlight-console notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv">
 <pre>{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}{{ i }}
 {% endif %}{% endfor %}</pre></div></td><td class="code"><div class="highlight">
@@ -7,5 +6,4 @@
 {% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}<span class="go{{ 'hll' if highlight_lines and i in highlight_lines else '' }}">{{ line.rstrip('\n') }}</span>
 {% endif %}{% endfor %}</pre></div>
 </td></tr></table></div>
-{% endwith %}
 {% endmacro %}
