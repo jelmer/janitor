@@ -5,9 +5,9 @@ from aiohttp import web
 import json
 import os
 
-from jinja2 import Environment, PackageLoader, select_autoescape
 from janitor.policy import read_policy, apply_policy
 from janitor import state
+from . import env
 
 DEFAULT_SCHEDULE_PRIORITY = 1000
 SUITE_TO_COMMAND = {
@@ -65,12 +65,12 @@ async def handle_schedule(request):
         raise web.HTTPNotFound(
             text=json.dumps({'reason': 'Package not found'}),
             content_type='application/json')
-    env = {
+    run_env = {
         'PACKAGE': name,
         'MAINTAINER_EMAIL': maintainer_email,
     }
 
-    await state.add_to_queue(vcs_url, env, command, priority)
+    await state.add_to_queue(vcs_url, run_env, command, priority)
     response_obj = {
         'package': package,
         'command': command,
@@ -116,12 +116,12 @@ async def handle_queue(request):
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async for (queue_id, branch_url, env, command) in state.iter_queue(
+    async for (queue_id, branch_url, run_env, command) in state.iter_queue(
             limit=limit):
         response_obj.append({
             'queue_id': queue_id,
             'branch_url': branch_url,
-            'env': env,
+            'env': run_env,
             'command': command})
     return web.json_response(response_obj, headers={'Cache-Control': 'max-age=60'})
 
@@ -183,7 +183,7 @@ async def handle_published_packages(request):
 
 
 async def handle_index(request):
-    template = jinja2_env.get_template('api-index.html')
+    template = env.get_template('api-index.html')
     return web.Response(
         content_type='text/html', text=await template.render_async(),
         headers={'Cache-Control': 'max-age=600'})
@@ -195,12 +195,6 @@ async def handle_global_policy(request):
             content_type='text/protobuf', text=f.read(),
             headers={'Cache-Control': 'max-age=60'})
 
-
-jinja2_env = Environment(
-    loader=PackageLoader('janitor', 'templates'),
-    autoescape=select_autoescape(['html', 'xml']),
-    enable_async=True,
-)
 
 app = web.Application()
 app.router.add_get('/pkgnames', handle_packagename_list)

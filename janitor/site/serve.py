@@ -139,7 +139,7 @@ if __name__ == '__main__':
         run_id = request.match_info['run_id']
         filename = request.match_info['log']
         with logfile_manager.get_log(pkg, run_id, filename) as f:
-            text = f.read()
+            text = f.read().decode('utf-8', 'replace')
         return web.Response(
             content_type='text/plain', text=text,
             headers={'Cache-Control': 'max-age=3600'})
@@ -218,6 +218,6 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log}', handle_log)
     app.router.add_get('/pkg/', handle_pkg_list)
     app.router.add_static('/_static', os.path.join(os.path.dirname(__file__), '_static'))
-    from janitor.api import app as api_app
+    from .api import app as api_app
     app.add_subapp('/api', api_app)
     web.run_app(app, host=args.host)
