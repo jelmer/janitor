@@ -54,17 +54,14 @@ async def handle_schedule(request):
     try:
         command = SUITE_TO_COMMAND[suite]
     except KeyError:
-        raise web.HTTPBadRequest(
-            text=json.dumps({'error': 'Unknown suite', 'suite': suite}),
-            content_type='application/json')
+        return web.json_response(
+            {'error': 'Unknown suite', 'suite': suite}, status=404)
     post = await request.post()
     priority = post.get('priority', DEFAULT_SCHEDULE_PRIORITY)
     try:
         (name, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
     except IndexError:
-        raise web.HTTPNotFound(
-            text=json.dumps({'reason': 'Package not found'}),
-            content_type='application/json')
+        return web.json_response({'reason': 'Package not found'}, status=404)
     run_env = {
         'PACKAGE': name,
         'MAINTAINER_EMAIL': maintainer_email,
@@ -179,7 +176,7 @@ async def handle_published_packages(request):
         response_obj.append({
             'package': package,
             'build_version': build_version})
-    return web.json_response(response_obj, content_type='application/json')
+    return web.json_response(response_obj)
 
 
 async def handle_index(request):
@@ -204,8 +201,8 @@ app.router.add_get(
     '/pkg/{package}/merge-proposals',
     handle_merge_proposal_list)
 app.router.add_get('/pkg/{package}/policy', handle_policy)
-app.router.add_post('/pkg/{package}/publish', handle_publish)
-app.router.add_post('/pkg/{package}/schedule/{suite}', handle_schedule)
+app.router.add_post('/{suite}/pkg/{package}/publish', handle_publish)
+app.router.add_post('/{suite}/pkg/{package}/schedule', handle_schedule)
 app.router.add_get('/merge-proposals', handle_merge_proposal_list)
 app.router.add_get('/queue', handle_queue)
 app.router.add_get('/run', handle_run)
@@ -215,7 +212,7 @@ app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
 app.router.add_get('/package-branch', handle_package_branch)
 app.router.add_get('/', handle_index)
 app.router.add_get(
-    '/apt/{suite}/published-packages', handle_published_packages)
+    '/{suite}/published-packages', handle_published_packages)
 app.router.add_get('/policy', handle_global_policy)
 # TODO(jelmer): Previous runs (iter_previous_runs)
 # TODO(jelmer): Last successes (iter_last_successes)

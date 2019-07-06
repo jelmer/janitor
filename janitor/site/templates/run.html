@@ -15,6 +15,23 @@
 
 {{ local_command(command, package) }}
 
+<button id="schedule">Reschedule</button>
+
+<script>
+$(function() {
+  // User clicks the "getData" button
+  $("#schedule").click(function() {
+    // Get the JSON file
+      $.getJSON('/api/{{ build_distro }}/pkg/{{ package }}/schedule', function(data) {
+      console.log('Scheduled: ' + data);
+      $("#commandResult").append("Scheduled new run.<br/>");
+    });
+  });
+});
+</script>
+
+<div id="commandResult"></div>
+
 <!-- TODO(jelmer): Include button to propose merging -->
 <!-- TODO(jelmer): Include button to retry -->
 
