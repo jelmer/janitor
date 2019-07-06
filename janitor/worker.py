@@ -21,6 +21,7 @@ import distro_info
 import json
 import os
 import subprocess
+import sys
 
 from breezy.config import GlobalStack
 
@@ -137,15 +138,16 @@ class LintianBrushWorker(SubWorker):
                         committer=self.committer,
                         update_changelog=self.args.update_changelog,
                         compat_release=self.args.compat_release,
-                        trust_package=TRUST_PACKAGE,
-                        verbose=True)
+                        trust_package=TRUST_PACKAGE)
             except GeneratedControlFile as e:
                 raise WorkerFailure(
                     'control-file-is-generated',
                     'A control file is generated: %s' % e.path)
 
         if failed:
-            note('some fixers failed to run: %r', set(failed))
+            for fixer_name, error in failed.items():
+                note('Fixer %r failed to run:', fixer_name)
+                sys.stderr.write(error.decode('utf-8', 'replace'))
 
         metadata['applied'] = [{
             'summary': summary,
@@ -515,5 +517,4 @@ def main(argv=None):
 
 
 if __name__ == '__main__':
-    import sys
     sys.exit(main())
