@@ -46,10 +46,12 @@ No recent runs for {{ package }}
 
 <h3>Failed tags:</h3>
 <ul>
-{% for tag in result['failed'] %}
+{% for tag, details in result['failed'].items() %}
    <li>{{ lintian_tag_link(tag) }}</li>
 {% endfor %}
 </ul>
+
+<p>See the <a href="/cupboard/pkg/{{ package }}/{{ run_id }}/worker.log">worker log</a> for details.</p>
 
 {% endif %}
 
