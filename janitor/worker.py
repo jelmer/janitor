@@ -153,7 +153,9 @@ class LintianBrushWorker(SubWorker):
             'fixed_lintian_tags': result.fixed_lintian_tags,
             'certainty': result.certainty}
             for result, summary in applied]
-        metadata['failed'] = {name: e.errors for (name, e) in failed.items()}
+        metadata['failed'] = {
+            name: e.errors.decode('utf-8', 'replace')
+            for (name, e) in failed.items()}
         metadata['add_on_only'] = not has_nontrivial_changes(
             applied, self.args.propose_addon_only)
 

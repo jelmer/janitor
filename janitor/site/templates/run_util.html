@@ -14,3 +14,21 @@
 <!-- Unknown vcs: {{ vcs }} -->
 {% endif %}
 {% endmacro %}
+
+{% macro reschedule_button(suite, package, title="Reschedule", resultDiv=None) %}
+<button id="reschedule">{{ title }}</button>
+
+<script src="/_static/jquery.js"></script>
+<script>
+$(function() {
+  $("#reschedule").click(function() {
+    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {}, function(data) {
+      console.log('Scheduled: ' + data.priority);
+{% if resultDiv %}
+      $("{{ resultDiv }}").append("Scheduled new run with priority " + data.priority + ".<br/>");
+{% endif %]
+    }, 'json');
+  });
+});
+</script>
+{% endmacro %}
