@@ -28,11 +28,15 @@
 
 <h3>Summary</h3>
 
+<p>Built on {{ finish_time }} (took {{ format_duration(finish_time - start_time) }})</p>
+
 {{ lintian_brush_summary(result['applied']) }}
 
-{% if result['failed'] %}
-
 <h3>Diff</h3>
+
+<!-- TODO -->
+
+{% if result['failed'] %}
 
 <h3>Failed tags:</h3>
 <ul>
@@ -50,7 +54,6 @@
 <p><a href="/cupboard/pkg/{{ package }}/{{ run_id }}">Full run details</a></p>
 
 <!-- TODOJRV: Provide button to create merge proposal -->
-<!-- TODOJRV: Show diff -->
 
 </div>
 {% endblock %}
