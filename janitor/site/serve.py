@@ -21,6 +21,7 @@ if __name__ == '__main__':
     import functools
     from gzip import GzipFile
     import os
+    from janitor.logs import LogFileManager
     from aiohttp import web
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
