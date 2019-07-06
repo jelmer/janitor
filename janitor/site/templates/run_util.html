@@ -32,3 +32,29 @@ $(function() {
 });
 </script>
 {% endmacro %}
+
+{% macro publish_buttons(suite, package, resultDiv=None) %}
+<button id="propose">Create merge proposal</button> <button id="push-derived">Create fork with changes</button>
+
+<script src="/_static/jquery.js"></script>
+
+<script>
+$(function() {
+  $("#propose").click(function() {
+    $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'propose'}, function(data) {
+{% if resultDiv %}
+      $("{{ resultDiv }}").append("Scheduled creation of merge proposal.<br/>");
+{% endif %]
+    }, 'json');
+  });
+
+  $("#push-derived").click(function() {
+    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {'mode': 'push-derived'}, function(data) {
+{% if resultDiv %}
+      $("{{ resultDiv }}").append("Scheduled creation of fork.<br/>");
+{% endif %]
+    }, 'json');
+  });
+});
+</script>
+{% endmacro %}

@@ -43,7 +43,12 @@ async def handle_policy(request):
 
 async def handle_publish(request):
     package = request.match_info['package']
-    # TODO(jelmer)
+    post = await request.post()
+    mode = post.get('mode', 'push-derived')
+    if mode not in ('push-derived', 'push', 'propose', 'attempt-push'):
+        return web.json_response(
+            {'error': 'Invalid mode', 'mode': mode}, status=400)
+    # TODO(jelmer): And now?
     response_obj = {'status': 'success', 'package': package}
     return web.json_response(response_obj)
 
