@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "codeblock.html" import include_console_log with context %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons %}
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -16,6 +16,7 @@
 {{ local_command(command, package) }}
 
 {{ reschedule_button(suite, package, "Reschedule", "#commandResult") }}
+{{ publish_buttons(suite, package, "#commandResult") }}
 
 <div id="commandResult"></div>
 
