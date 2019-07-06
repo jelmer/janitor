@@ -27,9 +27,7 @@ async def handle_policy(request):
     try:
         (name, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
     except IndexError:
-        raise web.HTTPNotFound(
-            text=json.dumps({'reason': 'Package not found'}),
-            content_type='application/json')
+        return web.json_response({'reason': 'Package not found'}, status=404)
     suite_policies = {}
     # TODO(jelmer): Package uploaders?
     for suite, field in SUITE_TO_POLICY_FIELD.items():
@@ -40,16 +38,14 @@ async def handle_policy(request):
             'changelog_policy': changelog_policy,
             'committer': committer}
     response_obj = {'by_suite': suite_policies}
-    return web.Response(
-        text=json.dumps(response_obj), content_type='application/json')
+    return web.json_response(response_obj)
 
 
 async def handle_publish(request):
     package = request.match_info['package']
     # TODO(jelmer)
     response_obj = {'status': 'success', 'package': package}
-    return web.Response(
-        text=json.dumps(response_obj), content_type='application/json')
+    return web.json_response(response_obj)
 
 
 async def handle_schedule(request):
@@ -81,8 +77,7 @@ async def handle_schedule(request):
         'suite': suite,
         'priority': priority,
         }
-    return web.Response(
-        text=json.dumps(response_obj), content_type='application/json')
+    return web.json_response(response_obj)
 
 
 async def handle_package_list(request):
@@ -94,20 +89,15 @@ async def handle_package_list(request):
             'name': name,
             'maintainer_email': maintainer_email,
             'branch_url': branch_url})
-    return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json',
-        headers={'Cache-Control': 'max-age=600'})
+    return web.json_response(
+            response_obj, headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_packagename_list(request):
     response_obj = []
     for name, maintainer_email, branch_url in await state.iter_packages():
         response_obj.append(name)
-    return web.Response(
-        text=json.dumps(response_obj, sort_keys=True),
-        content_type='application/json',
-        headers={'Cache-Control': 'max-age=600'})
+    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_merge_proposal_list(request):
@@ -118,9 +108,7 @@ async def handle_merge_proposal_list(request):
             'package': package,
             'url': url,
             'status': status})
-    return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json')
+    return web.json_response(response_obj)
 
 
 async def handle_queue(request):
@@ -135,10 +123,7 @@ async def handle_queue(request):
             'branch_url': branch_url,
             'env': env,
             'command': command})
-    return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json',
-        headers={'Cache-Control': 'max-age=60'})
+    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
 async def handle_run(request):
@@ -170,10 +155,7 @@ async def handle_run(request):
             'result_code': result_code,
             'branch_name': branch_name,
             })
-    return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json',
-        headers={'Cache-Control': 'max-age=600'})
+    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_package_branch(request):
@@ -187,10 +169,7 @@ async def handle_package_branch(request):
             'last_scanned': last_scanned.isoformat() if last_scanned else None,
             'description': description,
             })
-    return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json',
-        headers={'Cache-Control': 'max-age=60'})
+    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
 async def handle_published_packages(request):
@@ -200,9 +179,7 @@ async def handle_published_packages(request):
         response_obj.append({
             'package': package,
             'build_version': build_version})
-    return web.Response(
-        text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json')
+    return web.json_response(response_obj, content_type='application/json')
 
 
 async def handle_index(request):
