@@ -18,8 +18,18 @@ async def generate_pkg_file(package, suite):
     merge_proposals = [
         (url, status)
         for (package, url, status) in await state.iter_proposals(package)]
-    (command, build_version, result_code,
-     context, start_time, run_id, result) = await state.get_last_success(package, suite)
+    run = await state.get_last_success(package, suite)
+    if not run:
+        command = None
+        build_version = None
+        result_code = None
+        context = None
+        start_time = None
+        run_id = None
+        result = None
+    else:
+        (command, build_version, result_code,
+         context, start_time, run_id, result) = run
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
