@@ -41,6 +41,19 @@ Pin-Priority: <span class="mi">800</span>
 </pre></div>
 </div>
 </div>
+
+<div class="section" id="status">
+<h2>Package Status</h2>
+<p>
+<form autocomplete="off" action="pkg">
+  <div class="packages" style="width:300px;">
+    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p></div>
+
+
 <div class="section" id="package-list">
 <h2>Package list</h2>
 <p>The following source packages with new upstream releases merged are currently
@@ -60,12 +73,30 @@ available:</p>
 <tbody valign="top">
 {% for source, new_version, old_version in packages %}
 <tr class="row-even"><td>{{ source }}</td>
-    <td>{{ new_version }}</td>
-    <td>{{ old_version }}</td>
+	<td><a href="pkg/{{ source }}">{{ new_version }}</a></td>
+    <td><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version }}</a></td>
 </tr>
 {% endfor %}
 </tbody>
 </table>
 </div>
 </div>
+
+<script src="/_static/jquery.min.js"></script>
+<script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#package').typeahead(null, {
+  name: 'packages',
+  source: packages
+});
+});
+</script>
+
 {% endblock %}

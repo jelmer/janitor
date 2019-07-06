@@ -6,8 +6,8 @@
 <h1>Runs by lintian tag fixed</h1>
 
 <ul>
-{% for tag in tags %}
-	<li><a href="{{ tag }}">{{ tag }}</a></li>
+{% for tag, count in tags %}
+	<li><a href="{{ tag }}">{{ tag }}</a> ({{ count}})</li>
 {% endfor %}
 </ul>
 

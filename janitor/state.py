@@ -520,3 +520,27 @@ ON CONFLICT (url) DO UPDATE SET
   description = EXCLUDED.description
 """, branch_url, status, revision.decode('utf-8') if revision else None,
      last_scanned, description)
+
+
+async def iter_lintian_tags():
+    async with get_connection() as conn:
+        return await conn.fetch("""
+select tag, count(tag) from (
+select distinct on (package) package, json_array_elements(json_array_elements(result->'applied')->'fixed_lintian_tags') #>> '{}' as tag from run where build_distribution = 'lintian-fixes' order by package, start_time desc) as bypackage group by 1;
+""")
+
+
+async def iter_last_successes_by_lintian_tag(tag):
+    async with get_connection() as conn:
+        return await conn.fetch("""
+select distinct on (package) * from (
+select
+  package,
+  command,
+  build_version,
+  result_code,
+  context,
+  start_time,
+  id,
+  (json_array_elements(json_array_elements(result->'applied')->'fixed_lintian_tags') #>> '{}') as tag from run where build_distribution  = 'lintian-fixes' and result_code = 'success') as package where tag = $1 order by package, start_time desc
+""", tag)

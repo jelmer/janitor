@@ -10,6 +10,16 @@ archive that maintained in Git.</p>
 automatically propose them as merge requests on supported hosting sites (Salsa,
 GitHub, GitLab, Launchpad).</p>
 <p>For a current list of open requests, see <a href="merge-proposals">merge-proposals</a>. For a list of changes ready to be proposed or pushed, see <a href="ready">ready</a>.</p>
+
+<p>
+See the status for a specific package:
+<form autocomplete="off" action="pkg">
+  <div class="packages" style="width:300px;">
+    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p>
 <div class="toctree-wrapper compound">
 </div>
 <div class="section" id="faq">
@@ -141,4 +151,24 @@ merge proposals.</p>
 </div>
 </div>
 </div>
+
+
+<script src="/_static/jquery.min.js"></script>
+<script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#package').typeahead(null, {
+  name: 'packages',
+  source: packages
+});
+});
+</script>
+
+
 {% endblock %}

@@ -102,8 +102,7 @@ async def handle_package_list(request):
 
 async def handle_packagename_list(request):
     response_obj = []
-    for name, maintainer_email, branch_url in await state.iter_packages(
-            package=package):
+    for name, maintainer_email, branch_url in await state.iter_packages():
         response_obj.append(name)
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True),
