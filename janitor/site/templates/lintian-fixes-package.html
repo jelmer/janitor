@@ -44,7 +44,7 @@ No recent runs for {{ package }}
 
 {% if result['failed'] %}
 
-<h3>Failed tags:</h3>
+<h3>Failed fixers:</h3>
 <ul>
 {% for tag, details in result['failed'].items() %}
    <li>{{ lintian_tag_link(tag) }}</li>

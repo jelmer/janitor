@@ -2,17 +2,17 @@
 
 import argparse
 import asyncio
-import os
 import sys
 
 from janitor import state
-from janitor.site import env
+from janitor.site import env, format_duration
 
 
 async def generate_pkg_file(package):
     suite = 'lintian-fixes'
     try:
-        (package, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
+        (package, maintainer_email, vcs_url) = list(
+            await state.iter_packages(package=package))[0]
     except IndexError:
         raise KeyError(package)
     # TODO(jelmer): Filter out proposals not for this suite.
@@ -27,11 +27,12 @@ async def generate_pkg_file(package):
         result_code = None
         context = None
         start_time = None
+        finish_time = None
         run_id = None
         result = None
     else:
         (command, build_version, result_code,
-         context, start_time, run_id, result) = run
+         context, start_time, finish_time, run_id, result) = run
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
@@ -42,9 +43,11 @@ async def generate_pkg_file(package):
         'result_code': result_code,
         'context': context,
         'start_time': start_time,
+        'finish_time': finish_time,
         'run_id': run_id,
         'result': result,
         'suite': suite,
+        'format_duration': format_duration,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)

@@ -2,7 +2,6 @@
 
 import argparse
 from aiohttp import web
-import json
 import os
 
 from janitor.policy import read_policy, apply_policy
@@ -25,7 +24,8 @@ SUITE_TO_POLICY_FIELD = {
 async def handle_policy(request):
     package = request.match_info['package']
     try:
-        (name, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
+        (name, maintainer_email, vcs_url) = list(
+            await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     suite_policies = {}
@@ -59,7 +59,8 @@ async def handle_schedule(request):
     post = await request.post()
     priority = post.get('priority', DEFAULT_SCHEDULE_PRIORITY)
     try:
-        (name, maintainer_email, vcs_url) = list(await state.iter_packages(package=package))[0]
+        (name, maintainer_email, vcs_url) = list(
+            await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     run_env = {
@@ -94,7 +95,8 @@ async def handle_packagename_list(request):
     response_obj = []
     for name, maintainer_email, branch_url in await state.iter_packages():
         response_obj.append(name)
-    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=600'})
+    return web.json_response(
+        response_obj, headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_merge_proposal_list(request):
@@ -120,7 +122,8 @@ async def handle_queue(request):
             'branch_url': branch_url,
             'env': run_env,
             'command': command})
-    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=60'})
+    return web.json_response(
+        response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
 async def handle_run(request):
@@ -131,9 +134,10 @@ async def handle_run(request):
         limit = int(limit)
     response_obj = []
     async for (run_id, (start_time, finish_time), command, description,
-         package_name, merge_proposal_url, build_version, build_distribution,
-         result_code, branch_name) in state.iter_runs(
-                 package, run_id=run_id, limit=limit):
+               package_name, merge_proposal_url, build_version,
+               build_distribution, result_code,
+               branch_name) in state.iter_runs(
+                package, run_id=run_id, limit=limit):
         if build_version:
             build_info = {
                 'version': str(build_version),
@@ -152,7 +156,8 @@ async def handle_run(request):
             'result_code': result_code,
             'branch_name': branch_name,
             })
-    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=600'})
+    return web.json_response(
+        response_obj, headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_package_branch(request):
@@ -166,7 +171,8 @@ async def handle_package_branch(request):
             'last_scanned': last_scanned.isoformat() if last_scanned else None,
             'description': description,
             })
-    return web.json_response(response_obj, headers={'Cache-Control': 'max-age=60'})
+    return web.json_response(
+        response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
 async def handle_published_packages(request):
@@ -226,7 +232,8 @@ if __name__ == '__main__':
     parser.add_argument('--host', type=str, help='Host to listen on')
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,
-                        default=os.path.join(os.path.dirname(__file__), '..', 'policy.conf'))
+                        default=os.path.join(
+                            os.path.dirname(__file__), '..', 'policy.conf'))
     args = parser.parse_args()
 
     with open(args.policy, 'r') as f:

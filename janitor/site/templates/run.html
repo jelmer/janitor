@@ -4,7 +4,7 @@
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
-<h1>Run of {{ kind }} for {{ package }}</h1>
+<h1>Run of {{ suite }} for {{ package }}</h1>
 
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a></li>
@@ -15,16 +15,15 @@
 
 {{ local_command(command, package) }}
 
-<button id="schedule">Reschedule</button>
+<button id="reschedule">Reschedule</button>
 
+<script src="/_static/jquery.js"></script>
 <script>
 $(function() {
-  // User clicks the "getData" button
-  $("#schedule").click(function() {
-    // Get the JSON file
-    $.post('/api/{{ build_distro }}/pkg/{{ package }}/schedule', {}, function(data) {
-      console.log('Scheduled: ' + data);
-      $("#commandResult").append("Scheduled new run.<br/>");
+  $("#reschedule").click(function() {
+    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {}, function(data) {
+      console.log('Scheduled: ' + data.priority);
+      $("#commandResult").append("Scheduled new run with priority " + data.priority + ".<br/>");
     }, 'json');
   });
 });

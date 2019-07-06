@@ -2,7 +2,6 @@
 
 import operator
 import os
-import sys
 
 from janitor import state
 from janitor.site import env

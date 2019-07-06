@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-import os
 import sys
 
 from debian.changelog import Version
@@ -40,7 +39,8 @@ async def gather_package_list(suite):
 
 async def write_apt_repo(suite):
     template = env.get_template(suite + '.html')
-    return await template.render_async(packages=await gather_package_list(suite))
+    return await template.render_async(
+        packages=await gather_package_list(suite))
 
 
 if __name__ == '__main__':

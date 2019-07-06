@@ -1,15 +1,14 @@
 #!/usr/bin/python3
 
-import os
-
 from janitor import state
 from janitor.site import env, format_duration
+
 
 async def get_history(limit):
     data = []
     async for (run_id, times, command, description, package, proposal_url,
-            changes_filename, build_distro, result_code,
-            branch_name) in state.iter_runs(limit=limit):
+               changes_filename, build_distro, result_code,
+               branch_name) in state.iter_runs(limit=limit):
         row = [
             package,
             command,
@@ -35,8 +34,10 @@ if __name__ == '__main__':
     import asyncio
     import sys
     parser = argparse.ArgumentParser('report-history')
-    parser.add_argument('--limit', type=int, help='Number of entries to display',
-                        default=100)
+    parser.add_argument(
+        '--limit', type=int,
+        help='Number of entries to display',
+        default=100)
     args = parser.parse_args()
     loop = asyncio.get_event_loop()
     sys.stdout.write(loop.run_until_complete(write_history(limit=args.limit)))

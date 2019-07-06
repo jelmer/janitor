@@ -19,7 +19,6 @@
 if __name__ == '__main__':
     import argparse
     import functools
-    from gzip import GzipFile
     import os
     from janitor.logs import LogFileManager
     from aiohttp import web
@@ -110,12 +109,14 @@ if __name__ == '__main__':
     async def handle_pkg(request):
         from .pkg import generate_pkg_file
         from .. import state
-        name, maintainer_email, branch_url = list(await state.iter_packages(request.match_info['pkg']))[0]
+        name, maintainer_email, branch_url = list(
+            await state.iter_packages(request.match_info['pkg']))[0]
         merge_proposals = []
         for package, url, status in await state.iter_proposals(package=name):
             merge_proposals.append((url, status))
         runs = [x async for x in state.iter_runs(package=name)]
-        text = await generate_pkg_file(name, merge_proposals, maintainer_email, branch_url, runs)
+        text = await generate_pkg_file(
+            name, merge_proposals, maintainer_email, branch_url, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -126,7 +127,8 @@ if __name__ == '__main__':
         run_id = request.match_info['run_id']
         pkg = request.match_info.get('pkg')
         try:
-            run = [x async for x in state.iter_runs(run_id=run_id, package=pkg)][0]
+            run = [x async
+                   for x in state.iter_runs(run_id=run_id, package=pkg)][0]
         except IndexError:
             raise web.HTTPNotFound(text='No run with id %r' % run_id)
         text = await generate_run_file(logfile_manager, *run)
@@ -189,35 +191,50 @@ if __name__ == '__main__':
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
-        ('/', 'index.html'),
-        ('/contact', 'contact.html'),
-        ('/credentials', 'credentials.html'),
-        ('/apt', 'apt.html'),
-        ('/cupboard/', 'cupboard.html')]:
-        app.router.add_get(path, functools.partial(handle_simple, templatename))
+            ('/', 'index.html'),
+            ('/contact', 'contact.html'),
+            ('/credentials', 'credentials.html'),
+            ('/apt', 'apt.html'),
+            ('/cupboard/', 'cupboard.html')]:
+        app.router.add_get(
+            path, functools.partial(handle_simple, templatename))
     app.router.add_get('/lintian-fixes/', handle_lintian_fixes)
     for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
-        app.router.add_get('/%s/merge-proposals' % suite, functools.partial(handle_merge_proposals, suite))
-        app.router.add_get('/%s/ready' % suite, functools.partial(handle_ready_proposals, suite))
+        app.router.add_get(
+            '/%s/merge-proposals' % suite,
+            functools.partial(handle_merge_proposals, suite))
+        app.router.add_get(
+            '/%s/ready' % suite,
+            functools.partial(handle_ready_proposals, suite))
         app.router.add_get('/%s/pkg/' % suite, handle_pkg_list)
-    app.router.add_get('/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
-    app.router.add_get('/lintian-fixes/by-tag/', handle_lintian_fixes_tag_list)
-    app.router.add_get('/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page)
+    app.router.add_get(
+        '/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
+    app.router.add_get(
+        '/lintian-fixes/by-tag/', handle_lintian_fixes_tag_list)
+    app.router.add_get(
+        '/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page)
     for suite in ['fresh-releases', 'fresh-snapshots']:
-        app.router.add_get('/%s/' % suite, functools.partial(handle_apt_repo, suite))
-        app.router.add_get('/%s/pkg/{pkg}/' % suite, functools.partial(handle_new_upstream_pkg, suite))
+        app.router.add_get(
+            '/%s/' % suite, functools.partial(handle_apt_repo, suite))
+        app.router.add_get(
+            '/%s/pkg/{pkg}/' % suite,
+            functools.partial(handle_new_upstream_pkg, suite))
     app.router.add_get('/cupboard/history', handle_history)
     app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
     app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
-    app.router.add_get('/cupboard/ready', functools.partial(handle_ready_proposals, None))
+    app.router.add_get(
+        '/cupboard/ready', functools.partial(handle_ready_proposals, None))
     app.router.add_get('/cupboard/pkg/', handle_pkg_list)
     app.router.add_get('/cupboard/pkg/{pkg}/', handle_pkg)
     app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/', handle_run)
-    app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log}', handle_log)
-    app.router.add_get('/pkg/', handle_pkg_list)
-    app.router.add_static('/_static', os.path.join(os.path.dirname(__file__), '_static'))
+    app.router.add_get(
+        '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log}', handle_log)
+    app.router.add_get(
+        '/pkg/', handle_pkg_list)
+    app.router.add_static(
+        '/_static', os.path.join(os.path.dirname(__file__), '_static'))
     from .api import app as api_app
     app.add_subapp('/api', api_app)
     web.run_app(app, host=args.host)
