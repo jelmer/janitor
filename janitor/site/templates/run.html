@@ -39,7 +39,7 @@
 <p>Changes filename: <a class="reference external" href="/{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></p>
 
 {% if binary_packages %}
-<p>Install this package (if you have the <a class="reference external" href="../../../">apt repository</a> enabled) by running one of:</p>
+<p>Install this package (if you have the <a class="reference external" href="/{{ build_distro }}">apt repository</a> enabled) by running one of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 {% for binary_package in binary_packages %}
 apt install -t {{ build_distro }} {{ binary_package }}
