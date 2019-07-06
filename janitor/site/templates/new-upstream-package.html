@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "run_util.html" import local_command, merge_command with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button with context %}
 {% block page_title %}New Upstream - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
@@ -24,14 +24,14 @@ No recent runs for {{ package }}
 
 {% if changes_name %}
 <h2>Resulting package</h2>
-<p>Changes filename: <a class="reference external" href="/{{ build_distro }}/{{ changes_name }}">{{ changes_name }}</a></p>
+<p>Changes filename: <a class="reference external" href="/{{ suite }}/{{ changes_name }}">{{ changes_name }}</a></p>
 <p>Built on {{ finish_time }} (took {{ format_duration(finish_time - start_time) }})</p>
 
 {% if binary_packages %}
 <p>Install this package (if you have the <a class="reference external" href="../../">apt repository</a> enabled) by running one of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 {% for binary_package in binary_packages %}
-apt install -t {{ build_distro }} {{ binary_package }}
+apt install -t {{ build_distribution }} {{ binary_package }}
 {% endfor %}
 </pre></div></div>
 {% endif %}
@@ -39,8 +39,6 @@ apt install -t {{ build_distro }} {{ binary_package }}
 
 <div class="section" id="more-details">
 <h2>More details</h2>
-
-{{ local_command(command, package) }}
 
 <p><a href="/cupboard/pkg/{{ package }}/{{ run_id }}">Full run details</a></p>
 

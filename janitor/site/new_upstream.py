@@ -5,7 +5,12 @@ import asyncio
 import sys
 
 from janitor import state
-from janitor.site import env, format_duration
+from janitor.build import (
+    changes_filename,
+    get_build_architecture,
+)
+
+from janitor.site import env, format_duration, get_changes_path, changes_get_binaries
 
 
 async def generate_pkg_file(package, suite):
@@ -29,8 +34,14 @@ async def generate_pkg_file(package, suite):
         run_id = None
         result = None
     else:
-        (command, build_version, result_code,
-         context, start_time, finish_time, run_id, result) = run
+        command = run.command
+        build_version = run.build_version
+        result_code = run.result_code
+        context = run.context
+        start_time = run.times[0]
+        finish_time = run.times[1]
+        run_id = run.id
+        result = run.result
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
@@ -47,6 +58,18 @@ async def generate_pkg_file(package, suite):
         'suite': suite,
         'format_duration': format_duration,
         }
+    if run.build_version:
+        kwargs['changes_name'] = changes_filename(
+            run.package, run.build_version,
+            get_build_architecture())
+        changes_path = get_changes_path(run, kwargs['changes_name'])
+        kwargs['binary_packages'] = []
+        if changes_path:
+            for binary in changes_get_binaries(changes_path):
+                kwargs['binary_packages'].append(binary)
+    else:
+        kwargs['changes_name'] = None
+
     template = env.get_template('new-upstream-package.html')
     return await template.render_async(**kwargs)
 

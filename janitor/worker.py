@@ -145,9 +145,9 @@ class LintianBrushWorker(SubWorker):
                     'A control file is generated: %s' % e.path)
 
         if failed:
-            for fixer_name, error in failed.items():
+            for fixer_name, failure in failed.items():
                 note('Fixer %r failed to run:', fixer_name)
-                sys.stderr.write(error.decode('utf-8', 'replace'))
+                sys.stderr.write(failure.errors.decode('utf-8', 'replace'))
 
         metadata['applied'] = [{
             'summary': summary,
