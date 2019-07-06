@@ -96,7 +96,19 @@ async def handle_package_list(request):
             'branch_url': branch_url})
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json')
+        content_type='application/json',
+        headers={'Cache-Control': 'max-age=600'})
+
+
+async def handle_packagename_list(request):
+    response_obj = []
+    for name, maintainer_email, branch_url in await state.iter_packages(
+            package=package):
+        response_obj.append(name)
+    return web.Response(
+        text=json.dumps(response_obj, sort_keys=True),
+        content_type='application/json',
+        headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_merge_proposal_list(request):
@@ -126,7 +138,8 @@ async def handle_queue(request):
             'command': command})
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json')
+        content_type='application/json',
+        headers={'Cache-Control': 'max-age=60'})
 
 
 async def handle_run(request):
@@ -160,7 +173,8 @@ async def handle_run(request):
             })
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json')
+        content_type='application/json',
+        headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_package_branch(request):
@@ -176,7 +190,8 @@ async def handle_package_branch(request):
             })
     return web.Response(
         text=json.dumps(response_obj, sort_keys=True, indent=4),
-        content_type='application/json')
+        content_type='application/json',
+        headers={'Cache-Control': 'max-age=60'})
 
 
 async def handle_published_packages(request):
@@ -194,12 +209,15 @@ async def handle_published_packages(request):
 async def handle_index(request):
     template = jinja2_env.get_template('api-index.html')
     return web.Response(
-        content_type='text/html', text=await template.render_async())
+        content_type='text/html', text=await template.render_async(),
+        headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_global_policy(request):
     with open('policy.conf', 'r') as f:
-        return web.Response(content_type='text/protobuf', text=f.read())
+        return web.Response(
+            content_type='text/protobuf', text=f.read(),
+            headers={'Cache-Control': 'max-age=60'})
 
 
 jinja2_env = Environment(
@@ -209,6 +227,7 @@ jinja2_env = Environment(
 )
 
 app = web.Application()
+app.router.add_get('/pkgnames', handle_packagename_list)
 app.router.add_get('/pkg', handle_package_list)
 app.router.add_get('/pkg/{package}', handle_package_list)
 app.router.add_get(
