@@ -82,44 +82,41 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(
-        logfile_manager, run_id, times, command, description,
-        package_name, merge_proposal_url, build_version,
-        build_distro, result_code, branch_name):
+async def generate_run_file(logfile_manager, run):
     (start_time, finish_time) = times
     kwargs = {}
-    kwargs['run_id'] = run_id
-    kwargs['command'] = command
-    kwargs['description'] = description
-    kwargs['package'] = package_name
-    kwargs['start_time'] = start_time
-    kwargs['finish_time'] = finish_time
-    kwargs['merge_proposal_url'] = merge_proposal_url
-    kwargs['build_version'] = build_version
-    kwargs['build_distro'] = build_distro
-    kwargs['result_code'] = result_code
-    kwargs['branch_name'] = branch_name
+    kwargs['run_id'] = run.id
+    kwargs['command'] = run.command
+    kwargs['description'] = run.description
+    kwargs['package'] = run.package
+    kwargs['start_time'] = run.times[0]
+    kwargs['finish_time'] = run.times[1]
+    kwargs['merge_proposal_url'] = run.merge_proposal_url
+    kwargs['build_version'] = run.build_version
+    kwargs['build_distro'] = run.build_distribution
+    kwargs['result_code'] = run.result_code
+    kwargs['branch_name'] = run.branch_name
     kwargs['format_duration'] = format_duration
     kwargs['enumerate'] = enumerate
     kwargs['max'] = max
     kwargs['suite'] = {
         'lintian-brush': 'lintian-fixes',
         'merge-upstream': 'fresh-releases',
-        'merge-upstream --snapshot': 'fresh-snapshots'}.get(command)
+        'merge-upstream --snapshot': 'fresh-snapshots'}.get(run.command)
 
     def read_file(p):
         with open(p, 'rb') as f:
             return [l.decode('utf-8', 'replace') for l in f.readlines()]
     kwargs['read_file'] = read_file
-    if build_version:
+    if run.build_version:
         kwargs['changes_name'] = changes_filename(
-            package_name, build_version,
+            run.package, run.build_version,
             get_build_architecture())
     else:
         kwargs['changes_name'] = None
-    if os.path.exists('../vcs/git/%s' % package_name):
+    if os.path.exists('../vcs/git/%s' % run.package):
         kwargs['vcs'] = 'git'
-    elif os.path.exists('../vcs/bzr/%s' % package_name):
+    elif os.path.exists('../vcs/bzr/%s' % run.package):
         kwargs['vcs'] = 'bzr'
     else:
         kwargs['vcs'] = None
@@ -129,7 +126,7 @@ async def generate_run_file(
     kwargs['in_line_boundaries'] = in_line_boundaries
     if kwargs['changes_name']:
         changes_path = os.path.join(
-            "../public_html", build_distro, kwargs['changes_name'])
+            "../public_html", run.build_distribution, kwargs['changes_name'])
         if not os.path.exists(changes_path):
             warning('Missing changes path %r', changes_path)
         else:
@@ -137,25 +134,25 @@ async def generate_run_file(
                 kwargs['binary_packages'].append(binary)
 
     kwargs['get_log'] = functools.partial(
-        logfile_manager.get_log, package_name, run_id)
-    if logfile_manager.has_log(package_name, run_id, BUILD_LOG_NAME):
+        logfile_manager.get_log, run.package, run_id)
+    if logfile_manager.has_log(run.package, run.id, BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
         kwargs['earlier_build_log_names'] = []
         i = 1
         while logfile_manager.has_log(
-                package_name, run_id, BUILD_LOG_NAME + '.%d' % i):
+                run.package, run.id, BUILD_LOG_NAME + '.%d' % i):
             log_name = '%s.%d' % (BUILD_LOG_NAME, i)
             kwargs['earlier_build_log_names'].append((i, log_name))
             i += 1
 
         line_count, include_lines, highlight_lines = find_build_log_failure(
-            logfile_manager.get_log(package_name, run_id, BUILD_LOG_NAME),
+            logfile_manager.get_log(run.package, run.id, BUILD_LOG_NAME),
             FAIL_BUILD_LOG_LEN)
         kwargs['build_log_line_count'] = line_count
         kwargs['build_log_include_lines'] = include_lines
         kwargs['build_log_highlight_lines'] = highlight_lines
 
-    if logfile_manager.has_log(package_name, run_id, WORKER_LOG_NAME):
+    if logfile_manager.has_log(run.package, run.id, WORKER_LOG_NAME):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
 
     template = env.get_template('run.html')
@@ -163,14 +160,11 @@ async def generate_run_file(
     return text
 
 
-async def write_run_file(
-        logdirectory, dir, run_id, times, command, description, package_name,
-        merge_proposal_url, build_version, build_distro, result_code,
-        branch_name):
-    run_dir = os.path.join(dir, package_name, run_id)
+async def write_run_file(logdirectory, dir, run):
+    run_dir = os.path.join(dir, run.package, run.id)
     os.makedirs(run_dir, exist_ok=True)
 
-    log_directory = os.path.join(logdirectory, package_name, run_id)
+    log_directory = os.path.join(logdirectory, ru.package, run_id)
     build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
     if (not os.path.exists(os.path.join(run_dir, BUILD_LOG_NAME)) and
             os.path.exists(build_log_path)):
@@ -183,10 +177,7 @@ async def write_run_file(
 
     logfile_manager = LogFileManager(logdirectory)
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
-        f.write(await generate_run_file(
-            logfile_manager, run_id, times, command, description,
-            package_name, merge_proposal_url, build_version, build_distro,
-            result_code, branch_name))
+        f.write(await generate_run_file(logfile_manager, run))
     note('Wrote %s', run_dir)
 
 
@@ -195,9 +186,8 @@ async def write_run_files(logdirectory, dir):
 
     jobs = []
     async for run in state.iter_runs():
-        package_name = run[4]
-        jobs.append(write_run_file(logdirectory, dir, *run))
-        runs_by_pkg.setdefault(package_name, []).append(run)
+        jobs.append(write_run_file(logdirectory, dir, run))
+        runs_by_pkg.setdefault(run.package, []).append(run)
     await asyncio.gather(*jobs)
 
     return runs_by_pkg
@@ -210,7 +200,7 @@ async def generate_pkg_file(
     kwargs['maintainer_email'] = maintainer_email
     kwargs['vcs_url'] = branch_url
     kwargs['merge_proposals'] = merge_proposals
-    kwargs['builds'] = [run for run in runs if run[6]]
+    kwargs['builds'] = [run for run in runs if run.build_version]
     kwargs['runs'] = runs
     template = env.get_template('package-overview.html')
     return await template.render_async(**kwargs)
@@ -227,7 +217,7 @@ async def write_pkg_file(dir, name, merge_proposals, maintainer_email,
             name, merge_proposals, maintainer_email, branch_url, runs))
 
 
-async def write_pkg_files(dir):
+async def write_pkg_files(dir, runs_by_pkg):
     merge_proposals = {}
     for package, url, status in await state.iter_proposals():
         merge_proposals.setdefault(package, []).append((url, status))
@@ -282,5 +272,5 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     runs_by_pkg = loop.run_until_complete(
         write_run_files(args.logdirectory, args.directory))
-    packages = loop.run_until_complete(write_pkg_files(args.directory))
+    packages = loop.run_until_complete(write_pkg_files(args.directory, runs_by_pkg))
     loop.run_until_complete(write_pkg_list(args.directory, packages))

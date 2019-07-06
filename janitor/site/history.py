@@ -6,16 +6,14 @@ from janitor.site import env, format_duration
 
 async def get_history(limit):
     data = []
-    async for (run_id, times, command, description, package, proposal_url,
-               changes_filename, build_distro, result_code,
-               branch_name) in state.iter_runs(limit=limit):
+    async for run in state.iter_runs(limit=limit):
         row = [
-            package,
-            command,
-            times[1] - times[0],
-            run_id,
-            result_code,
-            proposal_url,
+            run.package,
+            run.command,
+            run.times[1] - run.times[0],
+            run.id,
+            run.result_code,
+            run.proposal_url,
             ]
         data.append(row)
     return data

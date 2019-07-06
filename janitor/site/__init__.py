@@ -28,3 +28,17 @@ env = Environment(
     autoescape=select_autoescape(['html', 'xml']),
     enable_async=True,
 )
+
+
+def get_run_diff(run):
+    from breezy.repository import Repository
+    from breezy.diff import show_diff_trees
+    import os
+    from io import StringIO
+    for vcs in ['git', 'bzr']:
+        repo = Repository.open(os.path.join('..', 'vcs', vcs, run.package))
+    f = StringIO()
+    old_tree = repo.revision_tree(run.main_branch_revision)
+    new_tree = repo.revision_tree(run.revision)
+    show_diff_trees(old_tree, new_tree, to_file=f)
+    return f
