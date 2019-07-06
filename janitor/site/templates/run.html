@@ -22,10 +22,10 @@ $(function() {
   // User clicks the "getData" button
   $("#schedule").click(function() {
     // Get the JSON file
-      $.getJSON('/api/{{ build_distro }}/pkg/{{ package }}/schedule', function(data) {
+    $.post('/api/{{ build_distro }}/pkg/{{ package }}/schedule', {}, function(data) {
       console.log('Scheduled: ' + data);
       $("#commandResult").append("Scheduled new run.<br/>");
-    });
+    }, 'json');
   });
 });
 </script>
