@@ -38,9 +38,9 @@ class LogFileManager(object):
             if not os.path.exists(path):
                 continue
             if path.endswith('.gz'):
-                return GzipFile(path)
+                return GzipFile(path, 'rb')
             else:
-                return open(path)
+                return open(path, 'rb')
         raise FileNotFoundError(name)
 
     def import_log(self, pkg, run_id, orig_path):
