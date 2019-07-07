@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    foreign key (package) references package(name),
    primary key(url)
 );
+CREATE TYPE suite AS ENUM('lintian-fixes', 'fresh-releases', 'fresh-snapshots');
 CREATE TABLE IF NOT EXISTS run (
    id text not null primary key,
    command text,
@@ -30,19 +31,20 @@ CREATE TABLE IF NOT EXISTS run (
    -- Some subworker-specific indication of what we attempted to do
    context text,
    -- Main branch revision
-   main_branch_revision bytes,
+   main_branch_revision text,
    branch_name text,
-   revision bytes,
+   revision text,
    result json,
+   suite text not null,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );
-CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only');
+CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived');
 CREATE TABLE IF NOT EXISTS publish (
    package text not null,
    branch_name text,
-   main_branch_revision bytes,
-   revision bytes,
+   main_branch_revision text,
+   revision text,
    mode publish_mode not null,
    merge_proposal_url text,
    result_code text,
@@ -65,7 +67,7 @@ CREATE TABLE IF NOT EXISTS queue (
 );
 CREATE TABLE IF NOT EXISTS branch (
    url text not null primary key,
-   revision bytes,
+   revision text,
    last_scanned timestamp,
    status text,
    description text

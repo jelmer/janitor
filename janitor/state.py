@@ -56,7 +56,7 @@ async def _ensure_package(conn, name, vcs_url, maintainer_email):
 
 
 async def store_run(
-        run_id, name, vcs_url, maintainer_email, start_time, finish_time,
+        run_id, name, suite, vcs_url, maintainer_email, start_time, finish_time,
         command, description, instigated_context, context,
         main_branch_revision, result_code, build_version,
         build_distribution, branch_name, revision, subworker_result):
@@ -64,6 +64,7 @@ async def store_run(
 
     :param run_id: Run id
     :param name: Package name
+    :param suite: Suite
     :param vcs_url: Upstream branch URL
     :param maintainer_email: Maintainer email
     :param start_time: Start time
@@ -86,14 +87,14 @@ async def store_run(
             "INSERT INTO run (id, command, description, result_code, "
             "start_time, finish_time, package, instigated_context, context, "
             "build_version, build_distribution, main_branch_revision, "
-            "branch_name, revision, result) "
+            "branch_name, revision, result, suite) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
-            "$14, $15)",
+            "$14, $15, $16)",
             run_id, ' '.join(command), description, result_code,
             start_time, finish_time, name, instigated_context, context,
             str(build_version) if build_version else None, build_distribution,
             main_branch_revision, branch_name, revision,
-            subworker_result if subworker_result else None)
+            subworker_result if subworker_result else None, suite)
 
 
 async def store_publish(package, branch_name, main_branch_revision, revision,
@@ -138,12 +139,14 @@ class Run(object):
             'id', 'times', 'command', 'description', 'package',
             'merge_proposal_url', 'build_version',
             'build_distribution', 'result_code', 'branch_name',
-            'main_branch_revision', 'revision', 'context', 'result']
+            'main_branch_revision', 'revision', 'context', 'result',
+            'suite']
 
     def __init__(self, run_id, times, command, description, package,
                  merge_proposal_url, build_version,
                  build_distribution, result_code, branch_name,
-                 main_branch_revision, revision, context, result):
+                 main_branch_revision, revision, context, result,
+                 suite):
         self.id = run_id
         self.times = times
         self.command = command
@@ -158,6 +161,7 @@ class Run(object):
         self.revision = revision
         self.context = context
         self.result = result
+        self.suite = suite
 
     @classmethod
     def from_row(cls, row):
@@ -172,7 +176,7 @@ class Run(object):
                    main_branch_revision=(
                        row[11].encode('utf-8') if row[11] else None),
                    revision=(row[12].encode('utf-8') if row[12] else None),
-                   context=row[13], result=row[14])
+                   context=row[13], result=row[14], suite=row[15])
 
     def __len__(self):
         return len(self.__slots__)
@@ -182,13 +186,13 @@ class Run(object):
                 self.package, self.merge_proposal_url,
                 self.build_version, self.build_distribution, self.result_code,
                 self.branch_name, self.main_branch_revision, self.revision,
-                self.context, self.result)
+                self.context, self.result, self.suite)
 
     def __eq__(self, other):
         if isinstance(other, Run):
             return tuple(self) == tuple(other)
         if isinstance(other, tuple):
-            return tuple(self) == other
+            return self.id == other.id
         return False
 
     def __lt__(self, other):
@@ -212,7 +216,7 @@ async def iter_runs(package=None, run_id=None, limit=None):
 SELECT
     id, command, start_time, finish_time, description, package,
     merge_proposal_url, build_version, build_distribution, result_code,
-    branch_name, main_branch_revision, revision, context, result
+    branch_name, main_branch_revision, revision, context, result, suite
 FROM
     run
 """
@@ -405,7 +409,7 @@ async def get_last_success(package, suite):
     args = []
     query = """
 SELECT
-  run.id,
+  id,
   command,
   start_time,
   finish_time,
@@ -419,7 +423,8 @@ SELECT
   main_branch_revision,
   revision,
   context,
-  result
+  result,
+  suite
 FROM
   run
 WHERE package = $1 AND build_distribution = $2
