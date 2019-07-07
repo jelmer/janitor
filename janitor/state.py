@@ -210,22 +210,21 @@ async def iter_runs(package=None, run_id=None, limit=None):
     """
     query = """
 SELECT
-    run.id, command, start_time, finish_time, description, package.name,
-    run.merge_proposal_url, build_version, build_distribution, result_code,
+    id, command, start_time, finish_time, description, package,
+    merge_proposal_url, build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result
 FROM
     run
-LEFT JOIN package ON package.name = run.package
 """
     args = ()
     if package is not None:
-        query += " WHERE package.name = $1 "
+        query += " WHERE package = $1 "
         args += (package,)
     if run_id is not None:
         if args:
-            query += " AND run.id = $2 "
+            query += " AND id = $2 "
         else:
-            query += " WHERE run.id = $1 "
+            query += " WHERE id = $1 "
         args += (run_id,)
     query += "ORDER BY start_time DESC"
     if limit:
