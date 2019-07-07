@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS run (
    -- Associated merge proposal URL, if any.
    merge_proposal_url text null,
    -- Debian version text of the built package
-   build_version text,
+   build_version debversion,
    -- Distribution the package was built for (e.g. "lintian-fixes")
    build_distribution text,
    result_code text,
@@ -30,9 +30,9 @@ CREATE TABLE IF NOT EXISTS run (
    -- Some subworker-specific indication of what we attempted to do
    context text,
    -- Main branch revision
-   main_branch_revision text,
+   main_branch_revision bytes,
    branch_name text,
-   revision text,
+   revision bytes,
    result json,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
@@ -41,8 +41,8 @@ CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only'
 CREATE TABLE IF NOT EXISTS publish (
    package text not null,
    branch_name text,
-   main_branch_revision text,
-   revision text,
+   main_branch_revision bytes,
+   revision bytes,
    mode publish_mode not null,
    merge_proposal_url text,
    result_code text,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS queue (
 );
 CREATE TABLE IF NOT EXISTS branch (
    url text not null primary key,
-   revision text,
+   revision bytes,
    last_scanned timestamp,
    status text,
    description text
