@@ -211,6 +211,3 @@ def get_local_vcs_branch(vcs_directory, pkg, branch_name):
             os.path.join(vcs_directory, 'bzr', pkg, branch_name))
     else:
         return None
-
-
-
