@@ -17,10 +17,12 @@ from janitor.sbuild_log import (
     strip_useless_build_tail,
 )
 from janitor.site import (
+    changes_get_binaries,
+    env,
     format_duration,
     get_changes_path,
+    get_local_vcs_repo,
 )
-from janitor.site import env, get_local_vcs_repo, get_changes_path, changes_get_binaries
 from janitor.trace import note, warning
 from janitor.vcs import (
     CACHE_URL_BZR,
@@ -157,7 +159,7 @@ async def write_run_file(logdirectory, dir, run):
     run_dir = os.path.join(dir, run.package, run.id)
     os.makedirs(run_dir, exist_ok=True)
 
-    log_directory = os.path.join(logdirectory, ru.package, run_id)
+    log_directory = os.path.join(logdirectory, run.package, run.id)
     build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
     if (not os.path.exists(os.path.join(run_dir, BUILD_LOG_NAME)) and
             os.path.exists(build_log_path)):
@@ -265,5 +267,6 @@ if __name__ == '__main__':
     loop = asyncio.get_event_loop()
     runs_by_pkg = loop.run_until_complete(
         write_run_files(args.logdirectory, args.directory))
-    packages = loop.run_until_complete(write_pkg_files(args.directory, runs_by_pkg))
+    packages = loop.run_until_complete(
+        write_pkg_files(args.directory, runs_by_pkg))
     loop.run_until_complete(write_pkg_list(args.directory, packages))

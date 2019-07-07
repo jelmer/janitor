@@ -48,7 +48,8 @@ async def get_queue(only_command=None, limit=None):
             if run_env.get('CONTEXT'):
                 expecting = (
                     'expecting to fix: ' +
-                    ', '.join(map(lintian_tag_link, run_env['CONTEXT'].split(' '))))
+                    ', '.join(
+                        map(lintian_tag_link, run_env['CONTEXT'].split(' '))))
         else:
             raise AssertionError('invalid command %s' % command)
         if only_command is not None:

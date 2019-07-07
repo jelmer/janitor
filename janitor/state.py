@@ -106,12 +106,12 @@ async def store_publish(package, branch_name, main_branch_revision, revision,
                 "VALUES ($1, $2, 'open') ON CONFLICT (url) DO UPDATE SET "
                 "package = EXCLUDED.package",
                 merge_proposal_url, package)
-        await conn.execute("""
-INSERT INTO publish (package, branch_name, main_branch_revision, revision,
-mode, result_code, description, merge_proposal_url) values ($1, $2, $3, $4, $5,
-$6, $7, $8)
-""", package, branch_name, main_branch_revision, revision, mode, result_code,
-description, merge_proposal_url)
+        await conn.execute(
+            "INSERT INTO publish (package, branch_name, "
+            "main_branch_revision, revision, mode, result_code, description, "
+            "merge_proposal_url) values ($1, $2, $3, $4, $5, $6, $7, $8) ",
+            package, branch_name, main_branch_revision, revision, mode,
+            result_code, description, merge_proposal_url)
 
 
 async def iter_packages(package=None):
@@ -169,7 +169,8 @@ class Run(object):
                    build_distribution=row[8],
                    result_code=(row[9] if row[9] else None),
                    branch_name=row[10],
-                   main_branch_revision=(row[11].encode('utf-8') if row[11] else None),
+                   main_branch_revision=(
+                       row[11].encode('utf-8') if row[11] else None),
                    revision=(row[12].encode('utf-8') if row[12] else None),
                    context=row[13], result=row[14])
 
@@ -582,16 +583,15 @@ async def update_branch_status(
         branch_url, last_scanned=None, status=None, revision=None,
         description=None):
     async with get_connection() as conn:
-        await conn.execute("""\
-INSERT INTO branch (url, status, revision, last_scanned, description)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (url) DO UPDATE SET
-  status = EXCLUDED.status,
-  revision = EXCLUDED.revision,
-  last_scanned = EXCLUDED.last_scanned,
-  description = EXCLUDED.description
-""", branch_url, status, revision.decode('utf-8') if revision else None,
-last_scanned, description)
+        await conn.execute(
+            "INSERT INTO branch (url, status, revision, last_scanned, "
+            "description) VALUES ($1, $2, $3, $4, $5) "
+            "ON CONFLICT (url) DO UPDATE SET "
+            "status = EXCLUDED.status, revision = EXCLUDED.revision, "
+            "last_scanned = EXCLUDED.last_scanned, "
+            "description = EXCLUDED.description",
+            branch_url, status, revision.decode('utf-8') if revision else None,
+            last_scanned, description)
 
 
 async def iter_lintian_tags():

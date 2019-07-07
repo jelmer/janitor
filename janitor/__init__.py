@@ -19,6 +19,9 @@
 from breezy.transport import http as _mod_http
 
 
+SUPPORTED_VCSES = ['git', 'bzr']
+
+
 version_info = (0, 1, 0)
 version_string = '.'.join(map(str, version_info))
 
