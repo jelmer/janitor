@@ -346,18 +346,6 @@ class NewUpstreamPublisher(object):
         return True
 
 
-def get_local_vcs_branch(vcs_directory, pkg, branch_name):
-    if os.path.exists(os.path.join(vcs_directory, 'git', pkg)):
-        return open_branch(
-            'file:%s,branch=%s' % (
-                os.path.join(vcs_directory, 'git', pkg), branch_name))
-    elif os.path.exists(os.path.join(vcs_directory, 'bzr', pkg)):
-        return open_branch(
-            os.path.join(vcs_directory, 'bzr', pkg, branch_name))
-    else:
-        return None
-
-
 async def publish_one(
         pkg, publisher, command, subworker_result, main_branch_url,
         mode, log_id, maintainer_email, vcs_directory, branch_name,

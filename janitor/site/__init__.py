@@ -19,7 +19,7 @@ from debian.deb822 import Changes
 from jinja2 import Environment, PackageLoader, select_autoescape
 import os
 
-from janitor import SUPPORTED_VCSES
+from janitor.vcs import SUPPORTED_VCSES
 
 
 def format_duration(duration):
