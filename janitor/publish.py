@@ -17,13 +17,17 @@
 
 """Publishing VCS changes."""
 
+from aiohttp import web
 import asyncio
+import functools
 import os
 import sys
 import urllib.parse
 
 from prometheus_client import (
     Gauge,
+    CONTENT_TYPE_LATEST,
+    generate_latest,
     push_to_gateway,
     REGISTRY,
 )
@@ -465,6 +469,54 @@ async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
             proposal.url if proposal else None)
 
 
+async def publish_request(publisher, dry_run, request):
+    package = request.match_info['package']
+    suite = request.match_info['suite']
+    post = await request.post()
+    mode = post.get('mode', MODE_PROPOSE)
+    try:
+        name, maintainer_email, main_branch_url = list(await state.iter_packages(package=package))[0]
+    except IndexError:
+        return web.json_response({}, status=400)
+    run = await state.get_last_success(package, suite)
+    if run is None:
+        return web.json_response({}, status=400)
+    try:
+        proposal, branch_name = await publish_one(
+            pkg, publisher, run.command, run.result,
+            main_branch_url, mode, run.id, maintainer_email,
+            vcs_directory=vcs_directory, branch_name=run.branch_name,
+            dry_run=dry_run)
+    except PublishFailure as e:
+        return web.json_response(
+            {'code': e.code, 'description': e.description}, status=400)
+
+    return web.json_response(
+        {'branch_name': branch_name, 'proposal': proposal.url if proposal else None})
+
+
+async def run_web_server(listen_addr, port, publisher, dry_run=False):
+    async def metrics(request):
+        resp = web.Response(body=generate_latest())
+        resp.content_type = CONTENT_TYPE_LATEST
+        return resp
+
+    app = web.Application()
+    app.router.add_get("/metrics", metrics)
+    app.router.add_post("/{suite}/{package}/publish", functools.partial(publish_request, publisher, dry_run))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, listen_addr, port)
+    await site.start()
+
+
+async def process_queue_loop(publisher, policy, dry_run, vcs_directory,
+                             interval):
+    while True:
+        await publish_pending(publisher, policy, vcs_directory, dry_run)
+        await asyncio.sleep(interval)
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.publish')
@@ -488,6 +540,15 @@ def main(argv=None):
     parser.add_argument(
         '--prometheus', type=str,
         help='Prometheus push gateway to export to.')
+    parser.add_argument(
+        '--once', action='store_true',
+        help="Just do one pass over the queue, don't run as a daemon.")
+    parser.add_argument(
+        '--listen-address', type=str,
+        help='Listen address', default='localhost')
+    parser.add_argument(
+        '--port', type=int,
+        help='Listen port', default=9912)
 
     args = parser.parse_args()
 
@@ -497,16 +558,22 @@ def main(argv=None):
     publisher = Publisher(args.max_mps_per_maintainer)
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(publish_pending(
-        publisher, policy, dry_run=args.dry_run,
-        vcs_directory=args.vcs_result_dir))
+    if args.once:
+        loop.run_until_complete(publish_pending(
+            publisher, policy, dry_run=args.dry_run,
+            vcs_directory=args.vcs_result_dir))
 
-    last_success_gauge.set_to_current_time()
-    if args.prometheus:
-        push_to_gateway(
-            args.prometheus, job='janitor.publish',
-            registry=REGISTRY)
-
+        last_success_gauge.set_to_current_time()
+        if args.prometheus:
+            push_to_gateway(
+                args.prometheus, job='janitor.publish',
+                registry=REGISTRY)
+    else:
+        loop.run_until_complete(asyncio.gather(
+            loop.create_task(process_queue_loop(
+                publisher, policy, dry_run=args.dry_run,
+                vcs_directory=args.vcs_result_dir, interval=600)),
+            loop.create_task(run_web_server(args.listen_address, args.port, publisher, args.dry_run))))
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))
