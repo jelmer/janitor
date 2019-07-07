@@ -40,6 +40,7 @@ from silver_platter.proposal import (
     publish_changes as publish_changes_from_workspace,
     propose_changes,
     push_changes,
+    push_derived_changes,
     find_existing_proposed,
     get_hoster,
     hosters,
@@ -205,6 +206,14 @@ class BranchWorkspace(object):
             self.local_branch, self.main_branch, hoster=hoster,
             additional_colocated_branches=self.additional_colocated_branches,
             dry_run=dry_run)
+
+    def push_derived(self, name, hoster=None, overwrite_existing=False):
+        if hoster is None:
+            hoster = get_hoster(self.main_branch)
+        return push_derived_changes(
+            self.local_branch,
+            self.main_branch, hoster, name,
+            overwrite_existing=overwrite_existing)
 
 
 class Publisher(object):
