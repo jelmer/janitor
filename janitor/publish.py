@@ -78,6 +78,21 @@ https://janitor.debian.net/pkg/%(package)s/%(log_id)s/.
 # TODO(jelmer): Dedupe this with janitor.runner.ADDITIONAL_COLOCATED_BRANCHES
 ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
 
+MODE_SKIP = 'skip'
+MODE_BUILD_ONLY = 'build-only'
+MODE_PUSH = 'push'
+MODE_PUSH_DERIVED = 'push-derived'
+MODE_PROPOSE = 'propose'
+MODE_ATTEMPT_PUSH = 'attempt-push'
+SUPPORTED_MODES = [
+    MODE_PUSH,
+    MODE_SKIP,
+    MODE_BUILD_ONLY,
+    MODE_PUSH_DERIVED,
+    MODE_PROPOSE,
+    MODE_ATTEMPT_PUSH,
+    ]
+
 
 open_proposal_count = Gauge(
     'open_proposal_count', 'Number of open proposals.',
@@ -205,20 +220,20 @@ class Publisher(object):
                 main_branch, local_branch, resume_branch=None,
                 dry_run=False, log_id=None, existing_proposal=None):
         if self._check_limit(maintainer_email) and \
-                mode in ('propose', 'attempt-push'):
+                mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
             warning(
                 'Not creating proposal for %s, maximum number of open merge '
                 'proposals reached for maintainer %s', pkg, maintainer_email)
-            if mode == 'propose':
-                mode = 'build-only'
-            if mode == 'attempt-push':
-                mode = 'push'
+            if mode == MODE_PROPOSE:
+                mode = MODE_BUILD_ONLY
+            if mode == MODE_ATTEMPT_PUSH:
+                mode = MODE_PUSH
         if mode == "attempt-push" and \
                 "salsa.debian.org/debian/" in main_branch.user_url:
             # Make sure we don't accidentally push to unsuspecting collab-maint
             # repositories, even if debian-janitor becomes a member of "debian"
             # in the future.
-            mode = "propose"
+            mode = MODE_PROPOSE
 
         def get_proposal_description(existing_proposal):
             if existing_proposal:
@@ -331,18 +346,26 @@ class NewUpstreamPublisher(object):
         return True
 
 
-def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
-                mode, log_id, maintainer_email, vcs_directory, branch_name,
-                dry_run=False, possible_hosters=None,
-                possible_transports=None):
+def get_local_vcs_branch(vcs_directory, pkg, branch_name):
     if os.path.exists(os.path.join(vcs_directory, 'git', pkg)):
-        local_branch = open_branch(
+        return open_branch(
             'file:%s,branch=%s' % (
                 os.path.join(vcs_directory, 'git', pkg), branch_name))
     elif os.path.exists(os.path.join(vcs_directory, 'bzr', pkg)):
-        local_branch = open_branch(
+        return open_branch(
             os.path.join(vcs_directory, 'bzr', pkg, branch_name))
     else:
+        return None
+
+
+async def publish_one(
+        pkg, publisher, command, subworker_result, main_branch_url,
+        mode, log_id, maintainer_email, vcs_directory, branch_name,
+        dry_run=False, possible_hosters=None,
+        possible_transports=None):
+    assert mode in SUPPORTED_MODES
+    local_branch = get_local_vcs_branch(vcs_directory, pkg, branch_name)
+    if local_branch is None:
         raise PublishFailure(
             'result-branch-not-found', 'can not find local branch')
 
@@ -365,7 +388,7 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
-        if mode not in ('push', 'build-only'):
+        if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
             netloc = urllib.parse.urlparse(main_branch.user_url).netloc
             raise PublishFailure(
                 description='Hoster unsupported: %s.' % netloc,
@@ -374,7 +397,7 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
         # that can tell us.
         resume_branch = None
         existing_proposal = None
-        if mode == 'push':
+        if mode == MODE_PUSH:
             warning('Unsupported hoster (%s), will attempt to push to %s',
                     e, main_branch.user_url)
     else:
@@ -383,7 +406,7 @@ def publish_one(pkg, publisher, command, subworker_result, main_branch_url,
                 find_existing_proposed(
                     main_branch, hoster, branch_name))
         except NoSuchProject as e:
-            if mode not in ('push', 'build-only'):
+            if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
                 raise PublishFailure(
                     description='Project %s not found.' % e.project,
                     code='project-not-found')
@@ -422,14 +445,14 @@ async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
         mode, unused_update_changelog, unused_committer = apply_policy(
             policy, policy_name, pkg, maintainer_email,
             uploader_emails)
-        if mode in ('build-only', 'skip'):
+        if mode in (MODE_BUILD_ONLY, MODE_SKIP):
             continue
         if await state.already_published(
                 pkg, branch_name, revision, mode):
             continue
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
-            proposal, branch_name = publish_one(
+            proposal, branch_name = await publish_one(
                 pkg, publisher, command, subworker_result,
                 main_branch_url, mode, log_id, maintainer_email,
                 vcs_directory=vcs_directory, branch_name=branch_name,
