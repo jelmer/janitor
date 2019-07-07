@@ -19,6 +19,8 @@ from debian.deb822 import Changes
 from jinja2 import Environment, PackageLoader, select_autoescape
 import os
 
+from janitor import SUPPORTED_VCSES
+
 
 def format_duration(duration):
     return '%dm%02ds' % (duration.seconds / 60, duration.seconds % 60)
@@ -32,11 +34,12 @@ env = Environment(
 
 
 def get_local_vcs_repo(package):
-    import breezy.git
-    import breezy.bzr
+    import breezy.git  # noqa: F401
+    import breezy.bzr  # noqa: F401
     from breezy.repository import Repository
-    for vcs in ['git', 'bzr']:
-        path = os.path.join(os.path.dirname(__file__), '..', '..', 'vcs', vcs, package)
+    for vcs in SUPPORTED_VCSES:
+        path = os.path.join(
+            os.path.dirname(__file__), '..', '..', 'vcs', vcs, package)
         if not os.path.exists(path):
             continue
         return Repository.open(path)

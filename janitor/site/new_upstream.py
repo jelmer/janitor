@@ -10,7 +10,12 @@ from janitor.build import (
     get_build_architecture,
 )
 
-from janitor.site import env, format_duration, get_changes_path, changes_get_binaries
+from janitor.site import (
+    changes_get_binaries,
+    env,
+    format_duration,
+    get_changes_path,
+)
 
 
 async def generate_pkg_file(package, suite):

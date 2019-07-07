@@ -52,7 +52,7 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 
-from . import state
+from . import state, SUPPORTED_VCSES
 from .logs import LogFileManager
 from .trace import note, warning
 from .vcs import (
@@ -253,7 +253,7 @@ async def process_one(
         if cached_branch is not None:
             note('Using cached branch %s', cached_branch.user_url)
     else:
-        for vcs_abbrev in ['git', 'bzr']:
+        for vcs_abbrev in SUPPORTED_VCSES:
             main_branch = get_cached_branch(vcs_abbrev, pkg, 'master')
             if main_branch is not None:
                 break

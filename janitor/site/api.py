@@ -135,7 +135,9 @@ async def handle_diff(request):
     package = request.match_info.get('package')
     run_id = request.match_info['run_id']
     try:
-        run = [r async for r in state.iter_runs(package=package, run_id=run_id)][0]
+        run = [
+            r async for r in state.iter_runs(
+                package=package, run_id=run_id)][0]
     except IndexError:
         raise web.HTTPNotFoundError()
     text = get_run_diff(run)
@@ -167,7 +169,7 @@ async def handle_run(request):
             'command': run.command,
             'description': run.description,
             'package': run.package_name,
-            'build_info': run.build_info,
+            'build_info': build_info,
             'result_code': run.result_code,
             'branch_name': run.branch_name,
             })
