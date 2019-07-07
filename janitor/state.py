@@ -424,6 +424,7 @@ FROM
   run
 WHERE package = $1 AND build_distribution = $2
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
+LIMIT 1
 """
     args = [package, suite]
     async with get_connection() as conn:
@@ -636,13 +637,13 @@ where
 
 async def get_run_result_by_revision(revision):
     async with get_connection() as conn:
-        return await conn.fetchvalue("""
+        return await conn.fetchval("""
 SELECT result FROM run WHERE revision = $1""", revision.decode('utf-8'))
 
 
 async def get_last_build_version(package, suite):
     async with get_connection() as conn:
-        return await conn.fetchvalue(
+        return await conn.fetchval(
             "SELECT build_version FROM run WHERE "
             "build_version IS NOT NULL AND package = $1 AND "
             "build_distribution = $2 ORDER BY build_version DESC",

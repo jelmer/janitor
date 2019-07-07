@@ -32,6 +32,8 @@ No recent runs for {{ package }}
 </div>
 {% endif %}
 
+{% if branch_name %}
+
 <h2>Ready changes</h2>
 
 {{ publish_buttons(suite, package, "#commandResult") }}
@@ -58,6 +60,8 @@ No recent runs for {{ package }}
 </ul>
 
 <p>See the <a href="/cupboard/pkg/{{ package }}/{{ run_id }}/worker.log">worker log</a> for details.</p>
+
+{% endif %}
 
 {% endif %}
 

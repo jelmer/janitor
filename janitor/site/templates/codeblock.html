@@ -1,4 +1,5 @@
 {% macro include_console_log(f, include_lines=None, highlight_lines=None) %}
+{% set lines = read_file(f) %}
 <div class="highlight-console notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv">
 <pre>{% for i, line in enumerate(lines, 1) %}{% if in_line_boundaries(i, include_lines) %}{{ i }}
 {% endif %}{% endfor %}</pre></div></td><td class="code"><div class="highlight">

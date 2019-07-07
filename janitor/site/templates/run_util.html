@@ -1,5 +1,5 @@
 {% macro local_command(command, package) %}
-<p>Try this locally:</p>
+<p>Try this locally (using <a href="https://packages.debian.org/silver-platter">silver-platter</a>):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
 {% endmacro %}
 
@@ -61,11 +61,9 @@ $(function() {
 
 {% macro install_commands(binary_packages, distribution) %}
 {% if binary_packages %}
-<p>Install this package (if you have the <a class="reference external" href="../../">apt repository</a> enabled) by running one of:</p>
+<p>Install this package (if you have the <a class="reference external" href="/{{ distribution }}">apt repository</a> enabled) by running one of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
-{% for binary_package in binary_packages %}
-apt install -t {{ build_distribution }} {{ binary_package }}
-{% endfor %}
-</pre></div></div>
+{% for binary_package in binary_packages %}apt install -t {{ distribution }} {{ binary_package }}
+{% endfor %}</pre></div></div>
 {% endif %}
 {% endmacro %}

@@ -98,12 +98,11 @@ async def generate_run_file(logfile_manager, run):
     kwargs['max'] = max
     kwargs['suite'] = {
         'lintian-brush': 'lintian-fixes',
-        'merge-upstream': 'fresh-releases',
-        'merge-upstream --snapshot': 'fresh-snapshots'}.get(run.command)
+        'new-upstream': 'fresh-releases',
+        'new-upstream --snapshot': 'fresh-snapshots'}.get(run.command)
 
-    def read_file(p):
-        with open(p, 'rb') as f:
-            return [l.decode('utf-8', 'replace') for l in f.readlines()]
+    def read_file(f):
+        return [l.decode('utf-8', 'replace') for l in f.readlines()]
     kwargs['read_file'] = read_file
     if run.build_version:
         kwargs['changes_name'] = changes_filename(

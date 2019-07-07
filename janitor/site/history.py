@@ -13,7 +13,7 @@ async def get_history(limit):
             run.times[1] - run.times[0],
             run.id,
             run.result_code,
-            run.proposal_url,
+            run.merge_proposal_url,
             ]
         data.append(row)
     return data
