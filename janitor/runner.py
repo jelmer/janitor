@@ -206,7 +206,7 @@ async def invoke_subprocess_worker(
 
 async def process_one(
         worker_kind, vcs_url, env, command, build_command,
-        pre_check=None, post_check=None,
+        suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
         possible_transports=None, possible_hosters=None,
@@ -382,9 +382,20 @@ async def process_queue(
     async def process_queue_item(item):
         (queue_id, vcs_url, env, command) = item
         start_time = datetime.now()
+
+        # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
+        if command == ["new-upstream"]:
+            suite = 'fresh-releases'
+        elif command == ["new-upstream", "--snapshot"]:
+            suite = 'fresh-snapshots'
+        elif command == ["lintian-brush"]:
+            suite = 'lintian-fixes'
+        else:
+            raise AssertionError('Unknown command %s' % command[0])
+
         result = await process_one(
             worker_kind, vcs_url, env, command,
-            pre_check=pre_check,
+            suite=suite, pre_check=pre_check,
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
             debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
@@ -404,7 +415,8 @@ async def process_queue(
                 build_distribution=result.build_distribution,
                 branch_name=result.branch_name,
                 revision=result.revision,
-                subworker_result=result.subworker_result)
+                subworker_result=result.subworker_result,
+                suite=suite)
 
             await state.drop_queue_item(queue_id)
         last_success_gauge.set_to_current_time()
