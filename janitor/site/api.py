@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
 import argparse
-from aiohttp import web
+from aiohttp import web, ClientSession
+import functools
 import os
+import urllib.parse
 
 from janitor.policy import read_policy, apply_policy
 from janitor import state
@@ -21,7 +23,7 @@ SUITE_TO_POLICY_FIELD = {
 }
 
 
-async def handle_policy(request):
+async def handle_policy(policy_config, request):
     package = request.match_info['package']
     try:
         (name, maintainer_email, vcs_url) = list(
@@ -41,16 +43,21 @@ async def handle_policy(request):
     return web.json_response(response_obj)
 
 
-async def handle_publish(request):
+async def handle_publish(publisher_url, request):
     package = request.match_info['package']
+    suite = request.match_info['suite']
     post = await request.post()
     mode = post.get('mode', 'push-derived')
     if mode not in ('push-derived', 'push', 'propose', 'attempt-push'):
         return web.json_response(
             {'error': 'Invalid mode', 'mode': mode}, status=400)
-    # TODO(jelmer): And now?
-    response_obj = {'status': 'success', 'package': package, 'mode': mode}
-    return web.json_response(response_obj)
+    url = urllib.parse.urljoin(publisher_url, '%s/%s/publish' % (suite, package))
+    async with ClientSession() as client:
+        async with client.post(url, data={'mode': mode}) as resp:
+            if resp == 200:
+                return web.json_response(await resp.json())
+            else:
+                return web.json_response(await resp.json(), status=400)
 
 
 async def handle_schedule(request):
@@ -216,34 +223,36 @@ async def handle_global_policy(request):
             headers={'Cache-Control': 'max-age=60'})
 
 
-app = web.Application()
-app.router.add_get('/pkgnames', handle_packagename_list)
-app.router.add_get('/pkg', handle_package_list)
-app.router.add_get('/pkg/{package}', handle_package_list)
-app.router.add_get(
-    '/pkg/{package}/merge-proposals',
-    handle_merge_proposal_list)
-app.router.add_get('/pkg/{package}/policy', handle_policy)
-app.router.add_post('/{suite}/pkg/{package}/publish', handle_publish)
-app.router.add_post('/{suite}/pkg/{package}/schedule', handle_schedule)
-app.router.add_get('/merge-proposals', handle_merge_proposal_list)
-app.router.add_get('/queue', handle_queue)
-app.router.add_get('/run', handle_run)
-app.router.add_get('/run/{run_id}', handle_run)
-app.router.add_get('/run/{run_id}/diff', handle_diff)
-app.router.add_get('/pkg/{package}/run', handle_run)
-app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
-app.router.add_get('/pkg/{package}/run/{run_id}/diff', handle_diff)
-app.router.add_get('/package-branch', handle_package_branch)
-app.router.add_get('/', handle_index)
-app.router.add_get(
-    '/{suite}/published-packages', handle_published_packages)
-app.router.add_get('/policy', handle_global_policy)
-# TODO(jelmer): Previous runs (iter_previous_runs)
-# TODO(jelmer): Last successes (iter_last_successes)
-# TODO(jelmer): Last runs (iter_last_runs)
-# TODO(jelmer): Build failures (iter_build_failures)
-# TODO(jelmer): Publish ready (iter_publish_ready)
+def create_app(publisher_url, policy_config):
+    app = web.Application()
+    app.router.add_get('/pkgnames', handle_packagename_list)
+    app.router.add_get('/pkg', handle_package_list)
+    app.router.add_get('/pkg/{package}', handle_package_list)
+    app.router.add_get(
+        '/pkg/{package}/merge-proposals',
+        handle_merge_proposal_list)
+    app.router.add_get('/pkg/{package}/policy', functools.partial(handle_policy, policy_config))
+    app.router.add_post('/{suite}/pkg/{package}/publish', functools.partial(handle_publish, publisher_url))
+    app.router.add_post('/{suite}/pkg/{package}/schedule', handle_schedule)
+    app.router.add_get('/merge-proposals', handle_merge_proposal_list)
+    app.router.add_get('/queue', handle_queue)
+    app.router.add_get('/run', handle_run)
+    app.router.add_get('/run/{run_id}', handle_run)
+    app.router.add_get('/run/{run_id}/diff', handle_diff)
+    app.router.add_get('/pkg/{package}/run', handle_run)
+    app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
+    app.router.add_get('/pkg/{package}/run/{run_id}/diff', handle_diff)
+    app.router.add_get('/package-branch', handle_package_branch)
+    app.router.add_get('/', handle_index)
+    app.router.add_get(
+        '/{suite}/published-packages', handle_published_packages)
+    app.router.add_get('/policy', handle_global_policy)
+    # TODO(jelmer): Previous runs (iter_previous_runs)
+    # TODO(jelmer): Last successes (iter_last_successes)
+    # TODO(jelmer): Last runs (iter_last_runs)
+    # TODO(jelmer): Build failures (iter_build_failures)
+    # TODO(jelmer): Publish ready (iter_publish_ready)
+    return app
 
 
 if __name__ == '__main__':
@@ -252,10 +261,14 @@ if __name__ == '__main__':
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,
                         default=os.path.join(
-                            os.path.dirname(__file__), '..', 'policy.conf'))
+                            os.path.dirname(__file__), '..', '..', 'policy.conf'))
+    parser.add_argument('--publisher-url', type=str, default='http://localhost:9912/',
+                        help='URL for publisher.')
     args = parser.parse_args()
 
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
+
+    app = create_app(args.publisher_url, policy_config)
 
     web.run_app(app, host=args.host)
