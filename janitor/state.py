@@ -633,3 +633,18 @@ where
   result_code = 'success'
 ) as package where tag = $1 order by package, start_time desc
 """, tag)
+
+
+async def get_run_result_by_revision(revision):
+    async with get_connection() as conn:
+        return await conn.fetchvalue("""
+SELECT result FROM run WHERE revision = $1""", revision.decode('utf-8'))
+
+
+async def get_last_build_version(package, suite):
+    async with get_connection() as conn:
+        return await conn.fetchvalue(
+            "SELECT build_version FROM run WHERE "
+            "build_version IS NOT NULL AND package = $1 AND "
+            "build_distribution = $2 ORDER BY build_version DESC",
+            package, suite)

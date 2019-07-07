@@ -153,7 +153,9 @@ async def invoke_subprocess_worker(
         worker_kind, main_branch, env, command, output_directory,
         resume_branch=None, cached_branch=None,
         pre_check=None, post_check=None,
-        build_command=None, log_path=None):
+        build_command=None, log_path=None,
+        resume_branch_result=None,
+        last_build_version=None):
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
@@ -175,6 +177,14 @@ async def invoke_subprocess_worker(
         args.append('--post-check=%s' % post_check)
     if build_command:
         args.append('--build-command=%s' % build_command)
+    if resume_branch_result:
+        resume_result_path = os.path.join(
+            output_directory, 'previous_result.json')
+        with open(resume_result_path, 'w') as f:
+            json.dump(f, resume_branch_result)
+        args.append('--resume-result-path=%s' % resume_result_path)
+    if last_build_version:
+        args.append('--last-build-version=%s' % last_build_version)
 
     args.extend(command)
 
@@ -209,10 +219,13 @@ async def process_one(
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if command == ["new-upstream"]:
         branch_name = 'new-upstream'
+        suite = 'fresh-releases'
     elif command == ["new-upstream", "--snapshot"]:
         branch_name = 'new-upstream-snapshot'
+        suite = 'fresh-snapshots'
     elif command == ["lintian-brush"]:
         branch_name = "lintian-fixes"
+        suite = 'lintian-fixes'
     else:
         raise AssertionError('Unknown command %s' % command[0])
 
@@ -266,13 +279,23 @@ async def process_one(
         resume_branch = get_cached_branch(vcs_abbrev, pkg, branch_name)
         cached_branch = None
 
+    if resume_branch is not None:
+        resume_branch_result = await state.get_run_result_by_revision(
+            revision=resume_branch.last_revision())
+    else:
+        resume_branch_result = None
+
+    last_build_version = await state.get_last_build_version(pkg, suite)
+
     with tempfile.TemporaryDirectory() as output_directory:
         log_path = os.path.join(output_directory, 'worker.log')
         retcode = await invoke_subprocess_worker(
                 worker_kind, main_branch, env, command, output_directory,
                 resume_branch=resume_branch, cached_branch=cached_branch,
                 pre_check=pre_check, post_check=post_check,
-                build_command=build_command, log_path=log_path)
+                build_command=build_command, log_path=log_path,
+                resume_branch_result=resume_branch_result,
+                last_build_version=last_build_version)
 
         for name in [
                 n for n in os.listdir(output_directory) if n.endswith('.log')]:

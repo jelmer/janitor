@@ -17,6 +17,7 @@
 
 import argparse
 from datetime import datetime
+from debian.changelog import Changelog, Version
 import distro_info
 import json
 import os
@@ -88,12 +89,16 @@ class SubWorker(object):
           env: Environment dictionary
         """
 
-    def make_changes(self, local_tree, report_context, metadata):
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata):
         """Make the actual changes to a tree.
 
         Args:
           local_tree: Tree to make changes to
           report_context: report context
+          metadata: JSON Dictionary that can be used for storing results
+          base_metadata: Optional JSON Dictionary with results of
+            any previous runs this one is based on
         """
         raise NotImplementedError(self.make_changes)
 
@@ -127,7 +132,8 @@ class LintianBrushWorker(SubWorker):
             type=str, action='append', default=DEFAULT_ADDON_FIXERS)
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata):
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata):
         fixers = get_fixers(
             available_lintian_fixers(), tags=self.args.tags)
 
@@ -149,24 +155,29 @@ class LintianBrushWorker(SubWorker):
                 note('Fixer %r failed to run:', fixer_name)
                 sys.stderr.write(failure.errors.decode('utf-8', 'replace'))
 
-        metadata['applied'] = [{
-            'summary': summary,
-            'description': result.description,
-            'fixed_lintian_tags': result.fixed_lintian_tags,
-            'certainty': result.certainty}
-            for result, summary in applied]
+        metadata = []
+        if base_metadata:
+            metadata['applied'].extend(base_metadata['applied'])
+        for result, summary in applied:
+            metadata['applied'].append({
+                'summary': summary,
+                'description': result.description,
+                'fixed_lintian_tags': result.fixed_lintian_tags,
+                'certainty': result.certainty})
         metadata['failed'] = {
             name: e.errors.decode('utf-8', 'replace')
             for (name, e) in failed.items()}
         metadata['add_on_only'] = not has_nontrivial_changes(
             applied, self.args.propose_addon_only)
+        if base_metadata and not base_metadata['add_on_only']:
+            metadata['add_on_only'] = False
 
         if not applied:
             raise WorkerFailure('nothing-to-do', 'no fixers to apply')
         else:
             tags = set()
-            for brush_result, unused_summary in applied:
-                tags.update(brush_result.fixed_lintian_tags)
+            for entry in metadata['applied']:
+                tags.update(entry['fixed_lintian_tags'])
         return 'Applied fixes for %r' % tags
 
     def build_suite(self):
@@ -187,7 +198,8 @@ class NewUpstreamWorker(SubWorker):
             action='store_true')
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata):
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata):
         # Make sure that the quilt patches applied in the first place..
         with local_tree.lock_write():
             try:
@@ -291,6 +303,15 @@ class WorkerFailure(Exception):
         self.description = description
 
 
+def tree_set_changelog_version(tree, build_version):
+    cl = Changelog(tree.get_file('debian/changelog'))
+    if cl.version > Version(build_version):
+        return
+    cl.set_version(build_version)
+    with open(tree.abspath('debian/changelog'), 'wb') as f:
+        cl.write_to_open_file(f)
+
+
 debian_info = distro_info.DebianDistroInfo()
 
 
@@ -298,7 +319,9 @@ def process_package(vcs_url, env, command, output_directory,
                     metadata, build_command=None, pre_check_command=None,
                     post_check_command=None, possible_transports=None,
                     possible_hosters=None, resume_branch_url=None,
-                    cached_branch_url=None, tgz_repo=False):
+                    cached_branch_url=None, tgz_repo=False,
+                    last_build_version=None,
+                    resume_subworker_result=None):
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg
@@ -374,8 +397,15 @@ def process_package(vcs_url, env, command, output_directory,
 
         def provide_context(c):
             metadata['context'] = c
+
+        if ws.resume_branch is None:
+            # If the resume branch was discarded for whatever reason, then we
+            # don't need to pass in the subworker result.
+            resume_subworker_result = None
+
         description = subworker.make_changes(
-            ws.local_tree, provide_context, metadata['subworker'])
+            ws.local_tree, provide_context, metadata['subworker'],
+            resume_subworker_result)
 
         if not ws.changes_since_main():
             raise WorkerFailure('nothing-to-do', 'Nothing to do.')
@@ -389,6 +419,12 @@ def process_package(vcs_url, env, command, output_directory,
             raise WorkerFailure('post-check-failed', str(e))
 
         if build_command:
+            if last_build_version:
+                # Update the changelog entry with the previous build version;
+                # This allows us to upload incremented versions for subsequent
+                # runs.
+                tree_set_changelog_version(
+                    ws.local_tree, last_build_version)
             try:
                 (changes_name, cl_version) = build_incrementally(
                     ws.local_tree, '~' + subworker.build_version_suffix(),
@@ -443,6 +479,13 @@ def main(argv=None):
         '--resume-branch-url', type=str,
         help='URL of resume branch to continue on (if any).')
     parser.add_argument(
+        '--resume-result-path', type=str,
+        help=('Path to a JSON file with the results for '
+              'the last run on the resumed branch.'))
+    parser.add_argument(
+        '--last-build-version', type=str,
+        help='Version of the last built Debian package in this suite.')
+    parser.add_argument(
         '--cached-branch-url', type=str,
         help='URL of cached branch to start from.')
     parser.add_argument(
@@ -474,6 +517,12 @@ def main(argv=None):
     global_config = GlobalStack()
     global_config.set('branch.fetch_tags', True)
 
+    if args.resume_subworker_result:
+        with open(args.resume_subworker_result, 'rb') as f:
+            resume_subworker_result = json.load(f)['subworker']
+    else:
+        resume_subworker_result = None
+
     metadata = {}
     start_time = datetime.now()
     metadata['start_time'] = start_time.isoformat()
@@ -485,7 +534,9 @@ def main(argv=None):
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,
             cached_branch_url=args.cached_branch_url,
-            tgz_repo=args.tgz_repo)
+            tgz_repo=args.tgz_repo,
+            last_build_version=args.last_build_version,
+            resume_subworker_result=resume_subworker_result)
     except WorkerFailure as e:
         metadata['code'] = e.code
         metadata['description'] = e.description
