@@ -21,12 +21,20 @@ if __name__ == '__main__':
     import functools
     import os
     from janitor.logs import LogFileManager
+    from janitor.policy import read_policy
     from aiohttp import web
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, help='Host to listen on')
     parser.add_argument('--logdirectory', type=str,
                         help='Logs directory path.', default='site/pkg')
+    parser.add_argument('--publisher-url', type=str, default='http://localhost:9912/',
+                        help='URL for publisher.')
+    parser.add_argument("--policy",
+                        help="Policy file to read.", type=str,
+                        default=os.path.join(
+                            os.path.dirname(__file__), '..', '..', 'policy.conf'))
+
     args = parser.parse_args()
 
     logfile_manager = LogFileManager(args.logdirectory)
@@ -235,6 +243,9 @@ if __name__ == '__main__':
         '/pkg/', handle_pkg_list)
     app.router.add_static(
         '/_static', os.path.join(os.path.dirname(__file__), '_static'))
-    from .api import app as api_app
-    app.add_subapp('/api', api_app)
+    from .api import create_app as create_api_app
+    with open(args.policy, 'r') as f:
+        policy_config = read_policy(f)
+
+    app.add_subapp('/api', create_api_app(args.publisher_url, policy_config))
     web.run_app(app, host=args.host)
