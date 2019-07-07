@@ -24,6 +24,7 @@ from prometheus_client import (
     Counter,
     Gauge,
     Histogram,
+    generate_latest,
     push_to_gateway,
     REGISTRY,
 )
@@ -74,3 +75,5 @@ if args.prometheus:
     push_to_gateway(
         args.prometheus, job='janitor.export-stats',
         registry=REGISTRY)
+else:
+    sys.stdout.buffer.write(generate_latest())
