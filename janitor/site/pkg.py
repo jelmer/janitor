@@ -22,6 +22,8 @@ from janitor.site import (
     format_duration,
     get_changes_path,
     get_local_vcs_repo,
+    get_run_diff,
+    highlight_diff,
 )
 from janitor.trace import note, warning
 from janitor.vcs import (
@@ -93,8 +95,11 @@ async def generate_run_file(logfile_manager, run):
     kwargs['build_distribution'] = run.build_distribution
     kwargs['result_code'] = run.result_code
     kwargs['branch_name'] = run.branch_name
+    kwargs['revision'] = run.revision
     kwargs['format_duration'] = format_duration
     kwargs['enumerate'] = enumerate
+    kwargs['show_diff'] = lambda: get_run_diff(run).decode('utf-8'),
+    kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
     kwargs['suite'] = {
         'lintian-brush': 'lintian-fixes',
