@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "codeblock.html" import include_console_log with context %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, install_commands %}
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -11,13 +11,18 @@
 <li>Start time: {{ start_time}}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Description: {{ description }}</li>
+{% if revision %}
 <li>Diff: <a href="/api/run/{{ run_id }}/diff">Raw diff</a></li>
+{% endif %}
+<!-- Command: {{ command }} -->
 </ul>
 
 {{ local_command(command, package) }}
 
 {{ reschedule_button(suite, package, "Reschedule", "#commandResult") }}
+{% if branch_name %}
 {{ publish_buttons(suite, package, "#commandResult") }}
+{% endif %}
 
 <div id="commandResult"></div>
 

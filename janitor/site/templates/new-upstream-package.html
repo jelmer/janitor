@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, install_commands with context %}
 {% block page_title %}New Upstream - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
@@ -22,12 +22,14 @@ No recent runs for {{ package }}
 </div>
 {% endif %}
 
+Merged new upstream version: <b>{{ result['upstream_version'] }}</b> (was: <b>{{ result['old_upstream_version'] }}</b>).
+
 {% if changes_name %}
 <h2>Resulting package</h2>
 <p>Changes filename: <a class="reference external" href="/{{ suite }}/{{ changes_name }}">{{ changes_name }}</a></p>
 <p>Built on {{ finish_time }} (took {{ format_duration(finish_time - start_time) }})</p>
 
-{{ install_commands(binary_packages, build_distribution) }}
+{{ install_commands(binary_packages, suite) }}
 
 {% endif %}
 

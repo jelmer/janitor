@@ -155,7 +155,7 @@ class LintianBrushWorker(SubWorker):
                 note('Fixer %r failed to run:', fixer_name)
                 sys.stderr.write(failure.errors.decode('utf-8', 'replace'))
 
-        metadata = []
+        metadata = {'applied': []}
         if base_metadata:
             metadata['applied'].extend(base_metadata['applied'])
         for result, summary in applied:
@@ -517,8 +517,8 @@ def main(argv=None):
     global_config = GlobalStack()
     global_config.set('branch.fetch_tags', True)
 
-    if args.resume_subworker_result:
-        with open(args.resume_subworker_result, 'rb') as f:
+    if args.resume_result_path:
+        with open(args.resume_result_path, 'rb') as f:
             resume_subworker_result = json.load(f)['subworker']
     else:
         resume_subworker_result = None

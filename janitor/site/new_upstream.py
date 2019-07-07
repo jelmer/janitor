@@ -63,7 +63,7 @@ async def generate_pkg_file(package, suite):
         'suite': suite,
         'format_duration': format_duration,
         }
-    if run.build_version:
+    if run and run.build_version:
         kwargs['changes_name'] = changes_filename(
             run.package, run.build_version,
             get_build_architecture())
