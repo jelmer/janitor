@@ -478,7 +478,7 @@ async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
             proposal.url if proposal else None)
 
 
-async def publish_request(publisher, dry_run, request):
+async def publish_request(publisher, dry_run, vcs_directory, request):
     package = request.match_info['package']
     suite = request.match_info['suite']
     post = await request.post()
@@ -492,7 +492,7 @@ async def publish_request(publisher, dry_run, request):
         return web.json_response({}, status=400)
     try:
         proposal, branch_name = await publish_one(
-            pkg, publisher, run.command, run.result,
+            package, publisher, run.command, run.result,
             main_branch_url, mode, run.id, maintainer_email,
             vcs_directory=vcs_directory, branch_name=run.branch_name,
             dry_run=dry_run)
@@ -504,7 +504,7 @@ async def publish_request(publisher, dry_run, request):
         {'branch_name': branch_name, 'proposal': proposal.url if proposal else None})
 
 
-async def run_web_server(listen_addr, port, publisher, dry_run=False):
+async def run_web_server(listen_addr, port, publisher, vcs_directory, dry_run=False):
     async def metrics(request):
         resp = web.Response(body=generate_latest())
         resp.content_type = CONTENT_TYPE_LATEST
@@ -512,7 +512,7 @@ async def run_web_server(listen_addr, port, publisher, dry_run=False):
 
     app = web.Application()
     app.router.add_get("/metrics", metrics)
-    app.router.add_post("/{suite}/{package}/publish", functools.partial(publish_request, publisher, dry_run))
+    app.router.add_post("/{suite}/{package}/publish", functools.partial(publish_request, publisher, dry_run, vcs_directory))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -582,7 +582,7 @@ def main(argv=None):
             loop.create_task(process_queue_loop(
                 publisher, policy, dry_run=args.dry_run,
                 vcs_directory=args.vcs_result_dir, interval=600)),
-            loop.create_task(run_web_server(args.listen_address, args.port, publisher, args.dry_run))))
+            loop.create_task(run_web_server(args.listen_address, args.port, publisher, args.vcs_result_dir, args.dry_run))))
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))

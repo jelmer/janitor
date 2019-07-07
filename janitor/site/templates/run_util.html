@@ -3,7 +3,7 @@
 <div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
 {% endmacro %}
 
-{% macro merge_command(package, branch_name) %}
+{% macro merge_command(package, branch_name, vcs) %}
 {% if vcs == 'git' %}
 <p>Merge these changes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>git pull {{ cache_url_git }}{{ package }} {{ branch_name }}</pre></div></div>
