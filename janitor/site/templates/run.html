@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "codeblock.html" import include_console_log with context %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, install_commands %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, install_commands with context %}
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -10,6 +10,7 @@
 <li>Package: <a class="reference external" href="..">{{ package }}</a></li>
 <li>Start time: {{ start_time}}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
+<li>Status: {{ result_code }}</li>
 <li>Description: {{ description }}</li>
 {% if revision %}
 <li>Diff: <a href="/api/run/{{ run_id }}/diff">Raw diff</a></li>
@@ -26,10 +27,8 @@
 
 <div id="commandResult"></div>
 
-<!-- TODO(jelmer): Include button to propose merging -->
-
 {% if branch_name %}
-{{ merge_command(package, branch_name) }}
+{{ merge_command(package, branch_name, vcs) }}
 {% else %}
 {% if build_log_name %}
 {% with f = get_log(build_log_name) %}
@@ -44,6 +43,29 @@
 {% endif %}
 {% endif %}
 
+{% if result %}
+<h3>Summary</h3>
+{% if suite == 'lintian-fixes' %}
+{% from "lintian-fixes-util.html" import lintian_brush_summary %}
+{{ lintian_brush_summary(result['applied']) }}
+{% else %}
+{% from "new_upstream_util.html" import new_upstream_summary %}
+{{ new_upstream_summary(result) }}
+{% endif %}
+{% endif %}
+
+{% if revision %}
+<h3>Diff</h3>
+
+{% set diff = show_diff() %}
+{% if diff.split('\n')|length < 200 %}
+{{ highlight_diff(show_diff())|safe }}
+{% else %}
+<p>Diff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/diff">raw diff</a>.</p>
+{% endif %}
+
+{% endif %}
+
 {% if changes_name %}
 <h2>Resulting package</h2>
 <p>Changes filename: <a class="reference external" href="/{{ build_distribution }}/{{ changes_name }}">{{ changes_name }}</a></p>
@@ -52,7 +74,7 @@
 
 {% endif %}
 
-<p>{% if build_log_path %}<a class="reference external" href="{{ build_log_name }}">Full build log</a>{% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}</a>{% endfor %} {% endif %}{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
+<p>{% if build_log_name %}<a class="reference external" href="{{ build_log_name }}">Full build log</a>{% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}</a>{% endfor %} {% endif %}{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
 
 </div>
 {% endblock %}

@@ -94,11 +94,12 @@ async def generate_run_file(logfile_manager, run):
     kwargs['build_version'] = run.build_version
     kwargs['build_distribution'] = run.build_distribution
     kwargs['result_code'] = run.result_code
+    kwargs['result'] = run.result
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['format_duration'] = format_duration
     kwargs['enumerate'] = enumerate
-    kwargs['show_diff'] = lambda: get_run_diff(run).decode('utf-8'),
+    kwargs['show_diff'] = lambda: get_run_diff(run).decode('utf-8')
     kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
     kwargs['suite'] = {
@@ -126,9 +127,7 @@ async def generate_run_file(logfile_manager, run):
     kwargs['in_line_boundaries'] = in_line_boundaries
     if kwargs['changes_name']:
         changes_path = get_changes_path(run, kwargs['changes_name'])
-        if not changes_path:
-            warning('Missing changes path %r', changes_path)
-        else:
+        if changes_path:
             for binary in changes_get_binaries(changes_path):
                 kwargs['binary_packages'].append(binary)
 

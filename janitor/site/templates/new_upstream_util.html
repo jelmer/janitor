@@ -1,0 +1,3 @@
+{% macro new_upstream_summary(result) %}
+<p>Merged new upstream version: <b>{{ result['upstream_version'] }}</b> (was: <b>{{ result['old_upstream_version'] }}</b>).</p>
+{% endmacro %}
