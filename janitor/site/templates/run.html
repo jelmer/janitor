@@ -43,14 +43,8 @@
 <h2>Resulting package</h2>
 <p>Changes filename: <a class="reference external" href="/{{ build_distribution }}/{{ changes_name }}">{{ changes_name }}</a></p>
 
-{% if binary_packages %}
-<p>Install this package (if you have the <a class="reference external" href="/{{ build_distribution }}">apt repository</a> enabled) by running one of:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>
-{% for binary_package in binary_packages %}
-apt install -t {{ build_distribution }} {{ binary_package }}
-{% endfor %}
-</pre></div></div>
-{% endif %}
+{{ install_commands(binary_packages, build_distribution) }}
+
 {% endif %}
 
 <p>{% if build_log_path %}<a class="reference external" href="{{ build_log_name }}">Full build log</a>{% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}</a>{% endfor %} {% endif %}{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
