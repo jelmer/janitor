@@ -155,7 +155,7 @@ class LintianBrushWorker(SubWorker):
                 note('Fixer %r failed to run:', fixer_name)
                 sys.stderr.write(failure.errors.decode('utf-8', 'replace'))
 
-        metadata = {'applied': []}
+        metadata['applied'] = []
         if base_metadata:
             metadata['applied'].extend(base_metadata['applied'])
         for result, summary in applied:
