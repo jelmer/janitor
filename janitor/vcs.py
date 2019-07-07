@@ -35,6 +35,9 @@ from silver_platter.utils import (
 
 from .trace import note
 
+
+SUPPORTED_VCSES = ['git', 'bzr']
+
 CACHE_URL_BZR = 'https://janitor.debian.net/bzr/'
 CACHE_URL_GIT = 'https://janitor.debian.net/git/'
 
@@ -196,3 +199,18 @@ def get_cached_branch(vcs_type, package, branch_name):
     except ConnectionError as e:
         note('Unable to reach cache server: %s', e)
         return None
+
+
+def get_local_vcs_branch(vcs_directory, pkg, branch_name):
+    if os.path.exists(os.path.join(vcs_directory, 'git', pkg)):
+        return open_branch(
+            'file:%s,branch=%s' % (
+                os.path.join(vcs_directory, 'git', pkg), branch_name))
+    elif os.path.exists(os.path.join(vcs_directory, 'bzr', pkg)):
+        return open_branch(
+            os.path.join(vcs_directory, 'bzr', pkg, branch_name))
+    else:
+        return None
+
+
+

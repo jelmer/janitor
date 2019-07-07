@@ -52,10 +52,11 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 
-from . import state, SUPPORTED_VCSES
+from . import state
 from .logs import LogFileManager
 from .trace import note, warning
 from .vcs import (
+    SUPPORTED_VCSES,
     get_vcs_abbreviation,
     open_branch_ext,
     copy_vcs_dir,
