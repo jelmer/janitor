@@ -99,7 +99,7 @@ async def generate_run_file(logfile_manager, run):
     kwargs['revision'] = run.revision
     kwargs['format_duration'] = format_duration
     kwargs['enumerate'] = enumerate
-    kwargs['show_diff'] = lambda: get_run_diff(run).decode('utf-8')
+    kwargs['show_diff'] = lambda: get_run_diff(run).decode('utf-8', 'replace')
     kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
     kwargs['suite'] = {
