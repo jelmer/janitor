@@ -394,7 +394,7 @@ select distinct package, build_version from run where build_distribution = $1
 """, suite, )
 
 
-async def iter_previous_runs(package, command):
+async def iter_previous_runs(package, suite):
     async with get_connection() as conn:
         for row in await conn.fetch("""
 SELECT
@@ -418,9 +418,9 @@ SELECT
 FROM
   run
 WHERE
-  package = $1 AND command = $2
+  package = $1 AND suite = $2
 ORDER BY start_time DESC
-""", package, ' '.join(command)):
+""", package, ' '.join(suite)):
             yield Run.from_row(row)
 
 
@@ -483,8 +483,7 @@ ORDER BY package, command, result_code = 'success' DESC, start_time DESC
         return await conn.fetch(query, *args)
 
 
-async def iter_last_runs(command=None):
-    args = []
+async def iter_last_runs():
     query = """
 SELECT DISTINCT ON (package, command)
   package,
@@ -495,13 +494,10 @@ SELECT DISTINCT ON (package, command)
   finish_time - start_time
 FROM
   run
+ ORDER BY package, command, start_time DESC
 """
-    if command:
-        query += " WHERE command = $1"
-        args.append(command)
-    query += " ORDER BY package, command, start_time DESC"
     async with get_connection() as conn:
-        return await conn.fetch(query, *args)
+        return await conn.fetch(query)
 
 
 async def iter_build_failures():

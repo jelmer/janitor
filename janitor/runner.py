@@ -383,7 +383,8 @@ async def process_queue(
         (queue_id, vcs_url, env, command) = item
         start_time = datetime.now()
 
-        # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
+        # TODO(jelmer): Ideally, there shouldn't be any command-specific code
+        # here.
         if command == ["new-upstream"]:
             suite = 'fresh-releases'
         elif command == ["new-upstream", "--snapshot"]:

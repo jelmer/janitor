@@ -28,12 +28,14 @@ if __name__ == '__main__':
     parser.add_argument('--host', type=str, help='Host to listen on')
     parser.add_argument('--logdirectory', type=str,
                         help='Logs directory path.', default='site/pkg')
-    parser.add_argument('--publisher-url', type=str, default='http://localhost:9912/',
+    parser.add_argument('--publisher-url', type=str,
+                        default='http://localhost:9912/',
                         help='URL for publisher.')
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,
                         default=os.path.join(
-                            os.path.dirname(__file__), '..', '..', 'policy.conf'))
+                            os.path.dirname(__file__), '..', '..',
+                            'policy.conf'))
 
     args = parser.parse_args()
 

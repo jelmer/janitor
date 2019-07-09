@@ -82,12 +82,15 @@ if args.fixers:
 fixer_count.inc(len(available_fixers))
 
 
+SUITE = 'lintian-fixes'
+
+
 async def main():
     note('Querying UDD...')
     todo = [x async for x in schedule_udd(
         args.policy, args.propose_addon_only, args.packages,
         available_fixers, args.shuffle)]
-    await add_to_queue(todo, dry_run=args.dry_run)
+    await add_to_queue(todo, SUITE, dry_run=args.dry_run)
 
 loop = asyncio.get_event_loop()
 loop.run_until_complete(main())
