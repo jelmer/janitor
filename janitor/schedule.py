@@ -255,25 +255,23 @@ def determine_tags(package, command, mode, previous_runs, context=None,
     NO_CONTEXT_REFRESH_FREQUENCY = 14
 
     if previous_runs:
-        (last_start_time, last_duration, last_instigated_context,
-         last_context, last_main_branch_revision, last_result_code) = (
-            previous_runs[0])
+        last_run = previous_runs[0]
         # TODO(jelmer): Should last_context and last_instigated_context be
         # treated differently?
-        if context and context in (last_context, last_instigated_context):
+        if context and context in (last_run.context, last_run.instigated_context):
             yield 'context_processed'
         elif context is None:
-            age = (datetime.now() - last_start_time)
+            age = (datetime.now() - last_run.times[0])
             if age.days > NO_CONTEXT_REFRESH_FREQUENCY:
                 yield 'no_context_refresh_bonus'
-            elif last_result_code != 'success':
+            elif last_run.result_code != 'success':
                 yield 'no_context_failure'
         else:
-            if last_result_code == 'success':
+            if last_run.result_code == 'success':
                 yield 'last_successful_bonus'
-        if last_result_code in VAGUE_RESULT_CODES:
+        if last_run.result_code in VAGUE_RESULT_CODES:
             yield 'last_vague_bonus'
-        priority -= (last_duration.total_seconds() / 60) / 10
+        priority -= (last_run.duration.total_seconds() / 60) / 10
     else:
         yield 'first_run'
 
@@ -288,11 +286,9 @@ async def add_to_queue(todo, dry_run=False, default_priority=0):
             priority_per_tag[t] for t in tags)
         estimated_duration = None
         if previous_runs:
-            for (last_start_time, last_duration, last_instigated_context,
-                 last_context, last_main_branch_revision,
-                 last_result_code) in previous_runs:
-                if last_result_code == 'success':
-                    estimated_duration = last_duration
+            for last_run in previous_runs:
+                if last_run.result_code == 'success':
+                    estimated_duration = last_run.duration
                     break
         if not dry_run:
             added = await state.add_to_queue(
