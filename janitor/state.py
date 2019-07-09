@@ -140,13 +140,13 @@ class Run(object):
             'merge_proposal_url', 'build_version',
             'build_distribution', 'result_code', 'branch_name',
             'main_branch_revision', 'revision', 'context', 'result',
-            'suite']
+            'suite', 'instigated_context']
 
     def __init__(self, run_id, times, command, description, package,
                  merge_proposal_url, build_version,
                  build_distribution, result_code, branch_name,
                  main_branch_revision, revision, context, result,
-                 suite):
+                 suite, instigated_context):
         self.id = run_id
         self.times = times
         self.command = command
@@ -162,6 +162,11 @@ class Run(object):
         self.context = context
         self.result = result
         self.suite = suite
+        self.instigated_context = instigated_context
+
+    @property
+    def duration(self):
+        return self.times[1] - self.times[0]
 
     @classmethod
     def from_row(cls, row):
@@ -176,7 +181,8 @@ class Run(object):
                    main_branch_revision=(
                        row[11].encode('utf-8') if row[11] else None),
                    revision=(row[12].encode('utf-8') if row[12] else None),
-                   context=row[13], result=row[14], suite=row[15])
+                   context=row[13], result=row[14], suite=row[15],
+                   instigated_context=row[16])
 
     def __len__(self):
         return len(self.__slots__)
@@ -186,7 +192,7 @@ class Run(object):
                 self.package, self.merge_proposal_url,
                 self.build_version, self.build_distribution, self.result_code,
                 self.branch_name, self.main_branch_revision, self.revision,
-                self.context, self.result, self.suite)
+                self.context, self.result, self.suite, self.instigated_context)
 
     def __eq__(self, other):
         if isinstance(other, Run):
@@ -216,7 +222,8 @@ async def iter_runs(package=None, run_id=None, limit=None):
 SELECT
     id, command, start_time, finish_time, description, package,
     merge_proposal_url, build_version, build_distribution, result_code,
-    branch_name, main_branch_revision, revision, context, result, suite
+    branch_name, main_branch_revision, revision, context, result, suite,
+    instigated_context
 FROM
     run
 """
@@ -389,20 +396,32 @@ select distinct package, build_version from run where build_distribution = $1
 
 async def iter_previous_runs(package, command):
     async with get_connection() as conn:
-        return await conn.fetch("""
+        for row in await conn.fetch("""
 SELECT
+  id,
+  command,
   start_time,
-  (finish_time - start_time) AS duration,
-  instigated_context,
-  context,
+  finish_time,
+  description,
+  package,
+  merge_proposal_url,
+  build_version,
+  build_distribution,
+  result_code,
+  branch_name,
   main_branch_revision,
-  result_code
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context
 FROM
   run
 WHERE
   package = $1 AND command = $2
 ORDER BY start_time DESC
-""", package, ' '.join(command))
+""", package, ' '.join(command)):
+            yield Run.from_row(row)
 
 
 async def get_last_success(package, suite):
@@ -424,7 +443,8 @@ SELECT
   revision,
   context,
   result,
-  suite
+  suite,
+  instigated_context
 FROM
   run
 WHERE package = $1 AND build_distribution = $2
