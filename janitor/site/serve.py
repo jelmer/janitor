@@ -195,8 +195,26 @@ if __name__ == '__main__':
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
-            content_type='text/html', text=text,
+            content_type='text/html', text=text
             headers={'Cache-Control': 'max-age=600'})
+
+    async def handle_apt_file(request):
+        suite = request.match_info['suite']
+        file = request.match_info['file']
+        path = os.path.join(
+                os.path.dirname(__file__), '..', '..',
+                "public_html", suite, file)
+        if not os.path.exists(path):
+            raise web.HTTPNotFound()
+
+        if (file.endswith('.deb') or
+                file.endswith('.buildinfo') or
+                file.endswith('.changes'):
+            max_age = 3600
+        else:
+            max_age = 60
+        headers = {'Cache-Control': 'max-age=%d' % max_ago}
+        return web.FileResponse(path, headers=headers)
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -217,6 +235,9 @@ if __name__ == '__main__':
             '/%s/ready' % suite,
             functools.partial(handle_ready_proposals, suite))
         app.router.add_get('/%s/pkg/' % suite, handle_pkg_list)
+    app.router.add_get(
+        '/{suite:lintian-fixes|fresh-releases|fresh-snapshots}/{file:Contents-.*|InRelease|Packages.*|Release.*|.*.(changes|deb|buildinfo)}',
+        handle_apt_file)
     app.router.add_get(
         '/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
     app.router.add_get(
