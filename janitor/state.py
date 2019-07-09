@@ -56,15 +56,14 @@ async def _ensure_package(conn, name, vcs_url, maintainer_email):
 
 
 async def store_run(
-        run_id, name, suite, vcs_url, maintainer_email, start_time, finish_time,
+        run_id, name, vcs_url, maintainer_email, start_time, finish_time,
         command, description, instigated_context, context,
         main_branch_revision, result_code, build_version,
-        build_distribution, branch_name, revision, subworker_result):
+        build_distribution, branch_name, revision, subworker_result, suite):
     """Store a run.
 
     :param run_id: Run id
     :param name: Package name
-    :param suite: Suite
     :param vcs_url: Upstream branch URL
     :param maintainer_email: Maintainer email
     :param start_time: Start time
@@ -80,6 +79,7 @@ async def store_run(
     :param branch_name: Resulting branch name
     :param revision: Resulting revision id
     :param subworker_result: Subworker-specific result data (as json)
+    :param suite: Suite
     """
     async with get_connection() as conn:
         await _ensure_package(conn, name, vcs_url, maintainer_email)
