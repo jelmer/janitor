@@ -20,7 +20,6 @@
 from aiohttp import web
 import asyncio
 import functools
-import os
 import sys
 import urllib.parse
 
@@ -484,7 +483,8 @@ async def publish_request(publisher, dry_run, vcs_directory, request):
     post = await request.post()
     mode = post.get('mode', MODE_PROPOSE)
     try:
-        name, maintainer_email, main_branch_url = list(await state.iter_packages(package=package))[0]
+        name, maintainer_email, main_branch_url = list(
+            await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({}, status=400)
     run = await state.get_last_success(package, suite)
@@ -501,10 +501,12 @@ async def publish_request(publisher, dry_run, vcs_directory, request):
             {'code': e.code, 'description': e.description}, status=400)
 
     return web.json_response(
-        {'branch_name': branch_name, 'proposal': proposal.url if proposal else None})
+        {'branch_name': branch_name,
+         'proposal': proposal.url if proposal else None})
 
 
-async def run_web_server(listen_addr, port, publisher, vcs_directory, dry_run=False):
+async def run_web_server(listen_addr, port, publisher, vcs_directory,
+                         dry_run=False):
     async def metrics(request):
         resp = web.Response(body=generate_latest())
         resp.content_type = CONTENT_TYPE_LATEST
@@ -512,7 +514,9 @@ async def run_web_server(listen_addr, port, publisher, vcs_directory, dry_run=Fa
 
     app = web.Application()
     app.router.add_get("/metrics", metrics)
-    app.router.add_post("/{suite}/{package}/publish", functools.partial(publish_request, publisher, dry_run, vcs_directory))
+    app.router.add_post(
+        "/{suite}/{package}/publish",
+        functools.partial(publish_request, publisher, dry_run, vcs_directory))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -582,7 +586,11 @@ def main(argv=None):
             loop.create_task(process_queue_loop(
                 publisher, policy, dry_run=args.dry_run,
                 vcs_directory=args.vcs_result_dir, interval=600)),
-            loop.create_task(run_web_server(args.listen_address, args.port, publisher, args.vcs_result_dir, args.dry_run))))
+            loop.create_task(
+                run_web_server(
+                    args.listen_address, args.port, publisher,
+                    args.vcs_result_dir, args.dry_run))))
+
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))

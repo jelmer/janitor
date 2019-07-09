@@ -51,7 +51,8 @@ async def handle_publish(publisher_url, request):
     if mode not in ('push-derived', 'push', 'propose', 'attempt-push'):
         return web.json_response(
             {'error': 'Invalid mode', 'mode': mode}, status=400)
-    url = urllib.parse.urljoin(publisher_url, '%s/%s/publish' % (suite, package))
+    url = urllib.parse.urljoin(
+        publisher_url, '%s/%s/publish' % (suite, package))
     async with ClientSession() as client:
         async with client.post(url, data={'mode': mode}) as resp:
             if resp == 200:
@@ -231,8 +232,12 @@ def create_app(publisher_url, policy_config):
     app.router.add_get(
         '/pkg/{package}/merge-proposals',
         handle_merge_proposal_list)
-    app.router.add_get('/pkg/{package}/policy', functools.partial(handle_policy, policy_config))
-    app.router.add_post('/{suite}/pkg/{package}/publish', functools.partial(handle_publish, publisher_url))
+    app.router.add_get(
+        '/pkg/{package}/policy',
+        functools.partial(handle_policy, policy_config))
+    app.router.add_post(
+        '/{suite}/pkg/{package}/publish',
+        functools.partial(handle_publish, publisher_url))
     app.router.add_post('/{suite}/pkg/{package}/schedule', handle_schedule)
     app.router.add_get('/merge-proposals', handle_merge_proposal_list)
     app.router.add_get('/queue', handle_queue)
@@ -261,8 +266,10 @@ if __name__ == '__main__':
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,
                         default=os.path.join(
-                            os.path.dirname(__file__), '..', '..', 'policy.conf'))
-    parser.add_argument('--publisher-url', type=str, default='http://localhost:9912/',
+                            os.path.dirname(__file__), '..', '..',
+                            'policy.conf'))
+    parser.add_argument('--publisher-url', type=str,
+                        default='http://localhost:9912/',
                         help='URL for publisher.')
     args = parser.parse_args()
 

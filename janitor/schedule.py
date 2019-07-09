@@ -258,7 +258,8 @@ def determine_tags(package, command, mode, previous_runs, context=None,
         last_run = previous_runs[0]
         # TODO(jelmer): Should last_context and last_instigated_context be
         # treated differently?
-        if context and context in (last_run.context, last_run.instigated_context):
+        if context and context in (
+                last_run.context, last_run.instigated_context):
             yield 'context_processed'
         elif context is None:
             age = (datetime.now() - last_run.times[0])
@@ -276,10 +277,10 @@ def determine_tags(package, command, mode, previous_runs, context=None,
         yield 'first_run'
 
 
-async def add_to_queue(todo, dry_run=False, default_priority=0):
+async def add_to_queue(todo, suite, dry_run=False, default_priority=0):
     for vcs_url, mode, env, command, priority in todo:
         package = env['PACKAGE']
-        previous_runs = list(await state.iter_previous_runs(package, command))
+        previous_runs = list(await state.iter_previous_runs(package, suite))
         tags = determine_tags(
             package, command, mode, previous_runs, env.get('CONTEXT'))
         priority = default_priority + priority + sum(

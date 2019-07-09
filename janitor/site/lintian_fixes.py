@@ -41,6 +41,7 @@ async def generate_pkg_file(package):
         run_id = run.id
         result = run.result
         branch_name = run.branch_name
+    previous_runs = list(await state.iter_previous_runs(package, suite))
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
@@ -59,6 +60,8 @@ async def generate_pkg_file(package):
         'show_diff': lambda: get_run_diff(run).decode('utf-8'),
         'highlight_diff': highlight_diff,
         'branch_name': branch_name,
+        'previous_runs': previous_runs,
+        'run': run,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)

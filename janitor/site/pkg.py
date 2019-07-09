@@ -25,7 +25,7 @@ from janitor.site import (
     get_run_diff,
     highlight_diff,
 )
-from janitor.trace import note, warning
+from janitor.trace import note
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
