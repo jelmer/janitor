@@ -47,6 +47,7 @@ async def generate_pkg_file(package, suite):
         finish_time = run.times[1]
         run_id = run.id
         result = run.result
+    previous_runs = [x async for x in state.iter_previous_runs(package, suite)]
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
@@ -62,6 +63,7 @@ async def generate_pkg_file(package, suite):
         'result': result,
         'suite': suite,
         'format_duration': format_duration,
+        'previous_runs': previous_runs,
         }
     if run and run.build_version:
         kwargs['changes_name'] = changes_filename(
