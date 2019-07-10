@@ -8,7 +8,11 @@
 
 {% if not result_code %}
 
-No recent runs for {{ package }}
+{% if previous_runs and previous_runs[0].result_code == 'nothing-to-do' %}
+Nothing to do for {{ package }}
+{% else %}
+No successful merges for {{ package }}
+{% endif %}
 
 {% else %}
 
@@ -46,6 +50,19 @@ No recent runs for {{ package }}
 {{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
 
 <div id="commandResult"></div>
+
+{% if previous_runs and previous_runs[0].result_code not in ('nothing-to-do', 'success') %}
+<h3>Historical runs</h3>
+
+<ul>
+{% for previous_run in previous_runs %}
+{% if previous_run != run %}
+<li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ previous_run.result_code }}: {{ previous_run.description }}</a></li>
+{% endif %}
+{% endfor %}
+</ul>
+
+{% endif %}
 
 </div>
 {% endblock %}
