@@ -420,7 +420,7 @@ FROM
 WHERE
   package = $1 AND suite = $2
 ORDER BY start_time DESC
-""", package, ' '.join(suite)):
+""", package, suite):
             yield Run.from_row(row)
 
 
