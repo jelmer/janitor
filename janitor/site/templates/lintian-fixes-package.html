@@ -17,7 +17,11 @@
 
 {% if not result_code %}
 
-No recent runs for {{ package }}
+{% if previous_runs and previous_runs[0].result_code == 'nothing-to-do' %}
+Nothing to do for {{ package }}
+{% else %}
+No successful runs for {{ package }}
+{% endif %}
 
 {% else %}
 
@@ -62,6 +66,17 @@ No recent runs for {{ package }}
 <p>See the <a href="/cupboard/pkg/{{ package }}/{{ run_id }}/worker.log">worker log</a> for details.</p>
 
 {% endif %}
+
+{% endif %}
+
+{% if previous_runs and previous_runs[0] != run %}
+<h3>Failed runs</h3>
+
+<ul>
+{% for previous_run in previous_runs %}
+<li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ previous_run.result_code }}: {{ previous_run.description }}</a></li>
+{% endfor %}
+</ul>
 
 {% endif %}
 
