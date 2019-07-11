@@ -217,7 +217,7 @@ async def write_pkg_file(dir, name, merge_proposals, maintainer_email,
 
 async def write_pkg_files(dir, runs_by_pkg):
     merge_proposals = {}
-    for package, url, status in await state.iter_proposals():
+    for package, url, status, revision in await state.iter_proposals():
         merge_proposals.setdefault(package, []).append((url, status))
 
     jobs = []

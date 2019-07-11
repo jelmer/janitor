@@ -103,10 +103,10 @@ async def store_publish(package, branch_name, main_branch_revision, revision,
     async with get_connection() as conn:
         if merge_proposal_url:
             await conn.execute(
-                "INSERT INTO merge_proposal (url, package, status) "
-                "VALUES ($1, $2, 'open') ON CONFLICT (url) DO UPDATE SET "
-                "package = EXCLUDED.package",
-                merge_proposal_url, package)
+                "INSERT INTO merge_proposal (url, package, status, revision) "
+                "VALUES ($1, $2, 'open', $3) ON CONFLICT (url) DO UPDATE SET "
+                "package = EXCLUDED.package, revision = EXCLUDED.revision",
+                merge_proposal_url, package, revision)
         await conn.execute(
             "INSERT INTO publish (package, branch_name, "
             "main_branch_revision, revision, mode, result_code, description, "
@@ -261,10 +261,9 @@ async def iter_proposals(package=None):
     args = []
     query = """
 SELECT
-    package, url, status
+    package, url, status, revision
 FROM
     merge_proposal
-LEFT JOIN package ON merge_proposal.package = package.name
 """
     if package:
         args.append(package)
@@ -277,11 +276,9 @@ async def iter_all_proposals(branch_name=None):
     args = []
     query = """
 SELECT
-    merge_proposal.url, merge_proposal.status, package.name
+    url, status, package, revision
 FROM
     merge_proposal
-LEFT JOIN package ON merge_proposal.package = package.name
-LEFT JOIN publish ON publish.merge_proposal_url = merge_proposal.url
 """
     if branch_name:
         query += " WHERE branch_name = $1"

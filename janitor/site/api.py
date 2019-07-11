@@ -114,12 +114,13 @@ async def handle_packagename_list(request):
 
 async def handle_merge_proposal_list(request):
     response_obj = []
-    for package, url, status in await state.iter_proposals(
+    for package, url, status, revision in await state.iter_proposals(
             request.match_info.get('package')):
         response_obj.append({
             'package': package,
             'url': url,
-            'status': status})
+            'status': status,
+            'revision': revision})
     return web.json_response(response_obj)
 
 

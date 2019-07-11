@@ -18,7 +18,8 @@ async def generate_pkg_file(package):
     # TODO(jelmer): Filter out proposals not for this suite.
     merge_proposals = [
         (url, status)
-        for (package, url, status) in await state.iter_proposals(package)]
+        for (package, url, status, revision) in
+        await state.iter_proposals(package)]
     run = await state.get_last_success(package, suite)
     if run is None:
         # No runs recorded

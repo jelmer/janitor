@@ -122,7 +122,8 @@ if __name__ == '__main__':
         name, maintainer_email, branch_url = list(
             await state.iter_packages(request.match_info['pkg']))[0]
         merge_proposals = []
-        for package, url, status in await state.iter_proposals(package=name):
+        for package, url, status, revision in await state.iter_proposals(
+                package=name):
             merge_proposals.append((url, status))
         runs = [x async for x in state.iter_runs(package=name)]
         text = await generate_pkg_file(
