@@ -10,7 +10,7 @@ from janitor.policy import read_policy, apply_policy
 from janitor import state
 from . import env, get_run_diff
 
-DEFAULT_SCHEDULE_PRIORITY = 1000
+DEFAULT_SCHEDULE_OFFSET = 0
 SUITE_TO_COMMAND = {
     'lintian-fixes': ['lintian-brush'],
     'fresh-releases': ['new-upstream'],
@@ -70,7 +70,7 @@ async def handle_schedule(request):
         return web.json_response(
             {'error': 'Unknown suite', 'suite': suite}, status=404)
     post = await request.post()
-    priority = post.get('priority', DEFAULT_SCHEDULE_PRIORITY)
+    offset = post.get('offset', DEFAULT_SCHEDULE_OFFSET)
     try:
         (name, maintainer_email, vcs_url) = list(
             await state.iter_packages(package=package))[0]
@@ -81,12 +81,12 @@ async def handle_schedule(request):
         'MAINTAINER_EMAIL': maintainer_email,
     }
 
-    await state.add_to_queue(vcs_url, run_env, command, priority)
+    await state.add_to_queue(vcs_url, run_env, command, offset)
     response_obj = {
         'package': package,
         'command': command,
         'suite': suite,
-        'priority': priority,
+        'offset': offset,
         }
     return web.json_response(response_obj)
 

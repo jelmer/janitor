@@ -41,6 +41,15 @@ from .policy import (
 )
 from .udd import UDD
 
+DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 200
+DEFAULT_VALUE_NEW_UPSTREAM = 300
+DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 100
+DEFAULT_VALUE_LINTIAN_BRUSH = 500
+
+# Default to 5 minutes
+DEFAULT_ESTIMATED_DURATION = 60 * 5
+
+
 # These are result codes that suggest some part of the system failed, but
 # not what exactly. Recent versions of the janitor will hopefully
 # give a better result code.
@@ -104,7 +113,7 @@ async def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
         yield (
             vcs_url, mode,
             {'COMMITTER': committer, 'PACKAGE': package.name},
-            command, 0)
+            command, 100)
 
 
 async def schedule_udd_new_upstreams(policy, packages, shuffle=False):
@@ -147,7 +156,7 @@ async def schedule_udd_new_upstreams(policy, packages, shuffle=False):
              'PACKAGE': package.name,
              'CONTEXT': upstream_version,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            command, 0)
+            command, DEFAULT_VALUE_NEW_UPSTREAM)
 
 
 async def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
@@ -187,7 +196,7 @@ async def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
              'PACKAGE': package.name,
              'CONTEXT': None,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            command, 0)
+            command, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
 
 async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
@@ -199,7 +208,6 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
 
     async for package, tags in udd.iter_source_packages_by_lintian(
             available_fixers, packages if packages else None, shuffle=shuffle):
-        priority = 0
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:
@@ -226,7 +234,9 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
                 "Invalid value %r for update_changelog" % update_changelog)
         if not (set(tags) - set(propose_addon_only)):
             # Penalty for whitespace-only fixes
-            priority -= 200
+            value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY + len(tags)
+        else:
+            value = DEFAULT_VALUE_LINTIAN_BRUSH + len(tags)
         context = ' '.join(sorted(tags))
         yield (
             vcs_url, mode,
@@ -234,69 +244,45 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
              'PACKAGE': package.name,
              'CONTEXT': context,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            command, priority)
+            command, value)
 
 
-priority_per_tag = {
-    # Priority increase for packages that have never been processed before
-    'first_run': 100,
-    'last_successful_bonus': 90,
-    'last_vague_bonus': 30,
-    'no_context_failure': -30,
-    # Penalty if the context has already been processed
-    'context_processed': -1000,
-    'no_context_refresh_bonus': 50,
-    }
+async def estimate_success_probability(package, suite):
+    # TODO(jelmer): Bias this towards recent runs?
+    total = 0
+    success = 0
+    for run in await state.iter_previous_runs(package, suite):
+        total += 1
+        if run.result_code == 'success':
+            success += 1
+    return (success + 1, total + 1)
 
 
-def determine_tags(package, command, mode, previous_runs, context=None,
-                   priority=0):
-
-    NO_CONTEXT_REFRESH_FREQUENCY = 14
-
-    if previous_runs:
-        last_run = previous_runs[0]
-        # TODO(jelmer): Should last_context and last_instigated_context be
-        # treated differently?
-        if context and context in (
-                last_run.context, last_run.instigated_context):
-            yield 'context_processed'
-        elif context is None:
-            age = (datetime.now() - last_run.times[0])
-            if age.days > NO_CONTEXT_REFRESH_FREQUENCY:
-                yield 'no_context_refresh_bonus'
-            elif last_run.result_code != 'success':
-                yield 'no_context_failure'
-        else:
-            if last_run.result_code == 'success':
-                yield 'last_successful_bonus'
-        if last_run.result_code in VAGUE_RESULT_CODES:
-            yield 'last_vague_bonus'
-        priority -= (last_run.duration.total_seconds() / 60) / 10
-    else:
-        yield 'first_run'
+async def estimate_duration(package, suite):
+    estimated_duration = await state.estimate_duration(package, suite)
+    if estimated_duration is not None:
+        return estimated_duration
+    # TODO(jelmer): Just fall back to duration for any builds for package?
+    # TODO(jelmer): Just fall back to median duration for all builds for suite.
+    return DEFAULT_ESTIMATED_DURATION
 
 
-async def add_to_queue(todo, suite, dry_run=False, default_priority=0):
-    for vcs_url, mode, env, command, priority in todo:
+async def add_to_queue(todo, suite, dry_run=False, default_offset=0):
+    for vcs_url, mode, env, command, value in todo:
         package = env['PACKAGE']
-        previous_runs = list(await state.iter_previous_runs(package, suite))
-        tags = determine_tags(
-            package, command, mode, previous_runs, env.get('CONTEXT'))
-        priority = default_priority + priority + sum(
-            priority_per_tag[t] for t in tags)
-        estimated_duration = None
-        if previous_runs:
-            for last_run in previous_runs:
-                if last_run.result_code == 'success':
-                    estimated_duration = last_run.duration
-                    break
+        estimated_duration = await estimate_duration(
+            package, suite)
+        estimated_probability_of_success = await estimate_success_probability(
+            package, suite)
+        estimated_value = (value * estimated_probability_of_success)
+        offset = estimated_duration / estimated_value
+        offset = default_offset + offset
         if not dry_run:
             added = await state.add_to_queue(
-                vcs_url, env, command, priority=priority,
+                vcs_url, env, command, offset=offset,
                 estimated_duration=estimated_duration)
         else:
             added = True
         if added:
-            trace.note('Scheduling %s (%s) with priority %d',
-                       package, mode, priority)
+            trace.note('Scheduling %s (%s) with offset %d',
+                       package, mode, offset)
