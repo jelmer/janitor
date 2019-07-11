@@ -8,7 +8,7 @@ from janitor.site import env
 
 async def write_merge_proposals(name):
     proposals_by_status = {}
-    for url, status, package in await state.iter_all_proposals(
+    for url, status, package, revision in await state.iter_all_proposals(
             branch_name=name):
         proposals_by_status.setdefault(status, []).append(url)
 
