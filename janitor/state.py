@@ -301,7 +301,7 @@ FROM
     queue
 LEFT JOIN package ON package.name = queue.package
 ORDER BY
-queue.priority DESC,
+queue.priority ASC,
 queue.id ASC
 """
     if limit:
@@ -324,7 +324,7 @@ async def drop_queue_item(queue_id):
         await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
-async def add_to_queue(vcs_url, env, command, priority=0,
+async def add_to_queue(vcs_url, env, command, offset=0,
                        estimated_duration=None):
     package = env['PACKAGE']
     maintainer_email = env.get('MAINTAINER_EMAIL')
@@ -336,7 +336,8 @@ async def add_to_queue(vcs_url, env, command, priority=0,
             "INSERT INTO queue "
             "(branch_url, package, command, committer, priority, context, "
             "estimated_duration) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7) "
+            "VALUES "
+            "($1, $2, $3, $4, $5, (SELECT MIN(priority) FROM queue) + $6, $7) "
             "ON CONFLICT (package, command) DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration "

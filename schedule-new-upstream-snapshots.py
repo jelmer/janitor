@@ -50,8 +50,8 @@ parser.add_argument("--dry-run",
 parser.add_argument('--shuffle',
                     help='Shuffle order in which packages are processed.',
                     action='store_true')
-parser.add_argument('--default-priority', default=-10, type=int,
-                    help='Default priority.')
+parser.add_argument('--default-offset', default=10, type=int,
+                    help='Default offset.')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
 args = parser.parse_args()
@@ -74,7 +74,7 @@ async def main():
             args.policy, args.packages, shuffle=args.shuffle)]
     await add_to_queue(
         todo, SUITE, dry_run=args.dry_run,
-        default_priority=args.default_priority)
+        default_offset=args.default_offset)
 
 loop.run_until_complete(main())
 
