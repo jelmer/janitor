@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS queue (
    id serial,
    branch_url text not null,
    package text not null,
+   suite text not null,
    command text not null,
    committer text null,
    priority integer default 0 not null,

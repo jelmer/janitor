@@ -214,13 +214,10 @@ async def process_one(
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if command == ["new-upstream"]:
         branch_name = 'new-upstream'
-        suite = 'fresh-releases'
     elif command == ["new-upstream", "--snapshot"]:
         branch_name = 'new-upstream-snapshot'
-        suite = 'fresh-snapshots'
     elif command == ["lintian-brush"]:
         branch_name = "lintian-fixes"
-        suite = 'lintian-fixes'
     else:
         raise AssertionError('Unknown command %s' % command[0])
 
@@ -371,23 +368,11 @@ async def process_queue(
         debsign_keyid=None, vcs_result_dir=None,
         concurrency=1, use_cached_only=False):
     async def process_queue_item(item):
-        (queue_id, vcs_url, env, command) = item
         start_time = datetime.now()
 
-        # TODO(jelmer): Ideally, there shouldn't be any command-specific code
-        # here.
-        if command == ["new-upstream"]:
-            suite = 'fresh-releases'
-        elif command == ["new-upstream", "--snapshot"]:
-            suite = 'fresh-snapshots'
-        elif command == ["lintian-brush"]:
-            suite = 'lintian-fixes'
-        else:
-            raise AssertionError('Unknown command %s' % command[0])
-
         result = await process_one(
-            worker_kind, vcs_url, env, command,
-            suite=suite, pre_check=pre_check,
+            worker_kind, item.branch_url, item.env, item.command,
+            suite=item.suite, pre_check=pre_check,
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
             debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
@@ -395,11 +380,11 @@ async def process_queue(
         finish_time = datetime.now()
         if not dry_run:
             await state.store_run(
-                result.log_id, env['PACKAGE'], vcs_url,
-                env['MAINTAINER_EMAIL'],
-                start_time, finish_time, command,
+                result.log_id, item.env['PACKAGE'], item.branch_url,
+                item.env['MAINTAINER_EMAIL'],
+                start_time, finish_time, item.command,
                 result.description,
-                env.get('CONTEXT'),
+                item.env.get('CONTEXT'),
                 result.context,
                 result.main_branch_revision,
                 result.code,
@@ -408,9 +393,9 @@ async def process_queue(
                 branch_name=result.branch_name,
                 revision=result.revision,
                 subworker_result=result.subworker_result,
-                suite=suite)
+                suite=item.suite)
 
-            await state.drop_queue_item(queue_id)
+            await state.drop_queue_item(item.id)
         last_success_gauge.set_to_current_time()
 
     started = set()

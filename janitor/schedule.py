@@ -41,14 +41,14 @@ from .policy import (
 )
 from .udd import UDD
 
-DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 200
-DEFAULT_VALUE_NEW_UPSTREAM = 300
-DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 100
-DEFAULT_VALUE_LINTIAN_BRUSH = 500
-LINTIAN_BRUSH_TAG_VALUE = 10
+DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
+DEFAULT_VALUE_NEW_UPSTREAM = 30
+DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
+DEFAULT_VALUE_LINTIAN_BRUSH = 50
+LINTIAN_BRUSH_TAG_VALUE = 1
 
 # Default to 5 minutes
-DEFAULT_ESTIMATED_DURATION = 60 * 5
+DEFAULT_ESTIMATED_DURATION = 15
 
 
 # These are result codes that suggest some part of the system failed, but
@@ -249,15 +249,18 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
             command, value)
 
 
-async def estimate_success_probability(package, suite):
+async def estimate_success_probability(package, suite, context=None):
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
     success = 0
+    context_repeated = False
     async for run in state.iter_previous_runs(package, suite):
         total += 1
         if run.result_code == 'success':
             success += 1
-    return (success + 1) / (total + 1)
+        if context and context in (run.instigated_context, run.context):
+            context_repeated = True
+    return (success * 10 + 1) / (total * 10 + 1) * (1.0 if not context_repeated else .10)
 
 
 async def estimate_duration(package, suite):
@@ -276,11 +279,11 @@ async def add_to_queue(todo, suite, dry_run=False, default_offset=0):
         estimated_duration = await estimate_duration(
             package, suite)
         estimated_probability_of_success = await estimate_success_probability(
-            package, suite)
+            package, suite, env.get('CONTEXT'))
         assert (estimated_probability_of_success >= 0.0 and
                 estimated_probability_of_success <= 1.0), \
             "Probability of success: %s" % estimated_probability_of_success
-        estimated_cost = estimated_duration.total_seconds() * 10.0
+        estimated_cost = 50 + estimated_duration.total_seconds()
         assert estimated_cost > 0, "Estimated cost: %d" % estimated_cost
         estimated_value = (estimated_probability_of_success * value)
         assert estimated_value > 0, "Estimated value: %s" % estimated_value
@@ -293,7 +296,7 @@ async def add_to_queue(todo, suite, dry_run=False, default_offset=0):
 
         if not dry_run:
             added = await state.add_to_queue(
-                vcs_url, env, command, offset=int(offset),
+                vcs_url, env, command, suite, offset=int(offset),
                 estimated_duration=estimated_duration)
         else:
             added = True

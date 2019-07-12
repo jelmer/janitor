@@ -289,19 +289,22 @@ FROM
 
 class QueueItem(object):
 
-    __slots__ = ['id', 'branch_url', 'env', 'command', 'estimated_duration']
+    __slots__ = ['id', 'branch_url', 'env', 'command', 'estimated_duration',
+                 'suite']
 
-    def __init__(self, id, branch_url, env, command, estimated_duration):
+    def __init__(self, id, branch_url, env, command, estimated_duration, suite):
         self.id = id
         self.branch_url = branch_url
         self.env = env
         self.command = command
         self.estimated_duration = estimated_duration
+        self.suite = suite
 
     @classmethod
     def from_row(cls, row):
         (branch_url, maintainer_email, package, committer,
-            command, context, queue_id, estimated_duration) = row
+            command, context, queue_id, estimated_duration,
+            suite) = row
         env = {
             'PACKAGE': package,
             'MAINTAINER_EMAIL': maintainer_email,
@@ -311,13 +314,15 @@ class QueueItem(object):
         return cls(
                 id=queue_id, branch_url=branch_url, env=env,
                 command=shlex.split(command),
-                estimated_duration=estimated_duration)
+                estimated_duration=estimated_duration,
+                suite=suite)
 
     def __len__(self):
         return len(self.__slots__)
 
     def __tuple__(self):
-        return (self.id, self.branch_url, self.env, self.command, self.estimated_duration)
+        return (self.id, self.branch_url, self.env, self.command,
+                self.estimated_duration, self.suite)
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
@@ -345,7 +350,8 @@ SELECT
     queue.command,
     queue.context,
     queue.id,
-    queue.estimated_duration
+    queue.estimated_duration,
+    queue.suite
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -365,7 +371,7 @@ async def drop_queue_item(queue_id):
         await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
-async def add_to_queue(vcs_url, env, command, offset=0,
+async def add_to_queue(vcs_url, env, command, suite, offset=0,
                        estimated_duration=None):
     package = env['PACKAGE']
     maintainer_email = env.get('MAINTAINER_EMAIL')
@@ -376,15 +382,15 @@ async def add_to_queue(vcs_url, env, command, offset=0,
         await conn.execute(
             "INSERT INTO queue "
             "(branch_url, package, command, committer, priority, context, "
-            "estimated_duration) "
+            "estimated_duration, suite) "
             "VALUES "
-            "($1, $2, $3, $4, (SELECT COALESCE(MIN(priority), 0) FROM queue) + $5, $6, $7) "
+            "($1, $2, $3, $4, (SELECT COALESCE(MIN(priority), 0) FROM queue) + $5, $6, $7, $8) "
             "ON CONFLICT (package, command) DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration "
             "WHERE queue.priority >= EXCLUDED.priority",
             vcs_url, package, ' '.join(command), committer,
-            offset, context, estimated_duration)
+            offset, context, estimated_duration, suite)
         return True
 
 
