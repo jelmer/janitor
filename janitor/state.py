@@ -287,6 +287,54 @@ FROM
         return await conn.fetch(query, *args)
 
 
+class QueueItem(object):
+
+    __slots__ = ['id', 'branch_url', 'env', 'command', 'estimated_duration']
+
+    def __init__(self, id, branch_url, env, command, estimated_duration):
+        self.id = id
+        self.branch_url = branch_url
+        self.env = env
+        self.command = command
+        self.estimated_duration = estimated_duration
+
+    @classmethod
+    def from_row(cls, row):
+        (branch_url, maintainer_email, package, committer,
+            command, context, queue_id, estimated_duration) = row
+        env = {
+            'PACKAGE': package,
+            'MAINTAINER_EMAIL': maintainer_email,
+            'COMMITTER': committer or None,
+            'CONTEXT': context,
+        }
+        return cls(
+                id=queue_id, branch_url=branch_url, env=env,
+                command=shlex.split(command),
+                estimated_duration=estimated_duration)
+
+    def __len__(self):
+        return len(self.__slots__)
+
+    def __tuple__(self):
+        return (self.id, self.branch_url, self.env, self.command, self.estimated_duration)
+
+    def __eq__(self, other):
+        if isinstance(other, QueueItem):
+            return tuple(self) == tuple(other)
+        if isinstance(other, tuple):
+            return self.id == other.id
+        return False
+
+    def __lt__(self, other):
+        return tuple(self) < tuple(other)
+
+    def __getitem__(self, i):
+        if isinstance(i, slice):
+            return tuple(self).__getitem__(i)
+        return getattr(self, self.__slots__[i])
+
+
 async def iter_queue(limit=None):
     query = """
 SELECT
@@ -296,7 +344,8 @@ SELECT
     queue.committer,
     queue.command,
     queue.context,
-    queue.id
+    queue.id,
+    queue.estimated_duration
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -308,15 +357,7 @@ queue.id ASC
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
         for row in await conn.fetch(query):
-            (branch_url, maintainer_email, package, committer,
-                command, context, queue_id) = row
-            env = {
-                'PACKAGE': package,
-                'MAINTAINER_EMAIL': maintainer_email,
-                'COMMITTER': committer or None,
-                'CONTEXT': context,
-            }
-            yield (queue_id, branch_url, env, shlex.split(command))
+            yield QueueItem.from_row(row)
 
 
 async def drop_queue_item(queue_id):
@@ -337,13 +378,13 @@ async def add_to_queue(vcs_url, env, command, offset=0,
             "(branch_url, package, command, committer, priority, context, "
             "estimated_duration) "
             "VALUES "
-            "($1, $2, $3, $4, $5, (SELECT MIN(priority) FROM queue) + $6, $7) "
+            "($1, $2, $3, $4, (SELECT MIN(priority) FROM queue) + $5, $6, $7) "
             "ON CONFLICT (package, command) DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration "
-            "WHERE queue.priority <= EXCLUDED.priority",
+            "WHERE queue.priority >= EXCLUDED.priority",
             vcs_url, package, ' '.join(command), committer,
-            priority, context, estimated_duration)
+            offset, context, estimated_duration)
         return True
 
 
@@ -666,4 +707,13 @@ async def get_last_build_version(package, suite):
             "SELECT build_version FROM run WHERE "
             "build_version IS NOT NULL AND package = $1 AND "
             "build_distribution = $2 ORDER BY build_version DESC",
+            package, suite)
+
+
+async def estimate_duration(package, suite):
+    async with get_connection() as conn:
+        return await conn.fetchval(
+            "SELECT finish_time - start_time FROM run "
+            "WHERE package = $1 AND suite = $2 "
+            "ORDER BY start_time DESC LIMIT 1",
             package, suite)

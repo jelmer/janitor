@@ -25,7 +25,7 @@ __all__ = [
     'schedule_udd_new_upstream_snapshots',
 ]
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from . import (
     state,
@@ -41,10 +41,10 @@ from .policy import (
 )
 from .udd import UDD
 
-DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 200
-DEFAULT_VALUE_NEW_UPSTREAM = 300
-DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 100
-DEFAULT_VALUE_LINTIAN_BRUSH = 500
+DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
+DEFAULT_VALUE_NEW_UPSTREAM = 30
+DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
+DEFAULT_VALUE_LINTIAN_BRUSH = 50
 
 # Default to 5 minutes
 DEFAULT_ESTIMATED_DURATION = 60 * 5
@@ -251,11 +251,11 @@ async def estimate_success_probability(package, suite):
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
     success = 0
-    for run in await state.iter_previous_runs(package, suite):
+    async for run in state.iter_previous_runs(package, suite):
         total += 1
         if run.result_code == 'success':
             success += 1
-    return (success + 1, total + 1)
+    return (success + 1) / (total + 1)
 
 
 async def estimate_duration(package, suite):
@@ -264,22 +264,34 @@ async def estimate_duration(package, suite):
         return estimated_duration
     # TODO(jelmer): Just fall back to duration for any builds for package?
     # TODO(jelmer): Just fall back to median duration for all builds for suite.
-    return DEFAULT_ESTIMATED_DURATION
+    return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
 async def add_to_queue(todo, suite, dry_run=False, default_offset=0):
     for vcs_url, mode, env, command, value in todo:
+        assert value > 0, "Value: %s" % value
         package = env['PACKAGE']
         estimated_duration = await estimate_duration(
             package, suite)
         estimated_probability_of_success = await estimate_success_probability(
             package, suite)
-        estimated_value = (value * estimated_probability_of_success)
-        offset = estimated_duration / estimated_value
+        assert (estimated_probability_of_success >= 0.0 and
+                estimated_probability_of_success <= 1.0), \
+            "Probability of success: %s" % estimated_probability_of_success
+        estimated_cost = estimated_duration.total_seconds() * 10.0
+        assert estimated_cost > 0, "Estimated cost: %d" % estimated_cost
+        estimated_value = (estimated_probability_of_success * value)
+        assert estimated_value > 0, "Estimated value: %s" % estimated_value
+        offset = estimated_cost / estimated_value
         offset = default_offset + offset
+        trace.note(
+            'Package %s: estimated value(%.2f * %d = %.2f), estimated cost (%d)',
+             package, estimated_probability_of_success, value, estimated_value,
+             estimated_cost)
+
         if not dry_run:
             added = await state.add_to_queue(
-                vcs_url, env, command, offset=offset,
+                vcs_url, env, command, offset=int(offset),
                 estimated_duration=estimated_duration)
         else:
             added = True
