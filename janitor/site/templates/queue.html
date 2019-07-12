@@ -3,10 +3,22 @@
 {% block body %}
 <div class="section" id="queue">
 <h1>Queue</h1>
-<ol class="arabic simple">
-{% for pkg, description in queue %}
-<li><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a> {% if description %}({{ description|safe }}){% endif %}</li>
+<table class="docutils" border="1">
+<colgroup>
+<col width="41%">
+<col width="6%">
+<col width="4%">
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Package</th>
+<th class="head">Command</th>
+<th class="head">Estimated duration</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for pkg, description, estimated_duration in queue %}
+<tr><td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a><td>{% if description %}({{ description|safe }}){% endif %}</td><td>{{ estimated_duration }}</td></tr>
 {% endfor %}
-</ol>
-</div>
+</tbody>
+</table>
 {% endblock %}

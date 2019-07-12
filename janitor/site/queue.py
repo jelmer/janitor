@@ -31,32 +31,32 @@ def lintian_tag_link(tag):
 async def get_queue(only_command=None, limit=None):
     data = []
 
-    async for queue_id, branch_url, run_env, command in (
+    async for entry in (
             state.iter_queue(limit=limit)):
-        if only_command is not None and command != only_command:
+        if only_command is not None and entry.command != only_command:
             continue
         expecting = None
-        if command[0] == 'new-upstream':
-            if '--snapshot' in command:
+        if entry.command[0] == 'new-upstream':
+            if '--snapshot' in entry.command:
                 description = 'New upstream snapshot'
             else:
                 description = 'New upstream'
-                if run_env.get('CONTEXT'):
-                    expecting = 'expecting to merge %s' % run_env['CONTEXT']
-        elif command[0] == 'lintian-brush':
+                if entry.env.get('CONTEXT'):
+                    expecting = 'expecting to merge %s' % entry.env['CONTEXT']
+        elif entry.command[0] == 'lintian-brush':
             description = 'Lintian fixes'
-            if run_env.get('CONTEXT'):
+            if entry.env.get('CONTEXT'):
                 expecting = (
                     'expecting to fix: ' +
                     ', '.join(
-                        map(lintian_tag_link, run_env['CONTEXT'].split(' '))))
+                        map(lintian_tag_link, entry.env['CONTEXT'].split(' '))))
         else:
             raise AssertionError('invalid command %s' % command)
         if only_command is not None:
             description = expecting
         elif expecting is not None:
             description += ", " + expecting
-        data.append((run_env['PACKAGE'], description))
+        data.append((entry.env['PACKAGE'], description, entry.estimated_duration))
 
     return data
 
