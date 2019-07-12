@@ -41,10 +41,11 @@ from .policy import (
 )
 from .udd import UDD
 
-DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
-DEFAULT_VALUE_NEW_UPSTREAM = 30
-DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
-DEFAULT_VALUE_LINTIAN_BRUSH = 50
+DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 200
+DEFAULT_VALUE_NEW_UPSTREAM = 300
+DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 100
+DEFAULT_VALUE_LINTIAN_BRUSH = 500
+LINTIAN_BRUSH_TAG_VALUE = 10
 
 # Default to 5 minutes
 DEFAULT_ESTIMATED_DURATION = 60 * 5
@@ -234,9 +235,10 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
                 "Invalid value %r for update_changelog" % update_changelog)
         if not (set(tags) - set(propose_addon_only)):
             # Penalty for whitespace-only fixes
-            value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY + len(tags)
+            value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
         else:
-            value = DEFAULT_VALUE_LINTIAN_BRUSH + len(tags)
+            value = DEFAULT_VALUE_LINTIAN_BRUSH 
+        value += len(tags) * LINTIAN_BRUSH_TAG_VALUE
         context = ' '.join(sorted(tags))
         yield (
             vcs_url, mode,
