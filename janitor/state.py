@@ -378,7 +378,7 @@ async def add_to_queue(vcs_url, env, command, offset=0,
             "(branch_url, package, command, committer, priority, context, "
             "estimated_duration) "
             "VALUES "
-            "($1, $2, $3, $4, (SELECT MIN(priority) FROM queue) + $5, $6, $7) "
+            "($1, $2, $3, $4, (SELECT COALESCE(MIN(priority), 0) FROM queue) + $5, $6, $7) "
             "ON CONFLICT (package, command) DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration "
