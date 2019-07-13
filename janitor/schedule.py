@@ -166,6 +166,7 @@ async def schedule_from_candidates(policy, iter_candidates):
             {'COMMITTER': committer,
              'PACKAGE': package.name,
              'CONTEXT': context,
+             'UPLOADER_EMAILS': package.uploader_emails,
              'MAINTAINER_EMAIL': package.maintainer_email},
             entry_command, suite, value)
 

@@ -483,7 +483,7 @@ async def publish_request(publisher, dry_run, vcs_directory, request):
     post = await request.post()
     mode = post.get('mode', MODE_PROPOSE)
     try:
-        name, maintainer_email, main_branch_url = list(
+        name, maintainer_email, uploader_emails, main_branch_url = list(
             await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({}, status=400)

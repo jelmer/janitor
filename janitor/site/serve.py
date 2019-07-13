@@ -119,7 +119,7 @@ if __name__ == '__main__':
     async def handle_pkg(request):
         from .pkg import generate_pkg_file
         from .. import state
-        name, maintainer_email, branch_url = list(
+        name, maintainer_email, uploader_emails, branch_url = list(
             await state.iter_packages(request.match_info['pkg']))[0]
         merge_proposals = []
         for package, url, status, revision in await state.iter_proposals(

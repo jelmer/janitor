@@ -46,17 +46,19 @@ async def get_connection():
         yield conn
 
 
-async def _ensure_package(conn, name, vcs_url, maintainer_email):
+async def _ensure_package(conn, name, vcs_url, maintainer_email, uploader_emails):
     await conn.execute(
-        "INSERT INTO package (name, branch_url, maintainer_email) "
-        "VALUES ($1, $2, $3) ON CONFLICT (name) DO UPDATE SET "
+        "INSERT INTO package (name, branch_url, maintainer_email, uploader_emails) "
+        "VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
-        "maintainer_email = EXCLUDED.maintainer_email",
-        name, vcs_url, maintainer_email)
+        "maintainer_email = EXCLUDED.maintainer_email, "
+        "uploader_emails = EXCLUDED.uploader_emails",
+        name, vcs_url, maintainer_email, uploader_emails)
 
 
 async def store_run(
-        run_id, name, vcs_url, maintainer_email, start_time, finish_time,
+        run_id, name, vcs_url, maintainer_email, uploader_emails,
+        start_time, finish_time,
         command, description, instigated_context, context,
         main_branch_revision, result_code, build_version,
         build_distribution, branch_name, revision, subworker_result, suite):
@@ -66,6 +68,7 @@ async def store_run(
     :param name: Package name
     :param vcs_url: Upstream branch URL
     :param maintainer_email: Maintainer email
+    :param uploader_emails: List of maintainer email addresses
     :param start_time: Start time
     :param finish_time: Finish time
     :param command: Command
@@ -82,7 +85,7 @@ async def store_run(
     :param suite: Suite
     """
     async with get_connection() as conn:
-        await _ensure_package(conn, name, vcs_url, maintainer_email)
+        await _ensure_package(conn, name, vcs_url, maintainer_email, uploader_emails)
         await conn.execute(
             "INSERT INTO run (id, command, description, result_code, "
             "start_time, finish_time, package, instigated_context, context, "
@@ -120,6 +123,7 @@ async def iter_packages(package=None):
 SELECT
   name,
   maintainer_email,
+  uploader_emails,
   branch_url
 FROM
   package
@@ -306,12 +310,13 @@ class QueueItem(object):
 
     @classmethod
     def from_row(cls, row):
-        (branch_url, maintainer_email, package, committer,
+        (branch_url, maintainer_email, uploader_emails, package, committer,
             command, context, queue_id, estimated_duration,
             suite) = row
         env = {
             'PACKAGE': package,
             'MAINTAINER_EMAIL': maintainer_email,
+            'UPLOADER_EMAILS': uploader_emails,
             'COMMITTER': committer or None,
             'CONTEXT': context,
         }
@@ -349,6 +354,7 @@ async def iter_queue(limit=None):
 SELECT
     package.branch_url,
     package.maintainer_email,
+    package.uploader_emails,
     package.name,
     queue.committer,
     queue.command,
@@ -379,10 +385,11 @@ async def add_to_queue(vcs_url, env, command, suite, offset=0,
                        estimated_duration=None):
     package = env['PACKAGE']
     maintainer_email = env.get('MAINTAINER_EMAIL')
+    uploader_emails = env.get('UPLOADER_EMAILS')
     context = env.get('CONTEXT')
     committer = env.get('COMMITTER')
     async with get_connection() as conn:
-        await _ensure_package(conn, package, vcs_url, maintainer_email)
+        await _ensure_package(conn, package, vcs_url, maintainer_email, uploader_emails)
         await conn.execute(
             "INSERT INTO queue "
             "(branch_url, package, command, committer, priority, context, "
