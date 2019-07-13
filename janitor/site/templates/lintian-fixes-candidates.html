@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% from "lintian-fixes-util.html" import lintian_tag_link %}
+{% block page_title %}Lintian Fixes - Candidates{% endblock %}
+{% block body %}
+<div class="section" id="{{ package }}">
+<h1>Lintian Fixes - Candidates</h1>
+
+<ul>
+{% for package, tags in candidates %}
+<li><a href="/lintian-fixes/pkg/{{ package.name }}">{{ package.name }}</a> - {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}

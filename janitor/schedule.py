@@ -72,7 +72,7 @@ def get_ubuntu_package_url(launchpad, package):
     return lp_repo.git_ssh_url
 
 
-async def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
+async def schedule_ubuntu(policy, propose_addon_only, packages):
     from breezy.plugins.launchpad.lp_api import (
         Launchpad,
         get_cache_directory,
@@ -90,7 +90,7 @@ async def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
         policy = read_policy(f)
 
     async for package in udd.iter_ubuntu_source_packages(
-            packages if packages else None, shuffle=shuffle):
+            packages if packages else None):
         mode, update_changelog, committer = apply_policy(
             policy, 'lintian_brush', package.name, package.maintainer_email,
             package.uploader_emails)
@@ -121,7 +121,7 @@ async def schedule_ubuntu(policy, propose_addon_only, packages, shuffle=False):
             command, 100)
 
 
-async def schedule_udd_new_upstreams(policy, packages, shuffle=False):
+async def schedule_udd_new_upstreams(policy, packages):
     udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
@@ -164,7 +164,7 @@ async def schedule_udd_new_upstreams(policy, packages, shuffle=False):
             command, DEFAULT_VALUE_NEW_UPSTREAM)
 
 
-async def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
+async def schedule_udd_new_upstream_snapshots(policy, packages):
     udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
@@ -204,15 +204,14 @@ async def schedule_udd_new_upstream_snapshots(policy, packages, shuffle=False):
             command, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
 
-async def schedule_udd(policy, propose_addon_only, packages, available_fixers,
-                       shuffle=False):
+async def schedule_udd(policy, propose_addon_only, packages, available_fixers):
     udd = await UDD.public_udd_mirror()
 
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
     async for package, tags in udd.iter_source_packages_by_lintian(
-            available_fixers, packages if packages else None, shuffle=shuffle):
+            available_fixers, packages if packages else None):
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:

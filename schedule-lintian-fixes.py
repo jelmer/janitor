@@ -55,9 +55,6 @@ parser.add_argument('--propose-addon-only',
                     help='Fixers that should be considered add-on-only.',
                     type=str, action='append',
                     default=DEFAULT_ADDON_FIXERS)
-parser.add_argument('--shuffle',
-                    help='Shuffle order in which packages are processed.',
-                    action='store_true')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
 args = parser.parse_args()
@@ -89,7 +86,7 @@ async def main():
     note('Querying UDD...')
     todo = [x async for x in schedule_udd(
         args.policy, args.propose_addon_only, args.packages,
-        available_fixers, args.shuffle)]
+        available_fixers)]
     await add_to_queue(todo, SUITE, dry_run=args.dry_run)
 
 loop = asyncio.get_event_loop()

@@ -79,10 +79,7 @@ class UDD(object):
                     vcs_url=row[3], maintainer_email=row[4],
                     uploader_emails=uploader_emails)
 
-    async def iter_ubuntu_source_packages(self, packages=None, shuffle=False):
-        # TODO(jelmer): Support shuffle
-        if shuffle:
-            raise NotImplementedError(self.iter_ubuntu_source_packages)
+    async def iter_ubuntu_source_packages(self, packages=None):
         release = distro_info.UbuntuDistroInfo().devel()
         query = """
 SELECT
@@ -104,8 +101,7 @@ source = ubuntu_sources.source)"""
                 maintainer_email=row[4],
                 uploader_emails=uploader_emails)
 
-    async def iter_source_packages_by_lintian(self, tags, packages=None,
-                                              shuffle=False):
+    async def iter_source_packages_by_lintian(self, tags, packages=None):
         """Iterate over all of the packages affected by a set of tags."""
         package_rows = {}
         package_tags = {}
@@ -161,10 +157,6 @@ and vcs_type != ''"""
             package_rows[row[0]] = row[:6]
             package_tags.setdefault((row[0], row[1]), []).append(row[6])
         package_values = package_rows.values()
-        if shuffle:
-            package_values = list(package_values)
-            import random
-            random.shuffle(package_values)
         for row in package_values:
             uploader_emails = extract_uploader_emails(row[5])
             yield (PackageData(

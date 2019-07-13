@@ -47,9 +47,6 @@ parser.add_argument("--policy",
 parser.add_argument("--dry-run",
                     help="Create branches but don't push or propose anything.",
                     action="store_true", default=False)
-parser.add_argument('--shuffle',
-                    help='Shuffle order in which packages are processed.',
-                    action='store_true')
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
 args = parser.parse_args()
@@ -69,7 +66,7 @@ SUITE = 'fresh-releases'
 
 async def main():
     todo = [x async for x in schedule_udd_new_upstreams(
-            args.policy, args.packages, shuffle=args.shuffle)]
+            args.policy, args.packages)]
     await add_to_queue(todo, SUITE, dry_run=args.dry_run)
 
 loop.run_until_complete(main())
