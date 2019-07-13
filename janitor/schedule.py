@@ -124,16 +124,18 @@ async def schedule_ubuntu(policy, propose_addon_only, packages):
             command, 100)
 
 
-async def schedule_udd_new_upstreams(policy, packages):
+async def iter_new_upstream_candidates(packages=None):
     udd = await UDD.public_udd_mirror()
-
-    with open(policy, 'r') as f:
-        policy = read_policy(f)
-
     async for package, upstream_version in udd.iter_packages_with_new_upstream(
             packages or None):
-        # TODO(jelmer): skip if "new-upstream $upstream_version" has already
-        # been processed
+        yield package, upstream_version, DEFAULT_VALUE_NEW_UPSTREAM
+
+
+async def schedule_from_candidates(policy, suite, command, iter_candidates):
+    with open(policy, 'r') as f:
+        policy = read_policy(f)
+
+    async for package, context, value in iter_candidates:
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:
@@ -141,18 +143,18 @@ async def schedule_udd_new_upstreams(policy, packages):
             continue
 
         mode, update_changelog, committer = apply_policy(
-            policy, 'fresh_releases', package.name,
+            policy, suite.replace('-', '_'), package.name,
             package.maintainer_email, package.uploader_emails)
 
         if mode == 'skip':
             trace.mutter('%s: skipping, per policy', package.name)
             continue
 
-        command = ["new-upstream"]
+        entry_command = list(command)
         if update_changelog == "update":
-            command.append("--update-changelog")
+            entry_command.append("--update-changelog")
         elif update_changelog == "leave":
-            command.append("--no-update-changelog")
+            entry_command.append("--no-update-changelog")
         elif update_changelog == "auto":
             pass
         else:
@@ -162,83 +164,21 @@ async def schedule_udd_new_upstreams(policy, packages):
             vcs_url, mode,
             {'COMMITTER': committer,
              'PACKAGE': package.name,
-             'CONTEXT': upstream_version,
+             'CONTEXT': context,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            command, DEFAULT_VALUE_NEW_UPSTREAM)
+            entry_command, value)
 
 
-async def schedule_udd_new_upstream_snapshots(policy, packages):
+async def iter_fresh_snapshots_candidates(packages):
     udd = await UDD.public_udd_mirror()
-
-    with open(policy, 'r') as f:
-        policy = read_policy(f)
-
     async for package in udd.iter_source_packages_with_vcs(packages or None):
-        try:
-            vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
-        except ValueError as e:
-            trace.note('%s: %s', package.name, e)
-            continue
-
-        mode, update_changelog, committer = apply_policy(
-            policy, 'fresh_snapshots', package.name,
-            package.maintainer_email, package.uploader_emails)
-
-        if mode == 'skip':
-            trace.mutter('%s: skipping, per policy', package.name)
-            continue
-
-        command = ["new-upstream", "--snapshot"]
-        if update_changelog == "update":
-            command.append("--update-changelog")
-        elif update_changelog == "leave":
-            command.append("--no-update-changelog")
-        elif update_changelog == "auto":
-            pass
-        else:
-            raise ValueError(
-                "Invalid value %r for update_changelog" % update_changelog)
-        yield (
-            vcs_url, mode,
-            {'COMMITTER': committer,
-             'PACKAGE': package.name,
-             'CONTEXT': None,
-             'MAINTAINER_EMAIL': package.maintainer_email},
-            command, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
+        yield package, None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS
 
 
-async def schedule_udd(policy, propose_addon_only, packages, available_fixers):
+async def iter_lintian_fixes_candidates(packages, available_fixers, propose_addon_only):
     udd = await UDD.public_udd_mirror()
-
-    with open(policy, 'r') as f:
-        policy = read_policy(f)
-
     async for package, tags in udd.iter_source_packages_by_lintian(
             available_fixers, packages if packages else None):
-        try:
-            vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
-        except ValueError as e:
-            trace.note('%s: %s', package.name, e)
-            continue
-
-        mode, update_changelog, committer = apply_policy(
-            policy, 'lintian_fixes', package.name, package.maintainer_email,
-            package.uploader_emails)
-
-        if mode == 'skip':
-            trace.mutter('%s: skipping, per policy', package.name)
-            continue
-
-        command = ["lintian-brush"]
-        if update_changelog == "update":
-            command.append("--update-changelog")
-        elif update_changelog == "leave":
-            command.append("--no-update-changelog")
-        elif update_changelog == "auto":
-            pass
-        else:
-            raise ValueError(
-                "Invalid value %r for update_changelog" % update_changelog)
         if not (set(tags) - set(propose_addon_only)):
             # Penalty for whitespace-only fixes
             value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
@@ -246,13 +186,7 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers):
             value = DEFAULT_VALUE_LINTIAN_BRUSH
         value += len(tags) * LINTIAN_BRUSH_TAG_VALUE
         context = ' '.join(sorted(tags))
-        yield (
-            vcs_url, mode,
-            {'COMMITTER': committer,
-             'PACKAGE': package.name,
-             'CONTEXT': context,
-             'MAINTAINER_EMAIL': package.maintainer_email},
-            command, value)
+        yield package, context, value
 
 
 async def estimate_success_probability(package, suite, context=None):
