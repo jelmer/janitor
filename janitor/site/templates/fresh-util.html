@@ -1,0 +1,23 @@
+{% macro package_list(packages) %}
+<table class="docutils" border="1">
+<colgroup>
+<col width="48%">
+<col width="12%">
+<col width="40%">
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Package</th>
+<th class="head">Version</th>
+<th class="head">Upstream Version in Unstable</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for source, new_version, old_version in packages %}
+<tr class="{{ 'row-disabled' if old_version > new_version else 'row-even' }}"><td>{{ source }}</td>
+	<td><a href="pkg/{{ source }}">{{ new_version }}</a></td>
+    <td><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version }}</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endmacro %}

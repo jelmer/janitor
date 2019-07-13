@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "fresh-util.html" import package_list %}
 {% block page_title %}Fresh Releases{% endblock %}
 {% block body %}
 <div class="section" id="upstream-releases">
@@ -53,32 +54,13 @@ Pin-Priority: <span class="mi">800</span>
 </form>
 </p></div>
 
-
 <div class="section" id="package-list">
 <h2>Package list</h2>
 <p>The following source packages with new upstream releases merged are currently
 available:</p>
-<table class="docutils" border="1">
-<colgroup>
-<col width="48%">
-<col width="12%">
-<col width="40%">
-</colgroup>
-<thead valign="bottom">
-<tr class="row-odd"><th class="head">Package</th>
-<th class="head">Version</th>
-<th class="head">Upstream Version in Unstable</th>
-</tr>
-</thead>
-<tbody valign="top">
-{% for source, new_version, old_version in packages %}
-<tr class="row-even"><td>{{ source }}</td>
-	<td><a href="pkg/{{ source }}">{{ new_version }}</a></td>
-    <td><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version }}</a></td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
+
+{{ package_list(packages) }}
+
 </div>
 </div>
 
