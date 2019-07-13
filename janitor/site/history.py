@@ -5,18 +5,7 @@ from janitor.site import env, format_duration
 
 
 async def get_history(limit):
-    data = []
-    async for run in state.iter_runs(limit=limit):
-        row = [
-            run.package,
-            run.command,
-            run.times[1] - run.times[0],
-            run.id,
-            run.result_code,
-            run.merge_proposal_url,
-            ]
-        data.append(row)
-    return data
+    return [run async for run in state.iter_runs(limit=limit)]
 
 
 async def write_history(limit=None):
