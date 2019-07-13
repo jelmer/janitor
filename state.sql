@@ -75,3 +75,11 @@ CREATE TABLE IF NOT EXISTS branch (
    status text,
    description text
 );
+CREATE TABLE IF NOT EXISTS candidate (
+   package text not null,
+   suite suite not null,
+   command text not null,
+   context text,
+   value integer,
+   foreign key (package) references package(name)
+);
