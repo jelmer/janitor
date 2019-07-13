@@ -68,7 +68,7 @@ SUITE = 'fresh-releases'
 async def main():
     iter_candidates = iter_new_upstream_candidates(args.packages)
     todo = [x async for x in schedule_from_candidates(
-            args.policy, SUITE, ['new-upstream'], iter_candidates)]
+            args.policy, iter_candidates)]
     await add_to_queue(todo, SUITE, dry_run=args.dry_run)
 
 loop.run_until_complete(main())

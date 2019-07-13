@@ -128,14 +128,15 @@ async def iter_new_upstream_candidates(packages=None):
     udd = await UDD.public_udd_mirror()
     async for package, upstream_version in udd.iter_packages_with_new_upstream(
             packages or None):
-        yield package, upstream_version, DEFAULT_VALUE_NEW_UPSTREAM
+        yield (package, 'fresh-releases', ['new-upstream'], upstream_version,
+               DEFAULT_VALUE_NEW_UPSTREAM)
 
 
-async def schedule_from_candidates(policy, suite, command, iter_candidates):
+async def schedule_from_candidates(policy, iter_candidates):
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
-    async for package, context, value in iter_candidates:
+    async for package, suite, command, context, value in iter_candidates:
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:
@@ -172,7 +173,8 @@ async def schedule_from_candidates(policy, suite, command, iter_candidates):
 async def iter_fresh_snapshots_candidates(packages):
     udd = await UDD.public_udd_mirror()
     async for package in udd.iter_source_packages_with_vcs(packages or None):
-        yield package, None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS
+        yield (package, 'fresh-snapshots', ['new-upstream', '--snapshot'],
+               None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
 
 async def iter_lintian_fixes_candidates(packages, available_fixers, propose_addon_only):
@@ -186,7 +188,7 @@ async def iter_lintian_fixes_candidates(packages, available_fixers, propose_addo
             value = DEFAULT_VALUE_LINTIAN_BRUSH
         value += len(tags) * LINTIAN_BRUSH_TAG_VALUE
         context = ' '.join(sorted(tags))
-        yield package, context, value
+        yield package, 'lintian-fixes', ['lintian-brush'], context, value
 
 
 async def estimate_success_probability(package, suite, context=None):
