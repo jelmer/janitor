@@ -32,7 +32,8 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor.schedule import (
-    schedule_udd_new_upstream_snapshots,
+    schedule_from_candidates,
+    iter_fresh_snapshots_candidates,
     add_to_queue,
 )  # noqa: E402
 from janitor.trace import (
@@ -67,8 +68,10 @@ SUITE = 'fresh-snapshots'
 
 
 async def main():
-    todo = [x async for x in schedule_udd_new_upstream_snapshots(
-            args.policy, args.packages)]
+    iter_candidates = iter_fresh_snapshots_candidates(args.packages)
+    todo = [x async for x in schedule_from_candidates(
+            args.policy, SUITE, ['new-upstream', '--snapshot'],
+            iter_candidates)]
     await add_to_queue(
         todo, SUITE, dry_run=args.dry_run,
         default_offset=args.default_offset)

@@ -36,7 +36,11 @@ from silver_platter.debian.lintian import (
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from janitor.schedule import add_to_queue, schedule_udd  # noqa: E402
+from janitor.schedule import (
+    add_to_queue,
+    schedule_from_candidates,
+    iter_lintian_fixes_candidates,
+    )  # noqa: E402
 from janitor.trace import (
     note,
 )  # noqa: E402
@@ -84,9 +88,10 @@ SUITE = 'lintian-fixes'
 
 async def main():
     note('Querying UDD...')
-    todo = [x async for x in schedule_udd(
-        args.policy, args.propose_addon_only, args.packages,
-        available_fixers)]
+    iter_candidates = iter_lintian_fixes_candidates(
+        args.packages, available_fixers, args.propose_addon_only)
+    todo = [x async for x in schedule_from_candidates(
+        args.policy, SUITE, ['lintian-brush'], iter_candidates)]
     await add_to_queue(todo, SUITE, dry_run=args.dry_run)
 
 loop = asyncio.get_event_loop()
