@@ -60,7 +60,10 @@ DEFAULT_ESTIMATED_DURATION = 15
 # give a better result code.
 VAGUE_RESULT_CODES = [
     None, 'worker-failure', 'worker-exception',
-    'build-failed-stage-explain-bd-uninstallable', 'build-failed']
+    'build-failed']
+
+TRANSIENT_RESULT_CODES = [
+    'worker-exception', 'build-failed-stage-explain-bd-uninstallable']
 
 
 def get_ubuntu_package_url(launchpad, package):
@@ -240,7 +243,7 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers):
             # Penalty for whitespace-only fixes
             value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
         else:
-            value = DEFAULT_VALUE_LINTIAN_BRUSH 
+            value = DEFAULT_VALUE_LINTIAN_BRUSH
         value += len(tags) * LINTIAN_BRUSH_TAG_VALUE
         context = ' '.join(sorted(tags))
         yield (
@@ -258,6 +261,8 @@ async def estimate_success_probability(package, suite, context=None):
     success = 0
     context_repeated = False
     async for run in state.iter_previous_runs(package, suite):
+        if run.result_code in TRANSIENT_RESULT_CODES:
+            continue
         total += 1
         if run.result_code == 'success':
             success += 1
