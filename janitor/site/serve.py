@@ -217,6 +217,13 @@ if __name__ == '__main__':
         headers = {'Cache-Control': 'max-age=%d' % max_age}
         return web.FileResponse(path, headers=headers)
 
+    async def handle_lintian_fixes_candidates(request):
+        from .lintian_fixes import generate_candidates
+        text = await generate_candidates()
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
@@ -247,6 +254,8 @@ if __name__ == '__main__':
         '/lintian-fixes/by-tag/', handle_lintian_fixes_tag_list)
     app.router.add_get(
         '/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page)
+    app.router.add_get(
+        '/lintian-fixes/candidates', handle_lintian_fixes_candidates)
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get(
             '/%s/' % suite, functools.partial(handle_apt_repo, suite))

@@ -6,6 +6,11 @@ import sys
 
 from janitor import state
 from janitor.site import env, format_duration, get_run_diff, highlight_diff
+from janitor.udd import UDD
+
+from silver_platter.debian.lintian import (
+    available_lintian_fixers,
+    )
 
 
 async def generate_pkg_file(package):
@@ -78,6 +83,18 @@ async def generate_tag_page(tag):
     template = env.get_template('lintian-fixes-tag.html')
     packages = list(await state.iter_last_successes_by_lintian_tag(tag))
     return await template.render_async(tag=tag, packages=packages)
+
+
+async def generate_candidates():
+    template = env.get_template('lintian-fixes-candidates.html')
+    supported_tags = set()
+    for fixer in available_lintian_fixers():
+        supported_tags.update(fixer.lintian_tags)
+    udd = await UDD.public_udd_mirror()
+    candidates = list(await udd.iter_source_packages_by_lintian(
+        supported_tags,))
+    return await template.render_async(
+        supported_tags=supported_tags, candidates=candidates)
 
 
 if __name__ == '__main__':
