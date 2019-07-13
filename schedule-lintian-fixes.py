@@ -91,7 +91,7 @@ async def main():
     iter_candidates = iter_lintian_fixes_candidates(
         args.packages, available_fixers, args.propose_addon_only)
     todo = [x async for x in schedule_from_candidates(
-        args.policy, SUITE, ['lintian-brush'], iter_candidates)]
+        args.policy, iter_candidates)]
     await add_to_queue(todo, SUITE, dry_run=args.dry_run)
 
 loop = asyncio.get_event_loop()
