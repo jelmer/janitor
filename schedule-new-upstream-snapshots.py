@@ -64,15 +64,12 @@ note('Querying UDD...')
 loop = asyncio.get_event_loop()
 
 
-SUITE = 'fresh-snapshots'
-
-
 async def main():
     iter_candidates = iter_fresh_snapshots_candidates(args.packages)
     todo = [x async for x in schedule_from_candidates(
             args.policy, iter_candidates)]
     await add_to_queue(
-        todo, SUITE, dry_run=args.dry_run,
+        todo, dry_run=args.dry_run,
         default_offset=args.default_offset)
 
 loop.run_until_complete(main())

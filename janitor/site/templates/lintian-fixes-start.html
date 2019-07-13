@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "lintian-fixes-util.html" import lintian_tag_link %}
 {% block page_title %}Lintian Fixes{% endblock %}
 {% block body %}
 
@@ -88,7 +89,7 @@ pull requests in Subversion would be.</p>
 <ul class="simple">
 {% for fixer in lintian_brush.available_lintian_fixers() %}
    {% for tag in fixer.lintian_tags %}
-   <li><a class="reference external" href="https://lintian.debian.org/tags/{{ tag }}.html">{{ tag }}</a></li>
+   <li>{{ lintian_tag_link(tag) }}</li>
    {% endfor %}
 {% endfor %}
 </ul>
@@ -99,8 +100,8 @@ pull requests in Subversion would be.</p>
 tags are only included in a pull request if there were other fixes as well.</p>
 <p>Tags currently considered add-on only are:</p>
 <ul class="simple">
-<li><a class="reference external" href="https://lintian.debian.org/tags/file-contains-trailing-whitespace.html">file-contains-trailing-whitespace</a></li>
-<li><a class="reference external" href="https://lintian.debian.org/tags/package-uses-old-debhelper-compat-version.html">package-uses-old-debhelper-compat-version</a></li>
+<li>{{ lintian_tag_link('file-contains-trailing-whitespace') }}</li>
+<li>{{ lintian_tag_link('package-uses-old-debhelper-compat-version') }}</li>
 </ul>
 </div>
 <div class="section" id="the-bot-is-proposing-an-incorrect-change-where-do-i-report-this">

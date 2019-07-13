@@ -90,9 +90,7 @@ async def generate_candidates():
     supported_tags = set()
     for fixer in available_lintian_fixers():
         supported_tags.update(fixer.lintian_tags)
-    udd = await UDD.public_udd_mirror()
-    candidates = list(await udd.iter_source_packages_by_lintian(
-        supported_tags,))
+    candidates = list(await state.iter_candidates('lintian-fixes'))
     return await template.render_async(
         supported_tags=supported_tags, candidates=candidates)
 

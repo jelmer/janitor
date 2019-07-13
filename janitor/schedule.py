@@ -19,10 +19,10 @@ from __future__ import absolute_import
 
 __all__ = [
     'add_to_queue',
-    'schedule_udd',
-    'schedule_ubuntu',
-    'schedule_udd_new_upstreams',
-    'schedule_udd_new_upstream_snapshots',
+    'schedule_from_candidates',
+    'iter_fresh_snapshots_candidates',
+    'iter_fresh_releases_candidates',
+    'iter_lintian_fixes_candidates',
 ]
 
 from datetime import datetime, timedelta
@@ -124,7 +124,7 @@ async def schedule_ubuntu(policy, propose_addon_only, packages):
             command, 100)
 
 
-async def iter_new_upstream_candidates(packages=None):
+async def iter_fresh_releases_candidates(packages=None):
     udd = await UDD.public_udd_mirror()
     async for package, upstream_version in udd.iter_packages_with_new_upstream(
             packages or None):
@@ -167,7 +167,7 @@ async def schedule_from_candidates(policy, iter_candidates):
              'PACKAGE': package.name,
              'CONTEXT': context,
              'MAINTAINER_EMAIL': package.maintainer_email},
-            entry_command, value)
+            entry_command, suite, value)
 
 
 async def iter_fresh_snapshots_candidates(packages):
@@ -216,12 +216,12 @@ async def estimate_duration(package, suite):
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
-async def add_to_queue(todo, suite, dry_run=False, default_offset=0):
+async def add_to_queue(todo, dry_run=False, default_offset=0):
     udd = await UDD.public_udd_mirror()
     popcon = {package: (inst, vote) for (package, inst, vote) in await udd.popcon()}
     max_inst = max([(v[0] or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
-    for vcs_url, mode, env, command, value in todo:
+    for vcs_url, mode, env, command, suite, value in todo:
         assert value > 0, "Value: %s" % value
         package = env['PACKAGE']
         estimated_duration = await estimate_duration(
