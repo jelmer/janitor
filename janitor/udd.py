@@ -229,3 +229,6 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
             args.append(suite)
         row = await self._conn.fetchrow(query, *args)
         return (row is not None)
+
+    async def popcon(self):
+        return await self._conn.fetch("SELECT package, insts, vote FROM popcon")
