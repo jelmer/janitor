@@ -281,7 +281,7 @@ async def add_to_queue(todo, suite, dry_run=False, default_offset=0):
     popcon = {package: (inst, vote) for (package, inst, vote) in await udd.popcon()}
     max_inst = max([(v[0] or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
-    async def add_item_to_queue(vcs_url, mode, env, command, value):
+    for vcs_url, mode, env, command, value in todo:
         assert value > 0, "Value: %s" % value
         package = env['PACKAGE']
         estimated_duration = await estimate_duration(
@@ -315,4 +315,3 @@ async def add_to_queue(todo, suite, dry_run=False, default_offset=0):
         if added:
             trace.note('Scheduling %s (%s) with offset %d',
                        package, mode, offset)
-    await asyncio.gather(*[add_item_to_queue(*item) for item in todo])
