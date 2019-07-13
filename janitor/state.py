@@ -276,12 +276,16 @@ async def iter_all_proposals(branch_name=None):
     args = []
     query = """
 SELECT
-    url, status, package, revision
+    merge_proposal.url,
+    merge_proposal.status,
+    merge_proposal.package,
+    merge_proposal.revision
 FROM
     merge_proposal
+LEFT JOIN publish ON publish.merge_proposal_url = merge_proposal.url
 """
     if branch_name:
-        query += " WHERE branch_name = $1"
+        query += " WHERE publish.branch_name = $1"
         args.append(branch_name)
     async with get_connection() as conn:
         return await conn.fetch(query, *args)

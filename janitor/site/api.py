@@ -81,7 +81,7 @@ async def handle_schedule(request):
         'MAINTAINER_EMAIL': maintainer_email,
     }
 
-    await state.add_to_queue(vcs_url, run_env, command, offset)
+    await state.add_to_queue(vcs_url, run_env, command, suite, offset)
     response_obj = {
         'package': package,
         'command': command,
