@@ -43,9 +43,9 @@ message Policy {
     repeated Match match = 1;
 
     // Mode
-    optional Mode lintian_brush = 2;
-    optional Mode new_upstream_releases = 6;
-    optional Mode new_upstream_snapshots = 7;
+    optional Mode lintian_fixes = 2;
+    optional Mode fresh_releases = 6;
+    optional Mode fresh_snapshots = 7;
 
     // Changelog update mode
     optional ChangelogMode changelog = 3;

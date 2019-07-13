@@ -95,7 +95,7 @@ async def schedule_ubuntu(policy, propose_addon_only, packages):
     async for package in udd.iter_ubuntu_source_packages(
             packages if packages else None):
         mode, update_changelog, committer = apply_policy(
-            policy, 'lintian_brush', package.name, package.maintainer_email,
+            policy, 'lintian_fixes', package.name, package.maintainer_email,
             package.uploader_emails)
 
         if mode == 'skip':
@@ -141,7 +141,7 @@ async def schedule_udd_new_upstreams(policy, packages):
             continue
 
         mode, update_changelog, committer = apply_policy(
-            policy, 'new_upstream_releases', package.name,
+            policy, 'fresh_releases', package.name,
             package.maintainer_email, package.uploader_emails)
 
         if mode == 'skip':
@@ -181,7 +181,7 @@ async def schedule_udd_new_upstream_snapshots(policy, packages):
             continue
 
         mode, update_changelog, committer = apply_policy(
-            policy, 'new_upstream_snapshots', package.name,
+            policy, 'fresh_snapshots', package.name,
             package.maintainer_email, package.uploader_emails)
 
         if mode == 'skip':
@@ -222,7 +222,7 @@ async def schedule_udd(policy, propose_addon_only, packages, available_fixers):
             continue
 
         mode, update_changelog, committer = apply_policy(
-            policy, 'lintian_brush', package.name, package.maintainer_email,
+            policy, 'lintian_fixes', package.name, package.maintainer_email,
             package.uploader_emails)
 
         if mode == 'skip':
