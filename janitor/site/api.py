@@ -26,15 +26,14 @@ SUITE_TO_POLICY_FIELD = {
 async def handle_policy(policy_config, request):
     package = request.match_info['package']
     try:
-        (name, maintainer_email, vcs_url) = list(
+        (name, maintainer_email, uploader_emails, vcs_url) = list(
             await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     suite_policies = {}
-    # TODO(jelmer): Package uploaders?
     for suite, field in SUITE_TO_POLICY_FIELD.items():
         (publish_policy, changelog_policy, committer) = apply_policy(
-            policy_config, field, name, maintainer_email, [])
+            policy_config, field, name, maintainer_email, uploader_emails)
         suite_policies[suite] = {
             'publish_policy': publish_policy,
             'changelog_policy': changelog_policy,
@@ -72,13 +71,14 @@ async def handle_schedule(request):
     post = await request.post()
     offset = post.get('offset', DEFAULT_SCHEDULE_OFFSET)
     try:
-        (name, maintainer_email, vcs_url) = list(
+        (name, maintainer_email, uploader_emails, vcs_url) = list(
             await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     run_env = {
         'PACKAGE': name,
         'MAINTAINER_EMAIL': maintainer_email,
+        'UPLOADER_EMAILS': uploader_emails,
     }
 
     await state.add_to_queue(vcs_url, run_env, command, suite, offset)
@@ -94,8 +94,8 @@ async def handle_schedule(request):
 async def handle_package_list(request):
     package = request.match_info.get('package')
     response_obj = []
-    for name, maintainer_email, branch_url in await state.iter_packages(
-            package=package):
+    for (name, maintainer_email, uploader_emails,
+         branch_url) in await state.iter_packages(package=package):
         response_obj.append({
             'name': name,
             'maintainer_email': maintainer_email,
@@ -106,7 +106,8 @@ async def handle_package_list(request):
 
 async def handle_packagename_list(request):
     response_obj = []
-    for name, maintainer_email, branch_url in await state.iter_packages():
+    for (name, maintainer_email, uploader_emails,
+         branch_url) in await state.iter_packages():
         response_obj.append(name)
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=600'})

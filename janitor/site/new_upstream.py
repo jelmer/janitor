@@ -20,7 +20,7 @@ from janitor.site import (
 
 async def generate_pkg_file(package, suite):
     try:
-        (package, maintainer_email, vcs_url) = list(
+        (package, maintainer_email, uploader_emails, vcs_url) = list(
             await state.iter_packages(package=package))[0]
     except IndexError:
         raise KeyError(package)
@@ -53,6 +53,7 @@ async def generate_pkg_file(package, suite):
         'package': package,
         'merge_proposals': merge_proposals,
         'maintainer_email': maintainer_email,
+        'uploader_emails': uploader_emails,
         'vcs_url': vcs_url,
         'command': command,
         'build_version': build_version,

@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS package (
    name text not null,
    branch_url text not null,
    maintainer_email text not null,
+   uploader_emails text[] not null,
    primary key(name)
 );
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged');
@@ -36,7 +37,7 @@ CREATE TABLE IF NOT EXISTS run (
    branch_name text,
    revision text,
    result json,
-   suite text not null,
+   suite suite not null,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );
@@ -57,7 +58,7 @@ CREATE TABLE IF NOT EXISTS queue (
    id serial,
    branch_url text not null,
    package text not null,
-   suite text not null,
+   suite suite not null,
    command text not null,
    committer text null,
    priority integer default 0 not null,

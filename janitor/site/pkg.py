@@ -222,7 +222,8 @@ async def write_pkg_files(dir, runs_by_pkg):
 
     jobs = []
     packages = []
-    for (name, maintainer_email, branch_url) in await state.iter_packages():
+    for (name, maintainer_email, uploader_emails, branch_url) in (
+            await state.iter_packages()):
         packages.append((name, maintainer_email))
         jobs.append(write_pkg_file(
             dir, name, merge_proposals.get(name, []),
