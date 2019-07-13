@@ -13,17 +13,17 @@
 </colgroup>
 <thead valign="bottom">
 <tr class="row-odd"><th class="head">Package</th>
-<th class="head">Command</th>
+<th class="head">Suite</th>
 <th class="head">Duration</th>
 <th class="head">Result</th>
 </tr>
 </thead>
 <tbody valign="top">
-{% for package, command, duration, run_id, result_code, proposal_url in history %}
-<tr class="row-even"><td><a class="reference external" href="pkg/{{ package }}">{{ package }}</a></td>
-<td>{{ command }}</td>
-<td>{{ format_duration(duration) }}</td>
-<td><a class="reference external" href="pkg/{{ package }}/{{ run_id }}">{{ result_code }}</a></td>
+{% for run in history %}
+<tr class="row-even"><td><a class="reference external" href="pkg/{{ run.package }}">{{ run.package }}</a></td>
+<td><a href="/{{ run.suite}}">{{ run.suite }}</a></td>
+<td>{{ format_duration(run.duration) }}</td>
+<td><a class="reference external" href="pkg/{{ run.package }}/{{ run.id }}">{{ run.result_code }}</a></td>
 </tr>
 {% endfor %}
 </tbody>
