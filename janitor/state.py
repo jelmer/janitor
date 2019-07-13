@@ -734,3 +734,13 @@ async def estimate_duration(package, suite):
             "WHERE package = $1 AND suite = $2 "
             "ORDER BY start_time DESC LIMIT 1",
             package, suite)
+
+
+async def store_candidate(package, suite, command, context, value)
+    async with get_connection() as conn:
+        await conn.execute(
+            "INSERT INTO candidate (package, suite, command, context, value) "
+            "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
+            "DO UPDATE SET command = EXCLUDED.command, "
+            "context = EXCLUDED.context, value = EXCLUDED.value",
+            package, suite, command, context, value)
