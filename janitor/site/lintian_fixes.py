@@ -5,7 +5,7 @@ import asyncio
 import sys
 
 from janitor import state
-from janitor.site import env, format_duration, get_run_diff, highlight_diff
+from janitor.site import env, get_run_diff, highlight_diff
 from janitor.udd import UDD
 
 from silver_platter.debian.lintian import (
@@ -63,7 +63,6 @@ async def generate_pkg_file(package):
         'run_id': run_id,
         'result': result,
         'suite': suite,
-        'format_duration': format_duration,
         'show_diff': lambda: get_run_diff(run).decode('utf-8'),
         'highlight_diff': highlight_diff,
         'branch_name': branch_name,

@@ -19,7 +19,6 @@ from janitor.sbuild_log import (
 from janitor.site import (
     changes_get_binaries,
     env,
-    format_duration,
     get_changes_path,
     get_local_vcs_repo,
     get_run_diff,
@@ -97,7 +96,6 @@ async def generate_run_file(logfile_manager, run):
     kwargs['result'] = run.result
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
-    kwargs['format_duration'] = format_duration
     kwargs['enumerate'] = enumerate
     kwargs['show_diff'] = lambda: get_run_diff(run).decode('utf-8', 'replace')
     kwargs['highlight_diff'] = highlight_diff

@@ -32,6 +32,8 @@ env = Environment(
     enable_async=True,
 )
 
+env.globals.update(format_duration=format_duration)
+
 
 def get_local_vcs_repo(package):
     import breezy.git  # noqa: F401
