@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 from janitor import state
-from janitor.site import env, format_duration
+from janitor.site import env
 
 
 async def get_history(limit):
@@ -12,8 +12,7 @@ async def write_history(limit=None):
     template = env.get_template('history.html')
     return await template.render_async(
         count=limit,
-        history=await get_history(limit),
-        format_duration=format_duration)
+        history=await get_history(limit))
 
 
 if __name__ == '__main__':

@@ -13,7 +13,6 @@ from janitor.build import (
 from janitor.site import (
     changes_get_binaries,
     env,
-    format_duration,
     get_changes_path,
 )
 
@@ -64,7 +63,6 @@ async def generate_pkg_file(package, suite):
         'run_id': run_id,
         'result': result,
         'suite': suite,
-        'format_duration': format_duration,
         'previous_runs': previous_runs,
         }
     if run and run.build_version:
