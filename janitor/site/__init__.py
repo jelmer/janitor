@@ -26,6 +26,10 @@ def format_duration(duration):
     return '%dm%02ds' % (duration.seconds / 60, duration.seconds % 60)
 
 
+def format_timestamp(ts):
+    return str(ts)
+
+
 env = Environment(
     loader=PackageLoader('janitor.site', 'templates'),
     autoescape=select_autoescape(['html', 'xml']),
@@ -33,6 +37,7 @@ env = Environment(
 )
 
 env.globals.update(format_duration=format_duration)
+env.globals.update(format_timestamp=format_timestamp)
 
 
 def get_local_vcs_repo(package):

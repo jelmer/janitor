@@ -8,7 +8,7 @@
 
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a></li>
-<li>Start time: {{ start_time}}</li>
+<li>Start time: {{ format_timestamp(start_time) }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Status: {{ result_code }}</li>
 <li>Description: {{ description }}</li>
