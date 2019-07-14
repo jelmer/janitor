@@ -81,5 +81,6 @@ CREATE TABLE IF NOT EXISTS candidate (
    command text not null,
    context text,
    value integer,
+   unique(package, suite),
    foreign key (package) references package(name)
 );
