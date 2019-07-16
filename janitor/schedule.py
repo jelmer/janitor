@@ -22,7 +22,7 @@ __all__ = [
     'schedule_from_candidates',
 ]
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from . import (
     state,
@@ -91,7 +91,7 @@ async def schedule_from_candidates(policy, iter_candidates):
             {'COMMITTER': committer,
              'PACKAGE': package.name,
              'CONTEXT': context,
-             'UPLOADER_EMAILS': package.uploader_emails,
+             'UPLOADER_EMAILS': ','.join(package.uploader_emails),
              'MAINTAINER_EMAIL': package.maintainer_email},
             entry_command, suite, value)
 
@@ -109,7 +109,10 @@ async def estimate_success_probability(package, suite, context=None):
             success += 1
         if context and context in (run.instigated_context, run.context):
             context_repeated = True
-    return (success * 10 + 1) / (total * 10 + 1) * (1.0 if not context_repeated else .10)
+    return (
+        (success * 10 + 1) /
+        (total * 10 + 1) *
+        (1.0 if not context_repeated else .10))
 
 
 async def estimate_duration(package, suite):
@@ -123,7 +126,8 @@ async def estimate_duration(package, suite):
 
 async def add_to_queue(todo, dry_run=False, default_offset=0):
     udd = await UDD.public_udd_mirror()
-    popcon = {package: (inst, vote) for (package, inst, vote) in await udd.popcon()}
+    popcon = {package: (inst, vote)
+              for (package, inst, vote) in await udd.popcon()}
     max_inst = max([(v[0] or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
     for vcs_url, mode, env, command, suite, value in todo:
@@ -138,8 +142,10 @@ async def add_to_queue(todo, dry_run=False, default_offset=0):
             "Probability of success: %s" % estimated_probability_of_success
         estimated_cost = 50 + estimated_duration.total_seconds()
         assert estimated_cost > 0, "Estimated cost: %d" % estimated_cost
-        estimated_popularity = max(popcon.get(package, (0, 0))[0], 10) / max_inst
-        estimated_value = (estimated_popularity * estimated_probability_of_success * value)
+        estimated_popularity = max(
+            popcon.get(package, (0, 0))[0], 10) / max_inst
+        estimated_value = (
+            estimated_popularity * estimated_probability_of_success * value)
         assert estimated_value > 0, "Estimated value: %s" % estimated_value
         offset = estimated_cost / estimated_value
         offset = default_offset + offset
@@ -147,9 +153,9 @@ async def add_to_queue(todo, dry_run=False, default_offset=0):
             'Package %s: '
             'estimated value((%.2f * %d) * (%.2f * %d) * %d = %.2f), '
             'estimated cost (%d)',
-             package, estimated_popularity, POPULARITY_WEIGHT,
-             estimated_probability_of_success, SUCCESS_WEIGHT,
-             value, estimated_value, estimated_cost)
+            package, estimated_popularity, POPULARITY_WEIGHT,
+            estimated_probability_of_success, SUCCESS_WEIGHT,
+            value, estimated_value, estimated_cost)
 
         if not dry_run:
             added = await state.add_to_queue(

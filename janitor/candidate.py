@@ -108,7 +108,8 @@ async def iter_fresh_snapshots_candidates(packages):
                None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
 
-async def iter_lintian_fixes_candidates(packages, available_fixers, propose_addon_only):
+async def iter_lintian_fixes_candidates(
+        packages, available_fixers, propose_addon_only):
     udd = await UDD.public_udd_mirror()
     async for package, tags in udd.iter_source_packages_by_lintian(
             available_fixers, packages if packages else None):

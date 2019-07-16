@@ -6,7 +6,6 @@ import sys
 
 from janitor import state
 from janitor.site import env, get_run_diff, highlight_diff
-from janitor.udd import UDD
 
 from silver_platter.debian.lintian import (
     available_lintian_fixers,

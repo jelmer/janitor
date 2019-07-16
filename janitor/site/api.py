@@ -78,7 +78,7 @@ async def handle_schedule(request):
     run_env = {
         'PACKAGE': name,
         'MAINTAINER_EMAIL': maintainer_email,
-        'UPLOADER_EMAILS': uploader_emails,
+        'UPLOADER_EMAILS': ','.join(uploader_emails),
     }
 
     await state.add_to_queue(vcs_url, run_env, command, suite, offset)
