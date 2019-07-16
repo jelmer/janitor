@@ -30,11 +30,7 @@ pool = None
 async def get_connection():
     global pool
     if pool is None:
-        pool = await asyncpg.create_pool(
-            database="janitor",
-            user="janitor",
-            port=5432,
-            host="brangwain.vpn.jelmer.uk")
+        pool = await asyncpg.create_pool(database="janitor")
 
     async with pool.acquire() as conn:
         await conn.set_type_codec(
