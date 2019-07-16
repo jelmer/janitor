@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS run (
    build_version debversion,
    -- Distribution the package was built for (e.g. "lintian-fixes")
    build_distribution text,
-   result_code text,
+   result_code text not null,
    instigated_context text,
    -- Some subworker-specific indication of what we attempted to do
    context text,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS publish (
    revision text,
    mode publish_mode not null,
    merge_proposal_url text,
-   result_code text,
+   result_code text not null,
    description text,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
