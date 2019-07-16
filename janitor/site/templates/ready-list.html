@@ -5,7 +5,7 @@
  <div class="section" id="history">
 <h1>Ready to publish</h1>
 <ul>
-{% for package_name, command, build_version, result_code, context, start_time, run_id, run_revision, run_result, run_branch_name, maintainer_email, branch_url, main_branch_revision in runs %}
+{% for package_name, command, build_version, result_code, context, start_time, run_id, run_revision, run_result, run_branch_name, run_suite, maintainer_email, uploader_emails, branch_url, main_branch_revision in runs %}
 <li><a href="pkg/{{ package_name }}">{{ package_name }}</a>{% if command == 'lintian-brush' %}
 {{ lintian_brush_summary(run_result['applied']) }}
 {% elif command == 'new-upstream' %}: Merge new upstream release <b>{{ run_result['upstream_version'] }}</b>
