@@ -33,7 +33,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor.schedule import (
     schedule_from_candidates,
-    iter_new_upstream_candidates,
+    iter_fresh_releases_candidates,
     add_to_queue,
 )  # noqa: E402
 from janitor.trace import (

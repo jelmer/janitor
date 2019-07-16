@@ -46,9 +46,11 @@ async def get_connection():
         yield conn
 
 
-async def _ensure_package(conn, name, vcs_url, maintainer_email, uploader_emails):
+async def _ensure_package(conn, name, vcs_url, maintainer_email,
+                          uploader_emails):
     await conn.execute(
-        "INSERT INTO package (name, branch_url, maintainer_email, uploader_emails) "
+        "INSERT INTO package "
+        "(name, branch_url, maintainer_email, uploader_emails) "
         "VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "maintainer_email = EXCLUDED.maintainer_email, "
@@ -85,7 +87,8 @@ async def store_run(
     :param suite: Suite
     """
     async with get_connection() as conn:
-        await _ensure_package(conn, name, vcs_url, maintainer_email, uploader_emails)
+        await _ensure_package(
+            conn, name, vcs_url, maintainer_email, uploader_emails)
         await conn.execute(
             "INSERT INTO run (id, command, description, result_code, "
             "start_time, finish_time, package, instigated_context, context, "
@@ -300,7 +303,8 @@ class QueueItem(object):
     __slots__ = ['id', 'branch_url', 'env', 'command', 'estimated_duration',
                  'suite']
 
-    def __init__(self, id, branch_url, env, command, estimated_duration, suite):
+    def __init__(self, id, branch_url, env, command, estimated_duration,
+                 suite):
         self.id = id
         self.branch_url = branch_url
         self.env = env
@@ -316,7 +320,7 @@ class QueueItem(object):
         env = {
             'PACKAGE': package,
             'MAINTAINER_EMAIL': maintainer_email,
-            'UPLOADER_EMAILS': uploader_emails,
+            'UPLOADER_EMAILS': ','.join(uploader_emails),
             'COMMITTER': committer or None,
             'CONTEXT': context,
         }
@@ -389,14 +393,16 @@ async def add_to_queue(vcs_url, env, command, suite, offset=0,
     context = env.get('CONTEXT')
     committer = env.get('COMMITTER')
     async with get_connection() as conn:
-        await _ensure_package(conn, package, vcs_url, maintainer_email, uploader_emails)
+        await _ensure_package(
+            conn, package, vcs_url, maintainer_email, uploader_emails)
         await conn.execute(
             "INSERT INTO queue "
             "(branch_url, package, command, committer, priority, context, "
             "estimated_duration, suite) "
             "VALUES "
-            "($1, $2, $3, $4, (SELECT COALESCE(MIN(priority), 0) FROM queue) + $5, $6, $7, $8) "
-            "ON CONFLICT (package, command) DO UPDATE SET "
+            "($1, $2, $3, $4,"
+            "(SELECT COALESCE(MIN(priority), 0) FROM queue) + $5, "
+            "$6, $7, $8) ON CONFLICT (package, command) DO UPDATE SET "
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration "
             "WHERE queue.priority >= EXCLUDED.priority",
@@ -604,7 +610,9 @@ SELECT DISTINCT ON (package, command)
   run.revision,
   run.result,
   run.branch_name,
+  run.suite,
   package.maintainer_email,
+  package.uploader_emails,
   package.branch_url,
   main_branch_revision
 FROM
@@ -736,7 +744,7 @@ async def estimate_duration(package, suite):
             package, suite)
 
 
-async def store_candidate(package, suite, command, context, value)
+async def store_candidate(package, suite, command, context, value):
     async with get_connection() as conn:
         await conn.execute(
             "INSERT INTO candidate (package, suite, command, context, value) "

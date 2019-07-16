@@ -49,14 +49,16 @@ async def get_queue(only_command=None, limit=None):
                 expecting = (
                     'expecting to fix: ' +
                     ', '.join(
-                        map(lintian_tag_link, entry.env['CONTEXT'].split(' '))))
+                        map(lintian_tag_link,
+                            entry.env['CONTEXT'].split(' '))))
         else:
-            raise AssertionError('invalid command %s' % command)
+            raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:
             description = expecting
         elif expecting is not None:
             description += ", " + expecting
-        data.append((entry.env['PACKAGE'], description, entry.estimated_duration))
+        data.append(
+            (entry.env['PACKAGE'], description, entry.estimated_duration))
 
     return data
 

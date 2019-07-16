@@ -432,23 +432,13 @@ async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
     possible_transports = []
 
     for (pkg, command, build_version, result_code, context,
-         start_time, log_id, revision,
-         subworker_result, branch_name, maintainer_email, main_branch_url,
+         start_time, log_id, revision, subworker_result, branch_name, suite,
+         maintainer_email, uploader_emails, main_branch_url,
          main_branch_revision) in await state.iter_publish_ready():
-        # TODO(jelmer): uploader_emails ??
-        uploader_emails = []
-        if command == 'new-upstream':
-            policy_name = 'new_upstream_releases'
-        elif command == 'lintian-brush':
-            policy_name = 'lintian_brush'
-        elif command == 'new-upstream --snapshot':
-            policy_name = 'new_upstream_snapshots'
-        else:
-            raise AssertionError('unknown command %r' % command)
 
         mode, unused_update_changelog, unused_committer = apply_policy(
-            policy, policy_name, pkg, maintainer_email,
-            uploader_emails)
+            policy, suite.replace('-', '_'), pkg, maintainer_email,
+            uploader_emails or [])
         if mode in (MODE_BUILD_ONLY, MODE_SKIP):
             continue
         if await state.already_published(
@@ -562,6 +552,10 @@ def main(argv=None):
     parser.add_argument(
         '--port', type=int,
         help='Listen port', default=9912)
+    parser.add_argument(
+        '--publish-pending-interval', type=int,
+        help=('Seconds to wait in between publishing '
+              'pending proposals'), default=7200)
 
     args = parser.parse_args()
 
@@ -585,7 +579,8 @@ def main(argv=None):
         loop.run_until_complete(asyncio.gather(
             loop.create_task(process_queue_loop(
                 publisher, policy, dry_run=args.dry_run,
-                vcs_directory=args.vcs_result_dir, interval=600)),
+                vcs_directory=args.vcs_result_dir,
+                interval=args.publish_pending_interval)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, publisher,

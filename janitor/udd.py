@@ -48,7 +48,7 @@ async def connect_udd_mirror():
 
 
 def extract_uploader_emails(uploaders):
-    return ([parseaddr(p)[0] for p in uploaders.split(',')]
+    return ([parseaddr(p)[1] for p in uploaders.split(',')]
             if uploaders else [])
 
 
@@ -223,4 +223,5 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
         return (row is not None)
 
     async def popcon(self):
-        return await self._conn.fetch("SELECT package, insts, vote FROM popcon")
+        return await self._conn.fetch(
+            "SELECT package, insts, vote FROM popcon")
