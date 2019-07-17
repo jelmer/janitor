@@ -121,3 +121,44 @@ async def iter_lintian_fixes_candidates(
         value += len(tags) * LINTIAN_BRUSH_TAG_VALUE
         context = ' '.join(sorted(tags))
         yield package, 'lintian-fixes', ['lintian-brush'], context, value
+
+
+async def main():
+    import argparse
+    from janitor import state
+    from silver_platter.debian.lintian import (
+        available_lintian_fixers,
+        DEFAULT_ADDON_FIXERS,
+    )
+
+    parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
+    parser.add_argument("packages", nargs='*')
+    parser.add_argument("--fixers",
+                        help="Fixers to run.", type=str, action='append')
+    parser.add_argument("--policy",
+                        help="Policy file to read.", type=str,
+                        default='policy.conf')
+    parser.add_argument("--dry-run",
+                        help="Create branches but don't push or propose anything.",
+                        action="store_true", default=False)
+    parser.add_argument('--propose-addon-only',
+                        help='Fixers that should be considered add-on-only.',
+                        type=str, action='append',
+                        default=DEFAULT_ADDON_FIXERS)
+    parser.add_argument('--prometheus', type=str,
+                        help='Prometheus push gateway to export to.')
+    args = parser.parse_args()
+
+    tags = set()
+    for fixer in available_lintian_fixers():
+        tags.update(fixer.lintian_tags)
+
+    async for package, suite, command, context, value in iter_lintian_fixes_candidates(
+            args.packages, tags, args.propose_addon_only):
+        await state.store_candidate(package.name, suite, command, context, value)
+
+
+if __name__ == '__main__':
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
