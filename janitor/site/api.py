@@ -130,13 +130,14 @@ async def handle_queue(request):
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async for (queue_id, branch_url, run_env, command) in state.iter_queue(
+    async for entry in state.iter_queue(
             limit=limit):
         response_obj.append({
-            'queue_id': queue_id,
-            'branch_url': branch_url,
-            'env': run_env,
-            'command': command})
+            'queue_id': entry.id,
+            'branch_url': entry.branch_url,
+            'package': entry.package,
+            'env': entry.env,
+            'command': entry.command})
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=60'})
 
