@@ -752,3 +752,9 @@ async def store_candidate(package, suite, command, context, value):
             "DO UPDATE SET command = EXCLUDED.command, "
             "context = EXCLUDED.context, value = EXCLUDED.value",
             package, suite, command, context, value)
+
+
+async def iter_all_candidates():
+    async with get_connection() as conn:
+        return await conn.fetch(
+            "SELECT package, suite, command, context, value FROM candidate")
