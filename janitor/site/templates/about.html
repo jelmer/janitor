@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block page_title %}About{% endblock %}
+{% block body %}
+<div class="section" id="about">
+<h1>About</h1>
+<p>The initial version of the Debian Janitor was written by <a href="https://www.jelmer.uk/">Jelmer Vernooĳ</a>.</p>
+
+<p>This project would not have been possible without several large efforts and projects across Debian:</p>
+
+<ul>
+<li><a class="reference external" href="https://www.debian.org/doc/debian-policy/ch-controlfields.html#version-control-system-vcs-fields">Vcs Headers</a> allow the finding the version control repositories.</li>
+<li>The migration from Alioth to <a class="reference external" href="https://salsa.debian.org/">Salsa</a> means that it's now possible to submit merge proposals for the vast majority of Debian packages.</li>
+<li><a class="reference external" href="https://lintian.debian.org/">Lintian</a> and its archive-wide run make it possible to process packages with specific issues, without having to download the full archive.</li>
+<li><a class="reference external" href="https://wiki.debian.org/UpstreamMetadata">UpstreamMetadata</a> allows easily finding upstream repository locations.</li>
+<li><a class="reference external" href="https://wiki.debian.org/UScan">UScan</a> allows easily finding new upstream releases.</li>
+<li><a class="reference external" href="https://wiki.debian.org/UltimateDebianDatabase/">UDD</a> makes it possible to find package VCS URLs, packages with new upstream releases and lintian results easily.</li>
+</ul>
+
+</div>
+{% endblock %}

@@ -230,6 +230,7 @@ if __name__ == '__main__':
     for path, templatename in [
             ('/', 'index.html'),
             ('/contact', 'contact.html'),
+            ('/about', 'about.html'),
             ('/credentials', 'credentials.html'),
             ('/apt', 'apt.html'),
             ('/cupboard/', 'cupboard.html')]:
