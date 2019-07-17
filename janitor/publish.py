@@ -68,7 +68,7 @@ from .vcs import get_local_vcs_branch
 
 JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot
-(https://janitor.debian.net/).
+(https://janitor.debian.net/%(suite)s).
 
 You can follow up to this merge proposal as you normally would.
 """
@@ -110,13 +110,13 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-def strip_janitor_blurb(text):
-    return text[:text.index(JANITOR_BLURB)]
+def strip_janitor_blurb(text, suite):
+    return text[:text.index(JANITOR_BLURB % {'suite': suite})]
 
 
-def add_janitor_blurb(text, pkg, log_id):
-    text += JANITOR_BLURB
-    text += (LOG_BLURB % {'package': pkg, 'log_id': log_id})
+def add_janitor_blurb(text, pkg, log_id, suite):
+    text += (JANITOR_BLURB % {'suite': suite})
+    text += (LOG_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
     return text
 
 
@@ -232,7 +232,7 @@ class Publisher(object):
                 >= self._max_mps_per_maintainer
 
     async def publish(
-            self, pkg, maintainer_email, subrunner, mode, hoster,
+            self, suite, pkg, maintainer_email, subrunner, mode, hoster,
             main_branch, local_branch, resume_branch=None,
             dry_run=False, log_id=None, existing_proposal=None):
         if self._check_limit(maintainer_email) and \
@@ -255,12 +255,12 @@ class Publisher(object):
             if existing_proposal:
                 existing_description = existing_proposal.get_description()
                 existing_description = strip_janitor_blurb(
-                    existing_description)
+                    existing_description, suite)
             else:
                 existing_description = None
             description = subrunner.get_proposal_description(
                 existing_description)
-            return add_janitor_blurb(description, pkg, log_id)
+            return add_janitor_blurb(description, pkg, log_id, suite)
 
         def get_proposal_commit_message(existing_proposal):
             if existing_proposal:
@@ -363,7 +363,7 @@ class NewUpstreamPublisher(object):
 
 
 async def publish_one(
-        pkg, publisher, command, subworker_result, main_branch_url,
+        suite, pkg, publisher, command, subworker_result, main_branch_url,
         mode, log_id, maintainer_email, vcs_directory, branch_name,
         dry_run=False, possible_hosters=None,
         possible_transports=None):
@@ -418,7 +418,7 @@ async def publish_one(
             existing_proposal = None
 
     proposal, is_new = await publisher.publish(
-        pkg, maintainer_email,
+        suite, pkg, maintainer_email,
         subrunner, mode, hoster, main_branch, local_branch,
         resume_branch,
         dry_run=dry_run, log_id=log_id,
@@ -447,7 +447,7 @@ async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
             proposal, branch_name = await publish_one(
-                pkg, publisher, command, subworker_result,
+                suite, pkg, publisher, command, subworker_result,
                 main_branch_url, mode, log_id, maintainer_email,
                 vcs_directory=vcs_directory, branch_name=branch_name,
                 dry_run=dry_run, possible_hosters=possible_hosters,
@@ -482,7 +482,7 @@ async def publish_request(publisher, dry_run, vcs_directory, request):
         return web.json_response({}, status=400)
     try:
         proposal, branch_name = await publish_one(
-            package, publisher, run.command, run.result,
+            suite, package, publisher, run.command, run.result,
             main_branch_url, mode, run.id, maintainer_email,
             vcs_directory=vcs_directory, branch_name=run.branch_name,
             dry_run=dry_run)
