@@ -296,12 +296,13 @@ LEFT JOIN publish ON publish.merge_proposal_url = merge_proposal.url
 
 class QueueItem(object):
 
-    __slots__ = ['id', 'branch_url', 'env', 'command', 'estimated_duration',
-                 'suite']
+    __slots__ = ['id', 'branch_url', 'package', 'env', 'command',
+                 'estimated_duration', 'suite']
 
-    def __init__(self, id, branch_url, env, command, estimated_duration,
-                 suite):
+    def __init__(self, id, branch_url, package, env, command,
+                 estimated_duration, suite):
         self.id = id
+        self.package = package
         self.branch_url = branch_url
         self.env = env
         self.command = command
@@ -314,37 +315,27 @@ class QueueItem(object):
             command, context, queue_id, estimated_duration,
             suite) = row
         env = {
-            'PACKAGE': package,
             'COMMITTER': committer or None,
             'CONTEXT': context,
         }
         return cls(
-                id=queue_id, branch_url=branch_url, env=env,
+                id=queue_id, branch_url=branch_url,
+                package=package, env=env,
                 command=shlex.split(command),
                 estimated_duration=estimated_duration,
                 suite=suite)
 
-    def __len__(self):
-        return len(self.__slots__)
-
-    def __tuple__(self):
-        return (self.id, self.branch_url, self.env, self.command,
+    def _tuple(self):
+        return (self.id, self.branch_url, self.package, self.env, self.command,
                 self.estimated_duration, self.suite)
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
-            return tuple(self) == tuple(other)
-        if isinstance(other, tuple):
             return self.id == other.id
         return False
 
     def __lt__(self, other):
-        return tuple(self) < tuple(other)
-
-    def __getitem__(self, i):
-        if isinstance(i, slice):
-            return tuple(self).__getitem__(i)
-        return getattr(self, self.__slots__[i])
+        return self.id < other.id
 
 
 async def iter_queue(limit=None):

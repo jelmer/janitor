@@ -199,13 +199,12 @@ async def invoke_subprocess_worker(
 
 
 async def process_one(
-        worker_kind, vcs_url, env, command, build_command,
+        worker_kind, vcs_url, pkg, env, command, build_command,
         suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False):
-    pkg = env['PACKAGE']
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
@@ -371,7 +370,7 @@ async def process_queue(
         start_time = datetime.now()
 
         result = await process_one(
-            worker_kind, item.branch_url, item.env, item.command,
+            worker_kind, item.branch_url, item.package, item.env, item.command,
             suite=item.suite, pre_check=pre_check,
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
@@ -380,7 +379,7 @@ async def process_queue(
         finish_time = datetime.now()
         if not dry_run:
             await state.store_run(
-                result.log_id, item.env['PACKAGE'], item.branch_url,
+                result.log_id, item.package, item.branch_url,
                 start_time, finish_time, item.command,
                 result.description,
                 item.env.get('CONTEXT'),
