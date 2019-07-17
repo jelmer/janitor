@@ -59,7 +59,7 @@ async def _ensure_package(conn, name, vcs_url, maintainer_email,
 
 
 async def store_run(
-        run_id, name, vcs_url, maintainer_email, uploader_emails,
+        run_id, name, vcs_url,
         start_time, finish_time,
         command, description, instigated_context, context,
         main_branch_revision, result_code, build_version,
@@ -69,8 +69,6 @@ async def store_run(
     :param run_id: Run id
     :param name: Package name
     :param vcs_url: Upstream branch URL
-    :param maintainer_email: Maintainer email
-    :param uploader_emails: List of maintainer email addresses
     :param start_time: Start time
     :param finish_time: Finish time
     :param command: Command
@@ -87,8 +85,6 @@ async def store_run(
     :param suite: Suite
     """
     async with get_connection() as conn:
-        await _ensure_package(
-            conn, name, vcs_url, maintainer_email, uploader_emails)
         await conn.execute(
             "INSERT INTO run (id, command, description, result_code, "
             "start_time, finish_time, package, instigated_context, context, "
@@ -314,13 +310,11 @@ class QueueItem(object):
 
     @classmethod
     def from_row(cls, row):
-        (branch_url, maintainer_email, uploader_emails, package, committer,
+        (branch_url, package, committer,
             command, context, queue_id, estimated_duration,
             suite) = row
         env = {
             'PACKAGE': package,
-            'MAINTAINER_EMAIL': maintainer_email,
-            'UPLOADER_EMAILS': ','.join(uploader_emails),
             'COMMITTER': committer or None,
             'CONTEXT': context,
         }
@@ -357,8 +351,6 @@ async def iter_queue(limit=None):
     query = """
 SELECT
     package.branch_url,
-    package.maintainer_email,
-    package.uploader_emails,
     package.name,
     queue.committer,
     queue.command,

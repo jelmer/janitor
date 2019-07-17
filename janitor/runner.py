@@ -381,8 +381,6 @@ async def process_queue(
         if not dry_run:
             await state.store_run(
                 result.log_id, item.env['PACKAGE'], item.branch_url,
-                item.env['MAINTAINER_EMAIL'],
-                item.env['UPLOADER_EMAILS'].split(','),
                 start_time, finish_time, item.command,
                 result.description,
                 item.env.get('CONTEXT'),
