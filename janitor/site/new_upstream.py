@@ -29,6 +29,8 @@ async def generate_pkg_file(package, suite):
         for (package, url, status, revision) in
         await state.iter_proposals(package)]
     run = await state.get_last_success(package, suite)
+    candidate_command, candidate_context, candidate_value = await state.get_candidate(
+            package, suite)
     if not run:
         command = None
         build_version = None
@@ -63,6 +65,8 @@ async def generate_pkg_file(package, suite):
         'run_id': run_id,
         'result': result,
         'suite': suite,
+        'candidate_version': candidate_context,
+        'candidate_value': candidate_value,
         'previous_runs': previous_runs,
         }
     if run and run.build_version:
