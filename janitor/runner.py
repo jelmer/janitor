@@ -369,8 +369,11 @@ async def process_queue(
     async def process_queue_item(item):
         start_time = datetime.now()
 
+        env = dict(item.env.items())
+        env['PACKAGE'] = item.package
+
         result = await process_one(
-            worker_kind, item.branch_url, item.package, item.env, item.command,
+            worker_kind, item.branch_url, item.package, env, item.command,
             suite=item.suite, pre_check=pre_check,
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
