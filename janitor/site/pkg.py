@@ -97,7 +97,12 @@ async def generate_run_file(logfile_manager, run):
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['enumerate'] = enumerate
-    kwargs['show_diff'] = lambda: get_run_diff(run).decode('utf-8', 'replace')
+    def show_diff():
+        diff = get_run_diff(run)
+        if diff is None:
+            return None
+        return diff.decode('utf-8', 'replace')
+    kwargs['show_diff'] = show_diff
     kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
     kwargs['suite'] = {

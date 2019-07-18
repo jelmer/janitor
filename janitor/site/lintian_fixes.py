@@ -49,6 +49,11 @@ async def generate_pkg_file(package):
     candidate_command, candidate_context, candidate_value = await state.get_candidate(
             package, suite)
     previous_runs = [x async for x in state.iter_previous_runs(package, suite)]
+    def show_diff():
+        diff = get_run_diff(run)
+        if diff is None:
+            return None
+        return diff.decode('utf-8', 'replace')
     kwargs = {
         'package': package,
         'merge_proposals': merge_proposals,
@@ -64,7 +69,7 @@ async def generate_pkg_file(package):
         'run_id': run_id,
         'result': result,
         'suite': suite,
-        'show_diff': lambda: get_run_diff(run).decode('utf-8'),
+        'show_diff': show_diff,
         'highlight_diff': highlight_diff,
         'branch_name': branch_name,
         'previous_runs': previous_runs,
