@@ -6,7 +6,7 @@
 <h1>Lintian Fixes - Candidates</h1>
 
 <ul>
-{% for package, tags in candidates %}
+{% for package, tags, value in candidates %}
 <li><a href="/lintian-fixes/pkg/{{ package.name }}">{{ package.name }}</a> - {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
 {% endfor %}
 </ul>

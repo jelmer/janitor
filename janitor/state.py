@@ -737,10 +737,14 @@ async def store_candidate(package, suite, command, context, value):
             package, suite, command, context, value)
 
 
-async def iter_all_candidates():
+async def iter_candidates(suite=None):
+    query = "SELECT package, suite, command, context, value FROM candidate"
+    args = []
+    if suite is not None:
+        query += " WHERE suite = $1"
+        args.append(suite)
     async with get_connection() as conn:
-        return await conn.fetch(
-            "SELECT package, suite, command, context, value FROM candidate")
+        return await conn.fetch(query, *args)
 
 
 async def get_candidate(package, suite):
