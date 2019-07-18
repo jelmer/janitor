@@ -9,8 +9,10 @@
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
 <li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
+{% if candidate_tags %}
 <li>Tags that might be fixable: {% for tag in candidate_tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}</li>
 <!-- Candidate value: {{ candidate_value }} -->
+{% endif %}
 </ul>
 
 {{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
