@@ -47,6 +47,11 @@ No successful merges for {{ package }}
 
 {% endif %}
 
+{% if candidate_version %}
+<p>A new upstream version is available: <b>{{ candidate_version }}</b></p>
+<!-- Candidate value: {{ candidate_value }} -->
+{% endif %}
+
 {{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
 
 {{ publish_buttons(suite, package, "#commandResult") }}
