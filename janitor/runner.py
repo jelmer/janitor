@@ -400,7 +400,7 @@ async def process_queue(
     todo = set()
     async for item in state.iter_queue(limit=concurrency):
         todo.add(process_queue_item(item))
-        started.add(item[0])
+        started.add(item.id)
 
     def handle_sigterm():
         global concurrency
@@ -423,10 +423,10 @@ async def process_queue(
             if concurrency:
                 for i in enumerate(done):
                     async for item in state.iter_queue(limit=concurrency):
-                        if item[0] in started:
+                        if item.id in started:
                             continue
                         todo.add(process_queue_item(item))
-                        started.add(item[0])
+                        started.add(item.id)
     finally:
         loop.remove_signal_handler(signal.SIGTERM)
 
