@@ -29,8 +29,12 @@ async def generate_pkg_file(package, suite):
         for (package, url, status, revision) in
         await state.iter_proposals(package)]
     run = await state.get_last_success(package, suite)
-    candidate_command, candidate_context, candidate_value = await state.get_candidate(
-            package, suite)
+    candidate = await state.get_candidate(package, suite)
+    if candidate is not None:
+        candidate_command, candidate_context, candidate_value = candidate
+    else:
+        candidate_context = None
+        candidate_value = None
     if not run:
         command = None
         build_version = None

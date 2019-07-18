@@ -48,8 +48,12 @@ async def generate_pkg_file(package):
         run_id = run.id
         result = run.result
         branch_name = run.branch_name
-    candidate_command, candidate_context, candidate_value = await state.get_candidate(
-            package, SUITE)
+    candidate = await state.get_candidate(package, SUITE)
+    if candidate is not None:
+        candidate_command, candidate_context, candidate_value = candidate
+    else:
+        candidate_context = None
+        candidate_value = None
     previous_runs = [x async for x in state.iter_previous_runs(package, SUITE)]
     def show_diff():
         diff = get_run_diff(run)
