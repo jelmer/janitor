@@ -12,8 +12,10 @@ from silver_platter.debian.lintian import (
     )
 
 
+SUITE = 'lintian-fixes'
+
+
 async def generate_pkg_file(package):
-    suite = 'lintian-fixes'
     try:
         (package, maintainer_email, uploader_emails, vcs_url) = list(
             await state.iter_packages(package=package))[0]
@@ -24,7 +26,7 @@ async def generate_pkg_file(package):
         (url, status)
         for (package, url, status, revision) in
         await state.iter_proposals(package)]
-    run = await state.get_last_success(package, suite)
+    run = await state.get_last_success(package, SUITE)
     if run is None:
         # No runs recorded
         command = None
@@ -47,8 +49,8 @@ async def generate_pkg_file(package):
         result = run.result
         branch_name = run.branch_name
     candidate_command, candidate_context, candidate_value = await state.get_candidate(
-            package, suite)
-    previous_runs = [x async for x in state.iter_previous_runs(package, suite)]
+            package, SUITE)
+    previous_runs = [x async for x in state.iter_previous_runs(package, SUITE)]
     def show_diff():
         diff = get_run_diff(run)
         if diff is None:
@@ -68,7 +70,7 @@ async def generate_pkg_file(package):
         'finish_time': finish_time,
         'run_id': run_id,
         'result': result,
-        'suite': suite,
+        'suite': SUITE,
         'show_diff': show_diff,
         'highlight_diff': highlight_diff,
         'branch_name': branch_name,
@@ -99,7 +101,9 @@ async def generate_candidates():
     supported_tags = set()
     for fixer in available_lintian_fixers():
         supported_tags.update(fixer.lintian_tags)
-    candidates = list(await state.iter_candidates('lintian-fixes'))
+    candidates = [(package, context.split(' '), value) for
+                  (package, suite, command, context, value) in
+                  await state.iter_candidates('lintian-fixes')]
     return await template.render_async(
         supported_tags=supported_tags, candidates=candidates)
 
