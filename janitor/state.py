@@ -741,3 +741,10 @@ async def iter_all_candidates():
     async with get_connection() as conn:
         return await conn.fetch(
             "SELECT package, suite, command, context, value FROM candidate")
+
+
+async def get_candidate(package, suite):
+    async with get_connection() as conn:
+        return await conn.fetchrow(
+            "SELECT command, context, value FROM candidate "
+            "WHERE package = $1 AND suite = $2", package, suite)

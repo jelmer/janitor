@@ -46,6 +46,8 @@ async def generate_pkg_file(package):
         run_id = run.id
         result = run.result
         branch_name = run.branch_name
+    candidate_command, candidate_context, candidate_value = await state.get_candidate(
+            package, suite)
     previous_runs = [x async for x in state.iter_previous_runs(package, suite)]
     kwargs = {
         'package': package,
@@ -67,6 +69,9 @@ async def generate_pkg_file(package):
         'branch_name': branch_name,
         'previous_runs': previous_runs,
         'run': run,
+        'candidate_context': candidate_context,
+        'candidate_tags': candidate_context.split(' ') if candidate_context else None,
+        'candidate_value': candidate_value,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)
