@@ -2,12 +2,12 @@
 {% from "lintian-fixes-util.html" import lintian_tag_link %}
 {% block page_title %}Lintian Fixes - Candidates{% endblock %}
 {% block body %}
-<div class="section" id="{{ package }}">
+<div class="section" id="candidates">
 <h1>Lintian Fixes - Candidates</h1>
 
 <ul>
 {% for package, tags, value in candidates %}
-<li><a href="/lintian-fixes/pkg/{{ package.name }}">{{ package.name }}</a> - {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
+<li><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a> - {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
 {% endfor %}
 </ul>
 
