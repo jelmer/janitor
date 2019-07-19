@@ -46,7 +46,9 @@ Nothing to do for {{ package }}.</p>
 <div class="section" id="ready-changes">
 <h2>Ready changes</h2>
 
+{% if branch_name %}
 {{ publish_buttons(suite, package, "#commandResult") }}
+{% endif %}
 
 {{ merge_command(package, branch_name, vcs) }}
 
