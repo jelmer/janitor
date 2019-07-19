@@ -393,7 +393,7 @@ class MissingPerlModule(object):
             other.filename == other.filename
 
     def __str__(self):
-        return "Missing Perl module: " % self.module
+        return "Missing Perl module: %s" % self.module
 
     def __repr__(self):
         return "%s(%r, %r)" % (
