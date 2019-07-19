@@ -55,6 +55,7 @@ async def generate_pkg_file(package):
         candidate_context = None
         candidate_value = None
     previous_runs = [x async for x in state.iter_previous_runs(package, SUITE)]
+
     def show_diff():
         diff = get_run_diff(run)
         if diff is None:
@@ -81,7 +82,8 @@ async def generate_pkg_file(package):
         'previous_runs': previous_runs,
         'run': run,
         'candidate_context': candidate_context,
-        'candidate_tags': candidate_context.split(' ') if candidate_context else None,
+        'candidate_tags':
+            candidate_context.split(' ') if candidate_context else None,
         'candidate_value': candidate_value,
         }
     template = env.get_template('lintian-fixes-package.html')
