@@ -9,9 +9,9 @@
 {% if not result_code %}
 
 {% if previous_runs and previous_runs[0].result_code == 'nothing-to-do' %}
-Nothing to do for {{ package }}
+<p>Nothing to do for {{ package }}</p>
 {% else %}
-No successful merges for {{ package }}
+<p>No successful merges for {{ package }}</p>
 {% endif %}
 
 {% else %}
