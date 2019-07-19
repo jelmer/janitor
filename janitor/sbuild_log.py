@@ -365,6 +365,21 @@ def dh_with_order(m):
     return DhWithOrderIncorrect()
 
 
+class NoSpaceOnDevice(object):
+
+    kind = 'no-space-on-device'
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return "No space on device"
+
+
+def install_no_space(m):
+    return NoSpaceOnDevice()
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -405,6 +420,7 @@ build_failure_regexps = [
      pkg_config_missing),
     (r'dh: Unknown sequence --with '
      r'\(options should not come before the sequence\)', dh_with_order),
+    (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
 ]
 
 compiled_build_failure_regexps = [

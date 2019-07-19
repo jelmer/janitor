@@ -24,6 +24,7 @@ from janitor.sbuild_log import (
     MissingNodeModule,
     MissingCommand,
     MissingPkgConfig,
+    NoSpaceOnDevice,
     DhWithOrderIncorrect,
     )
 import unittest
@@ -167,3 +168,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'dh: Unknown sequence --with '
             '(options should not come before the sequence)'], 1,
             DhWithOrderIncorrect())
+
+    def test_no_disk_space(self):
+        self.run_test([
+            '/usr/bin/install: error writing \''
+            '/<<PKGBUILDDIR>>/debian/tmp/usr/lib/gcc/'
+            'x86_64-linux-gnu/8/cc1objplus\': No space left on device'], 1,
+            NoSpaceOnDevice())
