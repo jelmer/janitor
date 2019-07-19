@@ -379,6 +379,31 @@ def install_no_space(m):
     return NoSpaceOnDevice()
 
 
+class MissingPerlModule(object):
+
+    kind = 'missing-perl-module'
+
+    def __init__(self, filename, module):
+        self.filename = filename
+        self.module = module
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            other.module == self.module and \
+            other.filename == other.filename
+
+    def __str__(self):
+        return "Missing Perl module: " % self.module
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.filename, self.module)
+
+
+def perl_missing_module(m):
+    return MissingPerlModule(m.group(1), m.group(2))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -420,17 +445,23 @@ build_failure_regexps = [
     (r'dh: Unknown sequence --with '
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
+    (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
+     r'(.*) module\) \(@INC contains: .*\) at .* line .*.',
+     perl_missing_module),
 ]
 
 compiled_build_failure_regexps = [
     (re.compile(regexp), cb) for (regexp, cb) in build_failure_regexps]
 
 
+LOOK_BACK = 50
+
+
 def strip_useless_build_tail(lines):
     # Strip off unuseful tail
-    for i, line in enumerate(lines[-15:]):
+    for i, line in enumerate(lines[-LOOK_BACK:]):
         if line.startswith('Build finished at '):
-            lines = lines[:len(lines)-(15-i)]
+            lines = lines[:len(lines)-(LOOK_BACK-i)]
             if lines and lines[-1] == ('-' * 80 + '\n'):
                 lines = lines[:-1]
             break
