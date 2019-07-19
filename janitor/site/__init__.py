@@ -57,11 +57,14 @@ def get_local_vcs_repo(package):
 
 def get_run_diff(run):
     from breezy.diff import show_diff_trees
-    from breezy.errors import NoSuchRevision
+    from breezy.errors import NoSuchRevision, NotBranchError
     from io import BytesIO
 
     f = BytesIO()
-    repo = get_local_vcs_repo(run.package)
+    try:
+        repo = get_local_vcs_repo(run.package)
+    except NotBranchError:
+        return b'VCS repository for %s inaccessible' % run.package
     if repo is None:
         return None
     try:
