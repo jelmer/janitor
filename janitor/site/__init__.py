@@ -28,7 +28,7 @@ def format_duration(duration):
 
 
 def format_timestamp(ts):
-    return str(ts)
+    return ts.isoformat(timespec='minutes')
 
 
 env = Environment(
