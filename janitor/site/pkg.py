@@ -3,6 +3,7 @@
 import functools
 import os
 
+from breezy.errors import NotBranchError
 from janitor import state
 from janitor.build import (
     changes_filename,
@@ -120,7 +121,10 @@ async def generate_run_file(logfile_manager, run):
             get_build_architecture())
     else:
         kwargs['changes_name'] = None
-    repo = get_local_vcs_repo(run.package)
+    try:
+        repo = get_local_vcs_repo(run.package)
+    except NotBranchError:
+        repo = None
     if repo:
         kwargs['vcs'] = get_vcs_abbreviation(repo)
     else:
