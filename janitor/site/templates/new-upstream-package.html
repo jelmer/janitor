@@ -6,6 +6,12 @@
 <div class="section" id="{{ package }}">
 <h1>New Upstream {% if suite == 'fresh-snapshots' %}Snapshot{% else %}Release{% endif %} - {{ package }}</h1>
 
+<ul class="simple">
+<li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
+<li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+<li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
+</ul>
+
 {% if not result_code %}
 
 {% if previous_runs and previous_runs[0].result_code == 'nothing-to-do' %}
