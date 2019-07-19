@@ -60,7 +60,9 @@
 
 {{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
 
+{% if branch_name %}
 {{ publish_buttons(suite, package, "#commandResult") }}
+{% endif %}
 
 <div id="commandResult"></div>
 

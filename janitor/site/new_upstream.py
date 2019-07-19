@@ -44,6 +44,7 @@ async def generate_pkg_file(package, suite):
         finish_time = None
         run_id = None
         result = None
+        branch_name = None
     else:
         command = run.command
         build_version = run.build_version
@@ -53,6 +54,7 @@ async def generate_pkg_file(package, suite):
         finish_time = run.times[1]
         run_id = run.id
         result = run.result
+        branch_name = run.branch_name
     previous_runs = [x async for x in state.iter_previous_runs(package, suite)]
     kwargs = {
         'package': package,
@@ -72,6 +74,7 @@ async def generate_pkg_file(package, suite):
         'candidate_version': candidate_context,
         'candidate_value': candidate_value,
         'previous_runs': previous_runs,
+        'branch_name': branch_name,
         }
     if run and run.build_version:
         kwargs['changes_name'] = changes_filename(
