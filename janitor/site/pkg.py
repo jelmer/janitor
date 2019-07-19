@@ -7,7 +7,6 @@ from breezy.errors import NotBranchError
 from janitor import state
 from janitor.build import (
     changes_filename,
-    get_build_architecture,
 )
 from janitor.logs import LogFileManager
 from janitor.sbuild_log import (
@@ -20,6 +19,7 @@ from janitor.sbuild_log import (
 from janitor.site import (
     changes_get_binaries,
     env,
+    get_build_architecture,
     get_changes_path,
     get_local_vcs_repo,
     get_run_diff,
