@@ -174,7 +174,8 @@ upstream.upstream_version from upstream \
 INNER JOIN sources on upstream.version = sources.version \
 AND upstream.source = sources.source where \
 status = 'newer package available' AND \
-sources.vcs_url != '' \
+sources.vcs_url != '' AND \
+source.release = 'sid'
 """
         if packages is not None:
             query += " AND upstream.source = any($1::text[])"
@@ -193,7 +194,8 @@ sources.vcs_url != '' \
 SELECT DISTINCT ON (sources.source)
 sources.source, sources.version, sources.vcs_type, sources.vcs_url,
 sources.maintainer_email, sources.uploaders from sources
-where sources.vcs_url != '' and position('-' in sources.version) > 0
+where sources.vcs_url != '' and position('-' in sources.version) > 0 AND
+source.release = 'sid'
 """
         if packages is not None:
             query += " AND sources.source = any($1::text[])"
@@ -207,7 +209,7 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
                 )
 
     async def get_popcon_score(self, package):
-        query = "SELECT insts FROM sources_popcon WHERE name = $1"
+        query = "SELECT insts FROM sources_popcon WHERE source = $1"
         row = await self._conn.fetchrow(query, package)
         if row:
             return row[0]
@@ -224,4 +226,4 @@ where sources.vcs_url != '' and position('-' in sources.version) > 0
 
     async def popcon(self):
         return await self._conn.fetch(
-            "SELECT package, insts, vote FROM popcon")
+            "SELECT source, insts, vote FROM sources_popcon")
