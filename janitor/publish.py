@@ -492,7 +492,8 @@ async def publish_request(publisher, dry_run, vcs_directory, request):
 
     return web.json_response(
         {'branch_name': branch_name,
-         'proposal': proposal.url if proposal else None})
+         'mode': mode,
+         'proposal': proposal.url if proposal else None}, status=200)
 
 
 async def run_web_server(listen_addr, port, publisher, vcs_directory,
