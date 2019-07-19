@@ -23,6 +23,9 @@ import asyncpg
 from contextlib import asynccontextmanager
 
 
+DEFAULT_URL = 'postgresq://janitor@brangwain.vpn.jelmer.uk:5432/janitor'
+
+
 pool = None
 
 
@@ -30,11 +33,7 @@ pool = None
 async def get_connection():
     global pool
     if pool is None:
-        pool = await asyncpg.create_pool(
-            database="janitor",
-            user="janitor",
-            port=5432,
-            host="brangwain.vpn.jelmer.uk")
+        pool = await asyncpg.create_pool(DEFAULT_URL)
 
     async with pool.acquire() as conn:
         await conn.set_type_codec(
