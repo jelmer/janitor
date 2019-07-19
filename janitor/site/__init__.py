@@ -64,7 +64,8 @@ def get_run_diff(run):
     try:
         repo = get_local_vcs_repo(run.package)
     except NotBranchError:
-        return b'VCS repository for %s inaccessible' % run.package
+        return b'VCS repository for %s inaccessible' % (
+            run.package.encode('ascii'))
     if repo is None:
         return None
     try:
