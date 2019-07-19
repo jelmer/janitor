@@ -49,6 +49,7 @@ from .sbuild_log import (
     MissingCommand,
     MissingFile,
     MissingGoPackage,
+    MissingPerlModule,
     SbuildFailure,
     )
 from .trace import note, warning
@@ -273,6 +274,15 @@ def fix_missing_file(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_perl_module(tree, error, committer=None):
+    package = get_package_for_paths(
+        [os.path.join('/usr/share/perl5', error.filename)],
+        regex=False)
+    if package is None:
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingCHeader, fix_missing_c_header),
@@ -280,6 +290,7 @@ FIXERS = [
     (MissingCommand, fix_missing_command),
     (MissingFile, fix_missing_file),
     (MissingGoPackage, fix_missing_go_package),
+    (MissingPerlModule, fix_missing_perl_module),
 ]
 
 
