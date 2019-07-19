@@ -5,7 +5,7 @@ janitor/policy_pb2.py: janitor/policy.proto
 
 check:
 	flake8
-	PYTHONPATH=.:silver-platter:lintian-brush python3 setup.py test
+	PYTHONPATH=.:silver-platter:lintian-brush:breezy python3 setup.py test
 
 janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
