@@ -51,13 +51,12 @@ class DpkgSourceLocalChanges(object):
         return "Tree has local changes."
 
 
-def worker_failure_from_sbuild_log(build_log_path):
+def worker_failure_from_sbuild_log(f):
     paragraphs = {}
-    with open(build_log_path, 'rb') as f:
-        for title, offsets, lines in parse_sbuild_log(f):
-            if title is not None:
-                title = title.lower()
-            paragraphs[title] = lines
+    for title, offsets, lines in parse_sbuild_log(f):
+        if title is not None:
+            title = title.lower()
+        paragraphs[title] = lines
     if len(paragraphs) == 1:
         if paragraphs[None][-4].startswith(
                 'dpkg-source: error: aborting due to unexpected upstream '

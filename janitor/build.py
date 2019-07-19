@@ -103,7 +103,8 @@ def attempt_build(
             build(local_tree, outf=f, build_command=build_command,
                   result_dir=output_directory, distribution=build_suite)
     except BuildFailedError:
-        raise worker_failure_from_sbuild_log(build_log_path)
+        with open(build_log_path, 'rb') as f:
+            raise worker_failure_from_sbuild_log(f)
 
     (cl_package, cl_version) = get_latest_changelog_version(local_tree)
     changes_name = changes_filename(
