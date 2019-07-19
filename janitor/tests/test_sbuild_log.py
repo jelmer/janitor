@@ -24,6 +24,7 @@ from janitor.sbuild_log import (
     MissingNodeModule,
     MissingCommand,
     MissingPkgConfig,
+    MissingPerlModule,
     NoSpaceOnDevice,
     DhWithOrderIncorrect,
     )
@@ -175,3 +176,15 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/<<PKGBUILDDIR>>/debian/tmp/usr/lib/gcc/'
             'x86_64-linux-gnu/8/cc1objplus\': No space left on device'], 1,
             NoSpaceOnDevice())
+
+    def test_missing_perl_module(self):
+        self.run_test([
+            'Converting tags.ledger... Can\'t locate String/Interpolate.pm in '
+            '@INC (you may need to install the String::Interpolate module) '
+            '(@INC contains: /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/'
+            '5.28.1 /usr/local/share/perl/5.28.1 /usr/lib/x86_64-linux-gnu/'
+            'perl5/5.28 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl/5.28 '
+            '/usr/share/perl/5.28 /usr/local/lib/site_perl '
+            '/usr/lib/x86_64-linux-gnu/perl-base) at '
+            '../bin/ledger2beancount line 23.'], 1,
+            MissingPerlModule('String/Interpolate.pm', 'String::Interpolate'))
