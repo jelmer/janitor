@@ -23,7 +23,7 @@ import asyncpg
 from contextlib import asynccontextmanager
 
 
-DEFAULT_URL = 'postgresq://janitor@brangwain.vpn.jelmer.uk:5432/janitor'
+DEFAULT_URL = 'postgresql://janitor@brangwain.vpn.jelmer.uk:5432/janitor'
 
 
 pool = None
