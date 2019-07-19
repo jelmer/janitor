@@ -245,6 +245,7 @@ if __name__ == '__main__':
         app.router.add_get(
             '/%s/ready' % suite,
             functools.partial(handle_ready_proposals, suite))
+        app.router.add_get('/%s/maintainer' % suite, handle_maintainer_list)
         app.router.add_get('/%s/pkg/' % suite, handle_pkg_list)
     app.router.add_get(
         '/{suite:' + '|'.join(SUITES) + '}'
