@@ -23,9 +23,9 @@
 $(function() {
   $("#reschedule").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {}, function(data) {
-      console.log('Scheduled: ' + data.priority);
+      console.log('Scheduled: ' + data.offset);
 {% if resultDiv %}
-      $("{{ resultDiv }}").append("Scheduled new run with priority " + data.priority + ".<br/>");
+      $("{{ resultDiv }}").append("Scheduled new run with offset " + data.offset + ".<br/>");
 {% endif %}
     }, 'json');
   });
