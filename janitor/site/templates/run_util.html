@@ -61,7 +61,7 @@ $(function() {
 
 {% macro install_commands(binary_packages, distribution) %}
 {% if binary_packages %}
-<p>Install this package (if you have the <a class="reference external" href="/{{ distribution }}">apt repository</a> enabled) by running one of:</p>
+<p>The resulting binary packages can be installed (if you have the <a class="reference external" href="/{{ distribution }}">apt repository</a> enabled) by running one of:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 {% for binary_package in binary_packages %}apt install -t {{ distribution }} {{ binary_package }}
 {% endfor %}</pre></div></div>
