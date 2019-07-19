@@ -203,6 +203,10 @@ async def generate_pkg_file(
     kwargs['merge_proposals'] = merge_proposals
     kwargs['builds'] = [run for run in runs if run.build_version]
     kwargs['runs'] = runs
+    kwargs['candidates'] = {
+        suite: (context, value)
+        for (package, suite, command, context, value) in
+        await uploader_await state.iter_candidates(package=name)}
     template = env.get_template('package-overview.html')
     return await template.render_async(**kwargs)
 

@@ -736,12 +736,18 @@ async def store_candidate(package, suite, command, context, value):
             package, suite, command, context, value)
 
 
-async def iter_candidates(suite=None):
+async def iter_candidates(package=None, suite=None):
     query = "SELECT package, suite, command, context, value FROM candidate"
     args = []
-    if suite is not None:
+    if suite is not None and package is not None:
+        query += " WHERE package = $1 AND suite = $2"
+        args.extend([package, suite])
+    elif suite is not None:
         query += " WHERE suite = $1"
         args.append(suite)
+    elif package is not None:
+        query += " WHERE package = $1"
+        args.append(package)
     async with get_connection() as conn:
         return await conn.fetch(query, *args)
 

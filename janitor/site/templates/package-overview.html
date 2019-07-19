@@ -10,6 +10,14 @@
 <li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
 </ul>
 
+<div class="section" id="suites">
+<h2>Per-suite pages</h2>
+<ul>
+{% for suite in suites %}
+<li><a href="/{{ suite }}/pkg/{{ package }}">{{ suite }}</a></li>
+{% endfor %}
+</ul>
+</div>
 
 {% if merge_proposals %}
 <div class="section" id="recent-merge-proposals">
