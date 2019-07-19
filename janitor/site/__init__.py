@@ -42,6 +42,11 @@ env.globals.update(format_timestamp=format_timestamp)
 env.globals.update(suites=SUITES)
 
 
+def get_build_architecture():
+    # TODO(jelmer): don't hardcode this
+    return "amd64"
+
+
 def get_local_vcs_repo(package):
     import breezy.git  # noqa: F401
     import breezy.bzr  # noqa: F401
