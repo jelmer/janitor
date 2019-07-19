@@ -97,6 +97,7 @@ async def generate_run_file(logfile_manager, run):
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['enumerate'] = enumerate
+
     def show_diff():
         diff = get_run_diff(run)
         if diff is None:
@@ -206,7 +207,7 @@ async def generate_pkg_file(
     kwargs['candidates'] = {
         suite: (context, value)
         for (package, suite, command, context, value) in
-        await uploader_await state.iter_candidates(package=name)}
+        await state.iter_candidates(package=name)}
     template = env.get_template('package-overview.html')
     return await template.render_async(**kwargs)
 

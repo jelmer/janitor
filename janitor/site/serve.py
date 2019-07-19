@@ -27,7 +27,9 @@ if __name__ == '__main__':
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, help='Host to listen on')
-    parser.add_argument('--port', type=int, help='Port to listen on', default=8080)
+    parser.add_argument(
+        '--port',
+        type=int, help='Port to listen on', default=8080)
     parser.add_argument('--logdirectory', type=str,
                         help='Logs directory path.', default='site/pkg')
     parser.add_argument('--publisher-url', type=str,
