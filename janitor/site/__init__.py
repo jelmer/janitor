@@ -19,6 +19,7 @@ from debian.deb822 import Changes
 from jinja2 import Environment, PackageLoader, select_autoescape
 import os
 
+from janitor import SUITES
 from janitor.vcs import SUPPORTED_VCSES
 
 
@@ -38,6 +39,7 @@ env = Environment(
 
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
+env.globals.update(suites=SUITES)
 
 
 def get_local_vcs_repo(package):

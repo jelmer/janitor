@@ -20,6 +20,7 @@ if __name__ == '__main__':
     import argparse
     import functools
     import os
+    from janitor import SUITES
     from janitor.logs import LogFileManager
     from janitor.policy import read_policy
     from aiohttp import web
@@ -237,7 +238,7 @@ if __name__ == '__main__':
         app.router.add_get(
             path, functools.partial(handle_simple, templatename))
     app.router.add_get('/lintian-fixes/', handle_lintian_fixes)
-    for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
+    for suite in SUITES:
         app.router.add_get(
             '/%s/merge-proposals' % suite,
             functools.partial(handle_merge_proposals, suite))
@@ -246,7 +247,7 @@ if __name__ == '__main__':
             functools.partial(handle_ready_proposals, suite))
         app.router.add_get('/%s/pkg/' % suite, handle_pkg_list)
     app.router.add_get(
-        '/{suite:lintian-fixes|fresh-releases|fresh-snapshots}'
+        '/{suite:' + '|'.join(SUITES) + '}'
         '/{file:Contents-.*|InRelease|Packages.*|Release.*|'
         '.*.(changes|deb|buildinfo)}',
         handle_apt_file)
