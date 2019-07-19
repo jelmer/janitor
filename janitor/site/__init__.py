@@ -57,14 +57,21 @@ def get_local_vcs_repo(package):
 
 def get_run_diff(run):
     from breezy.diff import show_diff_trees
+    from breezy.errors import NoSuchRevision
     from io import BytesIO
 
     f = BytesIO()
     repo = get_local_vcs_repo(run.package)
     if repo is None:
         return None
-    old_tree = repo.revision_tree(run.main_branch_revision)
-    new_tree = repo.revision_tree(run.revision)
+    try:
+        old_tree = repo.revision_tree(run.main_branch_revision)
+    except NoSuchRevision:
+        return b'Old revision %s missing' % run.main_branch_revision
+    try:
+        new_tree = repo.revision_tree(run.revision)
+    except NoSuchRevision:
+        return b'New revision %s missing' % run.revision
     show_diff_trees(old_tree, new_tree, to_file=f)
     return f.getvalue()
 
