@@ -275,10 +275,10 @@ if __name__ == '__main__':
             max_age = 60 * 60
 
         if args.apt_location.startswith('http'):
-            return read_apt_file_from_s3(
+            return await read_apt_file_from_s3(
                 http_client_session, args.apt_location, suite, file, max_age)
         else:
-            return read_apt_file_from_fs(suite, file, max_age)
+            return await read_apt_file_from_fs(suite, file, max_age)
 
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
