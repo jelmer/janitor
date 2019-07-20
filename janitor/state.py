@@ -717,13 +717,17 @@ async def get_last_build_version(package, suite):
             package, suite)
 
 
-async def estimate_duration(package, suite):
+async def estimate_duration(package, suite=None):
+    query = """
+SELECT finish_time - start_time FROM run "
+WHERE package = $1"""
+    args = [package]
+    if suite is not None:
+        query += " AND suite = $2"
+        args.append(suite)
+    query += " ORDER BY start_time DESC LIMIT 1"
     async with get_connection() as conn:
-        return await conn.fetchval(
-            "SELECT finish_time - start_time FROM run "
-            "WHERE package = $1 AND suite = $2 "
-            "ORDER BY start_time DESC LIMIT 1",
-            package, suite)
+        return await conn.fetchval(query, *args)
 
 
 async def store_candidate(package, suite, command, context, value):
