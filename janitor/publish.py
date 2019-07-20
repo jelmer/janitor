@@ -166,6 +166,9 @@ class MaintainerRateLimiter(object):
                 self._open_mps_per_maintainer.get(maintainer_email, 0) \
                 >= self._max_mps_per_maintainer
 
+    def inc(self, maintainer_email):
+        self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
+        self._open_mps_per_maintainer[maintainer_email] += 1
 
 
 class PublishFailure(Exception):
@@ -231,85 +234,61 @@ class BranchWorkspace(object):
             overwrite_existing=overwrite_existing)
 
 
-class Publisher(object):
-    """Publishes results made to a VCS, by pushing/proposing."""
+async def publish(
+        suite, pkg, maintainer_email, subrunner, mode, hoster,
+        main_branch, local_branch, resume_branch=None,
+        dry_run=False, log_id=None, existing_proposal=None,
+        allow_create_proposal=False):
+    def get_proposal_description(existing_proposal):
+        if existing_proposal:
+            existing_description = existing_proposal.get_description()
+            existing_description = strip_janitor_blurb(
+                existing_description, suite)
+        else:
+            existing_description = None
+        description = subrunner.get_proposal_description(
+            existing_description)
+        return add_janitor_blurb(description, pkg, log_id, suite)
 
-    def __init__(self, rate_limiter):
-        self.rate_limiter = rate_limiter
+    def get_proposal_commit_message(existing_proposal):
+        if existing_proposal:
+            existing_commit_message = (
+                getattr(existing_proposal, 'get_commit_message',
+                        lambda: None)())
+        else:
+            existing_commit_message = None
+        return subrunner.get_proposal_commit_message(
+            existing_commit_message)
 
-    async def publish(
-            self, suite, pkg, maintainer_email, subrunner, mode, hoster,
-            main_branch, local_branch, resume_branch=None,
-            dry_run=False, log_id=None, existing_proposal=None):
-        if self.rate_limiter.allowed(maintainer_email) and \
-                mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
-            warning(
-                'Not creating proposal for %s, maximum number of open merge '
-                'proposals reached for maintainer %s', pkg, maintainer_email)
-            if mode == MODE_PROPOSE:
-                mode = MODE_BUILD_ONLY
-            if mode == MODE_ATTEMPT_PUSH:
-                mode = MODE_PUSH
-        if mode == MODE_ATTEMPT_PUSH and \
-                "salsa.debian.org/debian/" in main_branch.user_url:
-            # Make sure we don't accidentally push to unsuspecting collab-maint
-            # repositories, even if debian-janitor becomes a member of "debian"
-            # in the future.
-            mode = MODE_PROPOSE
+    with BranchWorkspace(
+            main_branch, local_branch, resume_branch=resume_branch) as ws:
+        try:
+            (proposal, is_new) = publish_changes_from_workspace(
+                ws, mode, subrunner.branch_name(),
+                get_proposal_description=get_proposal_description,
+                get_proposal_commit_message=(
+                    get_proposal_commit_message),
+                dry_run=dry_run, hoster=hoster,
+                allow_create_proposal=allow_create_proposal,
+                overwrite_existing=True,
+                existing_proposal=existing_proposal)
+        except NoSuchProject as e:
+            raise PublishFailure(
+                description='project %s was not found' % e.project,
+                code='project-not-found')
+        except PermissionDenied as e:
+            raise PublishFailure(
+                description=str(e), code='permission-denied')
+        except MergeProposalExists as e:
+            raise PublishFailure(
+                description=str(e), code='merge-proposal-exists')
 
-        def get_proposal_description(existing_proposal):
-            if existing_proposal:
-                existing_description = existing_proposal.get_description()
-                existing_description = strip_janitor_blurb(
-                    existing_description, suite)
-            else:
-                existing_description = None
-            description = subrunner.get_proposal_description(
-                existing_description)
-            return add_janitor_blurb(description, pkg, log_id, suite)
+        if proposal and is_new:
+            merge_proposal_count.labels(status='open').inc()
+            open_proposal_count.labels(
+                maintainer=maintainer_email).inc()
 
-        def get_proposal_commit_message(existing_proposal):
-            if existing_proposal:
-                existing_commit_message = (
-                    getattr(existing_proposal, 'get_commit_message',
-                            lambda: None)())
-            else:
-                existing_commit_message = None
-            return subrunner.get_proposal_commit_message(
-                existing_commit_message)
-
-        with BranchWorkspace(
-                main_branch, local_branch, resume_branch=resume_branch) as ws:
-            try:
-                (proposal, is_new) = publish_changes_from_workspace(
-                    ws, mode, subrunner.branch_name(),
-                    get_proposal_description=get_proposal_description,
-                    get_proposal_commit_message=(
-                        get_proposal_commit_message),
-                    dry_run=dry_run, hoster=hoster,
-                    allow_create_proposal=(
-                        subrunner.allow_create_proposal()),
-                    overwrite_existing=True,
-                    existing_proposal=existing_proposal)
-            except NoSuchProject as e:
-                raise PublishFailure(
-                    description='project %s was not found' % e.project,
-                    code='project-not-found')
-            except PermissionDenied as e:
-                raise PublishFailure(
-                    description=str(e), code='permission-denied')
-            except MergeProposalExists as e:
-                raise PublishFailure(
-                    description=str(e), code='merge-proposal-exists')
-
-            if proposal and is_new:
-                self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
-                self._open_mps_per_maintainer[maintainer_email] += 1
-                merge_proposal_count.labels(status='open').inc()
-                open_proposal_count.labels(
-                    maintainer=maintainer_email).inc()
-
-        return proposal, is_new
+    return proposal, is_new
 
 
 class LintianBrushPublisher(object):
@@ -369,10 +348,10 @@ class NewUpstreamPublisher(object):
 
 
 async def publish_one(
-        suite, pkg, publisher, command, subworker_result, main_branch_url,
+        suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, maintainer_email, vcs_directory, branch_name,
         dry_run=False, possible_hosters=None,
-        possible_transports=None):
+        possible_transports=None, allow_create_proposal=None):
     assert mode in SUPPORTED_MODES
     local_branch = get_local_vcs_branch(vcs_directory, pkg, branch_name)
     if local_branch is None:
@@ -423,17 +402,20 @@ async def publish_one(
             resume_branch = None
             existing_proposal = None
 
-    proposal, is_new = await publisher.publish(
+    if allow_create_proposal is None:
+        allow_create_proposal = subrunner.allow_create_proposal()
+    proposal, is_new = await publish(
         suite, pkg, maintainer_email,
         subrunner, mode, hoster, main_branch, local_branch,
         resume_branch,
         dry_run=dry_run, log_id=log_id,
-        existing_proposal=existing_proposal)
+        existing_proposal=existing_proposal,
+        allow_create_proposal=allow_create_proposal)
 
-    return proposal, branch_name
+    return proposal, branch_name, is_new
 
 
-async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
+async def publish_pending(rate_limiter, policy, vcs_directory, dry_run=False):
     possible_hosters = []
     possible_transports = []
 
@@ -450,10 +432,25 @@ async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
         if await state.already_published(
                 pkg, branch_name, revision, mode):
             continue
+        if rate_limiter.allowed(maintainer_email) and \
+                mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
+            warning(
+                'Not creating proposal for %s, maximum number of open merge '
+                'proposals reached for maintainer %s', pkg, maintainer_email)
+            if mode == MODE_PROPOSE:
+                mode = MODE_BUILD_ONLY
+            if mode == MODE_ATTEMPT_PUSH:
+                mode = MODE_PUSH
+        if mode == MODE_ATTEMPT_PUSH and \
+                "salsa.debian.org/debian/" in main_branch.user_url:
+            # Make sure we don't accidentally push to unsuspecting collab-maint
+            # repositories, even if debian-janitor becomes a member of "debian"
+            # in the future.
+            mode = MODE_PROPOSE
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
-            proposal, branch_name = await publish_one(
-                suite, pkg, publisher, command, subworker_result,
+            proposal, branch_name, is_new = await publish_one(
+                suite, pkg, command, subworker_result,
                 main_branch_url, mode, log_id, maintainer_email,
                 vcs_directory=vcs_directory, branch_name=branch_name,
                 dry_run=dry_run, possible_hosters=possible_hosters,
@@ -467,13 +464,16 @@ async def publish_pending(publisher, policy, vcs_directory, dry_run=False):
         else:
             code = 'success'
             description = 'Success'
+            if proposal and is_new:
+                rate_limiter.inc(maintainer_email)
+
         await state.store_publish(
             pkg, branch_name, main_branch_revision,
             revision, mode, code, description,
             proposal.url if proposal else None)
 
 
-async def publish_request(publisher, dry_run, vcs_directory, request):
+async def publish_request(rate_limiter, dry_run, vcs_directory, request):
     package = request.match_info['package']
     suite = request.match_info['suite']
     post = await request.post()
@@ -483,42 +483,54 @@ async def publish_request(publisher, dry_run, vcs_directory, request):
             await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({}, status=400)
+
+    if not rate_limiter.allowed(maintainer_email):
+        raise web.json_response(
+            {'maintainer_email': maintainer_email, 'code': 'rate-limited',
+             'description':
+                'Maximum number of open merge proposals for maintainer reached'},
+            status=429)
+
     run = await state.get_last_success(package, suite)
     if run is None:
         return web.json_response({}, status=400)
     try:
-        proposal, branch_name = await publish_one(
-            suite, package, publisher, run.command, run.result,
+        proposal, branch_name, is_new = await publish_one(
+            suite, package, run.command, run.result,
             main_branch_url, mode, run.id, maintainer_email,
             vcs_directory=vcs_directory, branch_name=run.branch_name,
-            dry_run=dry_run)
+            dry_run=dry_run, allow_create_proposal=True)
     except PublishFailure as e:
         return web.json_response(
             {'code': e.code, 'description': e.description}, status=400)
 
+    if proposal and is_new:
+        rate_limiter.inc(maintainer_email)
+
     return web.json_response(
         {'branch_name': branch_name,
          'mode': mode,
+         'is_new': is_new,
          'proposal': proposal.url if proposal else None}, status=200)
 
 
-async def run_web_server(listen_addr, port, publisher, vcs_directory,
+async def run_web_server(listen_addr, port, rate_limiter, vcs_directory,
                          dry_run=False):
     app = web.Application()
     setup_metrics(app)
     app.router.add_post(
         "/{suite}/{package}/publish",
-        functools.partial(publish_request, publisher, dry_run, vcs_directory))
+        functools.partial(publish_request, rate_limiter, dry_run, vcs_directory))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
     await site.start()
 
 
-async def process_queue_loop(publisher, policy, dry_run, vcs_directory,
+async def process_queue_loop(rate_limiter, policy, dry_run, vcs_directory,
                              interval):
     while True:
-        await publish_pending(publisher, policy, vcs_directory, dry_run)
+        await publish_pending(rate_limiter, policy, vcs_directory, dry_run)
         await asyncio.sleep(interval)
 
 
@@ -565,12 +577,11 @@ def main(argv=None):
         policy = read_policy(f)
 
     rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
-    publisher = Publisher(rate_limiter)
 
     loop = asyncio.get_event_loop()
     if args.once:
         loop.run_until_complete(publish_pending(
-            publisher, policy, dry_run=args.dry_run,
+            policy, dry_run=args.dry_run,
             vcs_directory=args.vcs_result_dir))
 
         last_success_gauge.set_to_current_time()
@@ -581,12 +592,12 @@ def main(argv=None):
     else:
         loop.run_until_complete(asyncio.gather(
             loop.create_task(process_queue_loop(
-                publisher, policy, dry_run=args.dry_run,
+                rate_limiter, policy, dry_run=args.dry_run,
                 vcs_directory=args.vcs_result_dir,
                 interval=args.publish_pending_interval)),
             loop.create_task(
                 run_web_server(
-                    args.listen_address, args.port, publisher,
+                    args.listen_address, args.port, rate_limiter,
                     args.vcs_result_dir, args.dry_run))))
 
 
