@@ -94,16 +94,13 @@ def highlight_diff(diff):
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
-def get_changes_path(run, changes_name):
+def open_changes_file(run, changes_name):
     path = os.path.join(
             os.path.dirname(__file__), '..', '..',
             "public_html", run.build_distribution, changes_name)
-    if not os.path.exists(path):
-        return None
-    return path
+    return open(path, 'rb')
 
 
-def changes_get_binaries(changes_path):
-    with open(changes_path, "r") as cf:
-        changes = Changes(cf)
-        return changes['Binary'].split(' ')
+def changes_get_binaries(cf):
+    changes = Changes(cf)
+    return changes['Binary'].split(' ')

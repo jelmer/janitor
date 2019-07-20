@@ -13,7 +13,7 @@ from janitor.site import (
     changes_get_binaries,
     env,
     get_build_architecture,
-    get_changes_path,
+    open_changes_file,
 )
 
 
@@ -80,10 +80,13 @@ async def generate_pkg_file(package, suite):
         kwargs['changes_name'] = changes_filename(
             run.package, run.build_version,
             get_build_architecture())
-        changes_path = get_changes_path(run, kwargs['changes_name'])
-        kwargs['binary_packages'] = []
-        if changes_path:
-            for binary in changes_get_binaries(changes_path):
+        try:
+            changes_file = open_changes_file(run, kwargs['changes_name'])
+        except FileNotFoundError:
+            pass
+        else:
+            kwargs['binary_packages'] = []
+            for binary in changes_get_binaries(changes_file):
                 kwargs['binary_packages'].append(binary)
     else:
         kwargs['changes_name'] = None
