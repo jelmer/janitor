@@ -25,6 +25,8 @@ class LogFileManager(object):
         self.log_directory = log_directory
 
     def _get_paths(self, pkg, run_id, name):
+        if '/' in pkg or '/' in run_id or '/' in name:
+            return []
         return [
             os.path.join(self.log_directory, pkg, run_id, name),
             os.path.join(self.log_directory, pkg, run_id, name) + '.gz'
