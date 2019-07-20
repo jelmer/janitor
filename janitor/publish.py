@@ -484,7 +484,7 @@ async def publish_request(rate_limiter, dry_run, vcs_directory, request):
     except IndexError:
         return web.json_response({}, status=400)
 
-    if not rate_limiter.allowed(maintainer_email):
+    if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and rate_limiter.allowed(maintainer_email):
         return web.json_response(
             {'maintainer_email': maintainer_email, 'code': 'rate-limited',
              'description':
