@@ -244,7 +244,7 @@ class Publisher(object):
                 mode = MODE_BUILD_ONLY
             if mode == MODE_ATTEMPT_PUSH:
                 mode = MODE_PUSH
-        if mode == "attempt-push" and \
+        if mode == MODE_ATTEMPT_PUSH and \
                 "salsa.debian.org/debian/" in main_branch.user_url:
             # Make sure we don't accidentally push to unsuspecting collab-maint
             # repositories, even if debian-janitor becomes a member of "debian"
