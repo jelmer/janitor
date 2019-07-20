@@ -20,6 +20,7 @@ if __name__ == '__main__':
     import argparse
     import functools
     import os
+    import re
     from janitor import SUITES
     from janitor.logs import LogFileManager
     from janitor.policy import read_policy
@@ -158,10 +159,19 @@ if __name__ == '__main__':
 
     async def handle_log(request):
         pkg = request.match_info['pkg']
+        if not re.match('^[a-z0-9+-\.]+$', pkg) or len(pkg) < 2:
+            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
         run_id = request.match_info['run_id']
+        if not re.match('^[a-z0-9-]+$', run_id) or len(run_id) < 5:
+            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
         filename = request.match_info['log']
-        with logfile_manager.get_log(pkg, run_id, filename) as f:
-            text = f.read().decode('utf-8', 'replace')
+        if not re.match('^[a-z0-9\.]+$', filename) or len(filename) < 3:
+            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
+        try:
+            with logfile_manager.get_log(pkg, run_id, filename) as f:
+                text = f.read().decode('utf-8', 'replace')
+        except FileNotFoundError:
+            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
         return web.Response(
             content_type='text/plain', text=text,
             headers={'Cache-Control': 'max-age=3600'})
