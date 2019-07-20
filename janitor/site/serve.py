@@ -16,6 +16,45 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+async def read_apt_file_from_s3(session, s3_location, suite, filename, max_age):
+    headers = {'Cache-Control': 'max-age=%d' % max_age}
+    url = '%s/%s/%s' % (s3_location, suite, filename)
+    # TODO(jelmer): share session?
+    async with session.get(url) as client_response:
+        status = client_response.status
+
+        if status == 404:
+            raise web.HTTPNotFound()
+
+        if status != 200:
+            raise web.HTTPBadRequest()
+
+        response = web.StreamResponse(
+            status=200,
+            reason='OK',
+            headers=headers
+        )
+        await response.prepare(request)
+        S3_READ_CHUNK_SIZE = 65536
+        while True:
+            chunk = await resp.content.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            await response.write(chunk)
+    await response.write_eof()
+    return response
+
+
+async def read_apt_file_from_fs(suite, filename):
+    headers = {'Cache-Control': 'max-age=%d' % max_age}
+    path = os.path.join(
+            os.path.dirname(__file__), '..', '..',
+            "public_html", suite, file)
+    if not os.path.exists(path):
+        raise web.HTTPNotFound()
+    return web.FileResponse(path, headers=headers)
+
+
 if __name__ == '__main__':
     import argparse
     import functools
@@ -25,7 +64,7 @@ if __name__ == '__main__':
     from janitor.logs import LogFileManager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
-    from aiohttp import web
+    from aiohttp import web, ClientSession
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, help='Host to listen on')
@@ -37,6 +76,9 @@ if __name__ == '__main__':
     parser.add_argument('--publisher-url', type=str,
                         default='http://localhost:9912/',
                         help='URL for publisher.')
+    parser.add_argument('--apt-location', type=str,
+                        default='https://s3.nl-ams.scw.cloud/debian-janitor/apt',
+                        help='Location to read apt files from (HTTP or local).')
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,
                         default=os.path.join(
@@ -46,6 +88,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logfile_manager = LogFileManager(args.logdirectory)
+    http_client_session = ClientSession()
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
@@ -221,11 +264,6 @@ if __name__ == '__main__':
     async def handle_apt_file(request):
         suite = request.match_info['suite']
         file = request.match_info['file']
-        path = os.path.join(
-                os.path.dirname(__file__), '..', '..',
-                "public_html", suite, file)
-        if not os.path.exists(path):
-            raise web.HTTPNotFound()
 
         if (file.endswith('.deb') or
                 file.endswith('.buildinfo') or
@@ -235,8 +273,12 @@ if __name__ == '__main__':
         else:
             # 1 Hour
             max_age = 60 * 60
-        headers = {'Cache-Control': 'max-age=%d' % max_age}
-        return web.FileResponse(path, headers=headers)
+
+        if args.apt_location.startswith('http'):
+            return read_apt_file_from_s3(
+                http_client_session, args.apt_location, suite, file, max_age)
+        else:
+            return read_apt_file_from_fs(suite, file, max_age)
 
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
