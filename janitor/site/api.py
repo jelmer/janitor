@@ -54,7 +54,7 @@ async def handle_publish(publisher_url, request):
         publisher_url, '%s/%s/publish' % (suite, package))
     async with ClientSession() as client:
         async with client.post(url, data={'mode': mode}) as resp:
-            if resp == 200:
+            if resp.status == 200:
                 return web.json_response(await resp.json())
             else:
                 return web.json_response(await resp.json(), status=400)
