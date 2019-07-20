@@ -36,8 +36,6 @@ from breezy.plugins.debian.util import (
 from prometheus_client import (
     Counter,
     Gauge,
-    generate_latest,
-    CONTENT_TYPE_LATEST,
 )
 
 from silver_platter.proposal import (
@@ -54,6 +52,7 @@ from silver_platter.utils import (
 
 from . import state
 from .logs import LogFileManager
+from .prometheus import setup_metrics
 from .trace import note, warning
 from .vcs import (
     SUPPORTED_VCSES,
@@ -435,13 +434,8 @@ async def process_queue(
 
 
 async def run_web_server(listen_addr, port):
-    async def metrics(request):
-        resp = web.Response(body=generate_latest())
-        resp.content_type = CONTENT_TYPE_LATEST
-        return resp
-
     app = web.Application()
-    app.router.add_get("/metrics", metrics)
+    setup_metrics(app)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)

@@ -23,6 +23,7 @@ if __name__ == '__main__':
     from janitor import SUITES
     from janitor.logs import LogFileManager
     from janitor.policy import read_policy
+    from janitor.prometheus import setup_metrics
     from aiohttp import web
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
@@ -292,5 +293,6 @@ if __name__ == '__main__':
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
 
+    setup_metrics(app)
     app.add_subapp('/api', create_api_app(args.publisher_url, policy_config))
     web.run_app(app, host=args.host, port=args.port)
