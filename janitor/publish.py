@@ -151,6 +151,23 @@ async def get_open_mps_per_maintainer():
     return open_mps_per_maintainer
 
 
+class MaintainerRateLimiter(object):
+
+    def __init__(self, max_mps_per_maintainer=None):
+        self._max_mps_per_maintainer = max_mps_per_maintainer
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self._refresh_open_mps_per_maintainer())
+
+    async def _refresh_open_mps_per_maintainer(self):
+        self._open_mps_per_maintainer = await get_open_mps_per_maintainer()
+
+    def allowed(self, maintainer_email):
+        return self._max_mps_per_maintainer and \
+                self._open_mps_per_maintainer.get(maintainer_email, 0) \
+                >= self._max_mps_per_maintainer
+
+
+
 class PublishFailure(Exception):
 
     def __init__(self, code, description):
@@ -217,24 +234,14 @@ class BranchWorkspace(object):
 class Publisher(object):
     """Publishes results made to a VCS, by pushing/proposing."""
 
-    def __init__(self, max_mps_per_maintainer=None):
-        self._max_mps_per_maintainer = max_mps_per_maintainer
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self._refresh_open_mps_per_maintainer())
-
-    async def _refresh_open_mps_per_maintainer(self):
-        self._open_mps_per_maintainer = await get_open_mps_per_maintainer()
-
-    def _check_limit(self, maintainer_email):
-        return self._max_mps_per_maintainer and \
-                self._open_mps_per_maintainer.get(maintainer_email, 0) \
-                >= self._max_mps_per_maintainer
+    def __init__(self, rate_limiter):
+        self.rate_limiter = rate_limiter
 
     async def publish(
             self, suite, pkg, maintainer_email, subrunner, mode, hoster,
             main_branch, local_branch, resume_branch=None,
             dry_run=False, log_id=None, existing_proposal=None):
-        if self._check_limit(maintainer_email) and \
+        if self.rate_limiter.allowed(maintainer_email) and \
                 mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
             warning(
                 'Not creating proposal for %s, maximum number of open merge '
@@ -557,7 +564,8 @@ def main(argv=None):
     with open(args.policy, 'r') as f:
         policy = read_policy(f)
 
-    publisher = Publisher(args.max_mps_per_maintainer)
+    rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
+    publisher = Publisher(rate_limiter)
 
     loop = asyncio.get_event_loop()
     if args.once:
