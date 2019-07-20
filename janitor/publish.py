@@ -485,7 +485,7 @@ async def publish_request(rate_limiter, dry_run, vcs_directory, request):
         return web.json_response({}, status=400)
 
     if not rate_limiter.allowed(maintainer_email):
-        raise web.json_response(
+        return web.json_response(
             {'maintainer_email': maintainer_email, 'code': 'rate-limited',
              'description':
                 'Maximum number of open merge proposals for maintainer reached'},
