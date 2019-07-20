@@ -16,11 +16,26 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import web
+import asyncio
 
 from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
     generate_latest,
     CONTENT_TYPE_LATEST,
     )
+
+request_counter = Counter(
+    'requests_total', 'Total Request Count', ['method', 'path', 'status'])
+
+request_latency_hist = Histogram(
+    'request_latency_seconds', 'Request latency', ['path'])
+
+requests_in_progress_gauge = Gauge(
+    'requests_in_progress_total', 'Requests currently in progress',
+    ['method', 'path'])
+
 
 async def metrics(request):
     resp = web.Response(body=generate_latest())
@@ -28,5 +43,21 @@ async def metrics(request):
     return resp
 
 
+@asyncio.coroutine
+def metrics_middleware(app, handler):
+    @asyncio.coroutine
+    def wrapper(request):
+        start_time = time.time()
+        requests_in_progress.labels(request.method, request.path).inc()
+        response = yield from handler(request)
+        resp_time = time.time() - start_time
+        request_latency_hist.labels(request.path).observe(resp_time)
+        requests_in_progress_gauge.labels(request.method, request.path).dec()
+        request_counter.labels(request.method, request.path, response.status).inc()
+        return response
+    return wrapper
+
+
 def setup_metrics(app):
+    app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics)
