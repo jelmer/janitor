@@ -69,10 +69,10 @@ def get_run_diff(run):
     try:
         repo = get_local_vcs_repo(run.package)
     except NotBranchError:
+        repo = None
+    if repo is None:
         return b'Local VCS repository for %s temporarily inaccessible' % (
             run.package.encode('ascii'))
-    if repo is None:
-        return None
     try:
         old_tree = repo.revision_tree(run.main_branch_revision)
     except NoSuchRevision:
