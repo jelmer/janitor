@@ -171,6 +171,15 @@ class MaintainerRateLimiter(object):
         self._open_mps_per_maintainer[maintainer_email] += 1
 
 
+class NonRateLimiter(object):
+
+    def allowed(self, email):
+        return True
+
+    def inc(self, maintainer_email):
+        pass
+
+
 class PublishFailure(Exception):
 
     def __init__(self, code, description):
@@ -576,7 +585,10 @@ def main(argv=None):
     with open(args.policy, 'r') as f:
         policy = read_policy(f)
 
-    rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
+    if args.max_mps_per_maintainer:
+        rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
+    else:
+        rate_limiter = NonRateLimiter()
 
     loop = asyncio.get_event_loop()
     if args.once:
