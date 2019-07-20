@@ -5,7 +5,7 @@
 <div class="section" id="fixed-tag-list">
 <h1>Fixes for lintian tag <i>{{ tag }}</i></h1>
 
-<p>{{ lintian_tag_link(tag) }}</p>
+<p>Lintian Info page: {{ lintian_tag_link(tag) }}</p>
 
 <ul>
 {% for package, command, build_version, result_code, context, start_time, id, tag in packages %}
