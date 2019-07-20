@@ -20,7 +20,7 @@ from janitor.site import (
     changes_get_binaries,
     env,
     get_build_architecture,
-    get_changes_path,
+    open_changes_file,
     get_local_vcs_repo,
     get_run_diff,
     highlight_diff,
@@ -131,12 +131,15 @@ async def generate_run_file(logfile_manager, run):
         kwargs['vcs'] = None
     kwargs['cache_url_git'] = CACHE_URL_GIT
     kwargs['cache_url_bzr'] = CACHE_URL_BZR
-    kwargs['binary_packages'] = []
     kwargs['in_line_boundaries'] = in_line_boundaries
     if kwargs['changes_name']:
-        changes_path = get_changes_path(run, kwargs['changes_name'])
-        if changes_path:
-            for binary in changes_get_binaries(changes_path):
+        try:
+            changes_file = open_changes_file(run, kwargs['changes_name'])
+        except FileNotFoundError:
+            pass
+        else:
+            kwargs['binary_packages'] = []
+            for binary in changes_get_binaries(changes_file):
                 kwargs['binary_packages'].append(binary)
 
     kwargs['get_log'] = functools.partial(
