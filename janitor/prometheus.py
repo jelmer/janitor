@@ -17,6 +17,7 @@
 
 from aiohttp import web
 import asyncio
+import time
 
 from prometheus_client import (
     Counter,
@@ -48,7 +49,7 @@ def metrics_middleware(app, handler):
     @asyncio.coroutine
     def wrapper(request):
         start_time = time.time()
-        requests_in_progress.labels(request.method, request.path).inc()
+        requests_in_progress_gauge.labels(request.method, request.path).inc()
         response = yield from handler(request)
         resp_time = time.time() - start_time
         request_latency_hist.labels(request.path).observe(resp_time)
