@@ -119,7 +119,11 @@ async def estimate_duration(package, suite):
     estimated_duration = await state.estimate_duration(package, suite)
     if estimated_duration is not None:
         return estimated_duration
-    # TODO(jelmer): Just fall back to duration for any builds for package?
+
+    estimated_duration = await state.estimate_duration(package)
+    if estimated_duration is not None:
+        return estimated_duration
+
     # TODO(jelmer): Just fall back to median duration for all builds for suite.
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
@@ -166,3 +170,46 @@ async def add_to_queue(todo, dry_run=False, default_offset=0):
         if added:
             trace.note('Scheduling %s (%s) with offset %d',
                        package, mode, offset)
+
+
+async def main():
+    import argparse
+    from janitor import state
+    from prometheus_client import (
+        Gauge,
+        push_to_gateway,
+        REGISTRY,
+    )
+
+    parser = argparse.ArgumentParser(prog='janitor.schedule')
+    parser.add_argument("--policy",
+                        help="Policy file to read.", type=str,
+                        default='policy.conf')
+    parser.add_argument(
+        "--dry-run",
+        help="Create branches but don't push or propose anything.",
+        action="store_true", default=False)
+    parser.add_argument('--prometheus', type=str,
+                        help='Prometheus push gateway to export to.')
+    args = parser.parse_args()
+
+    last_success_gauge = Gauge(
+        'job_last_success_unixtime',
+        'Last time a batch job successfully finished')
+
+    iter_candidates = await state.iter_all_candidates()
+    todo = [x async for x in schedule_from_candidates(
+        args.policy, iter_candidates)]
+    await add_to_queue(todo, dry_run=args.dry_run)
+
+    last_success_gauge.set_to_current_time()
+    if args.prometheus:
+        push_to_gateway(
+            args.prometheus, job='janitor.schedule',
+            registry=REGISTRY)
+
+
+if __name__ == '__main__':
+    import asyncio
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
