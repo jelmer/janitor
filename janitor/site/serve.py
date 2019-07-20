@@ -230,9 +230,11 @@ if __name__ == '__main__':
         if (file.endswith('.deb') or
                 file.endswith('.buildinfo') or
                 file.endswith('.changes')):
-            max_age = 3600
+            # One week
+            max_age = 60 * 60 * 24 * 7
         else:
-            max_age = 60
+            # 1 Hour
+            max_age = 60 * 60
         headers = {'Cache-Control': 'max-age=%d' % max_age}
         return web.FileResponse(path, headers=headers)
 
