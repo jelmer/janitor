@@ -25,8 +25,6 @@ import urllib.parse
 
 from prometheus_client import (
     Gauge,
-    CONTENT_TYPE_LATEST,
-    generate_latest,
     push_to_gateway,
     REGISTRY,
 )
@@ -62,6 +60,7 @@ from .policy import (
     read_policy,
     apply_policy,
     )
+from .prometheus import setup_metrics
 from .trace import note, warning
 from .vcs import get_local_vcs_branch
 
@@ -498,13 +497,8 @@ async def publish_request(publisher, dry_run, vcs_directory, request):
 
 async def run_web_server(listen_addr, port, publisher, vcs_directory,
                          dry_run=False):
-    async def metrics(request):
-        resp = web.Response(body=generate_latest())
-        resp.content_type = CONTENT_TYPE_LATEST
-        return resp
-
     app = web.Application()
-    app.router.add_get("/metrics", metrics)
+    setup_metrics(app)
     app.router.add_post(
         "/{suite}/{package}/publish",
         functools.partial(publish_request, publisher, dry_run, vcs_directory))
