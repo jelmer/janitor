@@ -97,7 +97,7 @@ Nothing to do for {{ package }}.</p>
 <ul>
 {% for previous_run in previous_runs %}
 {% if previous_run != run %}
-<li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ previous_run.result_code }}: {{ previous_run.description }}</a></li>
+<li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code)|safe }}: {{ previous_run.description }}</a></li>
 {% endif %}
 {% endfor %}
 </ul>
