@@ -64,6 +64,9 @@ from .vcs import (
     get_cached_branch,
     )
 
+apt_package_count = Counter(
+    'apt_package_count', 'Number of packages with a version published',
+    ['suite'])
 packages_processed_count = Counter(
     'package_count', 'Number of packages processed.')
 queue_length = Gauge(
@@ -363,6 +366,14 @@ async def export_queue_length():
         await asyncio.sleep(60)
 
 
+async def export_apt_counts():
+    while True:
+        for suite, count in await state.get_published_by_suite():
+            apt_package_count.labels(suite=suite).set(count)
+        # Every 30 minutes
+        await asyncio.sleep(60 * 30)
+
+
 async def process_queue(
         worker_kind, build_command,
         pre_check=None, post_check=None,
@@ -513,6 +524,7 @@ def main(argv=None):
             args.concurrency,
             args.use_cached_only)),
         loop.create_task(export_queue_length()),
+        loop.create_task(export_apt_counts()),
         loop.create_task(run_web_server(args.listen_address, args.port)),
         ))
 
