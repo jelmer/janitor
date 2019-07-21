@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "run_util.html" import display_result_code %}
 {% block page_title %}Cupboard - History{% endblock %}
 {% block body %}
  <div class="section" id="history">
@@ -23,7 +24,7 @@
 <tr class="row-even"><td><a class="reference external" href="pkg/{{ run.package }}">{{ run.package }}</a></td>
 <td><a href="/{{ run.suite}}">{{ run.suite }}</a></td>
 <td>{{ format_duration(run.duration) }}</td>
-<td><a class="reference external" href="pkg/{{ run.package }}/{{ run.id }}">{{ run.result_code }}</a></td>
+<td><a class="reference external" href="pkg/{{ run.package }}/{{ run.id }}">{{ display_result_code(run.result_code)|safe }}</a></td>
 </tr>
 {% endfor %}
 </tbody>

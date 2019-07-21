@@ -674,3 +674,16 @@ div.math:hover a.headerlink {
         display: none;
     }
 }
+
+/* -- result codes */
+span.result-code-failure {
+    color: red;
+}
+
+span.result-code-success {
+    color: green;
+}
+
+span.result-code-nothing-to-do {
+    color: grey;
+}
