@@ -98,6 +98,10 @@ SUPPORTED_MODES = [
     ]
 
 
+proposal_rate_limited_count = Counter(
+    'proposal_rate_limited',
+    'Number of attempts to create a proposal that was rate-limited',
+    ['package', 'suite'])
 open_proposal_count = Gauge(
     'open_proposal_count', 'Number of open proposals.',
     labelnames=('maintainer',))
@@ -443,6 +447,7 @@ async def publish_pending(rate_limiter, policy, vcs_directory, dry_run=False):
             continue
         if rate_limiter.allowed(maintainer_email) and \
                 mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
+            proposal_rate_limited_count.labels(package=pkg, suite=suite).inc()
             warning(
                 'Not creating proposal for %s, maximum number of open merge '
                 'proposals reached for maintainer %s', pkg, maintainer_email)
