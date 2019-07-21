@@ -51,7 +51,7 @@ from silver_platter.utils import (
     )
 
 from . import state
-from .logs import LogFileManager
+from .logs import FileSystemLogFileManager
 from .prometheus import setup_metrics
 from .trace import note, warning
 from .vcs import (
@@ -207,7 +207,7 @@ async def process_one(
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
-    logfile_manager = LogFileManager(log_dir)
+    logfile_manager = FileSystemLogFileManager(log_dir)
 
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if command == ["new-upstream"]:

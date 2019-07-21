@@ -8,14 +8,14 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import silver_platter  # noqa: E402, F401
 from janitor import state  # noqa: E402
-from janitor.logs import LogFileManager  # noqa: E402
+from janitor.logs import FileSystemLogFileManager  # noqa: E402
 from janitor.sbuild_log import worker_failure_from_sbuild_log  # noqa: E402
 from janitor.trace import note  # noqa: E402
 
 
 loop = asyncio.get_event_loop()
 
-logfile_manager = LogFileManager(os.path.join('site', 'pkg'))
+logfile_manager = FileSystemLogFileManager(os.path.join('site', 'pkg'))
 
 
 for package, log_id, result_code, description in loop.run_until_complete(
