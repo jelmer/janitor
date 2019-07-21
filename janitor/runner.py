@@ -36,6 +36,7 @@ from breezy.plugins.debian.util import (
 from prometheus_client import (
     Counter,
     Gauge,
+    Histogram,
 )
 
 from silver_platter.proposal import (
@@ -72,6 +73,9 @@ queue_duration = Gauge(
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
+build_duration = Histogram(
+    'build_duration', 'Build duration',
+    ['package', 'suite'])
 
 
 ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
@@ -379,6 +383,8 @@ async def process_queue(
             debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
             log_dir=log_dir, use_cached_only=use_cached_only)
         finish_time = datetime.now()
+        build_duration.labels(package=item.package, suite=item.suite).observe(
+            finish_time - start_time)
         if not dry_run:
             await state.store_run(
                 result.log_id, item.package, item.branch_url,
