@@ -17,6 +17,7 @@
 
 from aiohttp import ClientSession
 from gzip import GzipFile
+from io import BytesIO
 import os
 
 
@@ -78,11 +79,23 @@ class S3LogFileManager(LogFileManager):
         return '%s/%s/%s/%s.gz' % (self.base_url, pkg, run_id, name)
 
     async def has_log(self, pkg, run_id, name):
-        async with self.session.head(self._get_url(pkg, run_id, name)) as resp:
-            return resp.status == 200
+        url = self._get_url(pkg, run_id, name)
+        print(url)
+        async with self.session.head(url) as resp:
+            if resp.status == 404:
+                return False
+            if resp.status == 200:
+                return True
+            if resp.status == 403:
+                return False
+            raise AssertionError('Unexpected response code %d' % resp.status)
 
     async def get_log(self, pkg, run_id, name):
         async with self.session.get(self._get_url(pkg, run_id, name)) as resp:
             if resp.status == 404:
                 raise FileNotFoundError(name)
-            return resp.response
+            if resp.status == 200:
+                return BytesIO(await resp.read())
+            if resp.status == 403:
+                raise PermissionError(await resp.text())
+            raise AssertionError('Unexpected response code %d' % resp.status)
