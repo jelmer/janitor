@@ -687,3 +687,7 @@ span.result-code-success {
 span.result-code-nothing-to-do {
     color: grey;
 }
+
+blockquote.result-code-explanation {
+    background-color: #FE9;
+}
