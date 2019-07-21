@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "run_util.html" import display_result_code %}
 {% block page_title %}Result Codes{% endblock %}
 {% block body %}
 <div class="section" id="result-codes">
@@ -15,7 +16,7 @@
 </thead>
 <tbody valign="top">
 {% for code, count in result_codes %}
-<tr class="row-even"><td><a class="reference external" href="/cupboard/result-codes/{{ code }}">{{ code }}</a></td>
+<tr class="row-even"><td><a class="reference external" href="/cupboard/result-codes/{{ code }}">{{ display_result_code(code)|safe }}</a></td>
 <td>{{ count }}</td>
 </tr>
 {% endfor %}

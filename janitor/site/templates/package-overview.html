@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% from "run_util.html" import display_result_code %}
 {% block page_title %}Package Overview - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
@@ -42,7 +43,7 @@
 <h2>Recent runs</h2>
 <ul class="simple">
 {% for run in runs %}
-<li><a class="reference external" href="{{ run.id }}/">{{ format_timestamp(run.times[1]) }} {{ run.command }}</a>: {{ run.result_code }}</li>
+<li><a class="reference external" href="{{ run.id }}/">{{ format_timestamp(run.times[1]) }} {{ run.command }}</a>: {{ display_result_code(run.result_code) }}</li>
 {% endfor %}
 </ul>
 </div>

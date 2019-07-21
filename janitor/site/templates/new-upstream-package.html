@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, install_commands, publish_buttons with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, install_commands, publish_buttons, display_result_code with context %}
 {% from "new_upstream_util.html" import new_upstream_summary %}
 {% block page_title %}New Upstream - {{ package }}{% endblock %}
 {% block body %}
@@ -72,7 +72,7 @@
 <ul>
 {% for previous_run in previous_runs %}
 {% if previous_run != run %}
-<li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ previous_run.result_code }}: {{ previous_run.description }}</a></li>
+<li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code)|safe }}: {{ previous_run.description }}</a></li>
 {% endif %}
 {% endfor %}
 </ul>
