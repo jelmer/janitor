@@ -77,5 +77,7 @@ $(function() {
 {% endmacro %}
 
 {% macro result_code_explanation(result_code) %}
+<blockquote class="result-code-explanation">
 {% include ("result-codes/" + result_code + ".html") ignore missing %}
+</blockquote>
 {% endmacro %}
