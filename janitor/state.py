@@ -411,6 +411,14 @@ async def queue_length(minimum_priority=None):
         return await conn.fetchval(query, *args)
 
 
+async def current_tick():
+    async with get_connection() as conn:
+        ret = await conn.fetchval('SELECT MIN(priority) FROM queue')
+        if ret is None:
+            ret = 0
+        return ret
+
+
 async def queue_duration(minimum_priority=None):
     args = []
     query = """
