@@ -209,7 +209,7 @@ if __name__ == '__main__':
         if not re.match('^[a-z0-9\.]+$', filename) or len(filename) < 3:
             raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
         try:
-            with logfile_manager.get_log(pkg, run_id, filename) as f:
+            async with logfile_manager.get_log(pkg, run_id, filename) as f:
                 text = f.read().decode('utf-8', 'replace')
         except FileNotFoundError:
             raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))

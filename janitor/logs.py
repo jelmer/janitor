@@ -21,13 +21,13 @@ import os
 
 class LogFileManager(object):
 
-    def has_log(self, pkg, run_id, name):
+    async def has_log(self, pkg, run_id, name):
         raise NotImplementedError(self.has_log)
 
-    def get_log(self, pkg, run_id, name):
+    async def get_log(self, pkg, run_id, name):
         raise NotImplementedError(self.get_log)
 
-    def import_log(self, pkg, run_id, orig_path):
+    async def import_log(self, pkg, run_id, orig_path):
         raise NotImplementedError(self.import_log)
 
 
@@ -44,10 +44,10 @@ class FileSystemLogFileManager(LogFileManager):
             os.path.join(self.log_directory, pkg, run_id, name) + '.gz'
         ]
 
-    def has_log(self, pkg, run_id, name):
+    async def has_log(self, pkg, run_id, name):
         return any(map(os.path.exists, self._get_paths(pkg, run_id, name)))
 
-    def get_log(self, pkg, run_id, name):
+    async def get_log(self, pkg, run_id, name):
         for path in self._get_paths(pkg, run_id, name):
             if not os.path.exists(path):
                 continue
@@ -57,7 +57,7 @@ class FileSystemLogFileManager(LogFileManager):
                 return open(path, 'rb')
         raise FileNotFoundError(name)
 
-    def import_log(self, pkg, run_id, orig_path):
+    async def import_log(self, pkg, run_id, orig_path):
         dest_dir = os.path.join(self.log_directory, pkg, run_id)
         os.makedirs(dest_dir, exist_ok=True)
         with open(orig_path, 'rb') as inf:

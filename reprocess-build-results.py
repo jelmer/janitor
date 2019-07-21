@@ -18,9 +18,8 @@ loop = asyncio.get_event_loop()
 logfile_manager = FileSystemLogFileManager(os.path.join('site', 'pkg'))
 
 
-for package, log_id, result_code, description in loop.run_until_complete(
-        state.iter_build_failures()):
-    build_logf = logfile_manager.get_log(package, log_id, 'build.log')
+async def reprocess_run(package, log_id, result_code, description):
+    build_logf = await logfile_manager.get_log(package, log_id, 'build.log')
     failure = worker_failure_from_sbuild_log(build_logf)
     if failure.error:
         new_code = '%s-%s' % (failure.stage, failure.error.kind)
@@ -32,3 +31,8 @@ for package, log_id, result_code, description in loop.run_until_complete(
         state.update_run_result(log_id, new_code, failure.description)
         note('Updated %r, %r => %r, %r', result_code, description,
              new_code, failure.description)
+
+
+for package, log_id, result_code, description in loop.run_until_complete(
+        state.iter_build_failures()):
+    loop.run_until_complete(reprocess_run(package, log_id, result_code, description))
