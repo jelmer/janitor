@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
+import asyncio
 import functools
+from io import BytesIO
 import os
 
 from breezy.errors import NotBranchError
@@ -141,26 +143,41 @@ async def generate_run_file(logfile_manager, run):
             for binary in changes_get_binaries(changes_file):
                 kwargs['binary_packages'].append(binary)
 
-    kwargs['get_log'] = await functools.partial(
-        logfile_manager.get_log, run.package, run.id)
-    if await logfile_manager.has_log(run.package, run.id, BUILD_LOG_NAME):
+    cached_logs = {}
+    async def _cache_log(name):
+        try:
+            cached_logs[name] = (await logfile_manager.get_log(run.package, run.id, name)).read()
+        except FileNotFoundError:
+            cached_logs[name] = None
+    async def has_log(name):
+        if not name in cached_logs:
+            await _cache_log(name)
+        return cached_logs[name] is not None
+    async def get_log(name):
+        if not name in cached_logs:
+            await _cache_log(name)
+        if cached_logs[name] is None:
+            raise FileNotFoundError(name)
+        return BytesIO(cached_logs[name])
+    kwargs['get_log'] = lambda name: asyncio.run(get_log(name))
+    if await has_log(BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
         kwargs['earlier_build_log_names'] = []
         i = 1
-        while await logfile_manager.has_log(
-                run.package, run.id, BUILD_LOG_NAME + '.%d' % i):
+        while await has_log(BUILD_LOG_NAME + '.%d' % i):
             log_name = '%s.%d' % (BUILD_LOG_NAME, i)
             kwargs['earlier_build_log_names'].append((i, log_name))
             i += 1
 
+        logf = await get_log(BUILD_LOG_NAME)
         line_count, include_lines, highlight_lines = find_build_log_failure(
-            await logfile_manager.get_log(run.package, run.id, BUILD_LOG_NAME),
+            logf,
             FAIL_BUILD_LOG_LEN)
         kwargs['build_log_line_count'] = line_count
         kwargs['build_log_include_lines'] = include_lines
         kwargs['build_log_highlight_lines'] = highlight_lines
 
-    if await logfile_manager.has_log(run.package, run.id, WORKER_LOG_NAME):
+    if await has_log(WORKER_LOG_NAME):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
 
     template = env.get_template('run.html')
