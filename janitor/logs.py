@@ -21,6 +21,18 @@ import os
 
 class LogFileManager(object):
 
+    def has_log(self, pkg, run_id, name):
+        raise NotImplementedError(self.has_log)
+
+    def get_log(self, pkg, run_id, name):
+        raise NotImplementedError(self.get_log)
+
+    def import_log(self, pkg, run_id, orig_path):
+        raise NotImplementedError(self.import_log)
+
+
+class FileSystemLogFileManager(LogFileManager):
+
     def __init__(self, log_directory):
         self.log_directory = log_directory
 
@@ -53,3 +65,10 @@ class LogFileManager(object):
                 dest_dir, os.path.basename(orig_path) + '.gz')
             with GzipFile(dest_path, mode='wb') as outf:
                 outf.write(inf.read())
+
+
+class S3LogFileManager(LogFileManager):
+
+    def __init__(self, base_url):
+        self.base_url = base_url
+

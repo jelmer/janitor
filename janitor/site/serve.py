@@ -60,7 +60,7 @@ if __name__ == '__main__':
     import os
     import re
     from janitor import SUITES
-    from janitor.logs import LogFileManager
+    from janitor.logs import FileSystemLogFileManager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
     from aiohttp import web, ClientSession
@@ -86,7 +86,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    logfile_manager = LogFileManager(args.logdirectory)
+    logfile_manager = FileSystemLogFileManager(args.logdirectory)
 
     async def handle_simple(templatename, request):
         from .generate import render_simple

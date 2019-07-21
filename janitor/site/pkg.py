@@ -8,7 +8,7 @@ from janitor import state
 from janitor.build import (
     changes_filename,
 )
-from janitor.logs import LogFileManager
+from janitor.logs import FileSystemLogFileManager
 from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
@@ -184,7 +184,7 @@ async def write_run_file(logdirectory, dir, run):
             os.path.exists(worker_log_path)):
         os.symlink(worker_log_path, os.path.join(run_dir, WORKER_LOG_NAME))
 
-    logfile_manager = LogFileManager(logdirectory)
+    logfile_manager = FileSystemLogFileManager(logdirectory)
     with open(os.path.join(run_dir, 'index.html'), 'w') as f:
         f.write(await generate_run_file(logfile_manager, run))
     note('Wrote %s', run_dir)
