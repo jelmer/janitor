@@ -1,8 +1,10 @@
 {% extends "layout.html" %}
+{% from "run_util.html" import result_code_explanation %}
 {% block page_title %}Result Code {{ code }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ code }}">
 <h1>{{ code }}</h1>
+{{ result_code_explanation(code) }}
 <table class="docutils" border="1">
 <colgroup>
 <col width="31%">
