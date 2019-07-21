@@ -7,7 +7,7 @@ import os
 import urllib.parse
 
 from janitor.policy import read_policy, apply_policy
-from janitor import state
+from janitor import state, SUITES
 from . import env, get_run_diff
 
 DEFAULT_SCHEDULE_OFFSET = 0
@@ -16,11 +16,6 @@ SUITE_TO_COMMAND = {
     'fresh-releases': ['new-upstream'],
     'fresh-snapshots': ['new-upstream', '--snapshot'],
     }
-SUITE_TO_POLICY_FIELD = {
-    'lintian-fixes': 'lintian_brush',
-    'fresh-releases': 'new_upstream_releases',
-    'fresh-snapshots': 'new_upstream_snapshots',
-}
 
 
 async def handle_policy(policy_config, request):
@@ -31,9 +26,10 @@ async def handle_policy(policy_config, request):
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     suite_policies = {}
-    for suite, field in SUITE_TO_POLICY_FIELD.items():
+    for suite in SUITES:
         (publish_policy, changelog_policy, committer) = apply_policy(
-            policy_config, field, name, maintainer_email, uploader_emails)
+            policy_config, suite.replace('-', '_'), name, maintainer_email,
+            uploader_emails)
         suite_policies[suite] = {
             'publish_policy': publish_policy,
             'changelog_policy': changelog_policy,
