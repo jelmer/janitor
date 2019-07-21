@@ -499,10 +499,7 @@ def main(argv=None):
     parser.add_argument(
         '--build-command',
         help='Build package to verify it.', type=str,
-        default=(
-            'sbuild -A -s -v -d$DISTRIBUTION --build-dep-resolver=aspcud '
-            '--extra-repository='
-            '\'deb http://janitor.debian.net/ $DISTRIBUTION/\''))
+        default='sbuild -A -s -v -d$DISTRIBUTION --build-dep-resolver=aspcud')
     parser.add_argument(
         '--tgz-repo',
         help='Whether to create a tgz of the VCS repo.',
