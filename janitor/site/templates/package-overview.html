@@ -42,7 +42,7 @@
 <h2>Recent runs</h2>
 <ul class="simple">
 {% for run in runs %}
-<li><a class="reference external" href="{{ run.id }}/">{{ run.times[1] }} {{ run.command }}</a>: {{ run.result_code }}</li>
+<li><a class="reference external" href="{{ run.id }}/">{{ format_timestamp(run.times[1]) }} {{ run.command }}</a>: {{ run.result_code }}</li>
 {% endfor %}
 </ul>
 </div>
