@@ -16,10 +16,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-async def read_apt_file_from_s3(session, s3_location, suite, filename, max_age):
+async def read_apt_file_from_s3(request, session, s3_location, suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
     url = '%s/%s/%s' % (s3_location, suite, filename)
-    # TODO(jelmer): share session?
     async with session.get(url) as client_response:
         status = client_response.status
 
@@ -37,7 +36,7 @@ async def read_apt_file_from_s3(session, s3_location, suite, filename, max_age):
         await response.prepare(request)
         S3_READ_CHUNK_SIZE = 65536
         while True:
-            chunk = await resp.content.read(CHUNK_SIZE)
+            chunk = await client_response.content.read(S3_READ_CHUNK_SIZE)
             if not chunk:
                 break
             await response.write(chunk)
@@ -88,7 +87,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     logfile_manager = LogFileManager(args.logdirectory)
-    http_client_session = ClientSession()
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
@@ -276,7 +274,8 @@ if __name__ == '__main__':
 
         if args.apt_location.startswith('http'):
             return await read_apt_file_from_s3(
-                http_client_session, args.apt_location, suite, file, max_age)
+                request, app.http_client_session, args.apt_location, suite, file,
+                max_age)
         else:
             return await read_apt_file_from_fs(suite, file, max_age)
 
@@ -347,6 +346,7 @@ if __name__ == '__main__':
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
 
+    app.http_client_session = ClientSession()
     setup_metrics(app)
     app.add_subapp('/api', create_api_app(args.publisher_url, policy_config))
     web.run_app(app, host=args.host, port=args.port)
