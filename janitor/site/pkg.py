@@ -8,7 +8,6 @@ from janitor import state
 from janitor.build import (
     changes_filename,
 )
-from janitor.logs import FileSystemLogFileManager
 from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
@@ -169,39 +168,6 @@ async def generate_run_file(logfile_manager, run):
     return text
 
 
-async def write_run_file(logdirectory, dir, run):
-    run_dir = os.path.join(dir, run.package, run.id)
-    os.makedirs(run_dir, exist_ok=True)
-
-    log_directory = os.path.join(logdirectory, run.package, run.id)
-    build_log_path = os.path.join(log_directory, BUILD_LOG_NAME)
-    if (not os.path.exists(os.path.join(run_dir, BUILD_LOG_NAME)) and
-            os.path.exists(build_log_path)):
-        os.symlink(build_log_path, os.path.join(run_dir, BUILD_LOG_NAME))
-
-    worker_log_path = os.path.join(log_directory, WORKER_LOG_NAME)
-    if (not os.path.exists(os.path.join(run_dir, WORKER_LOG_NAME)) and
-            os.path.exists(worker_log_path)):
-        os.symlink(worker_log_path, os.path.join(run_dir, WORKER_LOG_NAME))
-
-    logfile_manager = FileSystemLogFileManager(logdirectory)
-    with open(os.path.join(run_dir, 'index.html'), 'w') as f:
-        f.write(await generate_run_file(logfile_manager, run))
-    note('Wrote %s', run_dir)
-
-
-async def write_run_files(logdirectory, dir):
-    runs_by_pkg = {}
-
-    jobs = []
-    async for run in state.iter_runs():
-        jobs.append(write_run_file(logdirectory, dir, run))
-        runs_by_pkg.setdefault(run.package, []).append(run)
-    await asyncio.gather(*jobs)
-
-    return runs_by_pkg
-
-
 async def generate_pkg_file(
         name, merge_proposals, maintainer_email, branch_url, runs):
     kwargs = {}
@@ -219,36 +185,6 @@ async def generate_pkg_file(
     return await template.render_async(**kwargs)
 
 
-async def write_pkg_file(dir, name, merge_proposals, maintainer_email,
-                         branch_url, runs):
-    pkg_dir = os.path.join(dir, name)
-    if not os.path.isdir(pkg_dir):
-        os.mkdir(pkg_dir)
-
-    with open(os.path.join(pkg_dir, 'index.html'), 'w') as f:
-        f.write(await generate_pkg_file(
-            name, merge_proposals, maintainer_email, branch_url, runs))
-
-
-async def write_pkg_files(dir, runs_by_pkg):
-    merge_proposals = {}
-    for package, url, status, revision in await state.iter_proposals():
-        merge_proposals.setdefault(package, []).append((url, status))
-
-    jobs = []
-    packages = []
-    for (name, maintainer_email, uploader_emails, branch_url) in (
-            await state.iter_packages()):
-        packages.append((name, maintainer_email))
-        jobs.append(write_pkg_file(
-            dir, name, merge_proposals.get(name, []),
-            maintainer_email, branch_url, runs_by_pkg.get(name, [])))
-
-    await asyncio.gather(*jobs)
-
-    return packages
-
-
 async def generate_pkg_list(packages):
     template = env.get_template('package-name-list.html')
     return await template.render_async(
@@ -263,29 +199,7 @@ async def generate_maintainer_list(packages):
     return await template.render_async(by_maintainer=by_maintainer)
 
 
-async def write_pkg_list(dir, packages):
-    with open(os.path.join(dir, 'index.html'), 'w') as f:
-        f.write(await generate_pkg_list(packages))
-
-
 async def generate_ready_list(suite):
     template = env.get_template('ready-list.html')
     runs = list(await state.iter_publish_ready(suite=suite))
     return await template.render_async(runs=runs, suite=suite)
-
-
-if __name__ == '__main__':
-    import argparse
-    import asyncio
-    parser = argparse.ArgumentParser(prog='report-pkg')
-    parser.add_argument("logdirectory")
-    parser.add_argument("directory")
-    args = parser.parse_args()
-    if not os.path.isdir(args.directory):
-        os.mkdir(args.directory)
-    loop = asyncio.get_event_loop()
-    runs_by_pkg = loop.run_until_complete(
-        write_run_files(args.logdirectory, args.directory))
-    packages = loop.run_until_complete(
-        write_pkg_files(args.directory, runs_by_pkg))
-    loop.run_until_complete(write_pkg_list(args.directory, packages))

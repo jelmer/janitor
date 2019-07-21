@@ -60,7 +60,7 @@ if __name__ == '__main__':
     import os
     import re
     from janitor import SUITES
-    from janitor.logs import FileSystemLogFileManager
+    from janitor.logs import FileSystemLogFileManager, S3LogFileManager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
     from aiohttp import web, ClientSession
@@ -71,7 +71,8 @@ if __name__ == '__main__':
         '--port',
         type=int, help='Port to listen on', default=8080)
     parser.add_argument('--logdirectory', type=str,
-                        help='Logs directory path.', default='site/pkg')
+                        help='Logs directory path.',
+                        default='https://s3.nl-ams.scw.cloud/debian-janitor/logs')
     parser.add_argument('--publisher-url', type=str,
                         default='http://localhost:9912/',
                         help='URL for publisher.')
@@ -86,7 +87,10 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    logfile_manager = FileSystemLogFileManager(args.logdirectory)
+    if args.logdirectory.startswith('http'):
+        logfile_manager = S3LogFileManager(args.logdirectory)
+    else:
+        logfile_manager = FileSystemLogFileManager(args.logdirectory)
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
