@@ -290,7 +290,7 @@ async def process_one(
         for name in [
                 n for n in os.listdir(output_directory) if n.endswith('.log')]:
             src_build_log_path = os.path.join(output_directory, name)
-            logfile_manager.import_log(pkg, log_id, src_build_log_path)
+            await logfile_manager.import_log(pkg, log_id, src_build_log_path)
 
         if retcode != 0:
             return JanitorResult(

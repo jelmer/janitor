@@ -142,26 +142,26 @@ async def generate_run_file(logfile_manager, run):
             for binary in changes_get_binaries(changes_file):
                 kwargs['binary_packages'].append(binary)
 
-    kwargs['get_log'] = functools.partial(
+    kwargs['get_log'] = await functools.partial(
         logfile_manager.get_log, run.package, run.id)
-    if logfile_manager.has_log(run.package, run.id, BUILD_LOG_NAME):
+    if await logfile_manager.has_log(run.package, run.id, BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
         kwargs['earlier_build_log_names'] = []
         i = 1
-        while logfile_manager.has_log(
+        while await logfile_manager.has_log(
                 run.package, run.id, BUILD_LOG_NAME + '.%d' % i):
             log_name = '%s.%d' % (BUILD_LOG_NAME, i)
             kwargs['earlier_build_log_names'].append((i, log_name))
             i += 1
 
         line_count, include_lines, highlight_lines = find_build_log_failure(
-            logfile_manager.get_log(run.package, run.id, BUILD_LOG_NAME),
+            await logfile_manager.get_log(run.package, run.id, BUILD_LOG_NAME),
             FAIL_BUILD_LOG_LEN)
         kwargs['build_log_line_count'] = line_count
         kwargs['build_log_include_lines'] = include_lines
         kwargs['build_log_highlight_lines'] = highlight_lines
 
-    if logfile_manager.has_log(run.package, run.id, WORKER_LOG_NAME):
+    if await logfile_manager.has_log(run.package, run.id, WORKER_LOG_NAME):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
 
     template = env.get_template('run.html')
