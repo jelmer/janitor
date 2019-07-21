@@ -30,7 +30,6 @@ from prometheus_client import (
 import silver_platter   # noqa: F401
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
-    DEFAULT_ADDON_FIXERS,
 )
 
 import sys
@@ -55,10 +54,6 @@ parser.add_argument("--policy",
 parser.add_argument("--dry-run",
                     help="Create branches but don't push or propose anything.",
                     action="store_true", default=False)
-parser.add_argument('--propose-addon-only',
-                    help='Fixers that should be considered add-on-only.',
-                    type=str, action='append',
-                    default=DEFAULT_ADDON_FIXERS)
 parser.add_argument('--prometheus', type=str,
                     help='Prometheus push gateway to export to.')
 args = parser.parse_args()
@@ -86,7 +81,7 @@ fixer_count.inc(len(available_fixers))
 async def main():
     note('Querying UDD...')
     iter_candidates = iter_lintian_fixes_candidates(
-        args.packages, available_fixers, args.propose_addon_only)
+        args.packages, available_fixers)
     todo = [x async for x in schedule_from_candidates(
         args.policy, iter_candidates)]
     await add_to_queue(todo, dry_run=args.dry_run)

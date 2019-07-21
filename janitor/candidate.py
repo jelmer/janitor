@@ -24,14 +24,21 @@ __all__ = [
 ]
 
 from .udd import UDD
+from silver_platter.debian.lintian import (
+    DEFAULT_ADDON_FIXERS,
+    )
 
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
 DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
 DEFAULT_VALUE_LINTIAN_BRUSH = 50
-LINTIAN_BRUSH_TAG_VALUE = 1
+# Base these scores on the importance as set in Debian?
+LINTIAN_BRUSH_TAG_VALUES = {
+    'file-contains-trailing-whitespace': 0,
+    }
+LINTIAN_BRUSH_TAG_DEFAULT_VALUE = 5
 
-# Default to 5 minutes
+# Default to 15 seconds
 DEFAULT_ESTIMATED_DURATION = 15
 
 
@@ -45,11 +52,13 @@ def get_ubuntu_package_url(launchpad, package):
 
 
 async def schedule_ubuntu(policy, propose_addon_only, packages):
+    from breezy import trace
     from breezy.plugins.launchpad.lp_api import (
         Launchpad,
         get_cache_directory,
         httplib2,
         )
+    from .policy import read_policy, apply_policy
     proxy_info = httplib2.proxy_info_from_environment('https')
     cache_directory = get_cache_directory()
     launchpad = Launchpad.login_with(
@@ -109,16 +118,16 @@ async def iter_fresh_snapshots_candidates(packages):
 
 
 async def iter_lintian_fixes_candidates(
-        packages, available_fixers, propose_addon_only):
+        packages, available_fixers):
     udd = await UDD.public_udd_mirror()
     async for package, tags in udd.iter_source_packages_by_lintian(
             available_fixers, packages if packages else None):
-        if not (set(tags) - set(propose_addon_only)):
-            # Penalty for whitespace-only fixes
+        if not (set(tags) - set(DEFAULT_ADDON_FIXERS)):
             value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
         else:
             value = DEFAULT_VALUE_LINTIAN_BRUSH
-        value += len(tags) * LINTIAN_BRUSH_TAG_VALUE
+        for tag in tags:
+            value += LINTIAN_BRUSH_TAG_VALUES.get(tag, LINTIAN_BRUSH_TAG_DEFAULT_VALUE)
         context = ' '.join(sorted(tags))
         yield package, 'lintian-fixes', ['lintian-brush'], context, value
 
@@ -130,17 +139,24 @@ async def main():
         available_lintian_fixers,
         DEFAULT_ADDON_FIXERS,
     )
+    from prometheus_client import (
+        Counter,
+        Gauge,
+        push_to_gateway,
+        REGISTRY,
+    )
 
-    parser = argparse.ArgumentParser(prog='propose-lintian-fixes')
+    parser = argparse.ArgumentParser(prog='candidates')
     parser.add_argument("packages", nargs='*')
     parser.add_argument("--fixers",
                         help="Fixers to run.", type=str, action='append')
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,
                         default='policy.conf')
-    parser.add_argument("--dry-run",
-                        help="Create branches but don't push or propose anything.",
-                        action="store_true", default=False)
+    parser.add_argument(
+        "--dry-run",
+        help="Create branches but don't push or propose anything.",
+        action="store_true", default=False)
     parser.add_argument('--propose-addon-only',
                         help='Fixers that should be considered add-on-only.',
                         type=str, action='append',
@@ -149,13 +165,39 @@ async def main():
                         help='Prometheus push gateway to export to.')
     args = parser.parse_args()
 
-    tags = set()
-    for fixer in available_lintian_fixers():
-        tags.update(fixer.lintian_tags)
+    last_success_gauge = Gauge(
+        'job_last_success_unixtime',
+        'Last time a batch job successfully finished')
+    fixer_count = Counter(
+        'fixer_count', 'Number of selected fixers.')
 
-    async for package, suite, command, context, value in iter_lintian_fixes_candidates(
+    tags = set()
+    available_fixers = list(available_lintian_fixers())
+    for fixer in available_fixers:
+        tags.update(fixer.lintian_tags)
+    fixer_count.inc(len(available_fixers))
+
+    async for (package, suite, command, context,
+               value) in iter_lintian_fixes_candidates(
             args.packages, tags, args.propose_addon_only):
-        await state.store_candidate(package.name, suite, command, context, value)
+        await state.store_candidate(
+            package.name, suite, command, context, value)
+
+    async for (package, suite, command, context,
+               value) in iter_fresh_releases_candidates(args.packages):
+        await state.store_candidate(
+            package.name, suite, command, context, value)
+
+    async for (package, suite, command, context,
+               value) in iter_fresh_snapshots_candidates(args.packages):
+        await state.store_candidate(
+            package.name, suite, command, context, value)
+
+    last_success_gauge.set_to_current_time()
+    if args.prometheus:
+        push_to_gateway(
+            args.prometheus, job='janitor.schedule-new-upstream-snapshots',
+            registry=REGISTRY)
 
 
 if __name__ == '__main__':
