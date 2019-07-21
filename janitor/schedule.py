@@ -22,7 +22,7 @@ __all__ = [
     'schedule_from_candidates',
 ]
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from . import (
     state,
@@ -46,15 +46,16 @@ POPULARITY_WEIGHT = 1
 DEFAULT_ESTIMATED_DURATION = 15
 
 
-# These are result codes that suggest some part of the system failed, but
-# not what exactly. Recent versions of the janitor will hopefully
-# give a better result code.
-VAGUE_RESULT_CODES = [
-    None, 'worker-failure', 'worker-exception',
-    'build-failed']
-
-TRANSIENT_RESULT_CODES = [
-    'worker-exception', 'build-failed-stage-explain-bd-uninstallable']
+# In some cases, we want to ignore certain results when guessing
+# whether a future run is going to be successful.
+# For example, some results are transient, or sometimes new runs
+# will give a clearer error message.
+IGNORE_RESULT_CODE = {
+    'worker-exception': lambda run: True,
+    'build-failed-stage-explain-bd-uninstallable': lambda run: True,
+    # Run worker failures from more than a day ago.
+    'worker-failure': lambda run: ((datetime.now() - run.times[0]).days > 0),
+}
 
 
 async def schedule_from_candidates(policy, iter_candidates):
@@ -102,8 +103,13 @@ async def estimate_success_probability(package, suite, context=None):
     success = 0
     context_repeated = False
     async for run in state.iter_previous_runs(package, suite):
-        if run.result_code in TRANSIENT_RESULT_CODES:
-            continue
+        try:
+            ignore_checker = IGNORE_RESULT_CODE[run.result_code]
+        except KeyError:
+            pass
+        else:
+            if ignore_checker(run):
+                continue
         total += 1
         if run.result_code == 'success':
             success += 1
