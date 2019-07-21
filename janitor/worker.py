@@ -502,7 +502,7 @@ def main(argv=None):
         default=(
             'sbuild -A -s -v -d$DISTRIBUTION --build-dep-resolver=aspcud '
             '--extra-repository='
-            '\'deb https://janitor.debian.net/ $DISTRIBUTION/\''))
+            '\'deb http://janitor.debian.net/ $DISTRIBUTION/\''))
     parser.add_argument(
         '--tgz-repo',
         help='Whether to create a tgz of the VCS repo.',
