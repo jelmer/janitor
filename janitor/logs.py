@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import ClientSession
 from gzip import GzipFile
 import os
 
@@ -71,4 +72,17 @@ class S3LogFileManager(LogFileManager):
 
     def __init__(self, base_url):
         self.base_url = base_url
+        self.session = ClientSession()
 
+    def _get_url(self, pkg, run_id, name):
+        return '%s/%s/%s/%s.gz' % (self.base_url, pkg, run_id, name)
+
+    async def has_log(self, pkg, run_id, name):
+        async with self.session.head(self._get_url(pkg, run_id, name)) as resp:
+            return resp.status == 200
+
+    async def get_log(self, pkg, run_id, name):
+        async with self.session.get(self._get_url(pkg, run_id, name)) as resp:
+            if resp.status == 404:
+                raise FileNotFoundError(name)
+            return resp.response
