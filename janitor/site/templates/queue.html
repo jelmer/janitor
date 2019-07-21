@@ -17,7 +17,7 @@
 </thead>
 <tbody valign="top">
 {% for pkg, description, estimated_duration in queue %}
-<tr><td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a><td>{% if description %}({{ description|safe }}){% endif %}</td><td>{{ estimated_duration }}</td></tr>
+<tr><td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a><td>{{ description|safe }}</td><td>{{ estimated_duration }}</td></tr>
 {% endfor %}
 </tbody>
 </table>
