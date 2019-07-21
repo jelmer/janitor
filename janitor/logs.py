@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import ClientSession
-from gzip import GzipFile
+import gzip
 from io import BytesIO
 import os
 
@@ -54,7 +54,7 @@ class FileSystemLogFileManager(LogFileManager):
             if not os.path.exists(path):
                 continue
             if path.endswith('.gz'):
-                return GzipFile(path, mode='rb')
+                return gzip.GzipFile(path, mode='rb')
             else:
                 return open(path, 'rb')
         raise FileNotFoundError(name)
@@ -65,7 +65,7 @@ class FileSystemLogFileManager(LogFileManager):
         with open(orig_path, 'rb') as inf:
             dest_path = os.path.join(
                 dest_dir, os.path.basename(orig_path) + '.gz')
-            with GzipFile(dest_path, mode='wb') as outf:
+            with gzip.GzipFile(dest_path, mode='wb') as outf:
                 outf.write(inf.read())
 
 
@@ -80,7 +80,6 @@ class S3LogFileManager(LogFileManager):
 
     async def has_log(self, pkg, run_id, name):
         url = self._get_url(pkg, run_id, name)
-        print(url)
         async with self.session.head(url) as resp:
             if resp.status == 404:
                 return False
@@ -95,7 +94,7 @@ class S3LogFileManager(LogFileManager):
             if resp.status == 404:
                 raise FileNotFoundError(name)
             if resp.status == 200:
-                return BytesIO(await resp.read())
+                return BytesIO(gzip.decompress(await resp.read()))
             if resp.status == 403:
                 raise PermissionError(await resp.text())
             raise AssertionError('Unexpected response code %d' % resp.status)

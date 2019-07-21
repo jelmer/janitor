@@ -159,7 +159,7 @@ async def generate_run_file(logfile_manager, run):
         if cached_logs[name] is None:
             raise FileNotFoundError(name)
         return BytesIO(cached_logs[name])
-    kwargs['get_log'] = lambda name: asyncio.run(get_log(name))
+    kwargs['get_log'] = lambda name: BytesIO(cached_logs.get(name, b''))
     if await has_log(BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
         kwargs['earlier_build_log_names'] = []
@@ -171,8 +171,7 @@ async def generate_run_file(logfile_manager, run):
 
         logf = await get_log(BUILD_LOG_NAME)
         line_count, include_lines, highlight_lines = find_build_log_failure(
-            logf,
-            FAIL_BUILD_LOG_LEN)
+            logf, FAIL_BUILD_LOG_LEN)
         kwargs['build_log_line_count'] = line_count
         kwargs['build_log_include_lines'] = include_lines
         kwargs['build_log_highlight_lines'] = highlight_lines
