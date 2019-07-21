@@ -75,3 +75,7 @@ $(function() {
 {% macro display_result_code(result_code) %}
 <span class="result-code-{{ result_code if result_code in ('success', 'nothing-to-do') else 'failure' }}">{{ result_code }}</span>
 {% endmacro %}
+
+{% macro result_code_explanation(result_code) %}
+{% include ("result-codes/" + result_code + ".html") ignore missing %}
+{% endmacro %}
