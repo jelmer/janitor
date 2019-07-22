@@ -77,7 +77,7 @@ if __name__ == '__main__':
                         default='http://localhost:9912/',
                         help='URL for publisher.')
     parser.add_argument('--apt-location', type=str,
-                        default='https://s3.nl-ams.scw.cloud/debian-janitor/apt',
+                        default='https://s3.nl-ams.scw.cloud',
                         help='Location to read apt files from (HTTP or local).')
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,
