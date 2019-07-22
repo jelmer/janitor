@@ -16,7 +16,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import ClientSession
+import boto3
 import gzip
+from hashlib import sha256
 from io import BytesIO
 import os
 
@@ -71,12 +73,17 @@ class FileSystemLogFileManager(LogFileManager):
 
 class S3LogFileManager(LogFileManager):
 
-    def __init__(self, base_url):
-        self.base_url = base_url
+    def __init__(self, endpoint_url, bucket_name='debian-janitor'):
+        self.base_url = base_url + ('/%s/' % bucket_name)
         self.session = ClientSession()
+        self.s3 = boto3.resource('s3', endpoint_url=endpoint_url)
+        self.s3_bucket = self.s3.Bucket(bucket_name)
+
+    def _get_key(self, pkg, run_id, name):
+        return 'apt/%s/%s/%s.gz' % (pkg, run_id, name)
 
     def _get_url(self, pkg, run_id, name):
-        return '%s/%s/%s/%s.gz' % (self.base_url, pkg, run_id, name)
+        return '%s/%s' % (self.base_url, self._get_key(pkg, run_id, name))
 
     async def has_log(self, pkg, run_id, name):
         url = self._get_url(pkg, run_id, name)
@@ -98,3 +105,10 @@ class S3LogFileManager(LogFileManager):
             if resp.status == 403:
                 raise PermissionError(await resp.text())
             raise AssertionError('Unexpected response code %d' % resp.status)
+
+    async def import_log(self, pkg, run_id, orig_path):
+        with open(orig_path, 'rb') as f:
+            data = f.read()
+
+        key = self._get_key(pkg, run_id, os.path.basename(orig_path))
+        self.s3_bucket.put_object(Key=key, Body=data)

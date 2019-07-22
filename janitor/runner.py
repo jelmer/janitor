@@ -52,7 +52,7 @@ from silver_platter.utils import (
     )
 
 from . import state
-from .logs import FileSystemLogFileManager
+from .logs import FileSystemLogFileManager, S3LogFileManager
 from .prometheus import setup_metrics
 from .trace import note, warning
 from .vcs import (
@@ -217,7 +217,10 @@ async def process_one(
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
-    logfile_manager = FileSystemLogFileManager(log_dir)
+    if log_dir.startswith('http'):
+        logfile_manager = S3LogFileManager(log_dir)
+    else:
+        logfile_manager = FileSystemLogFileManager(log_dir)
 
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if command == ["new-upstream"]:
@@ -490,7 +493,7 @@ def main(argv=None):
         action="store_true", default=False)
     parser.add_argument(
         '--log-dir', help='Directory to store logs in.',
-        type=str, default='site/pkg')
+        type=str, default='https://s3.nl-ams.scw.cloud')
     parser.add_argument(
         '--incoming', type=str,
         help='Path to copy built Debian packages into.')
