@@ -64,7 +64,7 @@ from .vcs import (
     get_cached_branch,
     )
 
-apt_package_count = Counter(
+apt_package_count = Gauge(
     'apt_package_count', 'Number of packages with a version published',
     ['suite'])
 packages_processed_count = Counter(
@@ -415,7 +415,7 @@ async def process_queue(
             logfile_manager=logfile_manager, use_cached_only=use_cached_only)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
-            finish_time - start_time)
+            finish_time.timestamp() - start_time.timestamp())
         if not dry_run:
             await state.store_run(
                 result.log_id, item.package, item.branch_url,

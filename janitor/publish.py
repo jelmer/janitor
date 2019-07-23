@@ -445,7 +445,7 @@ async def publish_pending(rate_limiter, policy, vcs_directory, dry_run=False):
         if await state.already_published(
                 pkg, branch_name, revision, mode):
             continue
-        if rate_limiter.allowed(maintainer_email) and \
+        if not rate_limiter.allowed(maintainer_email) and \
                 mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
             proposal_rate_limited_count.labels(package=pkg, suite=suite).inc()
             warning(
@@ -498,7 +498,7 @@ async def publish_request(rate_limiter, dry_run, vcs_directory, request):
     except IndexError:
         return web.json_response({}, status=400)
 
-    if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and rate_limiter.allowed(maintainer_email):
+    if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and not rate_limiter.allowed(maintainer_email):
         return web.json_response(
             {'maintainer_email': maintainer_email, 'code': 'rate-limited',
              'description':
@@ -508,6 +508,7 @@ async def publish_request(rate_limiter, dry_run, vcs_directory, request):
     run = await state.get_last_success(package, suite)
     if run is None:
         return web.json_response({}, status=400)
+    note('Handling request to publish %s/%s', package, suite)
     try:
         proposal, branch_name, is_new = await publish_one(
             suite, package, run.command, run.result,
@@ -590,7 +591,7 @@ def main(argv=None):
     with open(args.policy, 'r') as f:
         policy = read_policy(f)
 
-    if args.max_mps_per_maintainer:
+    if args.max_mps_per_maintainer > 0:
         rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
     else:
         rate_limiter = NonRateLimiter()

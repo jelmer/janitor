@@ -28,11 +28,12 @@ async def reprocess_run(package, log_id, result_code, description):
     else:
         new_code = 'build-failed'
     if new_code != result_code or description != failure.description:
-        state.update_run_result(log_id, new_code, failure.description)
+        await state.update_run_result(log_id, new_code, failure.description)
         note('Updated %r, %r => %r, %r', result_code, description,
              new_code, failure.description)
 
 
-for package, log_id, result_code, description in loop.run_until_complete(
-        state.iter_build_failures()):
-    loop.run_until_complete(reprocess_run(package, log_id, result_code, description))
+loop.run_until_complete(asyncio.gather(*[
+    reprocess_run(package, log_id, result_code, description)
+    for package, log_id, result_code, description in loop.run_until_complete(
+        state.iter_build_failures())]))
