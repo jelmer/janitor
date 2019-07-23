@@ -18,6 +18,8 @@
 import os
 
 import urllib.parse
+import breezy.git  # noqa: F401
+import breezy.bzr  # noqa: F401
 from breezy.branch import Branch
 from breezy.errors import (
     ConnectionError,
@@ -28,6 +30,7 @@ from breezy.errors import (
     )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
+from breezy.repository import Repository
 from silver_platter.utils import (
     open_branch,
     BranchUnavailable,
@@ -216,6 +219,15 @@ def get_local_vcs_branch(vcs_directory, pkg, branch_name):
             os.path.join(vcs_directory, 'bzr', pkg, branch_name))
 
 
+def get_local_vcs_repo(vcs_directory, package, vcs_type=None):
+    for vcs in (SUPPORTED_VCSES if not vcs_type else [vcs_type]):
+        path = os.path.join(vcs_directory, vcs, package)
+        if not os.path.exists(path):
+            continue
+        return Repository.open(path)
+    return None
+
+
 class VcsManager(object):
 
     def get_branch(self, package, branch_name, vcs_type=None):
@@ -224,6 +236,9 @@ class VcsManager(object):
     def import_branches(self, main_branch, local_branch, pkg, name,
                         additional_colocated_branches=None):
         raise NotImplementedError(self.import_branches)
+
+    def get_repository(self, package, vcs_type=None):
+        raise NotImplementedError(self.get_repository)
 
 
 class LocalVcsManager(VcsManager):
@@ -239,6 +254,9 @@ class LocalVcsManager(VcsManager):
         copy_vcs_dir(
             main_branch, local_branch, self.base_path, pkg, name,
             additional_colocated_branches=additional_colocated_branches)
+
+    def get_repository(self, package, vcs_type=None):
+        return get_local_vcs_repo(package, vcs_type)
 
 
 class RemoteVcsManager(VcsManager):

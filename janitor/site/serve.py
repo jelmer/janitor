@@ -63,6 +63,7 @@ if __name__ == '__main__':
     from janitor.logs import FileSystemLogFileManager, S3LogFileManager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
+    from janitor.vcs import LocalVcsManager
     from aiohttp import web, ClientSession
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
@@ -91,6 +92,9 @@ if __name__ == '__main__':
         logfile_manager = S3LogFileManager(args.logdirectory)
     else:
         logfile_manager = FileSystemLogFileManager(args.logdirectory)
+
+    vcs_manager = LocalVcsManager(os.path.join(
+        os.path.dirname(__file__), '..', '..', 'vcs'))
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
@@ -197,7 +201,7 @@ if __name__ == '__main__':
                    for x in state.iter_runs(run_id=run_id, package=pkg)][0]
         except IndexError:
             raise web.HTTPNotFound(text='No run with id %r' % run_id)
-        text = await generate_run_file(logfile_manager, run)
+        text = await generate_run_file(logfile_manager, vcs_manager, run)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=3600'})
@@ -234,7 +238,7 @@ if __name__ == '__main__':
         from .lintian_fixes import generate_pkg_file
         pkg = request.match_info['pkg']
         try:
-            text = await generate_pkg_file(pkg)
+            text = await generate_pkg_file(vcs_manager, pkg)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(

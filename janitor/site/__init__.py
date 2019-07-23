@@ -47,27 +47,14 @@ def get_build_architecture():
     return "amd64"
 
 
-def get_local_vcs_repo(package):
-    import breezy.git  # noqa: F401
-    import breezy.bzr  # noqa: F401
-    from breezy.repository import Repository
-    for vcs in SUPPORTED_VCSES:
-        path = os.path.join(
-            os.path.dirname(__file__), '..', '..', 'vcs', vcs, package)
-        if not os.path.exists(path):
-            continue
-        return Repository.open(path)
-    return None
-
-
-def get_run_diff(run):
+def get_run_diff(vcs_manager, run):
     from breezy.diff import show_diff_trees
     from breezy.errors import NoSuchRevision, NotBranchError
     from io import BytesIO
 
     f = BytesIO()
     try:
-        repo = get_local_vcs_repo(run.package)
+        repo = vcs_manager.get_repository(run.package)
     except NotBranchError:
         repo = None
     if repo is None:

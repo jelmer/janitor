@@ -15,7 +15,7 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(package):
+async def generate_pkg_file(vcs_manager, package):
     try:
         (package, maintainer_email, uploader_emails, vcs_url) = list(
             await state.iter_packages(package=package))[0]
@@ -57,7 +57,7 @@ async def generate_pkg_file(package):
     previous_runs = [x async for x in state.iter_previous_runs(package, SUITE)]
 
     def show_diff():
-        diff = get_run_diff(run)
+        diff = get_run_diff(vcs_manager, run)
         if diff is None:
             return None
         return diff.decode('utf-8', 'replace')
@@ -115,9 +115,13 @@ async def generate_candidates():
 
 
 if __name__ == '__main__':
+    from janitor.vcs import LocalVcsManager
     parser = argparse.ArgumentParser(prog='report-lintian-fixes-pkg')
     parser.add_argument("package")
     args = parser.parse_args()
 
+    vcs_manager = LocalVcsManager(os.path.join(
+        os.path.dirname(__file__), '..', '..', 'vcs'))
     loop = asyncio.get_event_loop()
-    sys.stdout.write(loop.run_until_complete(generate_pkg_file(args.package)))
+    sys.stdout.write(loop.run_until_complete(generate_pkg_file(
+        vcs_manager, cargs.package)))
