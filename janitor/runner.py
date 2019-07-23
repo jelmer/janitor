@@ -56,12 +56,10 @@ from .logs import FileSystemLogFileManager, S3LogFileManager
 from .prometheus import setup_metrics
 from .trace import note, warning
 from .vcs import (
-    SUPPORTED_VCSES,
     get_vcs_abbreviation,
     open_branch_ext,
-    copy_vcs_dir,
     BranchOpenFailure,
-    get_cached_branch,
+    LocalVcsManager,
     )
 
 apt_package_count = Gauge(
@@ -213,7 +211,7 @@ async def process_one(
         worker_kind, vcs_url, pkg, env, command, build_command,
         suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, logfile_manager=None,
-        debsign_keyid=None, vcs_result_dir=None,
+        debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False):
     note('Running %r on %s', command, pkg)
@@ -254,30 +252,33 @@ async def process_one(
                 warning('Project %s not found', e.project)
                 resume_branch = None
 
-        if resume_branch is None:
-            resume_branch = get_cached_branch(
-                get_vcs_abbreviation(main_branch), pkg, branch_name)
+        if resume_branch is None and vcs_manager:
+            resume_branch = vcs_manager.get_branch(
+                pkg, branch_name, get_vcs_abbreviation(main_branch))
 
         if resume_branch is not None:
             note('Resuming from %s', resume_branch.user_url)
 
-        cached_branch = get_cached_branch(
-            get_vcs_abbreviation(main_branch), pkg, 'master')
+        if vcs_manager:
+            cached_branch = vcs_manager.get_branch(
+                pkg, 'master', get_vcs_abbreviation(main_branch))
+        else:
+            cached_branch = None
 
         if cached_branch is not None:
             note('Using cached branch %s', cached_branch.user_url)
     else:
-        for vcs_abbrev in SUPPORTED_VCSES:
-            main_branch = get_cached_branch(vcs_abbrev, pkg, 'master')
-            if main_branch is not None:
-                break
+        if vcs_manager:
+            main_branch = vcs_manager.get_branch(pkg, 'master')
         else:
+            main_branch = None
+        if main_branch is None:
             return JanitorResult(
                 pkg, log_id=log_id,
                 code='cached-branch-missing',
                 description='Missing cache branch for %s' % pkg)
         note('Using cached branch %s', main_branch.user_url)
-        resume_branch = get_cached_branch(vcs_abbrev, pkg, branch_name)
+        resume_branch = vcs_manager.get_branch(pkg, branch_name, vcs_abbrev)
         cached_branch = None
 
     if resume_branch is not None:
@@ -345,10 +346,10 @@ async def process_one(
         result.revision = local_branch.last_revision().decode('utf-8')
         enable_tag_pushing(local_branch)
 
-        if vcs_result_dir:
-            copy_vcs_dir(
+        if vcs_manager:
+            vcs_manager.import_branches(
                 main_branch, local_branch,
-                vcs_result_dir, pkg, branch_name,
+                pkg, branch_name,
                 additional_colocated_branches=(
                     ADDITIONAL_COLOCATED_BRANCHES))
             result.branch_name = branch_name
@@ -383,7 +384,7 @@ async def process_queue(
         worker_kind, build_command,
         pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None, vcs_result_dir=None,
+        debsign_keyid=None, vcs_manager=None,
         concurrency=1, use_cached_only=False):
     """Process the items added to the queue.
 
@@ -411,7 +412,7 @@ async def process_queue(
             suite=item.suite, pre_check=pre_check,
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
-            debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
+            debsign_keyid=debsign_keyid, vcs_manager=vcs_manager,
             logfile_manager=logfile_manager, use_cached_only=use_cached_only)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
@@ -532,6 +533,7 @@ def main(argv=None):
 
     debug.set_debug_flags_from_config()
 
+    vcs_manager = LocalVcsManager(args.vcs_result_dir)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(process_queue(
@@ -540,7 +542,7 @@ def main(argv=None):
             args.pre_check, args.post_check,
             args.dry_run, args.incoming, args.log_dir,
             args.debsign_keyid,
-            args.vcs_result_dir,
+            vcs_manager,
             args.concurrency,
             args.use_cached_only)),
         loop.create_task(export_queue_length()),
