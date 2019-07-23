@@ -62,7 +62,7 @@ from .policy import (
     )
 from .prometheus import setup_metrics
 from .trace import note, warning
-from .vcs import get_local_vcs_branch
+from .vcs import LocalVcsManager
 
 
 JANITOR_BLURB = """
@@ -362,11 +362,11 @@ class NewUpstreamPublisher(object):
 
 async def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
-        mode, log_id, maintainer_email, vcs_directory, branch_name,
+        mode, log_id, maintainer_email, vcs_manager, branch_name,
         dry_run=False, possible_hosters=None,
         possible_transports=None, allow_create_proposal=None):
     assert mode in SUPPORTED_MODES
-    local_branch = get_local_vcs_branch(vcs_directory, pkg, branch_name)
+    local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
         raise PublishFailure(
             'result-branch-not-found', 'can not find local branch')
@@ -428,7 +428,7 @@ async def publish_one(
     return proposal, branch_name, is_new
 
 
-async def publish_pending(rate_limiter, policy, vcs_directory, dry_run=False):
+async def publish_pending(rate_limiter, policy, vcs_manager, dry_run=False):
     possible_hosters = []
     possible_transports = []
 
@@ -466,7 +466,7 @@ async def publish_pending(rate_limiter, policy, vcs_directory, dry_run=False):
             proposal, branch_name, is_new = await publish_one(
                 suite, pkg, command, subworker_result,
                 main_branch_url, mode, log_id, maintainer_email,
-                vcs_directory=vcs_directory, branch_name=branch_name,
+                vcs_manager=vcs_manager, branch_name=branch_name,
                 dry_run=dry_run, possible_hosters=possible_hosters,
                 possible_transports=possible_transports)
         except PublishFailure as e:
@@ -487,7 +487,7 @@ async def publish_pending(rate_limiter, policy, vcs_directory, dry_run=False):
             proposal.url if proposal else None)
 
 
-async def publish_request(rate_limiter, dry_run, vcs_directory, request):
+async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     package = request.match_info['package']
     suite = request.match_info['suite']
     post = await request.post()
@@ -513,7 +513,7 @@ async def publish_request(rate_limiter, dry_run, vcs_directory, request):
         proposal, branch_name, is_new = await publish_one(
             suite, package, run.command, run.result,
             main_branch_url, mode, run.id, maintainer_email,
-            vcs_directory=vcs_directory, branch_name=run.branch_name,
+            vcs_manager=vcs_manager, branch_name=run.branch_name,
             dry_run=dry_run, allow_create_proposal=True)
     except PublishFailure as e:
         return web.json_response(
@@ -529,23 +529,23 @@ async def publish_request(rate_limiter, dry_run, vcs_directory, request):
          'proposal': proposal.url if proposal else None}, status=200)
 
 
-async def run_web_server(listen_addr, port, rate_limiter, vcs_directory,
+async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
                          dry_run=False):
     app = web.Application()
     setup_metrics(app)
     app.router.add_post(
         "/{suite}/{package}/publish",
-        functools.partial(publish_request, rate_limiter, dry_run, vcs_directory))
+        functools.partial(publish_request, rate_limiter, dry_run, vcs_manager))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
     await site.start()
 
 
-async def process_queue_loop(rate_limiter, policy, dry_run, vcs_directory,
+async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
                              interval):
     while True:
-        await publish_pending(rate_limiter, policy, vcs_directory, dry_run)
+        await publish_pending(rate_limiter, policy, vcs_manager, dry_run)
         await asyncio.sleep(interval)
 
 
@@ -597,10 +597,11 @@ def main(argv=None):
         rate_limiter = NonRateLimiter()
 
     loop = asyncio.get_event_loop()
+    vcs_manager = LocalVcsManager(args.vcs_result_dir)
     if args.once:
         loop.run_until_complete(publish_pending(
             policy, dry_run=args.dry_run,
-            vcs_directory=args.vcs_result_dir))
+            vcs_manager=vcs_manager))
 
         last_success_gauge.set_to_current_time()
         if args.prometheus:
@@ -611,7 +612,7 @@ def main(argv=None):
         loop.run_until_complete(asyncio.gather(
             loop.create_task(process_queue_loop(
                 rate_limiter, policy, dry_run=args.dry_run,
-                vcs_directory=args.vcs_result_dir,
+                vcs_manager=vcs_manager,
                 interval=args.publish_pending_interval)),
             loop.create_task(
                 run_web_server(
