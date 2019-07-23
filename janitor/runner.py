@@ -134,6 +134,7 @@ def find_changes(path, package):
 
 
 class WorkerResult(object):
+    """The result from a worker."""
 
     def __init__(self, code, description, context=None, subworker=None,
                  main_branch_revision=None):
@@ -145,6 +146,7 @@ class WorkerResult(object):
 
     @classmethod
     def from_file(cls, path):
+        """create a WorkerResult object from a JSON file."""
         with open(path, 'r') as f:
             worker_result = json.load(f)
         return cls(
@@ -210,17 +212,13 @@ async def invoke_subprocess_worker(
 async def process_one(
         worker_kind, vcs_url, pkg, env, command, build_command,
         suite, pre_check=None, post_check=None,
-        dry_run=False, incoming=None, log_dir=None,
+        dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_result_dir=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False):
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
-    if log_dir.startswith('http'):
-        logfile_manager = S3LogFileManager(log_dir)
-    else:
-        logfile_manager = FileSystemLogFileManager(log_dir)
 
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if command == ["new-upstream"]:
@@ -387,6 +385,21 @@ async def process_queue(
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_result_dir=None,
         concurrency=1, use_cached_only=False):
+    """Process the items added to the queue.
+
+    Args:
+      worker_kind: The kind of worker to run ('local', 'gcb')
+      build_command: The command used to build packages
+      pre_check: Function to run prior to modifying a package
+      post_check: Function to run after modifying a package
+      incoming: directory to copy debian pakcages to
+      log_dir: Directory to cop
+    """
+    if log_dir.startswith('http'):
+        logfile_manager = S3LogFileManager(log_dir)
+    else:
+        logfile_manager = FileSystemLogFileManager(log_dir)
+
     async def process_queue_item(item):
         start_time = datetime.now()
 
@@ -399,7 +412,7 @@ async def process_queue(
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
             debsign_keyid=debsign_keyid, vcs_result_dir=vcs_result_dir,
-            log_dir=log_dir, use_cached_only=use_cached_only)
+            logfile_manager=logfile_manager, use_cached_only=use_cached_only)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time - start_time)
