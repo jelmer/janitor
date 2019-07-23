@@ -22,8 +22,6 @@ CREATE TABLE IF NOT EXISTS run (
    start_time timestamp,
    finish_time timestamp,
    package text not null,
-   -- Associated merge proposal URL, if any.
-   merge_proposal_url text null,
    -- Debian version text of the built package
    build_version debversion,
    -- Distribution the package was built for (e.g. "lintian-fixes")

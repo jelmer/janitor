@@ -139,13 +139,13 @@ class Run(object):
 
     __slots__ = [
             'id', 'times', 'command', 'description', 'package',
-            'merge_proposal_url', 'build_version',
+            'build_version',
             'build_distribution', 'result_code', 'branch_name',
             'main_branch_revision', 'revision', 'context', 'result',
             'suite', 'instigated_context']
 
     def __init__(self, run_id, times, command, description, package,
-                 merge_proposal_url, build_version,
+                 build_version,
                  build_distribution, result_code, branch_name,
                  main_branch_revision, revision, context, result,
                  suite, instigated_context):
@@ -154,7 +154,6 @@ class Run(object):
         self.command = command
         self.description = description
         self.package = package
-        self.merge_proposal_url = merge_proposal_url
         self.build_version = build_version
         self.build_distribution = build_distribution
         self.result_code = result_code
@@ -175,26 +174,25 @@ class Run(object):
         return cls(run_id=row[0],
                    times=(row[2], row[3]),
                    command=row[1], description=row[4], package=row[5],
-                   merge_proposal_url=row[6],
-                   build_version=Version(row[7]) if row[7] else None,
-                   build_distribution=row[8],
-                   result_code=(row[9] if row[9] else None),
-                   branch_name=row[10],
+                   build_version=Version(row[6]) if row[6] else None,
+                   build_distribution=row[7],
+                   result_code=(row[8] if row[8] else None),
+                   branch_name=row[9],
                    main_branch_revision=(
-                       row[11].encode('utf-8') if row[11] else None),
-                   revision=(row[12].encode('utf-8') if row[12] else None),
-                   context=row[13], result=row[14], suite=row[15],
-                   instigated_context=row[16])
+                       row[10].encode('utf-8') if row[10] else None),
+                   revision=(row[11].encode('utf-8') if row[11] else None),
+                   context=row[12], result=row[13], suite=row[14],
+                   instigated_context=row[15])
 
     def __len__(self):
         return len(self.__slots__)
 
     def __tuple__(self):
         return (self.run_id, self.times, self.command, self.description,
-                self.package, self.merge_proposal_url,
-                self.build_version, self.build_distribution, self.result_code,
-                self.branch_name, self.main_branch_revision, self.revision,
-                self.context, self.result, self.suite, self.instigated_context)
+                self.package, self.build_version, self.build_distribution,
+                self.result_code, self.branch_name, self.main_branch_revision,
+                self.revision, self.context, self.result, self.suite,
+                self.instigated_context)
 
     def __eq__(self, other):
         if isinstance(other, Run):
@@ -223,7 +221,7 @@ async def iter_runs(package=None, run_id=None, limit=None):
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
-    merge_proposal_url, build_version, build_distribution, result_code,
+    build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context
 FROM
@@ -463,7 +461,6 @@ SELECT
   finish_time,
   description,
   package,
-  merge_proposal_url,
   build_version,
   build_distribution,
   result_code,
@@ -493,7 +490,6 @@ SELECT
   finish_time,
   description,
   package,
-  merge_proposal_url,
   build_version,
   build_distribution,
   result_code,
