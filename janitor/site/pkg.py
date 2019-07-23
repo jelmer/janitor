@@ -108,10 +108,7 @@ async def generate_run_file(logfile_manager, run):
     kwargs['show_diff'] = show_diff
     kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
-    kwargs['suite'] = {
-        'lintian-brush': 'lintian-fixes',
-        'new-upstream': 'fresh-releases',
-        'new-upstream --snapshot': 'fresh-snapshots'}.get(run.command)
+    kwargs['suite'] = run.suite
 
     def read_file(f):
         return [l.decode('utf-8', 'replace') for l in f.readlines()]

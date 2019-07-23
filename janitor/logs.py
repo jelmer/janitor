@@ -74,13 +74,13 @@ class FileSystemLogFileManager(LogFileManager):
 class S3LogFileManager(LogFileManager):
 
     def __init__(self, endpoint_url, bucket_name='debian-janitor'):
-        self.base_url = base_url + ('/%s/' % bucket_name)
+        self.base_url = endpoint_url + ('/%s/' % bucket_name)
         self.session = ClientSession()
         self.s3 = boto3.resource('s3', endpoint_url=endpoint_url)
         self.s3_bucket = self.s3.Bucket(bucket_name)
 
     def _get_key(self, pkg, run_id, name):
-        return 'apt/%s/%s/%s.gz' % (pkg, run_id, name)
+        return 'logs/%s/%s/%s.gz' % (pkg, run_id, name)
 
     def _get_url(self, pkg, run_id, name):
         return '%s/%s' % (self.base_url, self._get_key(pkg, run_id, name))
@@ -97,7 +97,8 @@ class S3LogFileManager(LogFileManager):
             raise AssertionError('Unexpected response code %d' % resp.status)
 
     async def get_log(self, pkg, run_id, name):
-        async with self.session.get(self._get_url(pkg, run_id, name)) as resp:
+        url = self._get_url(pkg, run_id, name)
+        async with self.session.get(url) as resp:
             if resp.status == 404:
                 raise FileNotFoundError(name)
             if resp.status == 200:
@@ -108,7 +109,7 @@ class S3LogFileManager(LogFileManager):
 
     async def import_log(self, pkg, run_id, orig_path):
         with open(orig_path, 'rb') as f:
-            data = f.read()
+            data = gzip.compress(f.read())
 
         key = self._get_key(pkg, run_id, os.path.basename(orig_path))
-        self.s3_bucket.put_object(Key=key, Body=data)
+        self.s3_bucket.put_object(Key=key, Body=data, ACL='public-read')

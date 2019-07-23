@@ -7,13 +7,13 @@
 <h1>Run of {{ suite }} for {{ package }}</h1>
 
 <ul class="simple">
-<li>Package: <a class="reference external" href="..">{{ package }}</a></li>
+<li>Package: <a class="reference external" href="..">{{ package }}</a> (<a href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a>)</li>
 <li>Start time: {{ format_timestamp(start_time) }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Status: {{ display_result_code(result_code)|safe }}</li>
 <li>Description: {{ description }}</li>
 
-{% result_code_explanation(result_code) %}
+{{ result_code_explanation(result_code) }}
 
 {% if revision %}
 <li>Diff: <a href="/api/run/{{ run_id }}/diff">Raw diff</a></li>
