@@ -202,12 +202,30 @@ def get_cached_branch(vcs_type, package, branch_name):
 
 
 def get_local_vcs_branch(vcs_directory, pkg, branch_name):
-    if os.path.exists(os.path.join(vcs_directory, 'git', pkg)):
+    for vcs in SUPPORTED_VCSES:
+        if os.path.exists(os.path.join(vcs_directory, 'git', pkg)):
+            break
+    else:
+        return None
+    if vcs == 'git':
         return open_branch(
             'file:%s,branch=%s' % (
                 os.path.join(vcs_directory, 'git', pkg), branch_name))
-    elif os.path.exists(os.path.join(vcs_directory, 'bzr', pkg)):
+    elif vcs == 'bzr':
         return open_branch(
             os.path.join(vcs_directory, 'bzr', pkg, branch_name))
-    else:
-        return None
+
+
+class VcsManager(object):
+
+    def get_branch(self, package, branch_name, vcs_type=None):
+        raise NotImplementedError(self.get_branch)
+
+
+class LocalVcsManager(VcsManager):
+
+    def __init__(self, base_path):
+        self.base_path = base_path
+
+    def get_branch(self, package, branch_name, vcs_type=None):
+        return get_local_vcs_branch(self.base_path, package, branch_name)
