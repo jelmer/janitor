@@ -72,12 +72,12 @@ if __name__ == '__main__':
         type=int, help='Port to listen on', default=8080)
     parser.add_argument('--logdirectory', type=str,
                         help='Logs directory path.',
-                        default='https://s3.nl-ams.scw.cloud/debian-janitor/logs')
+                        default='https://s3.nl-ams.scw.cloud')
     parser.add_argument('--publisher-url', type=str,
                         default='http://localhost:9912/',
                         help='URL for publisher.')
     parser.add_argument('--apt-location', type=str,
-                        default='https://s3.nl-ams.scw.cloud',
+                        default='https://s3.nl-ams.scw.cloud/debian-janitor/apt',
                         help='Location to read apt files from (HTTP or local).')
     parser.add_argument("--policy",
                         help="Policy file to read.", type=str,

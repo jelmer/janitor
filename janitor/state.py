@@ -446,7 +446,7 @@ select distinct package, build_version from run where build_distribution = $1
 """, suite, )
 
 
-async def get_published_by_suite(suite):
+async def get_published_by_suite():
     async with get_connection() as conn:
         return await conn.fetch("""
 select suite, count(distinct package) from run where build_version is not null
