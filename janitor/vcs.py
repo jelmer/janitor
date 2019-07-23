@@ -221,6 +221,10 @@ class VcsManager(object):
     def get_branch(self, package, branch_name, vcs_type=None):
         raise NotImplementedError(self.get_branch)
 
+    def import_branches(self, main_branch, local_branch, pkg, name,
+                        additional_colocated_branches=None):
+        raise NotImplementedError(self.import_branches)
+
 
 class LocalVcsManager(VcsManager):
 
@@ -229,3 +233,27 @@ class LocalVcsManager(VcsManager):
 
     def get_branch(self, package, branch_name, vcs_type=None):
         return get_local_vcs_branch(self.base_path, package, branch_name)
+
+    def import_branches(self, main_branch, local_branch, pkg, name,
+                        additional_colocated_branches=None):
+        copy_vcs_dir(
+            main_branch, local_branch, self.base_path, pkg, name,
+            additional_colocated_branches=additional_colocated_branches)
+
+
+class RemoteVcsManager(VcsManager):
+
+    def __init__(self, cache_url_git=CACHE_URL_BZR,
+                 cache_url_bzr=CACHE_URL_BZR):
+        self.cache_url_git = cache_url_git
+        self.cache_url_bzr = cache_url_bzr
+
+    def get_branch(self, package, branch_name, vcs_type=None):
+        if vcs_type:
+            return get_cached_branch(package, branch_name, vcs_type)
+        for vcs_type in SUPPORTED_VCSES:
+            branch = get_cached_branch(package, branch_name, vcs_type)
+            if branch:
+                return branch
+        else:
+            return None
