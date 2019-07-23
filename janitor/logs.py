@@ -83,7 +83,7 @@ class S3LogFileManager(LogFileManager):
         return 'logs/%s/%s/%s.gz' % (pkg, run_id, name)
 
     def _get_url(self, pkg, run_id, name):
-        return '%s/%s' % (self.base_url, self._get_key(pkg, run_id, name))
+        return '%s%s' % (self.base_url, self._get_key(pkg, run_id, name))
 
     async def has_log(self, pkg, run_id, name):
         url = self._get_url(pkg, run_id, name)
