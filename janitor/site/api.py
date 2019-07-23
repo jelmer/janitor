@@ -138,7 +138,7 @@ async def handle_queue(request):
         response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
-async def handle_diff(request):
+async def handle_diff(vcs_manager, request):
     package = request.match_info.get('package')
     run_id = request.match_info['run_id']
     try:
@@ -147,7 +147,7 @@ async def handle_diff(request):
                 package=package, run_id=run_id)][0]
     except IndexError:
         raise web.HTTPNotFoundError()
-    text = get_run_diff(run)
+    text = get_run_diff(vcs_manager, run)
     return web.Response(
             content_type='text/x-diff', body=text,
             headers={'Cache-Control': 'max-age=3600'})
@@ -223,7 +223,7 @@ async def handle_global_policy(request):
             headers={'Cache-Control': 'max-age=60'})
 
 
-def create_app(publisher_url, policy_config):
+def create_app(publisher_url, policy_config, vcs_manager):
     app = web.Application()
     app.router.add_get('/pkgnames', handle_packagename_list)
     app.router.add_get('/pkg', handle_package_list)
@@ -242,7 +242,8 @@ def create_app(publisher_url, policy_config):
     app.router.add_get('/queue', handle_queue)
     app.router.add_get('/run', handle_run)
     app.router.add_get('/run/{run_id}', handle_run)
-    app.router.add_get('/run/{run_id}/diff', handle_diff)
+    app.router.add_get(
+        '/run/{run_id}/diff', functools.partial(handle_diff, vcs_manager))
     app.router.add_get('/pkg/{package}/run', handle_run)
     app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
     app.router.add_get('/pkg/{package}/run/{run_id}/diff', handle_diff)

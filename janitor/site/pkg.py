@@ -22,7 +22,6 @@ from janitor.site import (
     env,
     get_build_architecture,
     open_changes_file,
-    get_local_vcs_repo,
     get_run_diff,
     highlight_diff,
 )
@@ -82,7 +81,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(logfile_manager, run):
+async def generate_run_file(logfile_manager, vcs_manager, run):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run_id'] = run.id
@@ -101,7 +100,7 @@ async def generate_run_file(logfile_manager, run):
     kwargs['enumerate'] = enumerate
 
     def show_diff():
-        diff = get_run_diff(run)
+        diff = get_run_diff(vcs_manager, run)
         if diff is None:
             return None
         return diff.decode('utf-8', 'replace')
@@ -120,7 +119,7 @@ async def generate_run_file(logfile_manager, run):
     else:
         kwargs['changes_name'] = None
     try:
-        repo = get_local_vcs_repo(run.package)
+        repo = vcs_manager.get_repository(run.package)
     except NotBranchError:
         repo = None
     if repo:
