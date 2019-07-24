@@ -21,15 +21,14 @@ SUITE_TO_COMMAND = {
 async def handle_policy(policy_config, request):
     package = request.match_info['package']
     try:
-        (name, maintainer_email, uploader_emails, vcs_url) = list(
-            await state.iter_packages(package=package))[0]
+        package = list(await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     suite_policies = {}
     for suite in SUITES:
         (publish_policy, changelog_policy, committer) = apply_policy(
-            policy_config, suite.replace('-', '_'), name, maintainer_email,
-            uploader_emails)
+            policy_config, suite.replace('-', '_'), package.name,
+            package.maintainer_email, package.uploader_emails)
         suite_policies[suite] = {
             'publish_policy': publish_policy,
             'changelog_policy': changelog_policy,
@@ -67,19 +66,18 @@ async def handle_schedule(request):
     post = await request.post()
     offset = post.get('offset', DEFAULT_SCHEDULE_OFFSET)
     try:
-        (name, maintainer_email, uploader_emails, vcs_url) = list(
-            await state.iter_packages(package=package))[0]
+        package = list(await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     run_env = {
-        'PACKAGE': name,
-        'MAINTAINER_EMAIL': maintainer_email,
-        'UPLOADER_EMAILS': uploader_emails,
+        'PACKAGE': package.name,
+        'MAINTAINER_EMAIL': package.maintainer_email,
+        'UPLOADER_EMAILS': package.uploader_emails,
     }
 
-    await state.add_to_queue(vcs_url, run_env, command, suite, offset)
+    await state.add_to_queue(package.branch_url, run_env, command, suite, offset)
     response_obj = {
-        'package': package,
+        'package': package.name,
         'command': command,
         'suite': suite,
         'offset': offset,
@@ -90,21 +88,19 @@ async def handle_schedule(request):
 async def handle_package_list(request):
     package = request.match_info.get('package')
     response_obj = []
-    for (name, maintainer_email, uploader_emails,
-         branch_url) in await state.iter_packages(package=package):
+    for package in await state.iter_packages(package=package):
         response_obj.append({
-            'name': name,
-            'maintainer_email': maintainer_email,
-            'branch_url': branch_url})
+            'name': package.name,
+            'maintainer_email': package.maintainer_email,
+            'branch_url': package.branch_url})
     return web.json_response(
             response_obj, headers={'Cache-Control': 'max-age=600'})
 
 
 async def handle_packagename_list(request):
     response_obj = []
-    for (name, maintainer_email, uploader_emails,
-         branch_url) in await state.iter_packages():
-        response_obj.append(name)
+    for package in await state.iter_packages():
+        response_obj.append(package.name)
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=600'})
 

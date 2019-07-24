@@ -493,26 +493,25 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     post = await request.post()
     mode = post.get('mode', MODE_PROPOSE)
     try:
-        name, maintainer_email, uploader_emails, main_branch_url = list(
-            await state.iter_packages(package=package))[0]
+        package = list(await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({}, status=400)
 
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and not rate_limiter.allowed(maintainer_email):
         return web.json_response(
-            {'maintainer_email': maintainer_email, 'code': 'rate-limited',
+            {'maintainer_email': package.maintainer_email, 'code': 'rate-limited',
              'description':
                 'Maximum number of open merge proposals for maintainer reached'},
             status=429)
 
-    run = await state.get_last_success(package, suite)
+    run = await state.get_last_success(package.name, suite)
     if run is None:
         return web.json_response({}, status=400)
-    note('Handling request to publish %s/%s', package, suite)
+    note('Handling request to publish %s/%s', package.name, suite)
     try:
         proposal, branch_name, is_new = await publish_one(
-            suite, package, run.command, run.result,
-            main_branch_url, mode, run.id, maintainer_email,
+            suite, package.name, run.command, run.result,
+            package.branch_url, mode, run.id, maintainer_email,
             vcs_manager=vcs_manager, branch_name=run.branch_name,
             dry_run=dry_run, allow_create_proposal=True)
     except PublishFailure as e:

@@ -156,7 +156,9 @@ if __name__ == '__main__':
             return web.HTTPFound(pkg)
         from .pkg import generate_pkg_list
         from .. import state
-        packages = [(item[0], item[1]) for item in await state.iter_packages()]
+        packages = [
+            (item.name, item.maintainer_email)
+            for item in await state.iter_packages()]
         text = await generate_pkg_list(packages)
         return web.Response(
             content_type='text/html', text=text,
@@ -165,7 +167,9 @@ if __name__ == '__main__':
     async def handle_maintainer_list(request):
         from .pkg import generate_maintainer_list
         from .. import state
-        packages = [(item[0], item[1]) for item in await state.iter_packages()]
+        packages = [
+            (item.name, item.maintainer_email)
+            for item in await state.iter_packages()]
         text = await generate_maintainer_list(packages)
         return web.Response(
             content_type='text/html', text=text,
@@ -176,17 +180,17 @@ if __name__ == '__main__':
         from .. import state
         package = request.match_info['pkg']
         try:
-            name, maintainer_email, uploader_emails, branch_url = list(
-                await state.iter_packages(package))[0]
+            package = list(await state.iter_packages(package))[0]
         except IndexError:
             raise web.HTTPNotFound(text='No package with name %s' % package)
         merge_proposals = []
-        for package, url, status, revision in await state.iter_proposals(
-                package=name):
+        for unused_package, url, status, revision in await state.iter_proposals(
+                package=package.name):
             merge_proposals.append((url, status))
-        runs = [x async for x in state.iter_runs(package=name)]
+        runs = [x async for x in state.iter_runs(package=package.name)]
         text = await generate_pkg_file(
-            name, merge_proposals, maintainer_email, branch_url, runs)
+            package.name, merge_proposals, package.maintainer_email,
+            package.branch_url, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})

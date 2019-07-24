@@ -6,16 +6,15 @@ import sys
 
 from debian.changelog import Version
 
-from janitor import state, udd
+from janitor import state
 from janitor.site import env
 
 
 async def get_unstable_versions(present):
     unstable = {}
     if present:
-        conn = await udd.UDD.public_udd_mirror()
-        async for package in conn.get_source_packages(
-                packages=list(present), release='sid'):
+        async for package in state.iter_sources_with_unstable_version(
+                packages=list(present)):
             unstable[package.name] = Version(package.version)
     return unstable
 
