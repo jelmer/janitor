@@ -19,17 +19,16 @@ from janitor.site import (
 
 async def generate_pkg_file(package, suite):
     try:
-        (package, maintainer_email, uploader_emails, vcs_url) = list(
-            await state.iter_packages(package=package))[0]
+        package = list(await state.iter_packages(package=package))[0]
     except IndexError:
         raise KeyError(package)
     # TODO(jelmer): Filter out proposals not for this suite.
     merge_proposals = [
         (url, status)
-        for (package, url, status, revision) in
-        await state.iter_proposals(package)]
-    run = await state.get_last_success(package, suite)
-    candidate = await state.get_candidate(package, suite)
+        for (unused_package, url, status, revision) in
+        await state.iter_proposals(package.name)]
+    run = await state.get_last_success(package.name, suite)
+    candidate = await state.get_candidate(package.name, suite)
     if candidate is not None:
         candidate_command, candidate_context, candidate_value = candidate
     else:
@@ -55,13 +54,13 @@ async def generate_pkg_file(package, suite):
         run_id = run.id
         result = run.result
         branch_name = run.branch_name
-    previous_runs = [x async for x in state.iter_previous_runs(package, suite)]
+    previous_runs = [x async for x in state.iter_previous_runs(package.name, suite)]
     kwargs = {
-        'package': package,
+        'package': package.name,
         'merge_proposals': merge_proposals,
-        'maintainer_email': maintainer_email,
-        'uploader_emails': uploader_emails,
-        'vcs_url': vcs_url,
+        'maintainer_email': package.maintainer_email,
+        'uploader_emails': package.uploader_emails,
+        'vcs_url': package.branch_url,
         'command': command,
         'build_version': build_version,
         'result_code': result_code,

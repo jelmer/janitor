@@ -45,16 +45,36 @@ async def get_connection():
         yield conn
 
 
-async def _ensure_package(conn, name, vcs_url, maintainer_email,
-                          uploader_emails):
-    await conn.execute(
-        "INSERT INTO package "
-        "(name, branch_url, maintainer_email, uploader_emails) "
-        "VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO UPDATE SET "
-        "branch_url = EXCLUDED.branch_url, "
-        "maintainer_email = EXCLUDED.maintainer_email, "
-        "uploader_emails = EXCLUDED.uploader_emails",
-        name, vcs_url, maintainer_email, uploader_emails)
+async def store_packages(packages):
+    """Store packages in the database.
+
+    Args:
+      packages: list of tuples with (
+        name, branch_url, maintainer_email, uploader_emails, unstable_version,
+        vcs_type, vcs_url, vcs_browse, popcon_inst)
+    """
+    async with get_connection() as conn:
+        await conn.executemany(
+            "INSERT INTO package "
+            "(name, branch_url, maintainer_email, uploader_emails, "
+            "unstable_version, vcs_type, vcs_url, vcs_browse, popcon_inst) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+            "ON CONFLICT (name) DO UPDATE SET "
+            "branch_url = EXCLUDED.branch_url, "
+            "maintainer_email = EXCLUDED.maintainer_email, "
+            "uploader_emails = EXCLUDED.uploader_emails, "
+            "unstable_version = EXCLUDED.unstable_version, "
+            "vcs_type = EXCLUDED.vcs_type, "
+            "vcs_url = EXCLUDED.vcs_url, "
+            "vcs_browse = EXCLUDED.vcs_browse, "
+            "popcon_inst = EXCLUDED.popcon_inst",
+            packages)
+
+
+async def popcon():
+    async with get_connection() as conn:
+        return await conn.fetch(
+            "SELECT name, popcon_inst FROM package")
 
 
 async def store_run(
@@ -116,13 +136,35 @@ async def store_publish(package, branch_name, main_branch_revision, revision,
             result_code, description, merge_proposal_url)
 
 
+class Package(object):
+
+    def __init__(self, name, maintainer_email, uploader_emails, branch_url,
+                 vcs_type, vcs_url):
+        self.name = name
+        self.maintainer_email = maintainer_email
+        self.uploader_emails = uploader_emails
+        self.branch_url = branch_url
+        self.vcs_type = vcs_type
+        self.vcs_url = vcs_url
+
+    @classmethod
+    def from_row(cls, row):
+        return cls(row[0], row[1], row[2], row[3], row[4], row[5])
+
+    def __tuple__(self):
+        return (self.name, self.maintainer_email, self.uploader_emails,
+                self.branch_url, self.vcs_type, self.vcs_url)
+
+
 async def iter_packages(package=None):
     query = """
 SELECT
   name,
   maintainer_email,
   uploader_emails,
-  branch_url
+  branch_url,
+  vcs_type,
+  vcs_url
 FROM
   package
 """
@@ -132,7 +174,8 @@ FROM
         args.append(package)
     query += " ORDER BY name ASC"
     async with get_connection() as conn:
-        return await conn.fetch(query, *args)
+        for row in await conn.fetch(query, *args):
+            yield Package.from_row(row)
 
 
 class Run(object):
@@ -338,8 +381,8 @@ class QueueItem(object):
 async def iter_queue(limit=None):
     query = """
 SELECT
-    package.branch_url,
-    package.name,
+    queue.branch_url,
+    queue.package,
     queue.committer,
     queue.command,
     queue.context,
@@ -348,7 +391,6 @@ SELECT
     queue.suite
 FROM
     queue
-LEFT JOIN package ON package.name = queue.package
 ORDER BY
 queue.priority ASC,
 queue.id ASC
@@ -373,8 +415,6 @@ async def add_to_queue(vcs_url, env, command, suite, offset=0,
     context = env.get('CONTEXT')
     committer = env.get('COMMITTER')
     async with get_connection() as conn:
-        await _ensure_package(
-            conn, package, vcs_url, maintainer_email, uploader_emails)
         await conn.execute(
             "INSERT INTO queue "
             "(branch_url, package, command, committer, priority, context, "
@@ -741,18 +781,32 @@ WHERE package = $1"""
         return await conn.fetchval(query, *args)
 
 
-async def store_candidate(package, suite, command, context, value):
+async def store_candidates(entries):
     async with get_connection() as conn:
-        await conn.execute(
+        await conn.executemany(
             "INSERT INTO candidate (package, suite, command, context, value) "
             "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
             "DO UPDATE SET command = EXCLUDED.command, "
             "context = EXCLUDED.context, value = EXCLUDED.value",
-            package, suite, command, context, value)
+            entries)
 
 
 async def iter_candidates(package=None, suite=None):
-    query = "SELECT package, suite, command, context, value FROM candidate"
+    query = """
+SELECT
+  package.name,
+  package.maintainer_email,
+  package.uploader_emails,
+  package.branch_url,
+  package.vcs_type,
+  package.vcs_url,
+  candidate.suite,
+  candidate.command,
+  candidate.context,
+  candidate.value
+FROM candidate
+INNER JOIN package on package.name = candidate.package
+"""
     args = []
     if suite is not None and package is not None:
         query += " WHERE package = $1 AND suite = $2"
@@ -764,7 +818,8 @@ async def iter_candidates(package=None, suite=None):
         query += " WHERE package = $1"
         args.append(package)
     async with get_connection() as conn:
-        return await conn.fetch(query, *args)
+        for row in await conn.fetch(query, *args):
+            yield [Package.from_row(row)] + row[6:]
 
 
 async def get_candidate(package, suite):
@@ -772,3 +827,10 @@ async def get_candidate(package, suite):
         return await conn.fetchrow(
             "SELECT command, context, value FROM candidate "
             "WHERE package = $1 AND suite = $2", package, suite)
+
+
+async def iter_sources_with_unstable_version(packages):
+    async with get_connection() as conn:
+        return await conn.fetch(
+            "SELECT name, unstable_version FROM package "
+            "WHERE package = any($1::text[])", packages)

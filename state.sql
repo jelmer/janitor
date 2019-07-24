@@ -3,6 +3,11 @@ CREATE TABLE IF NOT EXISTS package (
    branch_url text not null,
    maintainer_email text not null,
    uploader_emails text[] not null,
+   unstable_version debversion,
+   vcs_type text,
+   vcs_url text,
+   vcs_browse text,
+   popcon_inst integer,
    primary key(name)
 );
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged');

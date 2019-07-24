@@ -36,7 +36,6 @@ from .policy import (
     read_policy,
     apply_policy,
 )
-from .udd import UDD
 
 SUCCESS_WEIGHT = 20
 POPULARITY_WEIGHT = 1
@@ -135,10 +134,9 @@ async def estimate_duration(package, suite):
 
 
 async def add_to_queue(todo, dry_run=False, default_offset=0):
-    udd = await UDD.public_udd_mirror()
     popcon = {package: (inst, vote)
-              for (package, inst, vote) in await udd.popcon()}
-    max_inst = max([(v[0] or 0) for k, v in popcon.items()])
+              for (package, inst) in await state.popcon()}
+    max_inst = max([(v or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
     for vcs_url, mode, env, command, suite, value in todo:
         assert value > 0, "Value: %s" % value
