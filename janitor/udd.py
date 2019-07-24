@@ -57,7 +57,7 @@ async def connect_udd_mirror():
 
 
 def extract_uploader_emails(uploaders):
-    if uploaders:
+    if not uploaders:
         return []
     ret = []
     for uploader in uploaders.split(','):
