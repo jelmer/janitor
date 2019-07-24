@@ -108,7 +108,7 @@ async def generate_candidates():
         supported_tags.update(fixer.lintian_tags)
     candidates = [(package, context.split(' '), value) for
                   (package, suite, command, context, value) in
-                  await state.iter_candidates('lintian-fixes')]
+                  await state.iter_candidates(suite='lintian-fixes')]
     return await template.render_async(
         supported_tags=supported_tags, candidates=candidates)
 
