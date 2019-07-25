@@ -185,7 +185,7 @@ async def invoke_subprocess_worker(
         resume_result_path = os.path.join(
             output_directory, 'previous_result.json')
         with open(resume_result_path, 'w') as f:
-            json.dump(f, resume_branch_result)
+            json.dump(resume_branch_result, f)
         args.append('--resume-result-path=%s' % resume_result_path)
     if last_build_version:
         args.append('--last-build-version=%s' % last_build_version)
