@@ -90,7 +90,6 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
     kwargs['package'] = run.package
     kwargs['start_time'] = run.times[0]
     kwargs['finish_time'] = run.times[1]
-    kwargs['merge_proposal_url'] = run.merge_proposal_url
     kwargs['build_version'] = run.build_version
     kwargs['build_distribution'] = run.build_distribution
     kwargs['result_code'] = run.result_code
@@ -192,7 +191,7 @@ async def generate_pkg_file(
     kwargs['candidates'] = {
         suite: (context, value)
         for (package, suite, command, context, value) in
-        await state.iter_candidates(package=name)}
+        await state.iter_candidates(packages=[name])}
     template = env.get_template('package-overview.html')
     return await template.render_async(**kwargs)
 

@@ -13,9 +13,9 @@ from janitor.site import env
 async def get_unstable_versions(present):
     unstable = {}
     if present:
-        async for package in state.iter_sources_with_unstable_version(
+        for package, version in await state.iter_sources_with_unstable_version(
                 packages=list(present)):
-            unstable[package.name] = Version(package.version)
+            unstable[package] = Version(version)
     return unstable
 
 

@@ -263,6 +263,14 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_lintian_fixes_developer_page(request):
+        from .lintian_fixes import generate_developer_page
+        developer = request.match_info['developer']
+        text = await generate_developer_page(developer)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_new_upstream_pkg(suite, request):
         from .new_upstream import generate_pkg_file
         try:
@@ -333,6 +341,12 @@ if __name__ == '__main__':
     app.router.add_get(
         '/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page)
     app.router.add_get(
+        '/lintian-fixes/by-developer',
+        handle_lintian_fixes_developer_page)
+    app.router.add_get(
+        '/lintian-fixes/by-developer/{developer}',
+        handle_lintian_fixes_developer_page)
+    app.router.add_get(
         '/lintian-fixes/candidates', handle_lintian_fixes_candidates)
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get(
@@ -362,5 +376,5 @@ if __name__ == '__main__':
 
     app.http_client_session = ClientSession()
     setup_metrics(app)
-    app.add_subapp('/api', create_api_app(args.publisher_url, policy_config))
+    app.add_subapp('/api', create_api_app(args.publisher_url, policy_config, vcs_manager))
     web.run_app(app, host=args.host, port=args.port)

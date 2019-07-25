@@ -256,7 +256,7 @@ class LocalVcsManager(VcsManager):
             additional_colocated_branches=additional_colocated_branches)
 
     def get_repository(self, package, vcs_type=None):
-        return get_local_vcs_repo(package, vcs_type)
+        return get_local_vcs_repo(self.base_path, package, vcs_type)
 
 
 class RemoteVcsManager(VcsManager):
