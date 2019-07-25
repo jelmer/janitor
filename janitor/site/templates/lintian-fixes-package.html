@@ -25,7 +25,7 @@
 
 {% if previous_runs and previous_runs[0].result_code == 'nothing-to-do' %}
 <p>
-Nothing to do for {{ package }}.</p>
+Nothing to do for {{ package }}; last run at {{ format_timestamp(previous_runs[0].times[0]) }}.</p>
 {% else %}
 <p>No successful runs for {{ package }}.</p>
 {% endif %}
