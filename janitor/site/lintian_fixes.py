@@ -108,9 +108,24 @@ async def generate_candidates():
         supported_tags.update(fixer.lintian_tags)
     candidates = [(package, context.split(' '), value) for
                   (package, suite, command, context, value) in
-                  await state.iter_candidates(suite='lintian-fixes')]
+                  await state.iter_candidates(suite=SUITE)]
+    candidates.sort()
     return await template.render_async(
         supported_tags=supported_tags, candidates=candidates)
+
+
+async def generate_developer_page(developer):
+    template = env.get_template('lintian-fixes-developer.html')
+    packages = list(await state.iter_packages_by_maintainer(developer))
+    candidate_tags = {}
+    for row in await state.iter_candidates(packages=packages, suite=SUITE):
+        candidate_tags[row[0].name] = row[3].split(' ')
+    runs = {}
+    async for run in state.iter_last_successes(suite=SUITE, packages=packages):
+        runs[run.package] = run
+    return await template.render_async(
+        developer=developer, packages=packages, candidate_tags=candidate_tags,
+        runs=runs)
 
 
 if __name__ == '__main__':

@@ -151,6 +151,9 @@ class Package(object):
     def from_row(cls, row):
         return cls(row[0], row[1], row[2], row[3], row[4], row[5])
 
+    def __lt__(self, other):
+        return tuple(self) < tuple(other)
+
     def __tuple__(self):
         return (self.name, self.maintainer_email, self.uploader_emails,
                 self.branch_url, self.vcs_type, self.vcs_url)
@@ -174,8 +177,8 @@ FROM
         args.append(package)
     query += " ORDER BY name ASC"
     async with get_connection() as conn:
-        for row in await conn.fetch(query, *args):
-            yield Package.from_row(row)
+        return [
+            Package.from_row(row) for row in await conn.fetch(query, *args)]
 
 
 class Run(object):
@@ -554,28 +557,33 @@ LIMIT 1
         return Run.from_row(row)
 
 
-async def iter_last_successes(suite=None):
-    args = []
+async def iter_last_successes(suite, packages):
     query = """
-SELECT DISTINCT ON (package, command)
-  package,
+SELECT DISTINCT ON (package)
+  id,
   command,
-  build_version,
-  result_code,
-  context,
   start_time,
-  id
+  finish_time,
+  description,
+  package,
+  build_version,
+  build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context
 FROM
   run
-"""
-    if suite is not None:
-        query += " WHERE build_distribution = $1"
-        args.append(suite)
-    query += """
+WHERE suite = $1 AND package = ANY($2::text[])
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """
     async with get_connection() as conn:
-        return await conn.fetch(query, *args)
+        for row in await conn.fetch(query, suite, packages):
+            yield Run.from_row(row)
 
 
 async def iter_last_runs():
@@ -791,7 +799,7 @@ async def store_candidates(entries):
             entries)
 
 
-async def iter_candidates(package=None, suite=None):
+async def iter_candidates(packages=None, suite=None):
     query = """
 SELECT
   package.name,
@@ -808,18 +816,18 @@ FROM candidate
 INNER JOIN package on package.name = candidate.package
 """
     args = []
-    if suite is not None and package is not None:
-        query += " WHERE package = $1 AND suite = $2"
-        args.extend([package, suite])
+    if suite is not None and packages is not None:
+        query += " WHERE package = ANY($1::text[]) AND suite = $2"
+        args.extend([packages, suite])
     elif suite is not None:
         query += " WHERE suite = $1"
         args.append(suite)
-    elif package is not None:
-        query += " WHERE package = $1"
-        args.append(package)
+    elif packages is not None:
+        query += " WHERE package = ANY($1::text[])"
+        args.append(packages)
     async with get_connection() as conn:
-        for row in await conn.fetch(query, *args):
-            yield [Package.from_row(row)] + row[6:]
+        return [([Package.from_row(row)] + list(row[6:]))
+                for row in await conn.fetch(query, *args)]
 
 
 async def get_candidate(package, suite):
@@ -833,4 +841,10 @@ async def iter_sources_with_unstable_version(packages):
     async with get_connection() as conn:
         return await conn.fetch(
             "SELECT name, unstable_version FROM package "
-            "WHERE package = any($1::text[])", packages)
+            "WHERE name = any($1::text[])", packages)
+
+
+async def iter_packages_by_maintainer(maintainer):
+    async with get_connection() as conn:
+        return [row[0] for row in await conn.fetch(
+            "SELECT name FROM package WHERE maintainer_email = $1 OR $1 = any(uploader_emails)", maintainer)]

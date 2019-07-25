@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
+{% from "run_util.html" import reschedule_button, display_result_code, publish_buttons %}
+{% block page_title %}Lintian Fixes - Developer {{ developer }}{% endblock %}
+{% block body %}
+<div class="section" id="candidates">
+<h1>Lintian Fixes - for developer {{ developer }}</h1>
+
+{% for package in packages %}
+<div class="section" id="{{ package}}">
+<h3><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a></h3>
+
+{% set run = runs.get(package) %}
+{% if run %}
+{% if run.result_code == 'success' %}
+<p>Built on {{ format_timestamp(run.times[1]) }} (took {{ format_duration(run.times[1] - run.times[0]) }})</p>
+
+<p>{{ lintian_brush_summary(run.result['applied']) }}</p>
+
+{% if run.branch_name %}
+{{ publish_buttons(run.suite, run.package, "#commandResult") }}
+{% endif %}
+
+{% elif run.result_code == 'nothing-to-do' %}
+<p>Last run at {{ format_timestamp(run.times[1]) }} found nothing to fix.</p>
+{% else %}
+<p>Last run at {{ format_timestamp(run.times[1]) }}, result: {{ display_result_code(run.result_code) }}. <br/>{{ reschedule_button(suite, package, "Schedule a run", "#commandResult") }}</p>
+{% endif %}
+{% else %}
+{% set tags = candidate_tags.get(package, []) %}
+{% if tags %}
+<p>Lintian tags that may be fixable: {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}.  <br/>{{ reschedule_button(suite, package, "Schedule a run", "#commandResult") }}</p>
+{% else %}
+<p>No tags that may be fixable.</p>
+{% endif %}
+{% endif %}
+
+<div id="commandResult"></div>
+
+</div>
+{% endfor %}
+
+</div>
+{% endblock %}
