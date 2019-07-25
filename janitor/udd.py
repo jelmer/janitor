@@ -61,10 +61,10 @@ def extract_uploader_emails(uploaders):
         return []
     ret = []
     for uploader in uploaders.split(','):
-        if uploader:
+        if not uploader:
             continue
         email = parseaddr(uploader)[1]
-        if email:
+        if not email:
             continue
         ret.append(email)
     return ret
@@ -152,7 +152,7 @@ and vcs_type != ''"""
             context = ' '.join(sorted(tags))
             yield package, 'lintian-fixes', ['lintian-brush'], context, value
 
-    async def iter_packages_with_new_upstream(self, packages=None):
+    async def iter_fresh_releases_candidates(self, packages=None):
         args = []
         query = """\
 SELECT DISTINCT ON (sources.source)
@@ -256,18 +256,18 @@ async def main():
     candidates = []
 
     async for (package, suite, command, context,
-               value) in iter_lintian_fixes_candidates(
+               value) in udd.iter_lintian_fixes_candidates(
             args.packages, tags):
         candidates.append((
             package, suite, command, context, value))
 
     async for (package, suite, command, context,
-               value) in iter_fresh_releases_candidates(args.packages):
+               value) in udd.iter_fresh_releases_candidates(args.packages):
         candidates.append((
             package, suite, command, context, value))
 
     async for (package, suite, command, context,
-               value) in iter_fresh_snapshots_candidates(args.packages):
+               value) in udd.iter_fresh_snapshots_candidates(args.packages):
         candidates.append((
             package, suite, command, context, value))
 

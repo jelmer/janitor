@@ -247,7 +247,10 @@ class LocalVcsManager(VcsManager):
         self.base_path = base_path
 
     def get_branch(self, package, branch_name, vcs_type=None):
-        return get_local_vcs_branch(self.base_path, package, branch_name)
+        try:
+            return get_local_vcs_branch(self.base_path, package, branch_name)
+        except BranchUnavailable:
+            return None
 
     def import_branches(self, main_branch, local_branch, pkg, name,
                         additional_colocated_branches=None):

@@ -24,6 +24,7 @@ import sys
 import urllib.parse
 
 from prometheus_client import (
+    Counter,
     Gauge,
     push_to_gateway,
     REGISTRY,
@@ -73,6 +74,14 @@ You can follow up to this merge proposal as you normally would.
 """
 
 
+OLD_JANITOR_BLURB = """
+This merge proposal was created automatically by the Janitor bot
+(https://janitor.debian.net/).
+
+You can follow up to this merge proposal as you normally would.
+"""
+
+
 LOG_BLURB = """
 Build and test logs for this branch can be found at
 https://janitor.debian.net/cupboard/pkg/%(package)s/%(log_id)s/.
@@ -114,7 +123,15 @@ last_success_gauge = Gauge(
 
 
 def strip_janitor_blurb(text, suite):
-    return text[:text.index(JANITOR_BLURB % {'suite': suite})]
+    try:
+        i = text.index(JANITOR_BLURB % {'suite': suite})
+    except ValueError:
+        pass
+    else:
+        return text[:i]
+
+    i = text.index(OLD_JANITOR_BLURB)
+    return text[:i]
 
 
 def add_janitor_blurb(text, pkg, log_id, suite):
@@ -497,7 +514,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     except IndexError:
         return web.json_response({}, status=400)
 
-    if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and not rate_limiter.allowed(maintainer_email):
+    if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and not rate_limiter.allowed(package.maintainer_email):
         return web.json_response(
             {'maintainer_email': package.maintainer_email, 'code': 'rate-limited',
              'description':
@@ -511,7 +528,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     try:
         proposal, branch_name, is_new = await publish_one(
             suite, package.name, run.command, run.result,
-            package.branch_url, mode, run.id, maintainer_email,
+            package.branch_url, mode, run.id, package.maintainer_email,
             vcs_manager=vcs_manager, branch_name=run.branch_name,
             dry_run=dry_run, allow_create_proposal=True)
     except PublishFailure as e:
@@ -616,7 +633,7 @@ def main(argv=None):
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
-                    args.vcs_result_dir, args.dry_run))))
+                    vcs_manager, args.dry_run))))
 
 
 if __name__ == '__main__':

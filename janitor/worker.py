@@ -518,8 +518,8 @@ def main(argv=None):
     global_config.set('branch.fetch_tags', True)
 
     if args.resume_result_path:
-        with open(args.resume_result_path, 'rb') as f:
-            resume_subworker_result = json.load(f)['subworker']
+        with open(args.resume_result_path, 'r') as f:
+            resume_subworker_result = json.load(f)
     else:
         resume_subworker_result = None
 
