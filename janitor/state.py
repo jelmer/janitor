@@ -410,13 +410,8 @@ async def drop_queue_item(queue_id):
         await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
-async def add_to_queue(vcs_url, env, command, suite, offset=0,
-                       estimated_duration=None):
-    package = env['PACKAGE']
-    maintainer_email = env.get('MAINTAINER_EMAIL')
-    uploader_emails = env.get('UPLOADER_EMAILS')
-    context = env.get('CONTEXT')
-    committer = env.get('COMMITTER')
+async def add_to_queue(vcs_url, package, command, suite, offset=0,
+                       context=None, committer=None, estimated_duration=None):
     async with get_connection() as conn:
         await conn.execute(
             "INSERT INTO queue "

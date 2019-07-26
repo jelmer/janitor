@@ -69,13 +69,8 @@ async def handle_schedule(request):
         package = list(await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
-    run_env = {
-        'PACKAGE': package.name,
-        'MAINTAINER_EMAIL': package.maintainer_email,
-        'UPLOADER_EMAILS': package.uploader_emails,
-    }
 
-    await state.add_to_queue(package.branch_url, run_env, command, suite, offset)
+    await state.add_to_queue(package.branch_url, package.name, command, suite, offset)
     response_obj = {
         'package': package.name,
         'command': command,
