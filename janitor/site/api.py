@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
-from aiohttp import web, ClientSession
+from aiohttp import web, ClientSession, ContentTypeError
 import functools
 import os
 import urllib.parse
@@ -48,11 +48,16 @@ async def handle_publish(publisher_url, request):
     url = urllib.parse.urljoin(
         publisher_url, '%s/%s/publish' % (suite, package))
     async with ClientSession() as client:
-        async with client.post(url, data={'mode': mode}) as resp:
-            if resp.status == 200:
-                return web.json_response(await resp.json())
-            else:
-                return web.json_response(await resp.json(), status=400)
+        try:
+            async with client.post(url, data={'mode': mode}) as resp:
+                if resp.status == 200:
+                    return web.json_response(await resp.json())
+                else:
+                    return web.json_response(await resp.json(), status=400)
+        except ContentTypeError as e:
+            return web.json_response(
+                {'reason': 'publisher returned error %d' % e.code},
+                status=400)
 
 
 async def handle_schedule(request):
