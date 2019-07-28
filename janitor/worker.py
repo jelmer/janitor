@@ -25,6 +25,7 @@ import subprocess
 import sys
 
 from breezy.config import GlobalStack
+from breezy.errors import NoRoundtrippingSupport
 
 from silver_platter.debian import (
     MissingUpstreamTarball,
@@ -255,6 +256,11 @@ class NewUpstreamWorker(SubWorker):
                 error_description = (
                     'Package is native; unable to merge upstream.')
                 error_code = 'native-package'
+                raise WorkerFailure(error_code, error_description)
+            except NoRoundtrippingSupport:
+                error_description = (
+                    'Unable to import upstream repository into packaging repository.')
+                error_code = 'roundtripping-error'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
