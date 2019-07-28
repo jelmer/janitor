@@ -8,6 +8,7 @@
 
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a> (<a href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a>)</li>
+<li>Branch URL: <a href="{{ branch_url }}">{{ branch_url }}</a></li>
 <li>Start time: {{ format_timestamp(start_time) }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Status: {{ display_result_code(result_code)|safe }}</li>
