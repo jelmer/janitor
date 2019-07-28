@@ -97,6 +97,7 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['enumerate'] = enumerate
+    kwargs['branch_url'] = run.branch_url
 
     def show_diff():
         diff = get_run_diff(vcs_manager, run)

@@ -37,6 +37,7 @@ async def generate_pkg_file(vcs_manager, package):
         run_id = None
         result = None
         branch_name = None
+        branch_url = None
     else:
         command = run.command
         build_version = run.build_version
@@ -47,6 +48,7 @@ async def generate_pkg_file(vcs_manager, package):
         run_id = run.id
         result = run.result
         branch_name = run.branch_name
+        branch_url = run.branch_url
     candidate = await state.get_candidate(package.name, SUITE)
     if candidate is not None:
         candidate_command, candidate_context, candidate_value = candidate
@@ -84,6 +86,7 @@ async def generate_pkg_file(vcs_manager, package):
         'candidate_tags':
             candidate_context.split(' ') if candidate_context else None,
         'candidate_value': candidate_value,
+        'branch_url': branch_url,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)

@@ -188,13 +188,13 @@ class Run(object):
             'build_version',
             'build_distribution', 'result_code', 'branch_name',
             'main_branch_revision', 'revision', 'context', 'result',
-            'suite', 'instigated_context']
+            'suite', 'instigated_context', 'branch_url']
 
     def __init__(self, run_id, times, command, description, package,
                  build_version,
                  build_distribution, result_code, branch_name,
                  main_branch_revision, revision, context, result,
-                 suite, instigated_context):
+                 suite, instigated_context, branch_url):
         self.id = run_id
         self.times = times
         self.command = command
@@ -210,6 +210,7 @@ class Run(object):
         self.result = result
         self.suite = suite
         self.instigated_context = instigated_context
+        self.branch_url = branch_url
 
     @property
     def duration(self):
@@ -228,7 +229,7 @@ class Run(object):
                        row[10].encode('utf-8') if row[10] else None),
                    revision=(row[11].encode('utf-8') if row[11] else None),
                    context=row[12], result=row[13], suite=row[14],
-                   instigated_context=row[15])
+                   instigated_context=row[15], branch_url=row[16])
 
     def __len__(self):
         return len(self.__slots__)
@@ -238,7 +239,7 @@ class Run(object):
                 self.package, self.build_version, self.build_distribution,
                 self.result_code, self.branch_name, self.main_branch_revision,
                 self.revision, self.context, self.result, self.suite,
-                self.instigated_context)
+                self.instigated_context, self.branch_url)
 
     def __eq__(self, other):
         if isinstance(other, Run):
@@ -269,7 +270,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
-    instigated_context
+    instigated_context, branch_url
 FROM
     run
 """
@@ -508,7 +509,8 @@ SELECT
   context,
   result,
   suite,
-  instigated_context
+  instigated_context,
+  branch_url
 FROM
   run
 WHERE
@@ -537,7 +539,8 @@ SELECT
   context,
   result,
   suite,
-  instigated_context
+  instigated_context,
+  branch_url
 FROM
   run
 WHERE package = $1 AND build_distribution = $2
@@ -570,7 +573,8 @@ SELECT DISTINCT ON (package)
   context,
   result,
   suite,
-  instigated_context
+  instigated_context,
+  branch_url
 FROM
   run
 WHERE suite = $1 AND package = ANY($2::text[])
