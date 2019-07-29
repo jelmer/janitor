@@ -78,8 +78,7 @@ async def popcon():
 
 
 async def store_run(
-        run_id, name, vcs_url,
-        start_time, finish_time,
+        run_id, name, vcs_url, start_time, finish_time,
         command, description, instigated_context, context,
         main_branch_revision, result_code, build_version,
         build_distribution, branch_name, revision, subworker_result, suite):
@@ -108,14 +107,15 @@ async def store_run(
             "INSERT INTO run (id, command, description, result_code, "
             "start_time, finish_time, package, instigated_context, context, "
             "build_version, build_distribution, main_branch_revision, "
-            "branch_name, revision, result, suite) "
+            "branch_name, revision, result, suite, branch_url) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
-            "$14, $15, $16)",
+            "$14, $15, $16, $17)",
             run_id, ' '.join(command), description, result_code,
             start_time, finish_time, name, instigated_context, context,
             str(build_version) if build_version else None, build_distribution,
             main_branch_revision, branch_name, revision,
-            subworker_result if subworker_result else None, suite)
+            subworker_result if subworker_result else None, suite,
+            vcs_url)
 
 
 async def store_publish(package, branch_name, main_branch_revision, revision,
