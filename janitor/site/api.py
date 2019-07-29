@@ -10,7 +10,7 @@ from janitor.policy import read_policy, apply_policy
 from janitor import state, SUITES
 from . import env, get_run_diff
 
-DEFAULT_SCHEDULE_OFFSET = 0
+DEFAULT_SCHEDULE_OFFSET = -1
 SUITE_TO_COMMAND = {
     'lintian-fixes': ['lintian-brush'],
     'fresh-releases': ['new-upstream'],
@@ -61,6 +61,7 @@ async def handle_publish(publisher_url, request):
 
 
 async def handle_schedule(request):
+    from ..schedule import estimate_duration
     package = request.match_info['package']
     suite = request.match_info['suite']
     try:
@@ -74,13 +75,17 @@ async def handle_schedule(request):
         package = list(await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
-
-    await state.add_to_queue(package.branch_url, package.name, command, suite, offset)
+    estimated_duration = await estimate_duration(
+        package, suite)
+    await state.add_to_queue(
+        package.branch_url, package.name, command, suite, offset,
+        estimated_duration=estimated_duration)
     response_obj = {
         'package': package.name,
         'command': command,
         'suite': suite,
         'offset': offset,
+        'estimated_duration': estimated_duration,
         }
     return web.json_response(response_obj)
 
