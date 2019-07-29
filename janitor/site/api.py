@@ -75,8 +75,7 @@ async def handle_schedule(request):
         package = list(await state.iter_packages(package=package))[0]
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
-    estimated_duration = await estimate_duration(
-        package, suite)
+    estimated_duration = await estimate_duration(package.name, suite)
     await state.add_to_queue(
         package.branch_url, package.name, command, suite, offset,
         estimated_duration=estimated_duration)
@@ -85,7 +84,7 @@ async def handle_schedule(request):
         'command': command,
         'suite': suite,
         'offset': offset,
-        'estimated_duration': estimated_duration,
+        'estimated_duration_seconds': estimated_duration.total_seconds(),
         }
     return web.json_response(response_obj)
 

@@ -777,7 +777,7 @@ async def get_last_build_version(package, suite):
 
 async def estimate_duration(package, suite=None):
     query = """
-SELECT finish_time - start_time FROM run "
+SELECT finish_time - start_time FROM run
 WHERE package = $1"""
     args = [package]
     if suite is not None:
