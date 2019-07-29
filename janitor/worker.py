@@ -204,7 +204,7 @@ class NewUpstreamWorker(SubWorker):
         # Make sure that the quilt patches applied in the first place..
         with local_tree.lock_write():
             try:
-                old_upstream_version, upstream_version = merge_upstream(
+                result = merge_upstream(
                     tree=local_tree, snapshot=self.args.snapshot,
                     committer=self.committer, trust_package=TRUST_PACKAGE)
             except UpstreamAlreadyImported as e:
@@ -273,10 +273,10 @@ class NewUpstreamWorker(SubWorker):
                     error_code = 'quilt-refresh-error'
                     raise WorkerFailure(error_code, error_description)
 
-            report_context(upstream_version)
-            metadata['old_upstream_version'] = old_upstream_version
-            metadata['upstream_version'] = upstream_version
-            return "Merged new upstream version %s" % upstream_version
+            report_context(result.new_upstream_version)
+            metadata['old_upstream_version'] = result.old_upstream_version
+            metadata['upstream_version'] = result.new_upstream_version
+            return "Merged new upstream version %s" % result.new_upstream_version
 
     def build_suite(self):
         if self.args.snapshot:
