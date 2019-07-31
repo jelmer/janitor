@@ -233,7 +233,6 @@ class NewUpstreamWorker(SubWorker):
                 error_description = "Upstream version %s conflicted." % (
                     e.version)
                 error_code = 'upstream-merged-conflicts'
-                upstream_version = e.version
                 report_context(e.version)
                 metadata['upstream_version'] = e.version
                 raise WorkerFailure(error_code, error_description)
@@ -259,7 +258,8 @@ class NewUpstreamWorker(SubWorker):
                 raise WorkerFailure(error_code, error_description)
             except NoRoundtrippingSupport:
                 error_description = (
-                    'Unable to import upstream repository into packaging repository.')
+                    'Unable to import upstream repository into '
+                    'packaging repository.')
                 error_code = 'roundtripping-error'
                 raise WorkerFailure(error_code, error_description)
 
@@ -276,7 +276,13 @@ class NewUpstreamWorker(SubWorker):
             report_context(result.new_upstream_version)
             metadata['old_upstream_version'] = result.old_upstream_version
             metadata['upstream_version'] = result.new_upstream_version
-            return "Merged new upstream version %s" % result.new_upstream_version
+            if result.upstream_branch:
+                metadata['upstream_branch_url'] = (
+                    result.upstream_branch.user_url)
+                metadata['upstream_branch_browse'] = (
+                    result.upstream_branch_browse)
+            return "Merged new upstream version %s" % (
+                result.new_upstream_version)
 
     def build_suite(self):
         if self.args.snapshot:
