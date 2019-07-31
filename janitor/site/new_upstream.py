@@ -19,7 +19,7 @@ from janitor.site import (
 
 async def generate_pkg_file(package, suite):
     try:
-        package = list(await state.iter_packages(package=package))[0]
+        package = await state.get_package(package=package)
     except IndexError:
         raise KeyError(package)
     # TODO(jelmer): Filter out proposals not for this suite.
@@ -63,6 +63,7 @@ async def generate_pkg_file(package, suite):
         'maintainer_email': package.maintainer_email,
         'uploader_emails': package.uploader_emails,
         'vcs_url': package.branch_url,
+        "vcs_browse": package.vcs_browse,
         'command': command,
         'build_version': build_version,
         'result_code': result_code,

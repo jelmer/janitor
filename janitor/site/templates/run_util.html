@@ -83,3 +83,11 @@ $(function() {
 </blockquote>
 {% endif %}
 {% endmacro %}
+
+{% macro display_branch_url(vcs_browse, vcs_url) %}
+{% if vcs_browse %}
+<a href="{{ vcs_browse }}">{{ vcs_url }}</a>
+{% else %}
+<a href="{{ vcs_url }}">{{ vcs_url }}</a>
+{% endif %}
+{% endmacro %}

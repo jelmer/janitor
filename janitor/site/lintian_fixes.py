@@ -17,7 +17,7 @@ SUITE = 'lintian-fixes'
 
 async def generate_pkg_file(vcs_manager, package):
     try:
-        package = list(await state.iter_packages(package=package))[0]
+        package = await state.get_package(package=package)
     except IndexError:
         raise KeyError(package)
     # TODO(jelmer): Filter out proposals not for this suite.
@@ -67,7 +67,8 @@ async def generate_pkg_file(vcs_manager, package):
         'merge_proposals': merge_proposals,
         'maintainer_email': package.maintainer_email,
         'uploader_emails': package.uploader_emails,
-        'vcs_url': package.branch_url,
+        'vcs_url': package.vcs_url,
+        'vcs_browse': package.vcs_browse,
         'command': command,
         'build_version': build_version,
         'result_code': result_code,
