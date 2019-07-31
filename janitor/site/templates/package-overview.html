@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "run_util.html" import display_result_code %}
+{% from "run_util.html" import display_result_code, display_branch_url %}
 {% block page_title %}Package Overview - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
@@ -8,7 +8,7 @@
 <ul class="simple">
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
-<li>Branch URL: <a class="reference external" href="{{ vcs_url }}">{{ vcs_url }}</a></li>
+<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
 </ul>
 
 <div class="section" id="suites">

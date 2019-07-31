@@ -99,6 +99,10 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
     kwargs['enumerate'] = enumerate
     kwargs['branch_url'] = run.branch_url
 
+    package = await state.get_package(run.package)
+    kwargs['vcs_browse'] = package.vcs_browse
+    kwargs['vcs_url'] = package.vcs_url
+
     def show_diff():
         diff = get_run_diff(vcs_manager, run)
         if diff is None:
@@ -180,19 +184,19 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
     return text
 
 
-async def generate_pkg_file(
-        name, merge_proposals, maintainer_email, branch_url, runs):
+async def generate_pkg_file(package, merge_proposals, runs):
     kwargs = {}
-    kwargs['package'] = name
-    kwargs['maintainer_email'] = maintainer_email
-    kwargs['vcs_url'] = branch_url
+    kwargs['package'] = package.name
+    kwargs['maintainer_email'] = package.maintainer_email
+    kwargs['vcs_url'] = package.vcs_url
+    kwargs['vcs_browse'] = package.vcs_browse
     kwargs['merge_proposals'] = merge_proposals
     kwargs['builds'] = [run for run in runs if run.build_version]
     kwargs['runs'] = runs
     kwargs['candidates'] = {
         suite: (context, value)
         for (package, suite, command, context, value) in
-        await state.iter_candidates(packages=[name])}
+        await state.iter_candidates(packages=[package.name])}
     template = env.get_template('package-overview.html')
     return await template.render_async(**kwargs)
 

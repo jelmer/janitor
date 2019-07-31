@@ -181,6 +181,10 @@ FROM
             Package.from_row(row) for row in await conn.fetch(query, *args)]
 
 
+async def get_package(name):
+    return await list(iter_packages(package=[name]))[0]
+
+
 class Run(object):
 
     __slots__ = [

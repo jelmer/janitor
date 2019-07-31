@@ -188,9 +188,7 @@ if __name__ == '__main__':
                 package=package.name):
             merge_proposals.append((url, status))
         runs = [x async for x in state.iter_runs(package=package.name)]
-        text = await generate_pkg_file(
-            package.name, merge_proposals, package.maintainer_email,
-            package.branch_url, runs)
+        text = await generate_pkg_file(package, merge_proposals, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
