@@ -139,11 +139,12 @@ if __name__ == '__main__':
             get_results_by_code, generate_result_code_index,
             generate_result_code_page)
         code = request.match_info.get('code')
-        by_code = await get_results_by_code()
         if not code:
-            text = await generate_result_code_index(by_code)
+            stats = await state.stats_by_result_codes()
+            text = await generate_result_code_index(stats)
         else:
-            text = await generate_result_code_page(code, by_code.get(code, []))
+            runs = await get_results_by_code(code)
+            text = await generate_result_code_page(code, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
