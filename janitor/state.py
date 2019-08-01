@@ -589,6 +589,16 @@ ORDER BY package, command, result_code = 'success' DESC, start_time DESC
             yield Run.from_row(row)
 
 
+async def stats_by_result_codes():
+    query = """\
+select result_code, count(result_code) from (select distinct on(package, suite)
+package, suite, result_code from run order by 1, 2, start_time desc) AS results
+group by 1 order by 2 desc
+"""
+    async with get_connection() as conn:
+        return await conn.fetch(query)
+
+
 async def iter_last_runs():
     query = """
 SELECT DISTINCT ON (package, command)

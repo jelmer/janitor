@@ -7,13 +7,13 @@ from janitor import state
 from janitor.site import env
 
 
-async def get_results_by_code():
+async def get_results_by_code(code):
     by_code = {}
     for (source, command, result_code, log_id,
          description, duration) in await state.iter_last_runs():
         by_code.setdefault(result_code, []).append(
             (source, command, log_id, description))
-    return by_code
+    return by_code.get(code, [])
 
 
 async def generate_result_code_page(code, items):
@@ -37,7 +37,7 @@ async def generate_result_code_index(by_code):
     template = env.get_template('result-code-index.html')
 
     data = sorted(
-        [[name, len(by_code[name])] for name in by_code],
+        [[name, by_code[name]] for name in by_code],
         key=operator.itemgetter(1), reverse=True)
     return await template.render_async(result_codes=data)
 
