@@ -123,6 +123,7 @@ def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
     MAINTAINER_EMAIL_MAP = {
         'pkg-javascript-devel@lists.alioth.debian.org': 'js-team',
         'python-modules-team@lists.alioth.debian.org': 'python-team/modules',
+        'debian-science-maintainers@lists.alioth.debian.org': 'science-team',
         }
     if maintainer_email.endswith('@debian.org'):
         team_name = maintainer_email.split('@')[0]
