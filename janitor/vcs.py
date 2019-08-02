@@ -63,10 +63,15 @@ def get_vcs_abbreviation(repository):
 def is_alioth_url(url):
     return urllib.parse.urlparse(url).netloc in (
         'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
-        'bzr.debian.org', 'git.debian.org')
+        'hg.debian.org', 'git.debian.org')
 
 
 def open_branch_ext(vcs_url, possible_transports=None):
+    if ' [' in vcs_url:
+        raise BranchOpenFailure(
+            'package-in-subpath',
+            'The package is stored in a subpath rather than the '
+            'repository root.')
     try:
         return open_branch(vcs_url, possible_transports)
     except BranchUnavailable as e:
