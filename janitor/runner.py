@@ -119,6 +119,21 @@ class JanitorResult(object):
             self.subworker_result = None
 
 
+def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
+    MAINTAINER_EMAIL_MAP = {
+        'pkg-javascript-devel@lists.alioth.debian.org': 'js-team'}
+    if maintainer_email.endswith('@debian.org'):
+        team_name = maintainer_email.split('@')[0]
+    else:
+        try:
+            team_name = MAINTAINER_EMAIL_MAP[maintainer_email]
+        except KeyError:
+            return None
+
+    return open_branch_ext('https://salsa.debian.org/%s/%s' % (
+        team_name, pkg), possible_transports=possible_transports)
+
+
 def find_changes(path, package):
     for name in os.listdir(path):
         if name.startswith('%s_' % package) and name.endswith('.changes'):
@@ -233,8 +248,18 @@ async def process_one(
             main_branch = open_branch_ext(
                 vcs_url, possible_transports=possible_transports)
         except BranchOpenFailure as e:
-            return JanitorResult(
-                pkg, log_id=log_id, description=e.description, code=e.code)
+            main_branch = None
+            if e.code == 'hosted-on-alioth':
+                try:
+                    main_branch = open_salsa_branch(
+                        env['MAINTAINER_EMAIL'], pkg,
+                        possible_transports=possible_transports)
+                except BranchOpenFailure:
+                    # Well, that didn't work either. Just return the original error.
+                    pass
+            if main_branch is None:
+                return JanitorResult(
+                    pkg, log_id=log_id, description=e.description, code=e.code)
 
         try:
             hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
