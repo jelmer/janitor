@@ -496,6 +496,7 @@ select suite, count(distinct package) from run where build_version is not null
 group by 1
 """)
 
+
 async def iter_previous_runs(package, suite):
     async with get_connection() as conn:
         for row in await conn.fetch("""
@@ -866,4 +867,6 @@ async def iter_sources_with_unstable_version(packages):
 async def iter_packages_by_maintainer(maintainer):
     async with get_connection() as conn:
         return [row[0] for row in await conn.fetch(
-            "SELECT name FROM package WHERE maintainer_email = $1 OR $1 = any(uploader_emails)", maintainer)]
+            "SELECT name FROM package WHERE "
+            "maintainer_email = $1 OR $1 = any(uploader_emails)",
+            maintainer)]

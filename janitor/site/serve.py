@@ -16,7 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-async def read_apt_file_from_s3(request, session, s3_location, suite, filename, max_age):
+async def read_apt_file_from_s3(
+        request, session, s3_location, suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
     url = '%s/%s/%s' % (s3_location, suite, filename)
     async with session.get(url) as client_response:
@@ -44,11 +45,11 @@ async def read_apt_file_from_s3(request, session, s3_location, suite, filename, 
     return response
 
 
-async def read_apt_file_from_fs(suite, filename):
+async def read_apt_file_from_fs(suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
     path = os.path.join(
             os.path.dirname(__file__), '..', '..',
-            "public_html", suite, file)
+            "public_html", suite, filename)
     if not os.path.exists(path):
         raise web.HTTPNotFound()
     return web.FileResponse(path, headers=headers)
@@ -71,20 +72,23 @@ if __name__ == '__main__':
     parser.add_argument(
         '--port',
         type=int, help='Port to listen on', default=8080)
-    parser.add_argument('--logdirectory', type=str,
-                        help='Logs directory path.',
-                        default='https://s3.nl-ams.scw.cloud')
-    parser.add_argument('--publisher-url', type=str,
-                        default='http://localhost:9912/',
-                        help='URL for publisher.')
-    parser.add_argument('--apt-location', type=str,
-                        default='https://s3.nl-ams.scw.cloud/debian-janitor/apt',
-                        help='Location to read apt files from (HTTP or local).')
-    parser.add_argument("--policy",
-                        help="Policy file to read.", type=str,
-                        default=os.path.join(
-                            os.path.dirname(__file__), '..', '..',
-                            'policy.conf'))
+    parser.add_argument(
+        '--logdirectory', type=str,
+        help='Logs directory path.',
+        default='https://s3.nl-ams.scw.cloud')
+    parser.add_argument(
+        '--publisher-url', type=str,
+        default='http://localhost:9912/',
+        help='URL for publisher.')
+    parser.add_argument(
+        '--apt-location', type=str,
+        default='https://s3.nl-ams.scw.cloud/debian-janitor/apt',
+        help='Location to read apt files from (HTTP or local).')
+    parser.add_argument(
+        "--policy",
+        help="Policy file to read.", type=str,
+        default=os.path.join(
+            os.path.dirname(__file__), '..', '..', 'policy.conf'))
 
     args = parser.parse_args()
 
@@ -186,7 +190,8 @@ if __name__ == '__main__':
         except IndexError:
             raise web.HTTPNotFound(text='No package with name %s' % package)
         merge_proposals = []
-        for unused_package, url, status, revision in await state.iter_proposals(
+        for (unused_package, url, status,
+                revision) in await state.iter_proposals(
                 package=package.name):
             merge_proposals.append((url, status))
         runs = [x async for x in state.iter_runs(package=package.name)]
@@ -212,18 +217,22 @@ if __name__ == '__main__':
 
     async def handle_log(request):
         pkg = request.match_info['pkg']
-        if not re.match('^[a-z0-9+-\.]+$', pkg) or len(pkg) < 2:
-            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
-        run_id = request.match_info['run_id']
-        if not re.match('^[a-z0-9-]+$', run_id) or len(run_id) < 5:
-            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
         filename = request.match_info['log']
-        if not re.match('^[a-z0-9\.]+$', filename) or len(filename) < 3:
-            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
+        run_id = request.match_info['run_id']
+        if not re.match('^[a-z0-9+-\\.]+$', pkg) or len(pkg) < 2:
+            raise web.HTTPNotFound(
+                text='No log file %s for run %s' % (filename, run_id))
+        if not re.match('^[a-z0-9-]+$', run_id) or len(run_id) < 5:
+            raise web.HTTPNotFound(
+                text='No log file %s for run %s' % (filename, run_id))
+        if not re.match('^[a-z0-9\\.]+$', filename) or len(filename) < 3:
+            raise web.HTTPNotFound(
+                text='No log file %s for run %s' % (filename, run_id))
         try:
             logfile = await logfile_manager.get_log(pkg, run_id, filename)
         except FileNotFoundError:
-            raise web.HTTPNotFound(text='No log file %s for run %s' % (filename, run_id))
+            raise web.HTTPNotFound(
+                text='No log file %s for run %s' % (filename, run_id))
         else:
             with logfile as f:
                 text = f.read().decode('utf-8', 'replace')
@@ -296,8 +305,8 @@ if __name__ == '__main__':
 
         if args.apt_location.startswith('http'):
             return await read_apt_file_from_s3(
-                request, app.http_client_session, args.apt_location, suite, file,
-                max_age)
+                request, app.http_client_session, args.apt_location, suite,
+                file, max_age)
         else:
             return await read_apt_file_from_fs(suite, file, max_age)
 
@@ -376,5 +385,6 @@ if __name__ == '__main__':
 
     app.http_client_session = ClientSession()
     setup_metrics(app)
-    app.add_subapp('/api', create_api_app(args.publisher_url, policy_config, vcs_manager))
+    app.add_subapp(
+        '/api', create_api_app(args.publisher_url, policy_config, vcs_manager))
     web.run_app(app, host=args.host, port=args.port)

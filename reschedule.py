@@ -8,6 +8,7 @@ parser = argparse.ArgumentParser('reschedule')
 parser.add_argument('result_code', type=str)
 args = parser.parse_args()
 
+
 async def main(result_code):
     packages = {}
     for package in await state.iter_packages():
@@ -15,8 +16,8 @@ async def main(result_code):
 
     async with state.get_connection() as conn:
         results = await conn.fetch("""SELECT * FROM (
-SELECT DISTINCT ON (package, suite) package, command, suite, result_code FROM run) AS f
-WHERE result_code = $1""", result_code)
+SELECT DISTINCT ON (package, suite) package, command, suite, result_code
+FROM run) AS f WHERE result_code = $1""", result_code)
 
         print('%d items to reschedule.' % len(results))
 

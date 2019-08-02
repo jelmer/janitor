@@ -18,7 +18,6 @@
 from aiohttp import ClientSession
 import boto3
 import gzip
-from hashlib import sha256
 from io import BytesIO
 import os
 

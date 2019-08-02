@@ -54,7 +54,8 @@ def metrics_middleware(app, handler):
         resp_time = time.time() - start_time
         request_latency_hist.labels(request.path).observe(resp_time)
         requests_in_progress_gauge.labels(request.method, request.path).dec()
-        request_counter.labels(request.method, request.path, response.status).inc()
+        request_counter.labels(
+            request.method, request.path, response.status).inc()
         return response
     return wrapper
 

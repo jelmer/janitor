@@ -55,7 +55,8 @@ async def generate_pkg_file(vcs_manager, package):
     else:
         candidate_context = None
         candidate_value = None
-    previous_runs = [x async for x in state.iter_previous_runs(package.name, SUITE)]
+    previous_runs = [
+        x async for x in state.iter_previous_runs(package.name, SUITE)]
 
     def show_diff():
         diff = get_run_diff(vcs_manager, run)
@@ -134,12 +135,13 @@ async def generate_developer_page(developer):
 
 if __name__ == '__main__':
     from janitor.vcs import LocalVcsManager
+    import os
     parser = argparse.ArgumentParser(prog='report-lintian-fixes-pkg')
     parser.add_argument("package")
     args = parser.parse_args()
 
-    vcs_manager = LocalVcsManager(os.path.join(
-        os.path.dirname(__file__), '..', '..', 'vcs'))
+    vcs_manager = LocalVcsManager(
+        os.path.join(os.path.dirname(__file__), '..', '..', 'vcs'))
     loop = asyncio.get_event_loop()
     sys.stdout.write(loop.run_until_complete(generate_pkg_file(
-        vcs_manager, cargs.package)))
+        vcs_manager, args.package)))
