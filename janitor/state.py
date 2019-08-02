@@ -139,24 +139,25 @@ async def store_publish(package, branch_name, main_branch_revision, revision,
 class Package(object):
 
     def __init__(self, name, maintainer_email, uploader_emails, branch_url,
-                 vcs_type, vcs_url):
+                 vcs_type, vcs_url, vcs_browse):
         self.name = name
         self.maintainer_email = maintainer_email
         self.uploader_emails = uploader_emails
         self.branch_url = branch_url
         self.vcs_type = vcs_type
         self.vcs_url = vcs_url
+        self.vcs_browse = vcs_browse
 
     @classmethod
     def from_row(cls, row):
-        return cls(row[0], row[1], row[2], row[3], row[4], row[5])
+        return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
 
     def __lt__(self, other):
         return tuple(self) < tuple(other)
 
     def __tuple__(self):
         return (self.name, self.maintainer_email, self.uploader_emails,
-                self.branch_url, self.vcs_type, self.vcs_url)
+                self.branch_url, self.vcs_type, self.vcs_url, self.vcs_browse)
 
 
 async def iter_packages(package=None):
@@ -167,7 +168,8 @@ SELECT
   uploader_emails,
   branch_url,
   vcs_type,
-  vcs_url
+  vcs_url,
+  vcs_browse
 FROM
   package
 """
@@ -182,7 +184,7 @@ FROM
 
 
 async def get_package(name):
-    return await list(iter_packages(package=[name]))[0]
+    return list(await iter_packages(package=name))[0]
 
 
 class Run(object):
@@ -601,14 +603,15 @@ group by 1 order by 2 desc
 
 async def iter_last_runs(result_code):
     query = """
-SELECT * FROM (
+SELECT package, suite, id, description, start_time, duration FROM (
 SELECT DISTINCT ON (package, suite)
   package,
-  command,
+  suite,
   id,
   description,
   start_time,
-  finish_time - start_time
+  finish_time - start_time AS duration,
+  result_code
 FROM
   run
 ORDER BY package, suite, start_time DESC) AS runs
@@ -823,6 +826,7 @@ SELECT
   package.branch_url,
   package.vcs_type,
   package.vcs_url,
+  package.vcs_browse,
   candidate.suite,
   candidate.command,
   candidate.context,
@@ -841,7 +845,7 @@ INNER JOIN package on package.name = candidate.package
         query += " WHERE package = ANY($1::text[])"
         args.append(packages)
     async with get_connection() as conn:
-        return [([Package.from_row(row)] + list(row[6:]))
+        return [([Package.from_row(row)] + list(row[7:]))
                 for row in await conn.fetch(query, *args)]
 
 
