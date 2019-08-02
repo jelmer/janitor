@@ -16,16 +16,9 @@ async def get_results_by_code(code):
     return by_code.get(code, [])
 
 
-async def generate_result_code_page(code, items):
+async def generate_result_code_page(code, entries):
     template = env.get_template('result-code.html')
-    data = []
-    for (source, command, log_id, description) in items:
-        data.append((
-            source,
-            log_id,
-            command,
-            description))
-    return await template.render_async(code=code, entries=data)
+    return await template.render_async(code=code, entries=entries)
 
 
 async def write_result_code_page(path, code, items):
@@ -36,9 +29,7 @@ async def write_result_code_page(path, code, items):
 async def generate_result_code_index(by_code):
     template = env.get_template('result-code-index.html')
 
-    data = sorted(
-        [[name, by_code[name]] for name in by_code],
-        key=operator.itemgetter(1), reverse=True)
+    data = sorted(by_code, key=operator.itemgetter(1), reverse=True)
     return await template.render_async(result_codes=data)
 
 

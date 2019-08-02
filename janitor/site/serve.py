@@ -138,6 +138,7 @@ if __name__ == '__main__':
         from .result_codes import (
             generate_result_code_index,
             generate_result_code_page)
+        from .. import state
         code = request.match_info.get('code')
         if not code:
             stats = await state.stats_by_result_codes()
