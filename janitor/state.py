@@ -599,21 +599,23 @@ group by 1 order by 2 desc
         return await conn.fetch(query)
 
 
-async def iter_last_runs():
+async def iter_last_runs(result_code):
     query = """
-SELECT DISTINCT ON (package, command)
+SELECT * FROM (
+SELECT DISTINCT ON (package, suite)
   package,
   command,
-  result_code,
   id,
   description,
+  start_time,
   finish_time - start_time
 FROM
   run
- ORDER BY package, command, start_time DESC
+ORDER BY package, suite, start_time DESC) AS runs
+WHERE result_code = $1 ORDER BY start_time DESC
 """
     async with get_connection() as conn:
-        return await conn.fetch(query)
+        return await conn.fetch(query, result_code)
 
 
 async def iter_build_failures():

@@ -10,7 +10,7 @@ from janitor.site import env
 async def get_results_by_code(code):
     by_code = {}
     for (source, command, result_code, log_id,
-         description, duration) in await state.iter_last_runs():
+         description, start_time, duration) in await state.iter_last_runs():
         by_code.setdefault(result_code, []).append(
             (source, command, log_id, description))
     return by_code.get(code, [])

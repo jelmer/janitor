@@ -13,14 +13,14 @@
 </colgroup>
 <thead valign="bottom">
 <tr class="row-odd"><th class="head">Package</th>
-<th class="head">Command</th>
+<th class="head">Suite</th>
 <th class="head">Description</th>
 </tr>
 </thead>
 <tbody valign="top">
-{% for pkg, run_id, command, description in entries %}
+{% for pkg, suite, run_id, description, start_time, duration in entries %}
 <tr class="row-even"><td><a class="reference external" href="../pkg/{{ pkg }}/">{{ pkg }}</a></td>
-<td>{{ command }}</td>
+<td>{{ suite }}</td>
 <td><a class="reference external" href="../pkg/{{ pkg }}/{{ run_id }}">{{ description }}</a></td>
 </tr>
 {% endfor %}
