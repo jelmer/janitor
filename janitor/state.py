@@ -604,10 +604,11 @@ group by 1 order by 2 desc
 
 async def iter_last_runs(result_code):
     query = """
-SELECT package, suite, id, description, start_time, duration FROM (
+SELECT package, suite, command, id, description, start_time, duration FROM (
 SELECT DISTINCT ON (package, suite)
   package,
   suite,
+  command,
   id,
   description,
   start_time,
