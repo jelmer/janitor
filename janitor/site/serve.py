@@ -136,14 +136,14 @@ if __name__ == '__main__':
 
     async def handle_result_codes(request):
         from .result_codes import (
-            get_results_by_code, generate_result_code_index,
+            generate_result_code_index,
             generate_result_code_page)
         code = request.match_info.get('code')
         if not code:
             stats = await state.stats_by_result_codes()
             text = await generate_result_code_index(stats)
         else:
-            runs = await get_results_by_code(code)
+            runs = await state.iter_last_runs(code)
             text = await generate_result_code_page(code, runs)
         return web.Response(
             content_type='text/html', text=text,
