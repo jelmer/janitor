@@ -23,11 +23,10 @@ import asyncio
 from email.utils import parseaddr
 import asyncpg
 
-import distro_info
 from silver_platter.debian import (
     convert_debian_vcs_url,
 )
-from . import state, trace
+from . import trace
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
     )
@@ -199,11 +198,9 @@ sources.release = 'sid'
 
 async def main():
     import argparse
-    from breezy import trace
     from janitor import state
     from silver_platter.debian.lintian import (
         available_lintian_fixers,
-        DEFAULT_ADDON_FIXERS,
     )
     from prometheus_client import (
         Counter,
@@ -236,21 +233,20 @@ async def main():
 
     udd = await UDD.public_udd_mirror()
     packages = []
-    for (
-        name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-        vcs_browser, sid_version) in await udd.iter_packages_with_metadata():
-            uploader_emails = extract_uploader_emails(uploaders)
+    for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
+         vcs_browser, sid_version) in await udd.iter_packages_with_metadata():
+        uploader_emails = extract_uploader_emails(uploaders)
 
-            try:
-                branch_url = convert_debian_vcs_url(vcs_type, vcs_url)
-            except ValueError as e:
-                trace.note('%s: %s', name, e)
-                branch_url = None
+        try:
+            branch_url = convert_debian_vcs_url(vcs_type, vcs_url)
+        except ValueError as e:
+            trace.note('%s: %s', name, e)
+            branch_url = None
 
-            packages.append((
-                    name, branch_url, maintainer_email,
-                    uploader_emails, sid_version,
-                    vcs_type, vcs_url, vcs_browser, insts))
+        packages.append((
+                name, branch_url, maintainer_email,
+                uploader_emails, sid_version,
+                vcs_type, vcs_url, vcs_browser, insts))
     await state.store_packages(packages)
 
     candidates = []

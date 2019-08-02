@@ -20,7 +20,6 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 import os
 
 from janitor import SUITES
-from janitor.vcs import SUPPORTED_VCSES
 
 
 def format_duration(duration):

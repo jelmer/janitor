@@ -255,7 +255,8 @@ async def process_one(
                         env['MAINTAINER_EMAIL'], pkg,
                         possible_transports=possible_transports)
                 except BranchOpenFailure:
-                    # Well, that didn't work either. Just return the original error.
+                    # Well, that didn't work either. Just return the original
+                    # error.
                     pass
             if main_branch is None:
                 return JanitorResult(
@@ -303,7 +304,7 @@ async def process_one(
                 code='cached-branch-missing',
                 description='Missing cache branch for %s' % pkg)
         note('Using cached branch %s', main_branch.user_url)
-        resume_branch = vcs_manager.get_branch(pkg, branch_name, vcs_abbrev)
+        resume_branch = vcs_manager.get_branch(pkg, branch_name)
         cached_branch = None
 
     if resume_branch is not None:

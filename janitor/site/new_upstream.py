@@ -56,7 +56,8 @@ async def generate_pkg_file(package, suite):
         result = run.result
         branch_name = run.branch_name
         branch_url = run.branch_url
-    previous_runs = [x async for x in state.iter_previous_runs(package.name, suite)]
+    previous_runs = [x async for x in state.iter_previous_runs(
+        package.name, suite)]
     kwargs = {
         'package': package.name,
         'merge_proposals': merge_proposals,

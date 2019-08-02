@@ -1,9 +1,6 @@
 #!/usr/bin/python3
 
-import asyncio
-import functools
 from io import BytesIO
-import os
 
 from breezy.errors import NotBranchError
 from janitor import state
@@ -25,7 +22,6 @@ from janitor.site import (
     get_run_diff,
     highlight_diff,
 )
-from janitor.trace import note
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
@@ -144,17 +140,21 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
                 kwargs['binary_packages'].append(binary)
 
     cached_logs = {}
+
     async def _cache_log(name):
         try:
-            cached_logs[name] = (await logfile_manager.get_log(run.package, run.id, name)).read()
+            cached_logs[name] = (await logfile_manager.get_log(
+                run.package, run.id, name)).read()
         except FileNotFoundError:
             cached_logs[name] = None
+
     async def has_log(name):
-        if not name in cached_logs:
+        if name not in cached_logs:
             await _cache_log(name)
         return cached_logs[name] is not None
+
     async def get_log(name):
-        if not name in cached_logs:
+        if name not in cached_logs:
             await _cache_log(name)
         if cached_logs[name] is None:
             raise FileNotFoundError(name)

@@ -473,7 +473,7 @@ async def publish_pending(rate_limiter, policy, vcs_manager, dry_run=False):
             if mode == MODE_ATTEMPT_PUSH:
                 mode = MODE_PUSH
         if mode == MODE_ATTEMPT_PUSH and \
-                "salsa.debian.org/debian/" in main_branch.user_url:
+                "salsa.debian.org/debian/" in main_branch_url:
             # Make sure we don't accidentally push to unsuspecting collab-maint
             # repositories, even if debian-janitor becomes a member of "debian"
             # in the future.
@@ -514,11 +514,14 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     except IndexError:
         return web.json_response({}, status=400)
 
-    if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and not rate_limiter.allowed(package.maintainer_email):
+    if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
+            not rate_limiter.allowed(package.maintainer_email)):
         return web.json_response(
-            {'maintainer_email': package.maintainer_email, 'code': 'rate-limited',
+            {'maintainer_email': package.maintainer_email,
+             'code': 'rate-limited',
              'description':
-                'Maximum number of open merge proposals for maintainer reached'},
+                'Maximum number of open merge proposals for maintainer '
+                'reached'},
             status=429)
 
     run = await state.get_last_success(package.name, suite)
@@ -536,7 +539,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
             {'code': e.code, 'description': e.description}, status=400)
 
     if proposal and is_new:
-        rate_limiter.inc(maintainer_email)
+        rate_limiter.inc(package.maintainer_email)
 
     return web.json_response(
         {'branch_name': branch_name,

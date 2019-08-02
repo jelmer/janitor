@@ -134,8 +134,7 @@ async def estimate_duration(package, suite):
 
 
 async def add_to_queue(todo, dry_run=False, default_offset=0):
-    popcon = {package: (inst, vote)
-              for (package, inst) in await state.popcon()}
+    popcon = dict(await state.popcon())
     max_inst = max([(v or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
     for vcs_url, mode, env, command, suite, value in todo:

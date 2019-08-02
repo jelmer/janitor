@@ -42,7 +42,10 @@ async def get_queue(only_command=None, limit=None):
             else:
                 description = 'New upstream'
                 if entry.env.get('CONTEXT'):
-                    expecting = 'expecting to merge <a href=\'https://qa.debian.org/cgi-bin/watch?pkg=%s\'>%s</a>' % (entry.package, entry.env['CONTEXT'])
+                    expecting = (
+                        'expecting to merge <a href=\'https://qa.debian.org'
+                        '/cgi-bin/watch?pkg=%s\'>%s</a>' % (
+                            entry.package, entry.env['CONTEXT']))
         elif entry.command[0] == 'lintian-brush':
             description = 'Lintian fixes'
             if entry.env.get('CONTEXT'):
