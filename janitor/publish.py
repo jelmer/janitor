@@ -53,6 +53,7 @@ from silver_platter.debian.lintian import (
     )
 from silver_platter.utils import (
     open_branch,
+    BranchMissing,
     BranchUnavailable,
     )
 
@@ -400,6 +401,8 @@ async def publish_one(
             main_branch_url, possible_transports=possible_transports)
     except BranchUnavailable as e:
         raise PublishFailure('branch-unavailable', str(e))
+    except BranchMissing as e:
+        raise PublishFailure('branch-missing', str(e))
 
     subrunner.read_worker_result(subworker_result)
     branch_name = subrunner.branch_name()

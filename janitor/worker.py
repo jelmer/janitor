@@ -61,6 +61,7 @@ from silver_platter.utils import (
     PreCheckFailed,
     PostCheckFailed,
     open_branch,
+    BranchMissing,
     BranchUnavailable,
 )
 
@@ -359,13 +360,15 @@ def process_package(vcs_url, env, command, output_directory,
             vcs_url, possible_transports=possible_transports)
     except BranchUnavailable as e:
         raise WorkerFailure('worker-branch-unavailable', str(e))
+    except BranchMissing as e:
+        raise WorkerFailure('worker-branch-missing', str(e))
 
     if cached_branch_url:
         try:
             cached_branch = open_branch(
                 cached_branch_url,
                 possible_transports=possible_transports)
-        except BranchUnavailable as e:
+        except (BranchMissing, BranchUnavailable) as e:
             warning('Cached branch URL unavailable: %s', e)
             cached_branch = None
     else:
@@ -378,6 +381,8 @@ def process_package(vcs_url, env, command, output_directory,
                 possible_transports=possible_transports)
         except BranchUnavailable as e:
             raise WorkerFailure('worker-resume-branch-unavailable', str(e))
+        except BranchMissing as e:
+            raise WorkerFailure('worker-resume-branch-missing', str(e))
     else:
         resume_branch = None
 

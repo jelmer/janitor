@@ -33,6 +33,7 @@ from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
 from silver_platter.utils import (
     open_branch,
+    BranchMissing,
     BranchUnavailable,
     )
 
@@ -88,6 +89,8 @@ def open_branch_ext(vcs_url, possible_transports=None):
             else:
                 code = 'branch-unavailable'
         raise BranchOpenFailure(code, str(e))
+    except BranchMissing as e:
+        raise BranchOpenFailure('branch-missing', str(e))
     except KeyError as e:
         if e.args == ('www-authenticate not found',):
             raise BranchOpenFailure(
@@ -254,7 +257,7 @@ class LocalVcsManager(VcsManager):
     def get_branch(self, package, branch_name, vcs_type=None):
         try:
             return get_local_vcs_branch(self.base_path, package, branch_name)
-        except BranchUnavailable:
+        except (BranchUnavailable, BranchMissing):
             return None
 
     def import_branches(self, main_branch, local_branch, pkg, name,

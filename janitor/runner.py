@@ -48,6 +48,7 @@ from silver_platter.proposal import (
     )
 from silver_platter.utils import (
     open_branch,
+    BranchMissing,
     BranchUnavailable,
     )
 
@@ -357,10 +358,10 @@ async def process_one(
 
         try:
             local_branch = open_branch(os.path.join(output_directory, pkg))
-        except BranchUnavailable as e:
+        except (BranchMissing, BranchUnavailable) as e:
             return JanitorResult(
                 pkg, log_id,
-                description='result branch missing: %s' % e,
+                description='result branch unavailable: %s' % e,
                 code='result-branch-unavailable',
                 worker_result=worker_result)
 
