@@ -164,7 +164,8 @@ if __name__ == '__main__':
         from .. import state
         packages = [
             (item.name, item.maintainer_email)
-            for item in await state.iter_packages()]
+            for item in await state.iter_packages()
+            if not item.removed]
         text = await generate_pkg_list(packages)
         return web.Response(
             content_type='text/html', text=text,
@@ -175,7 +176,8 @@ if __name__ == '__main__':
         from .. import state
         packages = [
             (item.name, item.maintainer_email)
-            for item in await state.iter_packages()]
+            for item in await state.iter_packages()
+            if not item.removed]
         text = await generate_maintainer_list(packages)
         return web.Response(
             content_type='text/html', text=text,
@@ -186,7 +188,7 @@ if __name__ == '__main__':
         from .. import state
         package = request.match_info['pkg']
         try:
-            package = list(await state.iter_packages(package))[0]
+            package = await state.get_package(package)
         except IndexError:
             raise web.HTTPNotFound(text='No package with name %s' % package)
         merge_proposals = []

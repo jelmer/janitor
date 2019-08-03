@@ -12,6 +12,8 @@ args = parser.parse_args()
 async def main(result_code):
     packages = {}
     for package in await state.iter_packages():
+        if package.removed:
+            continue
         packages[package.name] = package
 
     results = await state.iter_last_runs(result_code)
