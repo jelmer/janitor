@@ -513,7 +513,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     post = await request.post()
     mode = post.get('mode', MODE_PROPOSE)
     try:
-        package = list(await state.iter_packages(package=package))[0]
+        package = await state.get_package(package)
     except IndexError:
         return web.json_response({}, status=400)
 

@@ -121,7 +121,9 @@ async def generate_candidates():
 
 async def generate_developer_page(developer):
     template = env.get_template('lintian-fixes-developer.html')
-    packages = list(await state.iter_packages_by_maintainer(developer))
+    packages = [p for p in
+                await state.iter_packages_by_maintainer(developer)
+                if not p.removed]
     candidate_tags = {}
     for row in await state.iter_candidates(packages=packages, suite=SUITE):
         candidate_tags[row[0].name] = row[3].split(' ')

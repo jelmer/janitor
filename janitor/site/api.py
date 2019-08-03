@@ -21,7 +21,7 @@ SUITE_TO_COMMAND = {
 async def handle_policy(policy_config, request):
     package = request.match_info['package']
     try:
-        package = list(await state.iter_packages(package=package))[0]
+        package = await state.get_package(package)
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     suite_policies = {}
@@ -72,7 +72,7 @@ async def handle_schedule(request):
     post = await request.post()
     offset = post.get('offset', DEFAULT_SCHEDULE_OFFSET)
     try:
-        package = list(await state.iter_packages(package=package))[0]
+        package = await state.get_package(package)
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     estimated_duration = await estimate_duration(package.name, suite)
@@ -90,9 +90,11 @@ async def handle_schedule(request):
 
 
 async def handle_package_list(request):
-    package = request.match_info.get('package')
+    name = request.match_info.get('package')
     response_obj = []
-    for package in await state.iter_packages(package=package):
+    for package in await state.iter_packages(package=name):
+        if not name and package.removed:
+            continue
         response_obj.append({
             'name': package.name,
             'maintainer_email': package.maintainer_email,
@@ -104,6 +106,8 @@ async def handle_package_list(request):
 async def handle_packagename_list(request):
     response_obj = []
     for package in await state.iter_packages():
+        if package.removed:
+            continue
         response_obj.append(package.name)
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=600'})
