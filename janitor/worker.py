@@ -149,7 +149,7 @@ class LintianBrushWorker(SubWorker):
         if failed:
             for fixer_name, failure in failed.items():
                 note('Fixer %r failed to run:', fixer_name)
-                sys.stderr.write(failure.errors.decode('utf-8', 'replace'))
+                sys.stderr.write(failure.errors)
 
         metadata['applied'] = []
         if base_metadata:
@@ -161,8 +161,7 @@ class LintianBrushWorker(SubWorker):
                 'fixed_lintian_tags': result.fixed_lintian_tags,
                 'certainty': result.certainty})
         metadata['failed'] = {
-            name: e.errors.decode('utf-8', 'replace')
-            for (name, e) in failed.items()}
+            name: e.errors for (name, e) in failed.items()}
         metadata['add_on_only'] = not has_nontrivial_changes(
             applied, self.args.propose_addon_only)
         if base_metadata and not base_metadata['add_on_only']:
