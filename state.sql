@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS package (
    vcs_url text,
    vcs_browse text,
    popcon_inst integer,
+   removed boolean default false,
    primary key(name)
 );
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged');

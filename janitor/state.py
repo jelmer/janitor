@@ -51,14 +51,15 @@ async def store_packages(packages):
     Args:
       packages: list of tuples with (
         name, branch_url, maintainer_email, uploader_emails, unstable_version,
-        vcs_type, vcs_url, vcs_browse, popcon_inst)
+        vcs_type, vcs_url, vcs_browse, popcon_inst, removed)
     """
     async with get_connection() as conn:
         await conn.executemany(
             "INSERT INTO package "
             "(name, branch_url, maintainer_email, uploader_emails, "
-            "unstable_version, vcs_type, vcs_url, vcs_browse, popcon_inst) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) "
+            "unstable_version, vcs_type, vcs_url, vcs_browse, popcon_inst, "
+            "removed) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) "
             "ON CONFLICT (name) DO UPDATE SET "
             "branch_url = EXCLUDED.branch_url, "
             "maintainer_email = EXCLUDED.maintainer_email, "
@@ -67,7 +68,8 @@ async def store_packages(packages):
             "vcs_type = EXCLUDED.vcs_type, "
             "vcs_url = EXCLUDED.vcs_url, "
             "vcs_browse = EXCLUDED.vcs_browse, "
-            "popcon_inst = EXCLUDED.popcon_inst",
+            "popcon_inst = EXCLUDED.popcon_inst, "
+            "removed = EXCLUDED.removed",
             packages)
 
 

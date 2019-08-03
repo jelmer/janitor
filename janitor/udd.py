@@ -20,6 +20,7 @@
 from __future__ import absolute_import
 
 import asyncio
+from debian.changelog import Version
 from email.utils import parseaddr
 import asyncpg
 
@@ -195,6 +196,11 @@ sources.release = 'sid'
         desc"""
         return await self._conn.fetch(query)
 
+    async def iter_removals(self):
+        query = """\
+select name, version from package_removal where 'source' = any(arch_array)"""
+        return await self._conn.fetch(query)
+
 
 async def main():
     import argparse
@@ -232,6 +238,14 @@ async def main():
     fixer_count.inc(len(available_fixers))
 
     udd = await UDD.public_udd_mirror()
+
+    removals = {}
+    for name, version in await udd.iter_removals():
+        if name not in removals:
+            removals[name] = Version(version)
+        else:
+            removals[name] = max(Version(version), removals[name])
+
     packages = []
     for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
          vcs_browser, sid_version) in await udd.iter_packages_with_metadata():
@@ -243,10 +257,14 @@ async def main():
             trace.note('%s: %s', name, e)
             branch_url = None
 
+        if name not in removals:
+            removed = False
+        else:
+            removed = Version(sid_version) <= removals[name]
         packages.append((
                 name, branch_url, maintainer_email,
                 uploader_emails, sid_version,
-                vcs_type, vcs_url, vcs_browser, insts))
+                vcs_type, vcs_url, vcs_browser, insts, removed))
     await state.store_packages(packages)
 
     candidates = []
