@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, result_code_explanation, display_result_code with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, result_code_explanation, display_result_code, display_branch_url with context %}
 {% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
 {% block page_title %}Lintian Fixes - {{ package }}{% endblock %}
 {% block body %}
