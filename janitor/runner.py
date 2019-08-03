@@ -120,21 +120,13 @@ class JanitorResult(object):
 
 
 def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
-    MAINTAINER_EMAIL_MAP = {
-        'pkg-javascript-devel@lists.alioth.debian.org': 'js-team',
-        'python-modules-team@lists.alioth.debian.org': 'python-team/modules',
-        'debian-science-maintainers@lists.alioth.debian.org': 'science-team',
-        }
-    if maintainer_email.endswith('@debian.org'):
-        team_name = maintainer_email.split('@')[0]
-    else:
-        try:
-            team_name = MAINTAINER_EMAIL_MAP[maintainer_email]
-        except KeyError:
-            return None
-
-    return open_branch_ext('https://salsa.debian.org/%s/%s' % (
-        team_name, pkg), possible_transports=possible_transports)
+    try:
+        from lintian_brush.salsa import guess_repository_url
+    except ImportError:
+        # lintian-brush < 0.19
+        return None
+    url = guess_repository_url(pkg, maintainer_email)
+    return open_branch_ext(url, possible_transports=possible_transports)
 
 
 def find_changes(path, package):
