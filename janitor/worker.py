@@ -37,7 +37,6 @@ from silver_platter.debian.lintian import (
     run_lintian_fixers,
     has_nontrivial_changes,
     DEFAULT_ADDON_FIXERS,
-    GeneratedControlFile,
 )
 from silver_platter.debian.upstream import (
     check_quilt_patches_apply,
@@ -140,17 +139,12 @@ class LintianBrushWorker(SubWorker):
             available_lintian_fixers(), tags=self.args.tags)
 
         with local_tree.lock_write():
-            try:
-                applied, failed = run_lintian_fixers(
-                        local_tree, fixers,
-                        committer=self.committer,
-                        update_changelog=self.args.update_changelog,
-                        compat_release=self.args.compat_release,
-                        trust_package=TRUST_PACKAGE)
-            except GeneratedControlFile as e:
-                raise WorkerFailure(
-                    'control-file-is-generated',
-                    'A control file is generated: %s' % e.path)
+            applied, failed = run_lintian_fixers(
+                    local_tree, fixers,
+                    committer=self.committer,
+                    update_changelog=self.args.update_changelog,
+                    compat_release=self.args.compat_release,
+                    trust_package=TRUST_PACKAGE)
 
         if failed:
             for fixer_name, failure in failed.items():
