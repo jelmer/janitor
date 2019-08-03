@@ -77,7 +77,11 @@ def open_branch_ext(vcs_url, possible_transports=None):
         return open_branch(vcs_url, possible_transports)
     except BranchUnavailable as e:
         if str(e).startswith('Unsupported protocol for url '):
-            code = 'unsupported-vcs-protocol'
+            if ('anonscm.debian.org' in str(e) or
+                    'svn.debian.org' in str(e)):
+                code = 'hosted-on-alioth'
+            else:
+                code = 'unsupported-vcs-protocol'
         elif 'http code 429: Too Many Requests' in str(e):
             code = 'too-many-requests'
         elif str(e).startswith('Branch does not exist: Not a branch: '
