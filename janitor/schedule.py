@@ -135,11 +135,15 @@ async def estimate_duration(package, suite):
 
 async def add_to_queue(todo, dry_run=False, default_offset=0):
     popcon = dict(await state.popcon())
+    removed = set(p.name or p in await state.iter_packages()
+                  if p.removed)
     max_inst = max([(v or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
     for vcs_url, mode, env, command, suite, value in todo:
         assert value > 0, "Value: %s" % value
         package = env['PACKAGE']
+        if package in removed:
+            continue
         estimated_duration = await estimate_duration(
             package, suite)
         estimated_probability_of_success = await estimate_success_probability(

@@ -141,7 +141,7 @@ async def store_publish(package, branch_name, main_branch_revision, revision,
 class Package(object):
 
     def __init__(self, name, maintainer_email, uploader_emails, branch_url,
-                 vcs_type, vcs_url, vcs_browse):
+                 vcs_type, vcs_url, vcs_browse, removed):
         self.name = name
         self.maintainer_email = maintainer_email
         self.uploader_emails = uploader_emails
@@ -149,17 +149,19 @@ class Package(object):
         self.vcs_type = vcs_type
         self.vcs_url = vcs_url
         self.vcs_browse = vcs_browse
+        self.removed = removed
 
     @classmethod
     def from_row(cls, row):
-        return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6])
+        return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7])
 
     def __lt__(self, other):
         return tuple(self) < tuple(other)
 
     def __tuple__(self):
         return (self.name, self.maintainer_email, self.uploader_emails,
-                self.branch_url, self.vcs_type, self.vcs_url, self.vcs_browse)
+                self.branch_url, self.vcs_type, self.vcs_url, self.vcs_browse,
+                self.removed)
 
 
 async def iter_packages(package=None):
@@ -171,7 +173,8 @@ SELECT
   branch_url,
   vcs_type,
   vcs_url,
-  vcs_browse
+  vcs_browse,
+  removed
 FROM
   package
 """
@@ -831,6 +834,7 @@ SELECT
   package.vcs_type,
   package.vcs_url,
   package.vcs_browse,
+  package.removed,
   candidate.suite,
   candidate.command,
   candidate.context,
@@ -849,7 +853,7 @@ INNER JOIN package on package.name = candidate.package
         query += " WHERE package = ANY($1::text[])"
         args.append(packages)
     async with get_connection() as conn:
-        return [([Package.from_row(row)] + list(row[7:]))
+        return [([Package.from_row(row)] + list(row[8:]))
                 for row in await conn.fetch(query, *args)]
 
 
