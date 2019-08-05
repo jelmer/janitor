@@ -883,8 +883,8 @@ async def iter_packages_by_maintainer(maintainer):
 async def iter_never_processed():
     async with get_connection() as conn:
         query = """\
-SELECT name, suite FROM package p CROSS JOIN UNNEST ($1) suite WHERE NOT EXISTS (
+SELECT name, suite FROM package p CROSS JOIN UNNEST ($1::text[]) suite WHERE NOT EXISTS (
     SELECT FROM run WHERE run.package = p.name AND run.suite = suite)
     """
         return await conn.fetch(
-            query, SUITES)
+            query, list(SUITES))

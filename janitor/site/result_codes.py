@@ -17,10 +17,11 @@ async def write_result_code_page(path, code, items):
         f.write(await generate_result_code_page(code, items))
 
 
-async def generate_result_code_index(by_code):
+async def generate_result_code_index(by_code, never_processed):
     template = env.get_template('result-code-index.html')
 
     data = sorted(by_code, key=operator.itemgetter(1), reverse=True)
+    data.append(('never-processed', never_processed))
     return await template.render_async(result_codes=data)
 
 
