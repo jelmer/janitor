@@ -16,7 +16,11 @@
 </thead>
 <tbody valign="top">
 {% for code, count in result_codes %}
+{% if code == 'never-processed' %}
+<tr class="row-even"><td>{{ code }}</a></td>
+{% else %}
 <tr class="row-even"><td><a class="reference external" href="/cupboard/result-codes/{{ code }}">{{ display_result_code(code)|safe }}</a></td>
+{% endif %}
 <td>{{ count }}</td>
 </tr>
 {% endfor %}

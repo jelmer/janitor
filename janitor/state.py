@@ -21,6 +21,7 @@ import json
 import shlex
 import asyncpg
 from contextlib import asynccontextmanager
+from . import SUITES
 
 
 DEFAULT_URL = 'postgresql://janitor@brangwain.vpn.jelmer.uk:5432/janitor'
@@ -877,3 +878,13 @@ async def iter_packages_by_maintainer(maintainer):
             "SELECT name FROM package WHERE "
             "maintainer_email = $1 OR $1 = any(uploader_emails)",
             maintainer)]
+
+
+async def iter_never_processed():
+    async with get_connection() as conn:
+        query = """\
+SELECT name, suite FROM package p CROSS JOIN UNNEST ($1) suite WHERE NOT EXISTS (
+    SELECT FROM run WHERE run.package = p.name AND run.suite = suite)
+    """
+        return await conn.fetch(
+            query, SUITES)
