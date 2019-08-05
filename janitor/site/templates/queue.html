@@ -4,17 +4,13 @@
 {% block body %}
 <div class="section" id="queue">
 <h1>Queue</h1>
-<table class="docutils" border="1">
-<colgroup>
-<col width="25%">
-<col>
-<col>
-</colgroup>
+<table border="1">
 <thead valign="bottom">
-<tr class="row-odd"><th class="head">Package</th>
-<th class="head">Command</th>
-<th class="head">Estimated duration</th>
-<th class="head">Last Run</th>
+<tr class="row-odd">
+  <th class="head">Package</th>
+  <th class="head">Command</th>
+  <th class="head">Estimated duration</th>
+  <th class="head">Last Run</th>
 </tr>
 </thead>
 <tbody valign="top">
@@ -23,7 +19,7 @@
   <td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a></td>
   <td>{{ description|safe }}</td>
   <td>{{ estimated_duration }}</td>
-  <td>{% if last_run_id %}<a href="/{{ suite }}/{{ pkg }}/{{ last_run_id }}">{{ display_result_code(last_run_result_code) }}</a>{% endif %}</td>
+  <td>{% if last_run_id %}<a href="/cupboard/pkg/{{ pkg }}/{{ last_run_id }}">{{ display_result_code(last_run_result_code) }}</a>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>
