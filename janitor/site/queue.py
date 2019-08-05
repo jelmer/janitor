@@ -31,8 +31,8 @@ def lintian_tag_link(tag):
 async def get_queue(only_command=None, limit=None):
     data = []
 
-    async for entry in (
-            state.iter_queue(limit=limit)):
+    async for entry, log_id, result_code in (
+            state.iter_queue_with_last_run(limit=limit)):
         if only_command is not None and entry.command != only_command:
             continue
         expecting = None
@@ -61,7 +61,7 @@ async def get_queue(only_command=None, limit=None):
         elif expecting is not None:
             description += ", " + expecting
         data.append(
-            (entry.package, description, entry.estimated_duration))
+            (entry.package, entry.suite, description, entry.estimated_duration, run_id, result_code))
 
     return data
 
