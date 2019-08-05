@@ -140,6 +140,7 @@ async def add_to_queue(todo, dry_run=False, default_offset=0):
     max_inst = max([(v or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
     for vcs_url, mode, env, command, suite, value in todo:
+        assert vcs_url is not None
         assert value > 0, "Value: %s" % value
         package = env['PACKAGE']
         if package in removed:

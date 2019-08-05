@@ -886,4 +886,19 @@ async def get_never_processed():
 SELECT suite, COUNT(suite) FROM package p CROSS JOIN UNNEST ($1::text[]) suite WHERE NOT EXISTS (
     SELECT FROM run WHERE run.package = p.name AND run.suite = suite) GROUP BY suite
     """
-        return await conn.fetchval(query, list(SUITES))
+        return await conn.fetch(query, list(SUITES))
+
+
+async def iter_by_suite_result_code():
+    query = """
+SELECT DISTINCT ON (package, suite)
+  package,
+  suite,
+  finish_time - start_time AS duration,
+  result_code
+FROM
+  run
+ORDER BY package, suite, start_time DESC
+"""
+    async with get_connection() as conn:
+        return await conn.fetch(query)

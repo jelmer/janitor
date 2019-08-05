@@ -42,19 +42,19 @@ args = parser.parse_args()
 
 run_count = Counter(
     'run_count', 'Number of total runs.',
-    labelnames=('command', ))
+    labelnames=('suite', ))
 run_result_count = Counter(
     'run_result_count', 'Number of runs by code.',
-    labelnames=('command', 'result_code'))
+    labelnames=('suite', 'result_code'))
 run_with_build_count = Counter(
     'run_with_build_count', 'Number of total runs with package built.',
-    labelnames=('command', ))
+    labelnames=('suite', ))
 run_with_proposal_count = Counter(
     'run_with_proposal_count', 'Number of total runs with merge proposal.',
-    labelnames=('command', ))
+    labelnames=('suite', ))
 duration = Histogram(
     'duration', 'Build duration',
-    labelnames=('command', 'result_code'))
+    labelnames=('suite', 'result_code'))
 never_processed_count = Counter(
     'never_processed_count', 'Number of items never processed.',
     labelnames=('suite', ))
@@ -64,16 +64,16 @@ last_success_gauge = Gauge(
 
 loop = asyncio.get_event_loop()
 
-for package_name, command, result_code, log_id, description, run_duration in (
-        loop.run_until_complete(state.iter_last_runs())):
-    run_count.labels(command=command).inc()
-    run_result_count.labels(command=command, result_code=result_code).inc()
+for package_name, suite, run_duration, result_code in (
+        loop.run_until_complete(state.iter_by_suite_result_code())):
+    run_count.labels(suite=suite).inc()
+    run_result_count.labels(suite=suite, result_code=result_code).inc()
     duration.labels(
-        command=command,
+        suite=suite,
         result_code=result_code).observe(run_duration.total_seconds())
 
 for suite, count in loop.run_until_complete(state.get_never_processed()):
-    never_processed_count.label(suite).set(count)
+    never_processed_count.labels(suite).inc(count)
 
 
 last_success_gauge.set_to_current_time()
