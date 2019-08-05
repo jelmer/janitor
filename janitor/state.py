@@ -418,6 +418,37 @@ queue.id ASC
             yield QueueItem.from_row(row)
 
 
+async def iter_queue_with_last_run(limit=None):
+    query = """
+SELECT
+      queue.branch_url,
+      queue.package,
+      queue.committer,
+      queue.command,
+      queue.context,
+      queue.id,
+      queue.estimated_duration,
+      queue.suite,
+      run.id,
+      run.result_code
+  FROM
+      queue
+  LEFT JOIN
+      run
+  ON
+      run.package = queue.package AND run.suite = queue.suite
+  ORDER BY
+  queue.priority ASC,
+  queue.id ASC,
+  run.start_time desc
+"""
+    if limit:
+        query += " LIMIT %d" % limit
+    async with get_connection() as conn:
+        for row in await conn.fetch(query):
+            yield QueueItem.from_row(row[:8]), row[9], row[10]
+
+
 async def drop_queue_item(queue_id):
     async with get_connection() as conn:
         await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
