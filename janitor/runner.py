@@ -123,7 +123,9 @@ class JanitorResult(object):
 def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
     from lintian_brush.salsa import guess_repository_url
     url = guess_repository_url(pkg, maintainer_email)
-    return open_branch_ext(url, possible_transports=possible_transports)
+    if url is not None:
+        return open_branch_ext(url, possible_transports=possible_transports)
+    return None
 
 
 def find_changes(path, package):
@@ -242,9 +244,10 @@ async def process_one(
         except BranchOpenFailure as e:
             main_branch = None
             if e.code == 'hosted-on-alioth':
+                package = await state.get_package(pkg)
                 try:
                     main_branch = open_salsa_branch(
-                        env['MAINTAINER_EMAIL'], pkg,
+                        package.maintainer_email, pkg,
                         possible_transports=possible_transports)
                 except BranchOpenFailure:
                     # Well, that didn't work either. Just return the original
