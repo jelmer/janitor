@@ -121,11 +121,7 @@ class JanitorResult(object):
 
 
 def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
-    try:
-        from lintian_brush.salsa import guess_repository_url
-    except ImportError:
-        # lintian-brush < 0.19
-        return None
+    from lintian_brush.salsa import guess_repository_url
     url = guess_repository_url(pkg, maintainer_email)
     return open_branch_ext(url, possible_transports=possible_transports)
 
