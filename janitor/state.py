@@ -446,7 +446,7 @@ SELECT
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
         for row in await conn.fetch(query):
-            yield QueueItem.from_row(row[:8]), row[9], row[10]
+            yield QueueItem.from_row(row[:8]), row[8], row[9]
 
 
 async def drop_queue_item(queue_id):
