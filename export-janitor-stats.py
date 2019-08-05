@@ -55,6 +55,9 @@ run_with_proposal_count = Counter(
 duration = Histogram(
     'duration', 'Build duration',
     labelnames=('command', 'result_code'))
+never_processed_count = Counter(
+    'never_processed_count', 'Number of items never processed.',
+    labelnames=('suite', ))
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
@@ -68,6 +71,9 @@ for package_name, command, result_code, log_id, description, run_duration in (
     duration.labels(
         command=command,
         result_code=result_code).observe(run_duration.total_seconds())
+
+for suite, count in loop.run_until_complete(state.get_never_processed()):
+    never_processed_count.label(suite).set(count)
 
 
 last_success_gauge.set_to_current_time()
