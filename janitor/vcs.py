@@ -84,9 +84,6 @@ def open_branch_ext(vcs_url, possible_transports=None):
                 code = 'unsupported-vcs-protocol'
         elif 'http code 429: Too Many Requests' in str(e):
             code = 'too-many-requests'
-        elif str(e).startswith('Branch does not exist: Not a branch: '
-                               '"https://anonscm.debian.org'):
-            code = 'hosted-on-alioth'
         else:
             if is_alioth_url(vcs_url):
                 code = 'hosted-on-alioth'
@@ -94,7 +91,12 @@ def open_branch_ext(vcs_url, possible_transports=None):
                 code = 'branch-unavailable'
         raise BranchOpenFailure(code, str(e))
     except BranchMissing as e:
-        raise BranchOpenFailure('branch-missing', str(e))
+        if str(e).startswith('Branch does not exist: Not a branch: '
+                             '"https://anonscm.debian.org'):
+            code = 'hosted-on-alioth'
+        else:
+            code = 'branch-missing'
+        raise BranchOpenFailure(code, str(e))
     except KeyError as e:
         if e.args == ('www-authenticate not found',):
             raise BranchOpenFailure(
