@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% from "codeblock.html" import include_console_log with context %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, install_commands, display_result_code, result_code_explanation, display_branch_url with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, install_commands, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url with context %}
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -9,6 +9,9 @@
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a> (<a href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a>)</li>
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
+{% if result and 'upstream_branch_url' in result %}
+<li>Upstream Branch URL: {{ display_upstream_branch_url(result) }}</li>
+{% endif %}
 <li>Start time: {{ format_timestamp(start_time) }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Status: {{ display_result_code(result_code)|safe }}</li>

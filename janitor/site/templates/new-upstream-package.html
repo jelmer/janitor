@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, install_commands, publish_buttons, display_result_code, result_code_explanation, display_branch_url with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, install_commands, publish_buttons, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url with context %}
 {% from "new_upstream_util.html" import new_upstream_summary %}
 {% block page_title %}New Upstream - {{ package }}{% endblock %}
 {% block body %}
@@ -10,6 +10,9 @@
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
+{% if result and 'upstream_branch_url' in result %}
+<li>Upstream Branch URL: {{ display_upstream_branch_url(result) }}</li>
+{% endif %}
 </ul>
 
 {{ result_code_explanation(result_code) }}
