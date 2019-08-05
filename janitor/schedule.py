@@ -135,7 +135,7 @@ async def estimate_duration(package, suite):
 
 async def add_to_queue(todo, dry_run=False, default_offset=0):
     popcon = dict(await state.popcon())
-    removed = set(p.name or p in await state.iter_packages()
+    removed = set(p.name for p in await state.iter_packages()
                   if p.removed)
     max_inst = max([(v or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
