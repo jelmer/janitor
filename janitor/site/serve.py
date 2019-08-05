@@ -146,8 +146,8 @@ if __name__ == '__main__':
         code = request.match_info.get('code')
         if not code:
             stats = await state.stats_by_result_codes()
-            stats.append(('never-processed', len(await state.iter_never_processed()))
-            text = await generate_result_code_index(stats)
+            never_processed = len(await state.iter_never_processed())
+            text = await generate_result_code_index(stats, never_processed)
         else:
             runs = await state.iter_last_runs(code)
             text = await generate_result_code_page(code, runs)
