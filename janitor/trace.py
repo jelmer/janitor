@@ -52,9 +52,9 @@ class JanitorUIFactory(NoninteractiveUIFactory):
 
 
 import breezy  # noqa: E402
+breezy.ui.ui_factory = JanitorUIFactory()
 if not breezy._global_state:
     breezy.initialize(setup_ui=False)
     import breezy.ui
-breezy.ui.ui_factory = JanitorUIFactory()
 
 from breezy.trace import mutter, note, warning  # noqa: E402
