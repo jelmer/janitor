@@ -154,7 +154,8 @@ class Package(object):
 
     @classmethod
     def from_row(cls, row):
-        return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7])
+        return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6],
+                   row[7])
 
     def __lt__(self, other):
         return tuple(self) < tuple(other)
@@ -914,8 +915,10 @@ async def iter_packages_by_maintainer(maintainer):
 async def get_never_processed():
     async with get_connection() as conn:
         query = """\
-SELECT suite, COUNT(suite) FROM package p CROSS JOIN UNNEST ($1::text[]) suite WHERE NOT EXISTS (
-    SELECT FROM run WHERE run.package = p.name AND run.suite = suite) GROUP BY suite
+SELECT suite, COUNT(suite) FROM package p CROSS JOIN UNNEST ($1::text[]) suite
+WHERE NOT EXISTS
+(SELECT FROM run WHERE run.package = p.name AND run.suite = suite)
+GROUP BY suite
     """
         return await conn.fetch(query, list(SUITES))
 
