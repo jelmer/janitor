@@ -18,7 +18,7 @@
 <tr>
   <td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a></td>
   <td>{{ description|safe }}</td>
-  <td>{{ estimated_duration }}</td>
+  <td>{{ format_duration(estimated_duration) }}</td>
   <td>{% if last_run_id %}<a href="/cupboard/pkg/{{ pkg }}/{{ last_run_id }}">{{ display_result_code(last_run_result_code) }}</a>{% endif %}</td>
 </tr>
 {% endfor %}
