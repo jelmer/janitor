@@ -31,6 +31,9 @@ from . import trace
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
     )
+from lintian_brush.salsa import (
+    salsa_url_from_alioth_url,
+    )
 
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
@@ -188,12 +191,16 @@ sources.release = 'sid'
                    None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
     async def iter_packages_with_metadata(self):
-        query = """select distinct on (sources.source) sources.source,
-        sources.maintainer_email, sources.uploaders, popcon_src.insts,
-        sources.vcs_type, sources.vcs_url, sources.vcs_browser, sources.version
-        from sources left join popcon_src on sources.source = popcon_src.source
-        where sources.release = 'sid' order by sources.source, sources.version
-        desc"""
+        query = """
+select distinct on (sources.source) sources.source,
+    sources.maintainer_email, sources.uploaders, popcon_src.insts,
+    coalesce(vcswatch.vcs, sources.vcs_type),
+    coalesce(vcswatch.url, sources.vcs_url),
+    coalesce(vcswatch.browser, sources.vcs_browser), sources.version
+    from sources left join popcon_src on sources.source = popcon_src.source
+    left join vcswatch on vcswatch.source = sources.source
+where sources.release = 'sid' order by sources.source, sources.version desc
+"""
         return await self._conn.fetch(query)
 
     async def iter_removals(self):
@@ -250,6 +257,11 @@ async def main():
     for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
          vcs_browser, sid_version) in await udd.iter_packages_with_metadata():
         uploader_emails = extract_uploader_emails(uploaders)
+
+        salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
+        if salsa_url:
+            vcs_type = 'git'
+            vcs_url = salsa_url
 
         try:
             branch_url = convert_debian_vcs_url(vcs_type, vcs_url)
