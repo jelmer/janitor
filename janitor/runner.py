@@ -59,6 +59,7 @@ from .trace import note, warning
 from .vcs import (
     get_vcs_abbreviation,
     open_branch_ext,
+    open_salsa_branch,
     BranchOpenFailure,
     LocalVcsManager,
     )
@@ -118,14 +119,6 @@ class JanitorResult(object):
             self.context = None
             self.main_branch_revision = None
             self.subworker_result = None
-
-
-def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
-    from lintian_brush.salsa import guess_repository_url
-    url = guess_repository_url(pkg, maintainer_email)
-    if url is not None:
-        return open_branch_ext(url, possible_transports=possible_transports)
-    return None
 
 
 def find_changes(path, package):
