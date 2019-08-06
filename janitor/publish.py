@@ -20,6 +20,7 @@
 from aiohttp import web
 import asyncio
 import functools
+import shlex
 import sys
 import urllib.parse
 
@@ -571,6 +572,34 @@ async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
         await asyncio.sleep(interval)
 
 
+async def check_status(dry_run=False):
+    for name, hoster_cls in hosters.items():
+        for instance in hoster_cls.iter_instances():
+            note('Checking merge proposals on %r...', instance)
+            for status in ['open', 'merged', 'closed']:
+                for mp in instance.iter_my_proposals(status=status):
+                    await state.set_proposal_status(mp.url, status)
+                    if status != 'open':
+                        continue
+                    try:
+                        if mp.can_be_merged():
+                            continue
+                    except NotImplementedError:
+                        # TODO(jelmer): Download and attempt to merge locally?
+                        continue
+                    note('%s is conflicted. Rescheduling.', mp.url)
+                    run = await state.get_merge_proposal_run(mp.url)
+                    await state.add_to_queue(
+                        run.branch_url, run.package, shlex.split(run.command), run.suite,
+                        offset=-2)
+
+
+async def check_status_loop(dry_run, interval):
+    while True:
+        await check_status(dry_run=dry_run)
+        await asyncio.sleep(interval)
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.publish')
@@ -604,6 +633,9 @@ def main(argv=None):
         '--port', type=int,
         help='Listen port', default=9912)
     parser.add_argument(
+        '--check-status-interval', type=int,
+        help='Check status interval', default=3600)
+    parser.add_argument(
         '--publish-pending-interval', type=int,
         help=('Seconds to wait in between publishing '
               'pending proposals'), default=7200)
@@ -636,6 +668,9 @@ def main(argv=None):
                 rate_limiter, policy, dry_run=args.dry_run,
                 vcs_manager=vcs_manager,
                 interval=args.publish_pending_interval)),
+            loop.create_task(check_status_loop(
+                dry_run=args.dry_run,
+                interval=args.check_status_interval)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
