@@ -61,7 +61,8 @@ async def get_queue(only_command=None, limit=None):
         elif expecting is not None:
             description += ", " + expecting
         data.append(
-            (entry.package, entry.suite, description, entry.estimated_duration, log_id, result_code))
+            (entry.package, entry.suite, description, entry.estimated_duration,
+                log_id, result_code))
 
     return data
 
