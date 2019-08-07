@@ -274,7 +274,7 @@ async def main():
         if vcs_type == 'git':
             parts = vcs_url.split(' ')
             new_vcs_url = ' '.join(
-                [fixup_broken_git_url(parts[0]])] + parts[1:])
+                [fixup_broken_git_url(parts[0])] + parts[1:])
             if new_vcs_url != vcs_url:
                 trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
