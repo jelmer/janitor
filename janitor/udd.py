@@ -34,6 +34,9 @@ from silver_platter.debian.lintian import (
 from lintian_brush.salsa import (
     salsa_url_from_alioth_url,
     )
+from lintian_brush.vcs import (
+    fixup_broken_git_url,
+    )
 
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
@@ -262,6 +265,14 @@ async def main():
         if salsa_url:
             vcs_type = 'git'
             vcs_url = salsa_url
+
+        if vcs_type == 'git':
+            parts = vcs_url.split(' ')
+            new_vcs_url = ' '.join(
+                [fixup_broken_git_url(parts[0]])] + parts[1:])
+            if new_vcs_url != vcs_url:
+                trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
+                vcs_url = new_vcs_url
 
         try:
             branch_url = convert_debian_vcs_url(vcs_type, vcs_url)
