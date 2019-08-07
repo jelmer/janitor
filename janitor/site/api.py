@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
-from aiohttp import web, ClientSession, ContentTypeError
+from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import functools
 import os
 import urllib.parse
@@ -57,6 +57,10 @@ async def handle_publish(publisher_url, request):
         except ContentTypeError as e:
             return web.json_response(
                 {'reason': 'publisher returned error %d' % e.code},
+                status=400)
+        except ClientConnectorError as e:
+            return web.json_response(
+                {'reason': 'unable to contact publisher'},
                 status=400)
 
 
