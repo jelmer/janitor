@@ -27,7 +27,10 @@ $(function() {
 {% if resultDiv %}
       $("{{ resultDiv }}").append("Scheduled new run with offset " + data.offset + ".<br/>");
 {% endif %}
-    }, 'json');
+    }, 'json')
+    .fail(function(response) {
+        $("{{ resultDiv}}").append("Failed: " + response.responseText + "<br/>");
+    });
   });
 });
 </script>
@@ -49,7 +52,10 @@ $(function() {
           $("{{ resultDiv }}").append("Updated <a href=\"" + data.proposal + "\">merge proposal</a>.<br/>");
       }
 {% endif %}
-    }, 'json');
+    }, 'json')
+    .fail(function(response) {
+        $("{{ resultDiv}}").append("Failed: " + response.responseText + "<br/>");
+    });
   });
 
   $("#push-derived").click(function() {
@@ -57,7 +63,10 @@ $(function() {
 {% if resultDiv %}
       $("{{ resultDiv }}").append("Created fork.<br/>");
 {% endif %}
-    }, 'json');
+    }, 'json')
+    .fail(function(response) {
+        $("{{ resultDiv}}").append("Failed: " + response.responseText + "<br/>");
+    });
   });
 });
 </script>
