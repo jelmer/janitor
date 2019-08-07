@@ -42,6 +42,7 @@ from silver_platter.debian.upstream import (
     check_quilt_patches_apply,
     merge_upstream,
     refresh_quilt_patches,
+    InconsistentSourceFormatError,
     NewUpstreamMissing,
     UpstreamAlreadyImported,
     UpstreamAlreadyMerged,
@@ -255,6 +256,10 @@ class NewUpstreamWorker(SubWorker):
                     'Unable to import upstream repository into '
                     'packaging repository.')
                 error_code = 'roundtripping-error'
+                raise WorkerFailure(error_code, error_description)
+            except InconsistentSourceFormatError as e:
+                error_description = str(e)
+                error_code = 'inconsistent-source-format'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
