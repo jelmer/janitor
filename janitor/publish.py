@@ -142,6 +142,15 @@ def add_janitor_blurb(text, pkg, log_id, suite):
     return text
 
 
+async def iter_all_mps():
+    for name, hoster_cls in hosters.items():
+        for instance in hoster_cls.iter_instances():
+            note('Checking merge proposals on %r...', instance)
+            for status in ['open', 'merged', 'closed']:
+                for mp in instance.iter_my_proposals(status=status):
+                    yield mp, status
+
+
 async def get_open_mps_per_maintainer():
     """Retrieve the number of open merge proposals by maintainer.
 
@@ -151,15 +160,11 @@ async def get_open_mps_per_maintainer():
     # Don't put in the effort if we don't need the results.
     # Querying GitHub in particular is quite slow.
     open_proposals = []
-    for name, hoster_cls in hosters.items():
-        for instance in hoster_cls.iter_instances():
-            note('Checking merge proposals on %r...', instance)
-            for status in ['open', 'merged', 'closed']:
-                for mp in instance.iter_my_proposals(status=status):
-                    await state.set_proposal_status(mp.url, status)
-                    merge_proposal_count.labels(status=status).inc()
-                    if status == 'open':
-                        open_proposals.append(mp)
+    async for mp, status in iter_all_mps():
+        await state.set_proposal_status(mp.url, status)
+        merge_proposal_count.labels(status=status).inc()
+        if status == 'open':
+            open_proposals.append(mp)
 
     open_mps_per_maintainer = {}
     for proposal in open_proposals:
@@ -580,25 +585,21 @@ async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
 
 
 async def check_status(dry_run=False):
-    for name, hoster_cls in hosters.items():
-        for instance in hoster_cls.iter_instances():
-            note('Checking merge proposals on %r...', instance)
-            for status in ['open', 'merged', 'closed']:
-                for mp in instance.iter_my_proposals(status=status):
-                    await state.set_proposal_status(mp.url, status)
-                    if status != 'open':
-                        continue
-                    try:
-                        if mp.can_be_merged():
-                            continue
-                    except NotImplementedError:
-                        # TODO(jelmer): Download and attempt to merge locally?
-                        continue
-                    note('%s is conflicted. Rescheduling.', mp.url)
-                    run = await state.get_merge_proposal_run(mp.url)
-                    await state.add_to_queue(
-                        run.branch_url, run.package, shlex.split(run.command), run.suite,
-                        offset=-2)
+    async for mp, status in iter_all_mps():
+        await state.set_proposal_status(mp.url, status)
+        if status != 'open':
+            continue
+        try:
+            if mp.can_be_merged():
+                continue
+        except NotImplementedError:
+            # TODO(jelmer): Download and attempt to merge locally?
+            continue
+        note('%s is conflicted. Rescheduling.', mp.url)
+        run = await state.get_merge_proposal_run(mp.url)
+        await state.add_to_queue(
+            run.branch_url, run.package, shlex.split(run.command), run.suite,
+            offset=-2)
 
 
 async def check_status_loop(dry_run, interval):
