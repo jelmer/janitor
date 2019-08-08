@@ -206,7 +206,7 @@ async def main():
         'job_last_success_unixtime',
         'Last time a batch job successfully finished')
 
-    iter_candidates = await state.iter_all_candidates()
+    iter_candidates = await state.iter_candidates()
     todo = [x async for x in schedule_from_candidates(
         args.policy, iter_candidates)]
     await add_to_queue(todo, dry_run=args.dry_run)
