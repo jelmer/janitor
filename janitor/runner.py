@@ -215,7 +215,7 @@ async def process_one(
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
-        use_cached_only=False):
+        use_cached_only=False, refresh=False):
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
@@ -294,6 +294,10 @@ async def process_one(
         note('Using cached branch %s', main_branch.user_url)
         resume_branch = vcs_manager.get_branch(pkg, branch_name)
         cached_branch = None
+
+    if refresh and resume_branch:
+        note('Since refresh was requested, ignoring resume branch.')
+        resume_branch = None
 
     if resume_branch is not None:
         resume_branch_result = await state.get_run_result_by_revision(
@@ -427,7 +431,8 @@ async def process_queue(
             build_command=build_command, post_check=post_check,
             dry_run=dry_run, incoming=incoming,
             debsign_keyid=debsign_keyid, vcs_manager=vcs_manager,
-            logfile_manager=logfile_manager, use_cached_only=use_cached_only)
+            logfile_manager=logfile_manager, use_cached_only=use_cached_only,
+            refresh=item.refresh)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())

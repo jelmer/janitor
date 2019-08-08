@@ -28,6 +28,7 @@
 {{ local_command(command, package) }}
 
 {{ reschedule_button(suite, package, "Reschedule", "#commandResult") }}
+{{ reschedule_button(suite, package, "Reschedule (from scratch)", "#commandResult", data={'refresh': '1'}) }}
 {% if branch_name %}
 {{ publish_buttons(suite, package, "#commandResult") }}
 {% endif %}
