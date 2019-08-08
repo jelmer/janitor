@@ -303,8 +303,8 @@ if __name__ == '__main__':
             # One week
             max_age = 60 * 60 * 24 * 7
         else:
-            # 1 Hour
-            max_age = 60 * 60
+            # 1 Minute
+            max_age = 60
 
         if args.apt_location.startswith('http'):
             return await read_apt_file_from_s3(
