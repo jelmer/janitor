@@ -17,6 +17,7 @@
 
 from debian.deb822 import Changes
 from jinja2 import Environment, PackageLoader, select_autoescape
+import json
 import os
 
 from janitor import SUITES
@@ -39,6 +40,7 @@ env = Environment(
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
 env.globals.update(suites=SUITES)
+env.globals.update(json_dumps=json.dumps)
 
 
 def get_build_architecture():

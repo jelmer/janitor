@@ -76,13 +76,18 @@ async def handle_schedule(request):
     post = await request.post()
     offset = post.get('offset', DEFAULT_SCHEDULE_OFFSET)
     try:
+        refresh = int(post.get('refresh', '0'))
+    except ValueError:
+        return web.json_response(
+            {'error': 'invalid boolean for refresh'}, status=400)
+    try:
         package = await state.get_package(package)
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
     estimated_duration = await estimate_duration(package.name, suite)
     await state.add_to_queue(
         package.branch_url, package.name, command, suite, offset,
-        estimated_duration=estimated_duration)
+        estimated_duration=estimated_duration, refresh=refresh)
     response_obj = {
         'package': package.name,
         'command': command,
