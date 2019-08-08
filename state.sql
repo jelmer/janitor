@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS queue (
    -- Some subworker-specific indication of what we are expecting to do.
    context text,
    estimated_duration interval,
+   refresh boolean default false,
    unique(package, command)
 );
 CREATE TABLE IF NOT EXISTS branch (
