@@ -151,20 +151,6 @@ async def iter_all_mps():
                     yield mp, status
 
 
-async def get_open_mps_per_maintainer():
-    """Retrieve the number of open merge proposals by maintainer.
-
-    Returns:
-      dictionary mapping maintainer emails to counts
-    """
-    # Don't put in the effort if we don't need the results.
-    # Querying GitHub in particular is quite slow.
-    open_proposals = []
-    open_mps_per_maintainer = {}
-    for proposal in open_proposals:
-    return open_mps_per_maintainer
-
-
 class MaintainerRateLimiter(object):
 
     def __init__(self, max_mps_per_maintainer=None):
@@ -582,6 +568,7 @@ def is_conflicted(mp):
 
 
 async def check_existing(rate_limiter, vcs_manager, dry_run=False):
+    open_mps_per_maintainer = {}
     async for mp, status in iter_all_mps():
         await state.set_proposal_status(mp.url, status)
         if status != 'open':
@@ -594,7 +581,7 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
             open_mps_per_maintainer[maintainer_email] += 1
         run = await state.get_merge_proposal_run(mp.url)
-        last_run = list(await state.iter_previous_runs(run.package, run.suite))[0]
+        last_run = [l async for l in state.iter_previous_runs(run.package, run.suite)][0]
         if run != last_run:
             # A new run happened since the last.
             note('%s needs to be updated.', mp.url)
