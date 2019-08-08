@@ -44,6 +44,7 @@ from silver_platter.debian.upstream import (
     refresh_quilt_patches,
     InconsistentSourceFormatError,
     NewUpstreamMissing,
+    UnparseableChangelog,
     UpstreamAlreadyImported,
     UpstreamAlreadyMerged,
     UpstreamMergeConflicted,
@@ -260,6 +261,10 @@ class NewUpstreamWorker(SubWorker):
             except InconsistentSourceFormatError as e:
                 error_description = str(e)
                 error_code = 'inconsistent-source-format'
+                raise WorkerFailure(error_code, error_description)
+            except UnparseableChangelog as e:
+                error_description = str(e)
+                error_code = 'unparseable-changelog'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
