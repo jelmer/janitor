@@ -463,8 +463,7 @@ async def publish_pending(rate_limiter, policy, vcs_manager, dry_run=False):
             uploader_emails or [])
         if mode in (MODE_BUILD_ONLY, MODE_SKIP):
             continue
-        if await state.already_published(
-                pkg, branch_name, revision, mode):
+        if await state.already_published(pkg, branch_name, revision, mode):
             continue
         if not rate_limiter.allowed(maintainer_email) and \
                 mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
@@ -482,6 +481,8 @@ async def publish_pending(rate_limiter, policy, vcs_manager, dry_run=False):
             # repositories, even if debian-janitor becomes a member of "debian"
             # in the future.
             mode = MODE_PROPOSE
+        if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+            continue
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
             proposal, branch_name, is_new = await publish_one(
@@ -527,6 +528,12 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
                 'Maximum number of open merge proposals for maintainer '
                 'reached'},
             status=429)
+
+    if mode in (MODE_SKIP, MODE_BUILD_ONLY):
+        return web.json_response(
+            {'code': 'done',
+             'description':
+                'Nothing to do'})
 
     run = await state.get_last_success(package.name, suite)
     if run is None:
