@@ -476,7 +476,7 @@ async def add_to_queue(vcs_url, package, command, suite, offset=0,
             "refresh = EXCLUDED.refresh "
             "WHERE queue.priority >= EXCLUDED.priority",
             vcs_url, package, ' '.join(command), committer,
-            offset, context, estimated_duration, suite)
+            offset, context, estimated_duration, suite, refresh)
         return True
 
 
@@ -657,7 +657,8 @@ SELECT DISTINCT ON (package, suite)
   description,
   start_time,
   finish_time - start_time AS duration,
-  result_code
+  result_code,
+  branch_url
 FROM
   run
 ORDER BY package, suite, start_time DESC) AS runs
