@@ -943,3 +943,17 @@ ORDER BY package, suite, start_time DESC
 """
     async with get_connection() as conn:
         return await conn.fetch(query)
+
+
+async def get_merge_proposal_run(mp_url):
+    query = """
+SELECT
+    run.id, run.command, run.start_time, run.finish_time, run.description,
+    run.package, run.build_version, run.build_distribution, run.result_code,
+    run.branch_name, run.main_branch_revision, run.revision, run.context,
+    run.result, run.suite, run.instigated_context, run.branch_url
+FROM run inner join publish on publish.revision = run.revision
+WHERE publish.merge_proposal_url = $1
+"""
+    async with get_connection() as conn:
+        return Run.from_row(await conn.fetchrow(query, mp_url))
