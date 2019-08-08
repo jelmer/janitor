@@ -160,22 +160,8 @@ async def get_open_mps_per_maintainer():
     # Don't put in the effort if we don't need the results.
     # Querying GitHub in particular is quite slow.
     open_proposals = []
-    async for mp, status in iter_all_mps():
-        await state.set_proposal_status(mp.url, status)
-        merge_proposal_count.labels(status=status).inc()
-        if status == 'open':
-            open_proposals.append(mp)
-
     open_mps_per_maintainer = {}
     for proposal in open_proposals:
-        maintainer_email = await state.get_maintainer_email_for_proposal(
-            proposal.url)
-        if maintainer_email is None:
-            warning('No maintainer email known for %s', proposal.url)
-            continue
-        open_mps_per_maintainer.setdefault(maintainer_email, 0)
-        open_mps_per_maintainer[maintainer_email] += 1
-        open_proposal_count.labels(maintainer=maintainer_email).inc()
     return open_mps_per_maintainer
 
 
@@ -183,11 +169,12 @@ class MaintainerRateLimiter(object):
 
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(self._refresh_open_mps_per_maintainer())
+        self._open_mps_per_maintainer = {}
 
-    async def _refresh_open_mps_per_maintainer(self):
-        self._open_mps_per_maintainer = await get_open_mps_per_maintainer()
+    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
+        self._open_mps_per_maintainer = open_mps_per_maintainer
+        for maintainer_email, count in open_mps_per_maintainer.items():
+            open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
     def allowed(self, maintainer_email):
         return self._max_mps_per_maintainer and \
@@ -197,6 +184,7 @@ class MaintainerRateLimiter(object):
     def inc(self, maintainer_email):
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
+        open_proposal_count.labels(maintainer=maintainer_email).inc()
 
 
 class NonRateLimiter(object):
@@ -454,7 +442,7 @@ async def publish_one(
     return proposal, branch_name, is_new
 
 
-async def publish_pending(rate_limiter, policy, vcs_manager, dry_run=False):
+async def publish_pending_new(rate_limiter, policy, vcs_manager, dry_run=False):
     possible_hosters = []
     possible_transports = []
 
@@ -547,7 +535,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     try:
         proposal, branch_name, is_new = await publish_one(
             suite, package.name, run.command, run.result,
-            package.branch_url, mode, run.id, package.maintainer_email,
+            run.branch_url, mode, run.id, package.maintainer_email,
             vcs_manager=vcs_manager, branch_name=run.branch_name,
             dry_run=dry_run, allow_create_proposal=True)
     except PublishFailure as e:
@@ -580,32 +568,67 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
 async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
                              interval):
     while True:
-        await publish_pending(rate_limiter, policy, vcs_manager, dry_run)
+        await check_existing(rate_limiter, vcs_manager, dry_run)
         await asyncio.sleep(interval)
+        await publish_pending_new(rate_limiter, policy, vcs_manager, dry_run)
 
 
-async def check_status(dry_run=False):
+def is_conflicted(mp):
+    try:
+        return not mp.can_be_merged()
+    except NotImplementedError:
+        # TODO(jelmer): Download and attempt to merge locally?
+        return None
+
+
+async def check_existing(rate_limiter, vcs_manager, dry_run=False):
     async for mp, status in iter_all_mps():
         await state.set_proposal_status(mp.url, status)
         if status != 'open':
             continue
-        try:
-            if mp.can_be_merged():
-                continue
-        except NotImplementedError:
-            # TODO(jelmer): Download and attempt to merge locally?
-            continue
-        note('%s is conflicted. Rescheduling.', mp.url)
+        maintainer_email = await state.get_maintainer_email_for_proposal(
+            mp.url)
+        if maintainer_email is None:
+            warning('No maintainer email known for %s', mp.url)
+        else:
+            open_mps_per_maintainer.setdefault(maintainer_email, 0)
+            open_mps_per_maintainer[maintainer_email] += 1
         run = await state.get_merge_proposal_run(mp.url)
-        await state.add_to_queue(
-            run.branch_url, run.package, shlex.split(run.command), run.suite,
-            offset=-2)
+        last_run = list(await state.iter_previous_runs(run.package, run.suite))[0]
+        if run != last_run:
+            # A new run happened since the last.
+            note('%s needs to be updated.', mp.url)
+            if last_run.result_code == 'nothing-to-do':
+                note('Last run did not produce any changes. Closing proposal %s.',
+                     mp.url)
+                mp.close()
+                continue
+            elif last_run.result_code != 'success':
+                note('Last run failed (%s).', last_run.result_code)
+            else:
+                try:
+                    mp, branch_name, is_new = await publish_one(
+                        run.suite, run.package, run.command, run.result,
+                        run.branch_url, MODE_PROPOSE, run.id,
+                        maintainer_email,
+                        vcs_manager=vcs_manager, branch_name=run.branch_name,
+                        dry_run=dry_run, allow_create_proposal=True)
+                except PublishFailure as e:
+                    return web.json_response(
+                        {'code': e.code, 'description': e.description}, status=400)
+                else:
+                    assert not is_new, "Intended to update proposal %r" % mp
 
+        if is_conflicted(mp):
+            note('%s is conflicted. Rescheduling.', mp.url)
+            await state.add_to_queue(
+                run.branch_url, run.package, shlex.split(run.command), run.suite,
+                offset=-2, refresh=True)
 
-async def check_status_loop(dry_run, interval):
-    while True:
-        await check_status(dry_run=dry_run)
-        await asyncio.sleep(interval)
+    for status, count in status_count.items():
+        merge_proposal_count.labels(status=status).set(count)
+
+    rate_limiter.set_open_mps_per_maintainer(open_mps_per_maintainer)
 
 
 def main(argv=None):
@@ -641,9 +664,6 @@ def main(argv=None):
         '--port', type=int,
         help='Listen port', default=9912)
     parser.add_argument(
-        '--check-status-interval', type=int,
-        help='Check status interval', default=3600)
-    parser.add_argument(
         '--publish-pending-interval', type=int,
         help=('Seconds to wait in between publishing '
               'pending proposals'), default=7200)
@@ -676,9 +696,6 @@ def main(argv=None):
                 rate_limiter, policy, dry_run=args.dry_run,
                 vcs_manager=vcs_manager,
                 interval=args.publish_pending_interval)),
-            loop.create_task(check_status_loop(
-                dry_run=args.dry_run,
-                interval=args.check_status_interval)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
