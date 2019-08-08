@@ -20,8 +20,7 @@ async def main(result_code):
     print('%d items to reschedule.' % len(results))
 
     for (package, suite, command, id, description, start_time,
-            duration) in results:
-        branch_url = packages[package].branch_url
+            duration, branch_url) in results:
         if branch_url is None:
             continue
         print('Rescheduling %s, %s' % (package, suite))

@@ -20,7 +20,7 @@
 </tr>
 </thead>
 <tbody valign="top">
-{% for pkg, suite, command, run_id, description, start_time, duration in entries %}
+{% for pkg, suite, command, run_id, description, start_time, duration, branch_url in entries %}
 <tr class="row-even"><td><a class="reference external" href="../pkg/{{ pkg }}/">{{ pkg }}</a></td>
 <td>{{ suite }}</td>
 <td>{{ format_timestamp(start_time) }}</td>
