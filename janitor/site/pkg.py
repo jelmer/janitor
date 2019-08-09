@@ -55,6 +55,8 @@ def find_build_log_failure(logf, length):
                          offsets[focus_section][1])
     elif length < linecount:
         include_lines = (linecount-length, None)
+    else:
+        include_lines = (1, linecount)
     if focus_section == 'build':
         lines = paragraphs.get(focus_section, [])
         lines = strip_useless_build_tail(lines)
