@@ -51,6 +51,32 @@ class DpkgSourceLocalChanges(object):
         return "Tree has local changes."
 
 
+class DpkgSourceUnrepresentableChanges(object):
+
+    kind = 'unrepresentable-local-changes'
+
+    def __str__(self):
+        return "Tree has unrepresentable local changes."
+
+
+def find_preamble_failure_description(lines):
+    OFFSET = 20
+    for i in range(1, OFFSET):
+        lineno = len(lines) - i
+        if lineno < 0:
+            break
+        line = lines[lineno].strip('\n')
+        if line.startswith(
+                'dpkg-source: error: aborting due to unexpected upstream '
+                'changes, see '):
+            err = DpkgSourceLocalChanges()
+            return lineno + 1, line, err
+        if line == 'dpkg-source: error: unrepresentable changes to source':
+            err = DpkgSourceUnrepresentableChanges()
+            return lineno + 1, line, err
+    return None, None, None
+
+
 def worker_failure_from_sbuild_log(f):
     paragraphs = {}
     for title, offsets, lines in parse_sbuild_log(f):
@@ -58,9 +84,9 @@ def worker_failure_from_sbuild_log(f):
             title = title.lower()
         paragraphs[title] = lines
     if len(paragraphs) == 1:
-        if paragraphs[None][-4].startswith(
-                'dpkg-source: error: aborting due to unexpected upstream '
-                'changes, see '):
+        offset, description, error = find_preamble_failure_description(
+            paragraphs[None])
+        if error:
             return SbuildFailure(
                 'unpack', 'unexpected upstream changes',
                 DpkgSourceLocalChanges())
