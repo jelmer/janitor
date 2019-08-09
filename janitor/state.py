@@ -440,11 +440,12 @@ SELECT
   LEFT JOIN
       run
   ON
-      run.package = queue.package AND run.suite = queue.suite
+      run.id = (
+          SELECT id FROM run WHERE package = queue.package AND run.suite = queue.suite
+          ORDER BY run.start_time desc LIMIT 1)
   ORDER BY
   queue.priority ASC,
   queue.id ASC,
-  run.start_time desc
 """
     if limit:
         query += " LIMIT %d" % limit
@@ -648,7 +649,7 @@ group by 1 order by 2 desc
 
 async def iter_last_runs(result_code):
     query = """
-SELECT package, suite, command, id, description, start_time, duration FROM (
+SELECT package, suite, command, id, description, start_time, duration, branch_url FROM (
 SELECT DISTINCT ON (package, suite)
   package,
   suite,
