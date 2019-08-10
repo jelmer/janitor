@@ -97,7 +97,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
             suite = 'master'
             try:
                 branch = open_branch_ext(
-                    url, possible_transports=possible_transports)
+                    url, possible_transports=possible_transports, vcs_type='git')
             except BranchOpenFailure as e:
                 await state.update_branch_status(
                     url, last_scanned=datetime.now(), status=e.code,

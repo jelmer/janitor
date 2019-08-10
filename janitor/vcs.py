@@ -73,18 +73,19 @@ def is_alioth_url(url):
 def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
     url = guess_repository_url(pkg, maintainer_email)
     if url is not None:
-        return open_branch_ext(url, possible_transports=possible_transports)
+        return open_branch_ext(
+            url, possible_transports=possible_transports, vcs_type='git')
     return None
 
 
-def open_branch_ext(vcs_url, possible_transports=None):
+def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
     if ' [' in vcs_url:
         raise BranchOpenFailure(
             'package-in-subpath',
             'The package is stored in a subpath rather than the '
             'repository root.')
     try:
-        return open_branch(vcs_url, possible_transports)
+        return open_branch(vcs_url, possible_transports, vcs_type)
     except BranchUnavailable as e:
         if str(e).startswith('Unsupported protocol for url '):
             if ('anonscm.debian.org' in str(e) or
