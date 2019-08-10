@@ -17,6 +17,7 @@
 
 from janitor.sbuild_log import (
     AptFileSizeMisMatch,
+    AptMissingReleaseFile,
     find_apt_get_update_failure,
     find_build_failure_description,
     MissingCHeader,
@@ -215,3 +216,10 @@ File has unexpected size (3385796 != 3385720). Mirror sync in progress? [IP]\
 """], 1, AptFileSizeMisMatch(
             'http://janitor.debian.net/lintian-fixes/Packages.xz',
             3385796, 3385720))
+
+    def test_missing_release_file(self):
+        self.run_test(["""\
+E: The repository 'https://janitor.debian.net lintian-fixes/ Release' \
+does not have a Release file.\
+"""], 1, AptMissingReleaseFile(
+            'http://janitor.debian.net/ lintian-fixes/ Release'))
