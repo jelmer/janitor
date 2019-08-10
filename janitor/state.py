@@ -34,7 +34,8 @@ pool = None
 async def get_connection():
     global pool
     if pool is None:
-        pool = await asyncpg.create_pool(DEFAULT_URL)
+        pool = await asyncpg.create_pool(
+            database="janitor")
 
     async with pool.acquire() as conn:
         await conn.set_type_codec(
@@ -336,6 +337,7 @@ async def iter_all_proposals(branch_name=None):
     args = []
     query = """
 SELECT
+    DISTINCT ON (merge_proposal.url)
     merge_proposal.url,
     merge_proposal.status,
     merge_proposal.package,
@@ -445,13 +447,13 @@ SELECT
           ORDER BY run.start_time desc LIMIT 1)
   ORDER BY
   queue.priority ASC,
-  queue.id ASC,
+  queue.id ASC
 """
     if limit:
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
         for row in await conn.fetch(query):
-            yield QueueItem.from_row(row[:9]), row[9], row[9]
+            yield QueueItem.from_row(row[:9]), row[9], row[10]
 
 
 async def drop_queue_item(queue_id):
@@ -459,7 +461,7 @@ async def drop_queue_item(queue_id):
         await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
-async def add_to_queue(vcs_url, package, command, suite, offset=0,
+async def add_to_queue(branch_url, package, command, suite, offset=0,
                        context=None, committer=None, estimated_duration=None,
                        refresh=False):
     async with get_connection() as conn:
@@ -476,7 +478,7 @@ async def add_to_queue(vcs_url, package, command, suite, offset=0,
             "branch_url = EXCLUDED.branch_url, "
             "refresh = EXCLUDED.refresh "
             "WHERE queue.priority >= EXCLUDED.priority",
-            vcs_url, package, ' '.join(command), committer,
+            branch_url, package, ' '.join(command), committer,
             offset, context, estimated_duration, suite, refresh)
         return True
 
@@ -914,8 +916,8 @@ async def iter_sources_with_unstable_version(packages):
 
 async def iter_packages_by_maintainer(maintainer):
     async with get_connection() as conn:
-        return [row[0] for row in await conn.fetch(
-            "SELECT name FROM package WHERE "
+        return [(row[0], row[1]) for row in await conn.fetch(
+            "SELECT name, removed FROM package WHERE "
             "maintainer_email = $1 OR $1 = any(uploader_emails)",
             maintainer)]
 
@@ -957,4 +959,7 @@ FROM run inner join publish on publish.revision = run.revision
 WHERE publish.merge_proposal_url = $1
 """
     async with get_connection() as conn:
-        return Run.from_row(await conn.fetchrow(query, mp_url))
+        row = await conn.fetchrow(query, mp_url)
+        if row:
+            return Run.from_row(row)
+        return None

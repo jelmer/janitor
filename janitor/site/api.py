@@ -76,7 +76,7 @@ async def handle_schedule(request):
     post = await request.post()
     offset = post.get('offset', DEFAULT_SCHEDULE_OFFSET)
     try:
-        refresh = int(post.get('refresh', '0'))
+        refresh = bool(int(post.get('refresh', '0')))
     except ValueError:
         return web.json_response(
             {'error': 'invalid boolean for refresh'}, status=400)

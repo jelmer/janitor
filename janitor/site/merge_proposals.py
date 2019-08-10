@@ -10,7 +10,8 @@ async def write_merge_proposals(name):
     proposals_by_status = {}
     for url, status, package, revision in await state.iter_all_proposals(
             branch_name=name):
-        proposals_by_status.setdefault(status, []).append(url)
+        run = await state.get_merge_proposal_run(url)
+        proposals_by_status.setdefault(status, []).append((url, run))
 
     template = env.get_template('merge-proposals.html')
     return await template.render_async(

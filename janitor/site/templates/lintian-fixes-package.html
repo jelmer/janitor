@@ -15,9 +15,11 @@
 {% endif %}
 </ul>
 
-{{ result_code_explanation(result_code) }}
+{{ result_code_explanation(result_code, run) }}
 
+{% if vcs_url %}
 {{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
+{% endif %}
 
 <div id="commandResult"></div>
 

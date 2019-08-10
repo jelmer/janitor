@@ -82,6 +82,7 @@ def in_line_boundaries(i, boundaries):
 async def generate_run_file(logfile_manager, vcs_manager, run):
     (start_time, finish_time) = run.times
     kwargs = {}
+    kwargs['run'] = run
     kwargs['run_id'] = run.id
     kwargs['command'] = run.command
     kwargs['description'] = run.description
