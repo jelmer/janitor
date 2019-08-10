@@ -88,7 +88,7 @@ run_count = Gauge(
 run_result_count = Gauge(
     'run_result_count', 'Number of runs by code.',
     labelnames=('suite', 'result_code'))
-never_processed_count = Counter(
+never_processed_count = Gauge(
     'never_processed_count', 'Number of items never processed.',
     labelnames=('suite', ))
 
@@ -404,17 +404,17 @@ async def export_stats():
         for suite, count in await state.get_published_by_suite():
             apt_package_count.labels(suite=suite).set(count)
 
-        suite_count = {}
-        run_result_count = {}
+        by_suite = {}
+        by_suite_result = {}
         async for package_name, suite, run_duration, result_code in (
                 state.iter_by_suite_result_code()):
-            suite_count.setdefault(suite, 0)
-            suite_count[suite] += 1
-            run_result_count.setdefault((suite, result_code), 0)
-            run_result_count[(suite, result_code)] += 1
-        for suite, count in suite_count.items():
+            by_suite.setdefault(suite, 0)
+            by_suite[suite] += 1
+            by_suite_result.setdefault((suite, result_code), 0)
+            by_suite_result[(suite, result_code)] += 1
+        for suite, count in by_suite.items():
             run_count.labels(suite=suite).set(count)
-        for (suite, result_code), count in run_result_count.items():
+        for (suite, result_code), count in by_suite_result.items():
             run_result_count.labels(
                 suite=suite, result_code=result_code).set(count)
         for suite, count in await state.get_never_processed():
