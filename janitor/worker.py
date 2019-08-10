@@ -25,7 +25,10 @@ import subprocess
 import sys
 
 from breezy.config import GlobalStack
-from breezy.errors import NoRoundtrippingSupport
+from breezy.errors import (
+    NoRoundtrippingSupport,
+    MalformedTransform,
+    )
 
 from silver_platter.debian import (
     MissingUpstreamTarball,
@@ -259,6 +262,11 @@ class NewUpstreamWorker(SubWorker):
                     'Unable to import upstream repository into '
                     'packaging repository.')
                 error_code = 'roundtripping-error'
+                raise WorkerFailure(error_code, error_description)
+            except MalformedTransform:
+                error_description = (
+                    'Malformed tree transform during new upstream merge')
+                error_code = 'malformed-transform'
                 raise WorkerFailure(error_code, error_description)
             except InconsistentSourceFormatError as e:
                 error_description = str(e)
