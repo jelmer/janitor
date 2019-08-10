@@ -43,6 +43,7 @@ from silver_platter.debian.upstream import (
     merge_upstream,
     refresh_quilt_patches,
     InconsistentSourceFormatError,
+    InvalidFormatUpstreamVersion,
     NewUpstreamMissing,
     UnparseableChangelog,
     UpstreamAlreadyImported,
@@ -261,6 +262,12 @@ class NewUpstreamWorker(SubWorker):
             except InconsistentSourceFormatError as e:
                 error_description = str(e)
                 error_code = 'inconsistent-source-format'
+                raise WorkerFailure(error_code, error_description)
+            except InvalidFormatUpstreamVersion as e:
+                error_description = (
+                        'Invalid format upstream version: %r',
+                        e.version)
+                error_code = 'invalid-upstream-version-format'
                 raise WorkerFailure(error_code, error_description)
             except UnparseableChangelog as e:
                 error_description = str(e)
