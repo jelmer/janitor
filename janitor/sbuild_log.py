@@ -115,6 +115,8 @@ def worker_failure_from_sbuild_log(f):
             description = str(error)
     if failed_stage == 'install-deps':
         for focus_section, lines in paragraphs.items():
+            if focus_section is None:
+                continue
             if re.match('install (.*) build dependencies.*',
                         focus_section):
                 offset, line, error = find_apt_get_failure(
