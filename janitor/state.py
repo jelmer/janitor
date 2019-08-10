@@ -948,7 +948,9 @@ FROM
 ORDER BY package, suite, start_time DESC
 """
     async with get_connection() as conn:
-        return await conn.fetch(query)
+        async with conn.transaction():
+            async for record in conn.cursor(query):
+                yield record
 
 
 async def get_merge_proposal_run(mp_url):
