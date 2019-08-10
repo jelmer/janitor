@@ -130,14 +130,14 @@ def strip_janitor_blurb(text, suite):
     except ValueError:
         pass
     else:
-        return text[:i]
+        return text[:i].strip()
 
     i = text.index(OLD_JANITOR_BLURB)
-    return text[:i]
+    return text[:i].strip()
 
 
 def add_janitor_blurb(text, pkg, log_id, suite):
-    text += (JANITOR_BLURB % {'suite': suite})
+    text += '\n' + (JANITOR_BLURB % {'suite': suite})
     text += (LOG_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
     return text
 
@@ -348,7 +348,7 @@ class NewUpstreamPublisher(object):
         self._upstream_version = result['upstream_version']
 
     def get_proposal_description(self, existing_description):
-        return "New upstream version %s" % self._upstream_version
+        return "New upstream version %s.\n" % self._upstream_version
 
     def get_proposal_commit_message(self, existing_commit_message):
         return self.get_proposal_description(None)
@@ -432,10 +432,10 @@ async def publish_pending_new(rate_limiter, policy, vcs_manager, dry_run=False):
     possible_hosters = []
     possible_transports = []
 
-    for (pkg, command, build_version, result_code, context,
+    async for (pkg, command, build_version, result_code, context,
          start_time, log_id, revision, subworker_result, branch_name, suite,
          maintainer_email, uploader_emails, main_branch_url,
-         main_branch_revision) in await state.iter_publish_ready():
+         main_branch_revision) in state.iter_publish_ready():
 
         mode, unused_update_changelog, unused_committer = apply_policy(
             policy, suite.replace('-', '_'), pkg, maintainer_email,
@@ -569,10 +569,10 @@ def is_conflicted(mp):
 
 async def check_existing(rate_limiter, vcs_manager, dry_run=False):
     open_mps_per_maintainer = {}
+    status_count = {'open': 0, 'closed': 0, 'merged': 0}
     async for mp, status in iter_all_mps():
         await state.set_proposal_status(mp.url, status)
-        if status != 'open':
-            continue
+        status_count[status] += 1
         maintainer_email = await state.get_maintainer_email_for_proposal(
             mp.url)
         if maintainer_email is None:
@@ -580,37 +580,68 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
         else:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
             open_mps_per_maintainer[maintainer_email] += 1
-        run = await state.get_merge_proposal_run(mp.url)
-        last_run = [l async for l in state.iter_previous_runs(run.package, run.suite)][0]
-        if run != last_run:
-            # A new run happened since the last.
-            note('%s needs to be updated.', mp.url)
-            if last_run.result_code == 'nothing-to-do':
-                note('Last run did not produce any changes. Closing proposal %s.',
-                     mp.url)
-                mp.close()
-                continue
-            elif last_run.result_code != 'success':
-                note('Last run failed (%s).', last_run.result_code)
-            else:
-                try:
-                    mp, branch_name, is_new = await publish_one(
-                        run.suite, run.package, run.command, run.result,
-                        run.branch_url, MODE_PROPOSE, run.id,
-                        maintainer_email,
-                        vcs_manager=vcs_manager, branch_name=run.branch_name,
-                        dry_run=dry_run, allow_create_proposal=True)
-                except PublishFailure as e:
-                    return web.json_response(
-                        {'code': e.code, 'description': e.description}, status=400)
-                else:
-                    assert not is_new, "Intended to update proposal %r" % mp
+        if status != 'open':
+            continue
+        mp_run = await state.get_merge_proposal_run(mp.url)
+        if mp_run is None:
+            warning('Unable to find local metadata for %s, skipping.', mp.url)
+            continue
 
-        if is_conflicted(mp):
-            note('%s is conflicted. Rescheduling.', mp.url)
-            await state.add_to_queue(
-                run.branch_url, run.package, shlex.split(run.command), run.suite,
-                offset=-2, refresh=True)
+        recent_runs = []
+        async for run in state.iter_previous_runs(mp_run.package, mp_run.suite):
+            if run == mp_run:
+                break
+            recent_runs.append(run)
+
+        for run in recent_runs:
+            if run.result_code not in ('success', 'nothing-to-do'):
+                note('%s: Last run failed (%s). Not touching merge proposal.',
+                     mp.url, run.result_code)
+                break
+
+            if run.result_code == 'nothing-to-do':
+                continue
+
+            note('%s needs to be updated.', mp.url)
+            try:
+                mp, branch_name, is_new = await publish_one(
+                    run.suite, run.package, run.command, run.result,
+                    run.branch_url, MODE_PROPOSE, run.id,
+                    maintainer_email,
+                    vcs_manager=vcs_manager, branch_name=run.branch_name,
+                    dry_run=dry_run, allow_create_proposal=True)
+            except PublishFailure as e:
+                note('%s: Updating merge proposal failed: %s (%s)',
+                     mp.url, e.code, e.description)
+                await state.store_publish(
+                    run.package, branch_name, run.main_branch_revision,
+                    run.revision, mode, e.code, e.description,
+                    mp.url)
+                break
+            else:
+                await state.store_publish(
+                    run.package, branch_name, run.main_branch_revision.decode('utf-8'),
+                    run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
+                    'Succesfully updated', mp.url)
+
+                assert not is_new, "Intended to update proposal %r" % mp
+                break
+        else:
+            if recent_runs:
+                # A new run happened since the last, but there was nothing to do.
+                if False:
+                    note('%s: Last run did not produce any changes, closing proposal.',
+                         mp.url)
+                    mp.close()
+                    continue
+
+            # It may take a while for the 'conflicted' bit on the proposal to
+            # be refreshed, so only check it if we haven't made any other changes.
+            if is_conflicted(mp):
+                note('%s is conflicted. Rescheduling.', mp.url)
+                await state.add_to_queue(
+                    run.branch_url, run.package, shlex.split(run.command), run.suite,
+                    offset=-2, refresh=True)
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
@@ -651,7 +682,7 @@ def main(argv=None):
         '--port', type=int,
         help='Listen port', default=9912)
     parser.add_argument(
-        '--publish-pending-interval', type=int,
+        '--interval', type=int,
         help=('Seconds to wait in between publishing '
               'pending proposals'), default=7200)
 
@@ -681,8 +712,7 @@ def main(argv=None):
         loop.run_until_complete(asyncio.gather(
             loop.create_task(process_queue_loop(
                 rate_limiter, policy, dry_run=args.dry_run,
-                vcs_manager=vcs_manager,
-                interval=args.publish_pending_interval)),
+                vcs_manager=vcs_manager, interval=args.interval)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
