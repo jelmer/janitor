@@ -574,15 +574,19 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
     async for mp, status in iter_all_mps():
         await state.set_proposal_status(mp.url, status)
         status_count[status] += 1
+        if status != 'open':
+            continue
         maintainer_email = await state.get_maintainer_email_for_proposal(
             mp.url)
         if maintainer_email is None:
-            warning('No maintainer email known for %s', mp.url)
-        else:
+            source_branch_url = mp.get_source_branch_url()
+            maintainer_email = await state.get_maintainer_email_for_branch_url(
+                source_branch_url)
+            if maintainer_email is None:
+                warning('No maintainer email known for %s', mp.url)
+        if maintainer_email is not None:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
             open_mps_per_maintainer[maintainer_email] += 1
-        if status != 'open':
-            continue
         mp_run = await state.get_merge_proposal_run(mp.url)
         if mp_run is None:
             warning('Unable to find local metadata for %s, skipping.', mp.url)
