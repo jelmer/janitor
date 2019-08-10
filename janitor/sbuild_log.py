@@ -40,6 +40,7 @@ SBUILD_FOCUS_SECTION = {
     'post-build': 'post build',
     'install-deps': 'install package build dependencies',
     'explain-bd-uninstallable': 'install package build dependencies',
+    'apt-get-update': 'update chroot',
 }
 
 
@@ -100,10 +101,15 @@ def worker_failure_from_sbuild_log(f):
         failed_stage = 'autopkgtest'
     description = None
     error = None
+    section_lines = paragraphs.get(focus_section, [])
     if failed_stage in ('build', 'autopkgtest'):
-        section_lines = paragraphs.get(focus_section, [])
         section_lines = strip_useless_build_tail(section_lines)
         offset, description, error = find_build_failure_description(
+            section_lines)
+        if error:
+            description = str(error)
+    if failed_stage == 'apt-get-update':
+        offset, description, error = find_apt_get_update_failure(
             section_lines)
         if error:
             description = str(error)
@@ -524,6 +530,52 @@ def find_build_failure_description(lines):
     return None, None, None
 
 
+class AptFileSizeMisMatch(object):
+    """Apt file size mismatch."""
+
+    kind = 'apt-update-file-size-mismatch'
+
+    def __init__(self, url, expected_size, actual_size):
+        self.url = url
+        self.expected_size = expected_size
+        self.actual_size = actual_size
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return False
+        if self.url != self.url:
+            return False
+        if self.expected_size != other.expected_size:
+            return False
+        if self.actual_size != other.actual_size:
+            return False
+        return True
+
+
+def find_apt_get_update_failure(lines):
+    """Find the key failure line in apt-get-update output.
+
+    Returns:
+      tuple with (line offset, line, error object)
+    """
+    OFFSET = 20
+    for i in range(1, OFFSET):
+        lineno = len(lines) - i
+        if lineno < 0:
+            break
+        line = lines[lineno].strip('\n')
+        if line.startswith('E: Failed to fetch '):
+            m = re.match(
+                '^E: Failed to fetch ([^ ]+)  File has unexpected size '
+                '\\(([0-9]+) != ([0-9]+)\\)\\. Mirror sync in progress\\? .*$',
+                line)
+            if m:
+                return lineno + 1, line, AptFileSizeMisMatch(
+                    m.group(1), int(m.group(2)), int(m.group(3)))
+            return lineno + 1, line, None
+    return None, None, None
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser('janitor.sbuild_log')
@@ -554,6 +606,16 @@ def main(argv=None):
         lines = section_lines.get(focus_section, [])
         lines = strip_useless_build_tail(lines)
         offset, line, error = find_build_failure_description(lines)
+        if offset:
+            print('Failed line: %d:' %
+                  (section_offsets[focus_section][0] + offset))
+            print(line)
+        if error:
+            print('Error: %s' % error)
+    if failed_stage == 'apt-get-update':
+        lines = section_lines.get(focus_section, [])
+        offset, line, error = find_apt_get_update_failure(
+            lines)
         if offset:
             print('Failed line: %d:' %
                   (section_offsets[focus_section][0] + offset))

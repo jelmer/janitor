@@ -428,14 +428,15 @@ async def publish_one(
     return proposal, branch_name, is_new
 
 
-async def publish_pending_new(rate_limiter, policy, vcs_manager, dry_run=False):
+async def publish_pending_new(rate_limiter, policy, vcs_manager,
+                              dry_run=False):
     possible_hosters = []
     possible_transports = []
 
     async for (pkg, command, build_version, result_code, context,
-         start_time, log_id, revision, subworker_result, branch_name, suite,
-         maintainer_email, uploader_emails, main_branch_url,
-         main_branch_revision) in state.iter_publish_ready():
+               start_time, log_id, revision, subworker_result, branch_name,
+               suite, maintainer_email, uploader_emails, main_branch_url,
+               main_branch_revision) in state.iter_publish_ready():
 
         mode, unused_update_changelog, unused_committer = apply_policy(
             policy, suite.replace('-', '_'), pkg, maintainer_email,
@@ -588,7 +589,8 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
             continue
 
         recent_runs = []
-        async for run in state.iter_previous_runs(mp_run.package, mp_run.suite):
+        async for run in state.iter_previous_runs(
+                mp_run.package, mp_run.suite):
             if run == mp_run:
                 break
             recent_runs.append(run)
@@ -615,12 +617,13 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                      mp.url, e.code, e.description)
                 await state.store_publish(
                     run.package, branch_name, run.main_branch_revision,
-                    run.revision, mode, e.code, e.description,
+                    run.revision, MODE_PROPOSE, e.code, e.description,
                     mp.url)
                 break
             else:
                 await state.store_publish(
-                    run.package, branch_name, run.main_branch_revision.decode('utf-8'),
+                    run.package, branch_name,
+                    run.main_branch_revision.decode('utf-8'),
                     run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
                     'Succesfully updated', mp.url)
 
@@ -628,20 +631,22 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                 break
         else:
             if recent_runs:
-                # A new run happened since the last, but there was nothing to do.
+                # A new run happened since the last, but there was nothing to
+                # do.
                 if False:
-                    note('%s: Last run did not produce any changes, closing proposal.',
-                         mp.url)
+                    note('%s: Last run did not produce any changes, '
+                         'closing proposal.', mp.url)
                     mp.close()
                     continue
 
             # It may take a while for the 'conflicted' bit on the proposal to
-            # be refreshed, so only check it if we haven't made any other changes.
+            # be refreshed, so only check it if we haven't made any other
+            # changes.
             if is_conflicted(mp):
                 note('%s is conflicted. Rescheduling.', mp.url)
                 await state.add_to_queue(
-                    run.branch_url, run.package, shlex.split(run.command), run.suite,
-                    offset=-2, refresh=True)
+                    run.branch_url, run.package, shlex.split(run.command),
+                    run.suite, offset=-2, refresh=True)
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
@@ -699,7 +704,7 @@ def main(argv=None):
     loop = asyncio.get_event_loop()
     vcs_manager = LocalVcsManager(args.vcs_result_dir)
     if args.once:
-        loop.run_until_complete(publish_pending(
+        loop.run_until_complete(publish_pending_new(
             policy, dry_run=args.dry_run,
             vcs_manager=vcs_manager))
 

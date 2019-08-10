@@ -58,7 +58,7 @@ async def handle_publish(publisher_url, request):
             return web.json_response(
                 {'reason': 'publisher returned error %d' % e.code},
                 status=400)
-        except ClientConnectorError as e:
+        except ClientConnectorError:
             return web.json_response(
                 {'reason': 'unable to contact publisher'},
                 status=400)
