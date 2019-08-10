@@ -82,6 +82,15 @@ build_duration = Histogram(
 current_tick = Gauge(
     'current_tick',
     'The current tick in the queue that\'s being processed')
+run_count = Gauge(
+    'run_count', 'Number of total runs.',
+    labelnames=('suite', ))
+run_result_count = Gauge(
+    'run_result_count', 'Number of runs by code.',
+    labelnames=('suite', 'result_code'))
+never_processed_count = Counter(
+    'never_processed_count', 'Number of items never processed.',
+    labelnames=('suite', ))
 
 
 ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
@@ -390,10 +399,27 @@ async def export_queue_length():
         await asyncio.sleep(60)
 
 
-async def export_apt_counts():
+async def export_stats():
     while True:
         for suite, count in await state.get_published_by_suite():
             apt_package_count.labels(suite=suite).set(count)
+
+        suite_count = {}
+        run_result_count = {}
+        async for package_name, suite, run_duration, result_code in (
+                state.iter_by_suite_result_code()):
+            suite_count.setdefault(suite, 0)
+            suite_count[suite] += 1
+            run_result_count.setdefault((suite, result_code), 0)
+            run_result_count[(suite, result_code)] += 1
+        for suite, count in suite_count.items():
+            run_count.labels(suite=suite).set(count)
+        for (suite, result_code), count in run_result_count.items():
+            run_result_count.labels(
+                suite=suite, result_code=result_code).set(count)
+        for suite, count in await state.get_never_processed():
+            never_processed_count.labels(suite).set(count)
+
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
 
@@ -562,7 +588,7 @@ def main(argv=None):
             args.concurrency,
             args.use_cached_only)),
         loop.create_task(export_queue_length()),
-        loop.create_task(export_apt_counts()),
+        loop.create_task(export_stats()),
         loop.create_task(run_web_server(args.listen_address, args.port)),
         ))
 
