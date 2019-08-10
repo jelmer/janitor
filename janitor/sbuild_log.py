@@ -530,7 +530,13 @@ def find_build_failure_description(lines):
     return None, None, None
 
 
-class AptFileSizeMisMatch(object):
+class AptUpdateError(object):
+    """Apt update error."""
+
+    kind = 'apt-update-error'
+
+
+class AptFileSizeMisMatch(AptUpdateError):
     """Apt file size mismatch."""
 
     kind = 'apt-update-file-size-mismatch'
@@ -548,6 +554,21 @@ class AptFileSizeMisMatch(object):
         if self.expected_size != other.expected_size:
             return False
         if self.actual_size != other.actual_size:
+            return False
+        return True
+
+
+class AptMissingReleaseFile(AptUpdateError):
+
+    kind = 'apt-update-missing-release-file'
+
+    def __init__(self, url):
+        self.url = url
+
+    def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return False
+        if self.url != self.url:
             return False
         return True
 
@@ -573,6 +594,11 @@ def find_apt_get_update_failure(lines):
                 return lineno + 1, line, AptFileSizeMisMatch(
                     m.group(1), int(m.group(2)), int(m.group(3)))
             return lineno + 1, line, None
+        m = re.match(
+            'E: The repository \'([^\']+)\' does not have a Release file.',
+            line)
+        if m:
+            return lineno + 1, line, AptMissingReleaseFile(m.group(1))
     return None, None, None
 
 
