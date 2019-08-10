@@ -18,7 +18,7 @@
 from janitor.sbuild_log import (
     AptFetchFailure,
     AptMissingReleaseFile,
-    find_apt_get_update_failure,
+    find_apt_get_failure,
     find_build_failure_description,
     MissingCHeader,
     MissingPythonModule,
@@ -196,7 +196,7 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
 
     def run_test(self, lines, lineno, err=None):
-        (offset, actual_line, actual_err) = find_apt_get_update_failure(
+        (offset, actual_line, actual_err) = find_apt_get_failure(
             lines)
         if lineno is not None:
             self.assertEqual(actual_line, lines[lineno-1])
@@ -224,3 +224,6 @@ E: The repository 'https://janitor.debian.net lintian-fixes/ Release' \
 does not have a Release file.\
 """], 1, AptMissingReleaseFile(
             'http://janitor.debian.net/ lintian-fixes/ Release'))
+
+    def test_vague(self):
+        self.run_test(["E: Stuff is broken"], 1, None)
