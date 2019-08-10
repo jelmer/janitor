@@ -55,6 +55,7 @@ from silver_platter.debian.upstream import (
     PreviousVersionTagMissing,
     PristineTarError,
     QuiltError,
+    UScanError,
 )
 
 from silver_platter.utils import (
@@ -272,6 +273,10 @@ class NewUpstreamWorker(SubWorker):
             except UnparseableChangelog as e:
                 error_description = str(e)
                 error_code = 'unparseable-changelog'
+                raise WorkerFailure(error_code, error_description)
+            except UScanError as e:
+                error_description = str(e)
+                error_code = 'uscan-error'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
