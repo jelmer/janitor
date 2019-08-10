@@ -980,3 +980,13 @@ WHERE publish.merge_proposal_url = $1
         if row:
             return Run.from_row(row)
         return None
+
+
+async def get_queue_position(package, suite):
+    async with get_connection() as conn:
+        query = """
+select idx from (select package, suite, priority,
+row_number() over (order by priority asc, id asc) idx from queue) as f where
+package = $1 and suite = $2
+"""
+        return await conn.fetchval(query, package, suite)
