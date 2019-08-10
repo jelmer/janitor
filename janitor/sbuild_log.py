@@ -109,10 +109,20 @@ def worker_failure_from_sbuild_log(f):
         if error:
             description = str(error)
     if failed_stage == 'apt-get-update':
-        offset, description, error = find_apt_get_update_failure(
+        offset, description, error = find_apt_get_failure(
             section_lines)
         if error:
             description = str(error)
+    if failed_stage == 'install-deps':
+        for focus_section, lines in paragraphs.items():
+            if re.match('install (.*) build dependencies.*',
+                        focus_section):
+                offset, line, error = find_apt_get_failure(
+                    lines)
+                if error:
+                    description = str(error)
+                if offset is not None:
+                    break
     if description is None and failed_stage is not None:
         description = 'build failed stage %s' % failed_stage
     if description is None:
@@ -576,13 +586,14 @@ class AptMissingReleaseFile(AptUpdateError):
         return 'Missing release file: %s' % self.url
 
 
-def find_apt_get_update_failure(lines):
-    """Find the key failure line in apt-get-update output.
+def find_apt_get_failure(lines):
+    """Find the key failure line in apt-get-output.
 
     Returns:
       tuple with (line offset, line, error object)
     """
-    OFFSET = 20
+    ret = (None, None, None)
+    OFFSET = 50
     for i in range(1, OFFSET):
         lineno = len(lines) - i
         if lineno < 0:
@@ -600,7 +611,9 @@ def find_apt_get_update_failure(lines):
             line)
         if m:
             return lineno + 1, line, AptMissingReleaseFile(m.group(1))
-    return None, None, None
+        if line.startswith('E: ') and ret[0] is None:
+            ret = (lineno + 1, line, None)
+    return ret
 
 
 def main(argv=None):
@@ -641,7 +654,7 @@ def main(argv=None):
             print('Error: %s' % error)
     if failed_stage == 'apt-get-update':
         lines = section_lines.get(focus_section, [])
-        offset, line, error = find_apt_get_update_failure(
+        offset, line, error = find_apt_get_failure(
             lines)
         if offset:
             print('Failed line: %d:' %
@@ -649,6 +662,18 @@ def main(argv=None):
             print(line)
         if error:
             print('Error: %s' % error)
+    if failed_stage == 'install-deps':
+        for focus_section, lines in section_lines.items():
+            if focus_section is None:
+                continue
+            if re.match('install (.*) build dependencies.*', focus_section):
+                offset, line, error = find_apt_get_failure(
+                    lines)
+                if offset is not None:
+                    print('Failed line: %d:' %
+                          (section_offsets[focus_section][0] + offset))
+                    print(line)
+                    break
 
 
 if __name__ == '__main__':
