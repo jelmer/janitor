@@ -974,6 +974,7 @@ SELECT
     run.result, run.suite, run.instigated_context, run.branch_url
 FROM run inner join publish on publish.revision = run.revision
 WHERE publish.merge_proposal_url = $1
+ORDER BY run.finish_time DESC
 """
     async with get_connection() as conn:
         row = await conn.fetchrow(query, mp_url)
