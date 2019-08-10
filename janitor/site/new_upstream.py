@@ -22,12 +22,11 @@ async def generate_pkg_file(package, suite):
         package = await state.get_package(package)
     except IndexError:
         raise KeyError(package)
-    # TODO(jelmer): Filter out proposals not for this suite.
     merge_proposals = [
         (url, status)
-        for (unused_package, url, status, revision) in
-        await state.iter_proposals(package.name)]
-    run = await state.get_last_success(package.name, suite)
+        for (unused_package, url, status) in
+        await state.iter_proposals(package.name, suite=suite)]
+    run = await state.get_last_unmerged_success(package.name, suite)
     candidate = await state.get_candidate(package.name, suite)
     if candidate is not None:
         candidate_command, candidate_context, candidate_value = candidate

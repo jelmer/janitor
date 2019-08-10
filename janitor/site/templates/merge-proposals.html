@@ -5,7 +5,7 @@
 <h1>Merge Proposal Status</h1>
 
 {% macro display_merge_proposal(url, run) %}
-<a class="reference external" href="{{ url }}">{{ url }}</a>
+<a class="reference external" href="{{ url }}">{% if run %}{{ run.package }}{% else %}{{ url }}{% endif %}</a>
 {% if run %}
 (<a href="/{{ run.suite }}/pkg/{{ run.package }}">Details</a>)
 {% endif %}

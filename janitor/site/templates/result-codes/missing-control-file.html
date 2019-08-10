@@ -1,5 +1,5 @@
-<p>The packaging branch {% if run %}({{ run.vcs_url }}) {% endif %}is accessible, but does not contain
+<p>The packaging branch {% if run %}({{ run.branch_url }}) {% endif %}is accessible, but does not contain
 a <i>debian/control</i> file.</p>
 
-<p>This may be because the <i>{% if run %}Vcs-{{ run.vcs_type.capitalize() }}{% else %}Vcs-* {% endif %}</i>
+<p>This may be because the <i>Vcs-*</i>
 URL points at a branch that contains the upstream sources, rather than the Debian packaging.</p>

@@ -8,12 +8,25 @@
 <ul class="simple">
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+{% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
+{% endif %}
 {% if candidate_tags %}
 <li>Tags that might be fixable: {% for tag in candidate_tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}</li>
 <!-- Candidate value: {{ candidate_value }} -->
 {% endif %}
 </ul>
+
+{% if merge_proposals %}
+<div class="section" id="recent-merge-proposals">
+<h2>Recent merge proposals</h2>
+<ul>
+{% for url, status in merge_proposals %}
+<li><a href="{{ url }}">{{ url }}</a> ({{ status }})</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
 
 {{ result_code_explanation(result_code, run) }}
 
@@ -33,17 +46,6 @@ Nothing to do for {{ package }}; last run at {{ format_timestamp(previous_runs[0
 {% endif %}
 
 {% else %}
-
-{% if merge_proposals %}
-<div class="section" id="recent-merge-proposals">
-<h2>Recent merge proposals</h2>
-<ul>
-{% for url, status in merge_proposals %}
-<li><a href="{{ url }}">{{ url }}</a> ({{ status }})</li>
-{% endfor %}
-</ul>
-</div>
-{% endif %}
 
 {% if branch_name %}
 

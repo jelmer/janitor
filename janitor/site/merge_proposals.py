@@ -6,11 +6,9 @@ from janitor import state
 from janitor.site import env
 
 
-async def write_merge_proposals(name):
+async def write_merge_proposals(suite):
     proposals_by_status = {}
-    for url, status, package, revision in await state.iter_all_proposals(
-            branch_name=name):
-        run = await state.get_merge_proposal_run(url)
+    async for run, url, status in state.iter_proposals_with_run(suite=suite):
         proposals_by_status.setdefault(status, []).append((url, run))
 
     template = env.get_template('merge-proposals.html')

@@ -191,8 +191,7 @@ if __name__ == '__main__':
         except IndexError:
             raise web.HTTPNotFound(text='No package with name %s' % package)
         merge_proposals = []
-        for (unused_package, url, status,
-                revision) in await state.iter_proposals(
+        for (unused_package, url, status) in await state.iter_proposals(
                 package=package.name):
             merge_proposals.append((url, status))
         runs = [x async for x in state.iter_runs(package=package.name)]

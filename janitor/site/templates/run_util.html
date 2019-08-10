@@ -104,3 +104,7 @@ $(function() {
 {% macro display_upstream_branch_url(result) %}
 {% if 'upstream_branch_browse' in result %}<a href="{{ result['upstream_branch_browse'] }}">{{ result['upstream_branch_url'] }}</a>{% else %}{{ result['upstream_branch_url'] }}{% endif %}
 {% endmacro %}
+
+{% macro display_maintainer_email(maintainer_email) %}
+<a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
+{% endmacro %}

@@ -521,7 +521,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
              'description':
                 'Nothing to do'})
 
-    run = await state.get_last_success(package.name, suite)
+    run = await state.get_last_unmerged_success(package.name, suite)
     if run is None:
         return web.json_response({}, status=400)
     note('Handling request to publish %s/%s', package.name, suite)
