@@ -275,7 +275,7 @@ class NewUpstreamWorker(SubWorker):
                 raise WorkerFailure(error_code, error_description)
             except InvalidFormatUpstreamVersion as e:
                 error_description = (
-                        'Invalid format upstream version: %r',
+                        'Invalid format upstream version: %r' %
                         e.version)
                 error_code = 'invalid-upstream-version-format'
                 raise WorkerFailure(error_code, error_description)
