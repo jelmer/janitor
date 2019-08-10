@@ -4,13 +4,20 @@
 <div class="section" id="merge-proposal-status">
 <h1>Merge Proposal Status</h1>
 
+{% macro display_merge_proposal(url, run) %}
+<a class="reference external" href="{{ url }}">{{ url }}</a>
+{% if run %}
+(<a href="/{{ run.suite }}/pkg/{{ run.package }}">Details</a>)
+{% endif %}
+{% endmacro %}
+
 {% if open_proposals %}
 <div class="section" id="open-proposals">
 <h2>Open Proposals</h2>
 <p>These proposals are currently waiting for review.</p>
 <ul class="simple">
-{% for url in open_proposals %}
-<li><a class="reference external" href="{{ url }}">{{ url }}</a></li>
+{% for url, run in open_proposals %}
+<li>{{ display_merge_proposal(url, run) }}</li>
 {% endfor %}
 </ul>
 </div>
@@ -21,8 +28,8 @@
 <h2>Merged Proposals</h2>
 <p>These proposals have been merged in the past.</p>
 <ul class="simple">
-{% for url in merged_proposals %}
-<li><a class="reference external" href="{{ url }}">{{ url }}</a></li>
+{% for url, run in merged_proposals %}
+<li>{{ display_merge_proposal(url, run) }}</li>
 {% endfor %}
 </ul>
 </div>
@@ -35,8 +42,8 @@ similar change has already been applied, the change was rejected or the change
 was merged without history being referenced (i.e. in the case of a
 cherry-pick.</p>
 <ul class="simple">
-{% for url in closed_proposals %}
-<li><a class="reference external" href="{{ url }}">{{ url }}</a></li>
+{% for url, run in closed_proposals %}
+<li>{{ display_merge_proposal(url, run) }}</li>
 {% endfor %}
 </ul>
 </div>

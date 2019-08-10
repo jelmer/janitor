@@ -60,6 +60,8 @@ async def get_queue(only_command=None, limit=None):
             description = expecting
         elif expecting is not None:
             description += ", " + expecting
+        if entry.refresh:
+            description += " (from scratch)"
         data.append(
             (entry.package, entry.suite, description, entry.estimated_duration,
                 log_id, result_code))

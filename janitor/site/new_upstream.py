@@ -79,6 +79,7 @@ async def generate_pkg_file(package, suite):
         'previous_runs': previous_runs,
         'branch_name': branch_name,
         'branch_url': branch_url,
+        'run': run,
         }
     if run and run.build_version:
         kwargs['changes_name'] = changes_filename(

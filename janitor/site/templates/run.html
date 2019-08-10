@@ -17,7 +17,7 @@
 <li>Status: {{ display_result_code(result_code)|safe }}</li>
 <li>Description: {{ description }}</li>
 
-{{ result_code_explanation(result_code) }}
+{{ result_code_explanation(result_code, run) }}
 
 {% if revision %}
 <li>Diff: <a href="/api/run/{{ run_id }}/diff">Raw diff</a></li>
@@ -27,10 +27,12 @@
 
 {{ local_command(command, package) }}
 
+{% if vcs_url %}
 {{ reschedule_button(suite, package, "Reschedule", "#commandResult") }}
-{{ reschedule_button(suite, package, "Reschedule (from scratch)", "#commandResult", data={'refresh': '1'}) }}
+{{ reschedule_button(suite, package, "Reschedule (from scratch)", "#commandResult", data={'refresh': '1'}, id='reschedule-refresh') }}
 {% if branch_name %}
 {{ publish_buttons(suite, package, "#commandResult") }}
+{% endif %}
 {% endif %}
 
 <div id="commandResult"></div>

@@ -15,14 +15,14 @@
 {% endif %}
 {% endmacro %}
 
-{% macro reschedule_button(suite, package, title="Reschedule", resultDiv=None, data={}) %}
-<button id="reschedule">{{ title }}</button>
+{% macro reschedule_button(suite, package, title="Reschedule", resultDiv=None, id='reschedule', data={}) %}
+<button id="{{ id }}">{{ title }}</button>
 
 <script src="/_static/jquery.js"></script>
 <script>
 $(function() {
-  $("#reschedule").click(function() {
-    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ json_dumps(data) }}, function(data) {
+	$("#{{ id }}").click(function() {
+    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ json_dumps(data)|safe }}, function(data) {
       console.log('Scheduled: ' + data.offset);
 {% if resultDiv %}
       $("{{ resultDiv }}").append("Scheduled new run with offset " + data.offset + ".<br/>");
@@ -85,7 +85,7 @@ $(function() {
 <span class="result-code-{{ result_code if result_code in ('success', 'nothing-to-do') else 'failure' }}">{{ result_code }}</span>
 {% endmacro %}
 
-{% macro result_code_explanation(result_code) %}
+{% macro result_code_explanation(result_code, run=None) %}
 {% if result_code %}
 <blockquote class="result-code-explanation">
 {% include ("result-codes/" + result_code + ".html") ignore missing %}
