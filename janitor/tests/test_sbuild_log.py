@@ -16,6 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from janitor.sbuild_log import (
+    AptFileSizeMisMatch,
+    find_apt_get_update_failure,
     find_build_failure_description,
     MissingCHeader,
     MissingPythonModule,
@@ -188,3 +190,28 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/usr/lib/x86_64-linux-gnu/perl-base) at '
             '../bin/ledger2beancount line 23.'], 1,
             MissingPerlModule('String/Interpolate.pm', 'String::Interpolate'))
+
+
+class FindAptGetFailureDescriptionTests(unittest.TestCase):
+
+    def run_test(self, lines, lineno, err=None):
+        (offset, actual_line, actual_err) = find_apt_get_update_failure(
+            lines)
+        if lineno is not None:
+            self.assertEqual(actual_line, lines[lineno-1])
+            self.assertEqual(lineno, offset)
+        else:
+            self.assertIs(actual_line, None)
+            self.assertIs(offset, None)
+        if err:
+            self.assertEqual(actual_err, err)
+        else:
+            self.assertIs(None, actual_err)
+
+    def test_make_missing_rule(self):
+        self.run_test(["""\
+E: Failed to fetch http://janitor.debian.net/lintian-fixes/Packages.xz  \
+File has unexpected size (3385796 != 3385720). Mirror sync in progress? [IP]\
+"""], 1, AptFileSizeMisMatch(
+            'http://janitor.debian.net/lintian-fixes/Packages.xz',
+            3385796, 3385720))
