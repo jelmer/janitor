@@ -8,7 +8,9 @@
 <ul class="simple">
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+{% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
+{% endif %}
 </ul>
 
 <div class="section" id="suites">

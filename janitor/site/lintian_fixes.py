@@ -20,12 +20,10 @@ async def generate_pkg_file(vcs_manager, package):
         package = await state.get_package(name=package)
     except IndexError:
         raise KeyError(package)
-    # TODO(jelmer): Filter out proposals not for this suite.
     merge_proposals = [
-        (url, status)
-        for (unused_package, url, status, revision) in
-        await state.iter_proposals(package.name)]
-    run = await state.get_last_success(package.name, SUITE)
+        (url, status) for (unused_package, url, status) in
+        await state.iter_proposals(package.name, suite=SUITE)]
+    run = await state.get_last_unmerged_success(package.name, SUITE)
     if run is None:
         # No runs recorded
         command = None
@@ -124,15 +122,37 @@ async def generate_developer_page(developer):
     packages = [p for p, removed in
                 await state.iter_packages_by_maintainer(developer)
                 if not removed]
-    candidate_tags = {}
+    proposals = {}
+    for package, url, status in await state.iter_proposals(packages, SUITE):
+        if status == 'open':
+            proposals[package] = url
+    candidates = []
     for row in await state.iter_candidates(packages=packages, suite=SUITE):
-        candidate_tags[row[0].name] = row[3].split(' ')
+        candidates.append((row[0].name, row[3].split(' ')))
+    nothing_to_do = []
+    errors = []
+    ready_changes = []
     runs = {}
+    merge_proposals = []
     async for run in state.iter_last_successes(suite=SUITE, packages=packages):
         runs[run.package] = run
+        if run.package in candidates:
+            del candidate_tags[run.package]
+        if run.result_code not in ('success', 'nothing-to-do'):
+            errors.append(run)
+        else:
+            if run.result and run.result.get('applied'):
+                if proposals.get(run.package):
+                    merge_proposals.append((proposals[run.package], run))
+                else:
+                    ready_changes.append(run)
+            else:
+                nothing_to_do.append(run)
+
     return await template.render_async(
-        developer=developer, packages=packages, candidate_tags=candidate_tags,
-        runs=runs)
+        developer=developer, packages=packages, candidates=candidates,
+        runs=runs, nothing_to_do=nothing_to_do, errors=errors,
+        ready_changes=ready_changes, merge_proposals=merge_proposals)
 
 
 if __name__ == '__main__':

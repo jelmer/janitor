@@ -8,7 +8,9 @@
 
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a> (<a href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a>)</li>
+{% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
+{% endif %}
 {% if result and 'upstream_branch_url' in result %}
 <li>Upstream Branch URL: {{ display_upstream_branch_url(result) }}</li>
 {% endif %}
@@ -40,7 +42,7 @@
 {% if branch_name %}
 {{ merge_command(package, branch_name, vcs) }}
 {% else %}
-{% if result_code not in ('missing-control-file') %}
+{% if result_code not in ('missing-control-file', 'unparseable-changelog', 'inconsistent-source-format') %}
 {% if build_log_name %}
 {% with f = get_log(build_log_name) %}
 {{ include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}

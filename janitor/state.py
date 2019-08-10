@@ -329,39 +329,78 @@ WHERE
     merge_proposal.url = $1""", vcs_url)
 
 
-async def iter_proposals(package=None):
-    args = []
-    query = """
-SELECT
-    package, url, status, revision
-FROM
-    merge_proposal
-"""
-    if package:
-        args.append(package)
-        query += " WHERE package = $1"
-    async with get_connection() as conn:
-        return await conn.fetch(query, *args)
-
-
-async def iter_all_proposals(branch_name=None):
+async def iter_proposals(package=None, suite=None):
     args = []
     query = """
 SELECT
     DISTINCT ON (merge_proposal.url)
-    merge_proposal.url,
-    merge_proposal.status,
-    merge_proposal.package,
-    merge_proposal.revision
+    merge_proposal.package, merge_proposal.url, merge_proposal.status
 FROM
     merge_proposal
-LEFT JOIN publish ON publish.merge_proposal_url = merge_proposal.url
+LEFT JOIN run ON merge_proposal.revision = run.revision
 """
-    if branch_name:
-        query += " WHERE publish.branch_name = $1"
-        args.append(branch_name)
+    if package:
+        if isinstance(package, list):
+            args.append(package)
+            query += " WHERE run.package = ANY($1::text[])"
+        else:
+            args.append(package)
+            query += " WHERE run.package = $1"
+        if suite:
+            query += " AND run.suite = $2"
+            args.append(suite)
+    elif suite:
+        args.append(suite)
+        query += " WHERE run.suite = $1"
+    query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     async with get_connection() as conn:
         return await conn.fetch(query, *args)
+
+
+async def iter_proposals_with_run(package=None, suite=None):
+    args = []
+    query = """
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    run.id,
+    run.command,
+    run.start_time,
+    run.finish_time,
+    run.description,
+    run.package,
+    run.build_version,
+    run.build_distribution,
+    run.result_code,
+    run.branch_name,
+    run.main_branch_revision,
+    run.revision,
+    run.context,
+    run.result,
+    run.suite,
+    run.instigated_context,
+    run.branch_url,
+    merge_proposal.url, merge_proposal.status
+FROM
+    merge_proposal
+LEFT JOIN run ON merge_proposal.revision = run.revision
+"""
+    if package:
+        if isinstance(package, list):
+            args.append(package)
+            query += " WHERE run.package = ANY($1::text[])"
+        else:
+            args.append(package)
+            query += " WHERE run.package = $1"
+        if suite:
+            query += " AND run.suite = $2"
+            args.append(suite)
+    elif suite:
+        args.append(suite)
+        query += " WHERE run.suite = $1"
+    query += " ORDER BY merge_proposal.url, run.finish_time DESC"
+    async with get_connection() as conn:
+        for row in await conn.fetch(query, *args):
+            yield Run.from_row(row[:17]), row[17], row[18]
 
 
 class QueueItem(object):
@@ -586,7 +625,7 @@ ORDER BY start_time DESC
             yield Run.from_row(row)
 
 
-async def get_last_success(package, suite):
+async def get_last_unmerged_success(package, suite):
     args = []
     query = """
 SELECT
@@ -609,7 +648,8 @@ SELECT
   branch_url
 FROM
   run
-WHERE package = $1 AND build_distribution = $2
+WHERE package = $1 AND build_distribution = $2 AND NOT EXISTS (
+    SELECT FROM merge_proposal WHERE revision = run.revision AND status IN ('closed', 'merged'))
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 LIMIT 1
 """

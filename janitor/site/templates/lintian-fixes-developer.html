@@ -6,39 +6,69 @@
 <div class="section" id="candidates">
 <h1>Lintian Fixes - for developer {{ developer }}</h1>
 
-{% for package in packages %}
-<div class="section" id="{{ package}}">
-<h3><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a></h3>
+{% if merge_proposals %}
+<div class="section" id="merge-proposals">
+<h2>Merge Proposals</h2>
+<ul>
+{% for url, run in merge_proposals %}
+<li><a href="{{ url }}">{{ run.package }}</a>: {{ lintian_brush_summary(run.result['applied']) }}</li>
+{% endfor %}
+</ul>
+</div>
 
-{% set run = runs.get(package) %}
-{% if run %}
-{% if run.result_code == 'success' %}
-<p>Built on {{ format_timestamp(run.times[1]) }} (took {{ format_duration(run.times[1] - run.times[0]) }})</p>
+{% endif %}
 
+{% if ready_changes %}
+<div class="section" id="ready-changes">
+<h2>Ready Changes</h2>
+{% for run in ready_runs %}
+<h3><a href="/lintian-fixes/pkg/{{ run.package }}">{{ run.package }}</a></h3>
 <p>{{ lintian_brush_summary(run.result['applied']) }}</p>
-
 {% if run.branch_name %}
 {{ publish_buttons(run.suite, run.package, "#commandResult") }}
 {% endif %}
+{% endfor %}
+</div>
+{% endif %}
 
-{% elif run.result_code == 'nothing-to-do' %}
-<p>Last run at {{ format_timestamp(run.times[1]) }} found nothing to fix.</p>
-{% else %}
-<p>Last run at {{ format_timestamp(run.times[1]) }}, result: {{ display_result_code(run.result_code) }}. <br/>{{ reschedule_button(suite, package, "Schedule a run", "#commandResult") }}</p>
+{% if errors %}
+<div class="section" id="nothing-to-do">
+<h2>Packages with errors</h2>
+<ul>
+{% for run in errors %}
+<li><a href="/lintian-fixes/pkg/{{ run.package }}">{{ run.package }}</a>: Last run at {{ format_timestamp(run.times[1]) }}, result: {{ display_result_code(run.result_code) }}. {{ reschedule_button(suite, package, "Schedule a run", "#commandResult", 'reschedule-' + run.package) }}</p>
+{% endfor %}
+</ul>
+</div>
 {% endif %}
-{% else %}
-{% set tags = candidate_tags.get(package, []) %}
+
+{% if candidates %}
+<div class="section" id="nothing-to-do">
+<h2>Packages that have not yet been processed</h2>
+<ul>
+{% for package, tags in candidates %}
+<li><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a>:
 {% if tags %}
-<p>Lintian tags that may be fixable: {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}.  <br/>{{ reschedule_button(suite, package, "Schedule a run", "#commandResult") }}</p>
+Tags that may be fixable: {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}. {{ reschedule_button(suite, package, "Schedule a run", "#commandResult", 'reschedule-' + package) }}</p>
 {% else %}
-<p>No tags that may be fixable.</p>
+No tags that may be fixable.
 {% endif %}
+</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+{% if nothing_to_do %}
+<div class="section" id="nothing-to-do">
+<h2>Packages without changes</h2>
+<ul>
+{% for run in nothing_to_do %}
+<li><a href="/lintian-fixes/pkg/{{ run.package }}">{{ run.package }}</a>: Last run at {{ format_timestamp(run.times[1]) }} found nothing to fix.</li>
+{% endfor %}
 {% endif %}
 
 <div id="commandResult"></div>
-
-</div>
-{% endfor %}
 
 </div>
 {% endblock %}
