@@ -155,7 +155,7 @@ class MaintainerRateLimiter(object):
 
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
-        self._open_mps_per_maintainer = {}
+        self._open_mps_per_maintainer = None
 
     def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
         self._open_mps_per_maintainer = open_mps_per_maintainer
@@ -163,11 +163,17 @@ class MaintainerRateLimiter(object):
             open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
     def allowed(self, maintainer_email):
-        return self._max_mps_per_maintainer and \
-                self._open_mps_per_maintainer.get(maintainer_email, 0) \
-                >= self._max_mps_per_maintainer
+        if not self._max_mps_per_maintainer:
+            return True
+        if self._open_mps_per_maintainer is None:
+            # Be conservative
+            return False
+        current = self._open_mps_per_maintainer.get(maintainer_email, 0)
+        return (current < self._max_mps_per_maintainer)
 
     def inc(self, maintainer_email):
+        if self._open_mps_per_maintainer is None:
+            return
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
         open_proposal_count.labels(maintainer=maintainer_email).inc()
