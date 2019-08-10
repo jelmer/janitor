@@ -236,6 +236,7 @@ class NewUpstreamWorker(SubWorker):
                 error_code = 'upstream-merged-conflicts'
                 report_context(e.version)
                 metadata['upstream_version'] = e.version
+                metadata['conflicts'] = [c.path for c in e.conflicts]
                 raise WorkerFailure(error_code, error_description)
             except PreviousVersionTagMissing as e:
                 error_description = (
