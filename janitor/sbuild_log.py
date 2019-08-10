@@ -536,31 +536,31 @@ class AptUpdateError(object):
     kind = 'apt-update-error'
 
 
-class AptFileSizeMisMatch(AptUpdateError):
-    """Apt file size mismatch."""
+class AptFetchFailure(AptUpdateError):
+    """Apt file fetch failed."""
 
-    kind = 'apt-update-file-size-mismatch'
+    kind = 'file-fetch-failure'
 
-    def __init__(self, url, expected_size, actual_size):
+    def __init__(self, url, error):
         self.url = url
-        self.expected_size = expected_size
-        self.actual_size = actual_size
+        self.error = error
 
     def __eq__(self, other):
         if not isinstance(other, type(self)):
             return False
-        if self.url != self.url:
+        if self.url != other.url:
             return False
-        if self.expected_size != other.expected_size:
-            return False
-        if self.actual_size != other.actual_size:
+        if self.error != other.error:
             return False
         return True
+
+    def __str__(self):
+        return 'Apt file fetch error: %s' % self.error
 
 
 class AptMissingReleaseFile(AptUpdateError):
 
-    kind = 'apt-update-missing-release-file'
+    kind = 'missing-release-file'
 
     def __init__(self, url):
         self.url = url
@@ -571,6 +571,9 @@ class AptMissingReleaseFile(AptUpdateError):
         if self.url != self.url:
             return False
         return True
+
+    def __str__(self):
+        return 'Missing release file: %s' % self.url
 
 
 def find_apt_get_update_failure(lines):
@@ -587,12 +590,10 @@ def find_apt_get_update_failure(lines):
         line = lines[lineno].strip('\n')
         if line.startswith('E: Failed to fetch '):
             m = re.match(
-                '^E: Failed to fetch ([^ ]+)  File has unexpected size '
-                '\\(([0-9]+) != ([0-9]+)\\)\\. Mirror sync in progress\\? .*$',
-                line)
+                '^E: Failed to fetch ([^ ]+)  (.*)', line)
             if m:
-                return lineno + 1, line, AptFileSizeMisMatch(
-                    m.group(1), int(m.group(2)), int(m.group(3)))
+                return lineno + 1, line, AptFetchFailure(
+                    m.group(1), m.group(2))
             return lineno + 1, line, None
         m = re.match(
             'E: The repository \'([^\']+)\' does not have a Release file.',

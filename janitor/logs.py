@@ -112,3 +112,9 @@ class S3LogFileManager(LogFileManager):
 
         key = self._get_key(pkg, run_id, os.path.basename(orig_path))
         self.s3_bucket.put_object(Key=key, Body=data, ACL='public-read')
+
+
+def get_log_manager(location):
+    if location.startswith('http:') or location.startswith('https:'):
+        return S3LogFileManager(location)
+    return FileSystemLogFileManager(location)

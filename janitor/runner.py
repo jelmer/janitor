@@ -53,7 +53,7 @@ from silver_platter.utils import (
     )
 
 from . import state
-from .logs import FileSystemLogFileManager, S3LogFileManager
+from .logs import get_log_manager
 from .prometheus import setup_metrics
 from .trace import note, warning
 from .vcs import (
@@ -414,10 +414,7 @@ async def process_queue(
       incoming: directory to copy debian pakcages to
       log_dir: Directory to cop
     """
-    if log_dir.startswith('http'):
-        logfile_manager = S3LogFileManager(log_dir)
-    else:
-        logfile_manager = FileSystemLogFileManager(log_dir)
+    logfile_manager = get_log_manager(log_dir)
 
     async def process_queue_item(item):
         start_time = datetime.now()
