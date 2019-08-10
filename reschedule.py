@@ -21,11 +21,13 @@ async def main(result_code):
 
     for (package, suite, command, id, description, start_time,
             duration, branch_url) in results:
-        if branch_url is None:
+        if package not in packages:
+            continue
+        if packages[package].branch_url is None:
             continue
         print('Rescheduling %s, %s' % (package, suite))
         await state.add_to_queue(
-            branch_url,
+            packages[package].branch_url,
             package, command.split(' '), suite)
 
 
