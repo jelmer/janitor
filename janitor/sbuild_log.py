@@ -448,6 +448,29 @@ def perl_missing_module(m):
     return MissingPerlModule(m.group(1), m.group(2))
 
 
+class MissingMavenArtifacts(object):
+
+    kdin = 'missing-maven-artifacts'
+
+    def __init__(self, artifacts):
+        self.artifacts = artifacts
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+                self.artifacts == other.artifacts
+
+    def __str__(self):
+        return "Missing maven artifacts: %r" % self.artifacts
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.artifacts)
+
+
+def maven_missing_artifact(m):
+    artifacts = m.group(1).split(',')
+    return MissingMavenArtifacts([a.strip() for a in artifacts])
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -492,6 +515,12 @@ build_failure_regexps = [
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: .*\) at .* line .*.',
      perl_missing_module),
+    (r'\[ERROR] Failed to execute goal on project .*: Could not resolve '
+     r'dependencies for project .*: The following artifacts could not be '
+     r'resolved: (.*): Cannot access central '
+     r'\(https://repo\.maven\.apache\.org/maven2\) in offline mode and '
+     r'the artifact .* has not been downloaded from it before..*',
+     maven_missing_artifact),
 ]
 
 compiled_build_failure_regexps = [

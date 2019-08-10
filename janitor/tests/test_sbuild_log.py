@@ -24,6 +24,7 @@ from janitor.sbuild_log import (
     MissingPythonModule,
     MissingGoPackage,
     MissingFile,
+    MissingMavenArtifacts,
     MissingNodeModule,
     MissingCommand,
     MissingPkgConfig,
@@ -191,6 +192,24 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/usr/lib/x86_64-linux-gnu/perl-base) at '
             '../bin/ledger2beancount line 23.'], 1,
             MissingPerlModule('String/Interpolate.pm', 'String::Interpolate'))
+
+    def test_missing_maven_artifacts(self):
+        self.run_test([
+            '[ERROR] Failed to execute goal on project byteman-bmunit5: Could '
+            'not resolve dependencies for project '
+            'org.jboss.byteman:byteman-bmunit5:jar:4.0.7: The following '
+            'artifacts could not be resolved: '
+            'org.junit.jupiter:junit-jupiter-api:jar:5.4.0, '
+            'org.junit.jupiter:junit-jupiter-params:jar:5.4.0, '
+            'org.junit.jupiter:junit-jupiter-engine:jar:5.4.0: '
+            'Cannot access central (https://repo.maven.apache.org/maven2) '
+            'in offline mode and the artifact '
+            'org.junit.jupiter:junit-jupiter-api:jar:5.4.0 has not been '
+            'downloaded from it before. -> [Help 1]'], 1,
+            MissingMavenArtifacts([
+                'org.junit.jupiter:junit-jupiter-api:jar:5.4.0',
+                'org.junit.jupiter:junit-jupiter-params:jar:5.4.0',
+                'org.junit.jupiter:junit-jupiter-engine:jar:5.4.0']))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):

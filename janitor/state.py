@@ -649,7 +649,9 @@ SELECT
 FROM
   run
 WHERE package = $1 AND build_distribution = $2 AND NOT EXISTS (
-    SELECT FROM merge_proposal WHERE revision = run.revision AND status IN ('closed', 'merged'))
+    SELECT FROM merge_proposal WHERE
+        revision = run.revision AND status IN ('closed', 'merged'))
+AND result_code != 'nothing-to-do'
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 LIMIT 1
 """
@@ -684,6 +686,7 @@ SELECT DISTINCT ON (package)
 FROM
   run
 WHERE suite = $1 AND package = ANY($2::text[])
+AND result_code != 'nothing-to-do'
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """
     async with get_connection() as conn:
