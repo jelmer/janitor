@@ -61,7 +61,7 @@ if __name__ == '__main__':
     import os
     import re
     from janitor import SUITES
-    from janitor.logs import FileSystemLogFileManager, S3LogFileManager
+    from janitor.logs import get_log_manager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
     from janitor.vcs import LocalVcsManager
@@ -92,10 +92,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.logdirectory.startswith('http'):
-        logfile_manager = S3LogFileManager(args.logdirectory)
-    else:
-        logfile_manager = FileSystemLogFileManager(args.logdirectory)
+    logfile_manager = get_log_manager(args.logdirectory)
 
     vcs_manager = LocalVcsManager(os.path.join(
         os.path.dirname(__file__), '..', '..', 'vcs'))

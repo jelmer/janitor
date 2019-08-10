@@ -741,7 +741,9 @@ ORDER BY
   finish_time DESC
 """
     async with get_connection() as conn:
-        return await conn.fetch(query, *args)
+        async with conn.transaction():
+            async for record in conn.cursor(query, *args):
+                yield record
 
 
 async def iter_unscanned_branches(last_scanned_minimum):

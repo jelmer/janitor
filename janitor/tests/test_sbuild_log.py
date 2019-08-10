@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from janitor.sbuild_log import (
-    AptFileSizeMisMatch,
+    AptFetchFailure,
     AptMissingReleaseFile,
     find_apt_get_update_failure,
     find_build_failure_description,
@@ -213,9 +213,10 @@ class FindAptGetFailureDescriptionTests(unittest.TestCase):
         self.run_test(["""\
 E: Failed to fetch http://janitor.debian.net/lintian-fixes/Packages.xz  \
 File has unexpected size (3385796 != 3385720). Mirror sync in progress? [IP]\
-"""], 1, AptFileSizeMisMatch(
+"""], 1, AptFetchFailure(
             'http://janitor.debian.net/lintian-fixes/Packages.xz',
-            3385796, 3385720))
+            'File has unexpected size (3385796 != 3385720). '
+            'Mirror sync in progress? [IP]'))
 
     def test_missing_release_file(self):
         self.run_test(["""\
