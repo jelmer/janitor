@@ -137,7 +137,7 @@ async def generate_developer_page(developer):
     async for run in state.iter_last_successes(suite=SUITE, packages=packages):
         runs[run.package] = run
         if run.package in candidates:
-            del candidate_tags[run.package]
+            del candidates[run.package]
         if run.result_code not in ('success', 'nothing-to-do'):
             errors.append(run)
         else:

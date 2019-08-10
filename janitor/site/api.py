@@ -125,7 +125,8 @@ async def handle_packagename_list(request):
 async def handle_merge_proposal_list(request):
     response_obj = []
     for package, url, status in await state.iter_proposals(
-            request.match_info.get('package'), request.match_info.get('suite')):
+            request.match_info.get('package'),
+            request.match_info.get('suite')):
         response_obj.append({
             'package': package,
             'url': url,
