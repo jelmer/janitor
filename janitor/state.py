@@ -194,6 +194,18 @@ async def get_package(name):
     return list(await iter_packages(package=name))[0]
 
 
+async def get_maintainer_email_for_branch_url(url):
+    query = """
+SELECT
+  maintainer_email
+FROM
+  package
+WHERE branch_url = $1
+"""
+    async with get_connection() as conn:
+        return await conn.fetchval(query, url)
+
+
 class Run(object):
 
     __slots__ = [
