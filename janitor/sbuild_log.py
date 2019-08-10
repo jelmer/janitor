@@ -450,7 +450,7 @@ def perl_missing_module(m):
 
 class MissingMavenArtifacts(object):
 
-    kdin = 'missing-maven-artifacts'
+    kind = 'missing-maven-artifacts'
 
     def __init__(self, artifacts):
         self.artifacts = artifacts
