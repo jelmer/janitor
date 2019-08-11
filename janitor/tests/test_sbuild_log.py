@@ -29,6 +29,7 @@ from janitor.sbuild_log import (
     MissingCommand,
     MissingPkgConfig,
     MissingPerlModule,
+    DhMissingUninstalled,
     NoSpaceOnDevice,
     DhWithOrderIncorrect,
     )
@@ -210,6 +211,17 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
                 'org.junit.jupiter:junit-jupiter-api:jar:5.4.0',
                 'org.junit.jupiter:junit-jupiter-params:jar:5.4.0',
                 'org.junit.jupiter:junit-jupiter-engine:jar:5.4.0']))
+
+    def test_dh_missing_uninstalled(self):
+        self.run_test([
+            'dh_missing --fail-missing',
+            'dh_missing: usr/share/man/man1/florence_applet.1 exists in '
+            'debian/tmp but is not installed to anywhere',
+            'dh_missing: usr/lib/x86_64-linux-gnu/libflorence-1.0.la exists '
+            'in debian/tmp but is not installed to anywhere',
+            'dh_missing: missing files, aborting'], 3,
+            DhMissingUninstalled(
+                'usr/lib/x86_64-linux-gnu/libflorence-1.0.la'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
