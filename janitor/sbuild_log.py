@@ -60,6 +60,14 @@ class DpkgSourceUnrepresentableChanges(object):
         return "Tree has unrepresentable local changes."
 
 
+class DpkgUnwantedBinaryFiles(object):
+
+    kind = 'unwanted-binary-files'
+
+    def __str__(self):
+        return "Tree has unwanted binary files."
+
+
 def find_preamble_failure_description(lines):
     OFFSET = 20
     for i in range(1, OFFSET):
@@ -74,6 +82,10 @@ def find_preamble_failure_description(lines):
             return lineno + 1, line, err
         if line == 'dpkg-source: error: unrepresentable changes to source':
             err = DpkgSourceUnrepresentableChanges()
+            return lineno + 1, line, err
+        if re.match('dpkg-source: error: detected ([0-9]+) unwanted binary '
+                    'file.*', line):
+            err = DpkgUnwantedBinaryFiles()
             return lineno + 1, line, err
     return None, None, None
 
