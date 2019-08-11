@@ -466,6 +466,28 @@ class MissingMavenArtifacts(object):
         return "%s(%r)" % (type(self).__name__, self.artifacts)
 
 
+class DhMissingUninstalled(object):
+
+    kind = 'dh-missing-uninstalled'
+
+    def __init__(self, missing_file):
+        self.missing_file = missing_file
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+                self.missing_file == other.missing_file
+
+    def __str__(self):
+        return "File build by Debian not installed: %r" % self.missing_file
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.missing_file)
+
+
+def dh_missing_uninstalled(m):
+    return DhMissingUninstalled(m.group(1))
+
+
 def maven_missing_artifact(m):
     artifacts = m.group(1).split(',')
     return MissingMavenArtifacts([a.strip() for a in artifacts])
@@ -521,6 +543,8 @@ build_failure_regexps = [
      r'\(https://repo\.maven\.apache\.org/maven2\) in offline mode and '
      r'the artifact .* has not been downloaded from it before..*',
      maven_missing_artifact),
+    (r'dh_missing: (.*) exists in debian/.* but is not installed to anywhere',
+     dh_missing_uninstalled),
 ]
 
 compiled_build_failure_regexps = [
