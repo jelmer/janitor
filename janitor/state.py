@@ -786,7 +786,7 @@ LEFT JOIN package ON package.name = run.package
 WHERE result_code = 'success' AND result IS NOT NULL
 """
     if suite is not None:
-        query += " AND build_distribution = $1 "
+        query += " AND suite = $1 "
         args.append(suite)
 
     query += """
