@@ -33,3 +33,4 @@ _mod_http.AbstractHTTPHandler._default_headers['User-agent'] = user_agent()
 
 
 SUITES = ['fresh-snapshots', 'fresh-releases', 'lintian-fixes']
+ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']

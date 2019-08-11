@@ -52,7 +52,10 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 
-from . import state
+from . import (
+    state,
+    ADDITIONAL_COLOCATED_BRANCHES,
+    )
 from .logs import get_log_manager
 from .prometheus import setup_metrics
 from .trace import note, warning
@@ -91,9 +94,6 @@ run_result_count = Gauge(
 never_processed_count = Gauge(
     'never_processed_count', 'Number of items never processed.',
     labelnames=('suite', ))
-
-
-ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
 
 
 class NoChangesFile(Exception):

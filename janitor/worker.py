@@ -71,6 +71,7 @@ from silver_platter.utils import (
     BranchUnavailable,
 )
 
+from . import ADDITIONAL_COLOCATED_BRANCHES
 from .fix_build import build_incrementally
 from .build import (
     MissingChangesFile,
@@ -412,7 +413,9 @@ def process_package(vcs_url, env, command, output_directory,
 
     with Workspace(main_branch, resume_branch=resume_branch,
                    cached_branch=cached_branch,
-                   path=os.path.join(output_directory, pkg)) as ws:
+                   path=os.path.join(output_directory, pkg),
+                   additional_colocated_branches=(
+                       ADDITIONAL_COLOCATED_BRANCHES)) as ws:
         metadata['main_branch_revision'] = (
             ws.main_branch.last_revision().decode())
 

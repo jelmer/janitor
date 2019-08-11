@@ -58,7 +58,10 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 
-from . import state
+from . import (
+    state,
+    ADDITIONAL_COLOCATED_BRANCHES,
+    )
 from .policy import (
     read_policy,
     apply_policy,
@@ -89,9 +92,6 @@ Build and test logs for this branch can be found at
 https://janitor.debian.net/cupboard/pkg/%(package)s/%(log_id)s/.
 """
 
-
-# TODO(jelmer): Dedupe this with janitor.runner.ADDITIONAL_COLOCATED_BRANCHES
-ADDITIONAL_COLOCATED_BRANCHES = ['pristine-tar', 'upstream']
 
 MODE_SKIP = 'skip'
 MODE_BUILD_ONLY = 'build-only'
