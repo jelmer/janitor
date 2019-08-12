@@ -553,8 +553,6 @@ build_failure_regexps = [
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
     (r'[^:]+:\d+: (.*): No such file or directory',
         file_not_found),
-    (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
-     None),
     (r'(distutils.errors.DistutilsError|error): '
      r'Could not find suitable distribution '
      r'for Requirement.parse\(\'([^\']+)\'\)', python_reqs_not_found),
@@ -603,6 +601,9 @@ build_failure_regexps = [
     (r'I/O error : Attempt to load network entity (.*)',
      xsltproc_network_entity),
     (r'ccache: error: (.*)', ccache_error),
+    (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
+     None),
+    (r'configure: error: (.*)', None),
 ]
 
 compiled_build_failure_regexps = [
