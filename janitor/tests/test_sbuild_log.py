@@ -20,6 +20,7 @@ from janitor.sbuild_log import (
     AptMissingReleaseFile,
     find_apt_get_failure,
     find_build_failure_description,
+    CcacheError,
     MissingCHeader,
     MissingPythonModule,
     MissingGoPackage,
@@ -230,6 +231,14 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd'],
             1, MissingXmlEntity(
                 'http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd'))
+
+    def test_ccache_error(self):
+        self.run_test([
+            'ccache: error: Failed to create directory '
+            '/sbuild-nonexistent/.ccache/tmp: Permission denied'],
+            1, CcacheError(
+                'Failed to create directory '
+                '/sbuild-nonexistent/.ccache/tmp: Permission denied'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
