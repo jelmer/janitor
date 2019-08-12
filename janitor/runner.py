@@ -326,10 +326,13 @@ async def process_one(
                 resume_branch_result=resume_branch_result,
                 last_build_version=last_build_version)
 
-        for name in [
-                n for n in os.listdir(output_directory) if n.endswith('.log')]:
-            src_build_log_path = os.path.join(output_directory, name)
-            await logfile_manager.import_log(pkg, log_id, src_build_log_path)
+        for name in os.listdir(output_directory):
+            if name.endswith('.log') or (
+                    name.rsplit('.')[-2] == 'log' and
+                    name.rsplit('.')[-1].isdigit()):
+                src_build_log_path = os.path.join(output_directory, name)
+                await logfile_manager.import_log(
+                    pkg, log_id, src_build_log_path)
 
         if retcode != 0:
             return JanitorResult(
