@@ -526,6 +526,27 @@ def xsltproc_network_entity(m):
     return MissingXmlEntity(m.group(1))
 
 
+class CcacheError(object):
+
+    kind = 'ccache-error'
+
+    def __init__(self, error):
+        self.error = error
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.error == other.error
+
+    def __str__(self):
+        return 'ccache error: %s' % self.error
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.error)
+
+
+def ccache_error(m):
+    return CcacheError(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -580,6 +601,7 @@ build_failure_regexps = [
      dh_missing_uninstalled),
     (r'I/O error : Attempt to load network entity (.*)',
      xsltproc_network_entity),
+    (r'ccache: error: (.*)', ccache_error),
 ]
 
 compiled_build_failure_regexps = [
