@@ -241,6 +241,7 @@ def python_reqs_not_found(m):
     if '>=' in expr:
         pkg, minimum = expr.split('>=')
         return MissingPythonModule(pkg.strip(), None, minimum.strip())
+    expr = expr.split(';')[0]
     if ' ' not in expr:
         return MissingPythonModule(expr, None)
     # Hmm
@@ -555,8 +556,8 @@ build_failure_regexps = [
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
     (r'(distutils.errors.DistutilsError|error): '
-        r'Could not find suitable distribution '
-        r'for Requirement.parse\(\'(.*)\'\)', python_reqs_not_found),
+     r'Could not find suitable distribution '
+     r'for Requirement.parse\(\'([^\']+)\'\)', python_reqs_not_found),
     (r'pluggy.manager.PluginValidationError: '
      r'Plugin \'.*\' could not be loaded: '
      r'\(.* \(/usr/lib/python2.7/dist-packages\), '

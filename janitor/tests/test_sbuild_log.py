@@ -84,6 +84,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             "distribution for Requirement.parse('certifi>=2019.3.9')"],
             1, MissingPythonModule('certifi', None, '2019.3.9'))
         self.run_test([
+            'distutils.errors.DistutilsError: Could not find suitable '
+            'distribution for Requirement.parse(\'cffi; '
+            'platform_python_implementation == "CPython"\')'], 1,
+            MissingPythonModule('cffi', None))
+        self.run_test([
             'error: Could not find suitable distribution for '
             'Requirement.parse(\'gitlab\')'], 1,
             MissingPythonModule('gitlab', None))
