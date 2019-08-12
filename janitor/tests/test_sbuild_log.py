@@ -29,6 +29,7 @@ from janitor.sbuild_log import (
     MissingCommand,
     MissingPkgConfig,
     MissingPerlModule,
+    MissingXmlEntity,
     DhMissingUninstalled,
     NoSpaceOnDevice,
     DhWithOrderIncorrect,
@@ -222,6 +223,13 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'dh_missing: missing files, aborting'], 3,
             DhMissingUninstalled(
                 'usr/lib/x86_64-linux-gnu/libflorence-1.0.la'))
+
+    def test_missing_xml_entity(self):
+        self.run_test([
+            'I/O error : Attempt to load network entity '
+            'http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd'],
+            1, MissingXmlEntity(
+                'http://www.oasis-open.org/docbook/xml/4.5/docbookx.dtd'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
