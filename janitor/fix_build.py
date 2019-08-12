@@ -50,6 +50,7 @@ from .sbuild_log import (
     MissingFile,
     MissingGoPackage,
     MissingPerlModule,
+    MissingXmlEntity,
     SbuildFailure,
     )
 from .trace import note, warning
@@ -283,6 +284,26 @@ def fix_missing_perl_module(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_xml_entity(tree, error, committer=None):
+    # Ideally we should be using the XML catalog for this, but hardcoding
+    # a few URLs will do for now..
+    URL_MAP = {
+        'http://www.oasis-open.org/docbook/xml/':
+            '/usr/share/xml/docbook/schema/dtd/'
+    }
+    for url, path in URL_MAP.items():
+        if error.url.startswith(url):
+            search_path = os.path.join(path, error.url[len(url):])
+            break
+    else:
+        return False
+
+    package = get_package_for_paths([search_path], regex=False)
+    if package is None:
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingCHeader, fix_missing_c_header),
@@ -291,6 +312,7 @@ FIXERS = [
     (MissingFile, fix_missing_file),
     (MissingGoPackage, fix_missing_go_package),
     (MissingPerlModule, fix_missing_perl_module),
+    (MissingXmlEntity, fix_missing_xml_entity),
 ]
 
 
