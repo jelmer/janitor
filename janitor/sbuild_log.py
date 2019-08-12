@@ -505,6 +505,27 @@ def maven_missing_artifact(m):
     return MissingMavenArtifacts([a.strip() for a in artifacts])
 
 
+class MissingXmlEntity(object):
+
+    kind = 'missing-xml-entity'
+
+    def __init__(self, url):
+        self.url = url
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.url == other.url
+
+    def __str__(self):
+        return 'Missing XML entity: %s' % self.url
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.url)
+
+
+def xsltproc_network_entity(m):
+    return MissingXmlEntity(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -557,6 +578,8 @@ build_failure_regexps = [
      maven_missing_artifact),
     (r'dh_missing: (.*) exists in debian/.* but is not installed to anywhere',
      dh_missing_uninstalled),
+    (r'I/O error : Attempt to load network entity (.*)',
+     xsltproc_network_entity),
 ]
 
 compiled_build_failure_regexps = [
