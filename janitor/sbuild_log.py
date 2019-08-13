@@ -848,9 +848,11 @@ def main(argv=None):
     if failed_stage == 'install-deps':
         focus_section, offset, line, error = find_install_deps_failure_description(
                 section_lines)
-        print('Failed line: %d:' %
-              (section_offsets[focus_section][0] + offset))
-        print(line)
+        if offset:
+            print('Failed line: %d:' %
+                  (section_offsets[focus_section][0] + offset))
+        if line:
+            print(line)
         print(error)
 
 
