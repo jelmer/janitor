@@ -127,8 +127,8 @@ def worker_failure_from_sbuild_log(f):
         if error:
             description = str(error)
     if failed_stage == 'install-deps':
-        focus_section, offset, line, error = find_install_deps_failure_description(
-                paragraphs)
+        (focus_section, offset, line,
+         error) = find_install_deps_failure_description(paragraphs)
         if error:
             description = str(error)
     if description is None and failed_stage is not None:
@@ -441,7 +441,7 @@ class MissingPerlModule(object):
     def __eq__(self, other):
         return isinstance(other, type(self)) and \
             other.module == self.module and \
-            other.filename == other.filename
+            other.filename == self.filename
 
     def __str__(self):
         return "Missing Perl module: %s" % self.module
@@ -452,7 +452,7 @@ class MissingPerlModule(object):
 
 
 def perl_missing_module(m):
-    return MissingPerlModule(m.group(1), m.group(2))
+    return MissingPerlModule(m.group(1) + '.pm', m.group(2))
 
 
 class MissingMavenArtifacts(object):
@@ -735,7 +735,8 @@ def error_from_dose3_report(report):
     for reason in report[0]['reasons']:
         if set(reason.keys()) - set(['missing', 'depchains']):
             return None
-        relation = PkgRelation.parse_relations(reason['missing']['pkg']['unsat-dependency'])
+        relation = PkgRelation.parse_relations(
+            reason['missing']['pkg']['unsat-dependency'])
         missing.extend(relation)
     return UnsatisfiedDependencies(missing)
 
@@ -846,8 +847,8 @@ def main(argv=None):
         if error:
             print('Error: %s' % error)
     if failed_stage == 'install-deps':
-        focus_section, offset, line, error = find_install_deps_failure_description(
-                section_lines)
+        (focus_section, offset, line,
+         error) = find_install_deps_failure_description(section_lines)
         if offset:
             print('Failed line: %d:' %
                   (section_offsets[focus_section][0] + offset))
