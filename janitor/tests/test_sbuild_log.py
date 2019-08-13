@@ -111,6 +111,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test(
                 ['ImportError: No module named pytz'], 1,
                 MissingPythonModule('pytz', 2))
+        self.run_test(
+                ['ImportError: cannot import name SubfieldBase'], 1,
+                None)
 
     def test_python3_import(self):
         self.run_test([

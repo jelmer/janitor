@@ -598,6 +598,9 @@ build_failure_regexps = [
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
     (r'configure: error: (.*)', None),
+    # A Python error, but not likely to be actionable. The previous
+    # line will have the actual line that failed.
+    (r'ImportError: cannot import name (.*)', None),
 ]
 
 compiled_build_failure_regexps = [
