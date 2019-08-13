@@ -16,8 +16,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from debian.deb822 import PkgRelation
 import re
 import sys
+import yaml
 
 __all__ = [
     'SbuildFailure',
@@ -104,8 +106,7 @@ def worker_failure_from_sbuild_log(f):
                 'unpack', 'unexpected upstream changes',
                 DpkgSourceLocalChanges())
 
-    failed_stage = find_failed_stage(
-        paragraphs.get('summary', []))
+    failed_stage = find_failed_stage(paragraphs.get('summary', []))
     focus_section = SBUILD_FOCUS_SECTION.get(failed_stage)
     if failed_stage in ('run-post-build-commands', 'post-build'):
         # We used to run autopkgtest as the only post build
@@ -121,22 +122,15 @@ def worker_failure_from_sbuild_log(f):
         if error:
             description = str(error)
     if failed_stage == 'apt-get-update':
-        offset, description, error = find_apt_get_failure(
-            section_lines)
+        focus_section, offset, description, error = (
+                find_apt_get_update_failure(paragraphs))
         if error:
             description = str(error)
     if failed_stage == 'install-deps':
-        for focus_section, lines in paragraphs.items():
-            if focus_section is None:
-                continue
-            if re.match('install (.*) build dependencies.*',
-                        focus_section):
-                offset, line, error = find_apt_get_failure(
-                    lines)
-                if error:
-                    description = str(error)
-                if offset is not None:
-                    break
+        focus_section, offset, line, error = find_install_deps_failure_description(
+                paragraphs)
+        if error:
+            description = str(error)
     if description is None and failed_stage is not None:
         description = 'build failed stage %s' % failed_stage
     if description is None:
@@ -700,6 +694,52 @@ class AptMissingReleaseFile(AptUpdateError):
         return 'Missing release file: %s' % self.url
 
 
+def find_cudf_output(lines):
+    for i in range(len(lines)-1, 0, -1):
+        if lines[i].startswith('output-version: '):
+            break
+    else:
+        return None
+    output = []
+    while lines[i].strip():
+        output.append(lines[i])
+        i += 1
+
+    return yaml.safe_load('\n'.join(output))
+
+
+class UnsatisfiedDependencies(object):
+
+    kind = 'unsatisfied-dependencies'
+
+    def __init__(self, relations):
+        self.relations = relations
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+                self.relations == other.relations
+
+    def __str__(self):
+        return "Unsatisfied dependencies: %s" % PkgRelation.str(self.relations)
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.relations)
+
+
+def error_from_dose3_report(report):
+    packages = [entry['package'] for entry in report]
+    assert packages == ['sbuild-build-depends-main-dummy']
+    if report[0]['status'] != 'broken':
+        return None
+    missing = []
+    for reason in report[0]['reasons']:
+        if set(reason.keys()) - set(['missing', 'depchains']):
+            return None
+        relation = PkgRelation.parse_relations(reason['missing']['pkg']['unsat-dependency'])
+        missing.extend(relation)
+    return UnsatisfiedDependencies(missing)
+
+
 def find_apt_get_failure(lines):
     """Find the key failure line in apt-get-output.
 
@@ -728,6 +768,36 @@ def find_apt_get_failure(lines):
         if line.startswith('E: ') and ret[0] is None:
             ret = (lineno + 1, line, None)
     return ret
+
+
+def find_install_deps_failure_description(paragraphs):
+    error = None
+    dose3_lines = paragraphs.get(
+        'install dose3 build dependencies (aspcud-based resolver)')
+    if dose3_lines:
+        dose3_output = find_cudf_output(dose3_lines)
+        if dose3_output:
+            error = error_from_dose3_report(dose3_output['report'])
+
+    for focus_section, lines in paragraphs.items():
+        if focus_section is None:
+            continue
+        if re.match('install (.*) build dependencies.*', focus_section):
+            offset, line, v_error = find_apt_get_failure(lines)
+            if error is None:
+                error = v_error
+            if offset is not None:
+                return focus_section, offset, line, error
+
+    return focus_section, None, None, error
+
+
+def find_apt_get_update_failure(paragraphs):
+    focus_section = 'update chroot'
+    lines = paragraphs.get(focus_section, [])
+    offset, line, error = find_apt_get_failure(
+        lines)
+    return focus_section, offset, line, error
 
 
 def main(argv=None):
@@ -767,9 +837,8 @@ def main(argv=None):
         if error:
             print('Error: %s' % error)
     if failed_stage == 'apt-get-update':
-        lines = section_lines.get(focus_section, [])
-        offset, line, error = find_apt_get_failure(
-            lines)
+        focus_section, offset, line, error = find_apt_get_update_failure(
+            section_lines)
         if offset:
             print('Failed line: %d:' %
                   (section_offsets[focus_section][0] + offset))
@@ -777,17 +846,12 @@ def main(argv=None):
         if error:
             print('Error: %s' % error)
     if failed_stage == 'install-deps':
-        for focus_section, lines in section_lines.items():
-            if focus_section is None:
-                continue
-            if re.match('install (.*) build dependencies.*', focus_section):
-                offset, line, error = find_apt_get_failure(
-                    lines)
-                if offset is not None:
-                    print('Failed line: %d:' %
-                          (section_offsets[focus_section][0] + offset))
-                    print(line)
-                    break
+        focus_section, offset, line, error = find_install_deps_failure_description(
+                section_lines)
+        print('Failed line: %d:' %
+              (section_offsets[focus_section][0] + offset))
+        print(line)
+        print(error)
 
 
 if __name__ == '__main__':
