@@ -631,7 +631,7 @@ def find_build_failure_description(lines):
     Returns:
       tuple with (line offset, line, error object)
     """
-    OFFSET = 20
+    OFFSET = 40
     for i in range(1, OFFSET):
         lineno = len(lines) - i
         if lineno < 0:
