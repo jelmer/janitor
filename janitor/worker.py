@@ -59,6 +59,7 @@ from silver_platter.debian.upstream import (
     PristineTarError,
     QuiltError,
     UScanError,
+    UpstreamVersionMissingInUpstreamBranch,
 )
 
 from silver_platter.utils import (
@@ -287,6 +288,10 @@ class NewUpstreamWorker(SubWorker):
             except UScanError as e:
                 error_description = str(e)
                 error_code = 'uscan-error'
+                raise WorkerFailure(error_code, error_description)
+            except UpstreamVersionMissingInUpstreamBranch as e:
+                error_description = str(e)
+                error_code = 'upstream-version-missing-in-upstream-branch'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
