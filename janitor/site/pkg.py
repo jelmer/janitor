@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 from io import BytesIO
-import re
 
 from breezy.errors import NotBranchError
 from janitor import state
@@ -12,9 +11,9 @@ from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
     find_build_failure_description,
+    find_install_deps_failure_description,
     SBUILD_FOCUS_SECTION,
     strip_useless_build_tail,
-    find_apt_get_failure,
 )
 from janitor.site import (
     changes_get_binaries,
@@ -53,8 +52,8 @@ def find_build_log_failure(logf, length):
     if focus_section not in paragraphs:
         focus_section = None
     if failed_stage == 'install-deps':
-        focus_section, offset, line, error = find_install_deps_failure_description(
-                paragraphs)
+        (focus_section, offset, line,
+         error) = find_install_deps_failure_description(paragraphs)
         if offset is not None:
             abs_offset = offsets[focus_section][0] + offset
             include_lines = (
