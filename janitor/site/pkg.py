@@ -53,16 +53,9 @@ def find_build_log_failure(logf, length):
     if focus_section not in paragraphs:
         focus_section = None
     if failed_stage == 'install-deps':
-        for section, lines in paragraphs.items():
-            if section is None:
-                continue
-            if not re.match('install (.*) build dependencies.*',
-                            section):
-                continue
-            focus_section = section
-            offset, line, error = find_apt_get_failure(lines)
-            if offset is None:
-                continue
+        focus_section, offset, line, error = find_install_deps_failure_description(
+                paragraphs)
+        if offset is not None:
             abs_offset = offsets[focus_section][0] + offset
             include_lines = (
                 max(1, abs_offset - length//2),
