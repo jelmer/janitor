@@ -34,7 +34,6 @@ from lintian_brush.control import (
     ensure_some_version,
     ensure_minimum_version,
     update_control,
-    FormattingUnpreservable,
     )
 from silver_platter.debian import (
     debcommit,
@@ -347,10 +346,6 @@ def build_incrementally(
             try:
                 if not resolve_error(local_tree, e.error, committer=committer):
                     raise
-            except FormattingUnpreservable:
-                warning('Unable to fix %r, control format unpreservable',
-                        e.error)
-                raise e
             except CircularDependency:
                 warning('Unable to fix %r; it would introduce a circular '
                         'dependency.', e.error)
