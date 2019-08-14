@@ -54,6 +54,8 @@ async def get_queue(only_command=None, limit=None):
                     ', '.join(
                         map(lintian_tag_link,
                             entry.env['CONTEXT'].split(' '))))
+        elif entry.command[0] == 'plain':
+            description = ''
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:

@@ -614,6 +614,9 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
             if run.result_code == 'nothing-to-do':
                 continue
 
+            if run.suite == 'unchanged':
+                continue
+
             note('%s needs to be updated.', mp.url)
             try:
                 mp, branch_name, is_new = await publish_one(
