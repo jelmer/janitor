@@ -278,7 +278,7 @@ def fix_missing_file(tree, error, committer=None):
 def fix_missing_perl_module(tree, error, committer=None):
     path = os.path.join('/usr/share/perl5', error.filename)
     package = get_package_for_paths([path], regex=False)
-    warning('no perl package found for %s (%r)', error.module, error.path)
+    warning('no perl package found for %s (%r)', error.module, path)
     if package is None:
         return False
     return add_build_dependency(tree, package, committer=committer)
