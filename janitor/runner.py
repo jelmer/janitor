@@ -236,6 +236,8 @@ async def process_one(
         branch_name = 'new-upstream-snapshot'
     elif command == ["lintian-brush"]:
         branch_name = "lintian-fixes"
+    elif command == ["just-build"]:
+        branch_name = "master"
     else:
         raise AssertionError('Unknown command %s' % command[0])
 

@@ -38,6 +38,7 @@ from lintian_brush.vcs import (
     fixup_broken_git_url,
     )
 
+DEFAULT_VALUE_UNCHANGED = 60
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
 DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
@@ -157,6 +158,17 @@ and vcs_type != ''"""
                     tag, LINTIAN_BRUSH_TAG_DEFAULT_VALUE)
             context = ' '.join(sorted(tags))
             yield package, 'lintian-fixes', ['lintian-brush'], context, value
+
+    async def iter_unchanged_candidates(self, packages=None):
+        args = []
+        query = """\
+SELECT DISTINCT ON (sources.source)
+sources.source FROM sources WHERE
+sources.vcs_url != '' AND \
+sources.release = 'sid'
+"""
+        for row in await self._conn.fetch(query, *args):
+            yield (row[0], 'unchanged', ['just-build'], None, DEFAULT_VALUE_UNCHANGED)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -298,20 +310,21 @@ async def main():
     candidates = []
 
     async for (package, suite, command, context,
+               value) in udd.iter_unchanged_candidates(args.packages):
+        candidates.append((package, suite, command, context, value))
+
+    async for (package, suite, command, context,
                value) in udd.iter_lintian_fixes_candidates(
             args.packages, tags):
-        candidates.append((
-            package, suite, command, context, value))
+        candidates.append((package, suite, command, context, value))
 
     async for (package, suite, command, context,
                value) in udd.iter_fresh_releases_candidates(args.packages):
-        candidates.append((
-            package, suite, command, context, value))
+        candidates.append((package, suite, command, context, value))
 
     async for (package, suite, command, context,
                value) in udd.iter_fresh_snapshots_candidates(args.packages):
-        candidates.append((
-            package, suite, command, context, value))
+        candidates.append((package, suite, command, context, value))
 
     await state.store_candidates(candidates)
 

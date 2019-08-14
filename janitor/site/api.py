@@ -15,6 +15,7 @@ SUITE_TO_COMMAND = {
     'lintian-fixes': ['lintian-brush'],
     'fresh-releases': ['new-upstream'],
     'fresh-snapshots': ['new-upstream', '--snapshot'],
+    'unchanged': ['just-build'],
     }
 
 

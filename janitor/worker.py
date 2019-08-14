@@ -328,6 +328,23 @@ class NewUpstreamWorker(SubWorker):
             return 'jan+nur'
 
 
+class JustBuildWorker(SubWorker):
+
+    def __init__(self, command, env):
+        subparser = argparse.ArgumentParser(prog='just-build')
+        self.args = subparser.parse_args(command)
+
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata):
+        return None
+
+    def build_suite(self):
+        return 'unchanged'
+
+    def build_version_suffix(self):
+        return 'jan+unchanged'
+
+
 class WorkerResult(object):
 
     def __init__(self, description, build_distribution=None,
@@ -375,6 +392,8 @@ def process_package(vcs_url, env, command, output_directory,
         subworker_cls = LintianBrushWorker
     elif command[0] == 'new-upstream':
         subworker_cls = NewUpstreamWorker
+    elif command[0] == 'just-build':
+        subworker_cls = JustBuildWorker
     else:
         raise WorkerFailure(
             'unknown-subcommand',
@@ -456,11 +475,12 @@ def process_package(vcs_url, env, command, output_directory,
             ws.local_tree, provide_context, metadata['subworker'],
             resume_subworker_result)
 
-        if not ws.changes_since_main():
-            raise WorkerFailure('nothing-to-do', 'Nothing to do.')
+        if command[0] != 'just-build':
+            if not ws.changes_since_main():
+                raise WorkerFailure('nothing-to-do', 'Nothing to do.')
 
-        if not ws.changes_since_resume():
-            raise WorkerFailure('nothing-new-to-do', 'Nothing new to do.')
+            if not ws.changes_since_resume():
+                raise WorkerFailure('nothing-new-to-do', 'Nothing new to do.')
 
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
