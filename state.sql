@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    foreign key (package) references package(name),
    primary key(url)
 );
-CREATE TYPE suite AS ENUM('lintian-fixes', 'fresh-releases', 'fresh-snapshots');
+CREATE TYPE suite AS ENUM('lintian-fixes', 'fresh-releases', 'fresh-snapshots','unchanged');
 CREATE TABLE IF NOT EXISTS run (
    id text not null primary key,
    command text,
