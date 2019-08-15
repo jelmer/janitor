@@ -32,6 +32,7 @@ from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
     )
 from lintian_brush.salsa import (
+    determine_browser_url as determine_salsa_browser_url,
     salsa_url_from_alioth_url,
     )
 from lintian_brush.vcs import (
@@ -135,7 +136,7 @@ sources.source = packages.source and sources.release = 'sid' \
 where lintian.tag = any($1::text[]) and lintian.package_type = 'binary' \
 and vcs_type != ''"""
         if packages is not None:
-            query += " AND sources.source IN $2"
+            query += " AND sources.source = ANY($2::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
         for row in await self._conn.fetch(query, *args):
@@ -205,7 +206,8 @@ sources.release = 'sid'
             yield (row[0], 'fresh-snapshots', ['new-upstream', '--snapshot'],
                    None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
-    async def iter_packages_with_metadata(self):
+    async def iter_packages_with_metadata(self, packages=None):
+        args = []
         query = """
 select distinct on (sources.source) sources.source,
     sources.maintainer_email, sources.uploaders, popcon_src.insts,
@@ -219,9 +221,15 @@ select distinct on (sources.source) sources.source,
     sources.version
     from sources left join popcon_src on sources.source = popcon_src.source
     left join vcswatch on vcswatch.source = sources.source
-where sources.release = 'sid' order by sources.source, sources.version desc
+where sources.release = 'sid'
 """
-        return await self._conn.fetch(query)
+        if packages:
+            query += " and sources.source = ANY($1::text[])"
+            args.append(packages)
+        query += " order by sources.source, sources.version desc"
+        async with self._conn.transaction():
+            async for row in self._conn.cursor(query, *args):
+                yield row
 
     async def iter_removals(self):
         query = """\
@@ -274,16 +282,19 @@ async def main():
             removals[name] = max(Version(version), removals[name])
 
     packages = []
-    for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-         vcs_browser, sid_version) in await udd.iter_packages_with_metadata():
+    async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
+         vcs_browser, sid_version) in udd.iter_packages_with_metadata(
+                 args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
         salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
         if salsa_url:
-            vcs_type = 'git'
+            trace.note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
+            vcs_type = 'Git'
             vcs_url = salsa_url
+            vcs_browser = determine_salsa_browser_url(salsa_url)
 
-        if vcs_type == 'git':
+        if vcs_type and vcs_type.capitalize() == 'Git':
             parts = vcs_url.split(' ')
             new_vcs_url = ' '.join(
                 [fixup_broken_git_url(parts[0])] + parts[1:])
@@ -291,10 +302,13 @@ async def main():
                 trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
 
-        try:
-            branch_url = convert_debian_vcs_url(vcs_type, vcs_url)
-        except ValueError as e:
-            trace.note('%s: %s', name, e)
+        if vcs_type is not None:
+            try:
+                branch_url = convert_debian_vcs_url(vcs_type.capitalize(), vcs_url)
+            except ValueError as e:
+                trace.note('%s: %s', name, e)
+                branch_url = None
+        else:
             branch_url = None
 
         if name not in removals:
@@ -331,7 +345,7 @@ async def main():
     last_success_gauge.set_to_current_time()
     if args.prometheus:
         push_to_gateway(
-            args.prometheus, job='janitor.schedule-new-upstream-snapshots',
+            args.prometheus, job='janitor.udd',
             registry=REGISTRY)
 
 
