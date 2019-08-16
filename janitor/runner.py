@@ -62,7 +62,6 @@ from .trace import note, warning
 from .vcs import (
     get_vcs_abbreviation,
     open_branch_ext,
-    open_salsa_branch,
     BranchOpenFailure,
     LocalVcsManager,
     )
@@ -246,20 +245,8 @@ async def process_one(
             main_branch = open_branch_ext(
                 vcs_url, possible_transports=possible_transports)
         except BranchOpenFailure as e:
-            main_branch = None
-            if e.code == 'hosted-on-alioth':
-                package = await state.get_package(pkg)
-                try:
-                    main_branch = open_salsa_branch(
-                        package.maintainer_email, pkg,
-                        possible_transports=possible_transports)
-                except BranchOpenFailure:
-                    # Well, that didn't work either. Just return the original
-                    # error.
-                    pass
-            if main_branch is None:
-                return JanitorResult(
-                    pkg, log_id=log_id, description=e.description, code=e.code)
+            return JanitorResult(
+                pkg, log_id=log_id, description=e.description, code=e.code)
 
         try:
             hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
