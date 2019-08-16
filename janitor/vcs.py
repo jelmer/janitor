@@ -36,9 +36,6 @@ from silver_platter.utils import (
     BranchMissing,
     BranchUnavailable,
     )
-from lintian_brush.salsa import (
-    guess_repository_url,
-    )
 
 from .trace import note
 
@@ -68,14 +65,6 @@ def is_alioth_url(url):
     return urllib.parse.urlparse(url).netloc in (
         'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
         'hg.debian.org', 'git.debian.org', 'alioth.debian.org')
-
-
-def open_salsa_branch(maintainer_email, pkg, possible_transports=None):
-    url = guess_repository_url(pkg, maintainer_email)
-    if url is not None:
-        return open_branch_ext(
-            url, possible_transports=possible_transports, vcs_type='git')
-    return None
 
 
 def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
