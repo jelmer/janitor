@@ -324,26 +324,17 @@ async def main():
                 vcs_type, vcs_url, vcs_browser, insts, removed))
     await state.store_packages(packages)
 
-    candidates = []
+    CANDIDATE_FNS = [
+        udd.iter_unchanged_candidates(args.packages),
+        udd.iter_lintian_fixes_candidates(args.packages, tags),
+        udd.iter_fresh_releases_candidates(args.packages),
+        udd.iter_fresh_snapshots_candidates(args.packages)]
 
-    async for (package, suite, command, context,
-               value) in udd.iter_unchanged_candidates(args.packages):
-        candidates.append((package, suite, command, context, value))
-
-    async for (package, suite, command, context,
-               value) in udd.iter_lintian_fixes_candidates(
-            args.packages, tags):
-        candidates.append((package, suite, command, context, value))
-
-    async for (package, suite, command, context,
-               value) in udd.iter_fresh_releases_candidates(args.packages):
-        candidates.append((package, suite, command, context, value))
-
-    async for (package, suite, command, context,
-               value) in udd.iter_fresh_snapshots_candidates(args.packages):
-        candidates.append((package, suite, command, context, value))
-
-    await state.store_candidates(candidates)
+    for candidate_fn in CANDIDATE_FNS:
+        candidates = []
+        async for (package, suite, command, context, value) in candidate_fn:
+            candidates.append((package, suite, command, context, value))
+        await state.store_candidates(candidates)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
