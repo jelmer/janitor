@@ -300,9 +300,7 @@ async def main():
                 vcs_browser = determine_salsa_browser_url(salsa_url)
 
         if vcs_type and vcs_type.capitalize() == 'Git':
-            parts = vcs_url.split(' ')
-            new_vcs_url = ' '.join(
-                [fixup_broken_git_url(parts[0])] + parts[1:])
+            new_vcs_url = fixup_broken_git_url(vcs_url)
             if new_vcs_url != vcs_url:
                 trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
