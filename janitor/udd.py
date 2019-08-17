@@ -28,6 +28,7 @@ from silver_platter.debian import (
     convert_debian_vcs_url,
 )
 from . import trace
+from .vcs import is_alioth_url
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
     )
@@ -291,8 +292,7 @@ async def main():
         if is_alioth_url(vcs_url):
             salsa_url = guess_repository_url(name, maintainer_email)
             if not salsa_url:
-                salsa_url = salsa_url_from_alioth_url(
-                    vcs_type, vcs_url, maintainer_email=maintainer_email)
+                salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
             if salsa_url:
                 trace.note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
                 vcs_type = 'Git'
