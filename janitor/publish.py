@@ -559,11 +559,12 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
 
 
 async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
-                             interval):
+                             interval, auto_publish=True):
     while True:
         await check_existing(rate_limiter, vcs_manager, dry_run)
         await asyncio.sleep(interval)
-        await publish_pending_new(rate_limiter, policy, vcs_manager, dry_run)
+        if auto_publish:
+            await publish_pending_new(rate_limiter, policy, vcs_manager, dry_run)
 
 
 def is_conflicted(mp):
@@ -703,6 +704,10 @@ def main(argv=None):
         '--interval', type=int,
         help=('Seconds to wait in between publishing '
               'pending proposals'), default=7200)
+    parser.add_argument(
+        '--no-auto-publish',
+        action='store_true',
+        help='Do not create merge proposals automatically.')
 
     args = parser.parse_args()
 
@@ -713,6 +718,10 @@ def main(argv=None):
         rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
     else:
         rate_limiter = NonRateLimiter()
+
+    if args.no_auto_publish and args.once:
+        sys.stderr.write('--no-auto-publish and --once are mutually exclude.')
+        sys.exit(1)
 
     loop = asyncio.get_event_loop()
     vcs_manager = LocalVcsManager(args.vcs_result_dir)
@@ -730,7 +739,8 @@ def main(argv=None):
         loop.run_until_complete(asyncio.gather(
             loop.create_task(process_queue_loop(
                 rate_limiter, policy, dry_run=args.dry_run,
-                vcs_manager=vcs_manager, interval=args.interval)),
+                vcs_manager=vcs_manager, interval=args.interval,
+                auto_publish=not args.no_auto_publish)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
