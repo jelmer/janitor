@@ -228,8 +228,9 @@ class NewUpstreamWorker(SubWorker):
                 error_description = "Unable to find new upstream source."
                 error_code = 'new-upstream-missing'
                 raise WorkerFailure(error_code, error_description)
-            except UpstreamBranchUnavailable:
-                error_description = "The upstream branch was unavailable."
+            except UpstreamBranchUnavailable as e:
+                error_description = (
+                    "The upstream branch at %s was unavailable." % e.location)
                 error_code = 'upstream-branch-unavailable'
                 raise WorkerFailure(error_code, error_description)
             except UpstreamMergeConflicted as e:
