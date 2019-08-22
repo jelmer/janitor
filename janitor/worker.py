@@ -60,6 +60,7 @@ from silver_platter.debian.upstream import (
     QuiltError,
     UScanError,
     UpstreamVersionMissingInUpstreamBranch,
+    UpstreamMetadataSyntaxError,
 )
 
 from silver_platter.utils import (
@@ -293,6 +294,11 @@ class NewUpstreamWorker(SubWorker):
             except UpstreamVersionMissingInUpstreamBranch as e:
                 error_description = str(e)
                 error_code = 'upstream-version-missing-in-upstream-branch'
+                raise WorkerFailure(error_code, error_description)
+            except UpstreamMetadataSyntaxError as e:
+                error_description = 'Syntax error in upstream metadata: %s' % (
+                        e.error)
+                error_code = 'upstream-metadata-syntax-error'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
