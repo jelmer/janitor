@@ -38,6 +38,9 @@ class JanitorUIFactory(NoninteractiveUIFactory):
     def get_username(self, prompt, **kwargs):
         return None
 
+    def get_password(self, prompt=u'', **kwargs):
+        return None
+
     def _make_output_stream_explicit(self, encoding, encoding_type):
         return NullOutputStream(encoding)
 
