@@ -214,11 +214,7 @@ sources.release = 'sid'
 select distinct on (sources.source) sources.source,
     sources.maintainer_email, sources.uploaders, popcon_src.insts,
     coalesce(vcswatch.vcs, sources.vcs_type),
-    case
-        when vcswatch.url is not null and vcswatch.branch is not null then
-            vcswatch.url || ' -b ' || vcswatch.branch
-        else coalesce(vcswatch.url, sources.vcs_url)
-    end,
+    coalesce(vcswatch.url, sources.vcs_url),
     coalesce(vcswatch.browser, sources.vcs_browser),
     sources.version
     from sources left join popcon_src on sources.source = popcon_src.source
