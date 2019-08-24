@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% from "run_util.html" import display_result_code %}
+{% block page_title %}Cupboard - Publish History{% endblock %}
+{% block body %}
+ <div class="section" id="publish-history">
+<h1>Publish History</h1>
+<p>Last {{ count }} publish actions:</p>
+<table class="docutils" border="1">
+<colgroup>
+<col width="41%">
+<col width="6%">
+<col width="4%">
+<col width="49%">
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Package</th>
+<th class="head">Branch Name</th>
+<th class="head">Mode</th>
+<th class="head">Result</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for package, branch_name, main_branch_revision, revision, mode, merge_proposal_url, result_code, description in history %}
+<tr class="row-even"><td><a class="reference external" href="pkg/{{ package }}">{{ package }}</a></td>
+<td>{{ branch_name }}</td>
+<td>{{ mode }}</td>
+<td>{{ result_code }}: {{ description }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% endblock %}

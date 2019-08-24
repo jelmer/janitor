@@ -1076,3 +1076,20 @@ async def get_proposal_revision(url):
     async with get_connection() as conn:
         return await conn.fetchval(
             "SELECT revision FROM merge_proposal WHERE url = $1", url)
+
+
+async def iter_publish_history(limit=None):
+    query = """
+SELECT
+    package, branch_name, main_branch_revision, revision, mode,
+    merge_proposal_url, result_code, description
+FROM
+    publish
+ORDER BY timestamp DESC
+"""
+    query += "ORDER BY start_time DESC"
+    if limit:
+        query += " LIMIT %d" % limit
+    async with get_connection() as conn:
+        for row in await conn.fetch(query, *args):
+            yield row
