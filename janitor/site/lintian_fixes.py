@@ -109,7 +109,7 @@ async def generate_candidates():
     supported_tags = set()
     for fixer in available_lintian_fixers():
         supported_tags.update(fixer.lintian_tags)
-    candidates = [(package, context.split(' '), value) for
+    candidates = [(package.name, context.split(' '), value) for
                   (package, suite, command, context, value) in
                   await state.iter_candidates(suite=SUITE)]
     candidates.sort()
@@ -126,15 +126,15 @@ async def generate_developer_page(developer):
     for package, url, status in await state.iter_proposals(packages, SUITE):
         if status == 'open':
             proposals[package] = url
-    candidates = []
+    candidates = {}
     for row in await state.iter_candidates(packages=packages, suite=SUITE):
-        candidates.append((row[0].name, row[3].split(' ')))
+        candidates[row[0].name] = row[3].split(' ')
     nothing_to_do = []
     errors = []
     ready_changes = []
     runs = {}
     merge_proposals = []
-    async for run in state.iter_last_successes(suite=SUITE, packages=packages):
+    async for run in state.iter_last_unmerged_successes(suite=SUITE, packages=packages):
         runs[run.package] = run
         if run.package in candidates:
             del candidates[run.package]
@@ -150,7 +150,8 @@ async def generate_developer_page(developer):
                 nothing_to_do.append(run)
 
     return await template.render_async(
-        developer=developer, packages=packages, candidates=candidates,
+        developer=developer, packages=packages,
+        candidates=list(candidates.items()),
         runs=runs, nothing_to_do=nothing_to_do, errors=errors,
         ready_changes=ready_changes, merge_proposals=merge_proposals)
 

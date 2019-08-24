@@ -686,7 +686,7 @@ LIMIT 1
         return Run.from_row(row)
 
 
-async def iter_last_successes(suite, packages):
+async def iter_last_unmerged_successes(suite, packages):
     query = """
 SELECT DISTINCT ON (package)
   id,
@@ -708,7 +708,8 @@ SELECT DISTINCT ON (package)
   branch_url
 FROM
   run
-WHERE suite = $1 AND package = ANY($2::text[])
+WHERE suite = $1 AND package = ANY($2::text[]) AND NOT EXISTS (
+    SELECT FROM merge_proposal WHERE revision = run.revision AND status IN ('closed', 'merged'))
 AND result_code != 'nothing-to-do'
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """
@@ -721,6 +722,7 @@ async def stats_by_result_codes():
     query = """\
 select result_code, count(result_code) from (select distinct on(package, suite)
 package, suite, result_code from run order by 1, 2, start_time desc) AS results
+where not exists (select from package where name = results.package and removed)
 group by 1 order by 2 desc
 """
     async with get_connection() as conn:
@@ -744,7 +746,9 @@ SELECT DISTINCT ON (package, suite)
 FROM
   run
 ORDER BY package, suite, start_time DESC) AS runs
-WHERE result_code = $1 ORDER BY start_time DESC
+WHERE result_code = $1
+AND NOT EXISTS (SELECT FROM package WHERE name = package and removed)
+ORDER BY start_time DESC
 """
     async with get_connection() as conn:
         return await conn.fetch(query, result_code)
