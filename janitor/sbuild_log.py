@@ -502,6 +502,24 @@ class MissingMavenArtifacts(object):
         return "%s(%r)" % (type(self).__name__, self.artifacts)
 
 
+class DhUntilUnsupported(object):
+
+    kind = 'dh-until-unsupported'
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return "dh --until is no longer supported"
+
+    def __repr__(self):
+        return "%s()" % (type(self).__name__, )
+
+
+def dh_until_unsupported(m):
+    return DhUntilUnsupported()
+
+
 class DhMissingUninstalled(object):
 
     kind = 'dh-missing-uninstalled'
@@ -626,6 +644,8 @@ build_failure_regexps = [
     (r'I/O error : Attempt to load network entity (.*)',
      xsltproc_network_entity),
     (r'ccache: error: (.*)', ccache_error),
+    (r'dh: The --until option is not supported any longer \(#932537\). '
+     r'Use override targets instead.', dh_until_unsupported),
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
     (r'configure: error: (.*)', None),
