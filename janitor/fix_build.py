@@ -48,6 +48,7 @@ from .sbuild_log import (
     MissingCommand,
     MissingFile,
     MissingGoPackage,
+    MissingPerlFile,
     MissingPerlModule,
     MissingXmlEntity,
     SbuildFailure,
@@ -274,11 +275,15 @@ def fix_missing_file(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
-def fix_missing_perl_module(tree, error, committer=None):
-    path = os.path.join('/usr/share/perl5', error.filename)
-    package = get_package_for_paths([path], regex=False)
+def fix_missing_perl_file(tree, error, committer=None):
+    paths = [os.path.join(inc, error.filename) for inc in error.inc]
+    package = get_package_for_paths(paths, regex=False)
     if package is None:
-        warning('no perl package found for %s (%r)', error.module, path)
+        if error.module:
+            warning('no perl package found for %s (%r).',
+                    error.module, error.filename)
+        else:
+            warning('perl file %s not found.', error.filename)
         return False
     return add_build_dependency(tree, package, committer=committer)
 
@@ -310,7 +315,8 @@ FIXERS = [
     (MissingCommand, fix_missing_command),
     (MissingFile, fix_missing_file),
     (MissingGoPackage, fix_missing_go_package),
-    (MissingPerlModule, fix_missing_perl_module),
+    (MissingPerlFile, fix_missing_perl_file),
+    (MissingPerlModule, fix_missing_perl_file),
     (MissingXmlEntity, fix_missing_xml_entity),
 ]
 
