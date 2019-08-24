@@ -194,6 +194,29 @@ async def get_package(name):
     return list(await iter_packages(package=name))[0]
 
 
+async def get_package_by_vcs_url(vcs_url):
+    query = """
+SELECT
+  name,
+  maintainer_email,
+  uploader_emails,
+  branch_url,
+  vcs_type,
+  vcs_url,
+  vcs_browse,
+  removed
+FROM
+  package
+WHERE
+  vcs_url = $1
+"""
+    async with get_connection() as conn:
+        row = await conn.fetchrow(query, vcs_url)
+        if row is None:
+            return None
+        return Package.from_row(row)
+
+
 async def get_maintainer_email_for_branch_url(url):
     query = """
 SELECT

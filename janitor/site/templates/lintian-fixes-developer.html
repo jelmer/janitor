@@ -21,11 +21,11 @@
 {% if ready_changes %}
 <div class="section" id="ready-changes">
 <h2>Ready Changes</h2>
-{% for run in ready_runs %}
+{% for run in ready_changes %}
 <h3><a href="/lintian-fixes/pkg/{{ run.package }}">{{ run.package }}</a></h3>
 <p>{{ lintian_brush_summary(run.result['applied']) }}</p>
 {% if run.branch_name %}
-{{ publish_buttons(run.suite, run.package, "#commandResult") }}
+{{ publish_buttons(run.suite, run.package, "#commandResult", id_suffix='-'+run.package) }}
 {% endif %}
 {% endfor %}
 </div>
@@ -36,7 +36,7 @@
 <h2>Packages with errors</h2>
 <ul>
 {% for run in errors %}
-<li><a href="/lintian-fixes/pkg/{{ run.package }}">{{ run.package }}</a>: Last run at {{ format_timestamp(run.times[1]) }}, result: {{ display_result_code(run.result_code) }}. {{ reschedule_button(suite, package, "Schedule a run", "#commandResult", 'reschedule-' + run.package) }}</p>
+<li><a href="/lintian-fixes/pkg/{{ run.package }}">{{ run.package }}</a>: Last run at {{ format_timestamp(run.times[1]) }}, result: {{ display_result_code(run.result_code) }}. {{ reschedule_button(run.suite, run.package, "Schedule a run", "#commandResult", 'reschedule-' + run.package) }}</p>
 {% endfor %}
 </ul>
 </div>
@@ -49,7 +49,7 @@
 {% for package, tags in candidates %}
 <li><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a>:
 {% if tags %}
-Tags that may be fixable: {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}. {{ reschedule_button(suite, package, "Schedule a run", "#commandResult", 'reschedule-' + package) }}</p>
+Tags that may be fixable: {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}. {{ reschedule_button('lintian-fixes', package, "Schedule a run", "#commandResult", 'reschedule-' + package) }}</p>
 {% else %}
 No tags that may be fixable.
 {% endif %}
