@@ -33,6 +33,7 @@ from janitor.sbuild_log import (
     MissingPerlModule,
     MissingXmlEntity,
     DhMissingUninstalled,
+    DhUntilUnsupported,
     NoSpaceOnDevice,
     DhWithOrderIncorrect,
     )
@@ -205,7 +206,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '../bin/ledger2beancount line 23.'], 1,
             MissingPerlModule('String/Interpolate.pm', 'String::Interpolate', [
                 '/etc/perl', '/usr/local/lib/x86_64-linux-gnu/perl/5.28.1',
-                '/usr/local/share/perl/5.28.1', '/usr/lib/x86_64-linux-gnu/perl5/5.28',
+                '/usr/local/share/perl/5.28.1',
+                '/usr/lib/x86_64-linux-gnu/perl5/5.28',
                 '/usr/share/perl5', '/usr/lib/x86_64-linux-gnu/perl/5.28',
                 '/usr/share/perl/5.28', '/usr/local/lib/site_perl',
                 '/usr/lib/x86_64-linux-gnu/perl-base']))
@@ -256,6 +258,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'dh_missing: missing files, aborting'], 3,
             DhMissingUninstalled(
                 'usr/lib/x86_64-linux-gnu/libflorence-1.0.la'))
+
+    def test_dh_until_unsupported(self):
+        self.run_test([
+            'dh: The --until option is not supported any longer (#932537). '
+            'Use override targets instead.'], 1,
+            DhUntilUnsupported())
 
     def test_missing_xml_entity(self):
         self.run_test([
