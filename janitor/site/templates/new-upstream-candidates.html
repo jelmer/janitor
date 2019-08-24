@@ -1,0 +1,14 @@
+{% extends "layout.html" %}
+{% block page_title %}{{ suite }} - Candidates{% endblock %}
+{% block body %}
+<div class="section" id="candidates">
+<h1>{{ suite }} - Candidates</h1>
+
+<ul>
+{% for package, version, value in candidates %}
+<li><a href="/{{ suite }}/pkg/{{ package }}">{{ package }}</a> - {{ version }}
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}

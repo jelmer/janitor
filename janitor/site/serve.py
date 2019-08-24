@@ -317,6 +317,14 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_new_upstream_candidates(suite, request):
+        from .new_upstream import generate_candidates
+        text = await generate_candidates(suite)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
+
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
@@ -363,6 +371,10 @@ if __name__ == '__main__':
         app.router.add_get(
             '/%s/pkg/{pkg}/' % suite,
             functools.partial(handle_new_upstream_pkg, suite))
+        app.router.add_get(
+            '/%s/candidates' % suite,
+            functools.partial(handle_new_upstream_candidates, suite))
+
     app.router.add_get('/cupboard/history', handle_history)
     app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
