@@ -324,10 +324,16 @@ async def process_one(
                     pkg, log_id, src_build_log_path)
 
         if retcode != 0:
+            try:
+                with open(log_path, 'r') as f:
+                    description = list(f.readlines())[-1]
+            except FileNotFoundError:
+                description = 'Worker exited with return code %d' % retcode
+
             return JanitorResult(
                 pkg, log_id=log_id,
                 code='worker-failure',
-                description='Worker exited with return code %d' % retcode)
+                description=description)
 
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
