@@ -191,9 +191,9 @@ if __name__ == '__main__':
         except IndexError:
             raise web.HTTPNotFound(text='No package with name %s' % package)
         merge_proposals = []
-        for (unused_package, url, status) in await state.iter_proposals(
+        async for (run, url, status) in state.iter_proposals_with_run(
                 package=package.name):
-            merge_proposals.append((url, status))
+            merge_proposals.append((url, status, run))
         runs = [x async for x in state.iter_runs(package=package.name)]
         text = await generate_pkg_file(package, merge_proposals, runs)
         return web.Response(
