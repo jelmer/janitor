@@ -32,6 +32,9 @@ async def reprocess_run(package, log_id, result_code, description):
             package, log_id, 'build.log')
     except FileNotFoundError:
         return
+    except aiohttp.client_exceptions.ServerDisconnectedError as e:
+        print(e)
+        return
     failure = worker_failure_from_sbuild_log(build_logf)
     if failure.error:
         new_code = '%s-%s' % (failure.stage, failure.error.kind)
@@ -45,7 +48,13 @@ async def reprocess_run(package, log_id, result_code, description):
              new_code, failure.description)
 
 
-loop.run_until_complete(asyncio.gather(*[
-    reprocess_run(package, log_id, result_code, description)
-    for package, log_id, result_code, description in loop.run_until_complete(
-        state.iter_build_failures())]))
+async def process_all_build_failures():
+    todo = []
+    async for package, log_id, result_code, description in (
+            state.iter_build_failures()):
+        todo.append(reprocess_run(package, log_id, result_code, description))
+    for i in range(0, len(todo), 100):
+        await asyncio.gather(*todo[i:i+100])
+
+
+loop.run_until_complete(process_all_build_failures())
