@@ -1087,9 +1087,8 @@ FROM
     publish
 ORDER BY timestamp DESC
 """
-    query += "ORDER BY start_time DESC"
     if limit:
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
-        for row in await conn.fetch(query, *args):
+        for row in await conn.fetch(query):
             yield row
