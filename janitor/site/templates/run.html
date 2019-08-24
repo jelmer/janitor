@@ -42,7 +42,7 @@
 {% if branch_name %}
 {{ merge_command(package, branch_name, vcs) }}
 {% else %}
-{% if result_code not in ('missing-control-file', 'unparseable-changelog', 'inconsistent-source-format') %}
+{% if result_code not in ('missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown') %}
 {% if build_log_name %}
 {% with f = get_log(build_log_name) %}
 {{ include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
