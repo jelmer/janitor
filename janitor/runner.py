@@ -316,9 +316,11 @@ async def process_one(
                 last_build_version=last_build_version)
 
         for name in os.listdir(output_directory):
-            if name.endswith('.log') or (
-                    name.rsplit('.')[-2] == 'log' and
-                    name.rsplit('.')[-1].isdigit()):
+            parts = name.split('.')
+            if parts[-1] == 'log' or (
+                    len(parts) == 3 and
+                    parts[-2] == 'log' and
+                    parts[-1].isdigit()):
                 src_build_log_path = os.path.join(output_directory, name)
                 await logfile_manager.import_log(
                     pkg, log_id, src_build_log_path)
