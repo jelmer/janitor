@@ -11,6 +11,9 @@
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
 {% endif %}
+{% if removed %}
+<li>This package is removed in unstable.</li>
+{% endif %}
 </ul>
 
 <div class="section" id="suites">
@@ -26,8 +29,8 @@
 <div class="section" id="recent-merge-proposals">
 <h2>Recent merge proposals</h2>
 <ul>
-{% for url, status in merge_proposals %}
-<li><a href="{{ url }}">{{ url }}</a> ({{ status }})</li>
+{% for url, status, run in merge_proposals %}
+<li><a href="{{ url }}">{% if run %}{{ run.suite }}{% else %}{{ url }}{% endif %}</a> ({{ status }})</li>
 {% endfor %}
 </ul>
 </div>
