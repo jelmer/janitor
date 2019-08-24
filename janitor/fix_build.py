@@ -41,6 +41,7 @@ from silver_platter.debian import (
     )
 
 from .build import attempt_build
+from .trace import note, warning
 from .sbuild_log import (
     MissingPythonModule,
     MissingCHeader,
@@ -53,7 +54,6 @@ from .sbuild_log import (
     MissingXmlEntity,
     SbuildFailure,
     )
-from .trace import note, warning
 
 
 DEFAULT_MAX_ITERATIONS = 10
@@ -341,8 +341,10 @@ def build_incrementally(
                 build_command, build_changelog_entry)
         except SbuildFailure as e:
             if e.error is None:
+                warning('Build failed with unidentified error. Giving up.')
                 raise
             if e.error in fixed_errors:
+                warning('Error was still not fixed on second try. Giving up.')
                 raise
             if max_iterations is not None \
                     and len(fixed_errors) > max_iterations:
@@ -351,6 +353,7 @@ def build_incrementally(
             reset_tree(local_tree)
             try:
                 if not resolve_error(local_tree, e.error, committer=committer):
+                    warning('Failed to resolve error %r. Giving up.', e.error)
                     raise
             except CircularDependency:
                 warning('Unable to fix %r; it would introduce a circular '
