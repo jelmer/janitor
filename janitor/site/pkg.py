@@ -208,6 +208,7 @@ async def generate_pkg_file(package, merge_proposals, runs):
     kwargs['merge_proposals'] = merge_proposals
     kwargs['builds'] = [run for run in runs if run.build_version]
     kwargs['runs'] = runs
+    kwargs['removed'] = package.removed
     kwargs['candidates'] = {
         suite: (context, value)
         for (package, suite, command, context, value) in
