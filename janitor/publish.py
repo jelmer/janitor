@@ -537,11 +537,20 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
             vcs_manager=vcs_manager, branch_name=run.branch_name,
             dry_run=dry_run, allow_create_proposal=True)
     except PublishFailure as e:
+        await state.store_publish(
+            run.package, run.branch_name, run.main_branch_revision.decode('utf-8'),
+            run.revision.decode('utf-8'), mode, e.code, e.description,
+            None)
         return web.json_response(
             {'code': e.code, 'description': e.description}, status=400)
 
     if proposal and is_new:
         rate_limiter.inc(package.maintainer_email)
+
+    await state.store_publish(
+        run.package, branch_name, run.main_branch_revision.decode('utf-8'),
+        run.revision.decode('utf-8'), mode, 'success', 'Success',
+        proposal.url if proposal else None)
 
     return web.json_response(
         {'branch_name': branch_name,
@@ -582,16 +591,26 @@ def is_conflicted(mp):
 
 async def check_existing(rate_limiter, vcs_manager, dry_run=False):
     open_mps_per_maintainer = {}
+    possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
     async for mp, status in iter_all_mps():
         await state.set_proposal_status(mp.url, status)
         status_count[status] += 1
+        if not await state.get_proposal_revision(mp.url):
+            try:
+                revision = open_branch(
+                    mp.get_source_branch_url(),
+                    possible_transports=possible_transports).last_revision()
+            except (BranchMissing, BranchUnavailable):
+                pass
+            else:
+                await state.set_proposal_revision(mp.url, revision.decode('utf-8'))
         if status != 'open':
             continue
         maintainer_email = await state.get_maintainer_email_for_proposal(
             mp.url)
         if maintainer_email is None:
-            source_branch_url = mp.get_source_branch_url()
+            source_branch_url = mp.get_target_branch_url()
             maintainer_email = await state.get_maintainer_email_for_branch_url(
                 source_branch_url)
             if maintainer_email is None:
@@ -635,8 +654,8 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                 note('%s: Updating merge proposal failed: %s (%s)',
                      mp.url, e.code, e.description)
                 await state.store_publish(
-                    run.package, branch_name, run.main_branch_revision,
-                    run.revision, MODE_PROPOSE, e.code, e.description,
+                    run.package, branch_name, run.main_branch_revision.decode('utf-8'),
+                    run.revision.decode('utf-8'), MODE_PROPOSE, e.code, e.description,
                     mp.url)
                 break
             else:

@@ -565,6 +565,13 @@ ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
 """, url, status)
 
 
+async def set_proposal_revision(url, revision):
+    async with get_connection() as conn:
+        await conn.execute("""
+    UPDATE merge_proposal SET revision = $1 WHERE url = $2""",
+    revision, url)
+
+
 async def queue_length(minimum_priority=None):
     args = []
     query = 'SELECT COUNT(*) FROM queue'
@@ -756,7 +763,8 @@ ORDER BY start_time DESC
 
 async def iter_build_failures():
     async with get_connection() as conn:
-        return await conn.fetch("""
+        async with conn.transaction():
+            async for row in conn.cursor("""
 SELECT
   package,
   id,
@@ -767,7 +775,8 @@ WHERE
   (result_code = 'build-failed' OR
    result_code LIKE 'build-failed-stage-%' OR
    result_code LIKE 'build-%')
-""")
+   """):
+                yield row
 
 
 async def update_run_result(log_id, code, description):
@@ -1042,8 +1051,8 @@ SELECT
     run.package, run.build_version, run.build_distribution, run.result_code,
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url
-FROM run inner join publish on publish.revision = run.revision
-WHERE publish.merge_proposal_url = $1
+FROM run inner join merge_proposal on merge_proposal.revision = run.revision
+WHERE merge_proposal.url = $1
 ORDER BY run.finish_time DESC
 """
     async with get_connection() as conn:
@@ -1061,3 +1070,9 @@ row_number() over (order by priority asc, id asc) idx from queue) as f where
 package = $1 and suite = $2
 """
         return await conn.fetchval(query, package, suite)
+
+
+async def get_proposal_revision(url):
+    async with get_connection() as conn:
+        return await conn.fetchval(
+            "SELECT revision FROM merge_proposal WHERE url = $1", url)
