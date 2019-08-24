@@ -279,6 +279,10 @@ async def publish(
 
     with BranchWorkspace(
             main_branch, local_branch, resume_branch=resume_branch) as ws:
+        if not hoster.supports_merge_proposal_labels:
+            labels = None
+        else:
+            labels = [suite]
         try:
             (proposal, is_new) = publish_changes_from_workspace(
                 ws, mode, subrunner.branch_name(),
@@ -288,7 +292,8 @@ async def publish(
                 dry_run=dry_run, hoster=hoster,
                 allow_create_proposal=allow_create_proposal,
                 overwrite_existing=True,
-                existing_proposal=existing_proposal)
+                existing_proposal=existing_proposal,
+                labels=labels)
         except NoSuchProject as e:
             raise PublishFailure(
                 description='project %s was not found' % e.project,
