@@ -99,6 +99,15 @@ async def generate_pkg_file(package, suite):
     return await template.render_async(**kwargs)
 
 
+async def generate_candidates(suite):
+    template = env.get_template('new-upstream-candidates.html')
+    candidates = [(package.name, context, value) for
+                  (package, suite, command, context, value) in
+                  await state.iter_candidates(suite=suite)]
+    candidates.sort()
+    return await template.render_async(candidates=candidates, suite=suite)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='report-new-upstream-pkg')
     parser.add_argument("package")
