@@ -128,6 +128,13 @@ if __name__ == '__main__':
             content_type='text/html', text=await write_history(limit=limit),
             headers={'Cache-Control': 'max-age=60'})
 
+    async def handle_publish_history(request):
+        limit = int(request.query.get('limit', '100'))
+        from .publish import write_history
+        return web.Response(
+            content_type='text/html', text=await write_history(limit=limit),
+            headers={'Cache-Control': 'max-age=60'})
+
     async def handle_queue(request):
         limit = int(request.query.get('limit', '100'))
         from .queue import write_queue
@@ -380,6 +387,7 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
     app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
+    app.router.add_get('/cupboard/publish', handle_publish_history)
     app.router.add_get(
         '/cupboard/ready', functools.partial(handle_ready_proposals, None))
     app.router.add_get('/cupboard/pkg/', handle_pkg_list)
