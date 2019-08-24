@@ -36,14 +36,14 @@ $(function() {
 </script>
 {% endmacro %}
 
-{% macro publish_buttons(suite, package, resultDiv=None) %}
-<button id="propose">Create merge proposal</button> <button id="push-derived">Create fork with changes</button>
+{% macro publish_buttons(suite, package, resultDiv=None, id_suffix='') %}
+<button id="propose{{ id_suffix }}">Create merge proposal</button> <button id="push-derived{{ id_suffix }}">Create fork with changes</button>
 
 <script src="/_static/jquery.js"></script>
 
 <script>
 $(function() {
-  $("#propose").click(function() {
+  $("#propose{{ id_suffix }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'propose'}, function(data) {
 {% if resultDiv %}
       if (data.proposal && data.is_new) {
@@ -58,7 +58,7 @@ $(function() {
     });
   });
 
-  $("#push-derived").click(function() {
+	$("#push-derived{{ id_suffix }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'push-derived'}, function(data) {
 {% if resultDiv %}
       $("{{ resultDiv }}").append("Created fork.<br/>");

@@ -3,6 +3,7 @@
 import argparse
 from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import functools
+import json
 import os
 import urllib.parse
 
@@ -65,13 +66,58 @@ async def handle_publish(publisher_url, request):
                 status=400)
 
 
-async def handle_schedule(request):
+async def get_package_from_gitlab_webhook(body):
+    vcs_url = body['project']['git_http_url']
+    package = await state.get_package_by_vcs_url(vcs_url)
+    if package is None:
+        ref = body['ref']
+        if not ref.startswith('refs/heads/'):
+            return None
+        branch_name = ref[len('refs/heads/'):]
+        url_with_branch = '%s -b %s' % (vcs_url, branch_name)
+        package = await state.get_package_by_vcs_url(
+            url_with_branch)
+        if package is None:
+            return None
+    return package
+
+
+async def schedule(package, suite, offset=DEFAULT_SCHEDULE_OFFSET,
+                   refresh=False):
     from ..schedule import estimate_duration
+    command = SUITE_TO_COMMAND[suite]
+    estimated_duration = await estimate_duration(package.name, suite)
+    await state.add_to_queue(
+        package.branch_url, package.name, command, suite, offset,
+        estimated_duration=estimated_duration, refresh=refresh)
+    return estimated_duration
+
+
+async def handle_webhook(request):
+    if request.headers.get('Content-Type') != 'application/json':
+        template = env.get_template('webhook.html')
+        return web.Response(
+            content_type='text/html', text=await template.render_async(),
+            headers={'Cache-Control': 'max-age=600'})
+    if request.headers['X-Gitlab-Event'] != 'Push Hook':
+        return web.json_response({}, status=200)
+    body = await request.json()
+    package = await get_package_from_gitlab_webhook(body)
+    if package is None:
+        return web.Response(
+            body=('VCS URL %s unknown' % body['project']['git_http_url']),
+            status=404)
+    # TODO(jelmer: If nothing found, then maybe fall back to
+    # urlutils.basename(body['project']['path_with_namespace'])?
+    for suite in SUITES:
+        await schedule(package, suite)
+    return web.json_response({})
+
+
+async def handle_schedule(request):
     package = request.match_info['package']
     suite = request.match_info['suite']
-    try:
-        command = SUITE_TO_COMMAND[suite]
-    except KeyError:
+    if suite not in SUITES:
         return web.json_response(
             {'error': 'Unknown suite', 'suite': suite}, status=404)
     post = await request.post()
@@ -85,13 +131,9 @@ async def handle_schedule(request):
         package = await state.get_package(package)
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
-    estimated_duration = await estimate_duration(package.name, suite)
-    await state.add_to_queue(
-        package.branch_url, package.name, command, suite, offset,
-        estimated_duration=estimated_duration, refresh=refresh)
+    estimated_duration = await schedule(package, suite, offset, refresh)
     response_obj = {
         'package': package.name,
-        'command': command,
         'suite': suite,
         'offset': offset,
         'estimated_duration_seconds': estimated_duration.total_seconds(),
@@ -266,6 +308,8 @@ def create_app(publisher_url, policy_config, vcs_manager):
     app.router.add_get(
         '/{suite}/published-packages', handle_published_packages)
     app.router.add_get('/policy', handle_global_policy)
+    app.router.add_post('/webhook', handle_webhook)
+    app.router.add_get('/webhook', handle_webhook)
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)
