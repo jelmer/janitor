@@ -160,7 +160,7 @@ async def handle_diff(vcs_manager, request):
             r async for r in state.iter_runs(
                 package=package, run_id=run_id)][0]
     except IndexError:
-        raise web.HTTPNotFoundError()
+        raise web.HTTPNotFound()
     text = get_run_diff(vcs_manager, run)
     return web.Response(
             content_type='text/x-diff', body=text,
