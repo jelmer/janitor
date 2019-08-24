@@ -29,6 +29,7 @@ from janitor.sbuild_log import (
     MissingNodeModule,
     MissingCommand,
     MissingPkgConfig,
+    MissingPerlFile,
     MissingPerlModule,
     MissingXmlEntity,
     DhMissingUninstalled,
@@ -202,7 +203,30 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/usr/share/perl/5.28 /usr/local/lib/site_perl '
             '/usr/lib/x86_64-linux-gnu/perl-base) at '
             '../bin/ledger2beancount line 23.'], 1,
-            MissingPerlModule('String/Interpolate.pm', 'String::Interpolate'))
+            MissingPerlModule('String/Interpolate.pm', 'String::Interpolate', [
+                '/etc/perl', '/usr/local/lib/x86_64-linux-gnu/perl/5.28.1',
+                '/usr/local/share/perl/5.28.1', '/usr/lib/x86_64-linux-gnu/perl5/5.28',
+                '/usr/share/perl5', '/usr/lib/x86_64-linux-gnu/perl/5.28',
+                '/usr/share/perl/5.28', '/usr/local/lib/site_perl',
+                '/usr/lib/x86_64-linux-gnu/perl-base']))
+
+    def test_missing_perl_file(self):
+        self.run_test([
+            'Can\'t locate debian/perldl.conf in @INC (@INC contains: '
+            '/<<PKGBUILDDIR>>/inc /etc/perl /usr/local/lib/x86_64-linux-gnu'
+            '/perl/5.28.1 /usr/local/share/perl/5.28.1 /usr/lib/'
+            'x86_64-linux-gnu/perl5/5.28 /usr/share/perl5 '
+            '/usr/lib/x86_64-linux-gnu/perl/5.28 /usr/share/perl/5.28 '
+            '/usr/local/lib/site_perl /usr/lib/x86_64-linux-gnu/perl-base) '
+            'at Makefile.PL line 131.'], 1,
+            MissingPerlFile('debian/perldl.conf', [
+                '/<<PKGBUILDDIR>>/inc', '/etc/perl',
+                '/usr/local/lib/x86_64-linux-gnu/perl/5.28.1',
+                '/usr/local/share/perl/5.28.1',
+                '/usr/lib/x86_64-linux-gnu/perl5/5.28',
+                '/usr/share/perl5', '/usr/lib/x86_64-linux-gnu/perl/5.28',
+                '/usr/share/perl/5.28', '/usr/local/lib/site_perl',
+                '/usr/lib/x86_64-linux-gnu/perl-base']))
 
     def test_missing_maven_artifacts(self):
         self.run_test([

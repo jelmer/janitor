@@ -434,25 +434,54 @@ class MissingPerlModule(object):
 
     kind = 'missing-perl-module'
 
-    def __init__(self, filename, module):
+    def __init__(self, filename, module, inc):
         self.filename = filename
         self.module = module
+        self.inc = inc
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and \
             other.module == self.module and \
-            other.filename == self.filename
+            other.filename == self.filename and \
+            other.inc == self.inc
 
     def __str__(self):
-        return "Missing Perl module: %s" % self.module
+        return "Missing Perl module: %s (inc: %r)" % (
+            self.module, self.inc)
 
     def __repr__(self):
-        return "%s(%r, %r)" % (
-            type(self).__name__, self.filename, self.module)
+        return "%s(%r, %r, %r)" % (
+            type(self).__name__, self.filename, self.module, self.inc)
 
 
 def perl_missing_module(m):
-    return MissingPerlModule(m.group(1) + '.pm', m.group(2))
+    return MissingPerlModule(
+        m.group(1) + '.pm', m.group(2), m.group(3).split(' '))
+
+
+class MissingPerlFile(object):
+
+    kind = 'missing-perl-file'
+
+    def __init__(self, filename, inc):
+        self.filename = filename
+        self.inc = inc
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            other.filename == self.filename and \
+            other.inc == self.inc
+
+    def __str__(self):
+        return "Missing Perl file: %s (inc: %r)" % (
+            self.module, self.inc)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.filename, self.inc)
+
+
+def perl_missing_file(m):
+    return MissingPerlFile(m.group(1), m.group(2).split(' '))
 
 
 class MissingMavenArtifacts(object):
@@ -582,8 +611,10 @@ build_failure_regexps = [
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
-     r'(.*) module\) \(@INC contains: .*\) at .* line .*.',
+     r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_module),
+    (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
+     perl_missing_file),
     (r'\[ERROR] Failed to execute goal on project .*: Could not resolve '
      r'dependencies for project .*: The following artifacts could not be '
      r'resolved: (.*): Cannot access central '
