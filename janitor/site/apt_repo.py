@@ -26,20 +26,18 @@ async def gather_package_list(suite):
 
     unstable = await get_unstable_versions(present)
 
-    ret = []
     for source in sorted(present):
-        ret.append((
+        yield (
             source,
             present[source].upstream_version,
             unstable[source].upstream_version
-            if source in unstable else ''))
-    return ret
+            if source in unstable else '')
 
 
 async def write_apt_repo(suite):
     template = env.get_template(suite + '.html')
     return await template.render_async(
-        packages=await gather_package_list(suite))
+        packages=gather_package_list(suite))
 
 
 if __name__ == '__main__':

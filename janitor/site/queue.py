@@ -64,8 +64,6 @@ async def get_processing(runner_url):
 
 
 async def get_queue(only_command=None, limit=None):
-    data = []
-
     async for entry, log_id, result_code in (
             state.iter_queue_with_last_run(limit=limit)):
         if only_command is not None and entry.command != only_command:
@@ -99,23 +97,19 @@ async def get_queue(only_command=None, limit=None):
             description += ", " + expecting
         if entry.refresh:
             description += " (from scratch)"
-        data.append(
-            (entry.package, entry.suite, description, entry.estimated_duration,
-                log_id, result_code))
-
-    return data
+        yield (
+            entry.package, entry.suite, description, entry.estimated_duration,
+            log_id, result_code)
 
 
 async def write_queue(only_command=None, limit=None, runner_url=None):
     template = env.get_template('queue.html')
     if runner_url:
-        try:
-            processing = [item async for item in get_processing(runner_url)]
-        except RunnerProcessingUnavailable:
-            # :-(
-            processing = []
+        processing = get_processing(runner_url)
+    else:
+        processing = []
     return await template.render_async(
-        queue=await get_queue(only_command, limit),
+        queue=get_queue(only_command, limit),
         processing=processing)
 
 

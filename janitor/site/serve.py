@@ -154,12 +154,12 @@ if __name__ == '__main__':
         from .. import state
         code = request.match_info.get('code')
         if not code:
-            stats = await state.stats_by_result_codes()
+            stats = state.stats_by_result_codes()
             never_processed = sum(dict(
                 await state.get_never_processed()).values())
             text = await generate_result_code_index(stats, never_processed)
         else:
-            runs = await state.iter_last_runs(code)
+            runs = state.iter_last_runs(code)
             text = await generate_result_code_page(code, runs)
         return web.Response(
             content_type='text/html', text=text,
@@ -206,7 +206,7 @@ if __name__ == '__main__':
         async for (run, url, status) in state.iter_proposals_with_run(
                 package=package.name):
             merge_proposals.append((url, status, run))
-        runs = [x async for x in state.iter_runs(package=package.name)]
+        runs = state.iter_runs(package=package.name)
         text = await generate_pkg_file(package, merge_proposals, runs)
         return web.Response(
             content_type='text/html', text=text,
