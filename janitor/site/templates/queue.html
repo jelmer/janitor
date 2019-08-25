@@ -13,7 +13,7 @@
   <th class="head">Package</th>
   <th class="head">Suite</th>
   <th class="head">Estimated Duration</th>
-  <th class="head">Start Time </th>
+  <th class="head">Current Duration</th>
 </tr>
 </thead>
 <tbody valign="top">
@@ -22,7 +22,7 @@
     <td>{{ entry['package'] }}</td>
     <td>{{ entry['suite'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
-    <td>{{ format_timestamp(entry['start_time']) }}</td>
+    <td>{{ format_duration(entry['current_duration']) }}</td>
 </tr>
 {% endfor %}
 </table>

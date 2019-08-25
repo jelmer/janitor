@@ -54,6 +54,9 @@ async def get_processing(runner_url):
                 if entry.get('estimated_duration'):
                     entry['estimated_duration'] = timedelta(
                         seconds=entry['estimated_duration'])
+                if entry.get('current_duration'):
+                    entry['current_duration'] = timedelta(
+                        seconds=entry['current_duration'])
                 if entry.get('start_time'):
                     entry['start_time'] = datetime.fromisoformat(
                         entry['start_time'])

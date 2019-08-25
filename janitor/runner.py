@@ -534,6 +534,8 @@ async def handle_status(queue_processor, request):
             'estimated_duration':
                 item.estimated_duration.total_seconds()
                 if item.estimated_duration else None,
+            'current_duration':
+                (datetime.now() - start_time).total_seconds(),
             'start_time': start_time.isoformat(),
         } for item, start_time in queue_processor.started.items()],
         'concurrency': queue_processor.concurrency,
