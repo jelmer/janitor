@@ -88,7 +88,7 @@
 
 {% endif %}
 
-<p>{% if build_log_name %}<a class="reference external" href="{{ build_log_name }}">Full build log</a>{% if earlier_build_log_names %} ({% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}{% if not last %}, {% endif %}</a>{% endfor %}){% endif %} {% endif %}{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
+<p>{% if build_log_name %}<a class="reference external" href="{{ build_log_name }}">Full build log</a>{% if earlier_build_log_names %} ({% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}{% if not loop.last %}, {% endif %}</a>{% endfor %}){% endif %} {% endif %}{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}</p>
 
 </div>
 {% endblock %}
