@@ -782,7 +782,9 @@ AND NOT EXISTS (SELECT FROM package WHERE name = package and removed)
 ORDER BY start_time DESC
 """
     async with get_connection() as conn:
-        return await conn.fetch(query, result_code)
+        async with conn.transaction():
+            async for row in conn.cursor(query, result_code):
+                yield row
 
 
 async def iter_build_failures():

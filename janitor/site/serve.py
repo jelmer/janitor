@@ -154,7 +154,7 @@ if __name__ == '__main__':
         from .. import state
         code = request.match_info.get('code')
         if not code:
-            stats = state.stats_by_result_codes()
+            stats = await state.stats_by_result_codes()
             never_processed = sum(dict(
                 await state.get_never_processed()).values())
             text = await generate_result_code_index(stats, never_processed)

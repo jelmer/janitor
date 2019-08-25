@@ -113,7 +113,9 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
         run.package, run.suite)
     kwargs['queue_wait_time'] = queue_wait_time
     kwargs['queue_position'] = queue_position
-    kwargs['package'] = state.get_package(run.package)
+    package = await state.get_package(run.package)
+    kwargs['vcs_url'] = package.vcs_url
+    kwargs['vcs_browse'] = package.vcs_browse
 
     def show_diff():
         diff = get_run_diff(vcs_manager, run)
@@ -206,7 +208,6 @@ async def generate_pkg_file(package, merge_proposals, runs):
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
     kwargs['merge_proposals'] = merge_proposals
-    kwargs['builds'] = [run for run in runs if run.build_version]
     kwargs['runs'] = runs
     kwargs['removed'] = package.removed
     kwargs['candidates'] = {
