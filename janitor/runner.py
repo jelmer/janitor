@@ -18,6 +18,7 @@
 from aiohttp import web
 import asyncio
 from datetime import datetime
+import functools
 import json
 import os
 import signal
@@ -424,42 +425,56 @@ async def export_stats():
         await asyncio.sleep(60 * 30)
 
 
-async def process_queue(
-        worker_kind, build_command,
-        started, pre_check=None, post_check=None,
-        dry_run=False, incoming=None, log_dir=None,
-        debsign_keyid=None, vcs_manager=None,
-        concurrency=1, use_cached_only=False):
-    """Process the items added to the queue.
+class QueueProcessor(object):
 
-    Args:
-      worker_kind: The kind of worker to run ('local', 'gcb')
-      build_command: The command used to build packages
-      pre_check: Function to run prior to modifying a package
-      post_check: Function to run after modifying a package
-      incoming: directory to copy debian packages to
-      log_dir: Directory to cop
-    """
-    logfile_manager = get_log_manager(log_dir)
+    def __init__(
+            self, worker_kind, build_command, pre_check=None,
+            post_check=None,
+            dry_run=False, incoming=None, log_dir=None,
+            debsign_keyid=None, vcs_manager=None,
+            concurrency=1, use_cached_only=False):
+        """Create a queue processor.
 
-    async def process_queue_item(item):
+        Args:
+          worker_kind: The kind of worker to run ('local', 'gcb')
+          build_command: The command used to build packages
+          pre_check: Function to run prior to modifying a package
+          post_check: Function to run after modifying a package
+          incoming: directory to copy debian packages to
+        """
+        self.worker_kind = worker_kind
+        self.build_command = build_command
+        self.pre_check = pre_check
+        self.post_check = post_check
+        self.dry_run = dry_run
+        self.incoming = incoming
+        self.logfile_manager = logfile_manager
+        self.debsign_keyid = debsign_keyid
+        self.vcs_manager = vcs_manager
+        self.concurrency = concurrency
+        self.use_cached_only = use_cached_only
+        self.started = {}
+
+    async def process_queue_item(self, item):
         start_time = datetime.now()
+        self.started[item] = start_time
 
         env = dict(item.env.items())
         env['PACKAGE'] = item.package
 
         result = await process_one(
-            worker_kind, item.branch_url, item.package, env, item.command,
-            suite=item.suite, pre_check=pre_check,
-            build_command=build_command, post_check=post_check,
-            dry_run=dry_run, incoming=incoming,
-            debsign_keyid=debsign_keyid, vcs_manager=vcs_manager,
-            logfile_manager=logfile_manager, use_cached_only=use_cached_only,
+            self.worker_kind, item.branch_url, item.package, env, item.command,
+            suite=item.suite, pre_check=self.pre_check,
+            build_command=self.build_command, post_check=self.post_check,
+            dry_run=self.dry_run, incoming=self.incoming,
+            debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
+            logfile_manager=self.logfile_manager,
+            use_cached_only=self.use_cached_only,
             refresh=item.refresh)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())
-        if not dry_run:
+        if not self.dry_run:
             await state.store_run(
                 result.log_id, item.package, item.branch_url,
                 start_time, finish_time, item.command,
@@ -478,51 +493,55 @@ async def process_queue(
             await state.drop_queue_item(item.id)
         last_success_gauge.set_to_current_time()
 
-    started = set()
-    todo = set()
-    async for item in state.iter_queue(limit=concurrency):
-        todo.add(process_queue_item(item))
-        started.add(item)
+    async def process(self):
+        todo = set()
+        async for item in state.iter_queue(limit=concurrency):
+            todo.add(self.process_queue_item(item))
 
-    def handle_sigterm():
-        global concurrency
-        concurrency = None
-        note('Received SIGTERM; not starting new jobs.')
+        def handle_sigterm():
+            global concurrency
+            concurrency = None
+            note('Received SIGTERM; not starting new jobs.')
 
-    loop = asyncio.get_event_loop()
-    loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
-    try:
-        while True:
-            if not todo:
-                note('Nothing to do. Sleeping for 60s.')
-                await asyncio.sleep(60)
-                continue
-            done, pending = await asyncio.wait(
-                todo, return_when='FIRST_COMPLETED')
-            for task in done:
-                task.result()
-            todo = pending
-            if concurrency:
-                for i in enumerate(done):
-                    async for item in state.iter_queue(limit=concurrency):
-                        if item in started:
-                            continue
-                        todo.add(process_queue_item(item))
-                        started.add(item)
-    finally:
-        loop.remove_signal_handler(signal.SIGTERM)
+        loop = asyncio.get_event_loop()
+        loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
+        try:
+            while True:
+                if not todo:
+                    note('Nothing to do. Sleeping for 60s.')
+                    await asyncio.sleep(60)
+                    continue
+                done, pending = await asyncio.wait(
+                    todo, return_when='FIRST_COMPLETED')
+                for task in done:
+                    task.result()
+                todo = pending
+                if concurrency:
+                    for i in enumerate(done):
+                        async for item in state.iter_queue(limit=concurrency):
+                            if item in self.started:
+                                continue
+                            todo.add(process_queue_item(item))
+        finally:
+            loop.remove_signal_handler(signal.SIGTERM)
 
 
-async def handle_status(started, request):
+async def handle_status(queue_processor, request):
     return web.json_response({
-        'processing': [item.package for item in started]
+        'processing': {
+            'package': item.package,
+            'suite': item.suite,
+            'estimated_duration': item.estimated_duration.total_seconds(),
+            'start_time': start_time,
+        } for item, start_time in queue_processor.started.items(),
+        'concurrency': queue_processor.concurrency,
     })
 
 
-async def run_web_server(listen_addr, port, started):
+async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
     setup_metrics(app)
-    app.router.add_get('/status', functools.partial(handle_status, started))
+    app.router.add_get('/status', functools.partial(handle_status, queue_processor))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -583,22 +602,23 @@ def main(argv=None):
     debug.set_debug_flags_from_config()
 
     vcs_manager = LocalVcsManager(args.vcs_result_dir)
+    logfile_manager = get_log_manager(args.log_dir)
+    queue_processor = QueueProcessor(
+        args.worker,
+        args.build_command,
+        args.pre_check, args.post_check,
+        args.dry_run, args.incoming, logfile_manager,
+        args.debsign_keyid,
+        vcs_manager,
+        args.concurrency,
+        args.use_cached_only)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
-        loop.create_task(process_queue(
-            args.worker,
-            args.build_command,
-            started,
-            args.pre_check, args.post_check,
-            args.dry_run, args.incoming, args.log_dir,
-            args.debsign_keyid,
-            vcs_manager,
-            args.concurrency,
-            args.use_cached_only)),
+        loop.create_task(queue_processor.process()),
         loop.create_task(export_queue_length()),
         loop.create_task(export_stats()),
         loop.create_task(run_web_server(
-            args.listen_address, args.port, started)),
+            args.listen_address, args.port, queue_processor)),
         ))
 
 
