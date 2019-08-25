@@ -113,10 +113,7 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
         run.package, run.suite)
     kwargs['queue_wait_time'] = queue_wait_time
     kwargs['queue_position'] = queue_position
-
-    package = await state.get_package(run.package)
-    kwargs['vcs_browse'] = package.vcs_browse
-    kwargs['vcs_url'] = package.vcs_url
+    kwargs['package'] = state.get_package(run.package)
 
     def show_diff():
         diff = get_run_diff(vcs_manager, run)
@@ -199,8 +196,7 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
 
     template = env.get_template('run.html')
-    text = await template.render_async(**kwargs)
-    return text
+    return await template.render_async(**kwargs)
 
 
 async def generate_pkg_file(package, merge_proposals, runs):
@@ -237,5 +233,5 @@ async def generate_maintainer_list(packages):
 
 async def generate_ready_list(suite):
     template = env.get_template('ready-list.html')
-    runs = [run async for run in state.iter_publish_ready(suite=suite)]
+    runs = state.iter_publish_ready(suite=suite)
     return await template.render_async(runs=runs, suite=suite)

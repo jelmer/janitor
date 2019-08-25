@@ -4,15 +4,11 @@ from janitor import state
 from janitor.site import env
 
 
-async def get_history(limit):
-    return [run async for run in state.iter_runs(limit=limit)]
-
-
 async def write_history(limit=None):
     template = env.get_template('history.html')
     return await template.render_async(
         count=limit,
-        history=await get_history(limit))
+        history=state.iter_runs(limit=limit))
 
 
 if __name__ == '__main__':
