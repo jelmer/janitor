@@ -46,6 +46,7 @@ from silver_platter.proposal import (
     NoSuchProject,
     PermissionDenied,
     UnsupportedHoster,
+    iter_all_mps,
     )
 from silver_platter.debian.lintian import (
     create_mp_description,
@@ -140,15 +141,6 @@ def add_janitor_blurb(text, pkg, log_id, suite):
     text += '\n' + (JANITOR_BLURB % {'suite': suite})
     text += (LOG_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
     return text
-
-
-async def iter_all_mps():
-    for name, hoster_cls in hosters.items():
-        for instance in hoster_cls.iter_instances():
-            note('Checking merge proposals on %r...', instance)
-            for status in ['open', 'merged', 'closed']:
-                for mp in instance.iter_my_proposals(status=status):
-                    yield mp, status
 
 
 class MaintainerRateLimiter(object):
@@ -593,7 +585,7 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
     open_mps_per_maintainer = {}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
-    async for mp, status in iter_all_mps():
+    for mp, status in iter_all_mps():
         await state.set_proposal_status(mp.url, status)
         status_count[status] += 1
         if not await state.get_proposal_revision(mp.url):
