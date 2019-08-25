@@ -470,6 +470,9 @@ class QueueItem(object):
     def __lt__(self, other):
         return self.id < other.id
 
+    def __hash__(self):
+        return hash((type(self), self.id))
+
 
 async def iter_queue(limit=None):
     query = """
