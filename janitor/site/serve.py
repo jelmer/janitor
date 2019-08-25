@@ -394,7 +394,7 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/pkg/{pkg}/', handle_pkg)
     app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/', handle_run)
     app.router.add_get(
-        '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log}', handle_log)
+        '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log)
     app.router.add_get(
         '/pkg/', handle_pkg_list)
     app.router.add_static(
