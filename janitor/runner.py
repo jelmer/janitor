@@ -491,6 +491,7 @@ class QueueProcessor(object):
                 suite=item.suite)
 
             await state.drop_queue_item(item.id)
+        del self.started[item]
         last_success_gauge.set_to_current_time()
 
     async def process(self):
