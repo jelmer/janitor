@@ -272,6 +272,9 @@ async def main():
 
     udd = await UDD.public_udd_mirror()
 
+    existing_packages = {
+        package.name: package for package in await state.iter_packages()}
+
     removals = {}
     for name, version in await udd.iter_removals():
         if name not in removals:
@@ -279,6 +282,12 @@ async def main():
         else:
             removals[name] = max(Version(version), removals[name])
 
+    trace.note('Updating removals.')
+    await state.update_removals(
+        [(name, version) for (name, version) in removals.items()
+         if name in existing_packages and not existing_packages[name].removed])
+
+    trace.note('Updating package metadata.')
     packages = []
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
          vcs_browser, sid_version) in udd.iter_packages_with_metadata(
@@ -314,6 +323,7 @@ async def main():
             removed = False
         else:
             removed = Version(sid_version) <= removals[name]
+
         packages.append((
                 name, branch_url, maintainer_email,
                 uploader_emails, sid_version,
