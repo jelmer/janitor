@@ -137,7 +137,7 @@ if __name__ == '__main__':
         from .publish import write_history
         return web.Response(
             content_type='text/html', text=await write_history(limit=limit),
-            headers={'Cache-Control': 'max-age=60'})
+            headers={'Cache-Control': 'max-age=10'})
 
     async def handle_queue(runner_url, request):
         limit = int(request.query.get('limit', '100'))
@@ -145,7 +145,7 @@ if __name__ == '__main__':
         return web.Response(
             content_type='text/html', text=await write_queue(
                 runner_url=runner_url, limit=limit),
-            headers={'Cache-Control': 'max-age=600'})
+            headers={'Cache-Control': 'max-age=10'})
 
     async def handle_result_codes(request):
         from .result_codes import (
