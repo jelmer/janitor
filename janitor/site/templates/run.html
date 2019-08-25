@@ -8,8 +8,8 @@
 
 <ul class="simple">
 <li>Package: <a class="reference external" href="..">{{ package }}</a> (<a href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a>)</li>
-{% if package.vcs_url %}
-<li>Branch URL: {{ display_branch_url(package.vcs_browse, package.vcs_url) }}</li>
+{% if vcs_url %}
+<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
 {% endif %}
 {% if result and 'upstream_branch_url' in result %}
 <li>Upstream Branch URL: {{ display_upstream_branch_url(result) }}</li>
@@ -32,7 +32,7 @@
 
 {{ local_command(command, package) }}
 
-{% if package.vcs_url %}
+{% if vcs_url %}
 {{ reschedule_button(suite, package, "Reschedule", "#commandResult") }}
 {{ reschedule_button(suite, package, "Reschedule (from scratch)", "#commandResult", data={'refresh': '1'}, id='reschedule-refresh') }}
 {% if branch_name %}

@@ -39,8 +39,10 @@
 <div class="section" id="recent-package-builds">
 <h2>Recent package builds</h2>
 <ul class="simple">
-{% for run in builds %}
+{% for run in runs %}
+{% if run.build_version %}
 <li>{{ run.build_version }} (for <a href="/{{ run.build_distribution }}">{{ run.build_distribution }}</a>)</li>
+{% endif %}
 {% endfor %}
 </ul>
 </div>
