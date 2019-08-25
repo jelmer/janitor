@@ -43,6 +43,7 @@ async def get_connection():
                     decoder=json.loads,
                     schema='pg_catalog'
                 )
+        await conn.set_type_codec('debversion', format='text', encoder=str, decoder=Version)
         yield conn
 
 
@@ -472,6 +473,25 @@ class QueueItem(object):
 
     def __hash__(self):
         return hash((type(self), self.id))
+
+
+async def get_queue_position(package, suite):
+    subquery = """
+SELECT
+    package,
+    suite,
+    row_number() OVER (ORDER BY priority ASC, id ASC) AS position,
+    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC) - estimated_duration AS wait_time
+FROM
+    queue
+ORDER BY priority ASC, id ASC
+"""
+    query = "SELECT position, wait_time FROM (" + subquery + ") AS q WHERE package = $1 AND suite = $2"
+    async with get_connection() as conn:
+        row = await conn.fetchrow(query, package, suite)
+        if row is None:
+            return (None, None)
+        return row
 
 
 async def iter_queue(limit=None):
@@ -1095,3 +1115,11 @@ ORDER BY timestamp DESC
     async with get_connection() as conn:
         for row in await conn.fetch(query):
             yield row
+
+
+async def update_removals(items):
+    if not items:
+        return
+    async with get_connection() as conn:
+        query = 'UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2'
+        await conn.executemany(query, items)

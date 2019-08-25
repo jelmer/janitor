@@ -109,6 +109,10 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
     kwargs['revision'] = run.revision
     kwargs['enumerate'] = enumerate
     kwargs['branch_url'] = run.branch_url
+    (queue_position, queue_wait_time) = await state.get_queue_position(
+        run.package, run.suite)
+    kwargs['queue_wait_time'] = queue_wait_time
+    kwargs['queue_position'] = queue_position
 
     package = await state.get_package(run.package)
     kwargs['vcs_browse'] = package.vcs_browse
