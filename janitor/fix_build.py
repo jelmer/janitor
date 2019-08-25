@@ -98,12 +98,13 @@ def add_build_dependency(tree, package, minimum_version=None,
     subprocess.check_call(
         ["dch", "Add missing dependency on %s." % desc],
         cwd=tree.basedir, stderr=subprocess.DEVNULL)
-    try:
-        debcommit(tree, committer=committer)
-    except PointlessCommit:
-        return False
-    else:
-        return True
+    with tree.lock_write():
+        try:
+            debcommit(tree, committer=committer)
+        except PointlessCommit:
+            return False
+        else:
+            return True
 
 
 def search_apt_file(path, regex=False):
