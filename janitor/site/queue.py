@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import ClientSession, ContentTypeError, ClientConnectorError
 import argparse
 import asyncio
 import sys
@@ -26,6 +27,27 @@ from janitor.site import env
 def lintian_tag_link(tag):
     return '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' % (
         tag, tag)
+
+
+class RunnerProcessingUnavailable(Exception):
+    """Raised when unable to get processing data for runner."""
+
+
+async def get_processing(runner_url):
+    url = urllib.parse.urljoin(runner_url, 'status')
+    async with ClientSession() as client:
+        try:
+            async with client.get(url) as resp:
+                if resp.status != 200:
+                    raise RunnerProcessingUnavailable(await resp.text())
+                answer = await resp.json()
+                return answer['processing']
+        except ContentTypeError as e:
+            raise RunnerProcessingUnavailable(
+                'publisher returned error %d' % e.code)
+        except ClientConnectorError:
+            raise RunnerProcessingUnavailable(
+                'unable to contact publisher')
 
 
 async def get_queue(only_command=None, limit=None):
@@ -71,10 +93,17 @@ async def get_queue(only_command=None, limit=None):
     return data
 
 
-async def write_queue(only_command=None, limit=None):
+async def write_queue(only_command=None, limit=None, runner_url=None):
     template = env.get_template('queue.html')
+    if runner_url:
+        try:
+            processing = await get_processing(runner_url)
+        except RunnerProcessingUnavailable as e:
+            # :(
+            processing = []
     return await template.render_async(
-        queue=await get_queue(only_command, limit))
+        queue=await get_queue(only_command, limit),
+        processing=processing)
 
 
 if __name__ == '__main__':

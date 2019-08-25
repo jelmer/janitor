@@ -81,6 +81,10 @@ if __name__ == '__main__':
         default='http://localhost:9912/',
         help='URL for publisher.')
     parser.add_argument(
+        '--runner-url', type=str,
+        default='http://localhost:9911/',
+        help='URL for runner.')
+    parser.add_argument(
         '--apt-location', type=str,
         default='https://s3.nl-ams.scw.cloud/debian-janitor/apt',
         help='Location to read apt files from (HTTP or local).')
@@ -135,11 +139,12 @@ if __name__ == '__main__':
             content_type='text/html', text=await write_history(limit=limit),
             headers={'Cache-Control': 'max-age=60'})
 
-    async def handle_queue(request):
+    async def handle_queue(runner_url, request):
         limit = int(request.query.get('limit', '100'))
         from .queue import write_queue
         return web.Response(
-            content_type='text/html', text=await write_queue(limit=limit),
+            content_type='text/html', text=await write_queue(
+                runner_url=runner_url, limit=limit),
             headers={'Cache-Control': 'max-age=600'})
 
     async def handle_result_codes(request):
@@ -383,7 +388,8 @@ if __name__ == '__main__':
             functools.partial(handle_new_upstream_candidates, suite))
 
     app.router.add_get('/cupboard/history', handle_history)
-    app.router.add_get('/cupboard/queue', handle_queue)
+    app.router.add_get('/cupboard/queue',
+        functools.partial(handle_queue, args.runner_url))
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
     app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
