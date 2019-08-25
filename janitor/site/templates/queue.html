@@ -4,6 +4,27 @@
 {% block body %}
 <div class="section" id="queue">
 <h1>Queue</h1>
+
+<div name="current">
+<h2>Current processing</h2>
+<table class="docutils" border="1">
+<thead valign="bottom">
+<tr class="row-odd">
+  <th class="head">Package</th>
+  <th class="head">Suite</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for pkg, suite in processing %}
+<tr>
+    <td>{{ pkg }}</td>
+    <td>{{ suite }}</td>
+</tr>
+{% endfor %}
+</div>
+
+<div name="queue">
+<h2>Coming up</h2>
 <table class="docutils" border="1">
 <thead valign="bottom">
 <tr class="row-odd">
@@ -24,4 +45,5 @@
 {% endfor %}
 </tbody>
 </table>
+</div>
 {% endblock %}
