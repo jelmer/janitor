@@ -61,6 +61,8 @@ async def generate_pkg_file(vcs_manager, package):
         if diff is None:
             return None
         return diff.decode('utf-8', 'replace')
+    (queue_position, queue_wait_time) = await state.get_queue_position(
+        package.name, SUITE)
     kwargs = {
         'package': package.name,
         'merge_proposals': merge_proposals,
@@ -87,6 +89,8 @@ async def generate_pkg_file(vcs_manager, package):
             candidate_context.split(' ') if candidate_context else None,
         'candidate_value': candidate_value,
         'branch_url': branch_url,
+        'queue_position': queue_position,
+        'queue_wait_time': queue_wait_time,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)

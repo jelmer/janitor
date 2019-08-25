@@ -15,6 +15,9 @@
 <li>Tags that might be fixable: {% for tag in candidate_tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}</li>
 <!-- Candidate value: {{ candidate_value }} -->
 {% endif %}
+{% if queue_position %}
+<li>Queue position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
+{% endif %}
 </ul>
 
 {% if merge_proposals %}
