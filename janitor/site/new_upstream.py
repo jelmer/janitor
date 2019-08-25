@@ -55,8 +55,9 @@ async def generate_pkg_file(package, suite):
         result = run.result
         branch_name = run.branch_name
         branch_url = run.branch_url
-    previous_runs = [x async for x in state.iter_previous_runs(
-        package.name, suite)]
+    previous_runs = state.iter_previous_runs(package.name, suite)
+    (queue_position, queue_wait_time) = await state.get_queue_position(
+        package.name, suite)
     kwargs = {
         'package': package.name,
         'merge_proposals': merge_proposals,
@@ -79,6 +80,8 @@ async def generate_pkg_file(package, suite):
         'branch_name': branch_name,
         'branch_url': branch_url,
         'run': run,
+        'queue_position': queue_position,
+        'queue_wait_time': queue_wait_time,
         }
     if run and run.build_version:
         kwargs['changes_name'] = changes_filename(
