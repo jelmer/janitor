@@ -279,7 +279,24 @@ async def handle_global_policy(request):
             headers={'Cache-Control': 'max-age=60'})
 
 
-def create_app(publisher_url, policy_config, vcs_manager):
+async def handle_runner_status(runner_url, status):
+    url = urllib.parse.urljoin(runner_url, 'status')
+    async with ClientSession() as client:
+        try:
+            async with client.get(url) as resp:
+                return web.json_response(
+                    await resp.json(), status=resp.status)
+        except ContentTypeError as e:
+            return web.json_response({
+                'reason': 'runner returned error %d' % e.code},
+                status=400)
+        except ClientConnectorError:
+            return web.json_response({
+                'reason': 'unable to contact runner'},
+                status=500)
+
+
+def create_app(publisher_url, runner_url, policy_config, vcs_manager):
     app = web.Application()
     app.router.add_get('/pkgnames', handle_packagename_list)
     app.router.add_get('/pkg', handle_package_list)
@@ -310,30 +327,11 @@ def create_app(publisher_url, policy_config, vcs_manager):
     app.router.add_get('/policy', handle_global_policy)
     app.router.add_post('/webhook', handle_webhook)
     app.router.add_get('/webhook', handle_webhook)
+    app.router.add_get(
+        '/runner-status', functools.partial(handle_runner_status, runner_url))
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)
     # TODO(jelmer): Build failures (iter_build_failures)
     # TODO(jelmer): Publish ready (iter_publish_ready)
     return app
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--host', type=str, help='Host to listen on')
-    parser.add_argument("--policy",
-                        help="Policy file to read.", type=str,
-                        default=os.path.join(
-                            os.path.dirname(__file__), '..', '..',
-                            'policy.conf'))
-    parser.add_argument('--publisher-url', type=str,
-                        default='http://localhost:9912/',
-                        help='URL for publisher.')
-    args = parser.parse_args()
-
-    with open(args.policy, 'r') as f:
-        policy_config = read_policy(f)
-
-    app = create_app(args.publisher_url, policy_config)
-
-    web.run_app(app, host=args.host)

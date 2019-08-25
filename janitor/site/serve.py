@@ -412,5 +412,6 @@ if __name__ == '__main__':
     app.http_client_session = ClientSession()
     setup_metrics(app)
     app.add_subapp(
-        '/api', create_api_app(args.publisher_url, policy_config, vcs_manager))
+        '/api', create_api_app(
+            args.publisher_url, args.runner_url, policy_config, vcs_manager))
     web.run_app(app, host=args.host, port=args.port)
