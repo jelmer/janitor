@@ -84,11 +84,12 @@ def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
                 code = 'unsupported-vcs-protocol'
         elif 'http code 429: Too Many Requests' in str(e):
             code = 'too-many-requests'
+        elif is_alioth_url(vcs_url):
+            code = 'hosted-on-alioth'
+        elif 'Unable to handle http code 401: Unauthorized' in str(e):
+            code = '401-unauthorized'
         else:
-            if is_alioth_url(vcs_url):
-                code = 'hosted-on-alioth'
-            else:
-                code = 'branch-unavailable'
+            code = 'branch-unavailable'
         raise BranchOpenFailure(code, str(e))
     except BranchMissing as e:
         if str(e).startswith('Branch does not exist: Not a branch: '
