@@ -12,15 +12,20 @@
 <tr class="row-odd">
   <th class="head">Package</th>
   <th class="head">Suite</th>
+  <th class="head">Estimated Duration</th>
+  <th class="head">Start Time </th>
 </tr>
 </thead>
 <tbody valign="top">
-{% for pkg, suite in processing %}
+{% for entry in processing %}
 <tr>
-    <td>{{ pkg }}</td>
-    <td>{{ suite }}</td>
+    <td>{{ entry['package'] }}</td>
+    <td>{{ entry['suite'] }}</td>
+    <td>{{ format_duration(entry['estimated_duration']) }}</td>
+    <td>{{ format_timestamp(entry['start_time']) }}</td>
 </tr>
 {% endfor %}
+</table>
 </div>
 
 <div name="queue">

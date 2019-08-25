@@ -19,6 +19,8 @@ from aiohttp import ClientSession, ContentTypeError, ClientConnectorError
 import argparse
 import asyncio
 import sys
+import urllib
+from datetime import datetime, timedelta
 
 from janitor import state
 from janitor.site import env
@@ -41,13 +43,21 @@ async def get_processing(runner_url):
                 if resp.status != 200:
                     raise RunnerProcessingUnavailable(await resp.text())
                 answer = await resp.json()
-                return answer['processing']
         except ContentTypeError as e:
             raise RunnerProcessingUnavailable(
                 'publisher returned error %d' % e.code)
         except ClientConnectorError:
             raise RunnerProcessingUnavailable(
                 'unable to contact publisher')
+        else:
+            for entry in answer['processing']:
+                if entry.get('estimated_duration'):
+                    entry['estimated_duration'] = timedelta(
+                        seconds=entry['estimated_duration'])
+                    if entry.get('start_time'):
+                        entry['start_time'] = datetime.fromisoformat(
+                            entry['start_time'])
+                yield entry
 
 
 async def get_queue(only_command=None, limit=None):
