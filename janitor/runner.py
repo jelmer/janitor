@@ -430,7 +430,7 @@ class QueueProcessor(object):
     def __init__(
             self, worker_kind, build_command, pre_check=None,
             post_check=None,
-            dry_run=False, incoming=None, log_dir=None,
+            dry_run=False, incoming=None, logfile_manager=None,
             debsign_keyid=None, vcs_manager=None,
             concurrency=1, use_cached_only=False):
         """Create a queue processor.
@@ -495,12 +495,11 @@ class QueueProcessor(object):
 
     async def process(self):
         todo = set()
-        async for item in state.iter_queue(limit=concurrency):
+        async for item in state.iter_queue(limit=self.concurrency):
             todo.add(self.process_queue_item(item))
 
         def handle_sigterm():
-            global concurrency
-            concurrency = None
+            self.concurrency = None
             note('Received SIGTERM; not starting new jobs.')
 
         loop = asyncio.get_event_loop()
@@ -516,24 +515,26 @@ class QueueProcessor(object):
                 for task in done:
                     task.result()
                 todo = pending
-                if concurrency:
+                if self.concurrency:
                     for i in enumerate(done):
-                        async for item in state.iter_queue(limit=concurrency):
+                        async for item in state.iter_queue(limit=self.concurrency):
                             if item in self.started:
                                 continue
-                            todo.add(process_queue_item(item))
+                            todo.add(self.process_queue_item(item))
         finally:
             loop.remove_signal_handler(signal.SIGTERM)
 
 
 async def handle_status(queue_processor, request):
     return web.json_response({
-        'processing': {
+        'processing': [{
             'package': item.package,
             'suite': item.suite,
-            'estimated_duration': item.estimated_duration.total_seconds(),
-            'start_time': start_time,
-        } for item, start_time in queue_processor.started.items(),
+            'estimated_duration':
+                item.estimated_duration.total_seconds()
+                if item.estimated_duration else None,
+            'start_time': start_time.isoformat(),
+        } for item, start_time in queue_processor.started.items()],
         'concurrency': queue_processor.concurrency,
     })
 
