@@ -321,13 +321,14 @@ async def main():
     await state.store_packages(packages)
 
     CANDIDATE_FNS = [
-        udd.iter_unchanged_candidates(args.packages),
-        udd.iter_lintian_fixes_candidates(args.packages, tags),
-        udd.iter_fresh_releases_candidates(args.packages),
-        udd.iter_fresh_snapshots_candidates(args.packages)]
+        ('unchanged', udd.iter_unchanged_candidates(args.packages)),
+        ('lintian-fixes', udd.iter_lintian_fixes_candidates(args.packages, tags)),
+        ('fresh-releases', udd.iter_fresh_releases_candidates(args.packages)),
+        ('fresh-snapshots', udd.iter_fresh_snapshots_candidates(args.packages))]
 
-    for candidate_fn in CANDIDATE_FNS:
+    for suite, candidate_fn in CANDIDATE_FNS:
         candidates = []
+        trace.note('Adding candidates for %s.', suite)
         async for (package, suite, command, context, value) in candidate_fn:
             candidates.append((package, suite, command, context, value))
         await state.store_candidates(candidates)
