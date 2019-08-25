@@ -16,10 +16,7 @@ async def main(result_code):
             continue
         packages[package.name] = package
 
-    results = await state.iter_last_runs(result_code)
-    print('%d items to reschedule.' % len(results))
-
-    for (package, suite, command, id, description, start_time,
+    async for (package, suite, command, id, description, start_time,
             duration, branch_url) in results:
         if package not in packages:
             continue
