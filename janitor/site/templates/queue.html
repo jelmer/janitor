@@ -21,7 +21,7 @@
 <tr>
     <td>{{ entry['package'] }}</td>
     <td>{{ entry['suite'] }}</td>
-    <td>{{ format_duration(entry['estimated_duration']) }}</td>
+    <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_timestamp(entry['start_time']) }}</td>
 </tr>
 {% endfor %}
