@@ -426,7 +426,7 @@ async def export_stats():
 
 async def process_queue(
         worker_kind, build_command,
-        pre_check=None, post_check=None,
+        started, pre_check=None, post_check=None,
         dry_run=False, incoming=None, log_dir=None,
         debsign_keyid=None, vcs_manager=None,
         concurrency=1, use_cached_only=False):
@@ -437,7 +437,7 @@ async def process_queue(
       build_command: The command used to build packages
       pre_check: Function to run prior to modifying a package
       post_check: Function to run after modifying a package
-      incoming: directory to copy debian pakcages to
+      incoming: directory to copy debian packages to
       log_dir: Directory to cop
     """
     logfile_manager = get_log_manager(log_dir)
@@ -482,7 +482,7 @@ async def process_queue(
     todo = set()
     async for item in state.iter_queue(limit=concurrency):
         todo.add(process_queue_item(item))
-        started.add(item.id)
+        started.add(item)
 
     def handle_sigterm():
         global concurrency
@@ -505,17 +505,24 @@ async def process_queue(
             if concurrency:
                 for i in enumerate(done):
                     async for item in state.iter_queue(limit=concurrency):
-                        if item.id in started:
+                        if item in started:
                             continue
                         todo.add(process_queue_item(item))
-                        started.add(item.id)
+                        started.add(item)
     finally:
         loop.remove_signal_handler(signal.SIGTERM)
 
 
-async def run_web_server(listen_addr, port):
+async def handle_status(started, request):
+    return web.json_response({
+        'processing': [item.package for item in started]
+    })
+
+
+async def run_web_server(listen_addr, port, started):
     app = web.Application()
     setup_metrics(app)
+    app.router.add_get('/status', functools.partial(handle_status, started))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -581,6 +588,7 @@ def main(argv=None):
         loop.create_task(process_queue(
             args.worker,
             args.build_command,
+            started,
             args.pre_check, args.post_check,
             args.dry_run, args.incoming, args.log_dir,
             args.debsign_keyid,
@@ -589,7 +597,8 @@ def main(argv=None):
             args.use_cached_only)),
         loop.create_task(export_queue_length()),
         loop.create_task(export_stats()),
-        loop.create_task(run_web_server(args.listen_address, args.port)),
+        loop.create_task(run_web_server(
+            args.listen_address, args.port, started)),
         ))
 
 
