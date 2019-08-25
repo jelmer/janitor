@@ -34,7 +34,8 @@ pool = None
 async def get_connection():
     global pool
     if pool is None:
-        pool = await asyncpg.create_pool(DEFAULT_URL)
+        pool = await asyncpg.create_pool(
+            database="janitor")
 
     async with pool.acquire() as conn:
         await conn.set_type_codec(
@@ -481,7 +482,7 @@ SELECT
     package,
     suite,
     row_number() OVER (ORDER BY priority ASC, id ASC) AS position,
-    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC) - estimated_duration AS wait_time
+    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC) - coalesce(estimated_duration, interval '0') AS wait_time
 FROM
     queue
 ORDER BY priority ASC, id ASC
@@ -491,7 +492,7 @@ ORDER BY priority ASC, id ASC
         row = await conn.fetchrow(query, package, suite)
         if row is None:
             return (None, None)
-        return row
+        return (row[0], row[1])
 
 
 async def iter_queue(limit=None):
@@ -1083,16 +1084,6 @@ ORDER BY run.finish_time DESC
         if row:
             return Run.from_row(row)
         return None
-
-
-async def get_queue_position(package, suite):
-    async with get_connection() as conn:
-        query = """
-select idx from (select package, suite, priority,
-row_number() over (order by priority asc, id asc) idx from queue) as f where
-package = $1 and suite = $2
-"""
-        return await conn.fetchval(query, package, suite)
 
 
 async def get_proposal_revision(url):
