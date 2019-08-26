@@ -262,8 +262,13 @@ def fix_missing_pkg_config(tree, error, committer=None):
 
 
 def fix_missing_command(tree, error, committer=None):
-    package = get_package_for_paths(
-        [os.path.join('/usr/bin', error.command)])
+    if os.path.isabs(error.command):
+        paths = [error.command]
+    else:
+        paths = [
+            os.path.join(dirname, error.command)
+            for dirname in ['/usr/bin']]
+    package = get_package_for_paths(paths)
     if package is None:
         return False
     return add_build_dependency(tree, package, committer=committer)
