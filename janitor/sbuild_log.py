@@ -314,7 +314,7 @@ class MissingCHeader(object):
         return "Missing C Header: %s" % self.header
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.header)
+        return "%s(%r)" % (type(self).__name__, self.header)
 
 
 def c_header_missing(m):
