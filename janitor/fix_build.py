@@ -298,7 +298,8 @@ def fix_missing_perl_file(tree, error, committer=None):
 def fix_missing_node_file(tree, error, committer=None):
     paths = [
         '/usr/share/nodejs/.*/node_modules/%s/package.json' % error.module,
-        '/usr/lib/nodejs/%s/package.json' % error.module]
+        '/usr/lib/nodejs/%s/package.json' % error.module,
+        '/usr/share/nodejs/%s/package.json' % error.module]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
         warning('no node package found for %s.',
