@@ -180,6 +180,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'configure: error: Package requirements '
             '(apertium-3.2 >= 3.2.0) were not met:'],
             1, MissingPkgConfig('apertium-3.2', '3.2.0'))
+        self.run_test([
+            'meson.build:10:0: ERROR: Dependency "gssdp-1.2" not '
+            'found, tried pkgconfig'], 1, MissingPkgConfig('gssdp-1.2'))
 
     def test_dh_with_order(self):
         self.run_test([

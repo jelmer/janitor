@@ -32,9 +32,6 @@ async def reprocess_run(package, log_id, result_code, description):
             package, log_id, 'build.log')
     except FileNotFoundError:
         return
-    except aiohttp.client_exceptions.ServerDisconnectedError as e:
-        print(e)
-        return
     failure = worker_failure_from_sbuild_log(build_logf)
     if failure.error:
         new_code = '%s-%s' % (failure.stage, failure.error.kind)

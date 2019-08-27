@@ -43,7 +43,8 @@ async def get_connection():
                     decoder=json.loads,
                     schema='pg_catalog'
                 )
-        await conn.set_type_codec('debversion', format='text', encoder=str, decoder=Version)
+        await conn.set_type_codec(
+            'debversion', format='text', encoder=str, decoder=Version)
         yield conn
 
 
@@ -481,12 +482,14 @@ SELECT
     package,
     suite,
     row_number() OVER (ORDER BY priority ASC, id ASC) AS position,
-    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC) - coalesce(estimated_duration, interval '0') AS wait_time
+    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC)
+        - coalesce(estimated_duration, interval '0') AS wait_time
 FROM
     queue
 ORDER BY priority ASC, id ASC
 """
-    query = "SELECT position, wait_time FROM (" + subquery + ") AS q WHERE package = $1 AND suite = $2"
+    query = ("SELECT position, wait_time FROM (" + subquery + ") AS q "
+             "WHERE package = $1 AND suite = $2")
     async with get_connection() as conn:
         row = await conn.fetchrow(query, package, suite)
         if row is None:
@@ -590,9 +593,9 @@ ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
 
 async def set_proposal_revision(url, revision):
     async with get_connection() as conn:
-        await conn.execute("""
-    UPDATE merge_proposal SET revision = $1 WHERE url = $2""",
-    revision, url)
+        await conn.execute(
+            "UPDATE merge_proposal SET revision = $1 WHERE url = $2",
+            revision, url)
 
 
 async def queue_length(minimum_priority=None):
@@ -739,8 +742,9 @@ SELECT DISTINCT ON (package)
 FROM
   run
 WHERE suite = $1 AND package = ANY($2::text[]) AND NOT EXISTS (
-    SELECT FROM merge_proposal WHERE revision = run.revision AND status IN ('closed', 'merged'))
-AND result_code != 'nothing-to-do'
+    SELECT FROM merge_proposal WHERE
+        revision = run.revision AND status IN ('closed', 'merged'))
+        AND result_code != 'nothing-to-do'
 ORDER BY package, command, result_code = 'success' DESC, start_time DESC
 """
     async with get_connection() as conn:
@@ -1113,5 +1117,7 @@ async def update_removals(items):
     if not items:
         return
     async with get_connection() as conn:
-        query = 'UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2'
+        query = """\
+UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2
+"""
         await conn.executemany(query, items)

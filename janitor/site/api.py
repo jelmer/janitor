@@ -1,13 +1,10 @@
 #!/usr/bin/python3
 
-import argparse
 from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import functools
-import json
-import os
 import urllib.parse
 
-from janitor.policy import read_policy, apply_policy
+from janitor.policy import apply_policy
 from janitor import state, SUITES
 from . import env, get_run_diff
 

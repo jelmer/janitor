@@ -19,7 +19,7 @@ async def main(result_code):
         packages[package.name] = package
 
     async for (package, suite, command, id, description, start_time,
-            duration, branch_url) in state.iter_last_runs(result_code):
+               duration, branch_url) in state.iter_last_runs(result_code):
         if package not in packages:
             continue
         if packages[package].branch_url is None:

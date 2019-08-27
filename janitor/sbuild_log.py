@@ -400,6 +400,10 @@ def pkg_config_missing(m):
     return None
 
 
+def meson_pkg_config_missing(m):
+    return MissingPkgConfig(m.group(3))
+
+
 class DhWithOrderIncorrect(object):
 
     kind = 'debhelper-argument-order'
@@ -474,7 +478,7 @@ class MissingPerlFile(object):
 
     def __str__(self):
         return "Missing Perl file: %s (inc: %r)" % (
-            self.module, self.inc)
+            self.filename, self.inc)
 
     def __repr__(self):
         return "%s(%r, %r)" % (type(self).__name__, self.filename, self.inc)
@@ -625,6 +629,8 @@ build_failure_regexps = [
     (r'make\[\d+\]: ([^\.].*): Command not found', command_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
+    ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
+     'tried pkgconfig', meson_pkg_config_missing),
     (r'dh: Unknown sequence --with '
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
