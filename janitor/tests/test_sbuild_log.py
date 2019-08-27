@@ -174,6 +174,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'make[1]: docker: Command not found'], 1,
             MissingCommand('docker'))
         self.run_test(['make[1]: ./docker: Command not found'], None)
+        self.run_test([
+            'make: dh_elpa: Command not found'], 1, MissingCommand('dh_elpa'))
 
     def test_pkg_config_missing(self):
         self.run_test([

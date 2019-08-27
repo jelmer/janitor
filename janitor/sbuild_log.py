@@ -627,6 +627,7 @@ build_failure_regexps = [
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
      command_missing),
     (r'make\[\d+\]: ([^\.].*): Command not found', command_missing),
+    (r'make: ([^\.].*): Command not found', command_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
