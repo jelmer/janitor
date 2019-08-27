@@ -52,6 +52,7 @@ from .sbuild_log import (
     MissingPerlFile,
     MissingPerlModule,
     MissingXmlEntity,
+    MissingNodeModule,
     SbuildFailure,
     )
 
@@ -294,6 +295,16 @@ def fix_missing_perl_file(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_node_file(tree, error, committer=None):
+    paths = ['/usr/share/nodejs/.*/node_modules/%s/package.json' % error.module]
+    package = get_package_for_paths(paths, regex=True)
+    if package is None:
+        warning('no node package found for %s.',
+                error.module)
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 def fix_missing_xml_entity(tree, error, committer=None):
     # Ideally we should be using the XML catalog for this, but hardcoding
     # a few URLs will do for now..
@@ -324,6 +335,7 @@ FIXERS = [
     (MissingPerlFile, fix_missing_perl_file),
     (MissingPerlModule, fix_missing_perl_file),
     (MissingXmlEntity, fix_missing_xml_entity),
+    (MissingNodeModule, fix_missing_node_module),
 ]
 
 
