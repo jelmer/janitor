@@ -336,7 +336,6 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
-
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
@@ -389,7 +388,7 @@ if __name__ == '__main__':
 
     app.router.add_get('/cupboard/history', handle_history)
     app.router.add_get('/cupboard/queue',
-        functools.partial(handle_queue, args.runner_url))
+                       functools.partial(handle_queue, args.runner_url))
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
     app.router.add_get('/cupboard/maintainer', handle_maintainer_list)

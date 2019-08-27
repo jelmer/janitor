@@ -518,7 +518,8 @@ class QueueProcessor(object):
                 todo = pending
                 if self.concurrency:
                     for i in enumerate(done):
-                        async for item in state.iter_queue(limit=self.concurrency):
+                        async for item in state.iter_queue(
+                                limit=self.concurrency):
                             if item in self.started:
                                 continue
                             todo.add(self.process_queue_item(item))
@@ -545,7 +546,8 @@ async def handle_status(queue_processor, request):
 async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
     setup_metrics(app)
-    app.router.add_get('/status', functools.partial(handle_status, queue_processor))
+    app.router.add_get(
+        '/status', functools.partial(handle_status, queue_processor))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)

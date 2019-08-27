@@ -171,7 +171,8 @@ sources.vcs_url != '' AND \
 sources.release = 'sid'
 """
         for row in await self._conn.fetch(query, *args):
-            yield (row[0], 'unchanged', ['just-build'], None, DEFAULT_VALUE_UNCHANGED)
+            yield (row[0], 'unchanged', ['just-build'], None,
+                   DEFAULT_VALUE_UNCHANGED)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -290,8 +291,8 @@ async def main():
     trace.note('Updating package metadata.')
     packages = []
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-         vcs_browser, sid_version) in udd.iter_packages_with_metadata(
-                 args.packages):
+               vcs_browser, sid_version) in udd.iter_packages_with_metadata(
+                   args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
         if is_alioth_url(vcs_url):
@@ -299,7 +300,8 @@ async def main():
             if not salsa_url:
                 salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
             if salsa_url:
-                trace.note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
+                trace.note('Converting alioth URL: %s -> %s', vcs_url,
+                           salsa_url)
                 vcs_type = 'Git'
                 vcs_url = salsa_url
                 vcs_browser = determine_salsa_browser_url(salsa_url)
@@ -312,7 +314,8 @@ async def main():
 
         if vcs_type is not None:
             try:
-                branch_url = convert_debian_vcs_url(vcs_type.capitalize(), vcs_url)
+                branch_url = convert_debian_vcs_url(
+                    vcs_type.capitalize(), vcs_url)
             except ValueError as e:
                 trace.note('%s: %s', name, e)
                 branch_url = None
@@ -332,9 +335,11 @@ async def main():
 
     CANDIDATE_FNS = [
         ('unchanged', udd.iter_unchanged_candidates(args.packages)),
-        ('lintian-fixes', udd.iter_lintian_fixes_candidates(args.packages, tags)),
+        ('lintian-fixes',
+         udd.iter_lintian_fixes_candidates(args.packages, tags)),
         ('fresh-releases', udd.iter_fresh_releases_candidates(args.packages)),
-        ('fresh-snapshots', udd.iter_fresh_snapshots_candidates(args.packages))]
+        ('fresh-snapshots',
+         udd.iter_fresh_snapshots_candidates(args.packages))]
 
     for suite, candidate_fn in CANDIDATE_FNS:
         candidates = []

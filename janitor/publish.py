@@ -42,7 +42,6 @@ from silver_platter.proposal import (
     push_derived_changes,
     find_existing_proposed,
     get_hoster,
-    hosters,
     NoSuchProject,
     PermissionDenied,
     UnsupportedHoster,
@@ -530,7 +529,8 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
             dry_run=dry_run, allow_create_proposal=True)
     except PublishFailure as e:
         await state.store_publish(
-            run.package, run.branch_name, run.main_branch_revision.decode('utf-8'),
+            run.package, run.branch_name,
+            run.main_branch_revision.decode('utf-8'),
             run.revision.decode('utf-8'), mode, e.code, e.description,
             None)
         return web.json_response(
@@ -570,7 +570,8 @@ async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
         await check_existing(rate_limiter, vcs_manager, dry_run)
         await asyncio.sleep(interval)
         if auto_publish:
-            await publish_pending_new(rate_limiter, policy, vcs_manager, dry_run)
+            await publish_pending_new(
+                rate_limiter, policy, vcs_manager, dry_run)
 
 
 def is_conflicted(mp):
@@ -596,7 +597,8 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
             except (BranchMissing, BranchUnavailable):
                 pass
             else:
-                await state.set_proposal_revision(mp.url, revision.decode('utf-8'))
+                await state.set_proposal_revision(
+                    mp.url, revision.decode('utf-8'))
         if status != 'open':
             continue
         maintainer_email = await state.get_maintainer_email_for_proposal(
@@ -646,9 +648,10 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                 note('%s: Updating merge proposal failed: %s (%s)',
                      mp.url, e.code, e.description)
                 await state.store_publish(
-                    run.package, branch_name, run.main_branch_revision.decode('utf-8'),
-                    run.revision.decode('utf-8'), MODE_PROPOSE, e.code, e.description,
-                    mp.url)
+                    run.package, branch_name,
+                    run.main_branch_revision.decode('utf-8'),
+                    run.revision.decode('utf-8'), MODE_PROPOSE, e.code,
+                    e.description, mp.url)
                 break
             else:
                 await state.store_publish(

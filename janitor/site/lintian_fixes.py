@@ -138,7 +138,8 @@ async def generate_developer_page(developer):
     ready_changes = []
     runs = {}
     merge_proposals = []
-    async for run in state.iter_last_unmerged_successes(suite=SUITE, packages=packages):
+    async for run in state.iter_last_unmerged_successes(
+            suite=SUITE, packages=packages):
         runs[run.package] = run
         if run.package in candidates:
             del candidates[run.package]
