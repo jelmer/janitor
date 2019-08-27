@@ -295,7 +295,7 @@ def fix_missing_perl_file(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
-def fix_missing_node_file(tree, error, committer=None):
+def fix_missing_node_module(tree, error, committer=None):
     paths = [
         '/usr/share/nodejs/.*/node_modules/%s/package.json' % error.module,
         '/usr/lib/nodejs/%s/package.json' % error.module,
