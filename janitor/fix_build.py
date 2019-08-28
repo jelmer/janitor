@@ -54,6 +54,7 @@ from .sbuild_log import (
     MissingXmlEntity,
     MissingNodeModule,
     SbuildFailure,
+    DhAddonLoadFailure,
     )
 
 
@@ -308,6 +309,15 @@ def fix_missing_node_module(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_dh_addon(tree, error, committer=None):
+    paths = [os.path.join('/usr/share/perl5', error.path)]
+    package = get_package_for_paths(paths)
+    if package is None:
+        warning('no package for debhelper addon %s', error.name)
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 def fix_missing_xml_entity(tree, error, committer=None):
     # Ideally we should be using the XML catalog for this, but hardcoding
     # a few URLs will do for now..
@@ -339,6 +349,7 @@ FIXERS = [
     (MissingPerlModule, fix_missing_perl_file),
     (MissingXmlEntity, fix_missing_xml_entity),
     (MissingNodeModule, fix_missing_node_module),
+    (DhAddonLoadFailure, fix_missing_dh_addon),
 ]
 
 
