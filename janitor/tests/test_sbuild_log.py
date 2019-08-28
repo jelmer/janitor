@@ -34,6 +34,7 @@ from janitor.sbuild_log import (
     MissingXmlEntity,
     DhMissingUninstalled,
     DhUntilUnsupported,
+    DhAddonLoadFailure,
     NoSpaceOnDevice,
     DhWithOrderIncorrect,
     )
@@ -284,6 +285,14 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             1, CcacheError(
                 'Failed to create directory '
                 '/sbuild-nonexistent/.ccache/tmp: Permission denied'))
+
+    def test_dh_addon_load_failure(self):
+        self.run_test([
+            'dh: unable to load addon nodejs: '
+            'Debian/Debhelper/Sequence/nodejs.pm did not return a true '
+            'value at (eval 11) line 1.'], 1,
+            DhAddonLoadFailure(
+                'nodejs', 'Debian/Debhelper/Sequence/nodejs.pm'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):

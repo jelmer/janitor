@@ -524,6 +524,30 @@ def dh_until_unsupported(m):
     return DhUntilUnsupported()
 
 
+class DhAddonLoadFailure(object):
+
+    kind = 'dh-addon-load-failure'
+
+    def __init__(self, name, path):
+        self.name = name
+        self.path = path
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+                self.name == other.name and \
+                self.path == other.path
+
+    def __str__(self):
+        return "dh addon loading failed: %s" % self.name
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self. name, self.path)
+
+
+def dh_addon_load_failure(m):
+    return DhAddonLoadFailure(m.group(1), m.group(2))
+
+
 class DhMissingUninstalled(object):
 
     kind = 'dh-missing-uninstalled'
@@ -632,7 +656,7 @@ build_failure_regexps = [
      pkg_config_missing),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
      'tried pkgconfig', meson_pkg_config_missing),
-    (r'dh: Unknown sequence --with '
+    (r'dh: Unknown sequence --(.*) '
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
@@ -653,8 +677,14 @@ build_failure_regexps = [
     (r'ccache: error: (.*)', ccache_error),
     (r'dh: The --until option is not supported any longer \(#932537\). '
      r'Use override targets instead.', dh_until_unsupported),
+    (r'dh: unable to load addon (.*): (.*) did not return a true '
+     r'value at \(eval 11\) line ([0-9]+).', dh_addon_load_failure),
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
+    (r'dh_install: Please use dh_missing '
+     '--list-missing/--fail-missing instead', None),
+    (r'dh_auto_clean: Please use the third-party "pybuild" build system '
+     'instead of python-distutils', None),
     (r'configure: error: (.*)', None),
     # A Python error, but not likely to be actionable. The previous
     # line will have the actual line that failed.
