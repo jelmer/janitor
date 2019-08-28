@@ -35,6 +35,7 @@ from lintian_brush.control import (
     ensure_minimum_version,
     update_control,
     )
+from lintian_brush.reformatting import FormattingUnpreservable
 from silver_platter.debian import (
     debcommit,
     DEFAULT_BUILDER,
@@ -86,10 +87,15 @@ def add_build_dependency(tree, package, minimum_version=None,
         if binary["Package"] == package:
             raise CircularDependency(package)
 
-    update_control(
-        source_package_cb=add_build_dep,
-        binary_package_cb=check_binary_pkg,
-        path=os.path.join(tree.basedir, 'debian/control'))
+    try:
+        update_control(
+            source_package_cb=add_build_dep,
+            binary_package_cb=check_binary_pkg,
+            path=os.path.join(tree.basedir, 'debian/control'))
+    except FormattingUnpreservable as e:
+        note('Unable to edit %s in a way that preserves formatting.',
+             e.path)
+        return False
 
     if minimum_version:
         desc = "%s (>= %s)" % (package, minimum_version)
