@@ -61,6 +61,7 @@ from silver_platter.debian.upstream import (
     UScanError,
     UpstreamVersionMissingInUpstreamBranch,
     UpstreamMetadataSyntaxError,
+    MissingChangelogError,
 )
 
 from silver_platter.utils import (
@@ -299,6 +300,10 @@ class NewUpstreamWorker(SubWorker):
                 error_description = 'Syntax error in upstream metadata: %s' % (
                         e.error)
                 error_code = 'upstream-metadata-syntax-error'
+                raise WorkerFailure(error_code, error_description)
+            except MissingChangelogError as e:
+                error_description = str(e)
+                error_code = 'missing-changelog'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
