@@ -62,6 +62,7 @@ from silver_platter.debian.upstream import (
     UpstreamVersionMissingInUpstreamBranch,
     UpstreamMetadataSyntaxError,
     MissingChangelogError,
+    MissingUpstreamTarball,
 )
 
 from silver_platter.utils import (
@@ -304,6 +305,10 @@ class NewUpstreamWorker(SubWorker):
             except MissingChangelogError as e:
                 error_description = str(e)
                 error_code = 'missing-changelog'
+                raise WorkerFailure(error_code, error_description)
+            except MissingUpstreamTarball as e:
+                error_description = str(e)
+                error_code = 'missing-upstream-tarball'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
