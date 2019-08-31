@@ -262,8 +262,9 @@ if __name__ == '__main__':
     async def handle_lintian_fixes_pkg(request):
         from .lintian_fixes import generate_pkg_file
         pkg = request.match_info['pkg']
+        run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(vcs_manager, pkg)
+            text = await generate_pkg_file(vcs_manager, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
@@ -364,6 +365,8 @@ if __name__ == '__main__':
         handle_apt_file)
     app.router.add_get(
         '/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
+    app.router.add_get(
+        '/lintian-fixes/pkg/{pkg}/{run_id}', handle_lintian_fixes_pkg)
     app.router.add_get(
         '/lintian-fixes/by-tag/', handle_lintian_fixes_tag_list)
     app.router.add_get(
