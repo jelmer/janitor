@@ -15,15 +15,21 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(vcs_manager, package):
+async def generate_pkg_file(vcs_manager, package, run_id=None):
     try:
         package = await state.get_package(name=package)
     except IndexError:
         raise KeyError(package)
-    merge_proposals = [
-        (url, status) for (unused_package, url, status) in
-        await state.iter_proposals(package.name, suite=SUITE)]
-    run = await state.get_last_unmerged_success(package.name, SUITE)
+    if run_id is not None:
+        run = state.get_run(run_id)
+        if not run:
+            raise KeyError(run_id)
+        merge_proposals = []
+    else:
+        run = await state.get_last_unmerged_success(package.name, SUITE)
+        merge_proposals = [
+            (url, status) for (unused_package, url, status) in
+            await state.iter_proposals(package.name, suite=SUITE)]
     if run is None:
         # No runs recorded
         command = None
