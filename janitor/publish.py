@@ -69,7 +69,10 @@ from .policy import (
     )
 from .prometheus import setup_metrics
 from .trace import note, warning
-from .vcs import LocalVcsManager
+from .vcs import (
+    LocalVcsManager,
+    get_run_diff,
+    )
 
 
 JANITOR_BLURB = """
@@ -492,6 +495,13 @@ async def publish_pending_new(rate_limiter, policy, vcs_manager,
             proposal.url if proposal else None)
 
 
+async def diff_request(vcs_manager, request):
+    run_id = request.match_info['run_id']
+    run = await state.get_run(run_id)
+    diff = get_run_diff(vcs_manager, run)
+    return web.Response(diff, content_type='text/x-diff')
+
+
 async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     package = request.match_info['package']
     suite = request.match_info['suite']
@@ -559,6 +569,9 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
     app.router.add_post(
         "/{suite}/{package}/publish",
         functools.partial(publish_request, rate_limiter, dry_run, vcs_manager))
+    app.router.add_post(
+        "/diff/{run_id}",
+        functools.partial(diff_request, vcs_manager))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)

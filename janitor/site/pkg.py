@@ -20,12 +20,12 @@ from janitor.site import (
     env,
     get_build_architecture,
     open_changes_file,
-    get_run_diff,
     highlight_diff,
 )
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
+    get_run_diff,
     get_vcs_abbreviation,
 )
 

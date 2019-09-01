@@ -194,16 +194,25 @@ async def handle_queue(request):
 async def handle_diff(vcs_manager, request):
     package = request.match_info.get('package')
     run_id = request.match_info['run_id']
-    try:
-        run = [
-            r async for r in state.iter_runs(
-                package=package, run_id=run_id)][0]
-    except IndexError:
-        raise web.HTTPNotFound()
-    text = get_run_diff(vcs_manager, run)
-    return web.Response(
-            content_type='text/x-diff', body=text,
-            headers={'Cache-Control': 'max-age=3600'})
+    url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
+    async with ClientSession() as client:
+        try:
+            async with client.get(url) as resp:
+                if resp.status == 200:
+                    return web.Response(
+                        await resp.data(),
+                        content_type='text/x-diff',
+                        headers={'Cache-Control': 'max-age=3600'})
+                else:
+                    return web.Response(await resp.data(), status=400)
+        except ContentTypeError as e:
+            return web.Response(
+                'publisher returned error %d' % e.code,
+                status=400)
+        except ClientConnectorError:
+            return web.json_response(
+                'unable to contact publisher',
+                status=400)
 
 
 async def handle_run(request):
@@ -312,6 +321,7 @@ def create_app(publisher_url, runner_url, policy_config, vcs_manager):
     app.router.add_get('/queue', handle_queue)
     app.router.add_get('/run', handle_run)
     app.router.add_get('/run/{run_id}', handle_run)
+    app.router.add_get('/run/{run_id}/diff', handle_diff)
     app.router.add_get(
         '/run/{run_id}/diff', functools.partial(handle_diff, vcs_manager))
     app.router.add_get('/pkg/{package}/run', handle_run)
