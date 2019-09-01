@@ -1,6 +1,6 @@
-all: janitor/site/_static/pygments.css janitor/policy_pb2.py
+all: janitor/site/_static/pygments.css janitor/policy_pb2.py janitor/config_pb2.py
 
-janitor/policy_pb2.py: janitor/policy.proto
+janitor/%_pb2.py: janitor/%.proto
 	protoc --python_out=. $<
 
 check:

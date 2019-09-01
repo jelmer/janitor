@@ -1,0 +1,11 @@
+syntax = "proto2";
+
+package janitor;
+
+message Config {
+  optional string vcs_location = 1;
+
+  optional string logs_location = 2;
+
+  optional string apt_location = 3;
+}
