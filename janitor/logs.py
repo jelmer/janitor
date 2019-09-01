@@ -124,7 +124,7 @@ class GCSLogFilemanager(LogFileManager):
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
     def _get_object_name(self, pkg, run_id, name):
-        return 'logs/%s/%s/%s.gz' % (pkg, run_id, name)
+        return '%s/%s/%s.gz' % (pkg, run_id, name)
 
     async def has_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)
