@@ -167,6 +167,8 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
             cached_logs[name] = None
 
     async def has_log(name):
+        if run.logfilenames is not None:
+            return name in run.logfilenames
         if name not in cached_logs:
             await _cache_log(name)
         return cached_logs[name] is not None
