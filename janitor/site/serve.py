@@ -220,7 +220,8 @@ if __name__ == '__main__':
                    for x in state.iter_runs(run_id=run_id, package=pkg)][0]
         except IndexError:
             raise web.HTTPNotFound(text='No run with id %r' % run_id)
-        text = await generate_run_file(logfile_manager, vcs_manager, run)
+        text = await generate_run_file(
+            logfile_manager, vcs_manager, run, args.publisher_url)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=3600'})
