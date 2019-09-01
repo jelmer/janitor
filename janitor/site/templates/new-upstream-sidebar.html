@@ -1,0 +1,23 @@
+<div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+<div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="/">Debian Janitor</a></h1>
+
+<h3><a href="/{{ suite }}">{{ suite }}</a></h3>
+
+<ul class="current">
+    <!-- <li class="toctree-l1"><a class="reference internal" href="/{{suite }}/merge-proposals">Merge Proposals</a></li> -->
+    <li class="toctree-l1"><a class="reference internal" href="/{{ suite }}/ready">Ready Changes</a></li>
+<li class="toctree-l1"><a class="reference internal" href="/{{ suite }}/candidates">Candidates</a></li>
+</ul>
+
+<p>
+See the status for a specific package:
+<form autocomplete="off" action="pkg">
+  <div class="packages" style="width:300px;">
+    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p>
+
+</div></div>

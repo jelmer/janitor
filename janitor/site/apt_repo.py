@@ -37,7 +37,8 @@ async def gather_package_list(suite):
 async def write_apt_repo(suite):
     template = env.get_template(suite + '.html')
     return await template.render_async(
-        packages=gather_package_list(suite))
+        packages=gather_package_list(suite),
+        suite=suite)
 
 
 if __name__ == '__main__':
