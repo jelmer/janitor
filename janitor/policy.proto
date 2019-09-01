@@ -1,6 +1,6 @@
 syntax = "proto2";
 
-package silver_platter.debian.policy;
+package janitor;
 
 enum Mode {
     // Don't make any changes to this package
