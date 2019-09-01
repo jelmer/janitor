@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
 {% from "lintian-fixes-util.html" import lintian_brush_summary %}
 {% block page_title %}Changes ready to publish{% if suite %} - {{ suite }}{% endif %}{% endblock %}
 {% block body %}
