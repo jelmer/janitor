@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% block sidebar %}{% include "lintian-fixes-sidebar.html" %}
 {% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
 {% block page_title %}Lintian Fixes - for {{ tag }}{% endblock %}
 {% block body %}
