@@ -68,13 +68,13 @@ def is_alioth_url(url):
 
 
 def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
-    if ' [' in vcs_url:
-        raise BranchOpenFailure(
-            'package-in-subpath',
-            'The package is stored in a subpath rather than the '
-            'repository root.')
+    if ' [' in vcs_url and vcs_url.endswith(']'):
+        subpath = vcs_url[vcs_url.rindex('['):vcs_url.rindex(']')]
+        vcs_url = vcs_url[:vcs_url.rindex('[')].rstrip()
+    else:
+        subpath = None
     try:
-        return open_branch(vcs_url, possible_transports, vcs_type)
+        return open_branch(vcs_url, possible_transports, vcs_type), subpath
     except BranchUnavailable as e:
         if str(e).startswith('Unsupported protocol for url '):
             if ('anonscm.debian.org' in str(e) or
