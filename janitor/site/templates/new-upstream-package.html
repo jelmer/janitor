@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% block sidebar %}{% include "new-upstream-sidebar.html" %}{% endblock %}
 {% from "run_util.html" import local_command, merge_command, reschedule_button, install_commands, publish_buttons, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url, display_maintainer_email with context %}
 {% from "new_upstream_util.html" import new_upstream_summary %}
 {% block page_title %}New Upstream - {{ package }}{% endblock %}
