@@ -25,7 +25,7 @@ args = parser.parse_args()
 
 
 with open(args.config, 'r') as f:
-    config = read_config(args.config)
+    config = read_config(f)
 
 
 logfile_manager = get_log_manager(config.logs_location)

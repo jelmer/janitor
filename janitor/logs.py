@@ -116,7 +116,7 @@ class S3LogFileManager(LogFileManager):
 
 class GCSLogFilemanager(LogFileManager):
 
-    def __init__(self, creds_path=None, bucket_name='debian-janitor-logs'):
+    def __init__(self, creds_path, bucket_name='debian-janitor-logs'):
         from gcloud.aio.storage import Storage
         self.bucket_name = bucket_name
         self.session = ClientSession()
@@ -128,12 +128,12 @@ class GCSLogFilemanager(LogFileManager):
 
     async def has_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)
-        return await self.bucket.blob_exists(object_name, session)
+        return await self.bucket.blob_exists(object_name, self.session)
 
     async def get_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)
         try:
-            blob = await self.bucket.get_blob(object_name, session)
+            blob = await self.bucket.get_blob(object_name, self.session)
         except ClientResponseError as e:
             if e.status == 404:
                 raise FileNotFoundError(name)
