@@ -599,3 +599,21 @@ table.docutils.citation, table.docutils.citation td, table.docutils.citation th 
   -webkit-box-shadow: none;
   box-shadow: none;
 }
+
+div.sphinxsidebar {
+    position: fixed;
+    margin-left: 0;
+}
+div.sphinxsidebar {
+    width: 220px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+div.sphinxsidebar {
+    float: left;
+    width: 230px;
+    margin-left: -20%;
+    font-size: 90%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
