@@ -15,8 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession
-import boto3
+from aiohttp import ClientSession, ClientResponseError
 import gzip
 from io import BytesIO
 import os
@@ -73,6 +72,7 @@ class FileSystemLogFileManager(LogFileManager):
 class S3LogFileManager(LogFileManager):
 
     def __init__(self, endpoint_url, bucket_name='debian-janitor'):
+        import boto3
         self.base_url = endpoint_url + ('/%s/' % bucket_name)
         self.session = ClientSession()
         self.s3 = boto3.resource('s3', endpoint_url=endpoint_url)
@@ -114,7 +114,42 @@ class S3LogFileManager(LogFileManager):
         self.s3_bucket.put_object(Key=key, Body=data, ACL='public-read')
 
 
+class GCSLogFilemanager(LogFileManager):
+
+    def __init__(self, creds_path=None, bucket_name='debian-janitor-logs'):
+        from gcloud.aio.storage import Storage
+        self.bucket_name = bucket_name
+        self.session = ClientSession()
+        self.storage = Storage(service_file=creds_path, session=self.session)
+        self.bucket = self.storage.get_bucket(self.bucket_name)
+
+    def _get_object_name(self, pkg, run_id, name):
+        return 'logs/%s/%s/%s.gz' % (pkg, run_id, name)
+
+    async def has_log(self, pkg, run_id, name):
+        object_name = self._get_object_name(pkg, run_id, name)
+        return await self.bucket.blob_exists(object_name, session)
+
+    async def get_log(self, pkg, run_id, name):
+        object_name = self._get_object_name(pkg, run_id, name)
+        try:
+            blob = await self.bucket.get_blob(object_name, session)
+        except ClientResponseError as e:
+            if e.status == 404:
+                raise FileNotFoundError(name)
+            raise
+        return await blob.download()
+
+    async def import_log(self, pkg, run_id, orig_path):
+        object_name = self._get_object_name(pkg, run_id, os.path.basename(orig_path))
+        with open(orig_path, 'rb') as f:
+            uploaded_data = gzip.compress(f.read())
+        await self.storage.upload(self.bucket_name, object_name, uploaded_data)
+
+
 def get_log_manager(location):
+    if location.startswith('https://storage.googleapis.com'):
+        return GCSLogFilemanager()
     if location.startswith('http:') or location.startswith('https:'):
         return S3LogFileManager(location)
     return FileSystemLogFileManager(location)
