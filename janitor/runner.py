@@ -105,7 +105,8 @@ class JanitorResult(object):
     def __init__(self, pkg, log_id, description=None,
                  code=None, is_new=None,
                  build_distribution=None, build_version=None,
-                 changes_filename=None, worker_result=None):
+                 changes_filename=None, worker_result=None,
+                 logfilenames=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
@@ -323,6 +324,7 @@ async def process_one(
                 resume_branch_result=resume_branch_result,
                 last_build_version=last_build_version)
 
+        logfilenames = []
         for name in os.listdir(output_directory):
             parts = name.split('.')
             if parts[-1] == 'log' or (
@@ -332,6 +334,7 @@ async def process_one(
                 src_build_log_path = os.path.join(output_directory, name)
                 await logfile_manager.import_log(
                     pkg, log_id, src_build_log_path)
+                logfilenames.append(name)
 
         if retcode != 0:
             try:
@@ -343,7 +346,8 @@ async def process_one(
             return JanitorResult(
                 pkg, log_id=log_id,
                 code='worker-failure',
-                description=description)
+                description=description,
+                logfilenames=logfilenames)
 
         json_result_path = os.path.join(output_directory, 'result.json')
         if os.path.exists(json_result_path):
@@ -355,11 +359,13 @@ async def process_one(
 
         if worker_result.code is not None:
             return JanitorResult(
-                pkg, log_id=log_id, worker_result=worker_result)
+                pkg, log_id=log_id, worker_result=worker_result,
+                logfilenames=logfilenames)
 
         result = JanitorResult(
             pkg, log_id=log_id,
-            code='success', worker_result=worker_result)
+            code='success', worker_result=worker_result,
+            logfilenames=logfilenames)
 
         try:
             (result.changes_filename, result.build_version,
@@ -376,7 +382,8 @@ async def process_one(
                 pkg, log_id,
                 description='result branch unavailable: %s' % e,
                 code='result-branch-unavailable',
-                worker_result=worker_result)
+                worker_result=worker_result,
+                logfilenames=logfilenames)
 
         result.revision = local_branch.last_revision().decode('utf-8')
         enable_tag_pushing(local_branch)
@@ -495,7 +502,8 @@ class QueueProcessor(object):
                 branch_name=result.branch_name,
                 revision=result.revision,
                 subworker_result=result.subworker_result,
-                suite=item.suite)
+                suite=item.suite,
+                logfilenames=result.logfilenames)
 
             await state.drop_queue_item(item.id)
         del self.started[item]
