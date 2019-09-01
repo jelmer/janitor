@@ -1,4 +1,5 @@
 {% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
 {% from "run_util.html" import display_result_code, display_branch_url %}
 {% block page_title %}Package Overview - {{ package }}{% endblock %}
 {% block body %}
