@@ -243,11 +243,18 @@ async def process_one(
 
     if not use_cached_only:
         try:
-            main_branch = open_branch_ext(
+            main_branch, subpath = open_branch_ext(
                 vcs_url, possible_transports=possible_transports)
         except BranchOpenFailure as e:
             return JanitorResult(
                 pkg, log_id=log_id, description=e.description, code=e.code)
+
+        if subpath:
+            return JanitorResult(
+                pkg, log_id=log_id, code='package-in-subpath',
+                description=(
+                    'The package is stored in a subpath rather than the '
+                    'repository root.'))
 
         try:
             hoster = get_hoster(main_branch, possible_hosters=possible_hosters)

@@ -96,7 +96,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
                  project['last_activity_at'])
             suite = 'master'
             try:
-                branch = open_branch_ext(
+                branch, unused_subpath = open_branch_ext(
                     url, possible_transports=possible_transports,
                     vcs_type='git')
             except BranchOpenFailure as e:
@@ -157,7 +157,7 @@ async def main(argv=None):
         if netloc in prefetch_hosts and last_scanned:
             continue
         try:
-            branch = open_branch_ext(
+            branch, unused_subpath = open_branch_ext(
                 branch_url, possible_transports=possible_transports)
         except BranchOpenFailure as e:
             await state.update_branch_status(
