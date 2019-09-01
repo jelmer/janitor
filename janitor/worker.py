@@ -63,6 +63,7 @@ from silver_platter.debian.upstream import (
     UpstreamMetadataSyntaxError,
     MissingChangelogError,
     MissingUpstreamTarball,
+    QuiltPatchPushFailure,
 )
 
 from silver_platter.utils import (
@@ -318,6 +319,12 @@ class NewUpstreamWorker(SubWorker):
                     error_description = (
                         "An error (%d) occurred refreshing quilt patches: "
                         "%s%s" % (e.retcode, e.stderr, e.extra))
+                    error_code = 'quilt-refresh-error'
+                    raise WorkerFailure(error_code, error_description)
+                except QuiltPatchPushFailure as e:
+                    error_description = (
+                        "An error (%d) occurred refreshing quilt patch %s: %s"
+                        % (e.patch_name, e.actual_error.extra))
                     error_code = 'quilt-refresh-error'
                     raise WorkerFailure(error_code, error_description)
 
