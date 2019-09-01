@@ -48,33 +48,6 @@ def get_build_architecture():
     return "amd64"
 
 
-def get_run_diff(vcs_manager, run):
-    from breezy.diff import show_diff_trees
-    from breezy.errors import NoSuchRevision, NotBranchError
-    from io import BytesIO
-
-    f = BytesIO()
-    try:
-        repo = vcs_manager.get_repository(run.package)
-    except NotBranchError:
-        repo = None
-    if repo is None:
-        return b'Local VCS repository for %s temporarily inaccessible' % (
-            run.package.encode('ascii'))
-    try:
-        old_tree = repo.revision_tree(run.main_branch_revision)
-    except NoSuchRevision:
-        return b'Old revision %s temporarily missing' % (
-            run.main_branch_revision)
-    try:
-        new_tree = repo.revision_tree(run.revision)
-    except NoSuchRevision:
-        return b'New revision %s temporarily missing' % (
-            run.revision)
-    show_diff_trees(old_tree, new_tree, to_file=f)
-    return f.getvalue()
-
-
 def highlight_diff(diff):
     from pygments import highlight
     from pygments.lexers.diff import DiffLexer

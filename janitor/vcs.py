@@ -15,12 +15,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from io import BytesIO
 import os
 
 import urllib.parse
 import breezy.git  # noqa: F401
 import breezy.bzr  # noqa: F401
 from breezy.branch import Branch
+from breezy.diff import show_diff_trees
 from breezy.errors import (
     ConnectionError,
     NotBranchError,
@@ -293,3 +295,27 @@ class RemoteVcsManager(VcsManager):
                 return branch
         else:
             return None
+
+
+def get_run_diff(vcs_manager, run):
+
+    f = BytesIO()
+    try:
+        repo = vcs_manager.get_repository(run.package)
+    except NotBranchError:
+        repo = None
+    if repo is None:
+        return b'Local VCS repository for %s temporarily inaccessible' % (
+            run.package.encode('ascii'))
+    try:
+        old_tree = repo.revision_tree(run.main_branch_revision)
+    except NoSuchRevision:
+        return b'Old revision %s temporarily missing' % (
+            run.main_branch_revision)
+    try:
+        new_tree = repo.revision_tree(run.revision)
+    except NoSuchRevision:
+        return b'New revision %s temporarily missing' % (
+            run.revision)
+    show_diff_trees(old_tree, new_tree, to_file=f)
+    return f.getvalue()
