@@ -295,8 +295,10 @@ if __name__ == '__main__':
 
     async def handle_new_upstream_pkg(suite, request):
         from .new_upstream import generate_pkg_file
+        pkg = request.match_info['pkg']
+        run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(request.match_info['pkg'], suite)
+            text = await generate_pkg_file(pkg, suite, run_id)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
@@ -384,6 +386,9 @@ if __name__ == '__main__':
             '/%s/' % suite, functools.partial(handle_apt_repo, suite))
         app.router.add_get(
             '/%s/pkg/{pkg}/' % suite,
+            functools.partial(handle_new_upstream_pkg, suite))
+        app.router.add_get(
+            '/%s/pkg/{pkg}/{run_id}' % suite,
             functools.partial(handle_new_upstream_pkg, suite))
         app.router.add_get(
             '/%s/candidates' % suite,
