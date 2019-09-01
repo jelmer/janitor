@@ -61,6 +61,7 @@ if __name__ == '__main__':
     import os
     import re
     from janitor import SUITES
+    from janitor.config import read_config
     from janitor.logs import get_log_manager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
@@ -73,10 +74,6 @@ if __name__ == '__main__':
         '--port',
         type=int, help='Port to listen on', default=8080)
     parser.add_argument(
-        '--logdirectory', type=str,
-        help='Logs directory path.',
-        default='https://s3.nl-ams.scw.cloud')
-    parser.add_argument(
         '--publisher-url', type=str,
         default='http://localhost:9912/',
         help='URL for publisher.')
@@ -85,21 +82,22 @@ if __name__ == '__main__':
         default='http://localhost:9911/',
         help='URL for runner.')
     parser.add_argument(
-        '--apt-location', type=str,
-        default='https://s3.nl-ams.scw.cloud/debian-janitor/apt',
-        help='Location to read apt files from (HTTP or local).')
-    parser.add_argument(
         "--policy",
         help="Policy file to read.", type=str,
         default=os.path.join(
             os.path.dirname(__file__), '..', '..', 'policy.conf'))
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
 
     args = parser.parse_args()
 
-    logfile_manager = get_log_manager(args.logdirectory)
+    with open(args.config, 'r') as f:
+        config = read_config(f)
 
-    vcs_manager = LocalVcsManager(os.path.join(
-        os.path.dirname(__file__), '..', '..', 'vcs'))
+    logfile_manager = get_log_manager(config.logs_location)
+
+    vcs_manager = LocalVcsManager(config.vcs_location)
 
     async def handle_simple(templatename, request):
         from .generate import render_simple
@@ -318,9 +316,9 @@ if __name__ == '__main__':
             # 1 Minute
             max_age = 60
 
-        if args.apt_location.startswith('http'):
+        if config.apt_location.startswith('http'):
             return await read_apt_file_from_s3(
-                request, app.http_client_session, args.apt_location, suite,
+                request, app.http_client_session, config.apt_location, suite,
                 file, max_age)
         else:
             return await read_apt_file_from_fs(suite, file, max_age)

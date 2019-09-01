@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 import silver_platter  # noqa: E402, F401
 from janitor import state  # noqa: E402
+from janitor.config import read_config
 from janitor.logs import get_log_manager  # noqa: E402
 from janitor.sbuild_log import worker_failure_from_sbuild_log  # noqa: E402
 from janitor.trace import note  # noqa: E402
@@ -18,12 +19,16 @@ loop = asyncio.get_event_loop()
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--log-dir', help='Directory to store logs in.',
-    type=str, default='https://s3.nl-ams.scw.cloud')
+    '--config', type=str, default='janitor.conf',
+    help='Path to configuration.')
 args = parser.parse_args()
 
 
-logfile_manager = get_log_manager(args.log_dir)
+with open(args.config, 'r') as f:
+    config = read_config(args.config)
+
+
+logfile_manager = get_log_manager(config.logs_location)
 
 
 async def reprocess_run(package, log_id, result_code, description):

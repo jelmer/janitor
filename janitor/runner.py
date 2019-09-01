@@ -57,6 +57,7 @@ from . import (
     state,
     ADDITIONAL_COLOCATED_BRANCHES,
     )
+from .config import read_config
 from .logs import get_log_manager
 from .prometheus import setup_metrics
 from .trace import note, warning
@@ -596,17 +597,11 @@ def main(argv=None):
         help="Create branches but don't push or propose anything.",
         action="store_true", default=False)
     parser.add_argument(
-        '--log-dir', help='Directory to store logs in.',
-        type=str, default='https://s3.nl-ams.scw.cloud')
-    parser.add_argument(
         '--incoming', type=str,
         help='Path to copy built Debian packages into.')
     parser.add_argument(
         '--debsign-keyid', type=str,
         help='GPG key to sign Debian package with.')
-    parser.add_argument(
-        '--vcs-result-dir', type=str,
-        help='Directory to store VCS repositories in.')
     parser.add_argument(
         '--worker', type=str,
         default='local',
@@ -618,13 +613,19 @@ def main(argv=None):
     parser.add_argument(
         '--use-cached-only', action='store_true',
         help='Use cached branches only.')
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
 
     args = parser.parse_args()
 
     debug.set_debug_flags_from_config()
 
-    vcs_manager = LocalVcsManager(args.vcs_result_dir)
-    logfile_manager = get_log_manager(args.log_dir)
+    with open(args.config, 'r') as f:
+        config = read_config(f)
+
+    vcs_manager = LocalVcsManager(config.vcs_location)
+    logfile_manager = get_log_manager(config.logs_location)
     queue_processor = QueueProcessor(
         args.worker,
         args.build_command,
