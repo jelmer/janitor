@@ -62,6 +62,7 @@ from . import (
     state,
     ADDITIONAL_COLOCATED_BRANCHES,
     )
+from .config import read_config
 from .policy import (
     read_policy,
     apply_policy,
@@ -700,10 +701,6 @@ def main(argv=None):
         help="Create branches but don't push or propose anything.",
         action="store_true", default=False)
     parser.add_argument(
-        '--vcs-result-dir', type=str,
-        help='Directory to store VCS repositories in.',
-        default='vcs')
-    parser.add_argument(
         "--policy",
         help="Policy file to read.", type=str,
         default='policy.conf')
@@ -727,11 +724,17 @@ def main(argv=None):
         '--no-auto-publish',
         action='store_true',
         help='Do not create merge proposals automatically.')
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to load configuration from.')
 
     args = parser.parse_args()
 
     with open(args.policy, 'r') as f:
         policy = read_policy(f)
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
 
     if args.max_mps_per_maintainer > 0:
         rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
@@ -743,7 +746,7 @@ def main(argv=None):
         sys.exit(1)
 
     loop = asyncio.get_event_loop()
-    vcs_manager = LocalVcsManager(args.vcs_result_dir)
+    vcs_manager = LocalVcsManager(config.vcs_location)
     if args.once:
         loop.run_until_complete(publish_pending_new(
             policy, dry_run=args.dry_run,

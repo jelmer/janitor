@@ -1,4 +1,4 @@
 # vim: ft=proto
 apt_location: 'http://storage.googleapis.com/debian-janitor-apt/'
 logs_location: 'https://s3.nl-ams.scw.cloud'
-vcs_location: '/home/janitor/debian-janitor/vcs'
+vcs_location: '/home/janitor/vcs'

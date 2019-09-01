@@ -12,3 +12,4 @@ site/history.rst
 policy_pb2.py
 build.log
 debian_janitor.egg-info/
+janitor/config_pb2.py
