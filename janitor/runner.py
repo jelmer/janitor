@@ -117,6 +117,7 @@ class JanitorResult(object):
         self.changes_filename = changes_filename
         self.branch_name = None
         self.revision = None
+        self.logfilenames = logfilenames
         if worker_result:
             self.context = worker_result.context
             if self.code is None:
