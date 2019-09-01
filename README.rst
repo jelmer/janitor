@@ -11,15 +11,17 @@ Design
 
 The janitor is made up out of multiple components:
 
-* a *vcs_mirrorer* that keeps a current mirror of remote VCS repositories
-* a *scheduler* that determines what packages are ready for processing
-  based on lintian data, and queues them.
-* a *publisher* that propose or pushes changes that have been successfully
+* the *udd* syncer imports package metadata from UDD
+* the *scheduler* determines what packages are ready for processing
+  based on lintian and upstream data, and queues them.
+* the *publisher* proposes or pushes changes that have been successfully
   created and built previously
-* a *runner* that processes the queue, kicks off workers for
-  each package and publishes changes.
+* the *runner* processes the queue, kicks off workers for
+  each package and stores the results.
 * one or more *workers* which are responsible for actual generating and
   building changes.
+* a *repository manager* (mini-dinstall) that takes care of managing the
+  apt archives and publishes them
 
 Workers are fairly naive; they simply run a ``silver-platter`` subcommand
 to create branches and they build the resulting branches. The runner
