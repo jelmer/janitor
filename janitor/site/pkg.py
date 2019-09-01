@@ -1,6 +1,8 @@
 #!/usr/bin/python3
 
+from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 from io import BytesIO
+import urllib.parse
 
 from breezy.errors import NotBranchError
 from janitor import state
@@ -25,7 +27,6 @@ from janitor.site import (
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
-    get_run_diff,
     get_vcs_abbreviation,
 )
 
@@ -91,7 +92,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(logfile_manager, vcs_manager, run):
+async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -117,11 +118,18 @@ async def generate_run_file(logfile_manager, vcs_manager, run):
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
 
-    def show_diff():
-        diff = get_run_diff(vcs_manager, run)
-        if diff is None:
-            return None
-        return diff.decode('utf-8', 'replace')
+    async def show_diff():
+        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
+        async with ClientSession() as client:
+            try:
+                async with client.get(url) as resp:
+                    if resp.status == 200:
+                        return await resp.text()
+                    else:
+                        return 'Unable to retrieve diff; error %d' % resp.status
+            except ClientConnectorError as e:
+                return 'Unable to retrieve diff; error %s' % e
+
     kwargs['show_diff'] = show_diff
     kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
