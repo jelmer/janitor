@@ -240,13 +240,13 @@ class Run(object):
             'build_version',
             'build_distribution', 'result_code', 'branch_name',
             'main_branch_revision', 'revision', 'context', 'result',
-            'suite', 'instigated_context', 'branch_url']
+            'suite', 'instigated_context', 'branch_url', 'logfilenames']
 
     def __init__(self, run_id, times, command, description, package,
                  build_version,
                  build_distribution, result_code, branch_name,
                  main_branch_revision, revision, context, result,
-                 suite, instigated_context, branch_url):
+                 suite, instigated_context, branch_url, logfilenames):
         self.id = run_id
         self.times = times
         self.command = command
@@ -263,6 +263,7 @@ class Run(object):
         self.suite = suite
         self.instigated_context = instigated_context
         self.branch_url = branch_url
+        self.logfilenames = logfilenames
 
     @property
     def duration(self):
@@ -281,7 +282,8 @@ class Run(object):
                        row[10].encode('utf-8') if row[10] else None),
                    revision=(row[11].encode('utf-8') if row[11] else None),
                    context=row[12], result=row[13], suite=row[14],
-                   instigated_context=row[15], branch_url=row[16])
+                   instigated_context=row[15], branch_url=row[16],
+                   logfilenames=row[17])
 
     def __len__(self):
         return len(self.__slots__)
@@ -291,7 +293,8 @@ class Run(object):
                 self.package, self.build_version, self.build_distribution,
                 self.result_code, self.branch_name, self.main_branch_revision,
                 self.revision, self.context, self.result, self.suite,
-                self.instigated_context, self.branch_url)
+                self.instigated_context, self.branch_url,
+                self.logfilenames)
 
     def __eq__(self, other):
         if isinstance(other, Run):
@@ -322,7 +325,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url
+    instigated_context, branch_url, logfilenames
 FROM
     run
 """
@@ -413,6 +416,7 @@ SELECT
     run.suite,
     run.instigated_context,
     run.branch_url,
+    run.logfilenames,
     merge_proposal.url, merge_proposal.status
 FROM
     merge_proposal
@@ -434,7 +438,7 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     async with get_connection() as conn:
         for row in await conn.fetch(query, *args):
-            yield Run.from_row(row[:17]), row[17], row[18]
+            yield Run.from_row(row[:18]), row[18], row[19]
 
 
 class QueueItem(object):
@@ -680,7 +684,8 @@ SELECT
   result,
   suite,
   instigated_context,
-  branch_url
+  branch_url,
+  logfilenames
 FROM
   run
 WHERE
@@ -710,7 +715,8 @@ SELECT
   result,
   suite,
   instigated_context,
-  branch_url
+  branch_url,
+  logfilenames
 FROM
   run
 WHERE package = $1 AND build_distribution = $2 AND NOT EXISTS (
@@ -747,7 +753,8 @@ SELECT DISTINCT ON (package)
   result,
   suite,
   instigated_context,
-  branch_url
+  branch_url,
+  logfilenames
 FROM
   run
 WHERE suite = $1 AND package = ANY($2::text[]) AND NOT EXISTS (
@@ -1088,7 +1095,8 @@ SELECT
     run.id, run.command, run.start_time, run.finish_time, run.description,
     run.package, run.build_version, run.build_distribution, run.result_code,
     run.branch_name, run.main_branch_revision, run.revision, run.context,
-    run.result, run.suite, run.instigated_context, run.branch_url
+    run.result, run.suite, run.instigated_context, run.branch_url,
+    run.logfilenames
 FROM run inner join merge_proposal on merge_proposal.revision = run.revision
 WHERE merge_proposal.url = $1
 ORDER BY run.finish_time DESC
