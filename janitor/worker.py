@@ -323,7 +323,7 @@ class NewUpstreamWorker(SubWorker):
                     raise WorkerFailure(error_code, error_description)
                 except QuiltPatchPushFailure as e:
                     error_description = (
-                        "An error (%d) occurred refreshing quilt patch %s: %s"
+                        "An error occurred refreshing quilt patch %s: %s"
                         % (e.patch_name, e.actual_error.extra))
                     error_code = 'quilt-refresh-error'
                     raise WorkerFailure(error_code, error_description)
