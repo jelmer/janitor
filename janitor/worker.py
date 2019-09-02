@@ -152,35 +152,36 @@ class LintianBrushWorker(SubWorker):
             available_lintian_fixers(), tags=self.args.tags)
 
         with local_tree.lock_write():
-            applied, failed = run_lintian_fixers(
+            overall_result = run_lintian_fixers(
                     local_tree, fixers,
                     committer=self.committer,
                     update_changelog=self.args.update_changelog,
                     compat_release=self.args.compat_release,
                     trust_package=TRUST_PACKAGE)
 
-        if failed:
-            for fixer_name, failure in failed.items():
+        if overall_result.failed_fixers:
+            for fixer_name, failure in overall_result.failed_fixers.items():
                 note('Fixer %r failed to run:', fixer_name)
                 sys.stderr.write(failure.errors)
 
         metadata['applied'] = []
         if base_metadata:
             metadata['applied'].extend(base_metadata['applied'])
-        for result, summary in applied:
+        for result, summary in overall_result.success:
             metadata['applied'].append({
                 'summary': summary,
                 'description': result.description,
                 'fixed_lintian_tags': result.fixed_lintian_tags,
                 'certainty': result.certainty})
         metadata['failed'] = {
-            name: e.errors for (name, e) in failed.items()}
+            name: e.errors
+            for (name, e) in overall_result.failed_fixers.items()}
         metadata['add_on_only'] = not has_nontrivial_changes(
-            applied, self.args.propose_addon_only)
+            overall_result.success, self.args.propose_addon_only)
         if base_metadata and not base_metadata['add_on_only']:
             metadata['add_on_only'] = False
 
-        if not applied:
+        if not overall_result.success:
             raise WorkerFailure('nothing-to-do', 'no fixers to apply')
         else:
             tags = set()
