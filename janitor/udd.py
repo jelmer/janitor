@@ -346,6 +346,7 @@ async def main():
         trace.note('Adding candidates for %s.', suite)
         async for (package, suite, command, context, value) in candidate_fn:
             candidates.append((package, suite, command, context, value))
+        trace.note('Collected %d candidates for %s.', len(candidates), suite)
         await state.store_candidates(candidates)
 
     last_success_gauge.set_to_current_time()
