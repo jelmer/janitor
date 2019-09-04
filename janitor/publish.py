@@ -499,7 +499,7 @@ async def diff_request(vcs_manager, request):
     run_id = request.match_info['run_id']
     run = await state.get_run(run_id)
     diff = get_run_diff(vcs_manager, run)
-    return web.Response(diff, content_type='text/x-diff')
+    return web.Response(body=diff, content_type='text/x-diff')
 
 
 async def publish_request(rate_limiter, dry_run, vcs_manager, request):
@@ -569,7 +569,7 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
     app.router.add_post(
         "/{suite}/{package}/publish",
         functools.partial(publish_request, rate_limiter, dry_run, vcs_manager))
-    app.router.add_post(
+    app.router.add_get(
         "/diff/{run_id}",
         functools.partial(diff_request, vcs_manager))
     runner = web.AppRunner(app)
@@ -600,7 +600,7 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
     open_mps_per_maintainer = {}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
-    for mp, status in iter_all_mps():
+    for hoster, mp, status in iter_all_mps():
         await state.set_proposal_status(mp.url, status)
         status_count[status] += 1
         if not await state.get_proposal_revision(mp.url):
