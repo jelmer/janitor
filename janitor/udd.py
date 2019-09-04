@@ -28,6 +28,7 @@ from silver_platter.debian import (
     convert_debian_vcs_url,
 )
 from . import trace
+from .config import read_config
 from .vcs import is_alioth_url
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
@@ -257,6 +258,10 @@ async def main():
         action="store_true", default=False)
     parser.add_argument('--prometheus', type=str,
                         help='Prometheus push gateway to export to.')
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
+
     args = parser.parse_args()
 
     last_success_gauge = Gauge(
@@ -264,6 +269,11 @@ async def main():
         'Last time a batch job successfully finished')
     fixer_count = Counter(
         'fixer_count', 'Number of selected fixers.')
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
+
+    state.DEFAULT_URL = config.database_location
 
     tags = set()
     available_fixers = list(available_lintian_fixers())

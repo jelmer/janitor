@@ -6,7 +6,7 @@ import urllib.parse
 
 from janitor.policy import apply_policy
 from janitor import state, SUITES
-from . import env, get_run_diff
+from . import env
 
 DEFAULT_SCHEDULE_OFFSET = -1
 SUITE_TO_COMMAND = {
@@ -192,7 +192,6 @@ async def handle_queue(request):
 
 
 async def handle_diff(vcs_manager, publisher_url, request):
-    package = request.match_info.get('package')
     run_id = request.match_info['run_id']
     url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
     async with ClientSession() as client:
