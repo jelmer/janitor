@@ -76,6 +76,10 @@ class FileSystemLogFileManager(LogFileManager):
                 pass
 
 
+class LogRetrievalError(Exception):
+    """Unable to retrieve log file."""
+
+
 class S3LogFileManager(LogFileManager):
 
     def __init__(self, endpoint_url, bucket_name='debian-janitor'):
@@ -100,7 +104,9 @@ class S3LogFileManager(LogFileManager):
                 return True
             if resp.status == 403:
                 return False
-            raise AssertionError('Unexpected response code %d' % resp.status)
+            raise LogRetrievalError(
+                'Unexpected response code %d: %s' % (
+                    resp.status, await resp.text()))
 
     async def get_log(self, pkg, run_id, name):
         url = self._get_url(pkg, run_id, name)
@@ -111,7 +117,9 @@ class S3LogFileManager(LogFileManager):
                 return BytesIO(gzip.decompress(await resp.read()))
             if resp.status == 403:
                 raise PermissionError(await resp.text())
-            raise AssertionError('Unexpected response code %d' % resp.status)
+            raise LogRetrievalError(
+                'Unexpected response code %d: %s' % (
+                    resp.status, await resp.text()))
 
     async def import_log(self, pkg, run_id, orig_path):
         with open(orig_path, 'rb') as f:
@@ -149,7 +157,7 @@ class GCSLogFilemanager(LogFileManager):
             if e.status == 404:
                 raise FileNotFoundError(name)
             raise
-        return await blob.download()
+        return BytesIO(gzip.decompress(await blob.download()))
 
     async def import_log(self, pkg, run_id, orig_path):
         object_name = self._get_object_name(

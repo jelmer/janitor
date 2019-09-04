@@ -1,11 +1,13 @@
 #!/usr/bin/python3
 
+from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import argparse
 import asyncio
+import urllib.parse
 import sys
 
 from janitor import state
-from janitor.site import env, get_run_diff, highlight_diff
+from janitor.site import env, highlight_diff
 
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
@@ -15,7 +17,7 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(vcs_manager, package, run_id=None):
+async def generate_pkg_file(publisher_url, vcs_manager, package, run_id=None):
     try:
         package = await state.get_package(name=package)
     except IndexError:
@@ -62,11 +64,18 @@ async def generate_pkg_file(vcs_manager, package, run_id=None):
     previous_runs = [
         x async for x in state.iter_previous_runs(package.name, SUITE)]
 
-    def show_diff():
-        diff = get_run_diff(vcs_manager, run)
-        if diff is None:
-            return None
-        return diff.decode('utf-8', 'replace')
+    async def show_diff():
+        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
+        async with ClientSession() as client:
+            try:
+                async with client.get(url) as resp:
+                    if resp.status == 200:
+                        return (await resp.read()).decode('utf-8', 'replace')
+                    else:
+                        return 'Unable to retrieve diff; error %d' % resp.status
+            except ClientConnectorError as e:
+                return 'Unable to retrieve diff; error %s' % e
+
     (queue_position, queue_wait_time) = await state.get_queue_position(
         package.name, SUITE)
     kwargs = {

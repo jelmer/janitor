@@ -24,7 +24,7 @@ from contextlib import asynccontextmanager
 from . import SUITES
 
 
-DEFAULT_URL = 'postgresql://janitor@brangwain.vpn.jelmer.uk:5432/janitor'
+DEFAULT_URL = 'postgresql://janitor-reader@brangwain.vpn.jelmer.uk:5432/janitor'
 
 
 pool = None

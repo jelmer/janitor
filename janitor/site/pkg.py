@@ -17,6 +17,7 @@ from janitor.sbuild_log import (
     SBUILD_FOCUS_SECTION,
     strip_useless_build_tail,
 )
+from janitor.logs import LogRetrievalError
 from janitor.site import (
     changes_get_binaries,
     env,
@@ -124,7 +125,7 @@ async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
             try:
                 async with client.get(url) as resp:
                     if resp.status == 200:
-                        return await resp.text()
+                        return (await resp.read()).decode('utf-8', 'replace')
                     else:
                         return 'Unable to retrieve diff; error %d' % resp.status
             except ClientConnectorError as e:
@@ -173,26 +174,24 @@ async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
                 run.package, run.id, name)).read()
         except FileNotFoundError:
             cached_logs[name] = None
+        except LogRetrievalError:
+            cached_logs[name] = None
 
-    async def has_log(name):
-        if run.logfilenames is not None:
-            return name in run.logfilenames
-        if name not in cached_logs:
-            await _cache_log(name)
-        return cached_logs[name] is not None
+    def has_log(name):
+        return name in run.logfilenames
 
     async def get_log(name):
         if name not in cached_logs:
             await _cache_log(name)
         if cached_logs[name] is None:
-            raise FileNotFoundError(name)
+            return BytesIO(b'Log file missing or inaccessible.')
         return BytesIO(cached_logs[name])
-    kwargs['get_log'] = lambda name: BytesIO(cached_logs.get(name, b''))
-    if await has_log(BUILD_LOG_NAME):
+    kwargs['get_log'] = get_log
+    if has_log(BUILD_LOG_NAME):
         kwargs['build_log_name'] = BUILD_LOG_NAME
         kwargs['earlier_build_log_names'] = []
         i = 1
-        while await has_log(BUILD_LOG_NAME + '.%d' % i):
+        while has_log(BUILD_LOG_NAME + '.%d' % i):
             log_name = '%s.%d' % (BUILD_LOG_NAME, i)
             kwargs['earlier_build_log_names'].append((i, log_name))
             i += 1
@@ -204,7 +203,7 @@ async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
         kwargs['build_log_include_lines'] = include_lines
         kwargs['build_log_highlight_lines'] = highlight_lines
 
-    if await has_log(WORKER_LOG_NAME):
+    if has_log(WORKER_LOG_NAME):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
 
     template = env.get_template('run.html')
