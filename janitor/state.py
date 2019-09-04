@@ -348,10 +348,10 @@ FROM
 
 
 async def get_run(run_id):
-    runs = await iter_runs(run_id=run_id)
-    if not runs:
+    async for run in iter_runs(run_id=run_id):
+        return run
+    else:
         return None
-    return runs[0]
 
 
 async def get_maintainer_email_for_proposal(vcs_url):
