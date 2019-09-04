@@ -8,4 +8,6 @@ message Config {
   optional string logs_location = 2;
 
   optional string apt_location = 3;
+
+  optional string database_location = 4;
 }
