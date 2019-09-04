@@ -749,6 +749,8 @@ def main(argv=None):
     with open(args.config, 'r') as f:
         config = read_config(f)
 
+    state.DEFAULT_URL = config.database_location
+
     if args.max_mps_per_maintainer > 0:
         rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
     else:

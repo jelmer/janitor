@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
+from aiohttp import ClientSession, ClientConnectorError
 from io import BytesIO
 import urllib.parse
 
@@ -119,7 +119,7 @@ async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
     kwargs['vcs_browse'] = package.vcs_browse
 
     async def show_diff():
-        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
+        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
         async with ClientSession() as client:
             try:
                 async with client.get(url) as resp:

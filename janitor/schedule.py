@@ -28,6 +28,7 @@ from . import (
     state,
     trace,
     )
+from .config import read_config
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
@@ -200,11 +201,21 @@ async def main():
         action="store_true", default=False)
     parser.add_argument('--prometheus', type=str,
                         help='Prometheus push gateway to export to.')
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
+
+
     args = parser.parse_args()
 
     last_success_gauge = Gauge(
         'job_last_success_unixtime',
         'Last time a batch job successfully finished')
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
+
+    state.DEFAULT_URL = config.database_location
 
     iter_candidates = await state.iter_candidates()
     todo = [x async for x in schedule_from_candidates(

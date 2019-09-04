@@ -4,11 +4,19 @@ import argparse
 import asyncio
 import re
 from janitor import state
+from janitor.config import read_config
 
 parser = argparse.ArgumentParser('reschedule')
 parser.add_argument('result_code', type=str)
 parser.add_argument('description_re', type=str, nargs='?')
+parser.add_argument(
+    '--config', type=str, default='janitor.conf',
+    help='Path to configuration.')
 args = parser.parse_args()
+with open(args.config, 'r') as f:
+    config = read_config(f)
+
+state.DEFAULT_URL = config.database_location
 
 
 async def main(result_code):
