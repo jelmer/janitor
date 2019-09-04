@@ -95,6 +95,7 @@ if __name__ == '__main__':
     with open(args.config, 'r') as f:
         config = read_config(f)
 
+    state.DEFAULT_URL = config.database_location
     logfile_manager = get_log_manager(config.logs_location)
 
     vcs_manager = LocalVcsManager(config.vcs_location)
