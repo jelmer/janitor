@@ -222,7 +222,7 @@ async def invoke_subprocess_worker(
 
 
 async def process_one(
-        worker_kind, vcs_url, pkg, env, command, build_command,
+        output_directory, worker_kind, vcs_url, pkg, env, command, build_command,
         suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
@@ -231,6 +231,9 @@ async def process_one(
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
+
+    env = dict(env.items())
+    env['PACKAGE'] = pkg
 
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if command == ["new-upstream"]:
@@ -316,94 +319,93 @@ async def process_one(
 
     last_build_version = await state.get_last_build_version(pkg, suite)
 
-    with tempfile.TemporaryDirectory() as output_directory:
-        log_path = os.path.join(output_directory, 'worker.log')
-        retcode = await invoke_subprocess_worker(
-                worker_kind, main_branch, env, command, output_directory,
-                resume_branch=resume_branch, cached_branch=cached_branch,
-                pre_check=pre_check, post_check=post_check,
-                build_command=build_command, log_path=log_path,
-                resume_branch_result=resume_branch_result,
-                last_build_version=last_build_version)
+    log_path = os.path.join(output_directory, 'worker.log')
+    retcode = await invoke_subprocess_worker(
+            worker_kind, main_branch, env, command, output_directory,
+            resume_branch=resume_branch, cached_branch=cached_branch,
+            pre_check=pre_check, post_check=post_check,
+            build_command=build_command, log_path=log_path,
+            resume_branch_result=resume_branch_result,
+            last_build_version=last_build_version)
 
-        logfilenames = []
-        for name in os.listdir(output_directory):
-            parts = name.split('.')
-            if parts[-1] == 'log' or (
-                    len(parts) == 3 and
-                    parts[-2] == 'log' and
-                    parts[-1].isdigit()):
-                src_build_log_path = os.path.join(output_directory, name)
-                await logfile_manager.import_log(
-                    pkg, log_id, src_build_log_path)
-                logfilenames.append(name)
+    logfilenames = []
+    for name in os.listdir(output_directory):
+        parts = name.split('.')
+        if parts[-1] == 'log' or (
+                len(parts) == 3 and
+                parts[-2] == 'log' and
+                parts[-1].isdigit()):
+            src_build_log_path = os.path.join(output_directory, name)
+            await logfile_manager.import_log(
+                pkg, log_id, src_build_log_path)
+            logfilenames.append(name)
 
-        if retcode != 0:
-            try:
-                with open(log_path, 'r') as f:
-                    description = list(f.readlines())[-1]
-            except FileNotFoundError:
-                description = 'Worker exited with return code %d' % retcode
+    if retcode != 0:
+        try:
+            with open(log_path, 'r') as f:
+                description = list(f.readlines())[-1]
+        except FileNotFoundError:
+            description = 'Worker exited with return code %d' % retcode
 
-            return JanitorResult(
-                pkg, log_id=log_id,
-                code='worker-failure',
-                description=description,
-                logfilenames=logfilenames)
-
-        json_result_path = os.path.join(output_directory, 'result.json')
-        if os.path.exists(json_result_path):
-            worker_result = WorkerResult.from_file(json_result_path)
-        else:
-            worker_result = WorkerResult(
-                'worker-missing-result',
-                'Worker failed and did not write a result file.')
-
-        if worker_result.code is not None:
-            return JanitorResult(
-                pkg, log_id=log_id, worker_result=worker_result,
-                logfilenames=logfilenames)
-
-        result = JanitorResult(
+        return JanitorResult(
             pkg, log_id=log_id,
-            code='success', worker_result=worker_result,
+            code='worker-failure',
+            description=description,
             logfilenames=logfilenames)
 
-        try:
-            (result.changes_filename, result.build_version,
-             result.build_distribution) = find_changes(
-                 output_directory, result.package)
-        except NoChangesFile as e:
-            # Oh, well.
-            note('No changes file found: %s', e)
+    json_result_path = os.path.join(output_directory, 'result.json')
+    if os.path.exists(json_result_path):
+        worker_result = WorkerResult.from_file(json_result_path)
+    else:
+        worker_result = WorkerResult(
+            'worker-missing-result',
+            'Worker failed and did not write a result file.')
 
-        try:
-            local_branch = open_branch(os.path.join(output_directory, pkg))
-        except (BranchMissing, BranchUnavailable) as e:
-            return JanitorResult(
-                pkg, log_id,
-                description='result branch unavailable: %s' % e,
-                code='result-branch-unavailable',
-                worker_result=worker_result,
-                logfilenames=logfilenames)
+    if worker_result.code is not None:
+        return JanitorResult(
+            pkg, log_id=log_id, worker_result=worker_result,
+            logfilenames=logfilenames)
 
-        result.revision = local_branch.last_revision().decode('utf-8')
-        enable_tag_pushing(local_branch)
+    result = JanitorResult(
+        pkg, log_id=log_id,
+        code='success', worker_result=worker_result,
+        logfilenames=logfilenames)
 
-        if vcs_manager:
-            vcs_manager.import_branches(
-                main_branch, local_branch,
-                pkg, branch_name,
-                additional_colocated_branches=(
-                    ADDITIONAL_COLOCATED_BRANCHES))
-            result.branch_name = branch_name
+    try:
+        (result.changes_filename, result.build_version,
+         result.build_distribution) = find_changes(
+             output_directory, result.package)
+    except NoChangesFile as e:
+        # Oh, well.
+        note('No changes file found: %s', e)
 
-        if result.changes_filename:
-            changes_path = os.path.join(
-                output_directory, result.changes_filename)
-            debsign(changes_path, debsign_keyid)
-            if incoming is not None:
-                dget_changes(changes_path, incoming)
+    try:
+        local_branch = open_branch(os.path.join(output_directory, pkg))
+    except (BranchMissing, BranchUnavailable) as e:
+        return JanitorResult(
+            pkg, log_id,
+            description='result branch unavailable: %s' % e,
+            code='result-branch-unavailable',
+            worker_result=worker_result,
+            logfilenames=logfilenames)
+
+    result.revision = local_branch.last_revision().decode('utf-8')
+    enable_tag_pushing(local_branch)
+
+    if vcs_manager:
+        vcs_manager.import_branches(
+            main_branch, local_branch,
+            pkg, branch_name,
+            additional_colocated_branches=(
+                ADDITIONAL_COLOCATED_BRANCHES))
+        result.branch_name = branch_name
+
+    if result.changes_filename:
+        changes_path = os.path.join(
+            output_directory, result.changes_filename)
+        debsign(changes_path, debsign_keyid)
+        if incoming is not None:
+            dget_changes(changes_path, incoming)
 
     return result
 
@@ -470,23 +472,23 @@ class QueueProcessor(object):
         self.concurrency = concurrency
         self.use_cached_only = use_cached_only
         self.started = {}
+        self.per_run_directory = {}
 
     async def process_queue_item(self, item):
         start_time = datetime.now()
         self.started[item] = start_time
 
-        env = dict(item.env.items())
-        env['PACKAGE'] = item.package
-
-        result = await process_one(
-            self.worker_kind, item.branch_url, item.package, env, item.command,
-            suite=item.suite, pre_check=self.pre_check,
-            build_command=self.build_command, post_check=self.post_check,
-            dry_run=self.dry_run, incoming=self.incoming,
-            debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
-            logfile_manager=self.logfile_manager,
-            use_cached_only=self.use_cached_only,
-            refresh=item.refresh)
+        with tempfile.TemporaryDirectory() as output_directory:
+            self.per_run_directory[item] = output_directory
+            result = await process_one(
+                output_directory, self.worker_kind, item.branch_url,
+                item.package, env, item.command, suite=item.suite,
+                pre_check=self.pre_check, build_command=self.build_command,
+                post_check=self.post_check, dry_run=self.dry_run,
+                incoming=self.incoming, debsign_keyid=self.debsign_keyid,
+                vcs_manager=self.vcs_manager,
+                logfile_manager=self.logfile_manager,
+                use_cached_only=self.use_cached_only, refresh=item.refresh)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())
@@ -565,6 +567,7 @@ async def run_web_server(listen_addr, port, queue_processor):
     setup_metrics(app)
     app.router.add_get(
         '/status', functools.partial(handle_status, queue_processor))
+    # TODO(jelmer): Add handler that serves live logs
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
