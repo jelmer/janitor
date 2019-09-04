@@ -479,7 +479,7 @@ class QueueProcessor(object):
         self.started[item] = start_time
 
         with tempfile.TemporaryDirectory() as output_directory:
-            self.per_run_directory[item] = output_directory
+            self.per_run_directory[item.id] = output_directory
             result = await process_one(
                 output_directory, self.worker_kind, item.branch_url,
                 item.package, env, item.command, suite=item.suite,
@@ -549,6 +549,7 @@ class QueueProcessor(object):
 async def handle_status(queue_processor, request):
     return web.json_response({
         'processing': [{
+            'id': item.id,
             'package': item.package,
             'suite': item.suite,
             'estimated_duration':
@@ -562,11 +563,48 @@ async def handle_status(queue_processor, request):
     })
 
 
+async def handle_log_index(queue_processor, request):
+    run_id = request.match_info['run_id']
+    filename = request.match_info['filename']
+    if '/' in filename:
+        return web.Response(
+            'Invalid filename %s' % request.match_info['filename'],
+            status=400)
+    try:
+        directory = queue_processor.per_run_directory[run_id]
+    except KeyError:
+        return web.Response(
+            'No such current run: %s' % run_id, status=404)
+    return web.json_response(os.path.listdir(directory))
+
+
+async def handle_log(queue_processor, request):
+    run_id = request.match_info['run_id']
+    filename = request.match_info['filename']
+    if '/' in filename:
+        return web.Response(
+            'Invalid filename %s' % request.match_info['filename'],
+            status=400)
+    try:
+        directory = queue_processor.per_run_directory[run_id]
+    except KeyError:
+        return web.Response(
+            'No such current run: %s' % run_id, status=404)
+    full_path = os.path.join(directory, filename)
+    return web.FileResponse(full_path, content_type='text/plain')
+
+
 async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
     setup_metrics(app)
     app.router.add_get(
         '/status', functools.partial(handle_status, queue_processor))
+    app.router.add_get(
+        '/log/{run_id}',
+        functools.partial(handle_log_index, queue_processor))
+    app.router.add_get(
+        '/log/{run_id}/{filename}',
+        functools.partial(handle_log, queue_processor))
     # TODO(jelmer): Add handler that serves live logs
     runner = web.AppRunner(app)
     await runner.setup()
