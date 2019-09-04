@@ -13,6 +13,7 @@ async def write_merge_proposals(suite):
 
     template = env.get_template('merge-proposals.html')
     return await template.render_async(
+            suite=suite,
             open_proposals=proposals_by_status.get('open', []),
             merged_proposals=proposals_by_status.get('merged', []),
             closed_proposals=proposals_by_status.get('closed', []))
