@@ -199,11 +199,11 @@ async def handle_diff(vcs_manager, publisher_url, request):
             async with client.get(url) as resp:
                 if resp.status == 200:
                     return web.Response(
-                        await resp.data(),
+                        body=await resp.read(),
                         content_type='text/x-diff',
                         headers={'Cache-Control': 'max-age=3600'})
                 else:
-                    return web.Response(await resp.data(), status=400)
+                    return web.Response(await resp.read(), status=400)
         except ContentTypeError as e:
             return web.Response(
                 'publisher returned error %d' % e.code,
@@ -320,9 +320,6 @@ def create_app(publisher_url, runner_url, policy_config, vcs_manager):
     app.router.add_get('/queue', handle_queue)
     app.router.add_get('/run', handle_run)
     app.router.add_get('/run/{run_id}', handle_run)
-    app.router.add_get(
-        '/run/{run_id}/diff',
-        functools.partial(handle_diff, vcs_manager, publisher_url))
     app.router.add_get(
         '/run/{run_id}/diff',
         functools.partial(handle_diff, vcs_manager, publisher_url))

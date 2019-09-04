@@ -59,7 +59,7 @@ async def generate_pkg_file(package, suite, run_id=None):
         result = run.result
         branch_name = run.branch_name
         branch_url = run.branch_url
-    previous_runs = state.iter_previous_runs(package.name, suite)
+    previous_runs = [r async for r in state.iter_previous_runs(package.name, suite)]
     (queue_position, queue_wait_time) = await state.get_queue_position(
         package.name, suite)
     kwargs = {

@@ -61,6 +61,7 @@ if __name__ == '__main__':
     import os
     import re
     from janitor import SUITES
+    from janitor import state
     from janitor.config import read_config
     from janitor.logs import get_log_manager
     from janitor.policy import read_policy
@@ -264,7 +265,8 @@ if __name__ == '__main__':
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(vcs_manager, pkg, run_id)
+            text = await generate_pkg_file(
+                args.publisher_url, vcs_manager, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
