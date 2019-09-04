@@ -68,6 +68,13 @@ class FileSystemLogFileManager(LogFileManager):
             with gzip.GzipFile(dest_path, mode='wb') as outf:
                 outf.write(inf.read())
 
+    async def delete_log(self, pkg, run_id, name):
+        for path in self._get_paths(pkg, run_id, name):
+            try:
+                os.unlink(path)
+            except FileNotFoundError:
+                pass
+
 
 class S3LogFileManager(LogFileManager):
 
@@ -113,10 +120,14 @@ class S3LogFileManager(LogFileManager):
         key = self._get_key(pkg, run_id, os.path.basename(orig_path))
         self.s3_bucket.put_object(Key=key, Body=data, ACL='public-read')
 
+    async def delete_log(self, pkg, run_id, name):
+        key = self._get_key(pkg, run_id, name)
+        self.s3_bucket.delete_objects(Delete={'Objects': [{'Key': key}]})
+
 
 class GCSLogFilemanager(LogFileManager):
 
-    def __init__(self, creds_path, bucket_name='debian-janitor-logs'):
+    def __init__(self, creds_path=None, bucket_name='debian-janitor-logs'):
         from gcloud.aio.storage import Storage
         self.bucket_name = bucket_name
         self.session = ClientSession()
