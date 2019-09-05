@@ -564,12 +564,7 @@ async def handle_status(queue_processor, request):
 
 
 async def handle_log_index(queue_processor, request):
-    run_id = request.match_info['run_id']
-    filename = request.match_info['filename']
-    if '/' in filename:
-        return web.Response(
-            'Invalid filename %s' % request.match_info['filename'],
-            status=400)
+    run_id = int(request.match_info['run_id'])
     try:
         directory = queue_processor.per_run_directory[run_id]
     except KeyError:
@@ -579,7 +574,7 @@ async def handle_log_index(queue_processor, request):
 
 
 async def handle_log(queue_processor, request):
-    run_id = request.match_info['run_id']
+    run_id = int(request.match_info['run_id'])
     filename = request.match_info['filename']
     if '/' in filename:
         return web.Response(
