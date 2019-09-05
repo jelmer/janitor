@@ -482,7 +482,7 @@ class QueueProcessor(object):
             self.per_run_directory[item.id] = output_directory
             result = await process_one(
                 output_directory, self.worker_kind, item.branch_url,
-                item.package, env, item.command, suite=item.suite,
+                item.package, item.env, item.command, suite=item.suite,
                 pre_check=self.pre_check, build_command=self.build_command,
                 post_check=self.post_check, dry_run=self.dry_run,
                 incoming=self.incoming, debsign_keyid=self.debsign_keyid,
