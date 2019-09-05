@@ -569,8 +569,10 @@ async def handle_log_index(queue_processor, request):
         directory = queue_processor.per_run_directory[run_id]
     except KeyError:
         return web.Response(
-            'No such current run: %s' % run_id, status=404)
-    return web.json_response(os.path.listdir(directory))
+            text='No such current run: %s' % run_id, status=404)
+    return web.json_response([
+        n for n in os.listdir(directory)
+        if os.path.isfile(os.path.join(directory, n))])
 
 
 async def handle_log(queue_processor, request):
@@ -578,15 +580,18 @@ async def handle_log(queue_processor, request):
     filename = request.match_info['filename']
     if '/' in filename:
         return web.Response(
-            'Invalid filename %s' % request.match_info['filename'],
+            text='Invalid filename %s' % request.match_info['filename'],
             status=400)
     try:
         directory = queue_processor.per_run_directory[run_id]
     except KeyError:
         return web.Response(
-            'No such current run: %s' % run_id, status=404)
+            text='No such current run: %s' % run_id, status=404)
     full_path = os.path.join(directory, filename)
-    return web.FileResponse(full_path, content_type='text/plain')
+    if os.path.exists(full_path):
+        return web.FileResponse(full_path)
+    else:
+        return web.Response(text='No such logfile: %s' % filename, status=404)
 
 
 async def run_web_server(listen_addr, port, queue_processor):

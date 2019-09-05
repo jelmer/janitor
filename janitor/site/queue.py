@@ -105,7 +105,13 @@ async def get_queue(only_command=None, limit=None):
 async def write_queue(only_command=None, limit=None, runner_url=None):
     template = env.get_template('queue.html')
     if runner_url:
-        processing = get_processing(runner_url)
+        async def processing_():
+            try:
+                async for x in get_processing(runner_url):
+                    yield x
+            except RunnerProcessingUnavailable:
+                pass
+        processing = processing_()
     else:
         processing = []
     return await template.render_async(

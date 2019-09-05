@@ -5,6 +5,7 @@ import functools
 import urllib.parse
 
 from janitor.policy import apply_policy
+from janitor.vcs import get_run_diff
 from janitor import state, SUITES
 from . import env
 
@@ -284,8 +285,8 @@ async def handle_global_policy(request):
             headers={'Cache-Control': 'max-age=60'})
 
 
-async def handle_runner_status(runner_url, status):
-    url = urllib.parse.urljoin(runner_url, 'status')
+async def forward_to_runner(runner_url, path):
+    url = urllib.parse.urljoin(runner_url, path)
     async with ClientSession() as client:
         try:
             async with client.get(url) as resp:
@@ -293,11 +294,39 @@ async def handle_runner_status(runner_url, status):
                     await resp.json(), status=resp.status)
         except ContentTypeError as e:
             return web.json_response({
-                'reason': 'runner returned error %d' % e.code},
+                'reason': 'runner returned error %s' % e},
                 status=400)
         except ClientConnectorError:
             return web.json_response({
                 'reason': 'unable to contact runner'},
+                status=500)
+
+
+async def handle_runner_status(runner_url, request):
+    return await forward_to_runner(runner_url, 'status')
+
+
+async def handle_runner_log_index(runner_url, request):
+    run_id = request.match_info['run_id']
+    return await forward_to_runner(runner_url, 'log/%s' % run_id)
+
+
+async def handle_runner_log(runner_url, request):
+    run_id = request.match_info['run_id']
+    filename = request.match_info['filename']
+    url = urllib.parse.urljoin(runner_url, 'log/%s/%s' % (run_id, filename))
+    async with ClientSession() as client:
+        try:
+            async with client.get(url) as resp:
+                body = await resp.read()
+                return web.Response(body=body, status=resp.status)
+        except ContentTypeError as e:
+            return web.Response(
+                text='runner returned error %s' % e,
+                status=400)
+        except ClientConnectorError:
+            return web.Response(
+                text='unable to contact runner',
                 status=500)
 
 
@@ -336,7 +365,13 @@ def create_app(publisher_url, runner_url, policy_config, vcs_manager):
     app.router.add_post('/webhook', handle_webhook)
     app.router.add_get('/webhook', handle_webhook)
     app.router.add_get(
-        '/runner-status', functools.partial(handle_runner_status, runner_url))
+        '/runner/status', functools.partial(handle_runner_status, runner_url))
+    app.router.add_get(
+        '/runner/log/{run_id}',
+        functools.partial(handle_runner_log_index, runner_url))
+    app.router.add_get(
+        '/runner/log/{run_id}/{filename}',
+        functools.partial(handle_runner_log, runner_url))
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)
