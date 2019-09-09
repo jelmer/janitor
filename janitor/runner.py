@@ -253,14 +253,16 @@ async def process_one(
                 vcs_url, possible_transports=possible_transports)
         except BranchOpenFailure as e:
             return JanitorResult(
-                pkg, log_id=log_id, description=e.description, code=e.code)
+                pkg, log_id=log_id, description=e.description, code=e.code,
+                logfilenames=[])
 
         if subpath:
             return JanitorResult(
                 pkg, log_id=log_id, code='package-in-subpath',
                 description=(
                     'The package is stored in a subpath rather than the '
-                    'repository root.'))
+                    'repository root.'),
+                logfilenames=[])
 
         try:
             hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
@@ -302,7 +304,8 @@ async def process_one(
             return JanitorResult(
                 pkg, log_id=log_id,
                 code='cached-branch-missing',
-                description='Missing cache branch for %s' % pkg)
+                description='Missing cache branch for %s' % pkg,
+                logfilenames=[])
         note('Using cached branch %s', main_branch.user_url)
         resume_branch = vcs_manager.get_branch(pkg, branch_name)
         cached_branch = None
