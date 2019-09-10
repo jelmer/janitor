@@ -28,6 +28,7 @@ from breezy.errors import (
     NotBranchError,
     NoSuchRevision,
     NoRepositoryPresent,
+    IncompatibleRepositories,
     InvalidHttpResponse,
     )
 from breezy.git.remote import RemoteGitError
@@ -164,7 +165,11 @@ def mirror_branches(vcs_result_dir, pkg, branch_map,
                 target_branch = ControlDir.create_branch_convenience(
                     target_branch_path)
             if public_master_branch:
-                target_branch.set_stacked_on_url(public_master_branch.user_url)
+                try:
+                    target_branch.set_stacked_on_url(
+                        public_master_branch.user_url)
+                except IncompatibleRepositories:
+                    pass
             try:
                 from_branch.push(target_branch, overwrite=True)
             except NoSuchRevision as e:
