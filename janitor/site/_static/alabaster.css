@@ -91,7 +91,7 @@ div.sphinxsidebar a:hover {
 }
 
 div.sphinxsidebarwrapper {
-    padding: 18px 10px;
+    /*! padding: 18px 10px; */
 }
 
 div.sphinxsidebarwrapper p.logo {
@@ -441,66 +441,19 @@ a:hover tt, a:hover code {
     background: #EEE;
 }
 
-
-@media screen and (max-width: 870px) {
-
-    div.sphinxsidebar {
-    	display: none;
-    }
-
-    div.document {
-       width: 100%;
-
-    }
-
-    div.documentwrapper {
-    	margin-left: 0;
-    	margin-top: 0;
-    	margin-right: 0;
-    	margin-bottom: 0;
-    }
-
-    div.bodywrapper {
-    	margin-top: 0;
-    	margin-right: 0;
-    	margin-bottom: 0;
-    	margin-left: 0;
-    }
-
-    ul {
-    	margin-left: 0;
-    }
-
-	li > ul {
-        /* Matches the 30px from the "ul, ol" selector above */
-		margin-left: 30px;
-	}
-
-    .document {
-    	width: auto;
-    }
-
-    .footer {
-    	width: auto;
-    }
-
-    .bodywrapper {
-    	margin: 0;
-    }
-
-    .footer {
-    	width: auto;
-    }
-
-    .github {
-        display: none;
-    }
-
-
-
+div.sphinxsidebar {
+    position: fixed;
+    margin-left: 0;
+    width: 220px;
+    font-size: 14px;
+    line-height: 1.5;
+    float: left;
+    width: 230px;
+    margin-left: -20%;
+    font-size: 90%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
-
-
 
 @media screen and (max-width: 875px) {
 
@@ -509,20 +462,17 @@ a:hover tt, a:hover code {
         padding: 20px 30px;
     }
 
-    div.documentwrapper {
-        float: none;
-        background: white;
-    }
-
     div.sphinxsidebar {
-        display: block;
-        float: none;
-        width: 102.5%;
-        margin: 50px -30px -20px -30px;
-        padding: 10px 20px;
-        background: #333;
+        position: initial;
+        float: initial;
+        width: auto;
+        margin-left: 0;
         color: #FFF;
+        font-size: medium;
+        line-height: normal;
     }
+    
+    li.toctree-l1 { display: inline; font-size: small;  }
 
     div.sphinxsidebar h3, div.sphinxsidebar h4, div.sphinxsidebar p,
     div.sphinxsidebar h3 a {
@@ -600,20 +550,3 @@ table.docutils.citation, table.docutils.citation td, table.docutils.citation th 
   box-shadow: none;
 }
 
-div.sphinxsidebar {
-    position: fixed;
-    margin-left: 0;
-}
-div.sphinxsidebar {
-    width: 220px;
-    font-size: 14px;
-    line-height: 1.5;
-}
-div.sphinxsidebar {
-    float: left;
-    width: 230px;
-    margin-left: -20%;
-    font-size: 90%;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
-}
