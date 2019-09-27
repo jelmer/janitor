@@ -21,6 +21,10 @@ from io import BytesIO
 import os
 
 
+class ServiceUnavailable(Exception):
+    """The remote server is temporarily unavailable."""
+
+
 class LogFileManager(object):
 
     async def has_log(self, pkg, run_id, name):
@@ -164,7 +168,12 @@ class GCSLogFilemanager(LogFileManager):
             pkg, run_id, os.path.basename(orig_path))
         with open(orig_path, 'rb') as f:
             uploaded_data = gzip.compress(f.read())
-        await self.storage.upload(self.bucket_name, object_name, uploaded_data)
+        try:
+            await self.storage.upload(self.bucket_name, object_name, uploaded_data)
+        except ClientResponseError as e:
+            if e.status == 503:
+                raise ServiceUnavailable()
+            raise
 
 
 def get_log_manager(location):

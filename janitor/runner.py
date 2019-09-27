@@ -58,7 +58,7 @@ from . import (
     ADDITIONAL_COLOCATED_BRANCHES,
     )
 from .config import read_config
-from .logs import get_log_manager
+from .logs import get_log_manager, ServiceUnavailable
 from .prometheus import setup_metrics
 from .trace import note, warning
 from .vcs import (
@@ -339,9 +339,14 @@ async def process_one(
                 parts[-2] == 'log' and
                 parts[-1].isdigit()):
             src_build_log_path = os.path.join(output_directory, name)
-            await logfile_manager.import_log(
-                pkg, log_id, src_build_log_path)
-            logfilenames.append(name)
+            try:
+                await logfile_manager.import_log(
+                    pkg, log_id, src_build_log_path)
+            except ServiceUnavailable as e:
+                warning('Unable to upload logfile %s: %s',
+                        name, e)
+            else:
+                logfilenames.append(name)
 
     if retcode != 0:
         try:
