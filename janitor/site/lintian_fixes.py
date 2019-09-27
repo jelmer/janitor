@@ -176,6 +176,12 @@ async def generate_developer_page(developer):
         ready_changes=ready_changes, merge_proposals=merge_proposals)
 
 
+async def generate_failing_fixers_list():
+    template = env.get_template('lintian-fixes-failed-list.html')
+    fixers = await state.iter_failed_lintian_fixers()
+    return await template.render_async(fixers=fixers)
+
+
 if __name__ == '__main__':
     from janitor.vcs import LocalVcsManager
     import os

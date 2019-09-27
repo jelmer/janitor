@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "lintian-fixes-sidebar.html" %}{% endblock %}
+{% block page_title %}Lintian Fixes - failed fixers{% endblock %}
+{% block body %}
+<div class="section" id="fixed-tag-list">
+<h1>Lintian Fixers Failure Count</h1>
+
+<ul>
+{% for fixer, count in fixers %}
+	<li><a href="{{ fixer }}">{{ fixer }}</a> ({{ count}})</li>
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}
