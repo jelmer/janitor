@@ -1138,3 +1138,12 @@ async def update_removals(items):
 UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2
 """
         await conn.executemany(query, items)
+
+
+async def iter_failed_lintian_fixers():
+    async with get_connection() as conn:
+        query = """
+select json_object_keys(result->'failed'), count(*) from run where
+suite = 'lintian-fixes' and json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
+"""
+        return await conn.fetch(query)
