@@ -212,9 +212,14 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
-    async def handle_failed_lintian_fixes(request):
-        from .lintian_fixes import generate_failing_fixers_list
-        text = await generate_failing_fixers_list()
+    async def handle_failed_lintian_brush_fixers(request):
+        from .lintian_fixes import (
+            generate_failing_fixers_list, generate_failing_fixer)
+        fixer = request.match_info.get('fixer')
+        if fixer:
+            text = await generate_failing_fixer(fixer)
+        else:
+            text = await generate_failing_fixers_list()
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -415,7 +420,10 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/pkg/', handle_pkg_list)
     app.router.add_get('/cupboard/pkg/{pkg}/', handle_pkg)
     app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/', handle_run)
-    app.router.add_get('/cupboard/lintian-fixes/failed-fixers', handle_failed_lintian_fixes)
+    app.router.add_get(
+        '/cupboard/failed-lintian-brush-fixers', handle_failed_lintian_brush_fixers)
+    app.router.add_get(
+        '/cupboard/failed-lintian-brush-fixers/{fixer}', handle_failed_lintian_brush_fixers)
     app.router.add_get(
         '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log)
     app.router.add_get(

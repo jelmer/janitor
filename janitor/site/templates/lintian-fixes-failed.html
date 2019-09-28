@@ -1,0 +1,27 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% from "run_util.html" import result_code_explanation %}
+{% block page_title %}Lintian Brush Failures for {{ fixer }}{% endblock %}
+{% block body %}
+<div class="section" id="{{ fixer }}">
+<h1>{{ fixer }}</h1>
+<table class="docutils" border="1">
+<colgroup>
+<col width="31%">
+<col width="63%">
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Package</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for pkg, description in failures %}
+<tr class="row-even"><td><a class="reference external" href="../pkg/{{ pkg }}/">{{ pkg }}</a></td>
+<td><a class="reference external" href="../pkg/{{ pkg }}/{{ run_id }}">{{ description }}</a></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}

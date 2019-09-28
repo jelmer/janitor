@@ -1147,3 +1147,11 @@ select json_object_keys(result->'failed'), count(*) from run where
 suite = 'lintian-fixes' and json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
 """
         return await conn.fetch(query)
+
+
+async def iter_lintian_brush_fixer_failures(fixer):
+    async with get_connection() as conn:
+        query = """
+select package, result->'failed'->$1 from run where result->'failed'?$1
+"""
+        return await conn.fetch(query, fixer)
