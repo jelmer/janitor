@@ -81,14 +81,14 @@ async def get_package_from_gitlab_webhook(body):
 
 
 async def schedule(package, suite, offset=DEFAULT_SCHEDULE_OFFSET,
-                   refresh=False):
+                   refresh=False, requestor=None):
     from ..schedule import estimate_duration
     command = SUITE_TO_COMMAND[suite]
     estimated_duration = await estimate_duration(package.name, suite)
     await state.add_to_queue(
         package.branch_url, package.name, command, suite, offset,
         estimated_duration=estimated_duration, refresh=refresh,
-        requestor='user from web UI')
+        requestor=requestor)
     return estimated_duration
 
 
@@ -108,8 +108,9 @@ async def handle_webhook(request):
             status=404)
     # TODO(jelmer: If nothing found, then maybe fall back to
     # urlutils.basename(body['project']['path_with_namespace'])?
+    requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
     for suite in SUITES:
-        await schedule(package, suite)
+        await schedule(package, suite, requestor)
     return web.json_response({})
 
 
@@ -130,7 +131,9 @@ async def handle_schedule(request):
         package = await state.get_package(package)
     except IndexError:
         return web.json_response({'reason': 'Package not found'}, status=404)
-    estimated_duration = await schedule(package, suite, offset, refresh)
+    requestor = 'user from web UI'
+    estimated_duration = await schedule(
+        package, suite, offset, refresh, requestor)
     response_obj = {
         'package': package.name,
         'suite': suite,
