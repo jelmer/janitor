@@ -88,7 +88,7 @@ async def get_queue(only_command=None, limit=None):
                         map(lintian_tag_link,
                             entry.env['CONTEXT'].split(' '))))
         elif entry.command[0] == 'plain':
-            description = ''
+            description = 'Build without changes'
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:
@@ -98,7 +98,8 @@ async def get_queue(only_command=None, limit=None):
         if entry.refresh:
             description += " (from scratch)"
         yield (
-            entry.package, entry.suite, description, entry.estimated_duration,
+            entry.package, entry.requestor,
+            entry.suite, description, entry.estimated_duration,
             log_id, result_code)
 
 
