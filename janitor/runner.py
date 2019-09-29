@@ -451,7 +451,7 @@ async def export_stats():
         for suite, count in await state.get_never_processed():
             never_processed_count.labels(suite).set(count)
         for fixer, count in await state.iter_failed_lintian_fixers():
-            lintian_brush_fixer_failed_count.labels(fixer, count)
+            lintian_brush_fixer_failed_count.labels(fixer).set(count)
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
