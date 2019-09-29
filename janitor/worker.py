@@ -40,7 +40,9 @@ from silver_platter.debian.lintian import (
     run_lintian_fixers,
     has_nontrivial_changes,
     DEFAULT_ADDON_FIXERS,
+    DEFAULT_MINIMUM_CERTAINTY,
 )
+from lintian_brush.config import Config as LintianBrushConfig
 from silver_platter.debian.upstream import (
     check_quilt_patches_apply,
     merge_upstream,
@@ -138,7 +140,7 @@ class LintianBrushWorker(SubWorker):
             '--update-changelog', action="store_true", dest="update_changelog",
             help="force updating of the changelog", default=None)
         subparser.add_argument(
-            '--compat-release', type=str, default=debian_info.stable(),
+            '--compat-release', type=str, default=None,
             help='Oldest Debian release to be compatible with.')
         subparser.add_argument(
             '--propose-addon-only',
@@ -151,12 +153,33 @@ class LintianBrushWorker(SubWorker):
         fixers = get_fixers(
             available_lintian_fixers(), tags=self.args.tags)
 
+        compat_release = self.args.compat_release
+        allow_reformatting = None
+        minimum_certainty = None
+        try:
+            cfg = LintianBrushConfig.from_workingtree(local_tree)
+        except FileNotFoundError:
+            pass
+        else:
+            if compat_release is None:
+                compat_release = cfg.compat_release()
+            allow_reformatting = cfg.allow_reformatting()
+            minimum_certainty = cfg.minimum_certainty()
+        if compat_release is None:
+            compat_release = debian_info.stable()
+        if allow_reformatting is None:
+            allow_reformatting = False
+        if minimum_certainty is None:
+            minimum_certainty = DEFAULT_MINIMUM_CERTAINTY
+
         with local_tree.lock_write():
             overall_result = run_lintian_fixers(
                     local_tree, fixers,
                     committer=self.committer,
                     update_changelog=self.args.update_changelog,
-                    compat_release=self.args.compat_release,
+                    compat_release=compat_release,
+                    minimum_certainty=minimum_certainty,
+                    allow_reformatting=allow_reformatting,
                     trust_package=TRUST_PACKAGE)
 
         if overall_result.failed_fixers:
