@@ -87,7 +87,7 @@ async def get_queue(only_command=None, limit=None):
                     ', '.join(
                         map(lintian_tag_link,
                             entry.env['CONTEXT'].split(' '))))
-        elif entry.command[0] == 'plain':
+        elif entry.command[0] == 'just-build':
             description = 'Build without changes'
         else:
             raise AssertionError('invalid command %s' % entry.command)
