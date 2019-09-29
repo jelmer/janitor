@@ -24,7 +24,18 @@ from janitor import SUITES
 
 
 def format_duration(duration):
-    return '%dm%02ds' % (duration.seconds / 60, duration.seconds % 60)
+    total_seconds = duration.seconds
+    seconds = duration.seconds % 60
+    total_minutes = total_seconds // 60
+    minutes = total_minutes % 60
+    total_hours = total_minutes // 24
+    hours = total_hours % 24
+    days = total_hours // 24
+    if days:
+        return '%dd%02dh' % (days, hours)
+    if hours:
+        return '%dh%02dm' % (hours, minutes)
+    return '%dm%02ds' % (minutes, seconds)
 
 
 def format_timestamp(ts):
