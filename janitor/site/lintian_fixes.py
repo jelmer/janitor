@@ -23,7 +23,7 @@ async def generate_pkg_file(publisher_url, vcs_manager, package, run_id=None):
     except IndexError:
         raise KeyError(package)
     if run_id is not None:
-        run = state.get_run(run_id)
+        run = await state.get_run(run_id)
         if not run:
             raise KeyError(run_id)
         merge_proposals = []

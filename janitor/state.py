@@ -1143,8 +1143,19 @@ UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2
 async def iter_failed_lintian_fixers():
     async with get_connection() as conn:
         query = """
-select json_object_keys(result->'failed'), count(*) from run where
-suite = 'lintian-fixes' and json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
+select json_object_keys(result->'failed'), count(*) from (
+SELECT DISTINCT ON (package)
+package,
+suite,
+id,
+result,
+description,
+start_time,
+finish_time - start_time AS duration
+FROM
+run
+ORDER BY package, start_time DESC) AS runs
+where suite = 'lintian-fixes' and json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
 """
         return await conn.fetch(query)
 
@@ -1152,6 +1163,18 @@ suite = 'lintian-fixes' and json_typeof(result->'failed') = 'object' group by 1 
 async def iter_lintian_brush_fixer_failures(fixer):
     async with get_connection() as conn:
         query = """
-select package, result->'failed'->$1 from run where result->'failed'?$1
+select id, package, result->'failed'->$1 from (
+SELECT DISTINCT ON (package)
+package,
+suite,
+id,
+result,
+description,
+start_time,
+finish_time - start_time AS duration
+FROM
+run
+ORDER BY package, start_time DESC) AS runs
+where suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
 """
         return await conn.fetch(query, fixer)
