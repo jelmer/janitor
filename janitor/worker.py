@@ -32,7 +32,6 @@ from breezy.errors import (
 
 from silver_platter.debian import (
     MissingUpstreamTarball,
-    BrokenNestedTreeSupport,
     Workspace,
 )
 from silver_platter.debian.lintian import (
@@ -335,12 +334,6 @@ class NewUpstreamWorker(SubWorker):
             except MissingUpstreamTarball as e:
                 error_description = str(e)
                 error_code = 'missing-upstream-tarball'
-                raise WorkerFailure(error_code, error_description)
-            except BrokenNestedTreeSupport:
-                error_description = (
-                    'This package uses nested trees (submodules), which '
-                    'are not yet supported properly by Breezy.')
-                error_code = 'requires-nested-trees'
                 raise WorkerFailure(error_code, error_description)
 
             if local_tree.has_filename('debian/patches/series'):
