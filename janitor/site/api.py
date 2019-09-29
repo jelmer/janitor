@@ -87,7 +87,8 @@ async def schedule(package, suite, offset=DEFAULT_SCHEDULE_OFFSET,
     estimated_duration = await estimate_duration(package.name, suite)
     await state.add_to_queue(
         package.branch_url, package.name, command, suite, offset,
-        estimated_duration=estimated_duration, refresh=refresh)
+        estimated_duration=estimated_duration, refresh=refresh,
+        'user from web UI')
     return estimated_duration
 
 

@@ -39,7 +39,7 @@ async def main(result_code):
         await state.add_to_queue(
             packages[package].branch_url,
             package, command.split(' '), suite,
-            estimated_duration=duration)
+            estimated_duration=duration, requestor='reschedule')
 
 
 asyncio.run(main(args.result_code))

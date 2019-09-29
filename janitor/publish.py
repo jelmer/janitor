@@ -693,7 +693,8 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                 note('%s is conflicted. Rescheduling.', mp.url)
                 await state.add_to_queue(
                     run.branch_url, run.package, shlex.split(run.command),
-                    run.suite, offset=-2, refresh=True)
+                    run.suite, offset=-2, refresh=True,
+                    requestor='publisher')
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)

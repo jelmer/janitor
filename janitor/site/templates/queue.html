@@ -37,15 +37,17 @@
   <th class="head">Package</th>
   <th class="head">Command</th>
   <th class="head">Estimated duration</th>
+  <th class="head">Requestor</th>
   <th class="head">Last Run</th>
 </tr>
 </thead>
 <tbody valign="top">
-{% for pkg, suite, description, estimated_duration, last_run_id, last_run_result_code in queue %}
+{% for pkg, requestor, suite, description, estimated_duration, last_run_id, last_run_result_code in queue %}
 <tr>
   <td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a></td>
   <td>{{ description|safe }}</td>
   <td>{{ format_duration(estimated_duration) if estimated_duration else 'unknown' }}</td>
+  <td>{{ requestor }}</td>
   <td>{% if last_run_id %}<a href="/cupboard/pkg/{{ pkg }}/{{ last_run_id }}">{{ display_result_code(last_run_result_code) }}</a>{% endif %}</td>
 </tr>
 {% endfor %}

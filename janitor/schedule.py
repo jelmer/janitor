@@ -174,7 +174,8 @@ async def add_to_queue(todo, dry_run=False, default_offset=0):
             added = await state.add_to_queue(
                 vcs_url, package, command, suite, offset=int(offset),
                 estimated_duration=estimated_duration,
-                context=env.get('CONTEXT'), committer=env.get('COMMITTER'))
+                context=env.get('CONTEXT'), committer=env.get('COMMITTER'),
+                requestor='scheduler')
         else:
             added = True
         if added:

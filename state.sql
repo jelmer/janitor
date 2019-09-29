@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS queue (
    context text,
    estimated_duration interval,
    refresh boolean default false,
+   requestor text,
    unique(package, command)
 );
 CREATE TABLE IF NOT EXISTS branch (

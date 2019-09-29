@@ -444,10 +444,10 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
 class QueueItem(object):
 
     __slots__ = ['id', 'branch_url', 'package', 'env', 'command',
-                 'estimated_duration', 'suite', 'refresh']
+                 'estimated_duration', 'suite', 'refresh', 'requestor']
 
     def __init__(self, id, branch_url, package, env, command,
-                 estimated_duration, suite, refresh):
+                 estimated_duration, suite, refresh, requestor):
         self.id = id
         self.package = package
         self.branch_url = branch_url
@@ -456,12 +456,13 @@ class QueueItem(object):
         self.estimated_duration = estimated_duration
         self.suite = suite
         self.refresh = refresh
+        self.requestor = requestor
 
     @classmethod
     def from_row(cls, row):
         (branch_url, package, committer,
             command, context, queue_id, estimated_duration,
-            suite, refresh) = row
+            suite, refresh, requestor) = row
         env = {
             'COMMITTER': committer or None,
             'CONTEXT': context,
@@ -471,11 +472,11 @@ class QueueItem(object):
                 package=package, env=env,
                 command=shlex.split(command),
                 estimated_duration=estimated_duration,
-                suite=suite, refresh=refresh)
+                suite=suite, refresh=refresh, requestor=requestor)
 
     def _tuple(self):
         return (self.id, self.branch_url, self.package, self.env, self.command,
-                self.estimated_duration, self.suite, self.refresh)
+                self.estimated_duration, self.suite, self.refresh, self.requestor)
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
@@ -521,7 +522,8 @@ SELECT
     queue.id,
     queue.estimated_duration,
     queue.suite,
-    queue.refresh
+    queue.refresh,
+    queue.requestor
 FROM
     queue
 ORDER BY
@@ -547,6 +549,7 @@ SELECT
       queue.estimated_duration,
       queue.suite,
       queue.refresh,
+      queue.requestor,
       run.id,
       run.result_code
   FROM
@@ -566,7 +569,7 @@ SELECT
         query += " LIMIT %d" % limit
     async with get_connection() as conn:
         for row in await conn.fetch(query):
-            yield QueueItem.from_row(row[:9]), row[9], row[10]
+            yield QueueItem.from_row(row[:10]), row[10], row[11]
 
 
 async def drop_queue_item(queue_id):
@@ -576,12 +579,12 @@ async def drop_queue_item(queue_id):
 
 async def add_to_queue(branch_url, package, command, suite, offset=0,
                        context=None, committer=None, estimated_duration=None,
-                       refresh=False):
+                       refresh=False, requestor=None):
     async with get_connection() as conn:
         await conn.execute(
             "INSERT INTO queue "
             "(branch_url, package, command, committer, priority, context, "
-            "estimated_duration, suite, refresh) "
+            "estimated_duration, suite, refresh, requestor) "
             "VALUES "
             "($1, $2, $3, $4,"
             "(SELECT COALESCE(MIN(priority), 0) FROM queue) + $5, "
@@ -589,10 +592,10 @@ async def add_to_queue(branch_url, package, command, suite, offset=0,
             "context = EXCLUDED.context, priority = EXCLUDED.priority, "
             "estimated_duration = EXCLUDED.estimated_duration, "
             "branch_url = EXCLUDED.branch_url, "
-            "refresh = EXCLUDED.refresh "
+            "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor "
             "WHERE queue.priority >= EXCLUDED.priority",
             branch_url, package, ' '.join(command), committer,
-            offset, context, estimated_duration, suite, refresh)
+            offset, context, estimated_duration, suite, refresh, requestor)
         return True
 
 
