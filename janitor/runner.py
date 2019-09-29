@@ -95,6 +95,10 @@ run_result_count = Gauge(
 never_processed_count = Gauge(
     'never_processed_count', 'Number of items never processed.',
     labelnames=('suite', ))
+lintian_brush_fixer_failed_count = Gauge(
+    'lintian_brush_fixer_failed_count',
+    'Number of failures per lintian-brush fixer.',
+    labelnames=('fixer', ))
 
 
 class NoChangesFile(Exception):
@@ -446,6 +450,8 @@ async def export_stats():
                 suite=suite, result_code=result_code).set(count)
         for suite, count in await state.get_never_processed():
             never_processed_count.labels(suite).set(count)
+        for fixer, count in await state.iter_failed_lintian_fixers():
+            lintian_brush_fixer_failed_count.labels(fixer, count)
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
