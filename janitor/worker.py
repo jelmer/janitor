@@ -157,7 +157,7 @@ class LintianBrushWorker(SubWorker):
         allow_reformatting = None
         minimum_certainty = None
         try:
-            cfg = LintianBrushConfig.from_workingtree(local_tree)
+            cfg = LintianBrushConfig.from_workingtree(local_tree, '')
         except FileNotFoundError:
             pass
         else:
