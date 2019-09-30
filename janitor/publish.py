@@ -31,26 +31,8 @@ from prometheus_client import (
     REGISTRY,
 )
 
-from breezy.plugins.propose.propose import (
-    MergeProposalExists,
-    )
-
 from silver_platter.proposal import (
-    publish_changes as publish_changes_from_workspace,
-    propose_changes,
-    push_changes,
-    push_derived_changes,
-    find_existing_proposed,
-    get_hoster,
-    NoSuchProject,
-    PermissionDenied,
-    UnsupportedHoster,
     iter_all_mps,
-    )
-from silver_platter.debian.lintian import (
-    create_mp_description,
-    parse_mp_description,
-    update_proposal_commit_message,
     )
 from silver_platter.utils import (
     open_branch,
@@ -60,7 +42,6 @@ from silver_platter.utils import (
 
 from . import (
     state,
-    ADDITIONAL_COLOCATED_BRANCHES,
     )
 from .config import read_config
 from .policy import (
@@ -73,28 +54,6 @@ from .vcs import (
     LocalVcsManager,
     get_run_diff,
     )
-
-
-JANITOR_BLURB = """
-This merge proposal was created automatically by the Janitor bot
-(https://janitor.debian.net/%(suite)s).
-
-You can follow up to this merge proposal as you normally would.
-"""
-
-
-OLD_JANITOR_BLURB = """
-This merge proposal was created automatically by the Janitor bot
-(https://janitor.debian.net/).
-
-You can follow up to this merge proposal as you normally would.
-"""
-
-
-LOG_BLURB = """
-Build and test logs for this branch can be found at
-https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s/.
-"""
 
 
 MODE_SKIP = 'skip'
@@ -128,240 +87,11 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-def strip_janitor_blurb(text, suite):
-    try:
-        i = text.index(JANITOR_BLURB % {'suite': suite})
-    except ValueError:
-        pass
-    else:
-        return text[:i].strip()
-
-    i = text.index(OLD_JANITOR_BLURB)
-    return text[:i].strip()
-
-
-def add_janitor_blurb(text, pkg, log_id, suite):
-    text += '\n' + (JANITOR_BLURB % {'suite': suite})
-    text += (LOG_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
-    return text
-
-
-class MaintainerRateLimiter(object):
-
-    def __init__(self, max_mps_per_maintainer=None):
-        self._max_mps_per_maintainer = max_mps_per_maintainer
-        self._open_mps_per_maintainer = None
-
-    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
-        self._open_mps_per_maintainer = open_mps_per_maintainer
-        for maintainer_email, count in open_mps_per_maintainer.items():
-            open_proposal_count.labels(maintainer=maintainer_email).set(count)
-
-    def allowed(self, maintainer_email):
-        if not self._max_mps_per_maintainer:
-            return True
-        if self._open_mps_per_maintainer is None:
-            # Be conservative
-            return False
-        current = self._open_mps_per_maintainer.get(maintainer_email, 0)
-        return (current < self._max_mps_per_maintainer)
-
-    def inc(self, maintainer_email):
-        if self._open_mps_per_maintainer is None:
-            return
-        self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
-        self._open_mps_per_maintainer[maintainer_email] += 1
-        open_proposal_count.labels(maintainer=maintainer_email).inc()
-
-
-class NonRateLimiter(object):
-
-    def allowed(self, email):
-        return True
-
-    def inc(self, maintainer_email):
-        pass
-
-
 class PublishFailure(Exception):
 
     def __init__(self, code, description):
         self.code = code
         self.description = description
-
-
-class BranchWorkspace(object):
-    """Workspace-like object that doesn't use working trees.
-    """
-
-    def __init__(self, main_branch, local_branch, resume_branch=None):
-        self.main_branch = main_branch
-        self.local_branch = local_branch
-        self.resume_branch = resume_branch
-        self.orig_revid = (resume_branch or main_branch).last_revision()
-        self.additional_colocated_branches = ADDITIONAL_COLOCATED_BRANCHES
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        return False
-
-    def changes_since_main(self):
-        return self.local_branch.last_revision() \
-               != self.main_branch.last_revision()
-
-    def changes_since_resume(self):
-        return self.orig_revid != self.local_branch.last_revision()
-
-    def propose(self, name, description, hoster=None, existing_proposal=None,
-                overwrite_existing=None, labels=None, dry_run=False,
-                commit_message=None):
-        if hoster is None:
-            hoster = get_hoster(self.main_branch)
-        return propose_changes(
-            self.local_branch, self.main_branch,
-            hoster=hoster, name=name, mp_description=description,
-            resume_branch=self.resume_branch,
-            resume_proposal=existing_proposal,
-            overwrite_existing=overwrite_existing,
-            labels=labels, dry_run=dry_run,
-            commit_message=commit_message,
-            additional_colocated_branches=self.additional_colocated_branches)
-
-    def push(self, hoster=None, dry_run=False):
-        if hoster is None:
-            hoster = get_hoster(self.main_branch)
-        return push_changes(
-            self.local_branch, self.main_branch, hoster=hoster,
-            additional_colocated_branches=self.additional_colocated_branches,
-            dry_run=dry_run)
-
-    def push_derived(self, name, hoster=None, overwrite_existing=False):
-        if hoster is None:
-            hoster = get_hoster(self.main_branch)
-        return push_derived_changes(
-            self.local_branch,
-            self.main_branch, hoster, name,
-            overwrite_existing=overwrite_existing)
-
-
-async def publish(
-        suite, pkg, maintainer_email, subrunner, mode, hoster,
-        main_branch, local_branch, resume_branch=None,
-        dry_run=False, log_id=None, existing_proposal=None,
-        allow_create_proposal=False):
-    def get_proposal_description(existing_proposal):
-        if existing_proposal:
-            existing_description = existing_proposal.get_description()
-            existing_description = strip_janitor_blurb(
-                existing_description, suite)
-        else:
-            existing_description = None
-        description = subrunner.get_proposal_description(
-            existing_description)
-        return add_janitor_blurb(description, pkg, log_id, suite)
-
-    def get_proposal_commit_message(existing_proposal):
-        if existing_proposal:
-            existing_commit_message = (
-                getattr(existing_proposal, 'get_commit_message',
-                        lambda: None)())
-        else:
-            existing_commit_message = None
-        return subrunner.get_proposal_commit_message(
-            existing_commit_message)
-
-    with BranchWorkspace(
-            main_branch, local_branch, resume_branch=resume_branch) as ws:
-        if not hoster.supports_merge_proposal_labels:
-            labels = None
-        else:
-            labels = [suite]
-        try:
-            (proposal, is_new) = publish_changes_from_workspace(
-                ws, mode, subrunner.branch_name(),
-                get_proposal_description=get_proposal_description,
-                get_proposal_commit_message=(
-                    get_proposal_commit_message),
-                dry_run=dry_run, hoster=hoster,
-                allow_create_proposal=allow_create_proposal,
-                overwrite_existing=True,
-                existing_proposal=existing_proposal,
-                labels=labels)
-        except NoSuchProject as e:
-            raise PublishFailure(
-                description='project %s was not found' % e.project,
-                code='project-not-found')
-        except PermissionDenied as e:
-            raise PublishFailure(
-                description=str(e), code='permission-denied')
-        except MergeProposalExists as e:
-            raise PublishFailure(
-                description=str(e), code='merge-proposal-exists')
-
-        if proposal and is_new:
-            merge_proposal_count.labels(status='open').inc()
-            open_proposal_count.labels(
-                maintainer=maintainer_email).inc()
-
-    return proposal, is_new
-
-
-class LintianBrushPublisher(object):
-
-    def __init__(self, args):
-        self.args = args
-
-    def branch_name(self):
-        return "lintian-fixes"
-
-    def get_proposal_description(self, existing_description):
-        if existing_description:
-            existing_lines = parse_mp_description(existing_description)
-        else:
-            existing_lines = []
-        return create_mp_description(
-            existing_lines + [l['summary'] for l in self.applied])
-
-    def get_proposal_commit_message(self, existing_commit_message):
-        applied = []
-        for result in self.applied:
-            applied.append((result['fixed_lintian_tags'], result['summary']))
-        return update_proposal_commit_message(existing_commit_message, applied)
-
-    def read_worker_result(self, result):
-        self.applied = result['applied']
-        self.failed = result['failed']
-        self.add_on_only = result['add_on_only']
-
-    def allow_create_proposal(self):
-        return self.applied and not self.add_on_only
-
-
-class NewUpstreamPublisher(object):
-
-    def __init__(self, args):
-        self.args = args
-
-    def branch_name(self):
-        if '--snapshot' in self.args:
-            return "new-upstream-snapshot"
-        else:
-            return "new-upstream"
-
-    def read_worker_result(self, result):
-        self._upstream_version = result['upstream_version']
-
-    def get_proposal_description(self, existing_description):
-        return "New upstream version %s.\n" % self._upstream_version
-
-    def get_proposal_commit_message(self, existing_commit_message):
-        return self.get_proposal_description(None)
-
-    def allow_create_proposal(self):
-        # No upstream release too small...
-        return True
 
 
 async def publish_one(
@@ -375,63 +105,44 @@ async def publish_one(
         raise PublishFailure(
             'result-branch-not-found', 'can not find local branch')
 
-    if command.startswith('new-upstream'):
-        subrunner = NewUpstreamPublisher(command)
-    elif command == 'lintian-brush':
-        subrunner = LintianBrushPublisher(command)
-    else:
-        raise AssertionError('unknown command %r' % command)
+    request = {
+        'dry-run': dry_run,
+        'suite': suite,
+        'package': pkg,
+        'command': command,
+        'subworker_result': subworker_result,
+        'main_branch_url': main_branch_url,
+        'local_branch_url': local_branch.user_url,
+        'mode': mode,
+        'log_id': log_id,
+        'allow_create_proposal': allow_create_proposal}
 
-    try:
-        main_branch = open_branch(
-            main_branch_url, possible_transports=possible_transports)
-    except BranchUnavailable as e:
-        raise PublishFailure('branch-unavailable', str(e))
-    except BranchMissing as e:
-        raise PublishFailure('branch-missing', str(e))
+    args = [sys.executable, '-m', 'janitor.publish_one']
 
-    subrunner.read_worker_result(subworker_result)
-    branch_name = subrunner.branch_name()
+    p = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
 
-    try:
-        hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
-    except UnsupportedHoster as e:
-        if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
-            netloc = urllib.parse.urlparse(main_branch.user_url).netloc
-            raise PublishFailure(
-                description='Hoster unsupported: %s.' % netloc,
-                code='hoster-unsupported')
-        # We can't figure out what branch to resume from when there's no hoster
-        # that can tell us.
-        resume_branch = None
-        existing_proposal = None
-        if mode == MODE_PUSH:
-            warning('Unsupported hoster (%s), will attempt to push to %s',
-                    e, main_branch.user_url)
-    else:
-        try:
-            (resume_branch, overwrite, existing_proposal) = (
-                find_existing_proposed(
-                    main_branch, hoster, branch_name))
-        except NoSuchProject as e:
-            if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
-                raise PublishFailure(
-                    description='Project %s not found.' % e.project,
-                    code='project-not-found')
-            resume_branch = None
-            existing_proposal = None
+    (stdout, stderr) = await p.communicate(json.dumps(request).encode())
 
-    if allow_create_proposal is None:
-        allow_create_proposal = subrunner.allow_create_proposal()
-    proposal, is_new = await publish(
-        suite, pkg, maintainer_email,
-        subrunner, mode, hoster, main_branch, local_branch,
-        resume_branch,
-        dry_run=dry_run, log_id=log_id,
-        existing_proposal=existing_proposal,
-        allow_create_proposal=allow_create_proposal)
+    if p.returncode == 1:
+        response = json.loads(stdout.decode())
+        raise PublishFailure(response['code'], response['description'])
 
-    return proposal, branch_name, is_new
+    if p.returncode == 0:
+        response = json.loads(stdout.decode())
+
+        proposal_url = output.get('proposal_url')
+        branch_name = output.get('branch_name')
+        is_new = output.get('is_new')
+
+        if proposal_url and is_new:
+            merge_proposal_count.labels(status='open').inc()
+            open_proposal_count.labels(
+                maintainer=maintainer_email).inc()
+
+        return proposal_url, branch_name, is_new
+
+    raise PublishFailure('publisher-invalid-response', stderr)
 
 
 async def publish_pending_new(rate_limiter, policy, vcs_manager,
@@ -471,7 +182,7 @@ async def publish_pending_new(rate_limiter, policy, vcs_manager,
             continue
         note('Publishing %s / %r (mode: %s)', pkg, command, mode)
         try:
-            proposal, branch_name, is_new = await publish_one(
+            proposal_url, branch_name, is_new = await publish_one(
                 suite, pkg, command, subworker_result,
                 main_branch_url, mode, log_id, maintainer_email,
                 vcs_manager=vcs_manager, branch_name=branch_name,
@@ -481,18 +192,18 @@ async def publish_pending_new(rate_limiter, policy, vcs_manager,
             code = e.code
             description = e.description
             branch_name = None
-            proposal = None
+            proposal_url = None
             note('Failed(%s): %s', code, description)
         else:
             code = 'success'
             description = 'Success'
-            if proposal and is_new:
+            if proposal_url and is_new:
                 rate_limiter.inc(maintainer_email)
 
         await state.store_publish(
             pkg, branch_name, main_branch_revision,
             revision, mode, code, description,
-            proposal.url if proposal else None)
+            proposal_url if proposal_url else None)
 
 
 async def diff_request(vcs_manager, request):
@@ -500,6 +211,28 @@ async def diff_request(vcs_manager, request):
     run = await state.get_run(run_id)
     diff = get_run_diff(vcs_manager, run)
     return web.Response(body=diff, content_type='text/x-diff')
+
+
+async def publish_and_store():
+
+    try:
+        proposal_url, branch_name, is_new = await publish_one(
+    except PublishFailure as e:
+        await state.store_publish(
+            run.package, run.branch_name,
+            run.main_branch_revision.decode('utf-8'),
+            run.revision.decode('utf-8'), mode, e.code, e.description,
+            None)
+        return web.json_response(
+            {'code': e.code, 'description': e.description}, status=400)
+
+    if proposal_url and is_new:
+        rate_limiter.inc(package.maintainer_email)
+
+    await state.store_publish(
+        run.package, branch_name, run.main_branch_revision.decode('utf-8'),
+        run.revision.decode('utf-8'), mode, 'success', 'Success',
+        proposal_url if proposal_url else None)
 
 
 async def publish_request(rate_limiter, dry_run, vcs_manager, request):
@@ -532,34 +265,16 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     if run is None:
         return web.json_response({}, status=400)
     note('Handling request to publish %s/%s', package.name, suite)
-    try:
-        proposal, branch_name, is_new = await publish_one(
-            suite, package.name, run.command, run.result,
-            run.branch_url, mode, run.id, package.maintainer_email,
-            vcs_manager=vcs_manager, branch_name=run.branch_name,
-            dry_run=dry_run, allow_create_proposal=True)
-    except PublishFailure as e:
-        await state.store_publish(
-            run.package, run.branch_name,
-            run.main_branch_revision.decode('utf-8'),
-            run.revision.decode('utf-8'), mode, e.code, e.description,
-            None)
-        return web.json_response(
-            {'code': e.code, 'description': e.description}, status=400)
 
-    if proposal and is_new:
-        rate_limiter.inc(package.maintainer_email)
-
-    await state.store_publish(
-        run.package, branch_name, run.main_branch_revision.decode('utf-8'),
-        run.revision.decode('utf-8'), mode, 'success', 'Success',
-        proposal.url if proposal else None)
+    request.loop.create_task(publish_and_store(
+        suite, package.name, run.command, run.result,
+        run.branch_url, mode, run.id, package.maintainer_email,
+        vcs_manager=vcs_manager, branch_name=run.branch_name,
+        dry_run=dry_run, allow_create_proposal=True))
 
     return web.json_response(
-        {'branch_name': branch_name,
-         'mode': mode,
-         'is_new': is_new,
-         'proposal': proposal.url if proposal else None}, status=200)
+        {'run_id': run.id, 'mode': mode},
+        status=202)
 
 
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
@@ -652,7 +367,7 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
 
             note('%s needs to be updated.', mp.url)
             try:
-                mp, branch_name, is_new = await publish_one(
+                mp_url, branch_name, is_new = await publish_one(
                     run.suite, run.package, run.command, run.result,
                     run.branch_url, MODE_PROPOSE, run.id,
                     maintainer_email,
@@ -672,19 +387,19 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                     run.package, branch_name,
                     run.main_branch_revision.decode('utf-8'),
                     run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
-                    'Succesfully updated', mp.url)
+                    'Succesfully updated', mp_url)
 
-                assert not is_new, "Intended to update proposal %r" % mp
+                assert not is_new, "Intended to update proposal %r" % mp_url
                 break
         else:
             if recent_runs:
                 # A new run happened since the last, but there was nothing to
                 # do.
-                if False:
-                    note('%s: Last run did not produce any changes, '
-                         'closing proposal.', mp.url)
-                    mp.close()
-                    continue
+                note('%s: Last run did not produce any changes, '
+                     'closing proposal.', mp.url)
+                # TODO(jelmer): Log this in the database
+                mp.close()
+                continue
 
             # It may take a while for the 'conflicted' bit on the proposal to
             # be refreshed, so only check it if we haven't made any other
