@@ -50,8 +50,8 @@ async def handle_publish(publisher_url, request):
     async with ClientSession() as client:
         try:
             async with client.post(url, data={'mode': mode}) as resp:
-                if resp.status == 200:
-                    return web.json_response(await resp.json())
+                if resp.status in (200, 202):
+                    return web.json_response(await resp.json(), status=resp.status)
                 else:
                     return web.json_response(await resp.json(), status=400)
         except ContentTypeError as e:
@@ -110,7 +110,7 @@ async def handle_webhook(request):
     # urlutils.basename(body['project']['path_with_namespace'])?
     requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
     for suite in SUITES:
-        await schedule(package, suite, requestor)
+        await schedule(package, suite, requestor=requestor)
     return web.json_response({})
 
 
@@ -133,7 +133,7 @@ async def handle_schedule(request):
         return web.json_response({'reason': 'Package not found'}, status=404)
     requestor = 'user from web UI'
     estimated_duration = await schedule(
-        package, suite, offset, refresh, requestor)
+        package, suite, offset, refresh, requestor=requestor)
     response_obj = {
         'package': package.name,
         'suite': suite,
