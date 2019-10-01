@@ -421,9 +421,11 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/pkg/{pkg}/', handle_pkg)
     app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/', handle_run)
     app.router.add_get(
-        '/cupboard/failed-lintian-brush-fixers/', handle_failed_lintian_brush_fixers)
+        '/cupboard/failed-lintian-brush-fixers/',
+        handle_failed_lintian_brush_fixers)
     app.router.add_get(
-        '/cupboard/failed-lintian-brush-fixers/{fixer}', handle_failed_lintian_brush_fixers)
+        '/cupboard/failed-lintian-brush-fixers/{fixer}',
+        handle_failed_lintian_brush_fixers)
     app.router.add_get(
         '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log)
     app.router.add_get(

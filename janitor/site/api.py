@@ -5,7 +5,6 @@ import functools
 import urllib.parse
 
 from janitor.policy import apply_policy
-from janitor.vcs import get_run_diff
 from janitor import state, SUITES
 from . import env
 
@@ -51,7 +50,8 @@ async def handle_publish(publisher_url, request):
         try:
             async with client.post(url, data={'mode': mode}) as resp:
                 if resp.status in (200, 202):
-                    return web.json_response(await resp.json(), status=resp.status)
+                    return web.json_response(
+                        await resp.json(), status=resp.status)
                 else:
                     return web.json_response(await resp.json(), status=400)
         except ContentTypeError as e:

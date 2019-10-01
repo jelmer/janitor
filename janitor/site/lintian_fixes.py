@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
+from aiohttp import ClientSession, ClientConnectorError
 import argparse
 import asyncio
 import urllib.parse
@@ -72,7 +72,8 @@ async def generate_pkg_file(publisher_url, vcs_manager, package, run_id=None):
                     if resp.status == 200:
                         return (await resp.read()).decode('utf-8', 'replace')
                     else:
-                        return 'Unable to retrieve diff; error %d' % resp.status
+                        return (
+                            'Unable to retrieve diff; error %d' % resp.status)
             except ClientConnectorError as e:
                 return 'Unable to retrieve diff; error %s' % e
 

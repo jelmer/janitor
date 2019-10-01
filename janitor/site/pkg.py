@@ -127,7 +127,8 @@ async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
                     if resp.status == 200:
                         return (await resp.read()).decode('utf-8', 'replace')
                     else:
-                        return 'Unable to retrieve diff; error %d' % resp.status
+                        return (
+                            'Unable to retrieve diff; error %d' % resp.status)
             except ClientConnectorError as e:
                 return 'Unable to retrieve diff; error %s' % e
 
