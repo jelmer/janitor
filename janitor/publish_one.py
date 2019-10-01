@@ -349,7 +349,7 @@ if __name__ == '__main__':
     request = json.load(sys.stdin)
 
     try:
-        response = publish_one(
+        proposal, branch_name, is_new = publish_one(
             request['suite'], request['package'],
             request['command'], request['subworker_result'],
             request['main_branch_url'], request['mode'], request['log_id'],
@@ -360,6 +360,9 @@ if __name__ == '__main__':
         json.dump({'code': e.code, 'description': e.description}, sys.stdout)
         sys.exit(1)
 
-    json.dump(response, sys.stdout)
+    json.dump({
+        'proposal_url': proposal.url,
+        'is_new': is_new,
+        'branch_name': branch_name}, sys.stdout)
 
     sys.exit(0)

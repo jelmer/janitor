@@ -31,8 +31,26 @@ from prometheus_client import (
     REGISTRY,
 )
 
+from breezy.plugins.propose.propose import (
+    MergeProposalExists,
+    )
+
 from silver_platter.proposal import (
+    publish_changes as publish_changes_from_workspace,
+    propose_changes,
+    push_changes,
+    push_derived_changes,
+    find_existing_proposed,
+    get_hoster,
+    NoSuchProject,
+    PermissionDenied,
+    UnsupportedHoster,
     iter_all_mps,
+    )
+from silver_platter.debian.lintian import (
+    create_mp_description,
+    parse_mp_description,
+    update_proposal_commit_message,
     )
 from silver_platter.utils import (
     open_branch,
@@ -42,6 +60,7 @@ from silver_platter.utils import (
 
 from . import (
     state,
+    ADDITIONAL_COLOCATED_BRANCHES,
     )
 from .config import read_config
 from .policy import (
@@ -54,6 +73,28 @@ from .vcs import (
     LocalVcsManager,
     get_run_diff,
     )
+
+
+JANITOR_BLURB = """
+This merge proposal was created automatically by the Janitor bot
+(https://janitor.debian.net/%(suite)s).
+
+You can follow up to this merge proposal as you normally would.
+"""
+
+
+OLD_JANITOR_BLURB = """
+This merge proposal was created automatically by the Janitor bot
+(https://janitor.debian.net/).
+
+You can follow up to this merge proposal as you normally would.
+"""
+
+
+LOG_BLURB = """
+Build and test logs for this branch can be found at
+https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s/.
+"""
 
 
 MODE_SKIP = 'skip'
@@ -87,18 +128,15 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-class PublishFailure(Exception):
+def strip_janitor_blurb(text, suite):
+    try:
+        i = text.index(JANITOR_BLURB % {'suite': suite})
+    except ValueError:
+        pass
+    else:
+        return text[:i].strip()
 
-    def __init__(self, code, description):
-        self.code = code
-        self.description = description
-
-
-async def publish_one(
-        suite, pkg, command, subworker_result, main_branch_url,
-        mode, log_id, maintainer_email, vcs_manager, branch_name,
-        dry_run=False, possible_hosters=None,
-        possible_transports=None, allow_create_proposal=None):
+    i = text.index(OLD_JANITOR_BLURB)
     assert mode in SUPPORTED_MODES
     local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
@@ -120,20 +158,24 @@ async def publish_one(
     args = [sys.executable, '-m', 'janitor.publish_one']
 
     p = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE)
 
     (stdout, stderr) = await p.communicate(json.dumps(request).encode())
 
     if p.returncode == 1:
-        response = json.loads(stdout.decode())
+        try:
+            response = json.loads(stdout.decode())
+        except json.JSONDecodeError:
+            raise PublishFailure('publisher-invalid-response', stderr.decode())
         raise PublishFailure(response['code'], response['description'])
 
     if p.returncode == 0:
         response = json.loads(stdout.decode())
 
-        proposal_url = output.get('proposal_url')
-        branch_name = output.get('branch_name')
-        is_new = output.get('is_new')
+        proposal_url = response.get('proposal_url')
+        branch_name = response.get('branch_name')
+        is_new = response.get('is_new')
 
         if proposal_url and is_new:
             merge_proposal_count.labels(status='open').inc()
@@ -142,7 +184,7 @@ async def publish_one(
 
         return proposal_url, branch_name, is_new
 
-    raise PublishFailure('publisher-invalid-response', stderr)
+    raise PublishFailure('publisher-invalid-response', stderr.decode())
 
 
 async def publish_pending_new(rate_limiter, policy, vcs_manager,
@@ -213,10 +255,15 @@ async def diff_request(vcs_manager, request):
     return web.Response(body=diff, content_type='text/x-diff')
 
 
-async def publish_and_store():
-
+async def publish_and_store(
+        run, mode, maintainer_email, vcs_manager, dry_run=False,
+        allow_create_proposal=True):
     try:
         proposal_url, branch_name, is_new = await publish_one(
+            run.suite, run.package, run.command, run.result, run.branch_url,
+            mode, run.id, maintainer_email, vcs_manager, run.branch_name,
+            dry_run=dry_run, possible_hosters=None,
+            possible_transports=None, allow_create_proposal=allow_create_proposal)
     except PublishFailure as e:
         await state.store_publish(
             run.package, run.branch_name,
@@ -227,7 +274,7 @@ async def publish_and_store():
             {'code': e.code, 'description': e.description}, status=400)
 
     if proposal_url and is_new:
-        rate_limiter.inc(package.maintainer_email)
+        rate_limiter.inc(maintainer_email)
 
     await state.store_publish(
         run.package, branch_name, run.main_branch_revision.decode('utf-8'),
@@ -267,9 +314,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     note('Handling request to publish %s/%s', package.name, suite)
 
     request.loop.create_task(publish_and_store(
-        suite, package.name, run.command, run.result,
-        run.branch_url, mode, run.id, package.maintainer_email,
-        vcs_manager=vcs_manager, branch_name=run.branch_name,
+        run, mode, package.maintainer_email, vcs_manager=vcs_manager,
         dry_run=dry_run, allow_create_proposal=True))
 
     return web.json_response(
@@ -466,6 +511,242 @@ def main(argv=None):
         config = read_config(f)
 
     state.DEFAULT_URL = config.database_location
+
+    if args.max_mps_per_maintainer > 0:
+        rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
+    else:
+        rate_limiter = NonRateLimiter()
+
+    if args.no_auto_publish and args.once:
+        sys.stderr.write('--no-auto-publish and --once are mutually exclude.')
+        sys.exit(1)
+
+    loop = asyncio.get_event_loop()
+    vcs_manager = LocalVcsManager(config.vcs_location)
+    if args.once:
+        loop.run_until_complete(publish_pending_new(
+            policy, dry_run=args.dry_run,
+            vcs_manager=vcs_manager))
+
+        last_success_gauge.set_to_current_time()
+        if args.prometheus:
+            push_to_gateway(
+                args.prometheus, job='janitor.publish',
+                registry=REGISTRY)
+    else:
+        loop.run_until_complete(asyncio.gather(
+            loop.create_task(process_queue_loop(
+                rate_limiter, policy, dry_run=args.dry_run,
+                vcs_manager=vcs_manager, interval=args.interval,
+                auto_publish=not args.no_auto_publish)),
+            loop.create_task(
+                run_web_server(
+                    args.listen_address, args.port, rate_limiter,
+                    vcs_manager, args.dry_run))))
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv))
+#!/usr/bin/python3
+# Copyright (C) 2019 Jelmer Vernooij <jelmer@jelmer.uk>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+"""Publishing VCS changes."""
+
+from aiohttp import web
+import asyncio
+import functools
+import json
+import shlex
+import sys
+import urllib.parse
+
+from prometheus_client import (
+    Counter,
+    Gauge,
+    push_to_gateway,
+    REGISTRY,
+)
+
+from silver_platter.proposal import (
+    iter_all_mps,
+    )
+from silver_platter.utils import (
+    open_branch,
+    BranchMissing,
+    BranchUnavailable,
+    )
+
+from . import (
+    state,
+    )
+from .config import read_config
+from .policy import (
+    read_policy,
+    apply_policy,
+    )
+from .prometheus import setup_metrics
+from .trace import note, warning
+from .vcs import (
+    LocalVcsManager,
+    get_run_diff,
+    )
+
+
+MODE_SKIP = 'skip'
+MODE_BUILD_ONLY = 'build-only'
+MODE_PUSH = 'push'
+MODE_PUSH_DERIVED = 'push-derived'
+MODE_PROPOSE = 'propose'
+MODE_ATTEMPT_PUSH = 'attempt-push'
+SUPPORTED_MODES = [
+    MODE_PUSH,
+    MODE_SKIP,
+    MODE_BUILD_ONLY,
+    MODE_PUSH_DERIVED,
+    MODE_PROPOSE,
+    MODE_ATTEMPT_PUSH,
+    ]
+
+
+proposal_rate_limited_count = Counter(
+    'proposal_rate_limited',
+    'Number of attempts to create a proposal that was rate-limited',
+    ['package', 'suite'])
+open_proposal_count = Gauge(
+    'open_proposal_count', 'Number of open proposals.',
+    labelnames=('maintainer',))
+merge_proposal_count = Gauge(
+    'merge_proposal_count', 'Number of merge proposals by status.',
+    labelnames=('status',))
+last_success_gauge = Gauge(
+    'job_last_success_unixtime',
+    'Last time a batch job successfully finished')
+
+
+class MaintainerRateLimiter(object):
+
+    def __init__(self, max_mps_per_maintainer=None):
+        self._max_mps_per_maintainer = max_mps_per_maintainer
+        self._open_mps_per_maintainer = None
+
+    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
+        self._open_mps_per_maintainer = open_mps_per_maintainer
+        for maintainer_email, count in open_mps_per_maintainer.items():
+            open_proposal_count.labels(maintainer=maintainer_email).set(count)
+
+    def allowed(self, maintainer_email):
+        if not self._max_mps_per_maintainer:
+            return True
+        if self._open_mps_per_maintainer is None:
+            # Be conservative
+            return False
+        current = self._open_mps_per_maintainer.get(maintainer_email, 0)
+        return (current < self._max_mps_per_maintainer)
+
+    def inc(self, maintainer_email):
+        if self._open_mps_per_maintainer is None:
+            return
+        self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
+        self._open_mps_per_maintainer[maintainer_email] += 1
+        open_proposal_count.labels(maintainer=maintainer_email).inc()
+
+
+class NonRateLimiter(object):
+
+    def allowed(self, email):
+        return True
+
+    def inc(self, maintainer_email):
+        pass
+
+
+class PublishFailure(Exception):
+
+    def __init__(self, code, description):
+        self.code = code
+        self.description = description
+
+
+async def publish_one(
+        suite, pkg, command, subworker_result, main_branch_url,
+        mode, log_id, maintainer_email, vcs_manager, branch_name,
+        dry_run=False, possible_hosters=None,
+        possible_transports=None, allow_create_proposal=None):
+    assert mode in SUPPORTED_MODES
+    local_branch = vcs_manager.get_branch(pkg, branch_name)
+    if local_branch is None:
+        raise PublishFailure(
+            'result-branch-not-found', 'can not find local branch')
+
+    request = {
+        'dry-run': dry_run,
+        'suite': suite,
+        'package': pkg,
+        'command': command,
+        'subworker_result': subworker_result,
+        'main_branch_url': main_branch_url,
+        'local_branch_url': local_branch.user_url,
+        'mode': mode,
+        'log_id': log_id,
+        'allow_create_proposal': allow_create_proposal}
+
+    args = [sys.executable, '-m', 'janitor.publish_one']
+
+    p = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE)
+
+        help="Create branches but don't push or propose anything.",
+        action="store_true", default=False)
+    parser.add_argument(
+        "--policy",
+        help="Policy file to read.", type=str,
+        default='policy.conf')
+    parser.add_argument(
+        '--prometheus', type=str,
+        help='Prometheus push gateway to export to.')
+    parser.add_argument(
+        '--once', action='store_true',
+        help="Just do one pass over the queue, don't run as a daemon.")
+    parser.add_argument(
+        '--listen-address', type=str,
+        help='Listen address', default='localhost')
+    parser.add_argument(
+        '--port', type=int,
+        help='Listen port', default=9912)
+    parser.add_argument(
+        '--interval', type=int,
+        help=('Seconds to wait in between publishing '
+              'pending proposals'), default=7200)
+    parser.add_argument(
+        '--no-auto-publish',
+        action='store_true',
+        help='Do not create merge proposals automatically.')
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to load configuration from.')
+
+    args = parser.parse_args()
+
+    with open(args.policy, 'r') as f:
+        policy = read_policy(f)
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
 
     if args.max_mps_per_maintainer > 0:
         rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
