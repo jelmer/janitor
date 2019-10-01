@@ -226,8 +226,8 @@ async def invoke_subprocess_worker(
 
 
 async def process_one(
-        output_directory, worker_kind, vcs_url, pkg, env, command, build_command,
-        suite, pre_check=None, post_check=None,
+        output_directory, worker_kind, vcs_url, pkg, env, command,
+        build_command, suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,

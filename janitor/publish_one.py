@@ -51,6 +51,14 @@ from . import (
 from .trace import warning
 
 
+MODE_SKIP = 'skip'
+MODE_BUILD_ONLY = 'build-only'
+MODE_PUSH = 'push'
+MODE_PUSH_DERIVED = 'push-derived'
+MODE_PROPOSE = 'propose'
+MODE_ATTEMPT_PUSH = 'attempt-push'
+
+
 JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot
 (https://janitor.debian.net/%(suite)s).

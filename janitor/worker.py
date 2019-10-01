@@ -64,7 +64,6 @@ from silver_platter.debian.upstream import (
     UpstreamVersionMissingInUpstreamBranch,
     UpstreamMetadataSyntaxError,
     MissingChangelogError,
-    MissingUpstreamTarball,
     QuiltPatchPushFailure,
 )
 

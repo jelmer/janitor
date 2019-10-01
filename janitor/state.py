@@ -24,7 +24,8 @@ from contextlib import asynccontextmanager
 from . import SUITES
 
 
-DEFAULT_URL = 'postgresql://janitor-reader@brangwain.vpn.jelmer.uk:5432/janitor'
+DEFAULT_URL = (
+    'postgresql://janitor-reader@brangwain.vpn.jelmer.uk:5432/janitor')
 
 
 pool = None
@@ -476,7 +477,8 @@ class QueueItem(object):
 
     def _tuple(self):
         return (self.id, self.branch_url, self.package, self.env, self.command,
-                self.estimated_duration, self.suite, self.refresh, self.requestor)
+                self.estimated_duration, self.suite, self.refresh,
+                self.requestor)
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
@@ -1158,7 +1160,9 @@ finish_time - start_time AS duration
 FROM
 run
 ORDER BY package, start_time DESC) AS runs
-where suite = 'lintian-fixes' and json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
+where
+  suite = 'lintian-fixes' and
+  json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
 """
         return await conn.fetch(query)
 

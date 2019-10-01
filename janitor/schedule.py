@@ -206,7 +206,6 @@ async def main():
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
 
-
     args = parser.parse_args()
 
     last_success_gauge = Gauge(

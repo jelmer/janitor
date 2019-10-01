@@ -169,7 +169,8 @@ class GCSLogFilemanager(LogFileManager):
         with open(orig_path, 'rb') as f:
             uploaded_data = gzip.compress(f.read())
         try:
-            await self.storage.upload(self.bucket_name, object_name, uploaded_data)
+            await self.storage.upload(
+                self.bucket_name, object_name, uploaded_data)
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable()
