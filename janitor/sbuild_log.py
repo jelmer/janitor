@@ -617,6 +617,27 @@ def ccache_error(m):
     return CcacheError(m.group(1))
 
 
+class MissingLibrary(object):
+
+    kind = 'missing-library'
+
+    def __init__(self, library):
+        self.library = library
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.library == other.library
+
+    def __str__(self):
+        return 'missing library: %s' % self.library
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.library)
+
+
+def ld_missing_lib(m):
+    return MissingLibrary(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -689,6 +710,7 @@ build_failure_regexps = [
     # A Python error, but not likely to be actionable. The previous
     # line will have the actual line that failed.
     (r'ImportError: cannot import name (.*)', None),
+    (r'/usr/bin/ld: cannot find -l(.*)', ld_missing_lib),
 ]
 
 compiled_build_failure_regexps = [

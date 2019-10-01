@@ -32,6 +32,7 @@ from janitor.sbuild_log import (
     MissingPerlFile,
     MissingPerlModule,
     MissingXmlEntity,
+    MissingLibrary,
     DhMissingUninstalled,
     DhUntilUnsupported,
     DhAddonLoadFailure,
@@ -293,6 +294,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'value at (eval 11) line 1.'], 1,
             DhAddonLoadFailure(
                 'nodejs', 'Debian/Debhelper/Sequence/nodejs.pm'))
+
+    def test_missing_library(self):
+        self.run_test([
+            '/usr/bin/ld: cannot find -lpthreads'], 1,
+            MissingLibrary('pthreads'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
