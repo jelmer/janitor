@@ -21,7 +21,7 @@
 <script src="/_static/jquery.js"></script>
 <script>
 $(function() {
-	$("#{{ id }}").click(function() {
+  $("#{{ id }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ json_dumps(data)|safe }}, function(data) {
       console.log('Scheduled: ' + data.offset);
 {% if resultDiv %}
@@ -46,11 +46,9 @@ $(function() {
   $("#propose{{ id_suffix }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'propose'}, function(data) {
 {% if resultDiv %}
-      if (data.proposal && data.is_new) {
-          $("{{ resultDiv }}").append("Created <a href=\"" + data.proposal + "\">new merge proposal</a>.<br/>");
-      } else {
-          $("{{ resultDiv }}").append("Updated <a href=\"" + data.proposal + "\">merge proposal</a>.<br/>");
-      }
+    if (data) {
+          $("{{ resultDiv }}").append("Publishing merge proposal.<br/>");
+    }
 {% endif %}
     }, 'json')
     .fail(function(response) {
@@ -58,10 +56,10 @@ $(function() {
     });
   });
 
-	$("#push-derived{{ id_suffix }}").click(function() {
+ $("#push-derived{{ id_suffix }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'push-derived'}, function(data) {
 {% if resultDiv %}
-      $("{{ resultDiv }}").append("Created fork.<br/>");
+      $("{{ resultDiv }}").append("Creating fork.<br/>");
 {% endif %}
     }, 'json')
     .fail(function(response) {
