@@ -121,7 +121,11 @@ class NonRateLimiter(object):
         return True
 
     def inc(self, maintainer_email):
-        pass
+        open_proposal_count.labels(maintainer=maintainer_email).inc()
+
+    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
+        for maintainer_email, count in open_mps_per_maintainer.items():
+            open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
 
 class PublishFailure(Exception):
