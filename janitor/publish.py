@@ -23,6 +23,7 @@ import functools
 import json
 import shlex
 import sys
+import uuid
 
 from prometheus_client import (
     Counter,
@@ -171,6 +172,7 @@ async def publish_one(
             response = json.loads(stdout.decode())
         except json.JSONDecodeError:
             raise PublishFailure('publisher-invalid-response', stderr.decode())
+        sys.stderr.write(stderr.decode())
         raise PublishFailure(response['code'], response['description'])
 
     if p.returncode == 0:
