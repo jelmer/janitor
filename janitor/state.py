@@ -128,7 +128,7 @@ async def store_run(
 
 async def store_publish(package, branch_name, main_branch_revision, revision,
                         mode, result_code, description,
-                        merge_proposal_url=None):
+                        merge_proposal_url=None, publish_id=None):
     async with get_connection() as conn:
         if merge_proposal_url:
             await conn.execute(
@@ -139,9 +139,10 @@ async def store_publish(package, branch_name, main_branch_revision, revision,
         await conn.execute(
             "INSERT INTO publish (package, branch_name, "
             "main_branch_revision, revision, mode, result_code, description, "
-            "merge_proposal_url) values ($1, $2, $3, $4, $5, $6, $7, $8) ",
+            "merge_proposal_url, id) "
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9) ",
             package, branch_name, main_branch_revision, revision, mode,
-            result_code, description, merge_proposal_url)
+            result_code, description, merge_proposal_url, publish_id)
 
 
 class Package(object):

@@ -241,10 +241,13 @@ async def publish_pending_new(rate_limiter, policy, vcs_manager,
             if proposal_url and is_new:
                 rate_limiter.inc(maintainer_email)
 
+        publish_id = str(uuid.uuid4())
+
         await state.store_publish(
             pkg, branch_name, main_branch_revision,
             revision, mode, code, description,
-            proposal_url if proposal_url else None)
+            proposal_url if proposal_url else None,
+            publish_id=publish_id)
 
 
 async def diff_request(vcs_manager, request):
@@ -255,8 +258,8 @@ async def diff_request(vcs_manager, request):
 
 
 async def publish_and_store(
-        run, mode, maintainer_email, vcs_manager, rate_limiter, dry_run=False,
-        allow_create_proposal=True):
+        publish_id, run, mode, maintainer_email, vcs_manager, rate_limiter,
+        dry_run=False, allow_create_proposal=True):
     try:
         proposal_url, branch_name, is_new = await publish_one(
             run.suite, run.package, run.command, run.result, run.branch_url,
@@ -269,7 +272,7 @@ async def publish_and_store(
             run.package, run.branch_name,
             run.main_branch_revision.decode('utf-8'),
             run.revision.decode('utf-8'), mode, e.code, e.description,
-            None)
+            None, publish_id=publish_id)
         return web.json_response(
             {'code': e.code, 'description': e.description}, status=400)
 
@@ -279,7 +282,8 @@ async def publish_and_store(
     await state.store_publish(
         run.package, branch_name, run.main_branch_revision.decode('utf-8'),
         run.revision.decode('utf-8'), mode, 'success', 'Success',
-        proposal_url if proposal_url else None)
+        proposal_url if proposal_url else None,
+        publish_id=publish_id)
 
 
 async def publish_request(rate_limiter, dry_run, vcs_manager, request):
@@ -313,13 +317,15 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
         return web.json_response({}, status=400)
     note('Handling request to publish %s/%s', package.name, suite)
 
+    publish_id = str(uuid.uuid4())
+
     request.loop.create_task(publish_and_store(
-        run, mode, package.maintainer_email, vcs_manager=vcs_manager,
+        publish_id, run, mode, package.maintainer_email, vcs_manager=vcs_manager,
         rate_limiter=rate_limiter, dry_run=dry_run,
         allow_create_proposal=True))
 
     return web.json_response(
-        {'run_id': run.id, 'mode': mode},
+        {'run_id': run.id, 'mode': mode, 'publish_id': publish_id},
         status=202)
 
 
@@ -411,6 +417,7 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
             if run.suite == 'unchanged':
                 continue
 
+            publish_id = str(uuid.uuid4())
             note('%s needs to be updated.', mp.url)
             try:
                 mp_url, branch_name, is_new = await publish_one(
@@ -426,14 +433,16 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                     run.package, run.branch_name,
                     run.main_branch_revision.decode('utf-8'),
                     run.revision.decode('utf-8'), MODE_PROPOSE, e.code,
-                    e.description, mp.url)
+                    e.description, mp.url,
+                    publish_id=publish_id)
                 break
             else:
                 await state.store_publish(
                     run.package, branch_name,
                     run.main_branch_revision.decode('utf-8'),
                     run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
-                    'Succesfully updated', mp_url)
+                    'Succesfully updated', mp_url,
+                    publish_id=publish_id)
 
                 assert not is_new, "Intended to update proposal %r" % mp_url
                 break
