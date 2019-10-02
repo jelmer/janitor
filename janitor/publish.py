@@ -145,7 +145,8 @@ async def publish_one(
     local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
         raise PublishFailure(
-            'result-branch-not-found', 'can not find local branch')
+            'result-branch-not-found',
+            'can not find local branch for %s / %s' % (pkg, branch_name))
 
     request = {
         'dry-run': dry_run,
