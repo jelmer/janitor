@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS run (
 );
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived');
 CREATE TABLE IF NOT EXISTS publish (
+   id text not null,
    package text not null,
    branch_name text,
    main_branch_revision text,
