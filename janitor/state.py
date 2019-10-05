@@ -35,7 +35,7 @@ pool = None
 async def get_connection():
     global pool
     if pool is None:
-        pool = await asyncpg.create_pool(DEFAULT_URL)
+        pool = await asyncpg.create_pool('postgresql:///janitor')
 
     async with pool.acquire() as conn:
         await conn.set_type_codec(
