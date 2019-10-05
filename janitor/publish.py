@@ -330,8 +330,8 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     publish_id = str(uuid.uuid4())
 
     request.loop.create_task(publish_and_store(
-        publish_id, run, mode, package.maintainer_email, vcs_manager=vcs_manager,
-        rate_limiter=rate_limiter, dry_run=dry_run,
+        publish_id, run, mode, package.maintainer_email,
+        vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
         allow_create_proposal=True))
 
     return web.json_response(

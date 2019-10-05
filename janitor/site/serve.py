@@ -278,7 +278,7 @@ if __name__ == '__main__':
         run_id = request.match_info.get('run_id')
         try:
             text = await generate_pkg_file(
-                args.publisher_url, vcs_manager, pkg, run_id)
+                args.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
@@ -440,5 +440,5 @@ if __name__ == '__main__':
     setup_metrics(app)
     app.add_subapp(
         '/api', create_api_app(
-            args.publisher_url, args.runner_url, policy_config, vcs_manager))
+            args.publisher_url, args.runner_url, policy_config))
     web.run_app(app, host=args.host, port=args.port)

@@ -196,7 +196,7 @@ async def handle_queue(request):
         response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
-async def handle_diff(vcs_manager, publisher_url, request):
+async def handle_diff(publisher_url, request):
     run_id = request.match_info['run_id']
     url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
     async with ClientSession() as client:
@@ -334,7 +334,7 @@ async def handle_runner_log(runner_url, request):
                 status=500)
 
 
-def create_app(publisher_url, runner_url, policy_config, vcs_manager):
+def create_app(publisher_url, runner_url, policy_config):
     app = web.Application()
     app.router.add_get('/pkgnames', handle_packagename_list)
     app.router.add_get('/pkg', handle_package_list)
@@ -355,12 +355,12 @@ def create_app(publisher_url, runner_url, policy_config, vcs_manager):
     app.router.add_get('/run/{run_id}', handle_run)
     app.router.add_get(
         '/run/{run_id}/diff',
-        functools.partial(handle_diff, vcs_manager, publisher_url))
+        functools.partial(handle_diff, publisher_url))
     app.router.add_get('/pkg/{package}/run', handle_run)
     app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
     app.router.add_get(
         '/pkg/{package}/run/{run_id}/diff',
-        functools.partial(handle_diff, vcs_manager, publisher_url))
+        functools.partial(handle_diff, publisher_url))
     app.router.add_get('/package-branch', handle_package_branch)
     app.router.add_get('/', handle_index)
     app.router.add_get(
