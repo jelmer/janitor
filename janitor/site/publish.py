@@ -9,3 +9,9 @@ async def write_history(limit=None):
     return await template.render_async(
         count=limit,
         history=state.iter_publish_history(limit=limit))
+
+
+async def write_publish(package, branch_name, main_branch_revision, revision,
+                        mode, merge_proposal_url, result_code, description):
+    # For now..
+    return result_code

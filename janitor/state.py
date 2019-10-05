@@ -1136,6 +1136,23 @@ ORDER BY timestamp DESC
             yield row
 
 
+async def get_publish(publish_id):
+    query = """
+SELECT
+  package,
+  branch_name,
+  main_branch_revision,
+  revision,
+  mode,
+  merge_proposal_url,
+  result_code,
+  description
+FROM publish WHERE id = $1
+"""
+    async with get_connection() as conn:
+        return await conn.fetchrow(query, publish_id):
+
+
 async def update_removals(items):
     if not items:
         return
