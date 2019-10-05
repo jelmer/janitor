@@ -4,7 +4,6 @@ from aiohttp import ClientSession, ClientConnectorError
 from io import BytesIO
 import urllib.parse
 
-from breezy.errors import NotBranchError
 from janitor import state
 from janitor.build import (
     changes_filename,
@@ -28,7 +27,6 @@ from janitor.site import (
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
-    get_vcs_abbreviation,
 )
 
 FAIL_BUILD_LOG_LEN = 15
@@ -146,14 +144,7 @@ async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
             get_build_architecture())
     else:
         kwargs['changes_name'] = None
-    try:
-        repo = vcs_manager.get_repository(run.package)
-    except NotBranchError:
-        repo = None
-    if repo:
-        kwargs['vcs'] = get_vcs_abbreviation(repo)
-    else:
-        kwargs['vcs'] = None
+    kwargs['vcs'] = vcs_manager.get_vcs_type(run.package)
     kwargs['cache_url_git'] = CACHE_URL_GIT
     kwargs['cache_url_bzr'] = CACHE_URL_BZR
     kwargs['in_line_boundaries'] = in_line_boundaries

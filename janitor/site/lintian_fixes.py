@@ -1,10 +1,7 @@
 #!/usr/bin/python3
 
 from aiohttp import ClientSession, ClientConnectorError
-import argparse
-import asyncio
 import urllib.parse
-import sys
 
 from janitor import state
 from janitor.site import env, highlight_diff
@@ -17,7 +14,7 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(publisher_url, vcs_manager, package, run_id=None):
+async def generate_pkg_file(publisher_url, package, run_id=None):
     try:
         package = await state.get_package(name=package)
     except IndexError:

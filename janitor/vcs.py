@@ -262,6 +262,13 @@ class VcsManager(object):
     def get_repository(self, package, vcs_type=None):
         raise NotImplementedError(self.get_repository)
 
+    def get_vcs_type(self, package):
+        try:
+            repo = self.get_repository(package)
+        except NotBranchError:
+            return None
+        return get_vcs_abbreviation(repo)
+
 
 class LocalVcsManager(VcsManager):
 
