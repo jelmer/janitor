@@ -334,6 +334,23 @@ async def handle_runner_log(runner_url, request):
                 status=500)
 
 
+async def handle_publish_id(request):
+    publish_id = request.match_info['publish_id']
+    (package, branch_name, main_branch_revision, revision, mode,
+     merge_proposal_url, result_code,
+     description) = await state.get_publish(publish_id)
+    return web.json_response({
+        'package': package,
+        'branch': branch_name,
+        'main_branch_revision': main_branch_revision,
+        'revision': revision,
+        'mode': mode,
+        'merge_proposal_url': merge_proposal_url,
+        'result_code': result_code,
+        'description': description,
+        })
+
+
 def create_app(publisher_url, runner_url, policy_config):
     app = web.Application()
     app.router.add_get('/pkgnames', handle_packagename_list)
@@ -368,6 +385,7 @@ def create_app(publisher_url, runner_url, policy_config):
     app.router.add_get('/policy', handle_global_policy)
     app.router.add_post('/webhook', handle_webhook)
     app.router.add_get('/webhook', handle_webhook)
+    app.router.add_get('/publish/{publish_id}', handle_publish_id)
     app.router.add_get(
         '/runner/status', functools.partial(handle_runner_status, runner_url))
     app.router.add_get(
