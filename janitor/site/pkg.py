@@ -91,7 +91,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
+async def generate_run_file(logfile_manager, run, publisher_url):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -144,7 +144,23 @@ async def generate_run_file(logfile_manager, vcs_manager, run, publisher_url):
             get_build_architecture())
     else:
         kwargs['changes_name'] = None
-    kwargs['vcs'] = vcs_manager.get_vcs_type(run.package)
+
+    async def get_vcs_type():
+        url = urllib.parse.urljoin(publisher_url, 'vcs-type/%s' % run.package)
+        async with ClientSession() as client:
+            try:
+                async with client.get(url) as resp:
+                    if resp.status == 200:
+                        ret = (await resp.read()).decode('utf-8', 'replace')
+                        if ret == "":
+                            ret = None
+                    else:
+                        ret = None
+                return ret
+            except ClientConnectorError as e:
+                return 'Unable to retrieve diff; error %s' % e
+
+    kwargs['vcs'] = get_vcs_type
     kwargs['cache_url_git'] = CACHE_URL_GIT
     kwargs['cache_url_bzr'] = CACHE_URL_BZR
     kwargs['in_line_boundaries'] = in_line_boundaries

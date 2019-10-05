@@ -423,6 +423,14 @@ async def bzr_backend(vcs_manager, request):
     return web.FileResponse(full_path)
 
 
+async def get_vcs_type(vcs_manager, request):
+    package = request.match_info['package']
+    vcs_type = vcs_manager.get_vcs_type(package)
+    if vcs_type is None:
+        raise web.HTTPNotFound()
+    return web.Response(vcs_type.encode('utf-8'))
+
+
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
                          dry_run=False):
     app = web.Application()
@@ -439,6 +447,8 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
     app.router.add_route(
         "*", "/bzr/{package}/{subpath:.*}",
         functools.partial(bzr_backend, vcs_manager))
+    app.router.add_get(
+        '/vcs-type/{package}', functools.partial(get_vcs_type, vcs_manager))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
