@@ -18,10 +18,11 @@
 """Publishing VCS changes."""
 
 from aiohttp import web
-from email.parser import BytesParser
+from http.client import parse_headers
 import asyncio
 import functools
 from io import BytesIO
+import os
 import json
 import shlex
 import sys
@@ -346,13 +347,14 @@ async def git_backend(vcs_manager, request):
     repo = vcs_manager.get_repository(package, 'git')
     if repo is None:
         raise web.HTTPNotFound()
-    local_path = repo.control_transport.local_abspath('.')
+    local_path = repo.user_transport.local_abspath('.')
+    full_path = local_path + '/' + subpath
     env = {
         'GIT_HTTP_EXPORT_ALL': 'true',
         'REQUEST_METHOD': request.method,
         'REMOTE_ADDR': request.remote,
         'CONTENT_TYPE': request.content_type,
-        'PATH_TRANSLATED': local_path + '/' + subpath,
+        'PATH_TRANSLATED': full_path,
         'QUERY_STRING': request.query_string,
         # REMOTE_USER is not set
         }
@@ -360,19 +362,33 @@ async def git_backend(vcs_manager, request):
     for key, value in request.headers.items():
         env['HTTP_' + key.replace('-', '_').upper()] = value
 
+    for name in ['HTTP_CONTENT_ENCODING', 'HTTP_CONTENT_LENGTH']:
+        try:
+            del env[name]
+        except KeyError:
+            pass
+
     p = await asyncio.create_subprocess_exec(
         *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
         env=env, stdin=asyncio.subprocess.PIPE)
 
-    (stdout, stderr) = await p.communicate(await request.read())
+    stdin = await request.read()
+
+    # TODO(jelmer): Stream output, rather than reading everything into a buffer
+    # and then sending it on.
+
+    (stdout, stderr) = await p.communicate(stdin)
+    if stderr:
+        warning('Git %s error: %s', subpath, stderr.decode())
+        return web.Response(
+            status=400, reason='Bad Request', body=stderr)
 
     b = BytesIO(stdout)
 
-    parser = BytesParser()
-    msg = parser.parse(b)
-    status = msg.get('Status')
+    headers = parse_headers(b)
+    status = headers.get('Status')
     if status:
-        del msg['Status']
+        del headers['Status']
         (status_code, status_reason) = status.split(b' ', 1)
         status_code = status_code.decode()
         status_reason = status_reason.decode()
@@ -380,9 +396,16 @@ async def git_backend(vcs_manager, request):
         status_code = 200
         status_reason = 'OK'
 
-    return web.Response(
-        headers=msg.items(), status=status_code,
-        reason=status_reason, body=msg.get_payload())
+    response = web.StreamResponse(
+        headers=headers.items(), status=status_code,
+        reason=status_reason)
+    await response.prepare(request)
+
+    await response.write(b.read())
+
+    await response.write_eof()
+
+    return response
 
 
 async def bzr_backend(vcs_manager, request):
@@ -391,8 +414,11 @@ async def bzr_backend(vcs_manager, request):
     repo = vcs_manager.get_repository(package, 'bzr')
     if repo is None:
         raise web.HTTPNotFound()
-    local_path = repo.control_transport.local_abspath('.')
-    return web.FileResponse(os.path.join(local_path, subpath))
+    local_path = repo.user_transport.local_abspath('.')
+    full_path = os.path.join(local_path, subpath)
+    if not os.path.exists(full_path):
+        raise web.HTTPNotFound()
+    return web.FileResponse(full_path)
 
 
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
