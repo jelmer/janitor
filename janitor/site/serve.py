@@ -99,8 +99,6 @@ if __name__ == '__main__':
     state.DEFAULT_URL = config.database_location
     logfile_manager = get_log_manager(config.logs_location)
 
-    vcs_manager = LocalVcsManager(config.vcs_location)
-
     async def handle_simple(templatename, request):
         from .generate import render_simple
         return web.Response(
@@ -235,7 +233,7 @@ if __name__ == '__main__':
         except IndexError:
             raise web.HTTPNotFound(text='No run with id %r' % run_id)
         text = await generate_run_file(
-            logfile_manager, vcs_manager, run, args.publisher_url)
+            logfile_manager, run, args.publisher_url)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=3600'})
