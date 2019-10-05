@@ -418,6 +418,8 @@ async def bzr_backend(vcs_manager, request):
     full_path = os.path.join(local_path, subpath)
     if not os.path.exists(full_path):
         raise web.HTTPNotFound()
+    if not os.path.isfile(full_path):
+        raise web.Response(b'This is a directory.')
     return web.FileResponse(full_path)
 
 
