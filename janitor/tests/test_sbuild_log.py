@@ -31,6 +31,7 @@ from janitor.sbuild_log import (
     MissingPkgConfig,
     MissingPerlFile,
     MissingPerlModule,
+    MissingRubyGem,
     MissingXmlEntity,
     MissingLibrary,
     DhMissingUninstalled,
@@ -299,6 +300,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             '/usr/bin/ld: cannot find -lpthreads'], 1,
             MissingLibrary('pthreads'))
+
+    def test_missing_ruby_gem(self):
+        self.run_test([
+            'Could not find gem \'childprocess (~> 0.5)\', which is '
+            'required by gem \'selenium-webdriver\', in any of the sources.'],
+            1, MissingRubyGem('childprocess', '0.5'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):

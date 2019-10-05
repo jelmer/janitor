@@ -54,6 +54,7 @@ from .sbuild_log import (
     MissingPerlModule,
     MissingXmlEntity,
     MissingNodeModule,
+    MissingRubyGem,
     MissingLibrary,
     SbuildFailure,
     DhAddonLoadFailure,
@@ -357,6 +358,15 @@ def fix_missing_library(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_ruby_gem(tree, error, committer=None):
+    paths = [os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.gem)]
+    package = get_package_for_paths(paths)
+    if package is None:
+        warning('no package for gem %s', error.gem)
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingCHeader, fix_missing_c_header),
@@ -368,6 +378,7 @@ FIXERS = [
     (MissingPerlModule, fix_missing_perl_file),
     (MissingXmlEntity, fix_missing_xml_entity),
     (MissingNodeModule, fix_missing_node_module),
+    (MissingRubyGem, fix_missing_ruby_gem),
     (MissingLibrary, fix_missing_library),
     (DhAddonLoadFailure, fix_missing_dh_addon),
 ]
