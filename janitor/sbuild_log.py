@@ -638,6 +638,33 @@ def ld_missing_lib(m):
     return MissingLibrary(m.group(1))
 
 
+class MissingRubyGem(object):
+
+    kind = 'missing-ruby-gem'
+
+    def __init__(self, gem, version=None):
+        self.gem = gem
+        self.version = version
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.gem == other.gem and
+                self.version == other.version)
+
+    def __str__(self):
+        if self.version:
+            return 'missing ruby gem: %s (>= %s)' % (self.gem, self.version)
+        else:
+            return 'missing ruby gem: %s' % self.gem
+
+    def __repr__(self):
+        return '%s(%r, %r)' % (type(self).__name__, self.gem, self.version)
+
+
+def ruby_missing_gem(m):
+    return MissingRubyGem(m.group(1), m.group(2))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -711,6 +738,8 @@ build_failure_regexps = [
     # line will have the actual line that failed.
     (r'ImportError: cannot import name (.*)', None),
     (r'/usr/bin/ld: cannot find -l(.*)', ld_missing_lib),
+    (r'Could not find gem \'([^ ]+) \(~> (.*)\)\', which is required by gem.*',
+     ruby_missing_gem),
 ]
 
 compiled_build_failure_regexps = [
