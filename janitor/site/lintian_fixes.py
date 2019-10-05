@@ -188,17 +188,3 @@ async def generate_failing_fixers_list():
     template = env.get_template('lintian-fixes-failed-list.html')
     fixers = await state.iter_failed_lintian_fixers()
     return await template.render_async(fixers=fixers)
-
-
-if __name__ == '__main__':
-    from janitor.vcs import LocalVcsManager
-    import os
-    parser = argparse.ArgumentParser(prog='report-lintian-fixes-pkg')
-    parser.add_argument("package")
-    args = parser.parse_args()
-
-    vcs_manager = LocalVcsManager(
-        os.path.join(os.path.dirname(__file__), '..', '..', 'vcs'))
-    loop = asyncio.get_event_loop()
-    sys.stdout.write(loop.run_until_complete(generate_pkg_file(
-        vcs_manager, args.package)))
