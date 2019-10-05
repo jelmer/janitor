@@ -21,6 +21,7 @@ from janitor.site import (
     changes_get_binaries,
     env,
     get_build_architecture,
+    get_vcs_type,
     open_changes_file,
     highlight_diff,
 )
@@ -145,24 +146,11 @@ async def generate_run_file(logfile_manager, run, publisher_url):
     else:
         kwargs['changes_name'] = None
 
-    async def get_vcs_type():
-        url = urllib.parse.urljoin(publisher_url, 'vcs-type/%s' % run.package)
-        async with ClientSession() as client:
-            try:
-                async with client.get(url) as resp:
-                    if resp.status == 200:
-                        ret = (await resp.read()).decode('utf-8', 'replace')
-                        if ret == "":
-                            ret = None
-                    else:
-                        ret = None
-                return ret
-            except ClientConnectorError as e:
-                return 'Unable to retrieve diff; error %s' % e
-
-    kwargs['vcs'] = get_vcs_type
     kwargs['cache_url_git'] = CACHE_URL_GIT
     kwargs['cache_url_bzr'] = CACHE_URL_BZR
+    async def vcs_type():
+        return await get_vcs_type(publisher_url, run.package)
+    kwargs['vcs_type'] = vcs_type
     kwargs['in_line_boundaries'] = in_line_boundaries
     if kwargs['changes_name']:
         try:

@@ -4,7 +4,11 @@ from aiohttp import ClientSession, ClientConnectorError
 import urllib.parse
 
 from janitor import state
-from janitor.site import env, highlight_diff
+from janitor.site import (
+    env,
+    get_vcs_type,
+    highlight_diff,
+    )
 
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
@@ -73,6 +77,8 @@ async def generate_pkg_file(publisher_url, package, run_id=None):
                             'Unable to retrieve diff; error %d' % resp.status)
             except ClientConnectorError as e:
                 return 'Unable to retrieve diff; error %s' % e
+    async def vcs_type():
+        return await get_vcs_type(publisher_url, run.package)
 
     (queue_position, queue_wait_time) = await state.get_queue_position(
         package.name, SUITE)
@@ -82,6 +88,7 @@ async def generate_pkg_file(publisher_url, package, run_id=None):
         'maintainer_email': package.maintainer_email,
         'uploader_emails': package.uploader_emails,
         'vcs_url': package.vcs_url,
+        'vcs_type': vcs_type,
         'vcs_browse': package.vcs_browse,
         'command': command,
         'build_version': build_version,

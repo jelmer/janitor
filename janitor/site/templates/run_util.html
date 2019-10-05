@@ -4,6 +4,7 @@
 {% endmacro %}
 
 {% macro merge_command(package, branch_name, vcs) %}
+{% set vcs = vcs_type() %}
 {% if vcs == 'git' %}
 <p>Merge these changes:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>git pull {{ cache_url_git }}{{ package }} {{ branch_name }}</pre></div></div>
