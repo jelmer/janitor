@@ -18,8 +18,10 @@
 """Publishing VCS changes."""
 
 from aiohttp import web
+from email.parser import BytesParser
 import asyncio
 import functools
+from io import BytesIO
 import json
 import shlex
 import sys
@@ -336,6 +338,63 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
         status=202)
 
 
+async def git_backend(vcs_manager, request):
+    package = request.match_info['package']
+    subpath = request.match_info['subpath']
+
+    args = ['/usr/lib/git-core/git-http-backend']
+    repo = vcs_manager.get_repository(package, 'git')
+    if repo is None:
+        raise web.HTTPNotFound()
+    local_path = repo.control_transport.local_abspath('.')
+    env = {
+        'GIT_HTTP_EXPORT_ALL': 'true',
+        'REQUEST_METHOD': request.method,
+        'REMOTE_ADDR': request.remote,
+        'CONTENT_TYPE': request.content_type,
+        'PATH_TRANSLATED': local_path + '/' + subpath,
+        'QUERY_STRING': request.query_string,
+        # REMOTE_USER is not set
+        }
+
+    for key, value in request.headers.items():
+        env['HTTP_' + key.replace('-', '_').upper()] = value
+
+    p = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        env=env, stdin=asyncio.subprocess.PIPE)
+
+    (stdout, stderr) = await p.communicate(await request.read())
+
+    b = BytesIO(stdout)
+
+    parser = BytesParser()
+    msg = parser.parse(b)
+    status = msg.get('Status')
+    if status:
+        del msg['Status']
+        (status_code, status_reason) = status.split(b' ', 1)
+        status_code = status_code.decode()
+        status_reason = status_reason.decode()
+    else:
+        status_code = 200
+        status_reason = 'OK'
+
+    return web.Response(
+        headers=msg.items(), status=status_code,
+        reason=status_reason, body=msg.get_payload())
+
+
+async def bzr_backend(vcs_manager, request):
+    package = request.match_info['package']
+    subpath = request.match_info['subpath']
+    repo = vcs_manager.get_repository(package, 'bzr')
+    if repo is None:
+        raise web.HTTPNotFound()
+    local_path = repo.control_transport.local_abspath('.')
+    return web.FileResponse(os.path.join(local_path, subpath))
+
+
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
                          dry_run=False):
     app = web.Application()
@@ -346,9 +405,16 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
     app.router.add_get(
         "/diff/{run_id}",
         functools.partial(diff_request, vcs_manager))
+    app.router.add_route(
+        "*", "/git/{package}/{subpath:.*}",
+        functools.partial(git_backend, vcs_manager))
+    app.router.add_route(
+        "*", "/bzr/{package}/{subpath:.*}",
+        functools.partial(bzr_backend, vcs_manager))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
+    note('Listening on %s:%s', listen_addr, port)
     await site.start()
 
 
