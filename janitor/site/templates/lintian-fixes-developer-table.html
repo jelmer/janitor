@@ -1,0 +1,34 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "lintian-fixes-sidebar.html" %}{% endblock %}
+{% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
+{% from "run_util.html" import reschedule_button, display_result_code, publish_buttons %}
+{% block page_title %}Lintian Fixes - Developer {{ developer }}{% endblock %}
+{% block body %}
+<div class="section" id="candidates">
+<h1>Lintian Fixes - for developer {{ developer }}</h1>
+
+<table>
+  <thead>
+      <td>Package</td>
+      <td>Lintian Tags</td>
+      <td>Merge Proposal</td>
+  </thead>
+
+{% for package, (run, candidates, open_proposal, other_proposal_url) in by_package.items() %}
+  <tr>
+    <td><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a></td>
+    <td>{% if run %}{{ lintian_brush_summary(run.result['applied']) }}{% endif %} (candidates: {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %})</td>
+    <td>
+      {% if open_proposal_url %}<a href="{{ open_proposal_url }}">proposal</a>
+      {% elif run and run.branch_name %}
+      {{ publish_buttons(run.suite, run.package, "#commandResult", id_suffix='-'+run.package) }}
+      {%endif %}
+    </td>
+{% endif %}
+{% endif %}</td>
+  </tr>
+{% endfor %}
+</table>
+
+</div>
+{% endblock %}

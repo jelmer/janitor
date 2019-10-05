@@ -181,6 +181,35 @@ async def generate_developer_page(developer):
         ready_changes=ready_changes, merge_proposals=merge_proposals)
 
 
+async def generate_developer_table_page(developer):
+    template = env.get_template('lintian-fixes-developer-table.html')
+    packages = [p for p, removed in
+                await state.iter_packages_by_maintainer(developer)
+                if not removed]
+    open_proposals = {}
+    other_proposals = {}
+    for package, url, status in await state.iter_proposals(packages, SUITE):
+        if status == 'open':
+            open_proposals[package] = url
+        else:
+            other_proposals.setdefault(package, []).append((status, url))
+    candidates = {}
+    for row in await state.iter_candidates(packages=packages, suite=SUITE):
+        candidates[row[0].name] = row[3].split(' ')
+    runs = {}
+    async for run in state.iter_last_unmerged_successes(
+            suite=SUITE, packages=packages):
+        runs[run.package] = run
+
+    by_package = {}
+    for package in packages:
+        by_package[package] = (
+            runs.get(package), candidates.get(package),
+            open_proposals.get(package), other_proposals.get(package))
+
+    return await template.render_async(packages=packages, by_package=by_package)
+
+
 async def generate_failing_fixer(fixer):
     template = env.get_template('lintian-fixes-failed.html')
     failures = await state.iter_lintian_brush_fixer_failures(
