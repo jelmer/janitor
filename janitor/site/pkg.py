@@ -213,7 +213,7 @@ async def generate_pkg_file(package, merge_proposals, runs):
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
     kwargs['merge_proposals'] = merge_proposals
-    kwargs['runs'] = runs
+    kwargs['runs'] = [run async for run in runs]
     kwargs['removed'] = package.removed
     kwargs['candidates'] = {
         suite: (context, value)
