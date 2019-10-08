@@ -134,11 +134,15 @@ async def handle_schedule(request):
     requestor = 'user from web UI'
     estimated_duration = await schedule(
         package, suite, offset, refresh, requestor=requestor)
+    (queue_position, queue_wait_time) = await state.get_queue_position(
+        package, suite)
     response_obj = {
         'package': package.name,
         'suite': suite,
         'offset': offset,
         'estimated_duration_seconds': estimated_duration.total_seconds(),
+        'queue_position': queue_position,
+        'queue_wait_time': queue_wait_time,
         }
     return web.json_response(response_obj)
 
