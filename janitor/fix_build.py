@@ -295,7 +295,7 @@ def fix_missing_perl_file(tree, error, committer=None):
     paths = [os.path.join(inc, error.filename) for inc in error.inc]
     package = get_package_for_paths(paths, regex=False)
     if package is None:
-        if error.module:
+        if getattr(error, 'module', None):
             warning('no perl package found for %s (%r).',
                     error.module, error.filename)
         else:
