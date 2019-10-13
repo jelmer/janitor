@@ -455,7 +455,12 @@ def process_package(vcs_url, env, command, output_directory,
         main_branch = open_branch(
             vcs_url, possible_transports=possible_transports)
     except BranchUnavailable as e:
-        raise WorkerFailure('worker-branch-unavailable', str(e))
+        if e.url in str(e):
+            msg = str(e)
+        else:
+            msg = '%s: %s' % (str(e), e.url)
+        raise WorkerFailure(
+            'worker-branch-unavailable', msg)
     except BranchMissing as e:
         raise WorkerFailure('worker-branch-missing', str(e))
 
