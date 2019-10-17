@@ -321,7 +321,7 @@ if __name__ == '__main__':
         text = await generate_developer_table_page(developer)
         return web.Response(
             content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+            headers={'Cache-Control': 'max-age=30'})
 
     async def handle_new_upstream_pkg(suite, request):
         from .new_upstream import generate_pkg_file

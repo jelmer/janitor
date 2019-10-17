@@ -25,7 +25,7 @@
 <tr class="row-even"><td><a class="reference external" href="pkg/{{ package }}">{{ package }}</a></td>
 <td>{{ branch_name }}</td>
 <td>{{ mode }}</td>
-<td>{{ result_code }}: {{ description }}</td>
+<td>{{ result_code }}: {{ description }}{% if merge_proposal_url %} - <a href="{{ merge_proposal_url }}">Merge Proposal</a>{% endif %}</td>
 </tr>
 {% endfor %}
 </tbody>

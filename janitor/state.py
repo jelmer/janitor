@@ -1127,6 +1127,7 @@ start_time,
 finish_time - start_time AS duration
 FROM
 run
+WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
 ORDER BY package, start_time DESC) AS runs
 where
   suite = 'lintian-fixes' and
@@ -1148,6 +1149,7 @@ start_time,
 finish_time - start_time AS duration
 FROM
 run
+WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
 ORDER BY package, start_time DESC) AS runs
 where suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
 """
