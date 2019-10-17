@@ -10,21 +10,23 @@ from janitor import state
 from janitor.site import env
 
 
-async def get_unstable_versions(present):
+async def get_unstable_versions(conn, present):
     unstable = {}
     if present:
         for package, version in await state.iter_sources_with_unstable_version(
-                packages=list(present)):
+                conn, packages=list(present)):
             unstable[package] = Version(version)
     return unstable
 
 
 async def gather_package_list(suite):
-    present = {}
-    for source, version in await state.iter_published_packages(suite):
-        present[source] = Version(version)
+    async with state.get_connection() as conn:
+        present = {}
+        for source, version in await state.iter_published_packages(
+                conn, suite):
+            present[source] = Version(version)
 
-    unstable = await get_unstable_versions(present)
+        unstable = await get_unstable_versions(conn, present)
 
     for source in sorted(present):
         yield (

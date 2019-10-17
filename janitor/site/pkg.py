@@ -110,11 +110,12 @@ async def generate_run_file(logfile_manager, run, publisher_url):
     kwargs['revision'] = run.revision
     kwargs['enumerate'] = enumerate
     kwargs['branch_url'] = run.branch_url
-    (queue_position, queue_wait_time) = await state.get_queue_position(
-        run.package, run.suite)
+    async with state.get_connection() as conn:
+        (queue_position, queue_wait_time) = await state.get_queue_position(
+            conn, run.package, run.suite)
+        package = await state.get_package(conn, run.package)
     kwargs['queue_wait_time'] = queue_wait_time
     kwargs['queue_position'] = queue_position
-    package = await state.get_package(run.package)
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
 
@@ -148,6 +149,7 @@ async def generate_run_file(logfile_manager, run, publisher_url):
 
     kwargs['cache_url_git'] = CACHE_URL_GIT
     kwargs['cache_url_bzr'] = CACHE_URL_BZR
+
     async def vcs_type():
         return await get_vcs_type(publisher_url, run.package)
     kwargs['vcs_type'] = vcs_type
@@ -215,10 +217,11 @@ async def generate_pkg_file(package, merge_proposals, runs):
     kwargs['merge_proposals'] = merge_proposals
     kwargs['runs'] = [run async for run in runs]
     kwargs['removed'] = package.removed
-    kwargs['candidates'] = {
-        suite: (context, value)
-        for (package, suite, command, context, value) in
-        await state.iter_candidates(packages=[package.name])}
+    async with state.get_connection() as conn:
+        kwargs['candidates'] = {
+            suite: (context, value)
+            for (package, suite, command, context, value) in
+            await state.iter_candidates(conn, packages=[package.name])}
     template = env.get_template('package-overview.html')
     return await template.render_async(**kwargs)
 
@@ -239,5 +242,7 @@ async def generate_maintainer_list(packages):
 
 async def generate_ready_list(suite):
     template = env.get_template('ready-list.html')
-    runs = state.iter_publish_ready(suite=suite)
+    async with state.get_connection() as conn:
+        runs = [
+            run async for run in state.iter_publish_ready(conn, suite=suite)]
     return await template.render_async(runs=runs, suite=suite)

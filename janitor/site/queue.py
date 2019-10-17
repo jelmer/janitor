@@ -63,9 +63,9 @@ async def get_processing(runner_url):
                 yield entry
 
 
-async def get_queue(only_command=None, limit=None):
+async def get_queue(conn, only_command=None, limit=None):
     async for entry, log_id, result_code in (
-            state.iter_queue_with_last_run(limit=limit)):
+            state.iter_queue_with_last_run(conn, limit=limit)):
         if only_command is not None and entry.command != only_command:
             continue
         expecting = None
@@ -115,9 +115,10 @@ async def write_queue(only_command=None, limit=None, runner_url=None):
         processing = processing_()
     else:
         processing = []
-    return await template.render_async(
-        queue=get_queue(only_command, limit),
-        processing=processing)
+    async with state.get_connection() as conn:
+        return await template.render_async(
+            queue=get_queue(conn, only_command, limit),
+            processing=processing)
 
 
 if __name__ == '__main__':

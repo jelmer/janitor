@@ -66,7 +66,6 @@ if __name__ == '__main__':
     from janitor.logs import get_log_manager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
-    from janitor.vcs import LocalVcsManager
     from aiohttp import web, ClientSession
     from aiohttp.web_middlewares import normalize_path_middleware
     parser = argparse.ArgumentParser()
@@ -139,7 +138,8 @@ if __name__ == '__main__':
 
     async def handle_publish_id(request):
         publish_id = request.match_info['publish_id']
-        args = await state.get_publish(publish_id)
+        async with state.get_connection() as conn:
+            args = await state.get_publish(conn, publish_id)
         from .publish import write_publish
         return web.Response(
             content_type='text/html', text=await write_publish(*args))
@@ -158,14 +158,15 @@ if __name__ == '__main__':
             generate_result_code_page)
         from .. import state
         code = request.match_info.get('code')
-        if not code:
-            stats = await state.stats_by_result_codes()
-            never_processed = sum(dict(
-                await state.get_never_processed()).values())
-            text = await generate_result_code_index(stats, never_processed)
-        else:
-            runs = state.iter_last_runs(code)
-            text = await generate_result_code_page(code, runs)
+        async with state.get_connection() as conn:
+            if not code:
+                stats = await state.stats_by_result_codes(conn)
+                never_processed = sum(dict(
+                    await state.get_never_processed(conn)).values())
+                text = await generate_result_code_index(stats, never_processed)
+            else:
+                runs = [run async for run in state.iter_last_runs(conn, code)]
+                text = await generate_result_code_page(code, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -178,10 +179,11 @@ if __name__ == '__main__':
             return web.HTTPFound(pkg)
         from .pkg import generate_pkg_list
         from .. import state
-        packages = [
-            (item.name, item.maintainer_email)
-            for item in await state.iter_packages()
-            if not item.removed]
+        async with state.get_connection() as conn:
+            packages = [
+                (item.name, item.maintainer_email)
+                for item in await state.iter_packages(conn)
+                if not item.removed]
         text = await generate_pkg_list(packages)
         return web.Response(
             content_type='text/html', text=text,
@@ -190,10 +192,11 @@ if __name__ == '__main__':
     async def handle_maintainer_list(request):
         from .pkg import generate_maintainer_list
         from .. import state
-        packages = [
-            (item.name, item.maintainer_email)
-            for item in await state.iter_packages()
-            if not item.removed]
+        async with state.get_connection() as conn:
+            packages = [
+                (item.name, item.maintainer_email)
+                for item in await state.iter_packages(conn)
+                if not item.removed]
         text = await generate_maintainer_list(packages)
         return web.Response(
             content_type='text/html', text=text,
@@ -203,15 +206,16 @@ if __name__ == '__main__':
         from .pkg import generate_pkg_file
         from .. import state
         package = request.match_info['pkg']
-        try:
+        async with state.get_connection() as conn:
             package = await state.get_package(package)
-        except IndexError:
-            raise web.HTTPNotFound(text='No package with name %s' % package)
-        merge_proposals = []
-        async for (run, url, status) in state.iter_proposals_with_run(
-                package=package.name):
-            merge_proposals.append((url, status, run))
-        runs = state.iter_runs(package=package.name)
+            if package is None:
+                raise web.HTTPNotFound(
+                    text='No package with name %s' % package)
+            merge_proposals = []
+            async for (run, url, status) in state.iter_proposals_with_run(
+                    conn, package=package.name):
+                merge_proposals.append((url, status, run))
+            runs = state.iter_runs(conn, package=package.name)
         text = await generate_pkg_file(package, merge_proposals, runs)
         return web.Response(
             content_type='text/html', text=text,
@@ -234,11 +238,10 @@ if __name__ == '__main__':
         from .. import state
         run_id = request.match_info['run_id']
         pkg = request.match_info.get('pkg')
-        try:
-            run = [x async
-                   for x in state.iter_runs(run_id=run_id, package=pkg)][0]
-        except IndexError:
-            raise web.HTTPNotFound(text='No run with id %r' % run_id)
+        async with state.get_connection() as conn:
+            run = state.get_run(conn, run_id, pkg)
+            if run is None:
+                raise web.HTTPNotFound(text='No run with id %r' % run_id)
         text = await generate_run_file(
             logfile_manager, run, args.publisher_url)
         return web.Response(

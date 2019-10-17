@@ -283,20 +283,24 @@ async def main():
 
     udd = await UDD.public_udd_mirror()
 
-    existing_packages = {
-        package.name: package for package in await state.iter_packages()}
+    async with state.get_connection() as conn:
+        existing_packages = {
+            package.name: package
+            for package in await state.iter_packages(conn)}
 
-    removals = {}
-    for name, version in await udd.iter_removals():
-        if name not in removals:
-            removals[name] = Version(version)
-        else:
-            removals[name] = max(Version(version), removals[name])
+        removals = {}
+        for name, version in await udd.iter_removals():
+            if name not in removals:
+                removals[name] = Version(version)
+            else:
+                removals[name] = max(Version(version), removals[name])
 
-    trace.note('Updating removals.')
-    await state.update_removals(
-        [(name, version) for (name, version) in removals.items()
-         if name in existing_packages and not existing_packages[name].removed])
+        trace.note('Updating removals.')
+        await state.update_removals(
+            conn,
+            [(name, version) for (name, version) in removals.items()
+             if name in existing_packages and
+             not existing_packages[name].removed])
 
     trace.note('Updating package metadata.')
     packages = []
@@ -341,23 +345,24 @@ async def main():
                 name, branch_url, maintainer_email,
                 uploader_emails, sid_version,
                 vcs_type, vcs_url, vcs_browser, insts, removed))
-    await state.store_packages(packages)
+    async with state.get_connection() as conn:
+        await state.store_packages(conn, packages)
 
-    CANDIDATE_FNS = [
-        ('unchanged', udd.iter_unchanged_candidates(args.packages)),
-        ('lintian-fixes',
-         udd.iter_lintian_fixes_candidates(args.packages, tags)),
-        ('fresh-releases', udd.iter_fresh_releases_candidates(args.packages)),
-        ('fresh-snapshots',
-         udd.iter_fresh_snapshots_candidates(args.packages))]
+        CANDIDATE_FNS = [
+            ('unchanged', udd.iter_unchanged_candidates(args.packages)),
+            ('lintian-fixes',
+             udd.iter_lintian_fixes_candidates(args.packages, tags)),
+            ('fresh-releases',
+             udd.iter_fresh_releases_candidates(args.packages)),
+            ('fresh-snapshots',
+             udd.iter_fresh_snapshots_candidates(args.packages))]
 
-    for suite, candidate_fn in CANDIDATE_FNS:
-        candidates = []
-        trace.note('Adding candidates for %s.', suite)
-        async for (package, suite, command, context, value) in candidate_fn:
-            candidates.append((package, suite, command, context, value))
-        trace.note('Collected %d candidates for %s.', len(candidates), suite)
-        await state.store_candidates(candidates)
+        for suite, candidate_fn in CANDIDATE_FNS:
+            trace.note('Adding candidates for %s.', suite)
+            candidates = [entry async for entry in candidate_fn]
+            trace.note('Collected %d candidates for %s.',
+                       len(candidates), suite)
+            await state.store_candidates(conn, candidates)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:

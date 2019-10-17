@@ -318,13 +318,15 @@ async def process_one(
         note('Since refresh was requested, ignoring resume branch.')
         resume_branch = None
 
-    if resume_branch is not None:
-        resume_branch_result = await state.get_run_result_by_revision(
-            revision=resume_branch.last_revision())
-    else:
-        resume_branch_result = None
+    async with state.get_connection() as conn:
+        if resume_branch is not None:
+            resume_branch_result = await state.get_run_result_by_revision(
+                conn, revision=resume_branch.last_revision())
+        else:
+            resume_branch_result = None
 
-    last_build_version = await state.get_last_build_version(pkg, suite)
+        last_build_version = await state.get_last_build_version(
+            conn, pkg, suite)
 
     log_path = os.path.join(output_directory, 'worker.log')
     retcode = await invoke_subprocess_worker(
@@ -424,34 +426,37 @@ async def process_one(
 
 async def export_queue_length():
     while True:
-        queue_length.set(await state.queue_length())
-        queue_duration.set((await state.queue_duration()).total_seconds())
-        current_tick.set(await state.current_tick())
+        async with state.get_connection() as conn:
+            queue_length.set(await state.queue_length(conn))
+            queue_duration.set(
+                (await state.queue_duration(conn)).total_seconds())
+            current_tick.set(await state.current_tick(conn))
         await asyncio.sleep(60)
 
 
 async def export_stats():
     while True:
-        for suite, count in await state.get_published_by_suite():
-            apt_package_count.labels(suite=suite).set(count)
+        async with state.get_connection() as conn:
+            for suite, count in await state.get_published_by_suite(conn):
+                apt_package_count.labels(suite=suite).set(count)
 
-        by_suite = {}
-        by_suite_result = {}
-        async for package_name, suite, run_duration, result_code in (
-                state.iter_by_suite_result_code()):
-            by_suite.setdefault(suite, 0)
-            by_suite[suite] += 1
-            by_suite_result.setdefault((suite, result_code), 0)
-            by_suite_result[(suite, result_code)] += 1
-        for suite, count in by_suite.items():
-            run_count.labels(suite=suite).set(count)
-        for (suite, result_code), count in by_suite_result.items():
-            run_result_count.labels(
-                suite=suite, result_code=result_code).set(count)
-        for suite, count in await state.get_never_processed():
-            never_processed_count.labels(suite).set(count)
-        for fixer, count in await state.iter_failed_lintian_fixers():
-            lintian_brush_fixer_failed_count.labels(fixer).set(count)
+            by_suite = {}
+            by_suite_result = {}
+            async for package_name, suite, run_duration, result_code in (
+                    state.iter_by_suite_result_code(conn)):
+                by_suite.setdefault(suite, 0)
+                by_suite[suite] += 1
+                by_suite_result.setdefault((suite, result_code), 0)
+                by_suite_result[(suite, result_code)] += 1
+            for suite, count in by_suite.items():
+                run_count.labels(suite=suite).set(count)
+            for (suite, result_code), count in by_suite_result.items():
+                run_result_count.labels(
+                    suite=suite, result_code=result_code).set(count)
+            for suite, count in await state.get_never_processed(conn):
+                never_processed_count.labels(suite).set(count)
+            for fixer, count in await state.iter_failed_lintian_fixers(conn):
+                lintian_brush_fixer_failed_count.labels(fixer).set(count)
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
@@ -507,30 +512,31 @@ class QueueProcessor(object):
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())
         if not self.dry_run:
-            await state.store_run(
-                result.log_id, item.package, item.branch_url,
-                start_time, finish_time, item.command,
-                result.description,
-                item.env.get('CONTEXT'),
-                result.context,
-                result.main_branch_revision,
-                result.code,
-                build_version=result.build_version,
-                build_distribution=result.build_distribution,
-                branch_name=result.branch_name,
-                revision=result.revision,
-                subworker_result=result.subworker_result,
-                suite=item.suite,
-                logfilenames=result.logfilenames)
-
-            await state.drop_queue_item(item.id)
+            async with state.get_connection() as conn:
+                await state.store_run(
+                    conn, result.log_id, item.package, item.branch_url,
+                    start_time, finish_time, item.command,
+                    result.description,
+                    item.env.get('CONTEXT'),
+                    result.context,
+                    result.main_branch_revision,
+                    result.code,
+                    build_version=result.build_version,
+                    build_distribution=result.build_distribution,
+                    branch_name=result.branch_name,
+                    revision=result.revision,
+                    subworker_result=result.subworker_result,
+                    suite=item.suite,
+                    logfilenames=result.logfilenames)
+                await state.drop_queue_item(conn, item.id)
         del self.started[item]
         last_success_gauge.set_to_current_time()
 
     async def process(self):
         todo = set()
-        async for item in state.iter_queue(limit=self.concurrency):
-            todo.add(self.process_queue_item(item))
+        async with state.get_connection() as conn:
+            async for item in state.iter_queue(conn, limit=self.concurrency):
+                todo.add(self.process_queue_item(item))
 
         def handle_sigterm():
             self.concurrency = None
@@ -550,12 +556,13 @@ class QueueProcessor(object):
                     task.result()
                 todo = pending
                 if self.concurrency:
-                    for i in enumerate(done):
-                        async for item in state.iter_queue(
-                                limit=self.concurrency):
-                            if item in self.started:
-                                continue
-                            todo.add(self.process_queue_item(item))
+                    async with state.get_connection() as conn:
+                        for i in enumerate(done):
+                            async for item in state.iter_queue(
+                                    conn, limit=self.concurrency):
+                                if item in self.started:
+                                    continue
+                                todo.add(self.process_queue_item(item))
         finally:
             loop.remove_signal_handler(signal.SIGTERM)
 
