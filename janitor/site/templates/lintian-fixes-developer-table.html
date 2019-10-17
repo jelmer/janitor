@@ -7,25 +7,31 @@
 <div class="section" id="candidates">
 <h1>Lintian Fixes - for developer {{ developer }}</h1>
 
-<table>
+<table class="docutils">
   <thead>
-      <td>Package</td>
-      <td>Lintian Tags</td>
-      <td>Merge Proposal</td>
+      <td width="10%">Package</td>
+      <td width="50%">Possible Lintian Tags</td>
+      <td width="50%">Fixed Lintian Tags</td>
+      <td width="25%">Merge Proposal</td>
   </thead>
 
-{% for package, (run, candidates, open_proposal, other_proposal_url) in by_package.items() %}
+{% for package, (run, candidates, fixed, open_proposal_url, other_proposals) in by_package.items() | sort %}
   <tr>
     <td><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a></td>
-    <td>{% if run %}{{ lintian_brush_summary(run.result['applied']) }}{% endif %} (candidates: {% for tag in tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %})</td>
+    <td>
+      {% if candidates - fixed %}{% for tag in candidates %}{% if not run or tag not in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endif %}{% endfor %}{% endif %}</td>
+    <td>
+	    {% if run %}{% if run.revision == run.main_branch_revision %}Nothing to do {% else %}{% for tag in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}{% endif %}{% else %}{{ reschedule_button(suite, package, title='Schedule', id='reschedule-' + package) }}{% endif %}
+    </td>
     <td>
       {% if open_proposal_url %}<a href="{{ open_proposal_url }}">proposal</a>
       {% elif run and run.branch_name %}
       {{ publish_buttons(run.suite, run.package, "#commandResult", id_suffix='-'+run.package) }}
       {%endif %}
+      {% if other_proposals %}
+      <br/>(previous: {% for status, url in other_proposals %}<a href="{{ url }}">{{ loop.index }}</a>{% if not loop.last %} {% endif %}{% endfor %})
+      {% endif %}
     </td>
-{% endif %}
-{% endif %}</td>
   </tr>
 {% endfor %}
 </table>

@@ -219,12 +219,23 @@ async def generate_developer_table_page(developer):
 
     by_package = {}
     for package in packages:
+        run = runs.get(package)
+        fixed = set()
+        if run and run.result:
+            applied = run.result.get('applied')
+            if isinstance(applied, dict):
+                applied = [applied]
+            for applied in applied:
+                for tag in applied.get('fixed_lintian_tags', []):
+                    fixed.add(tag)
         by_package[package] = (
-            runs.get(package), candidates.get(package),
+            run,
+            set(candidates.get(package, [])),
+            fixed,
             open_proposals.get(package), other_proposals.get(package))
 
     return await template.render_async(
-        packages=packages, by_package=by_package)
+        packages=packages, by_package=by_package, suite=SUITE)
 
 
 async def generate_failing_fixer(fixer):
