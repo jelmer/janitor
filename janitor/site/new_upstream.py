@@ -18,51 +18,53 @@ from janitor.site import (
 
 
 async def generate_pkg_file(package, suite, run_id=None):
-    try:
-        package = await state.get_package(package)
-    except IndexError:
-        raise KeyError(package)
-    if run_id is not None:
-        run = await state.get_run(run_id)
-        merge_proposals = []
-    else:
-        run = await state.get_last_unmerged_success(package.name, suite)
-        merge_proposals = [
-            (url, status)
-            for (unused_package, url, status) in
-            await state.iter_proposals(package.name, suite=suite)]
-    candidate = await state.get_candidate(package.name, suite)
-    if candidate is not None:
-        candidate_command, candidate_context, candidate_value = candidate
-    else:
-        candidate_context = None
-        candidate_value = None
-    if not run:
-        command = None
-        build_version = None
-        result_code = None
-        context = None
-        start_time = None
-        finish_time = None
-        run_id = None
-        result = None
-        branch_name = None
-        branch_url = None
-    else:
-        command = run.command
-        build_version = run.build_version
-        result_code = run.result_code
-        context = run.context
-        start_time = run.times[0]
-        finish_time = run.times[1]
-        run_id = run.id
-        result = run.result
-        branch_name = run.branch_name
-        branch_url = run.branch_url
-    previous_runs = [
-        r async for r in state.iter_previous_runs(package.name, suite)]
-    (queue_position, queue_wait_time) = await state.get_queue_position(
-        package.name, suite)
+    async with state.get_connection() as conn:
+        package = await state.get_package(conn, package)
+        if package is None:
+            raise KeyError(package)
+        if run_id is not None:
+            run = await state.get_run(conn, run_id)
+            merge_proposals = []
+        else:
+            run = await state.get_last_unmerged_success(
+                conn, package.name, suite)
+            merge_proposals = [
+                (url, status)
+                for (unused_package, url, status) in
+                await state.iter_proposals(conn, package.name, suite=suite)]
+        candidate = await state.get_candidate(conn, package.name, suite)
+        if candidate is not None:
+            candidate_command, candidate_context, candidate_value = candidate
+        else:
+            candidate_context = None
+            candidate_value = None
+        if not run:
+            command = None
+            build_version = None
+            result_code = None
+            context = None
+            start_time = None
+            finish_time = None
+            run_id = None
+            result = None
+            branch_name = None
+            branch_url = None
+        else:
+            command = run.command
+            build_version = run.build_version
+            result_code = run.result_code
+            context = run.context
+            start_time = run.times[0]
+            finish_time = run.times[1]
+            run_id = run.id
+            result = run.result
+            branch_name = run.branch_name
+            branch_url = run.branch_url
+        previous_runs = [
+            r async for r in
+            state.iter_previous_runs(conn, package.name, suite)]
+        (queue_position, queue_wait_time) = await state.get_queue_position(
+            conn, package.name, suite)
     kwargs = {
         'package': package.name,
         'merge_proposals': merge_proposals,
@@ -109,9 +111,10 @@ async def generate_pkg_file(package, suite, run_id=None):
 
 async def generate_candidates(suite):
     template = env.get_template('new-upstream-candidates.html')
-    candidates = [(package.name, context, value) for
-                  (package, suite, command, context, value) in
-                  await state.iter_candidates(suite=suite)]
+    async with state.get_connection() as conn:
+        candidates = [(package.name, context, value) for
+                      (package, suite, command, context, value) in
+                      await state.iter_candidates(conn, suite=suite)]
     candidates.sort()
     return await template.render_async(candidates=candidates, suite=suite)
 

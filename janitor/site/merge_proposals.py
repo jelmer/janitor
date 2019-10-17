@@ -7,9 +7,11 @@ from janitor.site import env
 
 
 async def write_merge_proposals(suite):
-    proposals_by_status = {}
-    async for run, url, status in state.iter_proposals_with_run(suite=suite):
-        proposals_by_status.setdefault(status, []).append((url, run))
+    async with state.get_connection() as conn:
+        proposals_by_status = {}
+        async for run, url, status in state.iter_proposals_with_run(
+                conn, suite=suite):
+            proposals_by_status.setdefault(status, []).append((url, run))
 
     template = env.get_template('merge-proposals.html')
     return await template.render_async(

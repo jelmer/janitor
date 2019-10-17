@@ -46,16 +46,20 @@ async def reprocess_run(package, log_id, result_code, description):
     else:
         new_code = 'build-failed'
     if new_code != result_code or description != failure.description:
-        await state.update_run_result(log_id, new_code, failure.description)
+        async with state.get_connection() as conn:
+            await state.update_run_result(
+                conn, log_id, new_code, failure.description)
         note('Updated %r, %r => %r, %r', result_code, description,
              new_code, failure.description)
 
 
 async def process_all_build_failures():
     todo = []
-    async for package, log_id, result_code, description in (
-            state.iter_build_failures()):
-        todo.append(reprocess_run(package, log_id, result_code, description))
+    async with state.get_connection() as conn:
+        async for package, log_id, result_code, description in (
+                state.iter_build_failures(conn)):
+            todo.append(
+                reprocess_run(package, log_id, result_code, description))
     for i in range(0, len(todo), 100):
         await asyncio.gather(*todo[i:i+100])
 

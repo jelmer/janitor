@@ -201,68 +201,73 @@ async def publish_pending_new(rate_limiter, policy, vcs_manager,
     possible_hosters = []
     possible_transports = []
 
-    async for (pkg, command, build_version, result_code, context,
-               start_time, log_id, revision, subworker_result, branch_name,
-               suite, maintainer_email, uploader_emails, main_branch_url,
-               main_branch_revision) in state.iter_publish_ready():
+    async with state.get_connection() as conn1, state.get_connection() as conn:
+        async for (pkg, command, build_version, result_code, context,
+                   start_time, log_id, revision, subworker_result, branch_name,
+                   suite, maintainer_email, uploader_emails, main_branch_url,
+                   main_branch_revision) in state.iter_publish_ready(conn1):
 
-        mode, unused_update_changelog, unused_committer = apply_policy(
-            policy, suite.replace('-', '_'), pkg, maintainer_email,
-            uploader_emails or [])
-        if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-            continue
-        if await state.already_published(pkg, branch_name, revision, mode):
-            continue
-        if not rate_limiter.allowed(maintainer_email) and \
-                mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
-            proposal_rate_limited_count.labels(package=pkg, suite=suite).inc()
-            warning(
-                'Not creating proposal for %s, maximum number of open merge '
-                'proposals reached for maintainer %s', pkg, maintainer_email)
-            if mode == MODE_PROPOSE:
-                mode = MODE_BUILD_ONLY
-            if mode == MODE_ATTEMPT_PUSH:
-                mode = MODE_PUSH
-        if mode == MODE_ATTEMPT_PUSH and \
-                "salsa.debian.org/debian/" in main_branch_url:
-            # Make sure we don't accidentally push to unsuspecting collab-maint
-            # repositories, even if debian-janitor becomes a member of "debian"
-            # in the future.
-            mode = MODE_PROPOSE
-        if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-            continue
-        note('Publishing %s / %r (mode: %s)', pkg, command, mode)
-        try:
-            proposal_url, branch_name, is_new = await publish_one(
-                suite, pkg, command, subworker_result,
-                main_branch_url, mode, log_id, maintainer_email,
-                vcs_manager=vcs_manager, branch_name=branch_name,
-                dry_run=dry_run, possible_hosters=possible_hosters,
-                possible_transports=possible_transports)
-        except PublishFailure as e:
-            code = e.code
-            description = e.description
-            branch_name = None
-            proposal_url = None
-            note('Failed(%s): %s', code, description)
-        else:
-            code = 'success'
-            description = 'Success'
-            if proposal_url and is_new:
-                rate_limiter.inc(maintainer_email)
+            mode, unused_update_changelog, unused_committer = apply_policy(
+                policy, suite.replace('-', '_'), pkg, maintainer_email,
+                uploader_emails or [])
+            if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+                continue
+            if await state.already_published(
+                    conn, pkg, branch_name, revision, mode):
+                continue
+            if not rate_limiter.allowed(maintainer_email) and \
+                    mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
+                proposal_rate_limited_count.labels(
+                    package=pkg, suite=suite).inc()
+                warning(
+                    'Not creating proposal for %s, maximum number of open '
+                    'merge proposals reached for maintainer %s', pkg,
+                    maintainer_email)
+                if mode == MODE_PROPOSE:
+                    mode = MODE_BUILD_ONLY
+                if mode == MODE_ATTEMPT_PUSH:
+                    mode = MODE_PUSH
+            if mode == MODE_ATTEMPT_PUSH and \
+                    "salsa.debian.org/debian/" in main_branch_url:
+                # Make sure we don't accidentally push to unsuspecting
+                # collab-maint repositories, even if debian-janitor becomes a
+                # member of "debian" in the future.
+                mode = MODE_PROPOSE
+            if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+                continue
+            note('Publishing %s / %r (mode: %s)', pkg, command, mode)
+            try:
+                proposal_url, branch_name, is_new = await publish_one(
+                    suite, pkg, command, subworker_result,
+                    main_branch_url, mode, log_id, maintainer_email,
+                    vcs_manager=vcs_manager, branch_name=branch_name,
+                    dry_run=dry_run, possible_hosters=possible_hosters,
+                    possible_transports=possible_transports)
+            except PublishFailure as e:
+                code = e.code
+                description = e.description
+                branch_name = None
+                proposal_url = None
+                note('Failed(%s): %s', code, description)
+            else:
+                code = 'success'
+                description = 'Success'
+                if proposal_url and is_new:
+                    rate_limiter.inc(maintainer_email)
 
-        publish_id = str(uuid.uuid4())
+            publish_id = str(uuid.uuid4())
 
-        await state.store_publish(
-            pkg, branch_name, main_branch_revision,
-            revision, mode, code, description,
-            proposal_url if proposal_url else None,
-            publish_id=publish_id)
+            await state.store_publish(
+                conn, pkg, branch_name, main_branch_revision,
+                revision, mode, code, description,
+                proposal_url if proposal_url else None,
+                publish_id=publish_id)
 
 
 async def diff_request(vcs_manager, request):
     run_id = request.match_info['run_id']
-    run = await state.get_run(run_id)
+    async with state.get_connection() as conn:
+        run = await state.get_run(conn, run_id)
     diff = get_run_diff(vcs_manager, run)
     return web.Response(body=diff, content_type='text/x-diff')
 
@@ -270,30 +275,32 @@ async def diff_request(vcs_manager, request):
 async def publish_and_store(
         publish_id, run, mode, maintainer_email, vcs_manager, rate_limiter,
         dry_run=False, allow_create_proposal=True):
-    try:
-        proposal_url, branch_name, is_new = await publish_one(
-            run.suite, run.package, run.command, run.result, run.branch_url,
-            mode, run.id, maintainer_email, vcs_manager, run.branch_name,
-            dry_run=dry_run, possible_hosters=None,
-            possible_transports=None,
-            allow_create_proposal=allow_create_proposal)
-    except PublishFailure as e:
+    async with state.get_connection() as conn:
+        try:
+            proposal_url, branch_name, is_new = await publish_one(
+                run.suite, run.package, run.command, run.result,
+                run.branch_url, mode, run.id, maintainer_email, vcs_manager,
+                run.branch_name, dry_run=dry_run, possible_hosters=None,
+                possible_transports=None,
+                allow_create_proposal=allow_create_proposal)
+        except PublishFailure as e:
+            await state.store_publish(
+                conn, run.package, run.branch_name,
+                run.main_branch_revision.decode('utf-8'),
+                run.revision.decode('utf-8'), mode, e.code, e.description,
+                None, publish_id=publish_id)
+            return web.json_response(
+                {'code': e.code, 'description': e.description}, status=400)
+
+        if proposal_url and is_new:
+            rate_limiter.inc(maintainer_email)
+
         await state.store_publish(
-            run.package, run.branch_name,
+            conn, run.package, branch_name,
             run.main_branch_revision.decode('utf-8'),
-            run.revision.decode('utf-8'), mode, e.code, e.description,
-            None, publish_id=publish_id)
-        return web.json_response(
-            {'code': e.code, 'description': e.description}, status=400)
-
-    if proposal_url and is_new:
-        rate_limiter.inc(maintainer_email)
-
-    await state.store_publish(
-        run.package, branch_name, run.main_branch_revision.decode('utf-8'),
-        run.revision.decode('utf-8'), mode, 'success', 'Success',
-        proposal_url if proposal_url else None,
-        publish_id=publish_id)
+            run.revision.decode('utf-8'), mode, 'success', 'Success',
+            proposal_url if proposal_url else None,
+            publish_id=publish_id)
 
 
 async def publish_request(rate_limiter, dry_run, vcs_manager, request):
@@ -301,31 +308,32 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     suite = request.match_info['suite']
     post = await request.post()
     mode = post.get('mode', MODE_PROPOSE)
-    try:
-        package = await state.get_package(package)
-    except IndexError:
-        return web.json_response({}, status=400)
+    async with state.get_connection() as conn:
+        try:
+            package = await state.get_package(conn, package)
+        except IndexError:
+            return web.json_response({}, status=400)
 
-    if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
-            not rate_limiter.allowed(package.maintainer_email)):
-        return web.json_response(
-            {'maintainer_email': package.maintainer_email,
-             'code': 'rate-limited',
-             'description':
-                'Maximum number of open merge proposals for maintainer '
-                'reached'},
-            status=429)
+        if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
+                not rate_limiter.allowed(package.maintainer_email)):
+            return web.json_response(
+                {'maintainer_email': package.maintainer_email,
+                 'code': 'rate-limited',
+                 'description':
+                    'Maximum number of open merge proposals for maintainer '
+                    'reached'},
+                status=429)
 
-    if mode in (MODE_SKIP, MODE_BUILD_ONLY):
-        return web.json_response(
-            {'code': 'done',
-             'description':
-                'Nothing to do'})
+        if mode in (MODE_SKIP, MODE_BUILD_ONLY):
+            return web.json_response(
+                {'code': 'done',
+                 'description':
+                    'Nothing to do'})
 
-    run = await state.get_last_unmerged_success(package.name, suite)
-    if run is None:
-        return web.json_response({}, status=400)
-    note('Handling request to publish %s/%s', package.name, suite)
+        run = await state.get_last_unmerged_success(conn, package.name, suite)
+        if run is None:
+            return web.json_response({}, status=400)
+        note('Handling request to publish %s/%s', package.name, suite)
 
     publish_id = str(uuid.uuid4())
 
@@ -459,7 +467,8 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
 async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
                              interval, auto_publish=True):
     while True:
-        await check_existing(rate_limiter, vcs_manager, dry_run)
+        async with state.get_connection() as conn:
+            await check_existing(conn, rate_limiter, vcs_manager, dry_run)
         await asyncio.sleep(interval)
         if auto_publish:
             await publish_pending_new(
@@ -474,14 +483,14 @@ def is_conflicted(mp):
         return None
 
 
-async def check_existing(rate_limiter, vcs_manager, dry_run=False):
+async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
     open_mps_per_maintainer = {}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
     for hoster, mp, status in iter_all_mps():
-        await state.set_proposal_status(mp.url, status)
+        await state.set_proposal_status(conn, mp.url, status)
         status_count[status] += 1
-        if not await state.get_proposal_revision(mp.url):
+        if not await state.get_proposal_revision(conn, mp.url):
             try:
                 revision = open_branch(
                     mp.get_source_branch_url(),
@@ -490,28 +499,28 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                 pass
             else:
                 await state.set_proposal_revision(
-                    mp.url, revision.decode('utf-8'))
+                    conn, mp.url, revision.decode('utf-8'))
         if status != 'open':
             continue
         maintainer_email = await state.get_maintainer_email_for_proposal(
-            mp.url)
+            conn, mp.url)
         if maintainer_email is None:
             source_branch_url = mp.get_target_branch_url()
             maintainer_email = await state.get_maintainer_email_for_branch_url(
-                source_branch_url)
+                conn, source_branch_url)
             if maintainer_email is None:
                 warning('No maintainer email known for %s', mp.url)
         if maintainer_email is not None:
             open_mps_per_maintainer.setdefault(maintainer_email, 0)
             open_mps_per_maintainer[maintainer_email] += 1
-        mp_run = await state.get_merge_proposal_run(mp.url)
+        mp_run = await state.get_merge_proposal_run(conn, mp.url)
         if mp_run is None:
             warning('Unable to find local metadata for %s, skipping.', mp.url)
             continue
 
         recent_runs = []
         async for run in state.iter_previous_runs(
-                mp_run.package, mp_run.suite):
+                conn, mp_run.package, mp_run.suite):
             if run == mp_run:
                 break
             recent_runs.append(run)
@@ -541,7 +550,7 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                 note('%s: Updating merge proposal failed: %s (%s)',
                      mp.url, e.code, e.description)
                 await state.store_publish(
-                    run.package, run.branch_name,
+                    conn, run.package, run.branch_name,
                     run.main_branch_revision.decode('utf-8'),
                     run.revision.decode('utf-8'), MODE_PROPOSE, e.code,
                     e.description, mp.url,
@@ -549,7 +558,7 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
                 break
             else:
                 await state.store_publish(
-                    run.package, branch_name,
+                    conn, run.package, branch_name,
                     run.main_branch_revision.decode('utf-8'),
                     run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
                     'Succesfully updated', mp_url,
@@ -573,7 +582,8 @@ async def check_existing(rate_limiter, vcs_manager, dry_run=False):
             if is_conflicted(mp):
                 note('%s is conflicted. Rescheduling.', mp.url)
                 await state.add_to_queue(
-                    run.branch_url, run.package, shlex.split(run.command),
+                    conn, run.branch_url, run.package,
+                    shlex.split(run.command),
                     run.suite, offset=-2, refresh=True,
                     requestor='publisher')
 

@@ -50,11 +50,11 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-async def update_gitlab_branches(vcs_result_dir, host):
+async def update_gitlab_branches(conn, vcs_result_dir, host):
     package_per_repo = {}
     branches_per_repo = {}
     for name, branch_url, revision, last_scanned, description in (
-            await state.iter_package_branches()):
+            await state.iter_package_branches(conn)):
         if branch_url.startswith('https://%s/' % host):
             url, params = urlutils.split_segment_parameters(branch_url)
             branches_per_repo.setdefault(url, {})
@@ -101,7 +101,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
                     vcs_type='git')
             except BranchOpenFailure as e:
                 await state.update_branch_status(
-                    url, last_scanned=datetime.now(), status=e.code,
+                    conn, url, last_scanned=datetime.now(), status=e.code,
                     revision=None, description=e.description)
             else:
                 try:
@@ -114,7 +114,7 @@ async def update_gitlab_branches(vcs_result_dir, host):
                     note('Failed to mirror %s: %s', e.branch_name, e.reason)
 
                 await state.update_branch_status(
-                    url, last_scanned=datetime.now(), status='success',
+                    conn, url, last_scanned=datetime.now(), status='success',
                     revision=revision.encode('utf-8'))
 
 
@@ -141,42 +141,43 @@ async def main(argv=None):
     prefetch_hosts = []
     # Unfortunately the project activity branch is very slow :(
     # prefetch_hosts = ['salsa.debian.org']
-    for host in prefetch_hosts:
-        await update_gitlab_branches(args.vcs_result_dir, host)
+    async with state.get_connection() as conn:
+        for host in prefetch_hosts:
+            await update_gitlab_branches(conn, args.vcs_result_dir, host)
 
-    unscanned_branches = await state.iter_unscanned_branches(
-            last_scanned_minimum=timedelta(days=7))
+        unscanned_branches = await state.iter_unscanned_branches(
+                last_scanned_minimum=timedelta(days=7))
 
-    possible_transports = []
-    for i, (package, suite, branch_url, last_scanned) in enumerate(
-            unscanned_branches):
-        note('[%d/%s] Processing %s', i, len(unscanned_branches), package)
-        netloc = urllib.parse.urlparse(branch_url).netloc
-        # TODO(jelmer): scan prefetch hosts too, just after a much longer
-        # period (1 month?)
-        if netloc in prefetch_hosts and last_scanned:
-            continue
-        try:
-            branch, unused_subpath = open_branch_ext(
-                branch_url, possible_transports=possible_transports)
-        except BranchOpenFailure as e:
-            await state.update_branch_status(
-                branch_url, last_scanned=datetime.now(), status=e.code,
-                revision=None, description=e.description)
-        else:
+        possible_transports = []
+        for i, (package, suite, branch_url, last_scanned) in enumerate(
+                unscanned_branches):
+            note('[%d/%s] Processing %s', i, len(unscanned_branches), package)
+            netloc = urllib.parse.urlparse(branch_url).netloc
+            # TODO(jelmer): scan prefetch hosts too, just after a much longer
+            # period (1 month?)
+            if netloc in prefetch_hosts and last_scanned:
+                continue
             try:
-                mirror_branches(
-                    args.vcs_result_dir, package, [(suite, branch)],
-                    public_master_branch=branch)
-            except MirrorFailure as e:
-                # For now, just ignore
-                note('Failed to mirror %s: %s', e.branch_name, e.reason)
-            await state.update_branch_status(
-                branch_url, last_scanned=datetime.now(), status='success',
-                revision=branch.last_revision())
-        if args.delay:
-            note('Sleeping for %d seconds', args.delay)
-            await asyncio.sleep(args.delay)
+                branch, unused_subpath = open_branch_ext(
+                    branch_url, possible_transports=possible_transports)
+            except BranchOpenFailure as e:
+                await state.update_branch_status(
+                    conn, branch_url, last_scanned=datetime.now(),
+                    status=e.code, revision=None, description=e.description)
+            else:
+                try:
+                    mirror_branches(
+                        args.vcs_result_dir, package, [(suite, branch)],
+                        public_master_branch=branch)
+                except MirrorFailure as e:
+                    # For now, just ignore
+                    note('Failed to mirror %s: %s', e.branch_name, e.reason)
+                await state.update_branch_status(
+                    conn, branch_url, last_scanned=datetime.now(),
+                    status='success', revision=branch.last_revision())
+            if args.delay:
+                note('Sleeping for %d seconds', args.delay)
+                await asyncio.sleep(args.delay)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:

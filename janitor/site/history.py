@@ -6,9 +6,10 @@ from janitor.site import env
 
 async def write_history(limit=None):
     template = env.get_template('history.html')
-    return await template.render_async(
-        count=limit,
-        history=state.iter_runs(limit=limit))
+    async with state.get_connection() as conn:
+        return await template.render_async(
+            count=limit,
+            history=state.iter_runs(conn, limit=limit))
 
 
 if __name__ == '__main__':

@@ -21,25 +21,28 @@ state.DEFAULT_URL = config.database_location
 
 async def main(result_code):
     packages = {}
-    for package in await state.iter_packages():
-        if package.removed:
-            continue
-        packages[package.name] = package
+    async with state.get_connection() as conn:
+        for package in await state.iter_packages(conn):
+            if package.removed:
+                continue
+            packages[package.name] = package
 
-    async for (package, suite, command, id, description, start_time,
-               duration, branch_url) in state.iter_last_runs(result_code):
-        if package not in packages:
-            continue
-        if packages[package].branch_url is None:
-            continue
-        if (args.description_re and
-                not re.match(args.description_re, description, re.S)):
-            continue
-        print('Rescheduling %s, %s' % (package, suite))
-        await state.add_to_queue(
-            packages[package].branch_url,
-            package, command.split(' '), suite,
-            estimated_duration=duration, requestor='reschedule')
+        async for (package, suite, command, id, description, start_time,
+                   duration, branch_url) in [
+                           run async for run in
+                           state.iter_last_runs(conn, result_code)]:
+            if package not in packages:
+                continue
+            if packages[package].branch_url is None:
+                continue
+            if (args.description_re and
+                    not re.match(args.description_re, description, re.S)):
+                continue
+            print('Rescheduling %s, %s' % (package, suite))
+            await state.add_to_queue(
+                conn, packages[package].branch_url,
+                package, command.split(' '), suite,
+                estimated_duration=duration, requestor='reschedule')
 
 
 asyncio.run(main(args.result_code))

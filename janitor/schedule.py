@@ -97,12 +97,12 @@ async def schedule_from_candidates(policy, iter_candidates):
             entry_command, suite, value)
 
 
-async def estimate_success_probability(package, suite, context=None):
+async def estimate_success_probability(conn, package, suite, context=None):
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
     success = 0
     context_repeated = False
-    async for run in state.iter_previous_runs(package, suite):
+    async for run in state.iter_previous_runs(conn, package, suite):
         try:
             ignore_checker = IGNORE_RESULT_CODE[run.result_code]
         except KeyError:
@@ -121,12 +121,12 @@ async def estimate_success_probability(package, suite, context=None):
         (1.0 if not context_repeated else .10))
 
 
-async def estimate_duration(package, suite):
-    estimated_duration = await state.estimate_duration(package, suite)
+async def estimate_duration(conn, package, suite):
+    estimated_duration = await state.estimate_duration(conn, package, suite)
     if estimated_duration is not None:
         return estimated_duration
 
-    estimated_duration = await state.estimate_duration(package)
+    estimated_duration = await state.estimate_duration(conn, package)
     if estimated_duration is not None:
         return estimated_duration
 
@@ -134,9 +134,9 @@ async def estimate_duration(package, suite):
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
-async def add_to_queue(todo, dry_run=False, default_offset=0):
-    popcon = dict(await state.popcon())
-    removed = set(p.name for p in await state.iter_packages()
+async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
+    popcon = dict(await state.popcon(conn))
+    removed = set(p.name for p in await state.iter_packages(conn)
                   if p.removed)
     max_inst = max([(v or 0) for k, v in popcon.items()])
     trace.note('Maximum inst count: %d', max_inst)
@@ -147,9 +147,9 @@ async def add_to_queue(todo, dry_run=False, default_offset=0):
         if package in removed:
             continue
         estimated_duration = await estimate_duration(
-            package, suite)
+            conn, package, suite)
         estimated_probability_of_success = await estimate_success_probability(
-            package, suite, env.get('CONTEXT'))
+            conn, package, suite, env.get('CONTEXT'))
         assert (estimated_probability_of_success >= 0.0 and
                 estimated_probability_of_success <= 1.0), \
             "Probability of success: %s" % estimated_probability_of_success
@@ -172,7 +172,7 @@ async def add_to_queue(todo, dry_run=False, default_offset=0):
 
         if not dry_run:
             added = await state.add_to_queue(
-                vcs_url, package, command, suite, offset=int(offset),
+                conn, vcs_url, package, command, suite, offset=int(offset),
                 estimated_duration=estimated_duration,
                 context=env.get('CONTEXT'), committer=env.get('COMMITTER'),
                 requestor='scheduler')
@@ -217,10 +217,11 @@ async def main():
 
     state.DEFAULT_URL = config.database_location
 
-    iter_candidates = await state.iter_candidates()
-    todo = [x async for x in schedule_from_candidates(
-        args.policy, iter_candidates)]
-    await add_to_queue(todo, dry_run=args.dry_run)
+    async with state.get_connection() as conn:
+        iter_candidates = await state.iter_candidates(conn)
+        todo = [x async for x in schedule_from_candidates(
+            args.policy, iter_candidates)]
+        await add_to_queue(todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
