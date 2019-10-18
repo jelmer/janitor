@@ -130,7 +130,7 @@ async def handle_schedule(request):
         return web.json_response(
             {'error': 'invalid boolean for refresh'}, status=400)
     async with state.get_connection() as conn:
-        package = await state.get_package(package)
+        package = await state.get_package(conn, package)
         if package is None:
             return web.json_response(
                 {'reason': 'Package not found'}, status=404)
