@@ -34,6 +34,7 @@ from janitor.sbuild_log import (
     MissingRubyGem,
     MissingXmlEntity,
     MissingLibrary,
+    MissingJavaClass,
     DhMissingUninstalled,
     DhUntilUnsupported,
     DhAddonLoadFailure,
@@ -306,6 +307,17 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Could not find gem \'childprocess (~> 0.5)\', which is '
             'required by gem \'selenium-webdriver\', in any of the sources.'],
             1, MissingRubyGem('childprocess', '0.5'))
+
+    def test_missing_java_class(self):
+        self.run_test("""\
+Caused by: java.lang.ClassNotFoundException: org.codehaus.Xpp3r$Builder
+\tat org.codehaus.strategy.SelfFirstStrategy.loadClass(SelfFirstStrategy.java:50)
+\tat org.codehaus.realm.ClassRealm.unsynchronizedLoadClass(ClassRealm.java:271)
+\tat org.codehaus.realm.ClassRealm.loadClass(ClassRealm.java:247)
+\tat org.codehaus.realm.ClassRealm.loadClass(ClassRealm.java:239)
+\t... 46 more
+""".splitlines(), 1,
+    MissingJavaClass('org.codehaus.Xpp3r$Builder'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
