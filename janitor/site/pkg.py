@@ -92,7 +92,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(logfile_manager, run, publisher_url):
+async def generate_run_file(client, logfile_manager, run, publisher_url):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -121,16 +121,15 @@ async def generate_run_file(logfile_manager, run, publisher_url):
 
     async def show_diff():
         url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
-        async with ClientSession() as client:
-            try:
-                async with client.get(url) as resp:
-                    if resp.status == 200:
-                        return (await resp.read()).decode('utf-8', 'replace')
-                    else:
-                        return (
-                            'Unable to retrieve diff; error %d' % resp.status)
-            except ClientConnectorError as e:
-                return 'Unable to retrieve diff; error %s' % e
+        try:
+            async with client.get(url) as resp:
+                if resp.status == 200:
+                    return (await resp.read()).decode('utf-8', 'replace')
+                else:
+                    return (
+                        'Unable to retrieve diff; error %d' % resp.status)
+        except ClientConnectorError as e:
+            return 'Unable to retrieve diff; error %s' % e
 
     kwargs['show_diff'] = show_diff
     kwargs['highlight_diff'] = highlight_diff

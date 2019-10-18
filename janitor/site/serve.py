@@ -149,6 +149,7 @@ if __name__ == '__main__':
         from .queue import write_queue
         return web.Response(
             content_type='text/html', text=await write_queue(
+                request.app.http_client_session,
                 runner_url=runner_url, limit=limit),
             headers={'Cache-Control': 'max-age=10'})
 
@@ -205,18 +206,18 @@ if __name__ == '__main__':
     async def handle_pkg(request):
         from .pkg import generate_pkg_file
         from .. import state
-        package = request.match_info['pkg']
+        package_name = request.match_info['pkg']
         async with state.get_connection() as conn:
-            package = await state.get_package(package)
+            package = await state.get_package(conn, package_name)
             if package is None:
                 raise web.HTTPNotFound(
-                    text='No package with name %s' % package)
+                    text='No package with name %s' % package_name)
             merge_proposals = []
             async for (run, url, status) in state.iter_proposals_with_run(
                     conn, package=package.name):
                 merge_proposals.append((url, status, run))
             runs = state.iter_runs(conn, package=package.name)
-        text = await generate_pkg_file(package, merge_proposals, runs)
+            text = await generate_pkg_file(package, merge_proposals, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -239,10 +240,11 @@ if __name__ == '__main__':
         run_id = request.match_info['run_id']
         pkg = request.match_info.get('pkg')
         async with state.get_connection() as conn:
-            run = state.get_run(conn, run_id, pkg)
+            run = await state.get_run(conn, run_id, pkg)
             if run is None:
                 raise web.HTTPNotFound(text='No run with id %r' % run_id)
         text = await generate_run_file(
+            request.app.http_client_session,
             logfile_manager, run, args.publisher_url)
         return web.Response(
             content_type='text/html', text=text,
@@ -286,6 +288,7 @@ if __name__ == '__main__':
         run_id = request.match_info.get('run_id')
         try:
             text = await generate_pkg_file(
+                request.app.http_client_session,
                 args.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()

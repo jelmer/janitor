@@ -18,7 +18,7 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(publisher_url, package, run_id=None):
+async def generate_pkg_file(client, publisher_url, package, run_id=None):
     async with state.get_connection() as conn:
         package = await state.get_package(conn, name=package)
         if package is None:
@@ -69,16 +69,15 @@ async def generate_pkg_file(publisher_url, package, run_id=None):
 
     async def show_diff():
         url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
-        async with ClientSession() as client:
-            try:
-                async with client.get(url) as resp:
-                    if resp.status == 200:
-                        return (await resp.read()).decode('utf-8', 'replace')
-                    else:
-                        return (
-                            'Unable to retrieve diff; error %d' % resp.status)
-            except ClientConnectorError as e:
-                return 'Unable to retrieve diff; error %s' % e
+        try:
+            async with client.get(url) as resp:
+                if resp.status == 200:
+                    return (await resp.read()).decode('utf-8', 'replace')
+                else:
+                    return (
+                        'Unable to retrieve diff; error %d' % resp.status)
+        except ClientConnectorError as e:
+            return 'Unable to retrieve diff; error %s' % e
 
     async def vcs_type():
         return await get_vcs_type(publisher_url, run.package)
