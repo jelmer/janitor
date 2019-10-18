@@ -113,32 +113,36 @@ if __name__ == '__main__':
     async def handle_merge_proposals(suite, request):
         from .merge_proposals import write_merge_proposals
         return web.Response(
-            content_type='text/html', text=await write_merge_proposals(suite),
+            content_type='text/html', text=await write_merge_proposals(
+                request.app.database, suite),
             headers={'Cache-Control': 'max-age=60'})
 
     async def handle_apt_repo(suite, request):
         from .apt_repo import write_apt_repo
-        return web.Response(
-            content_type='text/html', text=await write_apt_repo(suite),
-            headers={'Cache-Control': 'max-age=60'})
+        async with request.app.database.acquire() as conn:
+            return web.Response(
+                content_type='text/html', text=await write_apt_repo(conn, suite),
+                headers={'Cache-Control': 'max-age=60'})
 
     async def handle_history(request):
         limit = int(request.query.get('limit', '100'))
         from .history import write_history
-        return web.Response(
-            content_type='text/html', text=await write_history(limit=limit),
-            headers={'Cache-Control': 'max-age=60'})
+        async with request.app.database.acquire() as conn:
+            return web.Response(
+                content_type='text/html', text=await write_history(conn, limit=limit),
+                headers={'Cache-Control': 'max-age=60'})
 
     async def handle_publish_history(request):
         limit = int(request.query.get('limit', '100'))
         from .publish import write_history
-        return web.Response(
-            content_type='text/html', text=await write_history(limit=limit),
-            headers={'Cache-Control': 'max-age=10'})
+        async with request.app.database.acquire() as conn:
+            return web.Response(
+                content_type='text/html', text=await write_history(conn, limit=limit),
+                headers={'Cache-Control': 'max-age=10'})
 
     async def handle_publish_id(request):
         publish_id = request.match_info['publish_id']
-        async with state.get_connection() as conn:
+        async with request.app.database.acquire() as conn:
             args = await state.get_publish(conn, publish_id)
         from .publish import write_publish
         return web.Response(
@@ -147,11 +151,12 @@ if __name__ == '__main__':
     async def handle_queue(runner_url, request):
         limit = int(request.query.get('limit', '100'))
         from .queue import write_queue
-        return web.Response(
-            content_type='text/html', text=await write_queue(
-                request.app.http_client_session,
-                runner_url=runner_url, limit=limit),
-            headers={'Cache-Control': 'max-age=10'})
+        async with request.app.database.acquire() as conn:
+            return web.Response(
+                content_type='text/html', text=await write_queue(
+                    request.app.http_client_session, conn,
+                    runner_url=runner_url, limit=limit),
+                headers={'Cache-Control': 'max-age=10'})
 
     async def handle_result_codes(request):
         from .result_codes import (
@@ -159,7 +164,7 @@ if __name__ == '__main__':
             generate_result_code_page)
         from .. import state
         code = request.match_info.get('code')
-        async with state.get_connection() as conn:
+        async with request.app.database.acquire() as conn:
             if not code:
                 stats = await state.stats_by_result_codes(conn)
                 never_processed = sum(dict(
@@ -180,7 +185,7 @@ if __name__ == '__main__':
             return web.HTTPFound(pkg)
         from .pkg import generate_pkg_list
         from .. import state
-        async with state.get_connection() as conn:
+        async with request.app.database.acquire() as conn:
             packages = [
                 (item.name, item.maintainer_email)
                 for item in await state.iter_packages(conn)
@@ -193,7 +198,7 @@ if __name__ == '__main__':
     async def handle_maintainer_list(request):
         from .pkg import generate_maintainer_list
         from .. import state
-        async with state.get_connection() as conn:
+        async with request.app.database.acquire() as conn:
             packages = [
                 (item.name, item.maintainer_email)
                 for item in await state.iter_packages(conn)
@@ -207,7 +212,7 @@ if __name__ == '__main__':
         from .pkg import generate_pkg_file
         from .. import state
         package_name = request.match_info['pkg']
-        async with state.get_connection() as conn:
+        async with request.app.database.acquire() as conn:
             package = await state.get_package(conn, package_name)
             if package is None:
                 raise web.HTTPNotFound(
@@ -217,7 +222,8 @@ if __name__ == '__main__':
                     conn, package=package.name):
                 merge_proposals.append((url, status, run))
             runs = state.iter_runs(conn, package=package.name)
-            text = await generate_pkg_file(package, merge_proposals, runs)
+            text = await generate_pkg_file(
+                request.app.database, package, merge_proposals, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -227,9 +233,11 @@ if __name__ == '__main__':
             generate_failing_fixers_list, generate_failing_fixer)
         fixer = request.match_info.get('fixer')
         if fixer:
-            text = await generate_failing_fixer(fixer)
+            text = await generate_failing_fixer(
+                request.app.database, fixer)
         else:
-            text = await generate_failing_fixers_list()
+            text = await generate_failing_fixers_list(
+                request.app.database)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -239,11 +247,12 @@ if __name__ == '__main__':
         from .. import state
         run_id = request.match_info['run_id']
         pkg = request.match_info.get('pkg')
-        async with state.get_connection() as conn:
+        async with request.app.database.acquire() as conn:
             run = await state.get_run(conn, run_id, pkg)
             if run is None:
                 raise web.HTTPNotFound(text='No run with id %r' % run_id)
         text = await generate_run_file(
+            request.app.database,
             request.app.http_client_session,
             logfile_manager, run, args.publisher_url)
         return web.Response(
@@ -277,7 +286,7 @@ if __name__ == '__main__':
 
     async def handle_ready_proposals(suite, request):
         from .pkg import generate_ready_list
-        text = await generate_ready_list(suite)
+        text = await generate_ready_list(request.app.database, suite)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -288,6 +297,7 @@ if __name__ == '__main__':
         run_id = request.match_info.get('run_id')
         try:
             text = await generate_pkg_file(
+                request.app.database,
                 request.app.http_client_session,
                 args.publisher_url, pkg, run_id)
         except KeyError:
@@ -298,14 +308,16 @@ if __name__ == '__main__':
 
     async def handle_lintian_fixes_tag_list(request):
         from .lintian_fixes import generate_tag_list
-        text = await generate_tag_list()
+        async with request.app.database.acquire() as conn:
+            text = await generate_tag_list()
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
     async def handle_lintian_fixes_tag_page(request):
         from .lintian_fixes import generate_tag_page
-        text = await generate_tag_page(request.match_info['tag'])
+        text = await generate_tag_page(
+            request.app.database, request.match_info['tag'])
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -313,7 +325,8 @@ if __name__ == '__main__':
     async def handle_lintian_fixes_developer_page(request):
         from .lintian_fixes import generate_developer_page
         developer = request.match_info['developer']
-        text = await generate_developer_page(developer)
+        text = await generate_developer_page(
+            request.app.database, developer)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -321,7 +334,8 @@ if __name__ == '__main__':
     async def handle_lintian_fixes_developer_table_page(request):
         from .lintian_fixes import generate_developer_table_page
         developer = request.match_info['developer']
-        text = await generate_developer_table_page(developer)
+        text = await generate_developer_table_page(
+            request.app.database, developer)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=30'})
@@ -331,7 +345,8 @@ if __name__ == '__main__':
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(pkg, suite, run_id)
+            text = await generate_pkg_file(
+                request.app.database, pkg, suite, run_id)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
@@ -360,14 +375,16 @@ if __name__ == '__main__':
 
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
-        text = await generate_candidates()
+        text = await generate_candidates(
+            request.app.database)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
     async def handle_new_upstream_candidates(suite, request):
         from .new_upstream import generate_candidates
-        text = await generate_candidates(suite)
+        text = await generate_candidates(
+            request.app.database, suite)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -460,8 +477,9 @@ if __name__ == '__main__':
         policy_config = read_policy(f)
 
     app.http_client_session = ClientSession()
+    app.database = state.Database(config.database_location)
     setup_metrics(app)
     app.add_subapp(
         '/api', create_api_app(
-            args.publisher_url, args.runner_url, policy_config))
+            database, args.publisher_url, args.runner_url, policy_config))
     web.run_app(app, host=args.host, port=args.port)

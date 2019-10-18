@@ -196,12 +196,12 @@ async def publish_one(
     raise PublishFailure('publisher-invalid-response', stderr.decode())
 
 
-async def publish_pending_new(rate_limiter, policy, vcs_manager,
+async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
                               dry_run=False):
     possible_hosters = []
     possible_transports = []
 
-    async with state.get_connection() as conn1, state.get_connection() as conn:
+    async with db.acquire() as conn1, db.acquire() as conn:
         async for (pkg, command, build_version, result_code, context,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
@@ -264,18 +264,18 @@ async def publish_pending_new(rate_limiter, policy, vcs_manager,
                 publish_id=publish_id)
 
 
-async def diff_request(vcs_manager, request):
+async def diff_request(request):
     run_id = request.match_info['run_id']
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         run = await state.get_run(conn, run_id)
-    diff = get_run_diff(vcs_manager, run)
+    diff = get_run_diff(request.app.vcs_manager, run)
     return web.Response(body=diff, content_type='text/x-diff')
 
 
 async def publish_and_store(
         publish_id, run, mode, maintainer_email, vcs_manager, rate_limiter,
         dry_run=False, allow_create_proposal=True):
-    async with state.get_connection() as conn:
+    async db.acquire() as conn:
         try:
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
@@ -308,7 +308,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     suite = request.match_info['suite']
     post = await request.post()
     mode = post.get('mode', MODE_PROPOSE)
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         try:
             package = await state.get_package(conn, package)
         except IndexError:
@@ -338,7 +338,7 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     publish_id = str(uuid.uuid4())
 
     request.loop.create_task(publish_and_store(
-        publish_id, run, mode, package.maintainer_email,
+        request.app.db, publish_id, run, mode, package.maintainer_email,
         vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
         allow_create_proposal=True))
 
@@ -347,12 +347,12 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
         status=202)
 
 
-async def git_backend(vcs_manager, request):
+async def git_backend(request):
     package = request.match_info['package']
     subpath = request.match_info['subpath']
 
     args = ['/usr/lib/git-core/git-http-backend']
-    repo = vcs_manager.get_repository(package, 'git')
+    repo = request.app.vcs_manager.get_repository(package, 'git')
     if repo is None:
         raise web.HTTPNotFound()
     local_path = repo.user_transport.local_abspath('.')
@@ -431,32 +431,30 @@ async def bzr_backend(vcs_manager, request):
     return web.FileResponse(full_path)
 
 
-async def get_vcs_type(vcs_manager, request):
+async def get_vcs_type(request):
     package = request.match_info['package']
-    vcs_type = vcs_manager.get_vcs_type(package)
+    vcs_type = request.app.vcs_manager.get_vcs_type(package)
     if vcs_type is None:
         raise web.HTTPNotFound()
     return web.Response(body=vcs_type.encode('utf-8'))
 
 
-async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
+async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
                          dry_run=False):
     app = web.Application()
+    app.vcs_manager = vcs_manager
+    app.db = db
     setup_metrics(app)
     app.router.add_post(
         "/{suite}/{package}/publish",
         functools.partial(publish_request, rate_limiter, dry_run, vcs_manager))
-    app.router.add_get(
-        "/diff/{run_id}",
-        functools.partial(diff_request, vcs_manager))
-    app.router.add_route(
-        "*", "/git/{package}/{subpath:.*}",
-        functools.partial(git_backend, vcs_manager))
+    app.router.add_get("/diff/{run_id}", diff_request)
+    app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
     app.router.add_route(
         "*", "/bzr/{package}/{subpath:.*}",
         functools.partial(bzr_backend, vcs_manager))
     app.router.add_get(
-        '/vcs-type/{package}', functools.partial(get_vcs_type, vcs_manager))
+        '/vcs-type/{package}', get_vcs_type)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -464,15 +462,15 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager,
     await site.start()
 
 
-async def process_queue_loop(rate_limiter, policy, dry_run, vcs_manager,
+async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
                              interval, auto_publish=True):
     while True:
-        async with state.get_connection() as conn:
+        async with db.acquire() as conn:
             await check_existing(conn, rate_limiter, vcs_manager, dry_run)
         await asyncio.sleep(interval)
         if auto_publish:
             await publish_pending_new(
-                rate_limiter, policy, vcs_manager, dry_run)
+                db, rate_limiter, policy, vcs_manager, dry_run)
 
 
 def is_conflicted(mp):
@@ -654,9 +652,10 @@ def main(argv=None):
 
     loop = asyncio.get_event_loop()
     vcs_manager = LocalVcsManager(config.vcs_location)
+    db = state.Database(config.database_location)
     if args.once:
         loop.run_until_complete(publish_pending_new(
-            policy, dry_run=args.dry_run,
+            db, policy, dry_run=args.dry_run,
             vcs_manager=vcs_manager))
 
         last_success_gauge.set_to_current_time()
@@ -667,13 +666,13 @@ def main(argv=None):
     else:
         loop.run_until_complete(asyncio.gather(
             loop.create_task(process_queue_loop(
-                rate_limiter, policy, dry_run=args.dry_run,
+                db, rate_limiter, policy, dry_run=args.dry_run,
                 vcs_manager=vcs_manager, interval=args.interval,
                 auto_publish=not args.no_auto_publish)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
-                    vcs_manager, args.dry_run))))
+                    vcs_manager, db, args.dry_run))))
 
 
 if __name__ == '__main__':

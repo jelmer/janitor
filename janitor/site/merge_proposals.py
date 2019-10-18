@@ -6,8 +6,8 @@ from janitor import state
 from janitor.site import env
 
 
-async def write_merge_proposals(suite):
-    async with state.get_connection() as conn:
+async def write_merge_proposals(db, suite):
+    async with db.acquire() as conn:
         proposals_by_status = {}
         async for run, url, status in state.iter_proposals_with_run(
                 conn, suite=suite):

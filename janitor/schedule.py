@@ -215,9 +215,9 @@ async def main():
     with open(args.config, 'r') as f:
         config = read_config(f)
 
-    state.DEFAULT_URL = config.database_location
+    db = state.Database(config.database_location)
 
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         iter_candidates = await state.iter_candidates(conn)
         todo = [x async for x in schedule_from_candidates(
             args.policy, iter_candidates)]

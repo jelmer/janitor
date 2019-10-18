@@ -19,7 +19,7 @@ SUITE_TO_COMMAND = {
 
 async def handle_policy(policy_config, request):
     package = request.match_info['package']
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         package = await state.get_package(conn, package)
         if package is None:
             return web.json_response(
@@ -102,7 +102,7 @@ async def handle_webhook(request):
     if request.headers['X-Gitlab-Event'] != 'Push Hook':
         return web.json_response({}, status=200)
     body = await request.json()
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         package = await get_package_from_gitlab_webhook(conn, body)
         if package is None:
             return web.Response(
@@ -129,7 +129,7 @@ async def handle_schedule(request):
     except ValueError:
         return web.json_response(
             {'error': 'invalid boolean for refresh'}, status=400)
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         package = await state.get_package(conn, package)
         if package is None:
             return web.json_response(
@@ -153,7 +153,7 @@ async def handle_schedule(request):
 async def handle_package_list(request):
     name = request.match_info.get('package')
     response_obj = []
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         for package in await state.iter_packages(conn, package=name):
             if not name and package.removed:
                 continue
@@ -167,7 +167,7 @@ async def handle_package_list(request):
 
 async def handle_packagename_list(request):
     response_obj = []
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         for package in await state.iter_packages(conn):
             if package.removed:
                 continue
@@ -178,7 +178,7 @@ async def handle_packagename_list(request):
 
 async def handle_merge_proposal_list(request):
     response_obj = []
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         for package, url, status in await state.iter_proposals(
                 conn,
                 request.match_info.get('package'),
@@ -195,7 +195,7 @@ async def handle_queue(request):
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         async for entry in state.iter_queue(
                 conn, limit=limit):
             response_obj.append({
@@ -238,7 +238,7 @@ async def handle_run(request):
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         async for run in state.iter_runs(
                     conn, package, run_id=run_id, limit=limit):
             if run.build_version:
@@ -265,7 +265,7 @@ async def handle_run(request):
 
 async def handle_package_branch(request):
     response_obj = []
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         for (name, branch_url, revision, last_scanned, description) in (
                 await state.iter_package_branches(conn)):
             response_obj.append({
@@ -282,7 +282,7 @@ async def handle_package_branch(request):
 
 async def handle_published_packages(request):
     suite = request.match_info['suite']
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         response_obj = []
         for package, build_version in await state.iter_published_packages(
                 conn, suite):
@@ -353,7 +353,7 @@ async def handle_runner_log(runner_url, request):
 
 async def handle_publish_id(request):
     publish_id = request.match_info['publish_id']
-    async with state.get_connection() as conn:
+    async with request.app.db.acquire() as conn:
         (package, branch_name, main_branch_revision, revision, mode,
          merge_proposal_url, result_code,
          description) = await state.get_publish(conn, publish_id)
@@ -369,8 +369,9 @@ async def handle_publish_id(request):
         })
 
 
-def create_app(publisher_url, runner_url, policy_config):
+def create_app(db, publisher_url, runner_url, policy_config):
     app = web.Application()
+    app.db = db
     app.router.add_get('/pkgnames', handle_packagename_list)
     app.router.add_get('/pkg', handle_package_list)
     app.router.add_get('/pkg/{package}', handle_package_list)

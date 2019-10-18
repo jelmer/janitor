@@ -19,14 +19,13 @@ async def get_unstable_versions(conn, present):
     return unstable
 
 
-async def gather_package_list(suite):
-    async with state.get_connection() as conn:
-        present = {}
-        for source, version in await state.iter_published_packages(
-                conn, suite):
-            present[source] = Version(version)
+async def gather_package_list(conn, suite):
+    present = {}
+    for source, version in await state.iter_published_packages(
+            conn, suite):
+        present[source] = Version(version)
 
-        unstable = await get_unstable_versions(conn, present)
+    unstable = await get_unstable_versions(conn, present)
 
     for source in sorted(present):
         yield (
@@ -36,17 +35,8 @@ async def gather_package_list(suite):
             if source in unstable else '')
 
 
-async def write_apt_repo(suite):
+async def write_apt_repo(conn, suite):
     template = env.get_template(suite + '.html')
     return await template.render_async(
-        packages=gather_package_list(suite),
+        packages=gather_package_list(conn, suite),
         suite=suite)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(prog='report-apt-repo')
-    parser.add_argument("suite")
-    args = parser.parse_args()
-
-    loop = asyncio.get_event_loop()
-    sys.stdout.write(loop.run_until_complete(write_apt_repo(args.suite)))

@@ -102,7 +102,7 @@ async def get_queue(conn, only_command=None, limit=None):
             log_id, result_code)
 
 
-async def write_queue(client, only_command=None, limit=None, runner_url=None):
+async def write_queue(client, conn, only_command=None, limit=None, runner_url=None):
     template = env.get_template('queue.html')
     if runner_url:
         async def processing_():
@@ -114,10 +114,9 @@ async def write_queue(client, only_command=None, limit=None, runner_url=None):
         processing = processing_()
     else:
         processing = []
-    async with state.get_connection() as conn:
-        return await template.render_async(
-            queue=get_queue(conn, only_command, limit),
-            processing=processing)
+    return await template.render_async(
+        queue=get_queue(conn, only_command, limit),
+        processing=processing)
 
 
 if __name__ == '__main__':

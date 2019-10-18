@@ -92,7 +92,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(client, logfile_manager, run, publisher_url):
+async def generate_run_file(db, client, logfile_manager, run, publisher_url):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -110,7 +110,7 @@ async def generate_run_file(client, logfile_manager, run, publisher_url):
     kwargs['revision'] = run.revision
     kwargs['enumerate'] = enumerate
     kwargs['branch_url'] = run.branch_url
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.package, run.suite)
         package = await state.get_package(conn, run.package)
@@ -207,7 +207,7 @@ async def generate_run_file(client, logfile_manager, run, publisher_url):
     return await template.render_async(**kwargs)
 
 
-async def generate_pkg_file(package, merge_proposals, runs):
+async def generate_pkg_file(db, package, merge_proposals, runs):
     kwargs = {}
     kwargs['package'] = package.name
     kwargs['maintainer_email'] = package.maintainer_email
@@ -216,7 +216,7 @@ async def generate_pkg_file(package, merge_proposals, runs):
     kwargs['merge_proposals'] = merge_proposals
     kwargs['runs'] = [run async for run in runs]
     kwargs['removed'] = package.removed
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         kwargs['candidates'] = {
             suite: (context, value)
             for (package, suite, command, context, value) in
@@ -239,9 +239,9 @@ async def generate_maintainer_list(packages):
     return await template.render_async(by_maintainer=by_maintainer)
 
 
-async def generate_ready_list(suite):
+async def generate_ready_list(db, suite):
     template = env.get_template('ready-list.html')
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         runs = [
             run async for run in state.iter_publish_ready(conn, suite=suite)]
     return await template.render_async(runs=runs, suite=suite)
