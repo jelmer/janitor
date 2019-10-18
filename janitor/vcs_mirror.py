@@ -120,6 +120,7 @@ async def update_gitlab_branches(conn, vcs_result_dir, host):
 
 async def main(argv=None):
     import argparse
+    from .config import read_config
     parser = argparse.ArgumentParser(prog='janitor.vcs_mirror')
     parser.add_argument(
         '--prometheus', type=str,
@@ -132,16 +133,24 @@ async def main(argv=None):
         '--delay', type=int,
         help='Number of seconds to wait in between repositories.',
         default=300)
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
 
     args = parser.parse_args()
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
 
     global_config = GlobalStack()
     global_config.set('branch.fetch_tags', True)
 
+    db = state.Database(config.database_location)
+
     prefetch_hosts = []
     # Unfortunately the project activity branch is very slow :(
     # prefetch_hosts = ['salsa.debian.org']
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         for host in prefetch_hosts:
             await update_gitlab_branches(conn, args.vcs_result_dir, host)
 

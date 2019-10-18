@@ -18,8 +18,8 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(client, publisher_url, package, run_id=None):
-    async with state.get_connection() as conn:
+async def generate_pkg_file(db, client, publisher_url, package, run_id=None):
+    async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
         if package is None:
             raise KeyError(package)
@@ -66,6 +66,8 @@ async def generate_pkg_file(client, publisher_url, package, run_id=None):
         previous_runs = [
             x async for x in
             state.iter_previous_runs(conn, package.name, SUITE)]
+        (queue_position, queue_wait_time) = await state.get_queue_position(
+            conn, package.name, SUITE)
 
     async def show_diff():
         url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
@@ -82,9 +84,6 @@ async def generate_pkg_file(client, publisher_url, package, run_id=None):
     async def vcs_type():
         return await get_vcs_type(publisher_url, run.package)
 
-    async with state.get_connection() as conn:
-        (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, package.name, SUITE)
     kwargs = {
         'package': package.name,
         'merge_proposals': merge_proposals,
@@ -119,27 +118,26 @@ async def generate_pkg_file(client, publisher_url, package, run_id=None):
     return await template.render_async(**kwargs)
 
 
-async def generate_tag_list():
-    async with state.get_connection() as conn:
-        tags = sorted(await state.iter_lintian_tags(conn))
+async def generate_tag_list(conn):
+    tags = sorted(await state.iter_lintian_tags(conn))
     template = env.get_template('lintian-fixes-tag-list.html')
     return await template.render_async(tags=tags)
 
 
-async def generate_tag_page(tag):
+async def generate_tag_page(db, tag):
     template = env.get_template('lintian-fixes-tag.html')
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         packages = list(await state.iter_last_successes_by_lintian_tag(
             conn, tag))
     return await template.render_async(tag=tag, packages=packages)
 
 
-async def generate_candidates():
+async def generate_candidates(db):
     template = env.get_template('lintian-fixes-candidates.html')
     supported_tags = set()
     for fixer in available_lintian_fixers():
         supported_tags.update(fixer.lintian_tags)
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         candidates = [(package.name, context.split(' '), value) for
                       (package, suite, command, context, value) in
                       await state.iter_candidates(conn, suite=SUITE)]
@@ -148,9 +146,9 @@ async def generate_candidates():
         supported_tags=supported_tags, candidates=candidates)
 
 
-async def generate_developer_page(developer):
+async def generate_developer_page(db, developer):
     template = env.get_template('lintian-fixes-developer.html')
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         packages = [p for p, removed in
                     await state.iter_packages_by_maintainer(
                         conn, developer) if not removed]
@@ -192,9 +190,9 @@ async def generate_developer_page(developer):
         ready_changes=ready_changes, merge_proposals=merge_proposals)
 
 
-async def generate_developer_table_page(developer):
+async def generate_developer_table_page(db, developer):
     template = env.get_template('lintian-fixes-developer-table.html')
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         packages = [p for p, removed in
                     await state.iter_packages_by_maintainer(
                         conn, developer)
@@ -237,16 +235,16 @@ async def generate_developer_table_page(developer):
         packages=packages, by_package=by_package, suite=SUITE)
 
 
-async def generate_failing_fixer(fixer):
+async def generate_failing_fixer(db, fixer):
     template = env.get_template('lintian-fixes-failed.html')
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         failures = await state.iter_lintian_brush_fixer_failures(
             conn, fixer)
     return await template.render_async(failures=failures, fixer=fixer)
 
 
-async def generate_failing_fixers_list():
+async def generate_failing_fixers_list(db):
     template = env.get_template('lintian-fixes-failed-list.html')
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         fixers = await state.iter_failed_lintian_fixers(conn)
     return await template.render_async(fixers=fixers)

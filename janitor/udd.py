@@ -283,7 +283,9 @@ async def main():
 
     udd = await UDD.public_udd_mirror()
 
-    async with state.get_connection() as conn:
+    db = state.Database(config.database_location)
+
+    async with db.acquire() as conn:
         existing_packages = {
             package.name: package
             for package in await state.iter_packages(conn)}
@@ -345,7 +347,7 @@ async def main():
                 name, branch_url, maintainer_email,
                 uploader_emails, sid_version,
                 vcs_type, vcs_url, vcs_browser, insts, removed))
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         await state.store_packages(conn, packages)
 
         CANDIDATE_FNS = [

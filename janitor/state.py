@@ -24,29 +24,27 @@ from contextlib import asynccontextmanager
 from . import SUITES
 
 
-DEFAULT_URL = (
-    'postgresql://janitor-reader@brangwain.vpn.jelmer.uk:5432/janitor')
+class Database(object):
 
+    def __init__(self, url):
+        self.url = url
+        self.pool = None
 
-pool = None
+    @asynccontextmanager
+    async def acquire(self):
+        if self.pool is None:
+            self.pool = await asyncpg.create_pool(self.url)
+        async with pool.acquire() as conn:
+            await conn.set_type_codec(
+                        'json',
+                        encoder=json.dumps,
+                        decoder=json.loads,
+                        schema='pg_catalog'
+                    )
+            await conn.set_type_codec(
+                'debversion', format='text', encoder=str, decoder=Version)
+            yield conn
 
-
-@asynccontextmanager
-async def get_connection():
-    global pool
-    if pool is None:
-        pool = await asyncpg.create_pool('postgresql:///janitor')
-
-    async with pool.acquire() as conn:
-        await conn.set_type_codec(
-                    'json',
-                    encoder=json.dumps,
-                    decoder=json.loads,
-                    schema='pg_catalog'
-                )
-        await conn.set_type_codec(
-            'debversion', format='text', encoder=str, decoder=Version)
-        yield conn
 
 
 async def store_packages(conn, packages):

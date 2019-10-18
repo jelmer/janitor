@@ -226,7 +226,7 @@ async def invoke_subprocess_worker(
 
 
 async def process_one(
-        output_directory, worker_kind, vcs_url, pkg, env, command,
+        db, output_directory, worker_kind, vcs_url, pkg, env, command,
         build_command, suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
@@ -318,7 +318,7 @@ async def process_one(
         note('Since refresh was requested, ignoring resume branch.')
         resume_branch = None
 
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         if resume_branch is not None:
             resume_branch_result = await state.get_run_result_by_revision(
                 conn, revision=resume_branch.last_revision())
@@ -424,9 +424,9 @@ async def process_one(
     return result
 
 
-async def export_queue_length():
+async def export_queue_length(db):
     while True:
-        async with state.get_connection() as conn:
+        async with db.acquire() as conn:
             queue_length.set(await state.queue_length(conn))
             queue_duration.set(
                 (await state.queue_duration(conn)).total_seconds())
@@ -434,9 +434,9 @@ async def export_queue_length():
         await asyncio.sleep(60)
 
 
-async def export_stats():
+async def export_stats(db):
     while True:
-        async with state.get_connection() as conn:
+        async with db.acquire() as conn:
             for suite, count in await state.get_published_by_suite(conn):
                 apt_package_count.labels(suite=suite).set(count)
 
@@ -465,10 +465,9 @@ async def export_stats():
 class QueueProcessor(object):
 
     def __init__(
-            self, worker_kind, build_command, pre_check=None,
-            post_check=None,
-            dry_run=False, incoming=None, logfile_manager=None,
-            debsign_keyid=None, vcs_manager=None,
+            self, database, worker_kind, build_command, pre_check=None,
+            post_check=None, dry_run=False, incoming=None,
+            logfile_manager=None, debsign_keyid=None, vcs_manager=None,
             concurrency=1, use_cached_only=False):
         """Create a queue processor.
 
@@ -479,6 +478,7 @@ class QueueProcessor(object):
           post_check: Function to run after modifying a package
           incoming: directory to copy debian packages to
         """
+        self.database = database
         self.worker_kind = worker_kind
         self.build_command = build_command
         self.pre_check = pre_check
@@ -500,19 +500,19 @@ class QueueProcessor(object):
         with tempfile.TemporaryDirectory() as output_directory:
             self.per_run_directory[item.id] = output_directory
             result = await process_one(
-                output_directory, self.worker_kind, item.branch_url,
-                item.package, item.env, item.command, suite=item.suite,
-                pre_check=self.pre_check, build_command=self.build_command,
-                post_check=self.post_check, dry_run=self.dry_run,
-                incoming=self.incoming, debsign_keyid=self.debsign_keyid,
-                vcs_manager=self.vcs_manager,
+                self.database, output_directory, self.worker_kind,
+                item.branch_url, item.package, item.env, item.command,
+                suite=item.suite, pre_check=self.pre_check,
+                build_command=self.build_command, post_check=self.post_check,
+                dry_run=self.dry_run, incoming=self.incoming,
+                debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only, refresh=item.refresh)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())
         if not self.dry_run:
-            async with state.get_connection() as conn:
+            async with self.database.acquire() as conn:
                 await state.store_run(
                     conn, result.log_id, item.package, item.branch_url,
                     start_time, finish_time, item.command,
@@ -534,7 +534,7 @@ class QueueProcessor(object):
 
     async def process(self):
         todo = set()
-        async with state.get_connection() as conn:
+        async with self.database.acquire() as conn:
             async for item in state.iter_queue(conn, limit=self.concurrency):
                 todo.add(self.process_queue_item(item))
 
@@ -556,7 +556,7 @@ class QueueProcessor(object):
                     task.result()
                 todo = pending
                 if self.concurrency:
-                    async with state.get_connection() as conn:
+                    async with self.database.acquire() as conn:
                         for i in enumerate(done):
                             async for item in state.iter_queue(
                                     conn, limit=self.concurrency):
@@ -689,7 +689,9 @@ def main(argv=None):
     state.DEFAULT_URL = config.database_location
     vcs_manager = LocalVcsManager(config.vcs_location)
     logfile_manager = get_log_manager(config.logs_location)
+    db = state.Database(config.database_location)
     queue_processor = QueueProcessor(
+        db,
         args.worker,
         args.build_command,
         args.pre_check, args.post_check,
@@ -701,8 +703,8 @@ def main(argv=None):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(queue_processor.process()),
-        loop.create_task(export_queue_length()),
-        loop.create_task(export_stats()),
+        loop.create_task(export_queue_length(db)),
+        loop.create_task(export_stats(db)),
         loop.create_task(run_web_server(
             args.listen_address, args.port, queue_processor)),
         ))

@@ -17,8 +17,8 @@ from janitor.site import (
 )
 
 
-async def generate_pkg_file(package, suite, run_id=None):
-    async with state.get_connection() as conn:
+async def generate_pkg_file(db, package, suite, run_id=None):
+    async with db.acquire() as conn:
         package = await state.get_package(conn, package)
         if package is None:
             raise KeyError(package)
@@ -109,9 +109,9 @@ async def generate_pkg_file(package, suite, run_id=None):
     return await template.render_async(**kwargs)
 
 
-async def generate_candidates(suite):
+async def generate_candidates(db, suite):
     template = env.get_template('new-upstream-candidates.html')
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         candidates = [(package.name, context, value) for
                       (package, suite, command, context, value) in
                       await state.iter_candidates(conn, suite=suite)]
