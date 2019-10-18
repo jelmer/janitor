@@ -34,7 +34,7 @@ class Database(object):
     async def acquire(self):
         if self.pool is None:
             self.pool = await asyncpg.create_pool(self.url)
-        async with pool.acquire() as conn:
+        async with self.pool.acquire() as conn:
             await conn.set_type_codec(
                         'json',
                         encoder=json.dumps,

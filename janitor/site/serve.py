@@ -481,5 +481,5 @@ if __name__ == '__main__':
     setup_metrics(app)
     app.add_subapp(
         '/api', create_api_app(
-            database, args.publisher_url, args.runner_url, policy_config))
+            app.database, args.publisher_url, args.runner_url, policy_config))
     web.run_app(app, host=args.host, port=args.port)
