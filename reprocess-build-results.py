@@ -28,11 +28,10 @@ with open(args.config, 'r') as f:
     config = read_config(f)
 
 
-state.DEFAULT_URL = config.database_location
 logfile_manager = get_log_manager(config.logs_location)
 
 
-async def reprocess_run(package, log_id, result_code, description):
+async def reprocess_run(db, package, log_id, result_code, description):
     try:
         build_logf = await logfile_manager.get_log(
             package, log_id, 'build.log')
@@ -46,22 +45,23 @@ async def reprocess_run(package, log_id, result_code, description):
     else:
         new_code = 'build-failed'
     if new_code != result_code or description != failure.description:
-        async with state.get_connection() as conn:
+        async with db.acquire() as conn:
             await state.update_run_result(
                 conn, log_id, new_code, failure.description)
         note('Updated %r, %r => %r, %r', result_code, description,
              new_code, failure.description)
 
 
-async def process_all_build_failures():
+async def process_all_build_failures(db):
     todo = []
-    async with state.get_connection() as conn:
+    async with db.acquire() as conn:
         async for package, log_id, result_code, description in (
                 state.iter_build_failures(conn)):
             todo.append(
-                reprocess_run(package, log_id, result_code, description))
+                reprocess_run(db, package, log_id, result_code, description))
     for i in range(0, len(todo), 100):
         await asyncio.gather(*todo[i:i+100])
 
 
-loop.run_until_complete(process_all_build_failures())
+db = state.Database(config.database_location)
+loop.run_until_complete(process_all_build_failures(db))
