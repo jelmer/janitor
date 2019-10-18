@@ -665,6 +665,28 @@ def ruby_missing_gem(m):
     return MissingRubyGem(m.group(1), m.group(2))
 
 
+class MissingJavaClass(object):
+
+    kind = 'missing-java-class'
+
+    def __init__(self, classname):
+        self.classname = classname
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.classname == other.classname)
+
+    def __str__(self):
+        return 'missing java class: %s' % self.classname
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.classname)
+
+
+def java_missing_class(m):
+    return MissingJavaClass(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[1\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -740,6 +762,8 @@ build_failure_regexps = [
     (r'/usr/bin/ld: cannot find -l(.*)', ld_missing_lib),
     (r'Could not find gem \'([^ ]+) \(~> (.*)\)\', which is required by gem.*',
      ruby_missing_gem),
+    (r'Caused by: java.lang.ClassNotFoundException: (.*)',
+     java_missing_class),
 ]
 
 compiled_build_failure_regexps = [
