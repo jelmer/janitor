@@ -22,16 +22,15 @@ with open(args.config, 'r') as f:
 
 async def main(db, result_code):
     packages = {}
-    async with db.acquire() as conn:
-        for package in await state.iter_packages(conn):
+    async with db.acquire() as conn1, db.acquire() as conn2:
+        for package in await state.iter_packages(conn1):
             if package.removed:
                 continue
             packages[package.name] = package
 
         async for (package, suite, command, id, description, start_time,
-                   duration, branch_url) in [
-                           run async for run in
-                           state.iter_last_runs(conn, result_code)]:
+                   duration, branch_url) in state.iter_last_runs(
+                       conn1, result_code):
             if package not in packages:
                 continue
             if packages[package].branch_url is None:
@@ -41,7 +40,7 @@ async def main(db, result_code):
                 continue
             print('Rescheduling %s, %s' % (package, suite))
             await state.add_to_queue(
-                conn, packages[package].branch_url,
+                conn2, packages[package].branch_url,
                 package, command.split(' '), suite,
                 estimated_duration=duration, requestor='reschedule',
                 refresh=args.refresh)
