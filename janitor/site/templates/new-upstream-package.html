@@ -70,14 +70,12 @@
 {% endif %}
 
 {% if vcs_url %}
-{{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
+{{ reschedule_button(suite, package, "Schedule a new run") }}
 {% endif %}
 
 {% if branch_name %}
-{{ publish_buttons(suite, package, "#commandResult") }}
+{{ publish_buttons(suite, package) }}
 {% endif %}
-
-<div id="commandResult"></div>
 
 {% if previous_runs and previous_runs[0].result_code not in ('nothing-to-do', 'success') %}
 <h3>Historical runs</h3>

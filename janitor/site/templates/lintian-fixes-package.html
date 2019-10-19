@@ -35,10 +35,8 @@
 {{ result_code_explanation(result_code, run) }}
 
 {% if vcs_url %}
-{{ reschedule_button(suite, package, "Schedule a new run", "#commandResult") }}
+{{ reschedule_button(suite, package, "Schedule a new run") }}
 {% endif %}
-
-<div id="commandResult"></div>
 
 {% if not result_code %}
 
@@ -57,7 +55,7 @@ Nothing to do for {{ package }}; last run at {{ format_timestamp(previous_runs[0
 <h2>Ready changes</h2>
 
 {% if branch_name %}
-{{ publish_buttons(suite, package, "#commandResult") }}
+{{ publish_buttons(suite, package) }}
 {% endif %}
 
 {{ merge_command(package, branch_name, vcs) }}

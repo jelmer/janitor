@@ -26,7 +26,7 @@
     <td>
       {% if open_proposal_url %}<a href="{{ open_proposal_url }}">proposal</a>
       {% elif run and run.branch_name %}
-      {{ publish_buttons(run.suite, run.package, "#commandResult", id_suffix='-'+run.package) }}
+      {{ publish_buttons(run.suite, run.package, id_suffix='-'+run.package) }}
       {%endif %}
       {% if other_proposals %}
       <br/>(previous: {% for status, url in other_proposals %}<a href="{{ url }}">{{ loop.index }}</a>{% if not loop.last %} {% endif %}{% endfor %})
