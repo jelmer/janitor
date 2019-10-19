@@ -171,8 +171,12 @@ def publish(
     def get_proposal_description(existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
-            existing_description = strip_janitor_blurb(
-                existing_description, suite)
+            try:
+                existing_description = strip_janitor_blurb(
+                    existing_description, suite)
+            except ValueError:
+                # Oh, well...
+                existing_description = None
         else:
             existing_description = None
         description = subrunner.get_proposal_description(
