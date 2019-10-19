@@ -25,6 +25,7 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 from silver_platter.proposal import (
+    EmptyMergeProposal,
     get_hoster,
     publish_changes as publish_changes_from_workspace,
     propose_changes,
@@ -337,12 +338,20 @@ def publish_one(
 
     if allow_create_proposal is None:
         allow_create_proposal = subrunner.allow_create_proposal()
-    proposal, is_new = publish(
-        suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
-        resume_branch,
-        dry_run=dry_run, log_id=log_id,
-        existing_proposal=existing_proposal,
-        allow_create_proposal=allow_create_proposal)
+
+    try:
+        proposal, is_new = publish(
+            suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
+            resume_branch,
+            dry_run=dry_run, log_id=log_id,
+            existing_proposal=existing_proposal,
+            allow_create_proposal=allow_create_proposal)
+    except EmptyMergeProposal:
+        raise PublishFailure(
+            code='empty-merge-proposal',
+            description=(
+                'No changes to propose; '
+                'changes made independently upstream?'))
 
     return proposal, branch_name, is_new
 
