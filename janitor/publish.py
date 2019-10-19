@@ -275,7 +275,7 @@ async def diff_request(request):
 async def publish_and_store(
         publish_id, run, mode, maintainer_email, vcs_manager, rate_limiter,
         dry_run=False, allow_create_proposal=True):
-    async db.acquire() as conn:
+    async with db.acquire() as conn:
         try:
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
