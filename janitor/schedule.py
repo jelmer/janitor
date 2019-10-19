@@ -24,15 +24,15 @@ __all__ = [
 
 from datetime import datetime, timedelta
 
+from silver_platter.debian import (
+    convert_debian_vcs_url,
+)
 from . import (
     state,
     trace,
     )
 from .config import read_config
 
-from silver_platter.debian import (
-    convert_debian_vcs_url,
-)
 from .policy import (
     read_policy,
     apply_policy,
@@ -62,7 +62,9 @@ async def schedule_from_candidates(policy, iter_candidates):
     with open(policy, 'r') as f:
         policy = read_policy(f)
 
-    async for package, suite, command, context, value in iter_candidates:
+    for package, suite, command, context, value in iter_candidates:
+        if package.vcs_url is None:
+            continue
         try:
             vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
         except ValueError as e:
@@ -70,8 +72,8 @@ async def schedule_from_candidates(policy, iter_candidates):
             continue
 
         mode, update_changelog, committer = apply_policy(
-            policy, suite.replace('-', '_'), package.name,
-            package.maintainer_email, package.uploader_emails)
+            policy, suite.replace('-', '_') if suite != 'unchanged' else None,
+            package.name, package.maintainer_email, package.uploader_emails)
 
         if mode == 'skip':
             trace.mutter('%s: skipping, per policy', package.name)
@@ -135,10 +137,10 @@ async def estimate_duration(conn, package, suite):
 
 
 async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
-    popcon = dict(await state.popcon(conn))
+    popcon = {k: (v or 0) for (k, v) in await state.popcon(conn)}
     removed = set(p.name for p in await state.iter_packages(conn)
                   if p.removed)
-    max_inst = max([(v or 0) for k, v in popcon.items()])
+    max_inst = max([(v or 0) for v in popcon.values()])
     trace.note('Maximum inst count: %d', max_inst)
     for vcs_url, mode, env, command, suite, value in todo:
         assert vcs_url is not None
@@ -155,8 +157,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
             "Probability of success: %s" % estimated_probability_of_success
         estimated_cost = 50 + estimated_duration.total_seconds()
         assert estimated_cost > 0, "Estimated cost: %d" % estimated_cost
-        estimated_popularity = max(
-            popcon.get(package, (0, 0))[0], 10) / max_inst
+        estimated_popularity = max(popcon.get(package, 0), 10) / max_inst
         estimated_value = (
             estimated_popularity * estimated_probability_of_success * value)
         assert estimated_value > 0, "Estimated value: %s" % estimated_value
@@ -221,7 +222,7 @@ async def main():
         iter_candidates = await state.iter_candidates(conn)
         todo = [x async for x in schedule_from_candidates(
             args.policy, iter_candidates)]
-        await add_to_queue(todo, dry_run=args.dry_run)
+        await add_to_queue(conn, todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
