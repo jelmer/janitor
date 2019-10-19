@@ -34,14 +34,12 @@
 {{ local_command(command, package) }}
 
 {% if vcs_url %}
-{{ reschedule_button(suite, package, "Reschedule", "#commandResult") }}
-{{ reschedule_button(suite, package, "Reschedule (from scratch)", "#commandResult", data={'refresh': '1'}, id='reschedule-refresh') }}
+{{ reschedule_button(suite, package, "Reschedule") }}
+{{ reschedule_button(suite, package, "Reschedule (from scratch)", data={'refresh': '1'}, id='reschedule-refresh') }}
 {% if branch_name %}
-{{ publish_buttons(suite, package, "#commandResult") }}
+{{ publish_buttons(suite, package) }}
 {% endif %}
 {% endif %}
-
-<div id="commandResult"></div>
 
 {% if branch_name %}
 {{ merge_command(package, branch_name, vcs) }}
