@@ -373,7 +373,7 @@ def fix_missing_java_class(tree, error, committer=None):
     # system :(
     classpath = subprocess.check_output(
         ["java-propose-classpath", "-c" + error.classname]
-        ).decode().strip(":").split(':')
+        ).decode().strip(":").strip().split(':')
     if not classpath:
         warning('unable to find classpath for %s', error.classname)
         return False
