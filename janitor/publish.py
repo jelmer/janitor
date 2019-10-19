@@ -273,7 +273,7 @@ async def diff_request(request):
 
 
 async def publish_and_store(
-        publish_id, run, mode, maintainer_email, vcs_manager, rate_limiter,
+        db, publish_id, run, mode, maintainer_email, vcs_manager, rate_limiter,
         dry_run=False, allow_create_proposal=True):
     async with db.acquire() as conn:
         try:
