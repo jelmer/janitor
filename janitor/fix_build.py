@@ -56,6 +56,7 @@ from .sbuild_log import (
     MissingNodeModule,
     MissingRubyGem,
     MissingLibrary,
+    MissingJavaClass,
     SbuildFailure,
     DhAddonLoadFailure,
     )
@@ -367,6 +368,23 @@ def fix_missing_ruby_gem(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_java_class(tree, error, committer=None):
+    # Unfortunately this only finds classes in jars installed on the host
+    # system :(
+    classpath = subprocess.check_output(
+        ["java-propose-classpath", "-c" + error.classname]
+        ).decode().strip(":").split(':')
+    if not classpath:
+        warning('unable to find classpath for %s', error.classname)
+        return False
+    note('Classpath for %s: %r', error.classname, classpath)
+    package = get_package_for_paths(classpath)
+    if package is None:
+        warning('no package for files in %r', classpath)
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingCHeader, fix_missing_c_header),
@@ -380,6 +398,7 @@ FIXERS = [
     (MissingNodeModule, fix_missing_node_module),
     (MissingRubyGem, fix_missing_ruby_gem),
     (MissingLibrary, fix_missing_library),
+    (MissingJavaClass, fix_missing_java_class),
     (DhAddonLoadFailure, fix_missing_dh_addon),
 ]
 
