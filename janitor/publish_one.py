@@ -78,7 +78,7 @@ You can follow up to this merge proposal as you normally would.
 
 LOG_BLURB = """
 Build and test logs for this branch can be found at
-https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s/.
+https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
 """
 
 
