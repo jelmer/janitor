@@ -233,7 +233,8 @@ where sources.release = 'sid'
 
     async def iter_removals(self):
         query = """\
-select name, version from package_removal where 'source' = any(arch_array)"""
+select name, version from package_removal where 'source' = any(arch_array)
+"""
         return await self._conn.fetch(query)
 
 
@@ -298,11 +299,12 @@ async def main():
                 removals[name] = max(Version(version), removals[name])
 
         trace.note('Updating removals.')
-        await state.update_removals(
-            conn,
-            [(name, version) for (name, version) in removals.items()
-             if name in existing_packages and
-             not existing_packages[name].removed])
+        filtered_removals = [
+            (name, version) for (name, version) in removals.items()
+            if name in existing_packages and
+            not existing_packages[name].removed]
+        trace.note('Removals: %r', filtered_removals)
+        await state.update_removals(conn, filtered_removals)
 
     trace.note('Updating package metadata.')
     packages = []
