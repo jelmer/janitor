@@ -184,7 +184,8 @@ async def generate_developer_table_page(db, developer):
         package_candidates = set(candidates.get(package, []))
         if open_proposal:
             status = 'proposal'
-        elif run and run.result and run.result_code in ('success', 'nothing-to-do'):
+        elif run and run.result and run.result_code in (
+                'success', 'nothing-to-do'):
             status = 'unabsorbed'
         elif run and run.result_code != 'nothing-to-do':
             status = 'error'
@@ -192,7 +193,7 @@ async def generate_developer_table_page(db, developer):
             status = 'candidates'
         else:
             status = 'nothing-to-do'
-        
+
         by_package[package] = (
             run,
             package_candidates,

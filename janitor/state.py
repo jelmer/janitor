@@ -754,7 +754,16 @@ group by 1 order by 2 desc
 
 async def iter_last_runs(conn, result_code):
     query = """
-SELECT package, suite, command, id, description, start_time, finish_time - start_time, branch_url FROM last_runs
+SELECT
+  package,
+  suite,
+  command,
+  id,
+  description,
+  start_time,
+  finish_time - start_time,
+  branch_url
+FROM last_runs
 WHERE result_code = $1
 ORDER BY start_time DESC
 """
@@ -1103,7 +1112,8 @@ where
 async def iter_lintian_brush_fixer_failures(conn, fixer):
     query = """
 select id, package, result->'failed'->$1 FROM last_runs
-where suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
+where
+  suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
 """
     return await conn.fetch(query, fixer)
 
@@ -1111,9 +1121,11 @@ where suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
 async def iter_lintian_fixes_regressions(conn):
     query = """
 SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
-   INNER JOIN last_runs u ON l.main_branch_revision = u.main_branch_revision WHERE
-    l.suite = 'lintian-fixes' AND u.suite = 'unchanged'
-    AND l.result_code NOT IN ('success', 'nothing-to-do')
-    AND u.result_code = 'success'
+   INNER JOIN last_runs u ON l.main_branch_revision = u.main_branch_revision
+   WHERE
+    l.suite = 'lintian-fixes' AND
+    u.suite = 'unchanged' AND
+    l.result_code NOT IN ('success', 'nothing-to-do') AND
+    u.result_code = 'success'
 """
     return await conn.fetch(query)

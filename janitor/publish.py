@@ -529,7 +529,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
 
         if last_run.result_code not in ('success', 'nothing-to-do'):
             note('%s: Last run failed (%s). Not touching merge proposal.',
-                 mp.url, run.result_code)
+                 mp.url, last_run.result_code)
             continue
 
         if last_run != mp_run:
@@ -537,26 +537,26 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
             note('%s needs to be updated.', mp.url)
             try:
                 mp_url, branch_name, is_new = await publish_one(
-                    run.suite, run.package, run.command, run.result,
-                    run.branch_url, MODE_PROPOSE, run.id,
-                    maintainer_email,
-                    vcs_manager=vcs_manager, branch_name=run.branch_name,
+                    last_run.suite, last_run.package, last_run.command,
+                    last_run.result, last_run.branch_url, MODE_PROPOSE,
+                    last_run.id, maintainer_email,
+                    vcs_manager=vcs_manager, branch_name=last_run.branch_name,
                     dry_run=dry_run, allow_create_proposal=True)
             except PublishFailure as e:
                 note('%s: Updating merge proposal failed: %s (%s)',
                      mp.url, e.code, e.description)
                 await state.store_publish(
-                    conn, run.package, run.branch_name,
-                    run.main_branch_revision.decode('utf-8'),
-                    run.revision.decode('utf-8'), MODE_PROPOSE, e.code,
+                    conn, last_run.package, last_run.branch_name,
+                    last_run.main_branch_revision.decode('utf-8'),
+                    last_run.revision.decode('utf-8'), MODE_PROPOSE, e.code,
                     e.description, mp.url,
                     publish_id=publish_id)
                 break
             else:
                 await state.store_publish(
-                    conn, run.package, branch_name,
-                    run.main_branch_revision.decode('utf-8'),
-                    run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
+                    conn, last_run.package, branch_name,
+                    last_run.main_branch_revision.decode('utf-8'),
+                    last_run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
                     'Succesfully updated', mp_url,
                     publish_id=publish_id)
 
