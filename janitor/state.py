@@ -46,7 +46,6 @@ class Database(object):
             yield conn
 
 
-
 async def store_packages(conn, packages):
     """Store packages in the database.
 

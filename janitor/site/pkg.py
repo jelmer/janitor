@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from aiohttp import ClientSession, ClientConnectorError
+from aiohttp import ClientConnectorError
 from io import BytesIO
 import urllib.parse
 

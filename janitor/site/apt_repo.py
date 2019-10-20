@@ -1,9 +1,5 @@
 #!/usr/bin/python3
 
-import argparse
-import asyncio
-import sys
-
 from debian.changelog import Version
 
 from janitor import state

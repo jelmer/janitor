@@ -316,8 +316,12 @@ Caused by: java.lang.ClassNotFoundException: org.codehaus.Xpp3r$Builder
 \tat org.codehaus.realm.ClassRealm.loadClass(ClassRealm.java:247)
 \tat org.codehaus.realm.ClassRealm.loadClass(ClassRealm.java:239)
 \t... 46 more
-""".splitlines(), 1,
-    MissingJavaClass('org.codehaus.Xpp3r$Builder'))
+""".splitlines(), 1, MissingJavaClass('org.codehaus.Xpp3r$Builder'))
+
+    def test_install_docs_link(self):
+        self.run_test("""\
+dh_installdocs: --link-doc not allowed between sympow and sympow-data (one is \
+arch:all and the other not)""".splitlines(), 1)
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
