@@ -516,25 +516,23 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
             warning('Unable to find local metadata for %s, skipping.', mp.url)
             continue
 
-        recent_runs = []
-        async for run in state.iter_previous_runs(
-                conn, mp_run.package, mp_run.suite):
-            if run == mp_run:
-                break
-            recent_runs.append(run)
+        last_run = await state.get_last_unabsorbed_run(
+            conn, mp_run.package, mp_run.suite)
+        if last_run is None:
+            # A new run happened since the last, but there was nothing to
+            # do.
+            note('%s: Last run did not produce any changes, '
+                 'closing proposal.', mp.url)
+            # TODO(jelmer): Log this in the database
+            mp.close()
+            continue
 
-        for run in recent_runs:
-            if run.result_code not in ('success', 'nothing-to-do'):
-                note('%s: Last run failed (%s). Not touching merge proposal.',
-                     mp.url, run.result_code)
-                break
+        if last_run.result_code not in ('success', 'nothing-to-do'):
+            note('%s: Last run failed (%s). Not touching merge proposal.',
+                 mp.url, run.result_code)
+            continue
 
-            if run.result_code == 'nothing-to-do':
-                continue
-
-            if run.suite == 'unchanged':
-                continue
-
+        if last_run != mp_run:
             publish_id = str(uuid.uuid4())
             note('%s needs to be updated.', mp.url)
             try:
@@ -565,15 +563,6 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
                 assert not is_new, "Intended to update proposal %r" % mp_url
                 break
         else:
-            if recent_runs:
-                # A new run happened since the last, but there was nothing to
-                # do.
-                note('%s: Last run did not produce any changes, '
-                     'closing proposal.', mp.url)
-                # TODO(jelmer): Log this in the database
-                mp.close()
-                continue
-
             # It may take a while for the 'conflicted' bit on the proposal to
             # be refreshed, so only check it if we haven't made any other
             # changes.
@@ -584,6 +573,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
                     shlex.split(run.command),
                     run.suite, offset=-2, refresh=True,
                     requestor='publisher')
+
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
