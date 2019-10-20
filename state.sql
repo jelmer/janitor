@@ -101,3 +101,11 @@ CREATE OR REPLACE VIEW last_runs AS
   run
   WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
   ORDER BY package, suite, start_time DESC;
+
+CREATE OR REPLACE VIEW unabsorbed_runs AS
+  SELECT * FROM last_runs WHERE
+     result_code NOT in ('nothing-to-do', 'success') OR (
+     revision is not null AND
+     revision != main_branch_revision AND
+     revision NOT IN (SELECT revision FROM publish WHERE (mode = 'push' and result_code = 'success') OR (mode = 'propose' AND result_code = 'empty-merge-proposal')) AND
+     revision NOT IN (SELECT revision FROM merge_proposal WHERE status = 'merged'));

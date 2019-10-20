@@ -26,7 +26,7 @@ async def generate_pkg_file(db, package, suite, run_id=None):
             run = await state.get_run(conn, run_id)
             merge_proposals = []
         else:
-            run = await state.get_last_unmerged_success(
+            run = await state.get_last_unabsorbed_run(
                 conn, package.name, suite)
             merge_proposals = [
                 (url, status)

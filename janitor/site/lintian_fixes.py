@@ -29,7 +29,7 @@ async def generate_pkg_file(db, client, publisher_url, package, run_id=None):
                 raise KeyError(run_id)
             merge_proposals = []
         else:
-            run = await state.get_last_unmerged_success(
+            run = await state.get_last_unabsorbed_run(
                 conn, package.name, SUITE)
             merge_proposals = [
                 (url, status) for (unused_package, url, status) in
@@ -167,7 +167,7 @@ async def generate_developer_page(db, developer):
         ready_changes = []
         runs = {}
         merge_proposals = []
-        async for run in state.iter_last_unmerged_successes(
+        async for run in state.iter_last_unabsorbed_runs(
                 conn, suite=SUITE, packages=packages):
             runs[run.package] = run
             if run.package in candidates:
@@ -210,7 +210,7 @@ async def generate_developer_table_page(db, developer):
                 conn, packages=packages, suite=SUITE):
             candidates[row[0].name] = row[3].split(' ')
         runs = {}
-        async for run in state.iter_last_unmerged_successes(
+        async for run in state.iter_last_unabsorbed_runs(
                 conn, suite=SUITE, packages=packages):
             runs[run.package] = run
 
