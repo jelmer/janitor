@@ -248,3 +248,10 @@ async def generate_failing_fixers_list(db):
     async with db.acquire() as conn:
         fixers = await state.iter_failed_lintian_fixers(conn)
     return await template.render_async(fixers=fixers)
+
+
+async def generate_regressions_list(db):
+    template = env.get_template('lintian-fixes-regressions.html')
+    async with db.acquire() as conn:
+        packages = await state.iter_lintian_fixes_regressions(conn)
+    return await remplate.render_async(packages=packages)
