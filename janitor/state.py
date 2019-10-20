@@ -760,23 +760,8 @@ group by 1 order by 2 desc
 
 async def iter_last_runs(conn, result_code):
     query = """
-SELECT package, suite, command, id, description, start_time, duration,
-    branch_url FROM (
-SELECT DISTINCT ON (package, suite)
-  package,
-  suite,
-  command,
-  id,
-  description,
-  start_time,
-  finish_time - start_time AS duration,
-  result_code,
-  branch_url
-FROM
-  run
-ORDER BY package, suite, start_time DESC) AS runs
+SELECT package, suite, command, id, description, start_time, duration, branch_url FROM last_runs
 WHERE result_code = $1
-AND NOT EXISTS (SELECT FROM package WHERE name = package and removed)
 ORDER BY start_time DESC
 """
     async with conn.transaction():
@@ -1113,19 +1098,7 @@ UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2
 
 async def iter_failed_lintian_fixers(conn):
     query = """
-select json_object_keys(result->'failed'), count(*) from (
-SELECT DISTINCT ON (package)
-package,
-suite,
-id,
-result,
-description,
-start_time,
-finish_time - start_time AS duration
-FROM
-run
-WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
-ORDER BY package, start_time DESC) AS runs
+select json_object_keys(result->'failed'), count(*) from last_runs
 where
   suite = 'lintian-fixes' and
   json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
@@ -1135,19 +1108,7 @@ where
 
 async def iter_lintian_brush_fixer_failures(conn, fixer):
     query = """
-select id, package, result->'failed'->$1 from (
-SELECT DISTINCT ON (package)
-package,
-suite,
-id,
-result,
-description,
-start_time,
-finish_time - start_time AS duration
-FROM
-run
-WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
-ORDER BY package, start_time DESC) AS runs
+select id, package, result->'failed'->$1 FROM last_runs
 where suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
 """
     return await conn.fetch(query, fixer)
