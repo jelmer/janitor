@@ -146,50 +146,6 @@ async def generate_candidates(db):
         supported_tags=supported_tags, candidates=candidates)
 
 
-async def generate_developer_page(db, developer):
-    template = env.get_template('lintian-fixes-developer.html')
-    async with db.acquire() as conn:
-        packages = [p for p, removed in
-                    await state.iter_packages_by_maintainer(
-                        conn, developer) if not removed]
-        proposals = {}
-        for package, url, status in await state.iter_proposals(
-                conn, packages, SUITE):
-            if status == 'open':
-                proposals[package] = url
-
-        candidates = {}
-        for row in await state.iter_candidates(
-                conn, packages=packages, suite=SUITE):
-            candidates[row[0].name] = row[3].split(' ')
-        nothing_to_do = []
-        errors = []
-        ready_changes = []
-        runs = {}
-        merge_proposals = []
-        async for run in state.iter_last_unabsorbed_runs(
-                conn, suite=SUITE, packages=packages):
-            runs[run.package] = run
-            if run.package in candidates:
-                del candidates[run.package]
-            if run.result_code not in ('success', 'nothing-to-do'):
-                errors.append(run)
-            else:
-                if run.result and run.result.get('applied'):
-                    if proposals.get(run.package):
-                        merge_proposals.append((proposals[run.package], run))
-                    else:
-                        ready_changes.append(run)
-                else:
-                    nothing_to_do.append(run)
-
-    return await template.render_async(
-        developer=developer, packages=packages,
-        candidates=list(candidates.items()),
-        runs=runs, nothing_to_do=nothing_to_do, errors=errors,
-        ready_changes=ready_changes, merge_proposals=merge_proposals)
-
-
 async def generate_developer_table_page(db, developer):
     template = env.get_template('lintian-fixes-developer-table.html')
     async with db.acquire() as conn:
