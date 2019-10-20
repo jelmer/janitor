@@ -309,7 +309,7 @@ if __name__ == '__main__':
     async def handle_lintian_fixes_tag_list(request):
         from .lintian_fixes import generate_tag_list
         async with request.app.database.acquire() as conn:
-            text = await generate_tag_list()
+            text = await generate_tag_list(conn)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
