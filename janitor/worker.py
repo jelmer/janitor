@@ -412,10 +412,10 @@ class WorkerFailure(Exception):
 
 def tree_set_changelog_version(tree, build_version):
     cl = Changelog(tree.get_file('debian/changelog'))
-    if cl.version > Version(build_version):
+    if Version(str(cl.version) + '~') > Version(build_version):
         return
     cl.set_version(build_version)
-    with open(tree.abspath('debian/changelog'), 'wb') as f:
+    with open(tree.abspath('debian/changelog'), 'w') as f:
         cl.write_to_open_file(f)
 
 
@@ -499,7 +499,7 @@ def process_package(vcs_url, env, command, output_directory,
                     'Missing support for nested trees in Breezy.')
             raise AssertionError
 
-        metadata['main_branch_revision'] = (
+        metadata['revision'] = metadata['main_branch_revision'] = (
             ws.main_branch.last_revision().decode())
 
         if not ws.local_tree.has_filename('debian/control'):
@@ -530,9 +530,13 @@ def process_package(vcs_url, env, command, output_directory,
             # don't need to pass in the subworker result.
             resume_subworker_result = None
 
-        description = subworker.make_changes(
-            ws.local_tree, provide_context, metadata['subworker'],
-            resume_subworker_result)
+        try:
+            description = subworker.make_changes(
+                ws.local_tree, provide_context, metadata['subworker'],
+                resume_subworker_result)
+        finally:
+            metadata['revision'] = (
+                ws.local_tree.branch.last_revision().decode())
 
         if command[0] != 'just-build':
             if not ws.changes_since_main():

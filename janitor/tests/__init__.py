@@ -23,6 +23,7 @@ import unittest
 def test_suite():
     names = [
         'sbuild_log',
+        'worker',
         ]
     module_names = [__name__ + '.test_' + name for name in names]
     loader = unittest.TestLoader()
