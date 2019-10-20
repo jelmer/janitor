@@ -228,7 +228,7 @@ def get_cached_branch(vcs_type, package, branch_name):
 
 def get_local_vcs_branch(vcs_directory, pkg, branch_name):
     for vcs in SUPPORTED_VCSES:
-        if os.path.exists(os.path.join(vcs_directory, 'git', pkg)):
+        if os.path.exists(os.path.join(vcs_directory, vcs, pkg)):
             break
     else:
         return None
