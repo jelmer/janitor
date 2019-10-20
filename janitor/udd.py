@@ -166,11 +166,14 @@ and vcs_type != ''"""
     async def iter_unchanged_candidates(self, packages=None):
         args = []
         query = """\
-SELECT DISTINCT ON (sources.source)
-sources.source FROM sources WHERE
+SELECT DISTINCT ON (sources.source) \
+sources.source FROM sources WHERE \
 sources.vcs_url != '' AND \
 sources.release = 'sid'
 """
+        if packages is not None:
+            query += " AND upstream.source = any($1::text[])"
+            args.append(tuple(packages))
         for row in await self._conn.fetch(query, *args):
             yield (row[0], 'unchanged', ['just-build'], None,
                    DEFAULT_VALUE_UNCHANGED)
