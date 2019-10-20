@@ -17,7 +17,7 @@ SUITE_TO_COMMAND = {
     }
 
 
-async def handle_policy(policy_config, request):
+async def handle_policy(request):
     package = request.match_info['package']
     async with request.app.db.acquire() as conn:
         package = await state.get_package(conn, package)
@@ -27,7 +27,7 @@ async def handle_policy(policy_config, request):
     suite_policies = {}
     for suite in SUITES:
         (publish_policy, changelog_policy, committer) = apply_policy(
-            policy_config, suite.replace('-', '_'), package.name,
+            request.app.policy_config, suite.replace('-', '_'), package.name,
             package.maintainer_email, package.uploader_emails)
         suite_policies[suite] = {
             'publish_policy': publish_policy,
@@ -300,10 +300,9 @@ async def handle_index(request):
 
 
 async def handle_global_policy(request):
-    with open('policy.conf', 'r') as f:
-        return web.Response(
-            content_type='text/protobuf', text=f.read(),
-            headers={'Cache-Control': 'max-age=60'})
+    return web.Response(
+        content_type='text/protobuf', text=str(request.app.policy_config),
+        headers={'Cache-Control': 'max-age=60'})
 
 
 async def forward_to_runner(runner_url, path):
@@ -372,6 +371,7 @@ async def handle_publish_id(request):
 def create_app(db, publisher_url, runner_url, policy_config):
     app = web.Application()
     app.db = db
+    app.policy_config = policy_config
     app.router.add_get('/pkgnames', handle_packagename_list)
     app.router.add_get('/pkg', handle_package_list)
     app.router.add_get('/pkg/{package}', handle_package_list)
@@ -380,7 +380,7 @@ def create_app(db, publisher_url, runner_url, policy_config):
         handle_merge_proposal_list)
     app.router.add_get(
         '/pkg/{package}/policy',
-        functools.partial(handle_policy, policy_config))
+        handle_policy)
     app.router.add_post(
         '/{suite}/pkg/{package}/publish',
         functools.partial(handle_publish, publisher_url))
