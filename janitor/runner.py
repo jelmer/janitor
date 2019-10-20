@@ -121,7 +121,6 @@ class JanitorResult(object):
         self.build_version = build_version
         self.changes_filename = changes_filename
         self.branch_name = None
-        self.revision = None
         self.logfilenames = logfilenames
         if worker_result:
             self.context = worker_result.context
@@ -131,9 +130,11 @@ class JanitorResult(object):
                 self.description = worker_result.description
             self.main_branch_revision = worker_result.main_branch_revision
             self.subworker_result = worker_result.subworker
+            self.revision = worker_result.revision
         else:
             self.context = None
             self.main_branch_revision = None
+            self.revision = None
             self.subworker_result = None
 
 
@@ -153,12 +154,13 @@ class WorkerResult(object):
     """The result from a worker."""
 
     def __init__(self, code, description, context=None, subworker=None,
-                 main_branch_revision=None):
+                 main_branch_revision=None, revision=None):
         self.code = code
         self.description = description
         self.context = context
         self.subworker = subworker
         self.main_branch_revision = main_branch_revision
+        self.revision = revision
 
     @classmethod
     def from_file(cls, path):
@@ -168,7 +170,8 @@ class WorkerResult(object):
         return cls(
                 worker_result.get('code'), worker_result.get('description'),
                 worker_result.get('context'), worker_result.get('subworker'),
-                worker_result.get('main_branch_revision'))
+                worker_result.get('main_branch_revision'),
+                worker_result.get('revision'))
 
 
 async def invoke_subprocess_worker(
@@ -403,7 +406,6 @@ async def process_one(
             worker_result=worker_result,
             logfilenames=logfilenames)
 
-    result.revision = local_branch.last_revision().decode('utf-8')
     enable_tag_pushing(local_branch)
 
     if vcs_manager:
