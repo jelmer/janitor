@@ -245,6 +245,13 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_lintian_brush_regressions(request):
+        from .lintian_fixes import generate_regressions_list
+        text = await generate_regressions_list(request.app.database)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_run(request):
         from .pkg import generate_run_file
         from .. import state
@@ -469,6 +476,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/cupboard/failed-lintian-brush-fixers/{fixer}',
         handle_failed_lintian_brush_fixers)
+    app.router.add_get(
+        '/cupboard/lintian-brush-regressions/',
+        handle_lintian_brush_regressions)
     app.router.add_get(
         '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log)
     app.router.add_get(

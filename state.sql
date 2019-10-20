@@ -94,3 +94,18 @@ CREATE TABLE IF NOT EXISTS candidate (
    unique(package, suite),
    foreign key (package) references package(name)
 );
+CREATE OR REPLACE VIEW last_runs AS
+  SELECT DISTINCT ON (package, suite)
+  package,
+  suite,
+  id,
+  result,
+  result_code,
+  description,
+  start_time,
+  finish_time,
+  main_branch_revision
+  FROM
+  run
+  WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
+  ORDER BY package, suite, start_time DESC;
