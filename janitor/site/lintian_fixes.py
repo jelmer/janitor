@@ -254,4 +254,4 @@ async def generate_regressions_list(db):
     template = env.get_template('lintian-fixes-regressions.html')
     async with db.acquire() as conn:
         packages = await state.iter_lintian_fixes_regressions(conn)
-    return await remplate.render_async(packages=packages)
+    return await template.render_async(packages=packages)
