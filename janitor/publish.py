@@ -569,11 +569,10 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
             if is_conflicted(mp):
                 note('%s is conflicted. Rescheduling.', mp.url)
                 await state.add_to_queue(
-                    conn, run.branch_url, run.package,
-                    shlex.split(run.command),
-                    run.suite, offset=-2, refresh=True,
+                    conn, mp_run.branch_url, mp_run.package,
+                    shlex.split(mp_run.command),
+                    mp_run.suite, offset=-2, refresh=True,
                     requestor='publisher')
-
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
@@ -645,7 +644,7 @@ def main(argv=None):
     db = state.Database(config.database_location)
     if args.once:
         loop.run_until_complete(publish_pending_new(
-            db, policy, dry_run=args.dry_run,
+            db, rate_limiter, policy, dry_run=args.dry_run,
             vcs_manager=vcs_manager))
 
         last_success_gauge.set_to_current_time()
