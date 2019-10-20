@@ -55,6 +55,7 @@ IGNORE_RESULT_CODE = {
     'build-failed-stage-explain-bd-uninstallable': lambda run: True,
     # Run worker failures from more than a day ago.
     'worker-failure': lambda run: ((datetime.now() - run.times[0]).days > 0),
+    'apt-get-update-file-fetch-failure': lambda run: True,
 }
 
 

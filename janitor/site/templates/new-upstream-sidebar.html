@@ -12,12 +12,28 @@
 
 <p>
 See the status for a specific package:
-<form autocomplete="off" action="pkg">
-  <div class="packages" style="width:300px;">
-    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+<form autocomplete="off" action="/{{ suite }}/pkg">
+  <div class="sidebar-packages" style="width:300px;">
+    <input id="sidebar-package" type="text" name="package" class="typeahead" placeholder="Package">
   </div>
   <input type="submit" style="display: none">
 </form>
 </p>
+
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#sidebar-package').typeahead(null, {
+  name: 'sidebar-packages',
+  source: packages
+});
+});
+</script>
+
 
 </div></div>

@@ -120,6 +120,8 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
     kwargs['vcs_browse'] = package.vcs_browse
 
     async def show_diff():
+        if not run.revision or run.revision == run.main_branch_revision:
+            return ''
         url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
         try:
             async with client.get(url) as resp:

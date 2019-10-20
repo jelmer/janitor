@@ -70,6 +70,8 @@ async def generate_pkg_file(db, client, publisher_url, package, run_id=None):
             conn, package.name, SUITE)
 
     async def show_diff():
+        if not run.revision or run.revision == run.main_branch_revision:
+            return ''
         url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
         try:
             async with client.get(url) as resp:
@@ -154,13 +156,10 @@ async def generate_developer_table_page(db, developer):
                         conn, developer)
                     if not removed]
         open_proposals = {}
-        other_proposals = {}
         for package, url, status in await state.iter_proposals(
                 conn, packages, SUITE):
             if status == 'open':
                 open_proposals[package] = url
-            else:
-                other_proposals.setdefault(package, []).append((status, url))
         candidates = {}
         for row in await state.iter_candidates(
                 conn, packages=packages, suite=SUITE):
@@ -181,14 +180,28 @@ async def generate_developer_table_page(db, developer):
             for applied in applied:
                 for tag in applied.get('fixed_lintian_tags', []):
                     fixed.add(tag)
+        open_proposal = open_proposals.get(package)
+        package_candidates = set(candidates.get(package, []))
+        if open_proposal:
+            status = 'proposal'
+        elif run and run.result and run.result_code in ('success', 'nothing-to-do'):
+            status = 'unabsorbed'
+        elif run and run.result_code != 'nothing-to-do':
+            status = 'error'
+        elif package_candidates:
+            status = 'candidates'
+        else:
+            status = 'nothing-to-do'
+        
         by_package[package] = (
             run,
-            set(candidates.get(package, [])),
+            package_candidates,
             fixed,
-            open_proposals.get(package), other_proposals.get(package))
+            open_proposal, status)
 
     return await template.render_async(
-        packages=packages, by_package=by_package, suite=SUITE)
+        packages=packages, by_package=by_package, suite=SUITE,
+        developer=developer)
 
 
 async def generate_failing_fixer(db, fixer):
