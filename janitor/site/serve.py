@@ -332,15 +332,6 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
-    async def handle_lintian_fixes_developer_page(request):
-        from .lintian_fixes import generate_developer_page
-        developer = request.match_info['developer']
-        text = await generate_developer_page(
-            request.app.database, developer)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
-
     async def handle_lintian_fixes_developer_table_page(request):
         from .lintian_fixes import generate_developer_table_page
         developer = request.match_info['developer']
@@ -438,9 +429,6 @@ if __name__ == '__main__':
         handle_lintian_fixes_developer_page)
     app.router.add_get(
         '/lintian-fixes/by-developer/{developer}',
-        handle_lintian_fixes_developer_page)
-    app.router.add_get(
-        '/lintian-fixes/by-developer/{developer}/table',
         handle_lintian_fixes_developer_table_page)
     app.router.add_get(
         '/lintian-fixes/candidates', handle_lintian_fixes_candidates)
