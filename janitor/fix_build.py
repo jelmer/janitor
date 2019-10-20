@@ -371,9 +371,10 @@ def fix_missing_ruby_gem(tree, error, committer=None):
 def fix_missing_java_class(tree, error, committer=None):
     # Unfortunately this only finds classes in jars installed on the host
     # system :(
-    classpath = subprocess.check_output(
-        ["java-propose-classpath", "-c" + error.classname]
-        ).decode().strip(":").strip().split(':')
+    output = subprocess.check_output(
+        ["java-propose-classpath", "-c" + error.classname])
+    classpath = [
+        p for p in output.decode().strip(":").strip().split(':') if p]
     if not classpath:
         warning('unable to find classpath for %s', error.classname)
         return False
