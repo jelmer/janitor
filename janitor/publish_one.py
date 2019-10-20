@@ -200,7 +200,7 @@ def publish(
         else:
             labels = [suite]
         try:
-            (proposal, is_new) = publish_changes_from_workspace(
+            return publish_changes_from_workspace(
                 ws, mode, subrunner.branch_name(),
                 get_proposal_description=get_proposal_description,
                 get_proposal_commit_message=(
@@ -220,8 +220,6 @@ def publish(
         except MergeProposalExists as e:
             raise PublishFailure(
                 description=str(e), code='merge-proposal-exists')
-
-    return proposal, is_new
 
 
 class LintianBrushPublisher(object):
@@ -344,7 +342,7 @@ def publish_one(
         allow_create_proposal = subrunner.allow_create_proposal()
 
     try:
-        proposal, is_new = publish(
+        publish_result = publish(
             suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
             resume_branch,
             dry_run=dry_run, log_id=log_id,
@@ -357,7 +355,7 @@ def publish_one(
                 'No changes to propose; '
                 'changes made independently upstream?'))
 
-    return proposal, branch_name, is_new
+    return publish_result, branch_name
 
 
 if __name__ == '__main__':
@@ -370,7 +368,7 @@ if __name__ == '__main__':
     request = json.load(sys.stdin)
 
     try:
-        proposal, branch_name, is_new = publish_one(
+        publish_result, branch_name = publish_one(
             request['suite'], request['package'],
             request['command'], request['subworker_result'],
             request['main_branch_url'], request['mode'], request['log_id'],
@@ -381,9 +379,12 @@ if __name__ == '__main__':
         json.dump({'code': e.code, 'description': e.description}, sys.stdout)
         sys.exit(1)
 
-    json.dump({
-        'proposal_url': proposal.url,
-        'is_new': is_new,
-        'branch_name': branch_name}, sys.stdout)
+    result = {}
+    if publish_result.proposal:
+        result['proposal_url'] = publish_result.proposal.url
+        result['is_new'] = publish_result.is_new
+    result['branch_name'] = branch_name
+
+    json.dump(result, sys.stdout)
 
     sys.exit(0)
