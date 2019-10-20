@@ -16,9 +16,9 @@
 <tbody valign="top">
 {% for package, lintian_fixes_run_id, unchanged_run_id, result_code in packages %}
 <tr class="row-even">
-<td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ lintian_fixes_run_id }}">{{ package }}</a></td>
-<td>{{ result_code }}</td>
-<td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ unchanged_run_id }}">{{ package }}</a></td>
+<td><a class="reference external" href="/cupboard/pkg/{{ package }}">{{ package }}</a></td>
+<td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ lintian_fixes_run_id }}">{{ result_code }}</a></td>
+<td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ unchanged_run_id }}">success</a></td>
 </tr>
 {% endfor %}
 </tbody>
