@@ -701,7 +701,7 @@ SELECT
   logfilenames
 FROM
   unabsorbed_runs
-WHERE package = $1 AND build_distribution = $2
+WHERE package = $1 AND suite = $2
 ORDER BY package, command DESC, start_time DESC
 LIMIT 1
 """
