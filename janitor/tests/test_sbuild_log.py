@@ -311,7 +311,7 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
     def test_missing_java_class(self):
         self.run_test("""\
 Caused by: java.lang.ClassNotFoundException: org.codehaus.Xpp3r$Builder
-\tat org.codehaus.strategy.SelfFirstStrategy.loadClass(SelfFirstStrategy.java:50)
+\tat org.codehaus.strategy.SelfFirstStrategy.loadClass(lfFirstStrategy.java:50)
 \tat org.codehaus.realm.ClassRealm.unsynchronizedLoadClass(ClassRealm.java:271)
 \tat org.codehaus.realm.ClassRealm.loadClass(ClassRealm.java:247)
 \tat org.codehaus.realm.ClassRealm.loadClass(ClassRealm.java:239)

@@ -188,10 +188,13 @@ async def invoke_subprocess_worker(
     worker_module = {
         'local': 'janitor.worker',
         'gcb': 'janitor.gcb_worker',
-        }[worker_kind]
+        'ssh': 'janitor.ssh_worker',
+        }[worker_kind.split(':')[0]]
     args = [sys.executable, '-m', worker_module,
             '--branch-url=%s' % main_branch.user_url,
             '--output-directory=%s' % output_directory]
+    if ':' in worker_kind:
+        args.append('--host=%s' % worker_kind.split(':')[1])
     if resume_branch:
         args.append('--resume-branch-url=%s' % resume_branch.user_url)
     if cached_branch:
