@@ -30,7 +30,6 @@ cd {{ package }}
 {% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}) %}
 <button id="{{ id }}">{{ title }}</button>
 
-<script src="/_static/jquery.js"></script>
 <script>
 $(function() {
   $("#{{ id }}").click(function() {
@@ -50,8 +49,6 @@ $(function() {
 {% set propose_id="propose" + id_suffix %}
 {% set fork_id="push-derived" + id_suffix  %}
 <button id="{{ propose_id }}">Create merge proposal</button> <button id="{{ fork_id }}">Create fork with changes</button>
-
-<script src="/_static/jquery.js"></script>
 
 <script>
 $(function() {

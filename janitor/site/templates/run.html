@@ -25,7 +25,7 @@
 
 {{ result_code_explanation(result_code, run) }}
 
-{% if revision %}
+{% if revision and suite != 'unchanged' %}
 <li>Diff: <a href="/api/run/{{ run_id }}/diff">Raw diff</a></li>
 {% endif %}
 <!-- Command: {{ command }} -->
@@ -41,6 +41,7 @@
 {% endif %}
 {% endif %}
 
+{% if suite != 'unchanged' %}
 {% if branch_name %}
 {{ merge_command(package, branch_name, vcs) }}
 {% else %}
@@ -58,6 +59,7 @@
 {% endif %}
 {% endif %}
 {% endif %}
+{% endif %}
 
 {% if result %}
 <h3>Summary</h3>
@@ -70,7 +72,7 @@
 {% endif %}
 {% endif %}
 
-{% if revision %}
+{% if revision and result_code == 'success' and suite != 'unchanged' %}
 <h3>Diff</h3>
 
 {% set diff = show_diff() %}

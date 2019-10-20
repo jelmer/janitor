@@ -334,7 +334,12 @@ if __name__ == '__main__':
 
     async def handle_lintian_fixes_developer_table_page(request):
         from .lintian_fixes import generate_developer_table_page
-        developer = request.match_info['developer']
+        try:
+            developer = request.match_info['developer']
+        except KeyError:
+            developer = request.query.get('developer')
+        if '@' not in developer:
+            developer = '%s@debian.org' % developer
         text = await generate_developer_table_page(
             request.app.database, developer)
         return web.Response(
@@ -426,7 +431,7 @@ if __name__ == '__main__':
         '/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page)
     app.router.add_get(
         '/lintian-fixes/by-developer',
-        handle_lintian_fixes_developer_page)
+        handle_lintian_fixes_developer_table_page)
     app.router.add_get(
         '/lintian-fixes/by-developer/{developer}',
         handle_lintian_fixes_developer_table_page)

@@ -13,17 +13,32 @@
 <li class="toctree-l1"><a class="reference internal" href="/cupboard/ready">Ready</a></li>
 <li class="toctree-l1"><a class="reference internal" href="/cupboard/publish">Publish history</a></li>
 <li class="toctree-l1"><a class="reference internal" href="/cupboard/failed-lintian-brush-fixers">Lintian Brush Failed Fixers</a></li>
-<li class="toctree-l1"><a class="reference internal" href="lintian-brush-regressions">Lintian Brush Regressions</a></li>
+<li class="toctree-l1"><a class="reference internal" href="/cupboard/lintian-brush-regressions">Lintian Brush Regressions</a></li>
 </ul>
 
 <p>
 See the status for a specific package:
 <form autocomplete="off" action="/cupboard/pkg">
-  <div class="packages" style="width:300px;">
-    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+  <div class="sidebar-packages" style="width:300px;">
+    <input id="sidebar-package" type="text" name="package" class="typeahead" placeholder="Package">
   </div>
   <input type="submit" style="display: none">
 </form>
 </p>
+
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#sidebar-package').typeahead(null, {
+  name: 'sidebar-packages',
+  source: packages
+});
+});
+</script>
 
 </div></div>

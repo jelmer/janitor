@@ -22,6 +22,17 @@ See the status for a specific package:
   <input type="submit" style="display: none">
 </form>
 </p>
+
+<p>
+See the status for all packages of a specific developer (e-mail):
+<form autocomplete="off" action="/lintian-fixes/by-developer">
+  <div class="developers" style="width:300px;">
+    <input id="email" type="text" name="developer" placeholder="E-mail address" class="typeahead">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p>
+
 <div class="toctree-wrapper compound">
 </div>
 <div class="section" id="faq">
@@ -160,9 +171,6 @@ merge proposals.</p>
 </div>
 </div>
 
-
-<script src="/_static/jquery.js"></script>
-<script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
 <script>
 $(document).ready(function() {
 var packages = new Bloodhound({
