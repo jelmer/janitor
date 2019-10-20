@@ -172,7 +172,7 @@ sources.vcs_url != '' AND \
 sources.release = 'sid'
 """
         if packages is not None:
-            query += " AND upstream.source = any($1::text[])"
+            query += " AND sources.source = any($1::text[])"
             args.append(tuple(packages))
         for row in await self._conn.fetch(query, *args):
             yield (row[0], 'unchanged', ['just-build'], None,
