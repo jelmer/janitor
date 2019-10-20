@@ -9,6 +9,9 @@
 <ul class="simple">
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+{% if previous_runs %}
+<li>Last processed: {{ format_timestamp(previous_runs[0].times[1]) }} (took {{ format_duration(previous_runs[0].times[1] - previous_runs[0].times[0]) }})</li>
+{% endif %}
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
 {% endif %}
@@ -20,6 +23,10 @@
 <li>Queue position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
 {% endif %}
 </ul>
+
+{% if vcs_url %}
+{{ reschedule_button(suite, package, "Schedule a new run") }}
+{% endif %}
 
 {% if merge_proposals %}
 <div class="section" id="recent-merge-proposals">
@@ -34,15 +41,11 @@
 
 {{ result_code_explanation(result_code, run) }}
 
-{% if vcs_url %}
-{{ reschedule_button(suite, package, "Schedule a new run") }}
-{% endif %}
-
 {% if not result_code %}
 
 {% if previous_runs and previous_runs[0].result_code == 'nothing-to-do' %}
 <p>
-Nothing to do for {{ package }}; last run at {{ format_timestamp(previous_runs[0].times[0]) }}.</p>
+Nothing to do for {{ package }}.
 {% else %}
 <p>No successful runs for {{ package }}.</p>
 {% endif %}
@@ -64,8 +67,6 @@ Nothing to do for {{ package }}; last run at {{ format_timestamp(previous_runs[0
 
 <div class="section" id="summary">
 <h3>Summary</h3>
-
-<p>Built on {{ format_timestamp(finish_time) }} (took {{ format_duration(finish_time - start_time) }})</p>
 
 {{ lintian_brush_summary(result['applied']) }}
 
