@@ -303,7 +303,6 @@ async def main():
             (name, version) for (name, version) in removals.items()
             if name in existing_packages and
             not existing_packages[name].removed]
-        trace.note('Removals: %r', filtered_removals)
         await state.update_removals(conn, filtered_removals)
 
     trace.note('Updating package metadata.')
