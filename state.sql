@@ -96,15 +96,7 @@ CREATE TABLE IF NOT EXISTS candidate (
 );
 CREATE OR REPLACE VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
-  package,
-  suite,
-  id,
-  result,
-  result_code,
-  description,
-  start_time,
-  finish_time,
-  main_branch_revision
+  *
   FROM
   run
   WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
