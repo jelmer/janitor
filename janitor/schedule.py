@@ -46,17 +46,24 @@ POPULARITY_WEIGHT = 1
 DEFAULT_ESTIMATED_DURATION = 15
 
 
+TRANSIENT_ERROR_RESULT_CODES = [
+    'install-deps-file-fetch-failure',
+    'apt-get-update-file-fetch-failure',
+    'build-failed-stage-explain-bd-uninstallable',
+    'worker-exception',
+]
+
 # In some cases, we want to ignore certain results when guessing
 # whether a future run is going to be successful.
 # For example, some results are transient, or sometimes new runs
 # will give a clearer error message.
 IGNORE_RESULT_CODE = {
-    'worker-exception': lambda run: True,
-    'build-failed-stage-explain-bd-uninstallable': lambda run: True,
     # Run worker failures from more than a day ago.
     'worker-failure': lambda run: ((datetime.now() - run.times[0]).days > 0),
-    'apt-get-update-file-fetch-failure': lambda run: True,
 }
+
+IGNORE_RESULT_CODE.update(
+    {code: lambda run: True for code in TRANSIENT_ERROR_RESULT_CODES})
 
 
 async def schedule_from_candidates(policy, iter_candidates):
