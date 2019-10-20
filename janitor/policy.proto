@@ -46,6 +46,8 @@ message Policy {
     optional Mode lintian_fixes = 2;
     optional Mode fresh_releases = 6;
     optional Mode fresh_snapshots = 7;
+    // The only modes that are really relevant here are skip and build_only.
+    optional Mode unchanged = 8;
 
     // Changelog update mode
     optional ChangelogMode changelog = 3;
