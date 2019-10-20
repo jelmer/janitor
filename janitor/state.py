@@ -1116,14 +1116,10 @@ where suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
 
 async def iter_lintian_fixes_regressions(conn):
     query = """
-SELECT package, id, result_code FROM last_runs AS l WHERE
-  suite = 'lintian-fixes' AND
-  result_code NOT IN ('success', 'nothing-to-do') AND
-  EXISTS (
-    SELECT FROM last_runs WHERE
-      package = l.package AND
-      result_code = 'success' AND
-      main_branch_revision = l.main_branch_revision
-    )
-    """
+SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
+   INNER JOIN last_runs u ON l.main_branch_revision = u.main_branch_revision WHERE
+    l.suite = 'lintian-fixes' AND u.suite = 'unchanged'
+    AND l.result_code NOT IN ('success', 'nothing-to-do')
+    AND u.result_code = 'success'
+"""
     return await conn.fetch(query)
