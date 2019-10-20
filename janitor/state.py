@@ -677,7 +677,7 @@ ORDER BY start_time DESC
         yield Run.from_row(row)
 
 
-async def get_last_unmerged_success(conn, package, suite):
+async def get_last_unabsorbed_run(conn, package, suite):
     args = []
     query = """
 SELECT
@@ -700,12 +700,9 @@ SELECT
   branch_url,
   logfilenames
 FROM
-  run
-WHERE package = $1 AND build_distribution = $2 AND NOT EXISTS (
-    SELECT FROM merge_proposal WHERE
-        revision = run.revision AND status IN ('closed', 'merged'))
-AND result_code != 'nothing-to-do'
-ORDER BY package, command, result_code = 'success' DESC, start_time DESC
+  unabsorbed_runs
+WHERE package = $1 AND build_distribution = $2
+ORDER BY package, command DESC, start_time DESC
 LIMIT 1
 """
     args = [package, suite]
@@ -715,7 +712,7 @@ LIMIT 1
     return Run.from_row(row)
 
 
-async def iter_last_unmerged_successes(conn, suite, packages):
+async def iter_last_unabsorbed_runs(conn, suite, packages):
     query = """
 SELECT DISTINCT ON (package)
   id,
@@ -737,12 +734,9 @@ SELECT DISTINCT ON (package)
   branch_url,
   logfilenames
 FROM
-  run
-WHERE suite = $1 AND package = ANY($2::text[]) AND NOT EXISTS (
-    SELECT FROM merge_proposal WHERE
-        revision = run.revision AND status IN ('closed', 'merged'))
-        AND result_code != 'nothing-to-do'
-ORDER BY package, command, result_code = 'success' DESC, start_time DESC
+  unabsorbed_runs
+WHERE suite = $1 AND package = ANY($2::text[])
+ORDER BY package, command, start_time DESC
 """
     for row in await conn.fetch(query, suite, packages):
         yield Run.from_row(row)
@@ -822,9 +816,9 @@ SELECT DISTINCT ON (package, command)
   package.branch_url,
   main_branch_revision
 FROM
-  run
+  unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
-WHERE result_code = 'success' AND result IS NOT NULL
+WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
 """
     if suite is not None:
         query += " AND suite = $1 "
