@@ -764,6 +764,8 @@ build_failure_regexps = [
      ruby_missing_gem),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
+    (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
+     r'\(one is arch:all and the other not\)', None),
 ]
 
 compiled_build_failure_regexps = [

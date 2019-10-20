@@ -121,7 +121,8 @@ if __name__ == '__main__':
         from .apt_repo import write_apt_repo
         async with request.app.database.acquire() as conn:
             return web.Response(
-                content_type='text/html', text=await write_apt_repo(conn, suite),
+                content_type='text/html',
+                text=await write_apt_repo(conn, suite),
                 headers={'Cache-Control': 'max-age=60'})
 
     async def handle_history(request):
@@ -129,7 +130,8 @@ if __name__ == '__main__':
         from .history import write_history
         async with request.app.database.acquire() as conn:
             return web.Response(
-                content_type='text/html', text=await write_history(conn, limit=limit),
+                content_type='text/html',
+                text=await write_history(conn, limit=limit),
                 headers={'Cache-Control': 'max-age=60'})
 
     async def handle_publish_history(request):
@@ -137,7 +139,8 @@ if __name__ == '__main__':
         from .publish import write_history
         async with request.app.database.acquire() as conn:
             return web.Response(
-                content_type='text/html', text=await write_history(conn, limit=limit),
+                content_type='text/html',
+                text=await write_history(conn, limit=limit),
                 headers={'Cache-Control': 'max-age=10'})
 
     async def handle_publish_id(request):

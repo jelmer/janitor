@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from aiohttp import ClientSession, ClientConnectorError
+from aiohttp import ClientConnectorError
 import urllib.parse
 
 from janitor import state
