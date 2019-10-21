@@ -98,6 +98,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'error: Could not find suitable distribution for '
             'Requirement.parse(\'gitlab\')'], 1,
             MissingPythonModule('gitlab', None))
+        self.run_test([
+            'pkg_resources.DistributionNotFound: The \'configparser>=3.5\' '
+            'distribution was not found and is required by importlib-metadata'
+            ], 1, MissingPythonModule('configparser', None, '3.5'))
 
     def test_pytest_import(self):
         self.run_test([

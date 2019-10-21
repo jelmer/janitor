@@ -253,6 +253,14 @@ def python2_reqs_not_found(m):
     return None
 
 
+def pkg_resources_distribution_not_found(m):
+    expr = m.group(1)
+    if '>=' in expr:
+        pkg, minimum = expr.split('>=')
+        return MissingPythonModule(pkg.strip(), None, minimum.strip())
+    return None
+
+
 class MissingFile(object):
 
     kind = 'missing-file'
@@ -695,6 +703,9 @@ build_failure_regexps = [
     (r'(distutils.errors.DistutilsError|error): '
      r'Could not find suitable distribution '
      r'for Requirement.parse\(\'([^\']+)\'\)', python_reqs_not_found),
+    (r'pkg_resources.DistributionNotFound: The \'([^\']+)\' '
+     r'distribution was not found and is required by (.*)',
+     pkg_resources_distribution_not_found),
     (r'pluggy.manager.PluginValidationError: '
      r'Plugin \'.*\' could not be loaded: '
      r'\(.* \(/usr/lib/python2.7/dist-packages\), '

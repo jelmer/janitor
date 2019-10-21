@@ -411,7 +411,8 @@ class WorkerFailure(Exception):
 
 
 def tree_set_changelog_version(tree, build_version):
-    cl = Changelog(tree.get_file('debian/changelog'))
+    with tree.get_file('debian/changelog') as f:
+        cl = Changelog(f)
     if Version(str(cl.version) + '~') > Version(build_version):
         return
     cl.set_version(build_version)
