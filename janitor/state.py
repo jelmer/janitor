@@ -744,10 +744,7 @@ ORDER BY package, command, start_time DESC
 
 async def stats_by_result_codes(conn):
     query = """\
-select result_code, count(result_code) from (select distinct on(package, suite)
-package, suite, result_code from run order by 1, 2, start_time desc) AS results
-where not exists (select from package where name = results.package and removed)
-group by 1 order by 2 desc
+select result_code, count(result_code) from last_runs group by 1 order by 2 desc
 """
     return await conn.fetch(query)
 
@@ -808,7 +805,7 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
 async def iter_publish_ready(conn, suite=None):
     args = []
     query = """
-SELECT DISTINCT ON (package, command)
+SELECT DISTINCT ON (package, suite)
   package.name,
   run.command,
   run.build_version,
