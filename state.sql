@@ -11,6 +11,11 @@ CREATE TABLE IF NOT EXISTS package (
    removed boolean default false,
    primary key(name)
 );
+CREATE INDEX ON package (removed);
+CREATE INDEX ON package (vcs_url);
+CREATE INDEX ON package (branch_url);
+CREATE INDEX ON package (maintainer_email);
+CREATE INDEX ON package (uploader_emails);
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text,
@@ -40,13 +45,20 @@ CREATE TABLE IF NOT EXISTS run (
    main_branch_revision text,
    branch_name text,
    revision text,
-   result json,
+   result jsonb,
    suite suite not null,
    branch_url text not null,
    logfilenames text[] not null,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );
+CREATE INDEX ON run (package, suite, start_time DESC);
+CREATE INDEX ON run (start_time);
+CREATE INDEX ON run (suite, start_time);
+CREATE INDEX ON run (package, suite);
+CREATE INDEX ON run (suite);
+CREATE INDEX ON run (build_distribution);
+CREATE INDEX ON run (result_code);
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
@@ -78,6 +90,7 @@ CREATE TABLE IF NOT EXISTS queue (
    requestor text,
    unique(package, command)
 );
+CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE TABLE IF NOT EXISTS branch (
    url text not null primary key,
    revision text,
@@ -94,6 +107,7 @@ CREATE TABLE IF NOT EXISTS candidate (
    unique(package, suite),
    foreign key (package) references package(name)
 );
+CREATE INDEX ON candidate (suite);
 CREATE OR REPLACE VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
   *
