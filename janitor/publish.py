@@ -206,62 +206,76 @@ async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
                    main_branch_revision) in state.iter_publish_ready(conn1):
-
-            mode, unused_update_changelog, unused_committer = apply_policy(
-                policy, suite.replace('-', '_'), pkg, maintainer_email,
-                uploader_emails or [])
-            if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-                continue
-            if await state.already_published(
-                    conn, pkg, branch_name, revision, mode):
-                continue
-            if not rate_limiter.allowed(maintainer_email) and \
-                    mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
-                proposal_rate_limited_count.labels(
-                    package=pkg, suite=suite).inc()
-                warning(
-                    'Not creating proposal for %s, maximum number of open '
-                    'merge proposals reached for maintainer %s', pkg,
-                    maintainer_email)
-                if mode == MODE_PROPOSE:
-                    mode = MODE_BUILD_ONLY
-                if mode == MODE_ATTEMPT_PUSH:
-                    mode = MODE_PUSH
-            if mode == MODE_ATTEMPT_PUSH and \
-                    "salsa.debian.org/debian/" in main_branch_url:
-                # Make sure we don't accidentally push to unsuspecting
-                # collab-maint repositories, even if debian-janitor becomes a
-                # member of "debian" in the future.
-                mode = MODE_PROPOSE
-            if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-                continue
-            note('Publishing %s / %r (mode: %s)', pkg, command, mode)
-            try:
-                proposal_url, branch_name, is_new = await publish_one(
-                    suite, pkg, command, subworker_result,
-                    main_branch_url, mode, log_id, maintainer_email,
-                    vcs_manager=vcs_manager, branch_name=branch_name,
-                    dry_run=dry_run, possible_hosters=possible_hosters,
+            await publish_from_policy(pkg, command, build_version, result_code,
+                    context, start_time, log_id, revision, subworker_result,
+                    branch_name, suite, maintainer_email, uploader_emails,
+                    main_branch_url, main_branch_revision,
+                    possible_hosters=possible_hosters,
                     possible_transports=possible_transports)
-            except PublishFailure as e:
-                code = e.code
-                description = e.description
-                branch_name = None
-                proposal_url = None
-                note('Failed(%s): %s', code, description)
-            else:
-                code = 'success'
-                description = 'Success'
-                if proposal_url and is_new:
-                    rate_limiter.inc(maintainer_email)
 
-            publish_id = str(uuid.uuid4())
 
-            await state.store_publish(
-                conn, pkg, branch_name, main_branch_revision,
-                revision, mode, code, description,
-                proposal_url if proposal_url else None,
-                publish_id=publish_id)
+async def publish_from_policy(
+        pkg, command, build_version, result_code, context,
+        start_time, log_id, revision, subworker_result, branch_name,
+        suite, maintainer_email, uploader_emails, main_branch_url,
+        main_branch_revision, possible_hosters=None, possible_transports=None):
+    mode, unused_update_changelog, unused_committer = apply_policy(
+        policy, suite.replace('-', '_'), pkg, maintainer_email,
+        uploader_emails or [])
+    if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+        continue
+    if await state.already_published(
+            conn, pkg, branch_name, revision, mode):
+        continue
+    if not rate_limiter.allowed(maintainer_email) and \
+            mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
+        proposal_rate_limited_count.labels(
+            package=pkg, suite=suite).inc()
+        warning(
+            'Not creating proposal for %s, maximum number of open '
+            'merge proposals reached for maintainer %s', pkg,
+            maintainer_email)
+        if mode == MODE_PROPOSE:
+            mode = MODE_BUILD_ONLY
+        if mode == MODE_ATTEMPT_PUSH:
+            mode = MODE_PUSH
+    if mode == MODE_ATTEMPT_PUSH and \
+            "salsa.debian.org/debian/" in main_branch_url:
+        # Make sure we don't accidentally push to unsuspecting
+        # collab-maint repositories, even if debian-janitor becomes a
+        # member of "debian" in the future.
+        mode = MODE_PROPOSE
+    if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+        continue
+    note('Publishing %s / %r (mode: %s)', pkg, command, mode)
+    try:
+        proposal_url, branch_name, is_new = await publish_one(
+            suite, pkg, command, subworker_result,
+            main_branch_url, mode, log_id, maintainer_email,
+            vcs_manager=vcs_manager, branch_name=branch_name,
+            dry_run=dry_run, possible_hosters=possible_hosters,
+            possible_transports=possible_transports)
+    except PublishFailure as e:
+        code = e.code
+        description = e.description
+        branch_name = None
+        proposal_url = None
+        note('Failed(%s): %s', code, description)
+    else:
+        code = 'success'
+        description = 'Success'
+        if proposal_url and is_new:
+            rate_limiter.inc(maintainer_email)
+
+    publish_id = str(uuid.uuid4())
+
+    await state.store_publish(
+        conn, pkg, branch_name, main_branch_revision,
+        revision, mode, code, description,
+        proposal_url if proposal_url else None,
+        publish_id=publish_id)
+
+
 
 
 async def diff_request(request):
@@ -580,6 +594,36 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
     rate_limiter.set_open_mps_per_maintainer(open_mps_per_maintainer)
 
 
+async def listen_to_runner(db, runner_url):
+    import aiohttp
+    from aiohttp.client import ClientSession
+    import urllib.parse
+    url = urllib.parse.urljoin(runner_url, 'ws/queue')
+    async with ClientSession() as session:
+        ws = await session.ws_connect(url)
+        while True:
+            msg = await ws.receive()
+
+            if msg.type == aiohttp.WSMsgType.text:
+                async with db.acquire() as conn:
+                    package = await state.get_package(result['package'])
+                result = msg.json()
+                await publish_from_policy(
+                    result['package'], result['command'], result['build_version'],
+                    result['code'], result['context'],
+                    result['start_time'], result['log_id'],
+                    result['revision'],
+                    result['subworker_result'],
+                    result['branch_name'],
+                    result['suite'], package.maintainer_email,
+                    package.uploader_emails, package.branch_url,
+                    result['main_branch_revision'])
+            elif msg.type == aiohttp.WSMsgType.closed:
+                break
+            elif msg.type == aiohttp.WSMsgType.error:
+                break
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.publish')
@@ -619,6 +663,9 @@ def main(argv=None):
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to load configuration from.')
+    parser.add_argument(
+        '--runner-url', type=str, default=None,
+        help='URL to reach runner at.')
 
     args = parser.parse_args()
 
@@ -653,7 +700,7 @@ def main(argv=None):
                 args.prometheus, job='janitor.publish',
                 registry=REGISTRY)
     else:
-        loop.run_until_complete(asyncio.gather(
+        tasks = [
             loop.create_task(process_queue_loop(
                 db, rate_limiter, policy, dry_run=args.dry_run,
                 vcs_manager=vcs_manager, interval=args.interval,
@@ -662,6 +709,11 @@ def main(argv=None):
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
                     vcs_manager, db, args.dry_run))))
+        ]
+        if args.runner_url:
+            tasks.append(loop.create_task(
+                listen_to_runner(db, args.runner_url))
+        loop.run_until_complete(asyncio.gather(*tasks))
 
 
 if __name__ == '__main__':
