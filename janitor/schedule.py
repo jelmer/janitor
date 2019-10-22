@@ -23,6 +23,7 @@ __all__ = [
 ]
 
 from datetime import datetime, timedelta
+from debian.deb822 import PkgRelation
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
@@ -42,7 +43,7 @@ SUCCESS_WEIGHT = 20
 POPULARITY_WEIGHT = 1
 
 
-# Default to 5 minutes
+# Default estimation if there is no median for the suite or the package.
 DEFAULT_ESTIMATED_DURATION = 15
 
 
@@ -98,7 +99,7 @@ async def schedule_from_candidates(policy, iter_candidates):
             raise ValueError(
                 "Invalid value %r for update_changelog" % update_changelog)
         yield (
-            vcs_url, mode,
+            vcs_url,
             {'COMMITTER': committer,
              'PACKAGE': package.name,
              'CONTEXT': context,
@@ -125,22 +126,41 @@ async def estimate_success_probability(conn, package, suite, context=None):
             success += 1
         if context and context in (run.instigated_context, run.context):
             context_repeated = True
+        if run.result_code == 'install-deps-unsatisfied-dependencies':
+            START = 'Unsatisfied dependencies: '
+            if run.description.startswith(START):
+                unsatisfied_dependencies = PkgRelation.parse_relations(
+                    run.description[len(START):])
+                if await deps_satisfied(conn, suite, unsatisfied_dependencies):
+                    success += 1
+                    context_repeated = False
+
+    if context is None:
+        same_context_multiplier = 0.5
+    elif context_repeated:
+        same_context_multiplier = 0.10
+    else:
+        same_context_multiplier = 1.0
+
     return (
         (success * 10 + 1) /
         (total * 10 + 1) *
-        (1.0 if not context_repeated else .10))
+        same_context_multiplier)
 
 
 async def estimate_duration(conn, package, suite):
-    estimated_duration = await state.estimate_duration(conn, package, suite)
+    estimated_duration = await state.estimate_duration(conn, package=package, suite=suite)
     if estimated_duration is not None:
         return estimated_duration
 
-    estimated_duration = await state.estimate_duration(conn, package)
+    estimated_duration = await state.estimate_duration(conn, package=package)
     if estimated_duration is not None:
         return estimated_duration
 
-    # TODO(jelmer): Just fall back to median duration for all builds for suite.
+    estimated_duration = await state.estimate_duration(conn, suite=suite)
+    if estimated_duration is not None:
+        return estimated_duration
+
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
@@ -150,7 +170,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
                   if p.removed)
     max_inst = max([(v or 0) for v in popcon.values()])
     trace.note('Maximum inst count: %d', max_inst)
-    for vcs_url, mode, env, command, suite, value in todo:
+    for vcs_url, env, command, suite, value in todo:
         assert vcs_url is not None
         assert value > 0, "Value: %s" % value
         package = env['PACKAGE']
@@ -189,7 +209,26 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
             added = True
         if added:
             trace.note('Scheduling %s (%s) with offset %d',
-                       package, mode, offset)
+                       package, suite, offset)
+
+
+async def dep_available(
+        conn, suite, name, archqual=None, arch=None, version=None,
+        restrictions=None):
+    available = await state.version_available(conn, name, suite, version)
+    if available:
+        return True
+    return False
+
+
+async def deps_satisfied(conn, suite, dependencies):
+    for dep in dependencies:
+        for subdep in dep:
+            if await dep_available(conn, suite=suite, **subdep):
+                break
+        else:
+            return False
+    return True
 
 
 async def main():

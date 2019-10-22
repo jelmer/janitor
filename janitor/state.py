@@ -948,13 +948,18 @@ async def get_last_build_version(conn, package, suite):
         package, suite)
 
 
-async def estimate_duration(conn, package, suite=None):
+async def estimate_duration(conn, package=None, suite=None):
     query = """
 SELECT finish_time - start_time FROM run
-WHERE package = $1"""
-    args = [package]
+WHERE """
+    args = []
+    if package is not None:
+        query += " package = $1"
+        args.append(package)
     if suite is not None:
-        query += " AND suite = $2"
+        if package:
+            query += " AND"
+        query += " suite = $%d" % (len(args) + 1)
         args.append(suite)
     query += " ORDER BY start_time DESC LIMIT 1"
     return await conn.fetchval(query, *args)
@@ -1151,9 +1156,26 @@ FROM
   run
 WHERE
   package = $1 AND (suite = $2 OR suite = 'unchanged')
+  AND %(version_match1)s
+
+UNION
+
+SELECT
+  name,
+  'unchanged',
+  unstable_version
+FROM
+  package
+WHERE name = $1 AND %(version_match2)s
 """
     args = [package, suite]
     if version:
-        query += " AND build_version %s $3" % (version[0], )
+        query = query % {
+            'version_match1': "build_version %s $3" % (version[0], ),
+            'version_match2': "unstable_version %s $3" % (version[0], )}
         args.append(version[1])
+    else:
+        query = query % {
+            'version_match1': 'True',
+            'version_match2': 'True'}
     return await conn.fetch(query, *args)
