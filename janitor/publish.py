@@ -53,6 +53,7 @@ from .policy import (
     apply_policy,
     )
 from .prometheus import setup_metrics
+from .pubsub import Topic, pubsub_handler
 from .trace import note, warning
 from .vcs import (
     LocalVcsManager,
@@ -197,7 +198,7 @@ async def publish_one(
 
 
 async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
-                              dry_run=False):
+                              topic_publish, dry_run=False):
     possible_hosters = []
     possible_transports = []
 
@@ -211,7 +212,8 @@ async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
                     build_version, result_code, context, start_time, log_id,
                     revision, subworker_result, branch_name, suite,
                     maintainer_email, uploader_emails, main_branch_url,
-                    main_branch_revision, possible_hosters=possible_hosters,
+                    main_branch_revision, topic_publish,
+                    possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run)
 
 
@@ -219,7 +221,8 @@ async def publish_from_policy(
         policy, conn, rate_limiter, vcs_manager, pkg, command, build_version,
         result_code, context, start_time, log_id, revision, subworker_result,
         branch_name, suite, maintainer_email, uploader_emails, main_branch_url,
-        main_branch_revision, possible_hosters=None, possible_transports=None,
+        main_branch_revision, topic_publish, possible_hosters=None,
+        possible_transports=None,
         dry_run=False):
     mode, unused_update_changelog, unused_committer = apply_policy(
         policy, suite.replace('-', '_'), pkg, maintainer_email,
@@ -277,6 +280,9 @@ async def publish_from_policy(
         proposal_url if proposal_url else None,
         publish_id=publish_id)
 
+    topic_publish.publish(
+        {'id': publish_id, 'proposal_url': proposal_url or None})
+
 
 async def diff_request(request):
     run_id = request.match_info['run_id']
@@ -287,8 +293,8 @@ async def diff_request(request):
 
 
 async def publish_and_store(
-        db, publish_id, run, mode, maintainer_email, vcs_manager, rate_limiter,
-        dry_run=False, allow_create_proposal=True):
+        db, topic_publish, publish_id, run, mode, maintainer_email,
+        vcs_manager, rate_limiter, dry_run=False, allow_create_proposal=True):
     async with db.acquire() as conn:
         try:
             proposal_url, branch_name, is_new = await publish_one(
@@ -316,8 +322,13 @@ async def publish_and_store(
             proposal_url if proposal_url else None,
             publish_id=publish_id)
 
+        topic_publish.publish(
+            {'id': publish_id, 'proposal_url': proposal_url or None})
 
-async def publish_request(rate_limiter, dry_run, vcs_manager, request):
+
+async def publish_request(dry_run, request):
+    vcs_manager = request.app.vcs_manager
+    rate_limiter = request.app.rate_limiter
     package = request.match_info['package']
     suite = request.match_info['suite']
     post = await request.post()
@@ -352,7 +363,8 @@ async def publish_request(rate_limiter, dry_run, vcs_manager, request):
     publish_id = str(uuid.uuid4())
 
     request.loop.create_task(publish_and_store(
-        request.app.db, publish_id, run, mode, package.maintainer_email,
+        request.app.db, request.app.topic_publish,
+        publish_id, run, mode, package.maintainer_email,
         vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
         allow_create_proposal=True))
 
@@ -430,7 +442,8 @@ async def git_backend(request):
     return response
 
 
-async def bzr_backend(vcs_manager, request):
+async def bzr_backend(request):
+    vcs_manager = request.app.vcs_manager
     package = request.match_info['package']
     subpath = request.match_info['subpath']
     repo = vcs_manager.get_repository(package, 'bzr')
@@ -454,21 +467,26 @@ async def get_vcs_type(request):
 
 
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
-                         dry_run=False):
+                         topic_merge_proposal, topic_publish, dry_run=False):
     app = web.Application()
     app.vcs_manager = vcs_manager
     app.db = db
+    app.rate_limiter = rate_limiter
     setup_metrics(app)
     app.router.add_post(
         "/{suite}/{package}/publish",
-        functools.partial(publish_request, rate_limiter, dry_run, vcs_manager))
+        functools.partial(publish_request, dry_run))
     app.router.add_get("/diff/{run_id}", diff_request)
     app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
     app.router.add_route(
-        "*", "/bzr/{package}/{subpath:.*}",
-        functools.partial(bzr_backend, vcs_manager))
+        "*", "/bzr/{package}/{subpath:.*}", bzr_backend)
     app.router.add_get(
         '/vcs-type/{package}', get_vcs_type)
+    app.router.add_get(
+        '/ws/publish', functools.partial(pubsub_handler, topic_publish))
+    app.router.add_get(
+        '/ws/merge-proposal', functools.partial(
+            pubsub_handler, topic_merge_proposal))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -477,14 +495,17 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
 
 
 async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
-                             interval, auto_publish=True):
+                             interval, topic_merge_proposal, topic_publish,
+                             auto_publish=True):
     while True:
         async with db.acquire() as conn:
-            await check_existing(conn, rate_limiter, vcs_manager, dry_run)
+            await check_existing(
+                conn, rate_limiter, vcs_manager, topic_merge_proposal, dry_run)
         await asyncio.sleep(interval)
         if auto_publish:
             await publish_pending_new(
-                db, rate_limiter, policy, vcs_manager, dry_run)
+                db, rate_limiter, policy, vcs_manager, dry_run=dry_run,
+                topic_publish=topic_publish)
 
 
 def is_conflicted(mp):
@@ -495,12 +516,14 @@ def is_conflicted(mp):
         return None
 
 
-async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
+async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
+                         dry_run=False):
     open_mps_per_maintainer = {}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
     for hoster, mp, status in iter_all_mps():
         await state.set_proposal_status(conn, mp.url, status)
+        topic_merge_proposal.publish({'url': mp.url, 'status': status})
         status_count[status] += 1
         if not await state.get_proposal_revision(conn, mp.url):
             try:
@@ -595,7 +618,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
 
 
 async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
-                           dry_run=False):
+                           topic_publish, dry_run=False):
     import aiohttp
     from aiohttp.client import ClientSession
     import urllib.parse
@@ -619,7 +642,7 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
                         run.revision, run.result, run.branch_name, run.suite,
                         package.maintainer_email, package.uploader_emails,
                         package.branch_url, run.main_branch_revision,
-                        dry_run=dry_run)
+                        topic_publish, dry_run=dry_run)
             elif msg.type == aiohttp.WSMsgType.closed:
                 break
             elif msg.type == aiohttp.WSMsgType.error:
@@ -688,13 +711,15 @@ def main(argv=None):
         sys.stderr.write('--no-auto-publish and --once are mutually exclude.')
         sys.exit(1)
 
+    topic_merge_proposal = Topic()
+    topic_publish = Topic()
     loop = asyncio.get_event_loop()
     vcs_manager = LocalVcsManager(config.vcs_location)
     db = state.Database(config.database_location)
     if args.once:
         loop.run_until_complete(publish_pending_new(
             db, rate_limiter, policy, dry_run=args.dry_run,
-            vcs_manager=vcs_manager))
+            vcs_manager=vcs_manager, topic_publish=topic_publish))
 
         last_success_gauge.set_to_current_time()
         if args.prometheus:
@@ -706,17 +731,21 @@ def main(argv=None):
             loop.create_task(process_queue_loop(
                 db, rate_limiter, policy, dry_run=args.dry_run,
                 vcs_manager=vcs_manager, interval=args.interval,
+                topic_merge_proposal=topic_merge_proposal,
+                topic_publish=topic_publish,
                 auto_publish=not args.no_auto_publish)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
-                    vcs_manager, db, args.dry_run))
+                    vcs_manager, db, topic_merge_proposal, topic_publish,
+                    args.dry_run))
         ]
         if args.runner_url:
             tasks.append(loop.create_task(
                 listen_to_runner(
                     db, policy, rate_limiter, vcs_manager,
-                    args.runner_url, dry_run=args.dry_run)))
+                    args.runner_url, topic_publish,
+                    dry_run=args.dry_run)))
         loop.run_until_complete(asyncio.gather(*tasks))
 
 

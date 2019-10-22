@@ -60,6 +60,7 @@ from . import (
 from .config import read_config
 from .logs import get_log_manager, ServiceUnavailable
 from .prometheus import setup_metrics
+from .pubsub import Topic, pubsub_handler
 from .trace import note, warning
 from .vcs import (
     get_vcs_abbreviation,
@@ -108,15 +109,13 @@ class NoChangesFile(Exception):
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, description=None,
-                 code=None, is_new=None,
-                 build_distribution=None, build_version=None,
+                 code=None, build_distribution=None, build_version=None,
                  changes_filename=None, worker_result=None,
                  logfilenames=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
         self.code = code
-        self.is_new = is_new
         self.build_distribution = build_distribution
         self.build_version = build_version
         self.changes_filename = changes_filename
@@ -136,6 +135,20 @@ class JanitorResult(object):
             self.main_branch_revision = None
             self.revision = None
             self.subworker_result = None
+
+    def json(self):
+        return {
+            'package': self.package,
+            'log_id': self.log_id,
+            'description': self.description,
+            'code': self.code,
+            'build_distribution': self.build_distribution,
+            'build_version': self.build_version,
+            'changes_filename': self.changes_filename,
+            'branch_name': self.branch_name,
+            'logfilenames': self.logfilenames,
+            'subworker': self.subworker_result,
+        }
 
 
 def find_changes(path, package):
@@ -497,10 +510,28 @@ class QueueProcessor(object):
         self.use_cached_only = use_cached_only
         self.started = {}
         self.per_run_directory = {}
+        self.topic_queue = Topic(repeat_last=True)
+        self.topic_result = Topic()
+
+    def status_json(self):
+        return {'processing': [{
+                'id': item.id,
+                'package': item.package,
+                'suite': item.suite,
+                'estimated_duration':
+                    item.estimated_duration.total_seconds()
+                    if item.estimated_duration else None,
+                'current_duration':
+                    (datetime.now() - start_time).total_seconds(),
+                'start_time': start_time.isoformat(),
+                } for item, start_time in self.started.items()],
+                'concurrency': self.concurrency}
 
     async def process_queue_item(self, item):
         start_time = datetime.now()
         self.started[item] = start_time
+
+        self.topic_queue.publish(self.status_json())
 
         with tempfile.TemporaryDirectory() as output_directory:
             self.per_run_directory[item.id] = output_directory
@@ -534,7 +565,9 @@ class QueueProcessor(object):
                     suite=item.suite,
                     logfilenames=result.logfilenames)
                 await state.drop_queue_item(conn, item.id)
+        self.topic_result.publish(result.json())
         del self.started[item]
+        self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
 
     async def process(self):
@@ -572,24 +605,13 @@ class QueueProcessor(object):
             loop.remove_signal_handler(signal.SIGTERM)
 
 
-async def handle_status(queue_processor, request):
-    return web.json_response({
-        'processing': [{
-            'id': item.id,
-            'package': item.package,
-            'suite': item.suite,
-            'estimated_duration':
-                item.estimated_duration.total_seconds()
-                if item.estimated_duration else None,
-            'current_duration':
-                (datetime.now() - start_time).total_seconds(),
-            'start_time': start_time.isoformat(),
-        } for item, start_time in queue_processor.started.items()],
-        'concurrency': queue_processor.concurrency,
-    })
+async def handle_status(request):
+    queue_processor = request.app.queue_processor
+    return web.json_response(queue_processor.status_json())
 
 
-async def handle_log_index(queue_processor, request):
+async def handle_log_index(request):
+    queue_processor = request.app.queue_processor
     run_id = int(request.match_info['run_id'])
     try:
         directory = queue_processor.per_run_directory[run_id]
@@ -601,7 +623,8 @@ async def handle_log_index(queue_processor, request):
         if os.path.isfile(os.path.join(directory, n))])
 
 
-async def handle_log(queue_processor, request):
+async def handle_log(request):
+    queue_processor = request.app.queue_processor
     run_id = int(request.match_info['run_id'])
     filename = request.match_info['filename']
     if '/' in filename:
@@ -622,16 +645,15 @@ async def handle_log(queue_processor, request):
 
 async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
+    app.queue_processor = queue_processor
     setup_metrics(app)
-    app.router.add_get(
-        '/status', functools.partial(handle_status, queue_processor))
-    app.router.add_get(
-        '/log/{run_id}',
-        functools.partial(handle_log_index, queue_processor))
-    app.router.add_get(
-        '/log/{run_id}/{filename}',
-        functools.partial(handle_log, queue_processor))
-    # TODO(jelmer): Add handler that serves live logs
+    app.router.add_get('/status', handle_status)
+    app.router.add_get('/log/{run_id}', handle_log_index)
+    app.router.add_get('/log/{run_id}/{filename}', handle_log)
+    app.router.add_get('/ws/queue', functools.partial(
+        pubsub_handler, queue_processor.topic_queue))
+    app.router.add_get('/ws/result', functools.partial(
+        pubsub_handler, queue_processor.topic_result))
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)

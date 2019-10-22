@@ -151,14 +151,14 @@ if __name__ == '__main__':
         return web.Response(
             content_type='text/html', text=await write_publish(*args))
 
-    async def handle_queue(runner_url, request):
+    async def handle_queue(request):
         limit = int(request.query.get('limit', '100'))
         from .queue import write_queue
         async with request.app.database.acquire() as conn:
             return web.Response(
                 content_type='text/html', text=await write_queue(
                     request.app.http_client_session, conn,
-                    runner_url=runner_url, limit=limit),
+                    queue_status=app.runner_status, limit=limit),
                 headers={'Cache-Control': 'max-age=10'})
 
     async def handle_result_codes(request):
@@ -395,6 +395,30 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def listen_to_runner(app):
+        import aiohttp
+        import urllib.parse
+        url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
+        ws = await app.http_client_session.ws_connect(url)
+        while True:
+            msg = await ws.receive()
+
+            if msg.type == aiohttp.WSMsgType.text:
+                app.runner_status = msg.json()
+            elif msg.type == aiohttp.WSMsgType.closed:
+                break
+            elif msg.type == aiohttp.WSMsgType.error:
+                break
+
+    async def start_runner_status_listener(app):
+        app.runner_status = None
+        app.runner_status_listener = app.loop.create_task(
+            listen_to_runner(app))
+
+    async def stop_runner_status_listener(app):
+        app.runner_status_listener.cancel()
+        await app.runner_status_listener
+
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
@@ -451,8 +475,7 @@ if __name__ == '__main__':
             functools.partial(handle_new_upstream_candidates, suite))
 
     app.router.add_get('/cupboard/history', handle_history)
-    app.router.add_get('/cupboard/queue',
-                       functools.partial(handle_queue, args.runner_url))
+    app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
     app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
@@ -483,6 +506,9 @@ if __name__ == '__main__':
         policy_config = read_policy(f)
 
     app.http_client_session = ClientSession()
+    app.runner_url = args.runner_url
+    app.on_startup.append(start_runner_status_listener)
+    app.on_cleanup.append(stop_runner_status_listener)
     app.database = state.Database(config.database_location)
     setup_metrics(app)
     app.add_subapp(

@@ -744,7 +744,8 @@ ORDER BY package, command, start_time DESC
 
 async def stats_by_result_codes(conn):
     query = """\
-select result_code, count(result_code) from last_runs group by 1 order by 2 desc
+select result_code, count(result_code) from
+last_runs group by 1 order by 2 desc
 """
     return await conn.fetch(query)
 
@@ -793,6 +794,8 @@ async def update_run_result(conn, log_id, code, description):
 
 
 async def already_published(conn, package, branch_name, revision, mode):
+    if isinstance(revision, bytes):
+        revision = revision.decode('utf-8')
     row = await conn.fetchrow("""\
 SELECT * FROM publish
 WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
