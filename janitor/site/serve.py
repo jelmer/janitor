@@ -398,17 +398,10 @@ if __name__ == '__main__':
     async def listen_to_runner(app):
         import aiohttp
         import urllib.parse
+        from ..pubsub import pubsub_reader
         url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
-        ws = await app.http_client_session.ws_connect(url)
-        while True:
-            msg = await ws.receive()
-
-            if msg.type == aiohttp.WSMsgType.text:
-                app.runner_status = msg.json()
-            elif msg.type == aiohttp.WSMsgType.closed:
-                break
-            elif msg.type == aiohttp.WSMsgType.error:
-                break
+        async for msg in pubsub_reader(app.http_client_session, url):
+            app.runner_status = msg
 
     async def start_runner_status_listener(app):
         app.runner_status = None
