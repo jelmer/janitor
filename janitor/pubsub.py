@@ -60,3 +60,16 @@ async def pubsub_handler(topic, request):
             await ws.send_str(json.dumps(msg))
 
     return ws
+
+
+async def pubsub_reader(session, url):
+    ws = await session.ws_connect(url)
+    while True:
+        msg = await ws.receive()
+
+        if msg.type == aiohttp.WSMsgType.text:
+            yield msg.json()
+        elif msg.type == aiohttp.WSMsgType.closed:
+            break
+        elif msg.type == aiohttp.WSMsgType.error:
+            break
