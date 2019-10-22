@@ -15,11 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ContentTypeError, ClientConnectorError
 import argparse
 import asyncio
 import sys
-import urllib
 from datetime import datetime, timedelta
 
 from janitor import state
@@ -35,31 +33,16 @@ class RunnerProcessingUnavailable(Exception):
     """Raised when unable to get processing data for runner."""
 
 
-async def get_processing(client, runner_url):
-    url = urllib.parse.urljoin(runner_url, 'status')
-    try:
-        async with client.get(url) as resp:
-            if resp.status != 200:
-                raise RunnerProcessingUnavailable(await resp.text())
-            answer = await resp.json()
-    except ContentTypeError as e:
-        raise RunnerProcessingUnavailable(
-            'publisher returned error %d' % e.code)
-    except ClientConnectorError:
-        raise RunnerProcessingUnavailable(
-            'unable to contact publisher')
-    else:
-        for entry in answer['processing']:
-            if entry.get('estimated_duration'):
-                entry['estimated_duration'] = timedelta(
-                    seconds=entry['estimated_duration'])
-            if entry.get('current_duration'):
-                entry['current_duration'] = timedelta(
-                    seconds=entry['current_duration'])
-            if entry.get('start_time'):
-                entry['start_time'] = datetime.fromisoformat(
-                    entry['start_time'])
-            yield entry
+def get_processing(answer):
+    for entry in answer['processing']:
+        entry = dict(entry.items())
+        if entry.get('estimated_duration'):
+            entry['estimated_duration'] = timedelta(
+                seconds=entry['estimated_duration'])
+        if entry.get('start_time'):
+            entry['start_time'] = datetime.fromisoformat(entry['start_time'])
+            entry['current_duration'] = datetime.now() - entry['start_time']
+        yield entry
 
 
 async def get_queue(conn, only_command=None, limit=None):
@@ -103,16 +86,10 @@ async def get_queue(conn, only_command=None, limit=None):
 
 
 async def write_queue(client, conn, only_command=None, limit=None,
-                      runner_url=None):
+                      queue_status=None):
     template = env.get_template('queue.html')
-    if runner_url:
-        async def processing_():
-            try:
-                async for x in get_processing(client, runner_url):
-                    yield x
-            except RunnerProcessingUnavailable:
-                pass
-        processing = processing_()
+    if queue_status:
+        processing = get_processing(queue_status)
     else:
         processing = []
     return await template.render_async(
