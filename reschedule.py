@@ -28,21 +28,20 @@ async def main(db, result_code):
                 continue
             packages[package.name] = package
 
-        async for (package, suite, command, id, description, start_time,
-                   duration, branch_url) in state.iter_last_runs(
+        async for run in state.iter_last_runs(
                        conn1, result_code):
-            if package not in packages:
+            if run.package not in packages:
                 continue
-            if packages[package].branch_url is None:
+            if packages[run.package].branch_url is None:
                 continue
             if (args.description_re and
-                    not re.match(args.description_re, description, re.S)):
+                    not re.match(args.description_re, run.description, re.S)):
                 continue
-            print('Rescheduling %s, %s' % (package, suite))
+            print('Rescheduling %s, %s' % (run.package, run.suite))
             await state.add_to_queue(
-                conn2, packages[package].branch_url,
-                package, command.split(' '), suite,
-                estimated_duration=duration, requestor='reschedule',
+                conn2, packages[run.package].branch_url,
+                run.package, run.command.split(' '), run.suite,
+                estimated_duration=run.duration, requestor='reschedule',
                 refresh=args.refresh)
 
 
