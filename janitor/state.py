@@ -753,21 +753,31 @@ last_runs group by 1 order by 2 desc
 async def iter_last_runs(conn, result_code):
     query = """
 SELECT
-  package,
-  suite,
-  command,
   id,
-  description,
+  command,
   start_time,
-  finish_time - start_time,
-  branch_url
+  finish_time,
+  description,
+  package,
+  build_version,
+  build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context,
+  branch_url,
+  logfilenames
 FROM last_runs
 WHERE result_code = $1
 ORDER BY start_time DESC
 """
     async with conn.transaction():
         async for row in conn.cursor(query, result_code):
-            yield row
+            yield Run.from_row(row)
 
 
 async def iter_build_failures(conn):
@@ -1129,3 +1139,21 @@ SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
     u.result_code = 'success'
 """
     return await conn.fetch(query)
+
+
+async def version_available(conn, package, suite, version=None):
+    query = """\
+SELECT
+  package,
+  suite,
+  build_version
+FROM
+  run
+WHERE
+  package = $1 AND (suite = $2 OR suite = 'unchanged')
+"""
+    args = [package, suite]
+    if version:
+        query += " AND build_version %s $3" % (version[0], )
+        args.append(version[1])
+    return await conn.fetch(query, *args)
