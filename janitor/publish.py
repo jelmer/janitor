@@ -206,27 +206,29 @@ async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
                    main_branch_revision) in state.iter_publish_ready(conn1):
-            await publish_from_policy(pkg, command, build_version, result_code,
-                    context, start_time, log_id, revision, subworker_result,
-                    branch_name, suite, maintainer_email, uploader_emails,
-                    main_branch_url, main_branch_revision,
-                    possible_hosters=possible_hosters,
-                    possible_transports=possible_transports)
+            await publish_from_policy(
+                    policy, conn, rate_limiter, vcs_manager, pkg, command,
+                    build_version, result_code, context, start_time, log_id,
+                    revision, subworker_result, branch_name, suite,
+                    maintainer_email, uploader_emails, main_branch_url,
+                    main_branch_revision, possible_hosters=possible_hosters,
+                    possible_transports=possible_transports, dry_run=dry_run)
 
 
 async def publish_from_policy(
-        pkg, command, build_version, result_code, context,
-        start_time, log_id, revision, subworker_result, branch_name,
-        suite, maintainer_email, uploader_emails, main_branch_url,
-        main_branch_revision, possible_hosters=None, possible_transports=None):
+        policy, conn, rate_limiter, vcs_manager, pkg, command, build_version,
+        result_code, context, start_time, log_id, revision, subworker_result,
+        branch_name, suite, maintainer_email, uploader_emails, main_branch_url,
+        main_branch_revision, possible_hosters=None, possible_transports=None,
+        dry_run=False):
     mode, unused_update_changelog, unused_committer = apply_policy(
         policy, suite.replace('-', '_'), pkg, maintainer_email,
         uploader_emails or [])
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-        continue
+        return
     if await state.already_published(
             conn, pkg, branch_name, revision, mode):
-        continue
+        return
     if not rate_limiter.allowed(maintainer_email) and \
             mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         proposal_rate_limited_count.labels(
@@ -246,7 +248,7 @@ async def publish_from_policy(
         # member of "debian" in the future.
         mode = MODE_PROPOSE
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-        continue
+        return
     note('Publishing %s / %r (mode: %s)', pkg, command, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
@@ -274,8 +276,6 @@ async def publish_from_policy(
         revision, mode, code, description,
         proposal_url if proposal_url else None,
         publish_id=publish_id)
-
-
 
 
 async def diff_request(request):
@@ -594,30 +594,32 @@ async def check_existing(conn, rate_limiter, vcs_manager, dry_run=False):
     rate_limiter.set_open_mps_per_maintainer(open_mps_per_maintainer)
 
 
-async def listen_to_runner(db, runner_url):
+async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
+                           dry_run=False):
     import aiohttp
     from aiohttp.client import ClientSession
     import urllib.parse
-    url = urllib.parse.urljoin(runner_url, 'ws/queue')
+    url = urllib.parse.urljoin(runner_url, 'ws/result')
     async with ClientSession() as session:
         ws = await session.ws_connect(url)
         while True:
             msg = await ws.receive()
 
             if msg.type == aiohttp.WSMsgType.text:
-                async with db.acquire() as conn:
-                    package = await state.get_package(result['package'])
                 result = msg.json()
-                await publish_from_policy(
-                    result['package'], result['command'], result['build_version'],
-                    result['code'], result['context'],
-                    result['start_time'], result['log_id'],
-                    result['revision'],
-                    result['subworker_result'],
-                    result['branch_name'],
-                    result['suite'], package.maintainer_email,
-                    package.uploader_emails, package.branch_url,
-                    result['main_branch_revision'])
+                if result['code'] != 'success':
+                    continue
+                async with db.acquire() as conn:
+                    package = await state.get_package(conn, result['package'])
+                    run = await state.get_run(conn, result['log_id'])
+                    await publish_from_policy(
+                        policy, conn, rate_limiter, vcs_manager,
+                        run.package, run.command, run.build_version,
+                        run.result_code, run.context, run.times[0], run.id,
+                        run.revision, run.result, run.branch_name, run.suite,
+                        package.maintainer_email, package.uploader_emails,
+                        package.branch_url, run.main_branch_revision,
+                        dry_run=dry_run)
             elif msg.type == aiohttp.WSMsgType.closed:
                 break
             elif msg.type == aiohttp.WSMsgType.error:
@@ -708,11 +710,13 @@ def main(argv=None):
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
-                    vcs_manager, db, args.dry_run))))
+                    vcs_manager, db, args.dry_run))
         ]
         if args.runner_url:
             tasks.append(loop.create_task(
-                listen_to_runner(db, args.runner_url))
+                listen_to_runner(
+                    db, policy, rate_limiter, vcs_manager,
+                    args.runner_url, dry_run=args.dry_run)))
         loop.run_until_complete(asyncio.gather(*tasks))
 
 
