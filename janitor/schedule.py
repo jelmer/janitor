@@ -112,7 +112,10 @@ async def estimate_success_probability(conn, package, suite, context=None):
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
     success = 0
-    context_repeated = False
+    if context is None:
+        same_context_multiplier = 0.5
+    else:
+        same_context_multiplier = 1.0
     async for run in state.iter_previous_runs(conn, package, suite):
         try:
             ignore_checker = IGNORE_RESULT_CODE[run.result_code]
@@ -124,8 +127,9 @@ async def estimate_success_probability(conn, package, suite, context=None):
         total += 1
         if run.result_code == 'success':
             success += 1
+        same_context = False
         if context and context in (run.instigated_context, run.context):
-            context_repeated = True
+            same_context = True
         if run.result_code == 'install-deps-unsatisfied-dependencies':
             START = 'Unsatisfied dependencies: '
             if run.description.startswith(START):
@@ -133,14 +137,9 @@ async def estimate_success_probability(conn, package, suite, context=None):
                     run.description[len(START):])
                 if await deps_satisfied(conn, suite, unsatisfied_dependencies):
                     success += 1
-                    context_repeated = False
-
-    if context is None:
-        same_context_multiplier = 0.5
-    elif context_repeated:
-        same_context_multiplier = 0.10
-    else:
-        same_context_multiplier = 1.0
+                    same_context = False
+        if same_context:
+            same_context_multiplier = 0.1
 
     return (
         (success * 10 + 1) /
