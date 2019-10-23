@@ -1,0 +1,84 @@
+{% extends "layout.html" %}
+{% from "fresh-util.html" import package_list %}
+{% block page_title %}Unchanged Package Builds{% endblock %}
+{% block body %}
+  <div class="section" id="unchanged">
+<h1>Unchanged Package Builds</h1>
+<p>This repository contains builds of the HEADs of Debian packaging repositories. </p>
+<p>These packages are currently only available for amd64.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">The packages in this repository were created automatically, without review from a human.</p>
+</div>
+<div class="toctree-wrapper compound">
+</div>
+<div class="section" id="using-the-repository">
+<h2>Using the repository</h2>
+<p>To use the apt repository, run something like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb https://janitor.debian.net/ unchanged/ &gt; /etc/apt/sources.list.d/janitor.list
+gpg --recv-keys <span class="mi">6</span>F915003D1998D6A
+gpg --export <span class="mi">6</span>F915003D1998D6A | sudo apt-key add -
+apt update
+</pre></div>
+</div>
+<p>The repository is marked as <code class="docutils literal notranslate"><span class="pre">experimental</span></code>, meaning that apt won’t
+automatically update to packages in them unless explicitly requested to do so.
+To e.g. install the version of <em>cifs-utils</em> that’s in this repository, run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>apt install -t unchanged cifs-utils
+</pre></div>
+</div>
+<p>The packages are also versioned in such a way that if the new upstream version
+gets uploaded to the official Debian APT repository, it will replace the package
+in this archive.</p>
+</div>
+<div class="section" id="pinning">
+<h2>Pinning</h2>
+<p>Optionally, if you want to track a given package so upgrades happen automatically,
+add the following to <code class="docutils literal notranslate"><span class="pre">/etc/apt/preferences</span></code> (and see
+<a class="reference external" href="https://wiki.debian.org/AptPreferences">the documentation about apt preferences</a>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>Package: cifs-utils
+Pin: release a=unchanged
+Pin-Priority: <span class="mi">800</span>
+</pre></div>
+</div>
+</div>
+
+
+<div class="section" id="status">
+<h2>Package Status</h2>
+<p>
+See the status for a specific package:
+<form autocomplete="off" action="pkg">
+  <div class="packages" style="width:300px;">
+    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p>
+</div>
+
+
+<div class="section" id="package-list">
+<h2>Package list</h2>
+<p>The following source packages are currently available:</p>
+{{ package_list(packages) }}
+</div>
+</div>
+
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#package').typeahead(null, {
+  name: 'packages',
+  source: packages
+});
+});
+</script>
+
+
+{% endblock %}
