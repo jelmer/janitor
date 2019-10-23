@@ -303,6 +303,7 @@ if __name__ == '__main__':
         try:
             text = await generate_pkg_file(
                 request.app.database,
+                request.app.policy,
                 request.app.http_client_session,
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
@@ -510,6 +511,7 @@ if __name__ == '__main__':
     app.topic_publish = Topic()
     app.topic_queue = Topic()
     app.runner_url = args.runner_url
+    app.policy = policy_config
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_runner_status_listener)
     app.on_cleanup.append(stop_runner_status_listener)
