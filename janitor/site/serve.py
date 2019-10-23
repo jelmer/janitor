@@ -446,6 +446,8 @@ if __name__ == '__main__':
         '.*.(changes|deb|buildinfo)}',
         handle_apt_file)
     app.router.add_get(
+        '/unchanged', functools.partial(handle_apt_repo, 'unchanged'))
+    app.router.add_get(
         '/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
     app.router.add_get(
         '/lintian-fixes/pkg/{pkg}/{run_id}', handle_lintian_fixes_pkg)
