@@ -81,7 +81,7 @@ async def schedule_from_candidates(policy, iter_candidates):
             continue
 
         mode, update_changelog, committer = apply_policy(
-            policy, suite.replace('-', '_'),
+            policy, suite,
             package.name, package.maintainer_email, package.uploader_emails)
 
         if mode == 'skip':

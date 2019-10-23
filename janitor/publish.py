@@ -225,7 +225,7 @@ async def publish_from_policy(
         possible_transports=None,
         dry_run=False):
     mode, unused_update_changelog, unused_committer = apply_policy(
-        policy, suite.replace('-', '_'), pkg, maintainer_email,
+        policy, suite, pkg, maintainer_email,
         uploader_emails or [])
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         topic_publish.publish({'id': publish_id, 'mode': mode})

@@ -27,7 +27,7 @@ async def handle_policy(request):
     suite_policies = {}
     for suite in SUITES:
         (publish_policy, changelog_policy, committer) = apply_policy(
-            request.app.policy_config, suite.replace('-', '_'), package.name,
+            request.app.policy_config, suite, package.name,
             package.maintainer_email, package.uploader_emails)
         suite_policies[suite] = {
             'publish_policy': publish_policy,
