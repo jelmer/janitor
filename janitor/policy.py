@@ -41,7 +41,8 @@ def matches(match, package_name, package_maintainer, package_uploaders):
     return True
 
 
-def apply_policy(config, field, package_name, maintainer, uploaders):
+def apply_policy(config, suite, package_name, maintainer, uploaders):
+    field = suite.replace('-', '_')
     mode = policy_pb2.skip
     update_changelog = 'auto'
     committer = None
