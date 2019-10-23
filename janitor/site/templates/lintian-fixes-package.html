@@ -9,6 +9,9 @@
 <ul class="simple">
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+{% if removed %}
+<li class="removed-in-unstable">This package is removed in unstable.</li>
+{% endif %}
 {% if previous_runs %}
 <li>Last processed: {{ format_timestamp(previous_runs[0].times[1]) }} (took {{ format_duration(previous_runs[0].times[1] - previous_runs[0].times[0]) }})</li>
 {% endif %}

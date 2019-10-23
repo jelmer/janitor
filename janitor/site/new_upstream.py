@@ -70,6 +70,7 @@ async def generate_pkg_file(db, package, suite, run_id=None):
         'merge_proposals': merge_proposals,
         'maintainer_email': package.maintainer_email,
         'uploader_emails': package.uploader_emails,
+        'removed': package.removed,
         'vcs_url': package.branch_url,
         "vcs_browse": package.vcs_browse,
         'command': command,

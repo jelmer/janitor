@@ -10,6 +10,9 @@
 <ul class="simple">
 <li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
 <li>Maintainer email: {{ display_maintainer_email(maintainer_email) }}</li>
+{% if removed %}
+<li class="removed-in-unstable">This package is removed in unstable.</li>
+{% endif %}
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
 {% endif %}

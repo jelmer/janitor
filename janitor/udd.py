@@ -174,9 +174,10 @@ sources.release = 'sid'
         if packages is not None:
             query += " AND sources.source = any($1::text[])"
             args.append(tuple(packages))
-        for row in await self._conn.fetch(query, *args):
-            yield (row[0], 'unchanged', ['just-build'], None,
-                   DEFAULT_VALUE_UNCHANGED)
+        async with self._conn.transaction():
+            async for row in self._conn.cursor(query, *args):
+                yield (row[0], 'unchanged', ['just-build'], None,
+                       DEFAULT_VALUE_UNCHANGED)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -193,9 +194,10 @@ sources.release = 'sid'
             query += " AND upstream.source = any($1::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        for row in await self._conn.fetch(query, *args):
-            yield (row[0], 'fresh-releases', ['new-upstream'], row[1],
-                   DEFAULT_VALUE_NEW_UPSTREAM)
+        async with self._conn.transaction():
+            async for row in self._conn.cursor(query, *args):
+                yield (row[0], 'fresh-releases', ['new-upstream'], row[1],
+                       DEFAULT_VALUE_NEW_UPSTREAM)
 
     async def iter_fresh_snapshots_candidates(self, packages):
         args = []
@@ -209,9 +211,10 @@ sources.release = 'sid'
             query += " AND sources.source = any($1::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
-        for row in await self._conn.fetch(query, *args):
-            yield (row[0], 'fresh-snapshots', ['new-upstream', '--snapshot'],
-                   None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
+        async with self._conn.transaction():
+            async for row in self._conn.cursor(query, *args):
+                yield (row[0], 'fresh-snapshots', ['new-upstream', '--snapshot'],
+                       None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
     async def iter_packages_with_metadata(self, packages=None):
         args = []
