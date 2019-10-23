@@ -15,7 +15,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-
 async def read_apt_file_from_s3(
         request, session, s3_location, suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
@@ -57,6 +56,7 @@ async def read_apt_file_from_fs(suite, filename, max_age):
 
 if __name__ == '__main__':
     import argparse
+    import asyncio
     import functools
     import os
     import re
@@ -145,14 +145,6 @@ if __name__ == '__main__':
                 content_type='text/html',
                 text=await write_history(conn, limit=limit),
                 headers={'Cache-Control': 'max-age=10'})
-
-    async def handle_publish_id(request):
-        publish_id = request.match_info['publish_id']
-        async with request.app.database.acquire() as conn:
-            args = await state.get_publish(conn, publish_id)
-        from .publish import write_publish
-        return web.Response(
-            content_type='text/html', text=await write_publish(*args))
 
     async def handle_queue(request):
         limit = int(request.query.get('limit', '100'))
@@ -402,11 +394,21 @@ if __name__ == '__main__':
         url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
         async for msg in pubsub_reader(app.http_client_session, url):
             app.runner_status = msg
+            app.topic_queue.publish(msg)
 
     async def listen_to_publisher(app):
         url = urllib.parse.urljoin(app.publisher_url, 'ws/publish')
         async for msg in pubsub_reader(app.http_client_session, url):
             app.topic_publish.publish(msg)
+
+    async def start_publisher_status_listener(app):
+        app.publisher_status = None
+        app.publisher_status_listener = app.loop.create_task(
+            listen_to_publisher(app))
+
+    async def stop_publisher_status_listener(app):
+        app.publisher_status_listener.cancel()
+        await app.publisher_status_listener
 
     async def start_runner_status_listener(app):
         app.runner_status = None
@@ -478,7 +480,6 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
     app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
     app.router.add_get('/cupboard/publish', handle_publish_history)
-    app.router.add_get('/cupboard/publish/{publish_id}', handle_publish_id)
     app.router.add_get(
         '/cupboard/ready', functools.partial(handle_ready_proposals, None))
     app.router.add_get('/cupboard/pkg/', handle_pkg_list)
@@ -505,14 +506,19 @@ if __name__ == '__main__':
 
     app.http_client_session = ClientSession()
     app.topic_publish = Topic()
+    app.topic_queue = Topic()
     app.runner_url = args.runner_url
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_runner_status_listener)
     app.on_cleanup.append(stop_runner_status_listener)
+    app.on_startup.append(start_publisher_status_listener)
+    app.on_cleanup.append(stop_publisher_status_listener)
     app.database = state.Database(config.database_location)
     setup_metrics(app)
     app.router.add_get(
         '/ws/publish', functools.partial(pubsub_handler, app.topic_publish))
+    app.router.add_get(
+        '/ws/queue', functools.partial(pubsub_handler, app.topic_queue))
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url, policy_config))

@@ -619,3 +619,7 @@ tr.package-nothing-to-do {
 tr.package-proposal {
   background-color: lightgreen;
 }
+
+li.removed-in-unstable {
+  font-weight: bolder;
+}

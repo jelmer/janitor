@@ -55,11 +55,11 @@ $(function() {
 $("#{{ propose_id }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'propose'}, function(data) {
     if (data) {
-	$("#{{ propose_id }}").replaceWith("<span>Publishing merge proposal.</span>");
+        $("#{{ propose_id }}").replaceWith("<span>Publishing merge proposal...</span>");
     }
     }, 'json')
     .fail(function(response) {
-	$("#{{ propose_id }}").replaceWith("<span>Failed to schedule new run: " + response.responseText + "</span>");
+	$("#{{ propose_id }}").replaceWith("<span>Failed to publish: " + response.responseText + "</span>");
     });
   });
 
