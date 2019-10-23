@@ -123,6 +123,10 @@ async def store_run(
 async def store_publish(conn, package, branch_name, main_branch_revision,
                         revision, mode, result_code, description,
                         merge_proposal_url=None, publish_id=None):
+    if isinstance(revision, bytes):
+        revision = revision.decode('utf-8')
+    if isinstance(main_branch_revision, bytes):
+        main_branch_revision = main_branch_revision.decode('utf-8')
     if merge_proposal_url:
         await conn.execute(
             "INSERT INTO merge_proposal (url, package, status, revision) "
@@ -846,7 +850,7 @@ WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
     query += """
 ORDER BY
   package,
-  command,
+  suite,
   finish_time DESC
 """
     async with conn.transaction():
