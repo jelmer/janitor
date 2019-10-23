@@ -91,6 +91,7 @@ async def generate_pkg_file(db, client, publisher_url, package, run_id=None):
         'merge_proposals': merge_proposals,
         'maintainer_email': package.maintainer_email,
         'uploader_emails': package.uploader_emails,
+        'removed': package.removed,
         'vcs_url': package.vcs_url,
         'vcs_type': vcs_type,
         'vcs_browse': package.vcs_browse,
