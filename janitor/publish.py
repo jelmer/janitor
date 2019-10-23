@@ -228,9 +228,12 @@ async def publish_from_policy(
         policy, suite.replace('-', '_'), pkg, maintainer_email,
         uploader_emails or [])
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+        topic_publish.publish({'id': publish_id, 'mode': mode})
         return
     if await state.already_published(
             conn, pkg, branch_name, revision, mode):
+        topic_publish.publish(
+            {'id': publish_id, 'reason': 'already published', 'mode': mode})
         return
     if not rate_limiter.allowed(maintainer_email) and \
             mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
@@ -251,6 +254,8 @@ async def publish_from_policy(
         # member of "debian" in the future.
         mode = MODE_PROPOSE
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+        topic_publish.publish(
+            {'id': publish_id, 'mode': mode})
         return
     note('Publishing %s / %r (mode: %s)', pkg, command, mode)
     try:
@@ -472,6 +477,8 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.vcs_manager = vcs_manager
     app.db = db
     app.rate_limiter = rate_limiter
+    app.topic_publish = topic_publish
+    app.topic_merge_proposal = topic_merge_proposal
     setup_metrics(app)
     app.router.add_post(
         "/{suite}/{package}/publish",
