@@ -66,8 +66,11 @@ if __name__ == '__main__':
     from janitor.logs import get_log_manager
     from janitor.policy import read_policy
     from janitor.prometheus import setup_metrics
+    import aiohttp
     from aiohttp import web, ClientSession
     from aiohttp.web_middlewares import normalize_path_middleware
+    from ..pubsub import pubsub_reader, pubsub_handler, Topic
+    import urllib.parse
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str, help='Host to listen on')
     parser.add_argument(
@@ -264,7 +267,7 @@ if __name__ == '__main__':
         text = await generate_run_file(
             request.app.database,
             request.app.http_client_session,
-            logfile_manager, run, args.publisher_url)
+            logfile_manager, run, request.app.publisher_url)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=3600'})
@@ -309,7 +312,7 @@ if __name__ == '__main__':
             text = await generate_pkg_file(
                 request.app.database,
                 request.app.http_client_session,
-                args.publisher_url, pkg, run_id)
+                request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
@@ -396,12 +399,14 @@ if __name__ == '__main__':
             headers={'Cache-Control': 'max-age=600'})
 
     async def listen_to_runner(app):
-        import aiohttp
-        import urllib.parse
-        from ..pubsub import pubsub_reader
         url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
         async for msg in pubsub_reader(app.http_client_session, url):
             app.runner_status = msg
+
+    async def listen_to_publisher(app):
+        url = urllib.parse.urljoin(app.publisher_url, 'ws/publish')
+        async for msg in pubsub_reader(app.http_client_session, url):
+            app.topic_publish.publish(msg)
 
     async def start_runner_status_listener(app):
         app.runner_status = None
@@ -499,11 +504,15 @@ if __name__ == '__main__':
         policy_config = read_policy(f)
 
     app.http_client_session = ClientSession()
+    app.topic_publish = Topic()
     app.runner_url = args.runner_url
+    app.publisher_url = args.publisher_url
     app.on_startup.append(start_runner_status_listener)
     app.on_cleanup.append(stop_runner_status_listener)
     app.database = state.Database(config.database_location)
     setup_metrics(app)
+    app.router.add_get(
+        '/ws/publish', functools.partial(pubsub_handler, app.topic_publish))
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url, policy_config))
