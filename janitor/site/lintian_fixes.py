@@ -4,6 +4,7 @@ from aiohttp import ClientConnectorError
 import urllib.parse
 
 from janitor import state
+from janitor.policy import apply_policy
 from janitor.site import (
     env,
     get_vcs_type,
@@ -18,7 +19,7 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(db, client, publisher_url, package, run_id=None):
+async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
         if package is None:
@@ -34,6 +35,8 @@ async def generate_pkg_file(db, client, publisher_url, package, run_id=None):
             merge_proposals = [
                 (url, status) for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=SUITE)]
+        publish_policy = apply_policy(
+            policy, SUITE, package.name, package.maintainer, package.uploader_emails)
         if run is None:
             # No runs recorded
             command = None
@@ -116,6 +119,7 @@ async def generate_pkg_file(db, client, publisher_url, package, run_id=None):
         'branch_url': branch_url,
         'queue_position': queue_position,
         'queue_wait_time': queue_wait_time,
+        'publish_policy': publish_policy,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)
