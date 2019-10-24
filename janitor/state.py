@@ -487,6 +487,13 @@ class QueueItem(object):
 
 
 async def get_queue_position(conn, suite, package):
+    ret = list(await get_queue_positions(conn, suite, [package]))
+    if len(ret) == 0:
+        return (None, None)
+    return ret[0][1], ret[0][1]
+
+
+async def get_queue_positions(conn, suite, packages):
     subquery = """
 SELECT
     package,
@@ -498,12 +505,9 @@ FROM
     queue
 ORDER BY priority ASC, id ASC
 """
-    query = ("SELECT position, wait_time FROM (" + subquery + ") AS q "
-             "WHERE package = $1 AND suite = $2")
-    row = await conn.fetchrow(query, package, suite)
-    if row is None:
-        return (None, None)
-    return (row[0], row[1])
+    query = ("SELECT package, position, wait_time FROM (" + subquery + ") AS q "
+             "WHERE package = ANY($1::text[]) 1 AND suite = $2")
+    return await conn.fetch(query, packages, suite)
 
 
 async def iter_queue(conn, limit=None):
