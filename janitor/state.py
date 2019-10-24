@@ -506,7 +506,7 @@ FROM
 ORDER BY priority ASC, id ASC
 """
     query = ("SELECT package, position, wait_time FROM (" + subquery + ") AS q "
-             "WHERE package = ANY($1::text[]) 1 AND suite = $2")
+             "WHERE package = ANY($1::text[]) AND suite = $2")
     return await conn.fetch(query, packages, suite)
 
 
