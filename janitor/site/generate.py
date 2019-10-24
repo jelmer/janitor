@@ -21,7 +21,10 @@ async def render_simple(src):
 async def render_lintian_fixes():
     template = env.get_template('lintian-fixes-start.html')
     import lintian_brush
-    return await template.render_async({'lintian_brush': lintian_brush})
+    from silver_platter.debian.lintian import DEFAULT_ADDON_FIXERS
+    return await template.render_async(
+        {'lintian_brush': lintian_brush,
+        'ADDON_FIXERS': DEFAULT_ADDON_FIXERS})
 
 
 if __name__ == '__main__':
