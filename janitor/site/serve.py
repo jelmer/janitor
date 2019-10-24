@@ -395,12 +395,12 @@ if __name__ == '__main__':
         url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
         async for msg in pubsub_reader(app.http_client_session, url):
             app.runner_status = msg
-            app.topic_queue.publish(msg)
+            app.topic_notifications.publish(['queue', msg])
 
     async def listen_to_publisher(app):
         url = urllib.parse.urljoin(app.publisher_url, 'ws/publish')
         async for msg in pubsub_reader(app.http_client_session, url):
-            app.topic_publish.publish(msg)
+            app.topic_notifications.publish(['publish', msg])
 
     async def start_publisher_status_listener(app):
         app.publisher_status = None
@@ -508,8 +508,7 @@ if __name__ == '__main__':
         policy_config = read_policy(f)
 
     app.http_client_session = ClientSession()
-    app.topic_publish = Topic()
-    app.topic_queue = Topic()
+    app.topic_notifications = Topic()
     app.runner_url = args.runner_url
     app.policy = policy_config
     app.publisher_url = args.publisher_url
@@ -520,9 +519,7 @@ if __name__ == '__main__':
     app.database = state.Database(config.database_location)
     setup_metrics(app)
     app.router.add_get(
-        '/ws/publish', functools.partial(pubsub_handler, app.topic_publish))
-    app.router.add_get(
-        '/ws/queue', functools.partial(pubsub_handler, app.topic_queue))
+        '/ws/notifications', functools.partial(pubsub_handler, app.topic_notifications))
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url, policy_config))

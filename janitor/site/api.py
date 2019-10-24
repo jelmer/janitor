@@ -372,18 +372,22 @@ async def handle_report(request):
     suite = request.match_info['suite']
     report = {}
     async with request.app.db.acquire() as conn:
-        async for run in conn.iter_publish_ready(conn, suite=suite):
+        async for (package, command, build_version, result_code, context,
+                   start_time, log_id, revision, result, branch_name, suite,
+                   maintainer_email, uploader_emails, branch_url,
+                   main_branch_revision) in state.iter_publish_ready(
+                       conn, suite=suite):
             data = {
-                'timestamp': run.time[1],
+                'timestamp': start_time.isoformat(),
             }
             if suite == 'lintian-fixes':
                 data['fixed-tags'] = []
-                for entry in run.result['applied']:
+                for entry in result['applied']:
                     data['fixed-tags'].extend(entry['fixed_lintian_tags'])
             if suite in ('fresh-releases', 'fresh-snapshots'):
-                data['upstream-version'] = run.result.get('upstream_version')
-                data['old-upstream-version'] = run.result.get('old_upstream_version')
-            report[run.package] = data
+                data['upstream-version'] = result.get('upstream_version')
+                data['old-upstream-version'] = result.get('old_upstream_version')
+            report[package] = data
     return web.json_response(
         report,
         headers={'Cache-Control': 'max-age=600'},

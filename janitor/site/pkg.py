@@ -25,10 +25,6 @@ from janitor.site import (
     open_changes_file,
     highlight_diff,
 )
-from janitor.vcs import (
-    CACHE_URL_BZR,
-    CACHE_URL_GIT,
-)
 
 FAIL_BUILD_LOG_LEN = 15
 
@@ -147,9 +143,6 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
             get_build_architecture())
     else:
         kwargs['changes_name'] = None
-
-    kwargs['cache_url_git'] = CACHE_URL_GIT
-    kwargs['cache_url_bzr'] = CACHE_URL_BZR
 
     async def vcs_type():
         return await get_vcs_type(publisher_url, run.package)

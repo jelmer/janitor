@@ -23,6 +23,10 @@ import os
 import urllib.parse
 
 from janitor import SUITES
+from janitor.vcs import (
+    CACHE_URL_BZR,
+    CACHE_URL_GIT,
+)
 
 
 def format_duration(duration):
@@ -70,6 +74,8 @@ env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
 env.globals.update(suites=SUITES)
 env.globals.update(json_dumps=json.dumps)
+env.globals.update(cache_url_git=CACHE_URL_GIT)
+env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 
 
 def get_build_architecture():
