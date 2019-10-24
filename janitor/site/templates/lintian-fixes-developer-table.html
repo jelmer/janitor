@@ -21,17 +21,17 @@
     <td>
       {% if candidates - fixed %}{% for tag in candidates %}{% if not run or tag not in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endif %}{% endfor %}{% endif %}</td>
     <td>
-	    {% if run %}
-	      {% if run.revision == run.main_branch_revision and result_code == 'nothing-to-do' %}
-	        Nothing to do
-	      {% elif run.result_code in ('success', 'nothing-to-do') %}
-	        {% for tag in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
-    	      {% else %}
-	        {{ display_result_code(run.result_code)|safe }}
-	      {% endif %}
-	    {% else %}
-	      {{ reschedule_button(suite, package, title='Schedule', id='reschedule-' + package) }}
-	    {% endif %}
+        {% if run %}
+          {% if run.revision == run.main_branch_revision and result_code == 'nothing-to-do' %}
+            Nothing to do
+          {% elif run.result_code in ('success', 'nothing-to-do') %}
+            {% for tag in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
+          {% else %}
+            {{ display_result_code(run.result_code)|safe }}
+          {% endif %}
+        {% else %}
+          {{ reschedule_button(suite, package, title='Schedule', id='reschedule-' + package) }}
+        {% endif %}
     </td>
     <td>
       {% if open_proposal_url %}<a href="{{ open_proposal_url }}">proposal</a>
