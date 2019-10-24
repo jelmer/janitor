@@ -173,6 +173,10 @@ async def generate_developer_table_page(db, developer):
         async for run in state.iter_last_unabsorbed_runs(
                 conn, suite=SUITE, packages=packages):
             runs[run.package] = run
+        queue_data = {
+            package: (position, duration)
+            for (package, position, duration) in
+            await state.get_queue_positions(conn, SUITE, packages)}
 
     by_package = {}
     for package in packages:
@@ -203,7 +207,9 @@ async def generate_developer_table_page(db, developer):
             run,
             package_candidates,
             fixed,
-            open_proposal, status)
+            open_proposal,
+            status,
+            queue_data.get(package, (None, None)))
 
     return await template.render_async(
         packages=packages, by_package=by_package, suite=SUITE,
