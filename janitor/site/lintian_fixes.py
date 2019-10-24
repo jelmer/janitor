@@ -35,8 +35,8 @@ async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=N
             merge_proposals = [
                 (url, status) for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=SUITE)]
-        publish_policy = apply_policy(
-            policy, SUITE, package.name, package.maintainer, package.uploader_emails)
+        (publish_policy, unused_changelog_policy, commiter) = apply_policy(
+            policy, SUITE, package.name, package.maintainer_email, package.uploader_emails)
         if run is None:
             # No runs recorded
             command = None
