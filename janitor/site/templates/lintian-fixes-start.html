@@ -112,8 +112,9 @@ pull requests in Subversion would be.</p>
 tags are only included in a pull request if there were other fixes as well.</p>
 <p>Tags currently considered add-on only are:</p>
 <ul class="simple">
-<li>{{ lintian_tag_link('file-contains-trailing-whitespace') }}</li>
-<li>{{ lintian_tag_link('package-uses-old-debhelper-compat-version') }}</li>
+{% for tag in ADDON_FIXERS  %}
+<li>{{ lintian_tag_link(tag) }}</li>
+{% endfor %}
 </ul>
 </div>
 <div class="section" id="the-bot-is-proposing-an-incorrect-change-where-do-i-report-this">
