@@ -486,7 +486,7 @@ class QueueItem(object):
         return hash((type(self), self.id))
 
 
-async def get_queue_position(conn, package, suite):
+async def get_queue_position(conn, suite, package):
     subquery = """
 SELECT
     package,

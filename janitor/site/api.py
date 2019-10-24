@@ -138,7 +138,7 @@ async def handle_schedule(request):
         estimated_duration = await schedule(
             conn, package, suite, offset, refresh, requestor=requestor)
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, package.name, suite)
+            conn, suite, package.name)
     response_obj = {
         'package': package.name,
         'suite': suite,
