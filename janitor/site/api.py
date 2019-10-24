@@ -368,6 +368,28 @@ async def handle_publish_id(request):
         })
 
 
+async def handle_report(request):
+    suite = request.match_info['suite']
+    report = {}
+    async with request.app.db.acquire() as conn:
+        async for run in conn.iter_publish_ready(conn, suite=suite):
+            data = {
+                'timestamp': run.time[1],
+            }
+            if suite == 'lintian-fixes':
+                data['fixed-tags'] = []
+                for entry in run.result['applied']:
+                    data['fixed-tags'].extend(entry['fixed_lintian_tags'])
+            if suite in ('fresh-releases', 'fresh-snapshots'):
+                data['upstream-version'] = run.result.get('upstream_version')
+                data['old-upstream-version'] = run.result.get('old_upstream_version')
+            report[run.package] = data
+    return web.json_response(
+        report,
+        headers={'Cache-Control': 'max-age=600'},
+        status=200)
+
+
 def create_app(db, publisher_url, runner_url, policy_config):
     app = web.Application()
     app.db = db
@@ -413,6 +435,9 @@ def create_app(db, publisher_url, runner_url, policy_config):
     app.router.add_get(
         '/runner/log/{run_id}/{filename}',
         functools.partial(handle_runner_log, runner_url))
+    app.router.add_get(
+        '/report/{suite:' + '|'.join(SUITES) + '}',
+        handle_report)
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)
