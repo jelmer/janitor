@@ -108,7 +108,7 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
     kwargs['branch_url'] = run.branch_url
     async with db.acquire() as conn:
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, run.package, run.suite)
+            conn, run.suite, run.package)
         package = await state.get_package(conn, run.package)
     kwargs['queue_wait_time'] = queue_wait_time
     kwargs['queue_position'] = queue_position

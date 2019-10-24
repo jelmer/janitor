@@ -70,7 +70,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=N
             x async for x in
             state.iter_previous_runs(conn, package.name, SUITE)]
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, package.name, SUITE)
+            conn, SUITE, package.name)
 
     async def show_diff():
         if not run.revision or run.revision == run.main_branch_revision:

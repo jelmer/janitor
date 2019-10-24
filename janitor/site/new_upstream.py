@@ -64,7 +64,7 @@ async def generate_pkg_file(db, package, suite, run_id=None):
             r async for r in
             state.iter_previous_runs(conn, package.name, suite)]
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, package.name, suite)
+            conn, suite, package.name)
     kwargs = {
         'package': package.name,
         'merge_proposals': merge_proposals,
