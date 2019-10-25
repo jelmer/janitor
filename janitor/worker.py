@@ -43,6 +43,7 @@ from silver_platter.debian.lintian import (
     DEFAULT_MINIMUM_CERTAINTY,
 )
 from lintian_brush.config import Config as LintianBrushConfig
+from lintian_brush import SUPPORTED_CERTAINTIES
 from silver_platter.debian.upstream import (
     check_quilt_patches_apply,
     merge_upstream,
@@ -145,6 +146,15 @@ class LintianBrushWorker(SubWorker):
             '--propose-addon-only',
             help='Fixers that should be considered add-on-only.',
             type=str, action='append', default=DEFAULT_ADDON_FIXERS)
+        subparser.add_argument(
+            '--allow-reformatting', default=None, action='store_true',
+            help='Whether to allow reformatting.')
+        subparser.add_argument(
+            '--minimum-certainty',
+            type=str,
+            choices=SUPPORTED_CERTAINTIES,
+            default=None,
+            help=argparse.SUPPRESS)
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
@@ -153,8 +163,8 @@ class LintianBrushWorker(SubWorker):
             available_lintian_fixers(), tags=self.args.tags)
 
         compat_release = self.args.compat_release
-        allow_reformatting = None
-        minimum_certainty = None
+        allow_reformatting = self.args.allow_reformatting
+        minimum_certainty = self.args.minimum_certainty
         try:
             cfg = LintianBrushConfig.from_workingtree(local_tree, '')
         except FileNotFoundError:
