@@ -135,6 +135,9 @@ async def handle_schedule(request):
             return web.json_response(
                 {'reason': 'Package not found'}, status=404)
         requestor = 'user from web UI'
+        if package.branch_url is None:
+            return web.json_response(
+                {'reason': 'No branch URL defined.'}, status=400)
         estimated_duration = await schedule(
             conn, package, suite, offset, refresh, requestor=requestor)
         (queue_position, queue_wait_time) = await state.get_queue_position(
