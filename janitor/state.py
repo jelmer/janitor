@@ -490,7 +490,7 @@ async def get_queue_position(conn, suite, package):
     ret = list(await get_queue_positions(conn, suite, [package]))
     if len(ret) == 0:
         return (None, None)
-    return ret[0][1], ret[0][1]
+    return ret[0][1], ret[0][2]
 
 
 async def get_queue_positions(conn, suite, packages):
