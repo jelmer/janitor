@@ -182,6 +182,7 @@ async def generate_developer_table_page(db, developer):
     for package in packages:
         run = runs.get(package)
         fixed = set()
+        unfixed = set()
         if run and run.result:
             applied = run.result.get('applied')
             if isinstance(applied, dict):
@@ -189,6 +190,10 @@ async def generate_developer_table_page(db, developer):
             for applied in applied:
                 for tag in applied.get('fixed_lintian_tags', []):
                     fixed.add(tag)
+        if run.instigated_context:
+            for tag in run.instigated_context.split(' '):
+                unfixed.add(tag)
+        unfixed -= fixed
         open_proposal = open_proposals.get(package)
         package_candidates = set(candidates.get(package, []))
         if open_proposal:
@@ -207,6 +212,7 @@ async def generate_developer_table_page(db, developer):
             run,
             package_candidates,
             fixed,
+            unfixed,
             open_proposal,
             status,
             queue_data.get(package, (None, None)))

@@ -15,7 +15,7 @@
       <td width="25%">Publish</td>
   </thead>
 
-{% for package, (run, candidates, fixed, open_proposal_url, status, (queue_position, queue_duration)) in by_package.items() | sort %}
+{% for package, (run, candidates, fixed, unfixed, open_proposal_url, status, (queue_position, queue_duration)) in by_package.items() | sort %}
   <tr class="package-{{ status }}">
     <td><a href="/lintian-fixes/pkg/{{ package }}">{{ package }}</a></td>
     <td>
