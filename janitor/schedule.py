@@ -67,6 +67,14 @@ IGNORE_RESULT_CODE.update(
     {code: lambda run: True for code in TRANSIENT_ERROR_RESULT_CODES})
 
 
+PUBLISH_MODE_VALUE = {
+    'build-only': 0,
+    'push': 50,
+    'propose': 40,
+    'attempt-push': 45,
+    }
+
+
 async def schedule_from_candidates(policy, iter_candidates):
     with open(policy, 'r') as f:
         policy = read_policy(f)
@@ -80,13 +88,15 @@ async def schedule_from_candidates(policy, iter_candidates):
             trace.note('%s: %s', package.name, e)
             continue
 
-        mode, update_changelog, committer = apply_policy(
+        publish_mode, update_changelog, committer = apply_policy(
             policy, suite,
             package.name, package.maintainer_email, package.uploader_emails)
 
-        if mode == 'skip':
+        if publish_mode == 'skip':
             trace.mutter('%s: skipping, per policy', package.name)
             continue
+
+        value += PUBLISH_MODE_VALUE[publish_mode]
 
         entry_command = list(command)
         if update_changelog == "update":
