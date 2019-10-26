@@ -16,6 +16,29 @@
 
     <script src="/_static/jquery.js"></script>
     <script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
+    <script>
+window.onload = function() {
+const url = 'wss://janitor.debian.net/ws/notifications';
+const connection = new WebSocket(url)
+
+connection.onopen = () => {
+  connection.send('hey');
+}
+
+connection.onerror = (error) => {
+  console.log(`WebSocket error: ${error}`);
+}
+
+connection.onmessage = (e) => {
+  console.log(e.data);
+}
+}
+
+windowbeforeunload = function(){
+    socket.close();
+};
+
+    </script>
     <div class="document">
      {% block sidebar %}{% endblock %}
       <div class="documentwrapper">
@@ -29,7 +52,7 @@
       </div>
     </div>
     <div class="footer">
-      &copy;2019 <a href="/about">Jelmer Vernooĳ</a>.  <a href="https://salsa.debian.org/jelmer/debian-janitor/issues/new">File a bug</a>. Published under the GNU GPLv2 or later.
+      &copy;2018-2019 <a href="/about">Jelmer Vernooĳ</a>.  <a href="https://salsa.debian.org/jelmer/debian-janitor/issues/new">File a bug</a>. Published under the GNU GPLv2 or later.
     </div>
   </body>
 </html>
