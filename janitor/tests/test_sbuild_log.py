@@ -316,6 +316,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             '/usr/bin/ld: cannot find -lpthreads'], 1,
             MissingLibrary('pthreads'))
+        self.run_test([
+            "./testFortranCompiler.f:4: undefined reference to `sgemm_'",
+            ], 1)
 
     def test_missing_ruby_gem(self):
         self.run_test([

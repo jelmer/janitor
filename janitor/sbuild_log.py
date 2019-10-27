@@ -782,6 +782,7 @@ build_failure_regexps = [
      'instead', None),
     (r'dh: The --before option is not supported any longer \(#932537\). '
      r'Use override targets instead.', None),
+    ('(.*):([0-9]+): undefined reference to `(.*)\'', None),
 ]
 
 compiled_build_failure_regexps = [
