@@ -80,6 +80,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '(tried in ., debian/tmp)'],
             1)
 
+    def test_dh_systemd(self):
+        self.run_test([
+            'dh: unable to load addon systemd: dh: The systemd-sequence is '
+            'no longer provided in compat >= 11, please rely on '
+            'dh_installsystemd instead'], 1)
+
     def test_distutils_missing(self):
         self.run_test([
             'distutils.errors.DistutilsError: Could not find suitable '
