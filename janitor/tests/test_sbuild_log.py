@@ -86,6 +86,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'no longer provided in compat >= 11, please rely on '
             'dh_installsystemd instead'], 1)
 
+    def test_dh_before(self):
+        self.run_test([
+            'dh: The --before option is not supported any longer (#932537). '
+            'Use override targets instead.'], 1)
+
     def test_distutils_missing(self):
         self.run_test([
             'distutils.errors.DistutilsError: Could not find suitable '

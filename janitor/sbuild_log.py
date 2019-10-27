@@ -780,6 +780,8 @@ build_failure_regexps = [
     (r'dh: unable to load addon systemd: dh: The systemd-sequence is '
      'no longer provided in compat >= 11, please rely on dh_installsystemd '
      'instead', None),
+    (r'dh: The --before option is not supported any longer \(#932537\). '
+     r'Use override targets instead.', None),
 ]
 
 compiled_build_failure_regexps = [
