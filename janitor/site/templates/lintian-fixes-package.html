@@ -21,8 +21,8 @@
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
 {% endif %}
-{% if candidate_tags %}
-<li>Tags that might be fixable: {% for tag in candidate_tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}</li>
+{% if candidate_tags - fixed_tags %}
+<li>Tags that might be fixable: {% for tag in candidate_tags - fixed_tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}</li>
 <!-- Candidate value: {{ candidate_value }} -->
 {% endif %}
 {% if queue_position %}
