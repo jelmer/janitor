@@ -777,6 +777,9 @@ build_failure_regexps = [
      java_missing_class),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
      r'\(one is arch:all and the other not\)', None),
+    (r'dh: unable to load addon systemd: dh: The systemd-sequence is '
+     'no longer provided in compat >= 11, please rely on dh_installsystemd '
+     'instead', None),
 ]
 
 compiled_build_failure_regexps = [
