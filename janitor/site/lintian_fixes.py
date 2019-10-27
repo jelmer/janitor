@@ -49,6 +49,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=N
             result = None
             branch_name = None
             branch_url = None
+            fixed_tags = set()
         else:
             command = run.command
             build_version = run.build_version
@@ -60,6 +61,13 @@ async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=N
             result = run.result
             branch_name = run.branch_name
             branch_url = run.branch_url
+            applied = run.result.get('applied')
+            fixed_tags = set()
+            if isinstance(applied, dict):
+                applied = [applied]
+            for applied in applied:
+                for tag in applied.get('fixed_lintian_tags', []):
+                    fixed_tags.add(tag)
         candidate = await state.get_candidate(conn, package.name, SUITE)
         if candidate is not None:
             candidate_command, candidate_context, candidate_value = candidate
@@ -120,6 +128,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=N
         'queue_position': queue_position,
         'queue_wait_time': queue_wait_time,
         'publish_policy': publish_policy,
+        'fixed_tags': fixed_tags,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)
