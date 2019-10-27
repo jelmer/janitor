@@ -213,8 +213,9 @@ sources.release = 'sid'
         query += " ORDER BY sources.source, sources.version DESC"
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], 'fresh-snapshots', ['new-upstream', '--snapshot'],
-                       None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
+                yield (
+                    row[0], 'fresh-snapshots', ['new-upstream', '--snapshot'],
+                    None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
     async def iter_packages_with_metadata(self, packages=None):
         args = []

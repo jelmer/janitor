@@ -158,7 +158,8 @@ async def estimate_success_probability(conn, package, suite, context=None):
 
 
 async def estimate_duration(conn, package, suite):
-    estimated_duration = await state.estimate_duration(conn, package=package, suite=suite)
+    estimated_duration = await state.estimate_duration(
+        conn, package=package, suite=suite)
     if estimated_duration is not None:
         return estimated_duration
 
