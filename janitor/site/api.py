@@ -389,7 +389,8 @@ async def handle_report(request):
                     data['fixed-tags'].extend(entry['fixed_lintian_tags'])
             if suite in ('fresh-releases', 'fresh-snapshots'):
                 data['upstream-version'] = result.get('upstream_version')
-                data['old-upstream-version'] = result.get('old_upstream_version')
+                data['old-upstream-version'] = result.get(
+                    'old_upstream_version')
             report[package] = data
     return web.json_response(
         report,

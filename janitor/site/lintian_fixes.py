@@ -19,7 +19,8 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=None):
+async def generate_pkg_file(db, policy, client, publisher_url, package,
+                            run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
         if package is None:
@@ -36,7 +37,8 @@ async def generate_pkg_file(db, policy, client, publisher_url, package, run_id=N
                 (url, status) for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=SUITE)]
         (publish_policy, unused_changelog_policy, commiter) = apply_policy(
-            policy, SUITE, package.name, package.maintainer_email, package.uploader_emails)
+            policy, SUITE, package.name, package.maintainer_email,
+            package.uploader_emails)
         if run is None:
             # No runs recorded
             command = None

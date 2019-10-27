@@ -228,12 +228,9 @@ async def publish_from_policy(
         policy, suite, pkg, maintainer_email,
         uploader_emails or [])
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-        topic_publish.publish({'id': publish_id, 'mode': mode})
         return
     if await state.already_published(
             conn, pkg, branch_name, revision, mode):
-        topic_publish.publish(
-            {'id': publish_id, 'reason': 'already published', 'mode': mode})
         return
     if not rate_limiter.allowed(maintainer_email) and \
             mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
@@ -254,8 +251,6 @@ async def publish_from_policy(
         # member of "debian" in the future.
         mode = MODE_PROPOSE
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
-        topic_publish.publish(
-            {'id': publish_id, 'mode': mode})
         return
     note('Publishing %s / %r (mode: %s)', pkg, command, mode)
     try:
