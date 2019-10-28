@@ -12,6 +12,9 @@
 {% if publish_policy %}
 <li>Automatic publish policy: {{ publish_policy }}</li>
 {% endif %}
+{% if changelog_policy != 'auto' %}
+<li>Changelog update policy: {{ changelog_policy }}</li>
+{% endif %}
 {% if removed %}
 <li class="removed-in-unstable">This package is removed in unstable.</li>
 {% endif %}

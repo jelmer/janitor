@@ -36,7 +36,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
             merge_proposals = [
                 (url, status) for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=SUITE)]
-        (publish_policy, unused_changelog_policy, commiter) = apply_policy(
+        (publish_policy, changelog_policy, unused_committer) = apply_policy(
             policy, SUITE, package.name, package.maintainer_email,
             package.uploader_emails)
         if run is None:
@@ -124,13 +124,14 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
         'run': run,
         'candidate_context': candidate_context,
         'candidate_tags':
-            candidate_context.split(' ') if candidate_context else None,
+            set(candidate_context.split(' ')) if candidate_context else set(),
         'candidate_value': candidate_value,
         'branch_url': branch_url,
         'queue_position': queue_position,
         'queue_wait_time': queue_wait_time,
         'publish_policy': publish_policy,
         'fixed_tags': fixed_tags,
+        'changelog_policy': changelog_policy,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)
@@ -201,7 +202,7 @@ async def generate_developer_table_page(db, developer):
             for applied in applied:
                 for tag in applied.get('fixed_lintian_tags', []):
                     fixed.add(tag)
-        if run.instigated_context:
+        if run and run.instigated_context:
             for tag in run.instigated_context.split(' '):
                 unfixed.add(tag)
         unfixed -= fixed
