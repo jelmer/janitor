@@ -94,8 +94,8 @@ last_success_gauge = Gauge(
 
 class RateLimiter(object):
 
-    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
-        raise NotImplementedError(self.set_open_mps_per_maintainer)
+    def set_mps_per_maintainer(self, mps_per_maintainer):
+        raise NotImplementedError(self.set_mps_per_maintainer)
 
     def allowed(self, maintainer_email):
         raise NotImplementedError(self.allowed)
@@ -103,15 +103,15 @@ class RateLimiter(object):
     def inc(self, maintainer_email):
         raise NotImplementedError(self.inc)
 
- 
+
 class MaintainerRateLimiter(RateLimiter):
 
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
         self._open_mps_per_maintainer = None
 
-    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
-        self._open_mps_per_maintainer = open_mps_per_maintainer
+    def set_mps_per_maintainer(self, mps_per_maintainer):
+        self._open_mps_per_maintainer = mps_per_maintainer['open']
 
     def allowed(self, maintainer_email):
         if not self._max_mps_per_maintainer:
@@ -137,7 +137,7 @@ class NonRateLimiter(RateLimiter):
     def inc(self, maintainer_email):
         pass
 
-    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
+    def set_mps_per_maintainer(self, mps_per_maintainer):
         pass
 
 
@@ -153,10 +153,11 @@ class SlowStartRateLimiter(RateLimiter):
                 self._merged_mps_per_maintainer is None):
             # Be conservative
             return False
-        current = self._open_mps_per_maintainer.get(maintainer_email, 0)
-        if self._max_mps_per_maintainer and current >= self._max_mps_per_maintainer:
+        current = self._open_mps_per_maintainer.get(email, 0)
+        if (self._max_mps_per_maintainer and
+                current >= self._max_mps_per_maintainer):
             return False
-        limit = self._merged_mps_per_maintainer.get(maintainer_email, 0) + 1
+        limit = self._merged_mps_per_maintainer.get(email, 0) + 1
         return (current < limit)
 
     def inc(self, maintainer_email):
@@ -165,13 +166,15 @@ class SlowStartRateLimiter(RateLimiter):
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
 
-    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
-        self._open_mps_per_maintainer = open_mps_per_maintainer
+    def set_mps_per_maintainer(self, mps_per_maintainer):
+        self._open_mps_per_maintainer = mps_per_maintainer['open']
+        self._merged_mps_per_maintainer = mps_per_maintainer['merged']
 
 
 class PublishFailure(Exception):
 
-    def __init__(self, code, description):
+    def __init__(self, mode, code, description):
+        self.mode = mode
         self.code = code
         self.description = description
 
@@ -185,7 +188,7 @@ async def publish_one(
     local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
         raise PublishFailure(
-            'result-branch-not-found',
+            mode, 'result-branch-not-found',
             'can not find local branch for %s / %s' % (pkg, branch_name))
 
     request = {
@@ -212,9 +215,10 @@ async def publish_one(
         try:
             response = json.loads(stdout.decode())
         except json.JSONDecodeError:
-            raise PublishFailure('publisher-invalid-response', stderr.decode())
+            raise PublishFailure(
+                mode, 'publisher-invalid-response', stderr.decode())
         sys.stderr.write(stderr.decode())
-        raise PublishFailure(response['code'], response['description'])
+        raise PublishFailure(mode, response['code'], response['description'])
 
     if p.returncode == 0:
         response = json.loads(stdout.decode())
@@ -230,7 +234,7 @@ async def publish_one(
 
         return proposal_url, branch_name, is_new
 
-    raise PublishFailure('publisher-invalid-response', stderr.decode())
+    raise PublishFailure(mode, 'publisher-invalid-response', stderr.decode())
 
 
 async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
@@ -344,7 +348,7 @@ async def publish_and_store(
             await state.store_publish(
                 conn, run.package, run.branch_name,
                 run.main_branch_revision.decode('utf-8'),
-                run.revision.decode('utf-8'), mode, e.code, e.description,
+                run.revision.decode('utf-8'), e.mode, e.code, e.description,
                 None, publish_id=publish_id)
             return web.json_response(
                 {'code': e.code, 'description': e.description}, status=400)
@@ -558,36 +562,42 @@ def is_conflicted(mp):
 
 async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                          dry_run=False):
-    open_mps_per_maintainer = {}
+    mps_per_maintainer = {'open': {}, 'closed': {}, 'merged': {}}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
     for hoster, mp, status in iter_all_mps():
-        await state.set_proposal_status(conn, mp.url, status)
-        topic_merge_proposal.publish({'url': mp.url, 'status': status})
         status_count[status] += 1
-        if not await state.get_proposal_revision(conn, mp.url):
+        try:
+            (revision, old_status, package_name,
+                maintainer_email) = await state.get_proposal_info(conn, mp.url)
+        except KeyError:
             try:
                 revision = open_branch(
                     mp.get_source_branch_url(),
                     possible_transports=possible_transports).last_revision()
             except (BranchMissing, BranchUnavailable):
                 pass
-            else:
-                await state.set_proposal_revision(
-                    conn, mp.url, revision.decode('utf-8'))
+            old_status = None
+            maintainer_email = None
+            package_name = None
+        if maintainer_email is None:
+            target_branch_url = mp.get_target_branch_url()
+            package = await state.get_package_by_branch_url(
+                conn, target_branch_url)
+            if package is None:
+                warning('No package known for %s', mp.url)
+            maintainer_email = package.maintainer_email
+            package_name = package.name
+        if old_status != status:
+            await state.set_proposal_info(
+                conn, mp.url, status, revision, package_name)
+            topic_merge_proposal.publish(
+                {'url': mp.url, 'status': status, 'package': package_name})
+        if maintainer_email is not None:
+            mps_per_maintainer[status].setdefault(maintainer_email, 0)
+            mps_per_maintainer[status][maintainer_email] += 1
         if status != 'open':
             continue
-        maintainer_email = await state.get_maintainer_email_for_proposal(
-            conn, mp.url)
-        if maintainer_email is None:
-            source_branch_url = mp.get_target_branch_url()
-            maintainer_email = await state.get_maintainer_email_for_branch_url(
-                conn, source_branch_url)
-            if maintainer_email is None:
-                warning('No maintainer email known for %s', mp.url)
-        if maintainer_email is not None:
-            open_mps_per_maintainer.setdefault(maintainer_email, 0)
-            open_mps_per_maintainer[maintainer_email] += 1
         mp_run = await state.get_merge_proposal_run(conn, mp.url)
         if mp_run is None:
             warning('Unable to find local metadata for %s, skipping.', mp.url)
@@ -625,10 +635,9 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                 await state.store_publish(
                     conn, last_run.package, last_run.branch_name,
                     last_run.main_branch_revision.decode('utf-8'),
-                    last_run.revision.decode('utf-8'), MODE_PROPOSE, e.code,
+                    last_run.revision.decode('utf-8'), e.mode, e.code,
                     e.description, mp.url,
                     publish_id=publish_id)
-                break
             else:
                 await state.store_publish(
                     conn, last_run.package, branch_name,
@@ -638,7 +647,6 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                     publish_id=publish_id)
 
                 assert not is_new, "Intended to update proposal %r" % mp_url
-                break
         else:
             # It may take a while for the 'conflicted' bit on the proposal to
             # be refreshed, so only check it if we haven't made any other
@@ -654,8 +662,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
 
-    rate_limiter.set_open_mps_per_maintainer(open_mps_per_maintainer)
-    for maintainer_email, count in open_mps_per_maintainer.items():
+    rate_limiter.set_mps_per_maintainer(mps_per_maintainer)
+    for maintainer_email, count in mps_per_maintainer['open'].items():
         open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
 

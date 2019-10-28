@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS queue (
    estimated_duration interval,
    refresh boolean default false,
    requestor text,
-   unique(package, command)
+   unique(package, suite)
 );
 CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE TABLE IF NOT EXISTS branch (

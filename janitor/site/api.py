@@ -8,6 +8,8 @@ from janitor.policy import apply_policy
 from janitor import state, SUITES
 from . import env
 
+from breezy.git.urls import git_url_to_bzr_url
+
 DEFAULT_SCHEDULE_OFFSET = -1
 SUITE_TO_COMMAND = {
     'lintian-fixes': ['lintian-brush'],
@@ -67,17 +69,14 @@ async def handle_publish(publisher_url, request):
 
 async def get_package_from_gitlab_webhook(conn, body):
     vcs_url = body['project']['git_http_url']
-    package = await state.get_package_by_vcs_url(conn, vcs_url)
-    if package is None:
-        ref = body['ref']
-        if not ref.startswith('refs/heads/'):
-            return None
-        branch_name = ref[len('refs/heads/'):]
-        url_with_branch = '%s -b %s' % (vcs_url, branch_name)
-        package = await state.get_package_by_vcs_url(
-            conn, url_with_branch)
-        if package is None:
-            return None
+    for url in [
+            git_url_to_bzr_url(vcs_url, ref=body['ref']),
+            git_url_to_bzr_url(vcs_url)]:
+        package = await state.get_package_by_branch_url(conn, vcs_url)
+        if package is not None:
+            break
+    else:
+        return None
     return package
 
 

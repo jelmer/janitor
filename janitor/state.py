@@ -199,7 +199,7 @@ async def get_package(conn, name):
         return None
 
 
-async def get_package_by_vcs_url(conn, vcs_url):
+async def get_package_by_branch_url(conn, branch_url):
     query = """
 SELECT
   name,
@@ -213,23 +213,12 @@ SELECT
 FROM
   package
 WHERE
-  vcs_url = $1
+  branch_url = $1
 """
-    row = await conn.fetchrow(query, vcs_url)
+    row = await conn.fetchrow(query, branch_url)
     if row is None:
         return None
     return Package.from_row(row)
-
-
-async def get_maintainer_email_for_branch_url(conn, url):
-    query = """
-SELECT
-  maintainer_email
-FROM
-  package
-WHERE branch_url = $1
-"""
-    return await conn.fetchval(query, url)
 
 
 class Run(object):
@@ -350,17 +339,6 @@ async def get_run(conn, run_id, package=None):
         return run
     else:
         return None
-
-
-async def get_maintainer_email_for_proposal(conn, vcs_url):
-    return await conn.fetchval("""
-SELECT
-    maintainer_email
-FROM
-    package
-LEFT JOIN merge_proposal ON merge_proposal.package = package.name
-WHERE
-    merge_proposal.url = $1""", vcs_url)
 
 
 async def iter_proposals(conn, package=None, suite=None):
@@ -595,17 +573,16 @@ async def add_to_queue(conn, branch_url, package, command, suite, offset=0,
     return True
 
 
-async def set_proposal_status(conn, url, status):
+async def set_proposal_info(conn, url, status, revision, package):
     await conn.execute("""
-INSERT INTO merge_proposal (url, status) VALUES ($1, $2)
-ON CONFLICT (url) DO UPDATE SET status = EXCLUDED.status
-""", url, status)
-
-
-async def set_proposal_revision(conn, url, revision):
-    await conn.execute(
-        "UPDATE merge_proposal SET revision = $1 WHERE url = $2",
-        revision, url)
+INSERT INTO merge_proposal (url, status, revision, package)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (url)
+DO UPDATE SET
+  status = EXCLUDED.status,
+  revision = EXCLUDED.revision,
+  package = EXCLUDED.package
+""", url, status, revision.decode('utf-8'), package)
 
 
 async def queue_length(conn, minimum_priority=None):
@@ -908,7 +885,7 @@ async def update_branch_status(
 async def iter_lintian_tags(conn):
     return await conn.fetch("""
 select tag, count(tag) from (
-    select 
+    select
       json_array_elements(
         json_array_elements(
           result->'applied')->'fixed_lintian_tags') #>> '{}' as tag
@@ -1078,9 +1055,22 @@ ORDER BY run.finish_time DESC
     return None
 
 
-async def get_proposal_revision(conn, url):
-    return await conn.fetchval(
-        "SELECT revision FROM merge_proposal WHERE url = $1", url)
+async def get_proposal_info(conn, url):
+    row = await conn.fetchrow("""\
+SELECT
+    package.maintainer_email,
+    merge_proposal.revision,
+    merge_proposal.status,
+    package.name
+FROM
+    merge_proposal
+LEFT JOIN package ON merge_proposal.package = package.name
+WHERE
+    merge_proposal.url = $1
+""", url)
+    if not row:
+        raise KeyError
+    return (row[1].encode('utf-8'), row[2], row[3], row[0])
 
 
 async def iter_publish_history(conn, limit=None):

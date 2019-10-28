@@ -189,9 +189,11 @@ def worker_failure_from_sbuild_log(f):
         if list(paragraphs.keys()) == [None]:
             for line in paragraphs[None][-4:]:
                 if line.startswith('brz: ERROR: '):
-                    (error, description) = parse_brz_error(line[len('brz: ERROR: '):])
+                    (error, description) = parse_brz_error(
+                        line[len('brz: ERROR: '):])
                     break
-                m = re.match('Patch (.*) does not apply \\(enforce with -f\\)\n', line)
+                m = re.match(
+                    'Patch (.*) does not apply \\(enforce with -f\\)\n', line)
                 if m:
                     patchname = m.group(1).split('/')[-1]
                     error = PatchApplicationFailed(patchname)
