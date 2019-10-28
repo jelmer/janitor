@@ -39,7 +39,10 @@ async def reprocess_run(db, package, log_id, result_code, description):
         return
     failure = worker_failure_from_sbuild_log(build_logf)
     if failure.error:
-        new_code = '%s-%s' % (failure.stage, failure.error.kind)
+        if failure.stage:
+            new_code = '%s-%s' % (failure.stage, failure.error.kind)
+        else:
+            new_code = failure.error.kind
     elif failure.stage:
         new_code = 'build-failed-stage-%s' % failure.stage
     else:

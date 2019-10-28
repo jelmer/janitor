@@ -70,6 +70,41 @@ class DpkgUnwantedBinaryFiles(object):
         return "Tree has unwanted binary files."
 
 
+class UnableToFindUpstreamTarball(object):
+
+    kind = 'unable-to-find-upstream-tarball'
+
+    def __init__(self, package, version):
+        self.package = package
+        self.version = version
+
+    def __str__(self):
+        return ("Unable to find the needed upstream tarball for "
+                "%s, version %s." % (self.package, self.version))
+
+
+class PatchApplicationFailed(object):
+
+    kind = 'patch-application-failed'
+
+    def __init__(self, patchname):
+        self.patchname = patchname
+
+    def __str__(self):
+        return "Patch application failed: %s" % self.patchname
+
+
+class UnknownMercurialExtraFields(object):
+
+    kind = 'unknown-mercurial-extra-fields'
+
+    def __init__(self, field):
+        self.field = field
+
+    def __str__(self):
+        return "Unknown Mercurial extra fields: %s" % self.field
+
+
 def find_preamble_failure_description(lines):
     OFFSET = 20
     for i in range(1, OFFSET):
@@ -90,6 +125,22 @@ def find_preamble_failure_description(lines):
             err = DpkgUnwantedBinaryFiles()
             return lineno + 1, line, err
     return None, None, None
+
+
+def parse_brz_error(line):
+    m = re.match(
+        'Unable to find the needed upstream tarball for '
+        'package (.*), version (.*)\\.', line)
+    if m:
+        error = UnableToFindUpstreamTarball(m.group(1), m.group(2))
+        return (error, str(error))
+    m = re.match(
+        'Unknown mercurial extra fields in (.*): b\'(.*)\'.',
+        line)
+    if m:
+        error = UnknownMercurialExtraFields(m.group(2))
+        return (error, str(error))
+    return (None, line.strip())
 
 
 def worker_failure_from_sbuild_log(f):
@@ -135,6 +186,17 @@ def worker_failure_from_sbuild_log(f):
         description = 'build failed stage %s' % failed_stage
     if description is None:
         description = 'build failed'
+        if list(paragraphs.keys()) == [None]:
+            for line in paragraphs[None][-4:]:
+                if line.startswith('brz: ERROR: '):
+                    (error, description) = parse_brz_error(line[len('brz: ERROR: '):])
+                    break
+                m = re.match('Patch (.*) does not apply \\(enforce with -f\\)\n', line)
+                if m:
+                    patchname = m.group(1).split('/')[-1]
+                    error = PatchApplicationFailed(patchname)
+                    description = 'Patch %s failed to apply' % patchname
+
     return SbuildFailure(failed_stage, description, error=error)
 
 
