@@ -92,7 +92,19 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
-class MaintainerRateLimiter(object):
+class RateLimiter(object):
+
+    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
+        raise NotImplementedError(self.set_open_mps_per_maintainer)
+
+    def allowed(self, maintainer_email):
+        raise NotImplementedError(self.allowed)
+
+    def inc(self, maintainer_email):
+        raise NotImplementedError(self.inc)
+
+ 
+class MaintainerRateLimiter(RateLimiter):
 
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
@@ -100,8 +112,6 @@ class MaintainerRateLimiter(object):
 
     def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
         self._open_mps_per_maintainer = open_mps_per_maintainer
-        for maintainer_email, count in open_mps_per_maintainer.items():
-            open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
     def allowed(self, maintainer_email):
         if not self._max_mps_per_maintainer:
@@ -117,20 +127,46 @@ class MaintainerRateLimiter(object):
             return
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
-        open_proposal_count.labels(maintainer=maintainer_email).inc()
 
 
-class NonRateLimiter(object):
+class NonRateLimiter(RateLimiter):
 
     def allowed(self, email):
         return True
 
     def inc(self, maintainer_email):
-        open_proposal_count.labels(maintainer=maintainer_email).inc()
+        pass
 
     def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
-        for maintainer_email, count in open_mps_per_maintainer.items():
-            open_proposal_count.labels(maintainer=maintainer_email).set(count)
+        pass
+
+
+class SlowStartRateLimiter(RateLimiter):
+
+    def __init__(self, absolute_max=None):
+        self._absolute_max = absolute_max
+        self._open_mps_per_maintainer = None
+        self._merged_mps_per_maintainer = None
+
+    def allowed(self, email):
+        if (self._open_mps_per_maintainer is None or
+                self._merged_mps_per_maintainer is None):
+            # Be conservative
+            return False
+        current = self._open_mps_per_maintainer.get(maintainer_email, 0)
+        if self._max_mps_per_maintainer and current >= self._max_mps_per_maintainer:
+            return False
+        limit = self._merged_mps_per_maintainer.get(maintainer_email, 0) + 1
+        return (current < limit)
+
+    def inc(self, maintainer_email):
+        if self._open_mps_per_maintainer is None:
+            return
+        self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
+        self._open_mps_per_maintainer[maintainer_email] += 1
+
+    def set_open_mps_per_maintainer(self, open_mps_per_maintainer):
+        self._open_mps_per_maintainer = open_mps_per_maintainer
 
 
 class PublishFailure(Exception):
@@ -271,6 +307,7 @@ async def publish_from_policy(
         description = 'Success'
         if proposal_url and is_new:
             rate_limiter.inc(maintainer_email)
+            open_proposal_count.labels(maintainer=maintainer_email).inc()
 
     publish_id = str(uuid.uuid4())
 
@@ -314,6 +351,7 @@ async def publish_and_store(
 
         if proposal_url and is_new:
             rate_limiter.inc(maintainer_email)
+            open_proposal_count.labels(maintainer=maintainer_email).inc()
 
         await state.store_publish(
             conn, run.package, branch_name,
@@ -617,6 +655,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
         merge_proposal_count.labels(status=status).set(count)
 
     rate_limiter.set_open_mps_per_maintainer(open_mps_per_maintainer)
+    for maintainer_email, count in open_mps_per_maintainer.items():
+        open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
 
 async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
@@ -693,6 +733,9 @@ def main(argv=None):
     parser.add_argument(
         '--runner-url', type=str, default=None,
         help='URL to reach runner at.')
+    parser.add_argument(
+        '--slowstart',
+        action='store_true', help='Use slow start rate limiter.')
 
     args = parser.parse_args()
 
@@ -704,7 +747,9 @@ def main(argv=None):
 
     state.DEFAULT_URL = config.database_location
 
-    if args.max_mps_per_maintainer > 0:
+    if args.slowstart:
+        rate_limiter = SlowStartRateLimiter(args.max_mps_per_maintainer)
+    elif args.max_mps_per_maintainer > 0:
         rate_limiter = MaintainerRateLimiter(args.max_mps_per_maintainer)
     else:
         rate_limiter = NonRateLimiter()
