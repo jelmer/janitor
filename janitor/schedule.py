@@ -76,9 +76,6 @@ PUBLISH_MODE_VALUE = {
 
 
 async def schedule_from_candidates(policy, iter_candidates):
-    with open(policy, 'r') as f:
-        policy = read_policy(f)
-
     for package, suite, command, context, value in iter_candidates:
         if package.vcs_url is None:
             continue
@@ -263,6 +260,7 @@ async def main():
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+    parser.add_argument('packages', help='Package to process.', nargs='*')
 
     args = parser.parse_args()
 
@@ -273,12 +271,16 @@ async def main():
     with open(args.config, 'r') as f:
         config = read_config(f)
 
+    with open(args.policy, 'r') as f:
+        policy = read_policy(f)
+
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
-        iter_candidates = await state.iter_candidates(conn)
+        iter_candidates = await state.iter_candidates(
+            conn, packages=(args.packages or None))
         todo = [x async for x in schedule_from_candidates(
-            args.policy, iter_candidates)]
+            policy, iter_candidates)]
         await add_to_queue(conn, todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()

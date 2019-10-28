@@ -51,7 +51,7 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
                 not any([matches(m, package_name, maintainer, uploaders)
                          for m in policy.match])):
             continue
-        if field is not None and getattr(policy, field) is not None:
+        if field is not None and policy.HasField(field):
             mode = getattr(policy, field)
         if policy.changelog is not None:
             update_changelog = policy.changelog

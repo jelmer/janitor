@@ -264,6 +264,8 @@ async def publish_from_policy(
         main_branch_revision, topic_publish, possible_hosters=None,
         possible_transports=None,
         dry_run=False):
+
+    publish_id = str(uuid.uuid4())
     mode, unused_update_changelog, unused_committer = apply_policy(
         policy, suite, pkg, maintainer_email,
         uploader_emails or [])
@@ -313,8 +315,6 @@ async def publish_from_policy(
             rate_limiter.inc(maintainer_email)
             open_proposal_count.labels(maintainer=maintainer_email).inc()
 
-    publish_id = str(uuid.uuid4())
-
     await state.store_publish(
         conn, pkg, branch_name, main_branch_revision,
         revision, mode, code, description,
@@ -350,8 +350,11 @@ async def publish_and_store(
                 run.main_branch_revision.decode('utf-8'),
                 run.revision.decode('utf-8'), e.mode, e.code, e.description,
                 None, publish_id=publish_id)
-            return web.json_response(
-                {'code': e.code, 'description': e.description}, status=400)
+            topic_publish.publish({
+                'publish_id': publish_id,
+                'code': e.code,
+                'description': e.description})
+            return
 
         if proposal_url and is_new:
             rate_limiter.inc(maintainer_email)
