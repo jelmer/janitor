@@ -908,16 +908,16 @@ async def update_branch_status(
 async def iter_lintian_tags(conn):
     return await conn.fetch("""
 select tag, count(tag) from (
-    select distinct on (package)
-      package,
+    select 
       json_array_elements(
         json_array_elements(
           result->'applied')->'fixed_lintian_tags') #>> '{}' as tag
     from
-      run
+      last_runs
     where
       build_distribution = 'lintian-fixes'
-    order by package, start_time desc) as bypackage group by 1
+   ) as bypackage group by 1 order by 2
+ desc
 """)
 
 
