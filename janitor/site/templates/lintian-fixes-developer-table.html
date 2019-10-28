@@ -31,7 +31,7 @@
           {% endif %}
         {% else %}
           {% if queue_position %}
-          {% comment %}Queued (a {{ format_duration(queue_duration) }} wait) {% endcomment %}
+          <!-- Queued (a {{ format_duration(queue_duration) }} wait) -->
           {{ reschedule_button(suite, package, title='Prioritise', id='reschedule-' + package) }}
           {% else %}
           {{ reschedule_button(suite, package, title='Schedule', id='schedule-' + package) }}
