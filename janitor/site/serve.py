@@ -390,34 +390,32 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
-    async def listen_to_runner(app):
-        url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
-        async for msg in pubsub_reader(app.http_client_session, url):
-            app.runner_status = msg
-            app.topic_notifications.publish(['queue', msg])
+    async def start_pubsub_forwarder(app):
 
-    async def listen_to_publisher(app):
-        url = urllib.parse.urljoin(app.publisher_url, 'ws/publish')
-        async for msg in pubsub_reader(app.http_client_session, url):
-            app.topic_notifications.publish(['publish', msg])
+        async def listen_to_publisher_publish(app, path, name):
+            url = urllib.parse.urljoin(app.publisher_url, 'ws/publish')
+            async for msg in pubsub_reader(app.http_client_session, url):
+                app.topic_notifications.publish(['publish', msg])
 
-    async def start_publisher_status_listener(app):
-        app.publisher_status = None
-        app.publisher_status_listener = app.loop.create_task(
-            listen_to_publisher(app))
+        async def listen_to_publisher_mp(app):
+            url = urllib.parse.urljoin(app.publisher_url, 'ws/merge-proposal')
+            async for msg in pubsub_reader(app.http_client_session, url):
+                app.topic_notifications.publish(['merge-proposal', msg])
 
-    async def stop_publisher_status_listener(app):
-        app.publisher_status_listener.cancel()
-        await app.publisher_status_listener
-
-    async def start_runner_status_listener(app):
         app.runner_status = None
-        app.runner_status_listener = app.loop.create_task(
-            listen_to_runner(app))
+        async def listen_to_runner(app):
+            url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
+            async for msg in pubsub_reader(app.http_client_session, url):
+                app.runner_status = msg
+                app.topic_notifications.publish(['queue', msg])
 
-    async def stop_runner_status_listener(app):
-        app.runner_status_listener.cancel()
-        await app.runner_status_listener
+        for cb in [listen_to_publisher_publish, listen_to_publisher_mp,
+                   listen_to_runner]:
+            listener = app.loop.create_task(cb(app))
+            async def stop_listener(app):
+                listener.cancel()
+                await listener
+            app.on_cleanup.append(stop_listener)
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -511,10 +509,7 @@ if __name__ == '__main__':
     app.runner_url = args.runner_url
     app.policy = policy_config
     app.publisher_url = args.publisher_url
-    app.on_startup.append(start_runner_status_listener)
-    app.on_cleanup.append(stop_runner_status_listener)
-    app.on_startup.append(start_publisher_status_listener)
-    app.on_cleanup.append(stop_publisher_status_listener)
+    app.on_startup.append(start_pubsub_forwarder)
     app.database = state.Database(config.database_location)
     setup_metrics(app)
     app.router.add_get(
