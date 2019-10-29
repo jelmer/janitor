@@ -286,7 +286,7 @@ def publish_one(
 
     if command.startswith('new-upstream'):
         subrunner = NewUpstreamPublisher(command)
-    elif command == 'lintian-brush':
+    elif command.startswith('lintian-brush'):
         subrunner = LintianBrushPublisher(command)
     else:
         raise AssertionError('unknown command %r' % command)
