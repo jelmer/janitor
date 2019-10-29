@@ -181,18 +181,11 @@ class LintianBrushWorker(SubWorker):
         if minimum_certainty is None:
             minimum_certainty = DEFAULT_MINIMUM_CERTAINTY
 
-        if self.args.update_changelog:
-            update_changelog = True
-        elif self.args.no_update_changelog:
-            update_changelog = False
-        else:
-            update_changelog = None
-
         with local_tree.lock_write():
             overall_result = run_lintian_fixers(
                     local_tree, fixers,
                     committer=self.committer,
-                    update_changelog=update_changelog,
+                    update_changelog=self.args.update_changelog,
                     compat_release=compat_release,
                     minimum_certainty=minimum_certainty,
                     allow_reformatting=allow_reformatting,
