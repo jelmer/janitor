@@ -48,11 +48,11 @@ async def main(args):
     loop = asyncio.get_event_loop()
     asyncio.ensure_future(notifier.connect(args.server, tls=True, tls_verify=False), loop=loop)
     async with ClientSession() as session:
-        async for msg in pubsub_reader(session):
-            if data[0] == 'merge-proposal' and data[1]['status'] == 'merged':
-                await notifier.notify_merged(data[1]['url'], data[1].get('package'))
-            if data[0] == 'queue':
-                await notifier.set_runner_status(data[1])
+        async for msg in pubsub_reader(session, args.notifications_url):
+            if msg[0] == 'merge-proposal' and msg[1]['status'] == 'merged':
+                await notifier.notify_merged(msg[1]['url'], msg[1].get('package'))
+            if msg[0] == 'queue':
+                await notifier.set_runner_status(msg[1])
 
 import argparse
 import asyncio
