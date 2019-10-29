@@ -53,7 +53,7 @@ from .policy import (
     apply_policy,
     )
 from .prometheus import setup_metrics
-from .pubsub import Topic, pubsub_handler
+from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .trace import note, warning
 from .vcs import (
     LocalVcsManager,
@@ -683,29 +683,20 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')
     async with ClientSession() as session:
-        ws = await session.ws_connect(url)
-        while True:
-            msg = await ws.receive()
-
-            if msg.type == aiohttp.WSMsgType.text:
-                result = msg.json()
-                if result['code'] != 'success':
-                    continue
-                async with db.acquire() as conn:
-                    package = await state.get_package(conn, result['package'])
-                    run = await state.get_run(conn, result['log_id'])
-                    await publish_from_policy(
-                        policy, conn, rate_limiter, vcs_manager,
-                        run.package, run.command, run.build_version,
-                        run.result_code, run.context, run.times[0], run.id,
-                        run.revision, run.result, run.branch_name, run.suite,
-                        package.maintainer_email, package.uploader_emails,
-                        package.branch_url, run.main_branch_revision,
-                        topic_publish, dry_run=dry_run)
-            elif msg.type == aiohttp.WSMsgType.closed:
-                break
-            elif msg.type == aiohttp.WSMsgType.error:
-                break
+        async for result in pubsub_reader(session, url)
+            if result['code'] != 'success':
+                continue
+            async with db.acquire() as conn:
+                package = await state.get_package(conn, result['package'])
+                run = await state.get_run(conn, result['log_id'])
+                await publish_from_policy(
+                    policy, conn, rate_limiter, vcs_manager,
+                    run.package, run.command, run.build_version,
+                    run.result_code, run.context, run.times[0], run.id,
+                    run.revision, run.result, run.branch_name, run.suite,
+                    package.maintainer_email, package.uploader_emails,
+                    package.branch_url, run.main_branch_revision,
+                    topic_publish, dry_run=dry_run)
 
 
 def main(argv=None):
