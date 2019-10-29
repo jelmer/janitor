@@ -143,8 +143,8 @@ class NonRateLimiter(RateLimiter):
 
 class SlowStartRateLimiter(RateLimiter):
 
-    def __init__(self, absolute_max=None):
-        self._absolute_max = absolute_max
+    def __init__(self, max_mps_per_maintainer=None):
+        self._max_mps_per_maintainer = max_mps_per_maintainer
         self._open_mps_per_maintainer = None
         self._merged_mps_per_maintainer = None
 
@@ -595,9 +595,11 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             package = await state.get_package_by_branch_url(
                 conn, target_branch_url)
             if package is None:
-                warning('No package known for %s', mp.url)
-            maintainer_email = package.maintainer_email
-            package_name = package.name
+                warning('No package known for %s (%s)', mp.url, target_branch_url)
+                package_name = None
+            else:
+                maintainer_email = package.maintainer_email
+                package_name = package.name
         if old_status != status:
             await update_proposal_status(mp, status, revision, package_name)
         if maintainer_email is not None:
