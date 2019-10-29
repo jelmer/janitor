@@ -259,13 +259,13 @@ async def process_one(
     env['PACKAGE'] = pkg
 
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
-    if command == ["new-upstream"]:
+    if suite == "fresh-releases":
         branch_name = 'new-upstream'
-    elif command == ["new-upstream", "--snapshot"]:
+    elif suite == "fresh-snapshots":
         branch_name = 'new-upstream-snapshot'
-    elif command == ["lintian-brush"]:
+    elif suite == "lintian-fixes":
         branch_name = "lintian-fixes"
-    elif command == ["just-build"]:
+    elif suite == "unchanged":
         branch_name = "master"
     else:
         raise AssertionError('Unknown command %s' % command[0])
