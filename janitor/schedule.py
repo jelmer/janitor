@@ -45,6 +45,13 @@ POPULARITY_WEIGHT = 1
 
 # Default estimation if there is no median for the suite or the package.
 DEFAULT_ESTIMATED_DURATION = 15
+DEFAULT_SCHEDULE_OFFSET = -1
+SUITE_TO_COMMAND = {
+    'lintian-fixes': ['lintian-brush'],
+    'fresh-releases': ['new-upstream'],
+    'fresh-snapshots': ['new-upstream', '--snapshot'],
+    'unchanged': ['just-build'],
+    }
 
 
 TRANSIENT_ERROR_RESULT_CODES = [
@@ -75,6 +82,20 @@ PUBLISH_MODE_VALUE = {
     }
 
 
+def full_command(command, update_changelog):
+    entry_command = list(command)
+    if update_changelog == "update":
+        entry_command.append("--update-changelog")
+    elif update_changelog == "leave":
+        entry_command.append("--no-update-changelog")
+    elif update_changelog == "auto":
+        pass
+    else:
+        raise ValueError(
+            "Invalid value %r for update_changelog" % update_changelog)
+    return entry_command
+
+
 async def schedule_from_candidates(policy, iter_candidates):
     for package, suite, command, context, value in iter_candidates:
         if package.vcs_url is None:
@@ -95,16 +116,8 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         value += PUBLISH_MODE_VALUE[publish_mode]
 
-        entry_command = list(command)
-        if update_changelog == "update":
-            entry_command.append("--update-changelog")
-        elif update_changelog == "leave":
-            entry_command.append("--no-update-changelog")
-        elif update_changelog == "auto":
-            pass
-        else:
-            raise ValueError(
-                "Invalid value %r for update_changelog" % update_changelog)
+        entry_command = full_command(command, update_changelog)
+
         yield (
             vcs_url,
             {'COMMITTER': committer,

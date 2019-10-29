@@ -10,14 +10,6 @@ from . import env
 
 from breezy.git.urls import git_url_to_bzr_url
 
-DEFAULT_SCHEDULE_OFFSET = -1
-SUITE_TO_COMMAND = {
-    'lintian-fixes': ['lintian-brush'],
-    'fresh-releases': ['new-upstream'],
-    'fresh-snapshots': ['new-upstream', '--snapshot'],
-    'unchanged': ['just-build'],
-    }
-
 
 async def handle_policy(request):
     package = request.match_info['package']
@@ -80,15 +72,18 @@ async def get_package_from_gitlab_webhook(conn, body):
     return package
 
 
-async def schedule(conn, package, suite, offset=DEFAULT_SCHEDULE_OFFSET,
+async def schedule(conn, policy, package, suite, offset=DEFAULT_SCHEDULE_OFFSET,
                    refresh=False, requestor=None):
-    from ..schedule import estimate_duration
-    command = SUITE_TO_COMMAND[suite]
+    from ..schedule import estimate_duration, SUITE_TO_COMMAND, full_command
+    unused_publish_mode, update_changelog, committer = apply_policy(
+        policy, suite,
+        package.name, package.maintainer_email, package.uploader_emails)
+    command = full_command(SUITE_TO_COMMAND[suite], update_changelog)
     estimated_duration = await estimate_duration(conn, package.name, suite)
     await state.add_to_queue(
         conn, package.branch_url, package.name, command, suite, offset,
         estimated_duration=estimated_duration, refresh=refresh,
-        requestor=requestor)
+        requestor=requestor, committer=committer)
     return estimated_duration
 
 
@@ -111,7 +106,9 @@ async def handle_webhook(request):
         # urlutils.basename(body['project']['path_with_namespace'])?
         requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
         for suite in SUITES:
-            await schedule(conn, package, suite, requestor=requestor)
+            await schedule(
+                conn, requst.app.policy_config, package, suite,
+                requestor=requestor)
         return web.json_response({})
 
 
@@ -138,7 +135,8 @@ async def handle_schedule(request):
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
         estimated_duration = await schedule(
-            conn, package, suite, offset, refresh, requestor=requestor)
+            conn, request.app.policy_config, package, suite, offset, refresh,
+            requestor=requestor)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package.name)
     response_obj = {
