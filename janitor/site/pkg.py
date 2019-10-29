@@ -214,7 +214,7 @@ async def generate_pkg_file(db, package, merge_proposals, runs):
     async with db.acquire() as conn:
         kwargs['candidates'] = {
             suite: (context, value)
-            for (package, suite, command, context, value) in
+            for (package, suite, context, value) in
             await state.iter_candidates(conn, packages=[package.name])}
     template = env.get_template('package-overview.html')
     return await template.render_async(**kwargs)

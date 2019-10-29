@@ -72,9 +72,11 @@ async def get_package_from_gitlab_webhook(conn, body):
     return package
 
 
-async def schedule(conn, policy, package, suite, offset=DEFAULT_SCHEDULE_OFFSET,
+async def schedule(conn, policy, package, suite, offset=None,
                    refresh=False, requestor=None):
-    from ..schedule import estimate_duration, full_command
+    from ..schedule import estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET
+    if offset is None:
+        offset = DEFAULT_SCHEDULE_OFFSET
     unused_publish_mode, update_changelog, committer = apply_policy(
         policy, suite,
         package.name, package.maintainer_email, package.uploader_emails)

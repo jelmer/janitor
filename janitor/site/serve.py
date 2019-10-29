@@ -392,7 +392,7 @@ if __name__ == '__main__':
 
     async def start_pubsub_forwarder(app):
 
-        async def listen_to_publisher_publish(app, path, name):
+        async def listen_to_publisher_publish(app):
             url = urllib.parse.urljoin(app.publisher_url, 'ws/publish')
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(['publish', msg])
