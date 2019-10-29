@@ -101,7 +101,6 @@ CREATE TABLE IF NOT EXISTS branch (
 CREATE TABLE IF NOT EXISTS candidate (
    package text not null,
    suite suite not null,
-   command text[] not null,
    context text,
    value integer,
    unique(package, suite),

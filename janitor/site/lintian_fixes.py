@@ -158,7 +158,7 @@ async def generate_candidates(db):
         supported_tags.update(fixer.lintian_tags)
     async with db.acquire() as conn:
         candidates = [(package.name, context.split(' '), value) for
-                      (package, suite, command, context, value) in
+                      (package, suite, context, value) in
                       await state.iter_candidates(conn, suite=SUITE)]
         candidates.sort()
     return await template.render_async(
@@ -180,7 +180,7 @@ async def generate_developer_table_page(db, developer):
         candidates = {}
         for row in await state.iter_candidates(
                 conn, packages=packages, suite=SUITE):
-            candidates[row[0].name] = row[3].split(' ')
+            candidates[row[0].name] = row[2].split(' ')
         runs = {}
         async for run in state.iter_last_unabsorbed_runs(
                 conn, suite=SUITE, packages=packages):

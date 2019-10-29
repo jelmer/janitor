@@ -952,10 +952,9 @@ WHERE """
 
 async def store_candidates(conn, entries):
     await conn.executemany(
-        "INSERT INTO candidate (package, suite, command, context, value) "
-        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
-        "DO UPDATE SET command = EXCLUDED.command, "
-        "context = EXCLUDED.context, value = EXCLUDED.value",
+        "INSERT INTO candidate (package, suite, context, value) "
+        "VALUES ($1, $2, $3, $4) ON CONFLICT (package, suite) "
+        "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value",
         entries)
 
 
@@ -971,7 +970,6 @@ SELECT
   package.vcs_browse,
   package.removed,
   candidate.suite,
-  candidate.command,
   candidate.context,
   candidate.value
 FROM candidate

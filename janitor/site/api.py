@@ -74,11 +74,11 @@ async def get_package_from_gitlab_webhook(conn, body):
 
 async def schedule(conn, policy, package, suite, offset=DEFAULT_SCHEDULE_OFFSET,
                    refresh=False, requestor=None):
-    from ..schedule import estimate_duration, SUITE_TO_COMMAND, full_command
+    from ..schedule import estimate_duration, full_command
     unused_publish_mode, update_changelog, committer = apply_policy(
         policy, suite,
         package.name, package.maintainer_email, package.uploader_emails)
-    command = full_command(SUITE_TO_COMMAND[suite], update_changelog)
+    command = full_command(suite, update_changelog)
     estimated_duration = await estimate_duration(conn, package.name, suite)
     await state.add_to_queue(
         conn, package.branch_url, package.name, command, suite, offset,

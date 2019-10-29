@@ -82,8 +82,8 @@ PUBLISH_MODE_VALUE = {
     }
 
 
-def full_command(command, update_changelog):
-    entry_command = list(command)
+def full_command(suite, update_changelog):
+    entry_command = list(SUITE_TO_COMMAND[suite])
     if update_changelog == "update":
         entry_command.append("--update-changelog")
     elif update_changelog == "leave":
@@ -97,7 +97,7 @@ def full_command(command, update_changelog):
 
 
 async def schedule_from_candidates(policy, iter_candidates):
-    for package, suite, command, context, value in iter_candidates:
+    for package, suite, context, value in iter_candidates:
         if package.vcs_url is None:
             continue
         try:
@@ -116,7 +116,7 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         value += PUBLISH_MODE_VALUE[publish_mode]
 
-        entry_command = full_command(command, update_changelog)
+        entry_command = full_command(suite, update_changelog)
 
         yield (
             vcs_url,

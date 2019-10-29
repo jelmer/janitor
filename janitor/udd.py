@@ -161,7 +161,7 @@ and vcs_type != ''"""
                 value += LINTIAN_BRUSH_TAG_VALUES.get(
                     tag, LINTIAN_BRUSH_TAG_DEFAULT_VALUE)
             context = ' '.join(sorted(tags))
-            yield package, 'lintian-fixes', ['lintian-brush'], context, value
+            yield package, 'lintian-fixes', context, value
 
     async def iter_unchanged_candidates(self, packages=None):
         args = []
@@ -176,7 +176,7 @@ sources.release = 'sid'
             args.append(tuple(packages))
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], 'unchanged', ['just-build'], None,
+                yield (row[0], 'unchanged', None,
                        DEFAULT_VALUE_UNCHANGED)
 
     async def iter_fresh_releases_candidates(self, packages=None):
@@ -196,7 +196,7 @@ sources.release = 'sid'
         query += " ORDER BY sources.source, sources.version DESC"
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], 'fresh-releases', ['new-upstream'], row[1],
+                yield (row[0], 'fresh-releases', row[1],
                        DEFAULT_VALUE_NEW_UPSTREAM)
 
     async def iter_fresh_snapshots_candidates(self, packages):
@@ -214,7 +214,7 @@ sources.release = 'sid'
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
                 yield (
-                    row[0], 'fresh-snapshots', ['new-upstream', '--snapshot'],
+                    row[0], 'fresh-snapshots',
                     None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
     async def iter_packages_with_metadata(self, packages=None):
