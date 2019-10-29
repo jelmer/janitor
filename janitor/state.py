@@ -936,7 +936,7 @@ async def get_last_build_version(conn, package, suite):
 
 async def estimate_duration(conn, package=None, suite=None):
     query = """
-SELECT finish_time - start_time FROM run
+SELECT AVG(finish_time - start_time) FROM run
 WHERE """
     args = []
     if package is not None:
@@ -947,7 +947,6 @@ WHERE """
             query += " AND"
         query += " suite = $%d" % (len(args) + 1)
         args.append(suite)
-    query += " ORDER BY start_time DESC LIMIT 1"
     return await conn.fetchval(query, *args)
 
 
