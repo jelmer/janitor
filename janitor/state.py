@@ -22,6 +22,7 @@ import shlex
 import asyncpg
 from contextlib import asynccontextmanager
 from . import SUITES
+from breezy import urlutils
 
 
 class Database(object):
@@ -213,9 +214,10 @@ SELECT
 FROM
   package
 WHERE
-  branch_url = $1
+  branch_url = $1 OR branch_url = $2
 """
-    row = await conn.fetchrow(query, branch_url)
+    branch_url2 = urlutils.split_segment_parameters(branch_url)[0]
+    row = await conn.fetchrow(query, branch_url, branch_url2)
     if row is None:
         return None
     return Package.from_row(row)
