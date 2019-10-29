@@ -347,8 +347,8 @@ async def publish_and_store(
         except PublishFailure as e:
             await state.store_publish(
                 conn, run.package, run.branch_name,
-                run.main_branch_revision.decode('utf-8'),
-                run.revision.decode('utf-8'), e.mode, e.code, e.description,
+                run.main_branch_revision,
+                run.revision, e.mode, e.code, e.description,
                 None, publish_id=publish_id)
             topic_publish.publish({
                 'publish_id': publish_id,
@@ -362,8 +362,8 @@ async def publish_and_store(
 
         await state.store_publish(
             conn, run.package, branch_name,
-            run.main_branch_revision.decode('utf-8'),
-            run.revision.decode('utf-8'), mode, 'success', 'Success',
+            run.main_branch_revision,
+            run.revision, mode, 'success', 'Success',
             proposal_url if proposal_url else None,
             publish_id=publish_id)
 
@@ -568,6 +568,13 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
     mps_per_maintainer = {'open': {}, 'closed': {}, 'merged': {}}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
+
+    async def update_proposal_status(mp, status, revision, package_name):
+        await state.set_proposal_info(
+            conn, mp.url, status, revision, package_name)
+        topic_merge_proposal.publish(
+            {'url': mp.url, 'status': status, 'package': package_name})
+
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
         try:
@@ -579,7 +586,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                     mp.get_source_branch_url(),
                     possible_transports=possible_transports).last_revision()
             except (BranchMissing, BranchUnavailable):
-                pass
+                revision = None
             old_status = None
             maintainer_email = None
             package_name = None
@@ -592,10 +599,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             maintainer_email = package.maintainer_email
             package_name = package.name
         if old_status != status:
-            await state.set_proposal_info(
-                conn, mp.url, status, revision, package_name)
-            topic_merge_proposal.publish(
-                {'url': mp.url, 'status': status, 'package': package_name})
+            await update_proposal_status(mp, status, revision, package_name)
         if maintainer_email is not None:
             mps_per_maintainer[status].setdefault(maintainer_email, 0)
             mps_per_maintainer[status][maintainer_email] += 1
@@ -613,7 +617,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             # do.
             note('%s: Last run did not produce any changes, '
                  'closing proposal.', mp.url)
-            # TODO(jelmer): Log this in the database
+            await update_proposal_status(mp, 'closed', revision, package_name)
             mp.close()
             continue
 
@@ -637,15 +641,15 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                      mp.url, e.code, e.description)
                 await state.store_publish(
                     conn, last_run.package, last_run.branch_name,
-                    last_run.main_branch_revision.decode('utf-8'),
-                    last_run.revision.decode('utf-8'), e.mode, e.code,
+                    last_run.main_branch_revision,
+                    last_run.revision, e.mode, e.code,
                     e.description, mp.url,
                     publish_id=publish_id)
             else:
                 await state.store_publish(
                     conn, last_run.package, branch_name,
-                    last_run.main_branch_revision.decode('utf-8'),
-                    last_run.revision.decode('utf-8'), MODE_PROPOSE, 'success',
+                    last_run.main_branch_revision,
+                    last_run.revision, MODE_PROPOSE, 'success',
                     'Succesfully updated', mp_url,
                     publish_id=publish_id)
 
