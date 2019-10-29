@@ -384,16 +384,6 @@ async def publish_request(dry_run, request):
         except IndexError:
             return web.json_response({}, status=400)
 
-        if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
-                not rate_limiter.allowed(package.maintainer_email)):
-            return web.json_response(
-                {'maintainer_email': package.maintainer_email,
-                 'code': 'rate-limited',
-                 'description':
-                    'Maximum number of open merge proposals for maintainer '
-                    'reached'},
-                status=429)
-
         if mode in (MODE_SKIP, MODE_BUILD_ONLY):
             return web.json_response(
                 {'code': 'done',

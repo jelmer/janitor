@@ -63,7 +63,10 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
             result = run.result
             branch_name = run.branch_name
             branch_url = run.branch_url
-            applied = run.result.get('applied')
+            if run.result:
+                applied = run.result.get('applied', [])
+            else:
+                applied = []
             fixed_tags = set()
             if isinstance(applied, dict):
                 applied = [applied]
