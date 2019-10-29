@@ -3,6 +3,7 @@
 import aiohttp
 from aiohttp.client import ClientSession
 import pydle
+from janitor.pubsub import pubsub_reader
 
 import re
 
@@ -27,12 +28,12 @@ class JanitorNotifier(pydle.Client):
     async def on_message(self, target, source, message):
         if not message.startswith(self.nickname + ': '):
             return
-        message = message[len(self.nickname) + ': '):]
+        message = message[len(self.nickname + ': '):]
         m = re.match('reschedule (.*)', message)
         if m:
             await self.message(target, 'Rescheduling %s' % m.group(1))
             return
-        if message = 'status':
+        if message == 'status':
             if self._runner_status:
                 status_strs = [
                     '%s (%s) since %s' % (item['package'], item['suite'], item['start_time'])
@@ -43,23 +44,15 @@ class JanitorNotifier(pydle.Client):
 
 
 async def main(args):
-    notifier = JanitorNotifier(args.channel, nick=args.nick, realname=args.fullname)
+    notifier = JanitorNotifier(args.channel, nickname=args.nick, realname=args.fullname)
     loop = asyncio.get_event_loop()
     asyncio.ensure_future(notifier.connect(args.server, tls=True, tls_verify=False), loop=loop)
     async with ClientSession() as session:
-        ws = await session.ws_connect(URL)
-        while True:
-            msg = await ws.receive()
-            if msg.type == aiohttp.WSMsgType.text:
-                data = msg.json()
-                if data[0] == 'merge-proposal' and data[1]['status'] == 'merged':
-                    await notifier.notify_merged(data[1]['url'], data[1].get('package'))
-                if data[0] == 'queue':
-                    await notifier.set_runner_status(data[1])
-            elif msg.type == aiohttp.WSMsgType.closed:
-                break
-            elif msg.type == aiohttp.WSMsgType.error:
-                break
+        async for msg in pubsub_reader(session):
+            if data[0] == 'merge-proposal' and data[1]['status'] == 'merged':
+                await notifier.notify_merged(data[1]['url'], data[1].get('package'))
+            if data[0] == 'queue':
+                await notifier.set_runner_status(data[1])
 
 import argparse
 import asyncio
