@@ -114,7 +114,7 @@ async def generate_candidates(db, suite):
     template = env.get_template('new-upstream-candidates.html')
     async with db.acquire() as conn:
         candidates = [(package.name, context, value) for
-                      (package, suite, command, context, value) in
+                      (package, suite, context, value) in
                       await state.iter_candidates(conn, suite=suite)]
     candidates.sort()
     return await template.render_async(candidates=candidates, suite=suite)
