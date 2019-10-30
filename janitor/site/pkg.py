@@ -235,9 +235,10 @@ async def generate_maintainer_list(packages):
     return await template.render_async(by_maintainer=by_maintainer)
 
 
-async def generate_ready_list(db, suite):
+async def generate_ready_list(db, suite, review_status=None):
     template = env.get_template('ready-list.html')
     async with db.acquire() as conn:
         runs = [
-            run async for run in state.iter_publish_ready(conn, suite=suite)]
+            run async for run in state.iter_publish_ready(
+                conn, suite=suite, review_status=review_status)]
     return await template.render_async(runs=runs, suite=suite)

@@ -295,7 +295,9 @@ if __name__ == '__main__':
 
     async def handle_ready_proposals(suite, request):
         from .pkg import generate_ready_list
-        text = await generate_ready_list(request.app.database, suite)
+        review_status = request.query.get('review_status')
+        text = await generate_ready_list(
+            request.app.database, suite, review_status)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
