@@ -189,7 +189,8 @@ class LintianBrushWorker(SubWorker):
                     compat_release=compat_release,
                     minimum_certainty=minimum_certainty,
                     allow_reformatting=allow_reformatting,
-                    trust_package=TRUST_PACKAGE)
+                    trust_package=TRUST_PACKAGE,
+                    net_access=True)
 
         if overall_result.failed_fixers:
             for fixer_name, failure in overall_result.failed_fixers.items():
