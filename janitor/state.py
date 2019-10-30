@@ -843,7 +843,7 @@ WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
         if not isinstance(review_status, list):
             review_status = [review_status]
         args.append(review_status)
-        review_status += " AND review_status = ANY($%d::review_status[]) " % (
+        query += " AND review_status = ANY($%d::review_status[]) " % (
             len(args),)
 
     query += """
