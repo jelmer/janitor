@@ -28,14 +28,14 @@ from prometheus_client import (
     )
 
 request_counter = Counter(
-    'requests_total', 'Total Request Count', ['method', 'path', 'status'])
+    'requests_total', 'Total Request Count', ['method', 'route', 'status'])
 
 request_latency_hist = Histogram(
-    'request_latency_seconds', 'Request latency', ['path'])
+    'request_latency_seconds', 'Request latency', ['route'])
 
 requests_in_progress_gauge = Gauge(
     'requests_in_progress_total', 'Requests currently in progress',
-    ['method', 'path'])
+    ['method', 'route'])
 
 
 async def metrics(request):
@@ -49,13 +49,14 @@ def metrics_middleware(app, handler):
     @asyncio.coroutine
     def wrapper(request):
         start_time = time.time()
-        requests_in_progress_gauge.labels(request.method, request.path).inc()
+        route = request.match_info.route.name
+        requests_in_progress_gauge.labels(request.method, route).inc()
         response = yield from handler(request)
         resp_time = time.time() - start_time
-        request_latency_hist.labels(request.path).observe(resp_time)
-        requests_in_progress_gauge.labels(request.method, request.path).dec()
+        request_latency_hist.labels(route).observe(resp_time)
+        requests_in_progress_gauge.labels(request.method, route).dec()
         request_counter.labels(
-            request.method, request.path, response.status).inc()
+            request.method, route, response.status).inc()
         return response
     return wrapper
 

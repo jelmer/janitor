@@ -483,28 +483,41 @@ if __name__ == '__main__':
     app.router.add_get('/cupboard/queue', handle_queue)
     app.router.add_get('/cupboard/result-codes/', handle_result_codes)
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
-    app.router.add_get('/cupboard/maintainer', handle_maintainer_list)
-    app.router.add_get('/cupboard/publish', handle_publish_history)
     app.router.add_get(
-        '/cupboard/ready', functools.partial(handle_ready_proposals, None))
-    app.router.add_get('/cupboard/pkg/', handle_pkg_list)
-    app.router.add_get('/cupboard/pkg/{pkg}/', handle_pkg)
-    app.router.add_get('/cupboard/pkg/{pkg}/{run_id}/', handle_run)
+        '/cupboard/maintainer', handle_maintainer_list, name='maintainer-list')
+    app.router.add_get(
+        '/cupboard/publish', handle_publish_history, name='publish-history')
+    app.router.add_get(
+        '/cupboard/ready', functools.partial(handle_ready_proposals, None),
+        name='cupboard-ready')
+    app.router.add_get(
+        '/cupboard/pkg/', handle_pkg_list, name='package-list')
+    app.router.add_get(
+        '/cupboard/pkg/{pkg}/', handle_pkg, name='cupboard-package')
+    app.router.add_get(
+        '/cupboard/pkg/{pkg}/{run_id}/', handle_run,
+        name='cupboard-run')
     app.router.add_get(
         '/cupboard/failed-lintian-brush-fixers/',
-        handle_failed_lintian_brush_fixers)
+        handle_failed_lintian_brush_fixers,
+        name='failed-lintian-brush-fixer-list')
     app.router.add_get(
         '/cupboard/failed-lintian-brush-fixers/{fixer}',
-        handle_failed_lintian_brush_fixers)
+        handle_failed_lintian_brush_fixers,
+        name='failed-lintian-brush-fixer')
     app.router.add_get(
         '/cupboard/lintian-brush-regressions/',
-        handle_lintian_brush_regressions)
+        handle_lintian_brush_regressions,
+        name='lintian-brush-regressions')
     app.router.add_get(
-        '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log)
+        '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log,
+        name='logfile')
     app.router.add_get(
-        '/login', handle_login)
+        '/login', handle_login,
+        name='login')
     app.router.add_get(
-        '/pkg/', handle_pkg_list)
+        '/pkg/', handle_pkg_list,
+        name='package-list')
     app.router.add_static(
         '/_static', os.path.join(os.path.dirname(__file__), '_static'))
     from .api import create_app as create_api_app
@@ -521,7 +534,8 @@ if __name__ == '__main__':
     setup_metrics(app)
     app.router.add_get(
         '/ws/notifications',
-        functools.partial(pubsub_handler, app.topic_notifications))
+        functools.partial(pubsub_handler, app.topic_notifications),
+        name='ws-notifications')
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url, policy_config))
