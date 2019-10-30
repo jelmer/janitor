@@ -86,7 +86,7 @@ async def schedule(conn, policy, package, suite, offset=None,
         conn, package.branch_url, package.name, command, suite, offset,
         estimated_duration=estimated_duration, refresh=refresh,
         requestor=requestor, committer=committer)
-    return estimated_duration
+    return offset, estimated_duration
 
 
 async def handle_webhook(request):
@@ -121,7 +121,7 @@ async def handle_schedule(request):
         return web.json_response(
             {'error': 'Unknown suite', 'suite': suite}, status=404)
     post = await request.post()
-    offset = post.get('offset', DEFAULT_SCHEDULE_OFFSET)
+    offset = post.get('offset')
     try:
         refresh = bool(int(post.get('refresh', '0')))
     except ValueError:
@@ -136,7 +136,7 @@ async def handle_schedule(request):
         if package.branch_url is None:
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
-        estimated_duration = await schedule(
+        offset, estimated_duration = await schedule(
             conn, request.app.policy_config, package, suite, offset, refresh,
             requestor=requestor)
         (queue_position, queue_wait_time) = await state.get_queue_position(
@@ -231,6 +231,17 @@ async def handle_diff(publisher_url, request):
             return web.json_response(
                 'unable to contact publisher',
                 status=400)
+
+
+async def handle_run_post(request):
+    run_id = request.match_info.get('run_id')
+    post = await request.post()
+    review_status = post.get('review-status')
+    if review_status:
+        async with request.app.db.acquire() as conn:
+            await state.set_run_review_status(conn, run_id, review_status)
+    return web.json_response(
+            {'review-status': review_status})
 
 
 async def handle_run(request):
@@ -418,11 +429,13 @@ def create_app(db, publisher_url, runner_url, policy_config):
     app.router.add_get('/queue', handle_queue)
     app.router.add_get('/run', handle_run)
     app.router.add_get('/run/{run_id}', handle_run)
+    app.router.add_post('/run/{run_id}', handle_run_post)
     app.router.add_get(
         '/run/{run_id}/diff',
         functools.partial(handle_diff, publisher_url))
     app.router.add_get('/pkg/{package}/run', handle_run)
     app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
+    app.router.add_post('/pkg/{package}/run/{run_id}', handle_run_post)
     app.router.add_get(
         '/pkg/{package}/run/{run_id}/diff',
         functools.partial(handle_diff, publisher_url))

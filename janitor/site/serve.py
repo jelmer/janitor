@@ -174,6 +174,11 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_login(request):
+        return web.Response(
+            content_type='text/plain',
+            text=repr(request.headers))
+
     async def handle_pkg_list(request):
         # TODO(jelmer): The javascript plugin thingy should just redirect to
         # the right URL, not rely on query parameters here.
@@ -496,6 +501,8 @@ if __name__ == '__main__':
         handle_lintian_brush_regressions)
     app.router.add_get(
         '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log)
+    app.router.add_get(
+        '/login', handle_login)
     app.router.add_get(
         '/pkg/', handle_pkg_list)
     app.router.add_static(
