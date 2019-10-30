@@ -38,7 +38,6 @@ from silver_platter.proposal import (
     )
 from silver_platter.debian.lintian import (
     create_mp_description,
-    parse_mp_description,
     update_proposal_commit_message,
     )
 
@@ -231,18 +230,19 @@ class LintianBrushPublisher(object):
         return "lintian-fixes"
 
     def get_proposal_description(self, existing_description):
-        if existing_description:
-            existing_lines = parse_mp_description(existing_description)
-        else:
-            existing_lines = []
-        return create_mp_description(
-            existing_lines + [l['summary'] for l in self.applied])
+        return create_mp_description([l['summary'] for l in self.applied])
 
     def get_proposal_commit_message(self, existing_commit_message):
         applied = []
         for result in self.applied:
             applied.append((result['fixed_lintian_tags'], result['summary']))
-        return update_proposal_commit_message(existing_commit_message, applied)
+        if existing_commit_message and not existing_commit_message.startswith(
+                'Fix lintian issues: '):
+            # The commit message is something we haven't set - let's leave it
+            # alone.
+            return
+        return "Fix lintian issues: " + (
+            ', '.join(sorted([l for r, l in applied])))
 
     def read_worker_result(self, result):
         self.applied = result['applied']
