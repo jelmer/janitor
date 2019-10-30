@@ -417,7 +417,7 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
         query += " WHERE run.suite = $1"
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     for row in await conn.fetch(query, *args):
-        yield Run.from_row(row[:19]), row[19], row[20,]
+        yield Run.from_row(row[:19]), row[19], row[20]
 
 
 class QueueItem(object):

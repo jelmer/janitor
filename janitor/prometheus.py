@@ -63,4 +63,4 @@ def metrics_middleware(app, handler):
 
 def setup_metrics(app):
     app.middlewares.insert(0, metrics_middleware)
-    app.router.add_get("/metrics", metrics)
+    app.router.add_get("/metrics", metrics, name='metrics')

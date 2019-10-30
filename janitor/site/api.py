@@ -412,52 +412,74 @@ def create_app(db, publisher_url, runner_url, policy_config):
     app = web.Application()
     app.db = db
     app.policy_config = policy_config
-    app.router.add_get('/pkgnames', handle_packagename_list)
-    app.router.add_get('/pkg', handle_package_list)
-    app.router.add_get('/pkg/{package}', handle_package_list)
+    app.router.add_get(
+        '/pkgnames', handle_packagename_list, name='api-package-names')
+    app.router.add_get(
+        '/pkg', handle_package_list, name='api-package-list')
+    app.router.add_get(
+        '/pkg/{package}', handle_package_list, name='api-package')
     app.router.add_get(
         '/pkg/{package}/merge-proposals',
-        handle_merge_proposal_list)
+        handle_merge_proposal_list, name='api-package-merge-proposals')
     app.router.add_get(
         '/pkg/{package}/policy',
-        handle_policy)
+        handle_policy, name='api-package-policy')
     app.router.add_post(
         '/{suite}/pkg/{package}/publish',
-        functools.partial(handle_publish, publisher_url))
-    app.router.add_post('/{suite}/pkg/{package}/schedule', handle_schedule)
-    app.router.add_get('/merge-proposals', handle_merge_proposal_list)
-    app.router.add_get('/queue', handle_queue)
-    app.router.add_get('/run', handle_run)
-    app.router.add_get('/run/{run_id}', handle_run)
-    app.router.add_post('/run/{run_id}', handle_run_post)
+        functools.partial(handle_publish, publisher_url),
+        name='api-package-publish')
+    app.router.add_post(
+        '/{suite}/pkg/{package}/schedule', handle_schedule,
+        name='api-package-schedule')
+    app.router.add_get(
+        '/merge-proposals', handle_merge_proposal_list,
+         name='api-merge-proposals')
+    app.router.add_get('/queue', handle_queue, name='api-queue')
+    app.router.add_get('/run', handle_run, name='api-run-list')
+    app.router.add_get('/run/{run_id}', handle_run, name='api-run')
+    app.router.add_post(
+        '/run/{run_id}', handle_run_post, name='api-run-update')
     app.router.add_get(
         '/run/{run_id}/diff',
-        functools.partial(handle_diff, publisher_url))
-    app.router.add_get('/pkg/{package}/run', handle_run)
-    app.router.add_get('/pkg/{package}/run/{run_id}', handle_run)
-    app.router.add_post('/pkg/{package}/run/{run_id}', handle_run_post)
+        functools.partial(handle_diff, publisher_url),
+        name='api-run-diff')
+    app.router.add_get(
+        '/pkg/{package}/run', handle_run, name='api-package-run-list')
+    app.router.add_get(
+        '/pkg/{package}/run/{run_id}', handle_run, name='api-package-run')
+    app.router.add_post(
+        '/pkg/{package}/run/{run_id}', handle_run_post,
+        name='api-package-run')
     app.router.add_get(
         '/pkg/{package}/run/{run_id}/diff',
-        functools.partial(handle_diff, publisher_url))
-    app.router.add_get('/package-branch', handle_package_branch)
-    app.router.add_get('/', handle_index)
+        functools.partial(handle_diff, publisher_url),
+        name='api-package-run-diff')
     app.router.add_get(
-        '/{suite}/published-packages', handle_published_packages)
-    app.router.add_get('/policy', handle_global_policy)
-    app.router.add_post('/webhook', handle_webhook)
-    app.router.add_get('/webhook', handle_webhook)
-    app.router.add_get('/publish/{publish_id}', handle_publish_id)
+        '/package-branch', handle_package_branch, name='api-package-branch')
     app.router.add_get(
-        '/runner/status', functools.partial(handle_runner_status, runner_url))
+        '/', handle_index, name='api-index')
+    app.router.add_get(
+        '/{suite}/published-packages', handle_published_packages,
+        name='api-published-packages')
+    app.router.add_get('/policy', handle_global_policy, name='api-policy')
+    app.router.add_post('/webhook', handle_webhook, name='api-webhook')
+    app.router.add_get('/webhook', handle_webhook, name='api-webhook-help')
+    app.router.add_get(
+        '/publish/{publish_id}', handle_publish_id, name='publish-details')
+    app.router.add_get(
+        '/runner/status', functools.partial(handle_runner_status, runner_url),
+        name='api-runner-status')
     app.router.add_get(
         '/runner/log/{run_id}',
-        functools.partial(handle_runner_log_index, runner_url))
+        functools.partial(handle_runner_log_index, runner_url),
+        name='api-runner-log-list')
     app.router.add_get(
         '/runner/log/{run_id}/{filename}',
-        functools.partial(handle_runner_log, runner_url))
+        functools.partial(handle_runner_log, runner_url),
+        name='api-runner-log')
     app.router.add_get(
         '/report/{suite:' + '|'.join(SUITES) + '}',
-        handle_report)
+        handle_report, name='api-report')
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)

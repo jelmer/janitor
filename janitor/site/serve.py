@@ -425,64 +425,87 @@ if __name__ == '__main__':
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     for path, templatename in [
-            ('/', 'index.html'),
-            ('/contact', 'contact.html'),
-            ('/about', 'about.html'),
-            ('/credentials', 'credentials.html'),
-            ('/apt', 'apt.html'),
-            ('/cupboard/', 'cupboard.html')]:
+            ('/', 'index'),
+            ('/contact', 'contact'),
+            ('/about', 'about'),
+            ('/credentials', 'credentials'),
+            ('/apt', 'apt'),
+            ('/cupboard/', 'cupboard')]:
         app.router.add_get(
-            path, functools.partial(handle_simple, templatename))
-    app.router.add_get('/lintian-fixes/', handle_lintian_fixes)
+            path, functools.partial(handle_simple, templatename + '.html'),
+            name=templatename)
+    app.router.add_get(
+        '/lintian-fixes/', handle_lintian_fixes,
+        name='lintian-fixes-start')
     for suite in SUITES:
         app.router.add_get(
             '/%s/merge-proposals' % suite,
-            functools.partial(handle_merge_proposals, suite))
+            functools.partial(handle_merge_proposals, suite),
+            name='%s-merge-proposals' % suite)
         app.router.add_get(
             '/%s/ready' % suite,
-            functools.partial(handle_ready_proposals, suite))
-        app.router.add_get('/%s/maintainer' % suite, handle_maintainer_list)
-        app.router.add_get('/%s/pkg/' % suite, handle_pkg_list)
+            functools.partial(handle_ready_proposals, suite),
+            name='%s-ready' % suite)
+        app.router.add_get(
+            '/%s/maintainer' % suite, handle_maintainer_list,
+            name='%s-maintainer-list' % suite)
+        app.router.add_get(
+            '/%s/pkg/' % suite, handle_pkg_list,
+            name='%s-package-list' % suite)
     app.router.add_get(
         '/{suite:' + '|'.join(SUITES) + '}'
         '/{file:Contents-.*|InRelease|Packages.*|Release.*|'
         '.*.(changes|deb|buildinfo)}',
-        handle_apt_file)
+        handle_apt_file, name='apt-file')
     app.router.add_get(
-        '/unchanged', functools.partial(handle_apt_repo, 'unchanged'))
+        '/unchanged', functools.partial(handle_apt_repo, 'unchanged'),
+        name='unchanged-start')
     app.router.add_get(
-        '/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg)
+        '/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg,
+        name='lintian-fixes-package')
     app.router.add_get(
-        '/lintian-fixes/pkg/{pkg}/{run_id}', handle_lintian_fixes_pkg)
+        '/lintian-fixes/pkg/{pkg}/{run_id}', handle_lintian_fixes_pkg,
+        name='lintian-fixes-package-run')
     app.router.add_get(
-        '/lintian-fixes/by-tag/', handle_lintian_fixes_tag_list)
+        '/lintian-fixes/by-tag/', handle_lintian_fixes_tag_list,
+        name='lintian-fixes-tag-list')
     app.router.add_get(
-        '/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page)
+        '/lintian-fixes/by-tag/{tag}', handle_lintian_fixes_tag_page,
+        name='lintian-fixes-tag')
     app.router.add_get(
         '/lintian-fixes/by-developer',
-        handle_lintian_fixes_developer_table_page)
+        handle_lintian_fixes_developer_table_page,
+        name='lintian-fixes-developer-list')
     app.router.add_get(
         '/lintian-fixes/by-developer/{developer}',
-        handle_lintian_fixes_developer_table_page)
+        handle_lintian_fixes_developer_table_page,
+        name='lintian-fixes-developer')
     app.router.add_get(
-        '/lintian-fixes/candidates', handle_lintian_fixes_candidates)
+        '/lintian-fixes/candidates', handle_lintian_fixes_candidates,
+        name='lintian-fixes-candidates')
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get(
-            '/%s/' % suite, functools.partial(handle_apt_repo, suite))
+            '/%s/' % suite, functools.partial(handle_apt_repo, suite),
+            name='%s-start' % suite)
         app.router.add_get(
             '/%s/pkg/{pkg}/' % suite,
-            functools.partial(handle_new_upstream_pkg, suite))
+            functools.partial(handle_new_upstream_pkg, suite),
+            name='%s-package' % suite)
         app.router.add_get(
             '/%s/pkg/{pkg}/{run_id}' % suite,
-            functools.partial(handle_new_upstream_pkg, suite))
+            functools.partial(handle_new_upstream_pkg, suite),
+            name='%s-run' % suite)
         app.router.add_get(
             '/%s/candidates' % suite,
-            functools.partial(handle_new_upstream_candidates, suite))
+            functools.partial(handle_new_upstream_candidates, suite),
+            name='%s-candidates' % suite)
 
-    app.router.add_get('/cupboard/history', handle_history)
-    app.router.add_get('/cupboard/queue', handle_queue)
-    app.router.add_get('/cupboard/result-codes/', handle_result_codes)
-    app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes)
+    app.router.add_get('/cupboard/history', handle_history, name='history')
+    app.router.add_get('/cupboard/queue', handle_queue, name='queue')
+    app.router.add_get('/cupboard/result-codes/', handle_result_codes,
+                       name='result-code-list')
+    app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes, 
+                       name='result-code')
     app.router.add_get(
         '/cupboard/maintainer', handle_maintainer_list, name='maintainer-list')
     app.router.add_get(
@@ -515,9 +538,6 @@ if __name__ == '__main__':
     app.router.add_get(
         '/login', handle_login,
         name='login')
-    app.router.add_get(
-        '/pkg/', handle_pkg_list,
-        name='package-list')
     app.router.add_static(
         '/_static', os.path.join(os.path.dirname(__file__), '_static'))
     from .api import create_app as create_api_app
