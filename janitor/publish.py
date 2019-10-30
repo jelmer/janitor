@@ -120,7 +120,7 @@ class MaintainerRateLimiter(RateLimiter):
             # Be conservative
             return False
         current = self._open_mps_per_maintainer.get(maintainer_email, 0)
-        return (current < self._max_mps_per_maintainer)
+        return (current <= self._max_mps_per_maintainer)
 
     def inc(self, maintainer_email):
         if self._open_mps_per_maintainer is None:
@@ -679,7 +679,7 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')
     async with ClientSession() as session:
-        async for result in pubsub_reader(session, url)
+        async for result in pubsub_reader(session, url):
             if result['code'] != 'success':
                 continue
             async with db.acquire() as conn:
