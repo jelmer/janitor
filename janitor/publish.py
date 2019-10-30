@@ -238,15 +238,21 @@ async def publish_one(
 
 
 async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
-                              topic_publish, dry_run=False):
+                              topic_publish, dry_run=False, reviewed_only=False):
     possible_hosters = []
     possible_transports = []
+
+    if reviewed_only:
+        review_status = ['approved']
+    else:
+        review_status = ['approved', 'unreviewed']
 
     async with db.acquire() as conn1, db.acquire() as conn:
         async for (pkg, command, build_version, result_code, context,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
-                   main_branch_revision) in state.iter_publish_ready(conn1):
+                   main_branch_revision) in state.iter_publish_ready(
+                       conn1, review_status=review_status):
             await publish_from_policy(
                     policy, conn, rate_limiter, vcs_manager, pkg, command,
                     build_version, result_code, context, start_time, log_id,
@@ -533,7 +539,7 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
 
 async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
                              interval, topic_merge_proposal, topic_publish,
-                             auto_publish=True):
+                             auto_publish=True, reviewed_only=False):
     while True:
         async with db.acquire() as conn:
             await check_existing(
@@ -542,7 +548,7 @@ async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
         if auto_publish:
             await publish_pending_new(
                 db, rate_limiter, policy, vcs_manager, dry_run=dry_run,
-                topic_publish=topic_publish)
+                topic_publish=topic_publish, reviewed_only=reviewed_only)
 
 
 def is_conflicted(mp):
@@ -734,6 +740,9 @@ def main(argv=None):
     parser.add_argument(
         '--slowstart',
         action='store_true', help='Use slow start rate limiter.')
+    parser.add_argument(
+        '--reviewed-only',
+        action='store_true', help='Only publish changes that were reviewed.')
 
     args = parser.parse_args()
 
@@ -764,7 +773,8 @@ def main(argv=None):
     if args.once:
         loop.run_until_complete(publish_pending_new(
             db, rate_limiter, policy, dry_run=args.dry_run,
-            vcs_manager=vcs_manager, topic_publish=topic_publish))
+            vcs_manager=vcs_manager, topic_publish=topic_publish,
+            reviewed_only=args.reviewed_only))
 
         last_success_gauge.set_to_current_time()
         if args.prometheus:
@@ -778,7 +788,8 @@ def main(argv=None):
                 vcs_manager=vcs_manager, interval=args.interval,
                 topic_merge_proposal=topic_merge_proposal,
                 topic_publish=topic_publish,
-                auto_publish=not args.no_auto_publish)),
+                auto_publish=not args.no_auto_publish,
+                reviewed_only=args.reviewed_only)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,

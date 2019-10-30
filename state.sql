@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    primary key(url)
 );
 CREATE TYPE suite AS ENUM('lintian-fixes', 'fresh-releases', 'fresh-snapshots','unchanged');
+CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected');
 CREATE TABLE IF NOT EXISTS run (
    id text not null primary key,
    command text,
@@ -49,6 +50,7 @@ CREATE TABLE IF NOT EXISTS run (
    suite suite not null,
    branch_url text not null,
    logfilenames text[] not null,
+   review_status review_status not null default 'unreviewed',
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );

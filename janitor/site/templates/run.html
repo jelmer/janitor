@@ -19,6 +19,7 @@
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
 <li>Status: {{ display_result_code(result_code)|safe }}</li>
 <li>Description: {{ description }}</li>
+<li>Review Status: {{ review_status }}</li>
 {% if queue_position %}
 <li><a href="/cupboard/queue">Queue</a> position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
 {% endif %}
