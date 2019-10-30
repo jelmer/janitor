@@ -34,7 +34,7 @@ async def generate_pkg_file(db, package, suite, run_id=None):
                 await state.iter_proposals(conn, package.name, suite=suite)]
         candidate = await state.get_candidate(conn, package.name, suite)
         if candidate is not None:
-            candidate_command, candidate_context, candidate_value = candidate
+            candidate_context, candidate_value = candidate
         else:
             candidate_context = None
             candidate_value = None

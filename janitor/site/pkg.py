@@ -106,6 +106,7 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
     kwargs['revision'] = run.revision
     kwargs['enumerate'] = enumerate
     kwargs['branch_url'] = run.branch_url
+    kwargs['review_status'] = run.review_status
     async with db.acquire() as conn:
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package)

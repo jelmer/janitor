@@ -75,7 +75,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
                     fixed_tags.add(tag)
         candidate = await state.get_candidate(conn, package.name, SUITE)
         if candidate is not None:
-            candidate_command, candidate_context, candidate_value = candidate
+            candidate_context, candidate_value = candidate
         else:
             candidate_context = None
             candidate_value = None

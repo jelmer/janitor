@@ -230,13 +230,15 @@ class Run(object):
             'build_version',
             'build_distribution', 'result_code', 'branch_name',
             'main_branch_revision', 'revision', 'context', 'result',
-            'suite', 'instigated_context', 'branch_url', 'logfilenames']
+            'suite', 'instigated_context', 'branch_url', 'logfilenames',
+            'review_status']
 
     def __init__(self, run_id, times, command, description, package,
                  build_version,
                  build_distribution, result_code, branch_name,
                  main_branch_revision, revision, context, result,
-                 suite, instigated_context, branch_url, logfilenames):
+                 suite, instigated_context, branch_url, logfilenames,
+                 review_status):
         self.id = run_id
         self.times = times
         self.command = command
@@ -254,6 +256,7 @@ class Run(object):
         self.instigated_context = instigated_context
         self.branch_url = branch_url
         self.logfilenames = logfilenames
+        self.review_status = review_status
 
     @property
     def duration(self):
@@ -273,7 +276,7 @@ class Run(object):
                    revision=(row[11].encode('utf-8') if row[11] else None),
                    context=row[12], result=row[13], suite=row[14],
                    instigated_context=row[15], branch_url=row[16],
-                   logfilenames=row[17])
+                   logfilenames=row[17], review_status=row[18])
 
     def __len__(self):
         return len(self.__slots__)
@@ -284,7 +287,7 @@ class Run(object):
                 self.result_code, self.branch_name, self.main_branch_revision,
                 self.revision, self.context, self.result, self.suite,
                 self.instigated_context, self.branch_url,
-                self.logfilenames)
+                self.logfilenames, self.review_status)
 
     def __eq__(self, other):
         if isinstance(other, Run):
@@ -1005,7 +1008,7 @@ INNER JOIN package on package.name = candidate.package
 
 async def get_candidate(conn, package, suite):
     return await conn.fetchrow(
-        "SELECT command, context, value FROM candidate "
+        "SELECT context, value FROM candidate "
         "WHERE package = $1 AND suite = $2", package, suite)
 
 
