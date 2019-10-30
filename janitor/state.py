@@ -315,7 +315,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames
+    instigated_context, branch_url, logfilenames, review_status
 FROM
     run
 """
@@ -393,6 +393,7 @@ SELECT
     run.instigated_context,
     run.branch_url,
     run.logfilenames,
+    run.review_status,
     merge_proposal.url, merge_proposal.status
 FROM
     merge_proposal
@@ -413,7 +414,7 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
         query += " WHERE run.suite = $1"
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     for row in await conn.fetch(query, *args):
-        yield Run.from_row(row[:18]), row[18], row[19]
+        yield Run.from_row(row[:19]), row[19], row[20,]
 
 
 class QueueItem(object):
@@ -655,7 +656,8 @@ SELECT
   suite,
   instigated_context,
   branch_url,
-  logfilenames
+  logfilenames,
+  review_status
 FROM
   run
 WHERE
@@ -686,7 +688,8 @@ SELECT
   suite,
   instigated_context,
   branch_url,
-  logfilenames
+  logfilenames,
+  review_status
 FROM
   unabsorbed_runs
 WHERE package = $1 AND suite = $2
@@ -720,7 +723,8 @@ SELECT DISTINCT ON (package)
   suite,
   instigated_context,
   branch_url,
-  logfilenames
+  logfilenames,
+  review_status
 FROM
   unabsorbed_runs
 WHERE suite = $1 AND package = ANY($2::text[])
@@ -758,7 +762,8 @@ SELECT
   suite,
   instigated_context,
   branch_url,
-  logfilenames
+  logfilenames,
+  review_status
 FROM last_runs
 WHERE result_code = $1
 ORDER BY start_time DESC
@@ -803,7 +808,7 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
     return False
 
 
-async def iter_publish_ready(conn, suite=None):
+async def iter_publish_ready(conn, suite=None, review_status=None):
     args = []
     query = """
 SELECT DISTINCT ON (package, suite)
@@ -821,7 +826,8 @@ SELECT DISTINCT ON (package, suite)
   package.maintainer_email,
   package.uploader_emails,
   package.branch_url,
-  main_branch_revision
+  main_branch_revision,
+  run.review_status
 FROM
   unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
@@ -830,6 +836,12 @@ WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
     if suite is not None:
         query += " AND suite = $1 "
         args.append(suite)
+    if review_status is not None:
+        if not isinstance(review_status, list):
+            review_status = [review_status]
+        args.append(review_status)
+        review_status += " AND review_status = ANY($%d::review_status[]) " % (
+            len(args),)
 
     query += """
 ORDER BY
@@ -1043,7 +1055,7 @@ SELECT
     run.package, run.build_version, run.build_distribution, run.result_code,
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
-    run.logfilenames
+    run.logfilenames, run.review_status
 FROM run inner join merge_proposal on merge_proposal.revision = run.revision
 WHERE merge_proposal.url = $1
 ORDER BY run.finish_time DESC
@@ -1177,3 +1189,8 @@ WHERE name = $1 AND %(version_match2)s
             'version_match1': 'True',
             'version_match2': 'True'}
     return await conn.fetch(query, *args)
+
+
+async def set_run_review_status(conn, run_id, review_status):
+    await conn.execute('UPDATE run SET review_status = $1 WHERE id = $2',
+                       review_status, run_id)
