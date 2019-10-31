@@ -335,6 +335,8 @@ async def diff_request(request):
     run_id = request.match_info['run_id']
     async with request.app.db.acquire() as conn:
         run = await state.get_run(conn, run_id)
+        if not run:
+            raise web.HTTPNotFound(text='No such run: %r' % run_id)
     diff = get_run_diff(request.app.vcs_manager, run)
     return web.Response(body=diff, content_type='text/x-diff')
 
