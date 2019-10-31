@@ -343,6 +343,15 @@ async def main():
                 trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
 
+
+        if vcs_url and vcs_branch:
+            (repo_url, orig_branch) = extract_vcs_url_branch(vcs_url)
+            if orig_branch != vcs_branch:
+                new_vcs_url = '%s -b %s' % (repo_url, vcs_branch)
+                trace.note('Fixing up branch name from vcswatch: %s -> %s',
+                           vcs_url, new_vcs_url)
+                vcs_url = new_vcs_url
+
         if vcs_type is not None:
             try:
                 branch_url = convert_debian_vcs_url(
@@ -352,14 +361,6 @@ async def main():
                 branch_url = None
         else:
             branch_url = None
-
-        if branch_url and vcs_branch:
-            (repo_url, orig_branch) = extract_vcs_url_branch(branch_url)
-            if orig_branch != vcs_branch:
-                new_branch_url = '%s -b %s' % (repo_url, vcs_branch)
-                trace.note('Fixing up branch name from vcswatch: %s -> %s',
-                           branch_url, new_branch_url)
-                branch_url = new_branch_url
 
         if name not in removals:
             removed = False
