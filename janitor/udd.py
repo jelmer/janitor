@@ -39,6 +39,7 @@ from lintian_brush.salsa import (
     guess_repository_url,
     )
 from lintian_brush.vcs import (
+    extract_vcs_url_branch,
     fixup_broken_git_url,
     )
 
@@ -224,6 +225,7 @@ select distinct on (sources.source) sources.source,
     sources.maintainer_email, sources.uploaders, popcon_src.insts,
     coalesce(vcswatch.vcs, sources.vcs_type),
     coalesce(vcswatch.url, sources.vcs_url),
+    vcswatch.branch,
     coalesce(vcswatch.browser, sources.vcs_browser),
     sources.version
     from sources left join popcon_src on sources.source = popcon_src.source
@@ -238,11 +240,15 @@ where sources.release = 'sid'
             async for row in self._conn.cursor(query, *args):
                 yield row
 
-    async def iter_removals(self):
+    async def iter_removals(self, packages=None):
         query = """\
 select name, version from package_removal where 'source' = any(arch_array)
 """
-        return await self._conn.fetch(query)
+        args = []
+        if packages:
+            query += " and name = ANY($1::text[])"
+            args.append(packages)
+        return await self._conn.fetch(query, *args)
 
 
 async def main():
@@ -299,23 +305,24 @@ async def main():
             for package in await state.iter_packages(conn)}
 
         removals = {}
-        for name, version in await udd.iter_removals():
+        for name, version in await udd.iter_removals(packages=args.packages):
             if name not in removals:
                 removals[name] = Version(version)
             else:
                 removals[name] = max(Version(version), removals[name])
 
-        trace.note('Updating removals.')
-        filtered_removals = [
-            (name, version) for (name, version) in removals.items()
-            if name in existing_packages and
-            not existing_packages[name].removed]
-        await state.update_removals(conn, filtered_removals)
+        if not args.packages:
+            trace.note('Updating removals.')
+            filtered_removals = [
+                (name, version) for (name, version) in removals.items()
+                if name in existing_packages and
+                not existing_packages[name].removed]
+            await state.update_removals(conn, filtered_removals)
 
     trace.note('Updating package metadata.')
     packages = []
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-               vcs_browser, sid_version) in udd.iter_packages_with_metadata(
+               vcs_branch, vcs_browser, sid_version) in udd.iter_packages_with_metadata(
                    args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
@@ -345,6 +352,14 @@ async def main():
                 branch_url = None
         else:
             branch_url = None
+
+        if branch_url and vcs_branch:
+            (repo_url, orig_branch) = extract_vcs_url_branch(branch_url)
+            if orig_branch != vcs_branch:
+                new_branch_url = '%s -b %s' % (repo_url, vcs_branch)
+                trace.note('Fixing up branch name from vcswatch: %s -> %s',
+                           branch_url, new_branch_url)
+                branch_url = new_branch_url
 
         if name not in removals:
             removed = False
