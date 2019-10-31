@@ -5,5 +5,17 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
+{% set diff = show_diff() %}
+{{ highlight_diff(show_diff())|safe }}
+
+<form action="/cupboard/review" method="POST">
+<input type="hidden" name="run_id" value="{{ run_id }}"/>
+<input type="submit" name="review_status" value="Approved" accesskey="a">
+<input type="submit" name="review_status" value="Rejected" accesskey="r">
+<input type="submit" name="review_status" value="Reschedule" accesskey="s">
+</form>
+
+<p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}">Full Run</a></p>
+
 </div>
 {% endblock %}

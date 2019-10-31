@@ -811,7 +811,7 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
     return False
 
 
-async def iter_publish_ready(conn, suite=None, review_status=None):
+async def iter_publish_ready(conn, suite=None, review_status=None, limit=None):
     args = []
     query = """
 SELECT DISTINCT ON (package, suite)
@@ -852,6 +852,8 @@ ORDER BY
   suite,
   finish_time DESC
 """
+    if limit is not None:
+        query += " LIMIT %d" % limit
     async with conn.transaction():
         async for record in conn.cursor(query, *args):
             yield record

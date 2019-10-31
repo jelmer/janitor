@@ -397,9 +397,33 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_review_post(request):
+        from .review import generate_review
+        post = await request.post()
+        async with request.app.database.acquire() as conn:
+            run = await state.get_run(conn, post['run_id'])
+            package = await state.get_package(conn, run.package)
+            review_status = post['review_status'].lower()
+            if review_status == 'reschedule':
+                review_status = 'rejected'
+                from .api import schedule
+                await schedule(
+                    conn, request.app.policy, package, run.suite,
+                    refresh=True, requestor='reviewer')
+            await state.set_run_review_status(
+                conn, post['run_id'], review_status)
+            text = await generate_review(
+                conn, request.app.http_client_session,
+                request.app.publisher_url, suite=run.suite)
+        return web.Response(content_type='text/html', text=text)
+
     async def handle_review(request):
         from .review import generate_review
-        text = await generate_review(request.app.database)
+        suite = request.query.get('suite', 'lintian-fixes')
+        async with request.app.database.acquire() as conn:
+            text = await generate_review(
+                conn, request.app.http_client_session,
+                request.app.publisher_url, suite=suite)
         return web.Response(content_type='text/html', text=text)
 
     async def start_pubsub_forwarder(app):
@@ -530,6 +554,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/cupboard/review', handle_review,
         name='cupboard-review')
+    app.router.add_post(
+        '/cupboard/review', handle_review_post,
+        name='cupboard-review-post')
     app.router.add_get(
         '/cupboard/failed-lintian-brush-fixers/',
         handle_failed_lintian_brush_fixers,
