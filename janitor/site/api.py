@@ -218,7 +218,7 @@ async def handle_diff(publisher_url, request):
             async with client.get(url) as resp:
                 if resp.status == 200:
                     diff = await resp.read()
-                    for accept in request.headers.getall('ACCEPT', []):
+                    for accept in request.headers.get('ACCEPT', '').split(','):
                         if accept in ('text/x-diff', 'text/plain'):
                             return web.Response(
                                 body=diff,
@@ -226,12 +226,14 @@ async def handle_diff(publisher_url, request):
                                 headers={'Cache-Control': 'max-age=3600'})
                         if accept == 'text/html':
                             return web.Response(
-                                body=highlight_diff(diff),
+                                text=highlight_diff(diff.decode('utf-8', 'replace')),
                                 content_type='text/html',
                                 headers={'Cache-Control': 'max-age=3600'})
-                        raise web.HTTPNotAcceptable()
+                    raise web.HTTPNotAcceptable(
+                        text='Acceptable content types: '
+                             'text/html, text/x-diff')
                 else:
-                    return web.Response(await resp.read(), status=400)
+                    return web.Response(body=await resp.read(), status=400)
         except ContentTypeError as e:
             return web.Response(
                 'publisher returned error %d' % e.code,
@@ -243,11 +245,19 @@ async def handle_diff(publisher_url, request):
 
 
 async def handle_run_post(request):
-    run_id = request.match_info.get('run_id')
+    run_id = request.match_info['run_id']
     post = await request.post()
     review_status = post.get('review-status')
     if review_status:
         async with request.app.db.acquire() as conn:
+            review_status = review_status.lower()
+            if review_status == 'reschedule':
+                run = await state.get_run(conn, run_id)
+                package = await state.get_package(conn, run.package)
+                await schedule(
+                    conn, request.app.policy, package, run.suite,
+                    refresh=True, requestor='reviewer')
+                review_status = 'rejected'
             await state.set_run_review_status(conn, run_id, review_status)
     return web.json_response(
             {'review-status': review_status})
@@ -397,7 +407,7 @@ async def handle_report(request):
         async for (package, command, build_version, result_code, context,
                    start_time, log_id, revision, result, branch_name, suite,
                    maintainer_email, uploader_emails, branch_url,
-                   main_branch_revision) in state.iter_publish_ready(
+                   main_branch_revision, review_status) in state.iter_publish_ready(
                        conn, suite=suite):
             data = {
                 'timestamp': start_time.isoformat(),
@@ -415,6 +425,20 @@ async def handle_report(request):
         report,
         headers={'Cache-Control': 'max-age=600'},
         status=200)
+
+
+async def handle_publish_ready(request):
+    suite = request.match_info.get('suite')
+    review_status = request.query.get('review-status')
+    ret = []
+    async with request.app.db.acquire() as conn:
+        async for (package, command, build_version, result_code, context,
+                   start_time, log_id, revision, result, branch_name, suite,
+                   maintainer_email, uploader_emails, branch_url,
+                   main_branch_revision, review_status) in state.iter_publish_ready(
+                       conn, suite=suite, review_status=review_status):
+            ret.append((package, log_id))
+    return web.json_response(ret, status=200)    
 
 
 def create_app(db, publisher_url, runner_url, policy_config):
@@ -487,11 +511,16 @@ def create_app(db, publisher_url, runner_url, policy_config):
         functools.partial(handle_runner_log, runner_url),
         name='api-runner-log')
     app.router.add_get(
-        '/report/{suite:' + '|'.join(SUITES) + '}',
+        '/{suite:' + '|'.join(SUITES) + '}/report',
         handle_report, name='api-report')
+    app.router.add_get(
+        '/publish-ready',
+        handle_publish_ready, name='api-publish-ready')
+    app.router.add_get(
+        '/{suite:' + '|'.join(SUITES) + '}/publish-ready',
+        handle_publish_ready, name='api-publish-ready-suite')
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)
     # TODO(jelmer): Build failures (iter_build_failures)
-    # TODO(jelmer): Publish ready (iter_publish_ready)
     return app

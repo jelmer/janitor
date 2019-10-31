@@ -5,17 +5,52 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
-{% set diff = show_diff() %}
-{{ highlight_diff(show_diff())|safe }}
+<div id='diff'>
+{{highlight_diff(show_diff())|safe}}
+</div>
+
+<script type="text/javascript">
+function loadRun(package, run_id) {
+    $('#diff').load('/api/run/' + run_id + '/diff');
+
+    $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
+
+    $('#run-id').attr('value', run_id);
+}
+
+var todo = [];
+
+$(function() {
+  loadRun('{{ package_name }}', '{{ run_id }}');
+  $('.review-button').attr('type', 'button');
+  $.ajax({
+     url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?review-status=unreviewed',
+     dataType: 'json',
+     success: function(data) {
+     if (data[0][1] == '{{run_id}}') { data.shift(); }
+         todo.push(...data);
+     }
+  });
+});
+
+function submitReview(status) {
+    var run_id = $('#run-id').val();
+    $.post('/api/run/' + run_id, {'review-status': status});
+    var newJob = todo[0];
+    todo.shift();
+    loadRun(newJob[0], newJob[1]);
+}
+</script>
+
 
 <form action="/cupboard/review" method="POST">
-<input type="hidden" name="run_id" value="{{ run_id }}"/>
-<input type="submit" name="review_status" value="Approved" accesskey="a">
-<input type="submit" name="review_status" value="Rejected" accesskey="r">
-<input type="submit" name="review_status" value="Reschedule" accesskey="s">
+<input type="hidden" name="run_id" id='run-id' value="{{ run_id }}"/>
+<input class='review-button' type="submit" name="review_status" value="Approved" accesskey="a" onclick="submitReview('approved')">
+<input class='review-button' type="submit" name="review_status" value="Rejected" accesskey="r" onclick="submitReview('rejected')">
+<input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview('reschedule')">
 </form>
 
-<p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}">Full Run</a></p>
+<p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}" id="full-run-link">Full Run</a></p>
 
 </div>
 {% endblock %}
