@@ -37,6 +37,7 @@ async def generate_review(conn, client, publisher_url, suite=None):
         'package_name': package_name,
         'highlight_diff': highlight_diff,
         'run_id': run_id,
+        'suite': suite,
         }
     template = env.get_template('review.html')
     return await template.render_async(**kwargs)
