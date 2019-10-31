@@ -6,7 +6,7 @@ import urllib.parse
 
 from janitor.policy import apply_policy
 from janitor import state, SUITES
-from . import env
+from . import env, highlight_diff
 
 from breezy.git.urls import git_url_to_bzr_url
 
@@ -217,10 +217,19 @@ async def handle_diff(publisher_url, request):
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
-                    return web.Response(
-                        body=await resp.read(),
-                        content_type='text/x-diff',
-                        headers={'Cache-Control': 'max-age=3600'})
+                    diff = await resp.read()
+                    for accept in request.headers.getall('ACCEPT', []):
+                        if accept in ('text/x-diff', 'text/plain'):
+                            return web.Response(
+                                body=diff,
+                                content_type='text/x-diff',
+                                headers={'Cache-Control': 'max-age=3600'})
+                        if accept == 'text/html':
+                            return web.Response(
+                                body=highlight_diff(diff),
+                                content_type='text/html',
+                                headers={'Cache-Control': 'max-age=3600'})
+                        raise web.HTTPNotAcceptable()
                 else:
                     return web.Response(await resp.read(), status=400)
         except ContentTypeError as e:
