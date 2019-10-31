@@ -430,6 +430,7 @@ async def handle_report(request):
 async def handle_publish_ready(request):
     suite = request.match_info.get('suite')
     review_status = request.query.get('review-status')
+    for_publishing = set()
     ret = []
     async with request.app.db.acquire() as conn:
         async for (package, command, build_version, result_code, context,
@@ -437,8 +438,14 @@ async def handle_publish_ready(request):
                    maintainer_email, uploader_emails, branch_url,
                    main_branch_revision, review_status) in state.iter_publish_ready(
                        conn, suite=suite, review_status=review_status):
+            (publish_policy, changelog_policy, committer) = apply_policy(
+                request.app.policy_config, suite, package,
+                maintainer_email, uploader_emails)
+            if publish_policy in ('propose', 'attempt-push', 'push-derived', 'push'):
+                for_publishing.add(log_id)
             ret.append((package, log_id))
-    return web.json_response(ret, status=200)    
+    ret.sort(key=lambda x: x[1] in for_publishing, reverse=True)
+    return web.json_response(ret, status=200)
 
 
 def create_app(db, publisher_url, runner_url, policy_config):
