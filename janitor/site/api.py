@@ -62,7 +62,7 @@ async def handle_publish(publisher_url, request):
 async def get_package_from_gitlab_webhook(conn, body):
     vcs_url = body['project']['git_http_url']
     for url in [
-            git_url_to_bzr_url(vcs_url, ref=body['ref']),
+            git_url_to_bzr_url(vcs_url, ref=body['ref'].encode()),
             git_url_to_bzr_url(vcs_url)]:
         package = await state.get_package_by_branch_url(conn, vcs_url)
         if package is not None:

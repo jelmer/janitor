@@ -92,7 +92,7 @@ $(document).ready(function() {
 
 {% set diff = show_diff() %}
 {% if diff.split('\n')|length < 200 %}
-{{ highlight_diff(show_diff())|safe }}
+{{ highlight_diff(diff)|safe }}
 {% else %}
 <p>Diff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/diff">raw diff</a>.</p>
 {% endif %}
