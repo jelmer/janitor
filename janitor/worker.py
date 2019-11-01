@@ -515,6 +515,11 @@ def process_package(vcs_url, env, command, output_directory,
             ws.main_branch.last_revision().decode())
 
         if not ws.local_tree.has_filename('debian/control'):
+            if ws.local_tree.has_filename('control'):
+                raise WorkerFailure(
+                    'control-files-in-root',
+                    'control files live in root rather than debian/ '
+                    '(LarstIQ mode)')
             raise WorkerFailure(
                 'missing-control-file',
                 'missing control file: debian/control')
