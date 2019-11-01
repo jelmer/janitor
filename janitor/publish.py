@@ -238,7 +238,8 @@ async def publish_one(
 
 
 async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
-                              topic_publish, dry_run=False, reviewed_only=False):
+                              topic_publish, dry_run=False,
+                              reviewed_only=False):
     possible_hosters = []
     possible_transports = []
 
@@ -251,7 +252,8 @@ async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
         async for (pkg, command, build_version, result_code, context,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
-                   main_branch_revision, unused_review_status) in state.iter_publish_ready(
+                   main_branch_revision,
+                   unused_review_status) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             await publish_from_policy(
                     policy, conn, rate_limiter, vcs_manager, pkg, command,
@@ -593,7 +595,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             package = await state.get_package_by_branch_url(
                 conn, target_branch_url)
             if package is None:
-                warning('No package known for %s (%s)', mp.url, target_branch_url)
+                warning('No package known for %s (%s)',
+                        mp.url, target_branch_url)
                 package_name = None
             else:
                 maintainer_email = package.maintainer_email
@@ -676,7 +679,6 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
 
 async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
                            topic_publish, dry_run=False):
-    import aiohttp
     from aiohttp.client import ClientSession
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')

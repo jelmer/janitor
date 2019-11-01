@@ -6,7 +6,6 @@ import urllib.parse
 from janitor import state
 from janitor.site import (
     env,
-    get_vcs_type,
     highlight_diff,
     )
 
@@ -15,10 +14,12 @@ async def generate_review(conn, client, publisher_url, suite=None):
     async for (package_name, command, build_version, result_code, context,
                start_time, run_id, revision, result, branch_name, suite,
                maintainer_email, uploader_emails, branch_url,
-               main_branch_revision, review_status) in state.iter_publish_ready(
+               main_branch_revision, review_status
+               ) in state.iter_publish_ready(
                        conn, review_status=['unreviewed'], limit=1,
                        suite=suite):
         break
+
     async def show_diff():
         if not revision or revision == main_branch_revision:
             return ''

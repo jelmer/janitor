@@ -210,6 +210,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
             estimated_popularity * estimated_probability_of_success * value)
         assert estimated_value > 0, "Estimated value: %s" % estimated_value
         offset = estimated_cost / estimated_value
+        assert offset > 0
         offset = default_offset + offset
         trace.note(
             'Package %s: '

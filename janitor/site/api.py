@@ -74,7 +74,8 @@ async def get_package_from_gitlab_webhook(conn, body):
 
 async def schedule(conn, policy, package, suite, offset=None,
                    refresh=False, requestor=None):
-    from ..schedule import estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET
+    from ..schedule import (
+        estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET)
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     unused_publish_mode, update_changelog, committer = apply_policy(
@@ -109,7 +110,7 @@ async def handle_webhook(request):
         requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
         for suite in SUITES:
             await schedule(
-                conn, requst.app.policy_config, package, suite,
+                conn, request.app.policy_config, package, suite,
                 requestor=requestor)
         return web.json_response({})
 
@@ -226,7 +227,8 @@ async def handle_diff(publisher_url, request):
                                 headers={'Cache-Control': 'max-age=3600'})
                         if accept == 'text/html':
                             return web.Response(
-                                text=highlight_diff(diff.decode('utf-8', 'replace')),
+                                text=highlight_diff(
+                                    diff.decode('utf-8', 'replace')),
                                 content_type='text/html',
                                 headers={'Cache-Control': 'max-age=3600'})
                     raise web.HTTPNotAcceptable(
@@ -407,7 +409,8 @@ async def handle_report(request):
         async for (package, command, build_version, result_code, context,
                    start_time, log_id, revision, result, branch_name, suite,
                    maintainer_email, uploader_emails, branch_url,
-                   main_branch_revision, review_status) in state.iter_publish_ready(
+                   main_branch_revision, review_status
+                   ) in state.iter_publish_ready(
                        conn, suite=suite):
             data = {
                 'timestamp': start_time.isoformat(),
@@ -436,12 +439,14 @@ async def handle_publish_ready(request):
         async for (package, command, build_version, result_code, context,
                    start_time, log_id, revision, result, branch_name, suite,
                    maintainer_email, uploader_emails, branch_url,
-                   main_branch_revision, review_status) in state.iter_publish_ready(
+                   main_branch_revision, review_status
+                   ) in state.iter_publish_ready(
                        conn, suite=suite, review_status=review_status):
             (publish_policy, changelog_policy, committer) = apply_policy(
                 request.app.policy_config, suite, package,
                 maintainer_email, uploader_emails)
-            if publish_policy in ('propose', 'attempt-push', 'push-derived', 'push'):
+            if publish_policy in (
+                    'propose', 'attempt-push', 'push-derived', 'push'):
                 for_publishing.add(log_id)
             ret.append((package, log_id))
     ret.sort(key=lambda x: x[1] in for_publishing, reverse=True)
@@ -473,7 +478,7 @@ def create_app(db, publisher_url, runner_url, policy_config):
         name='api-package-schedule')
     app.router.add_get(
         '/merge-proposals', handle_merge_proposal_list,
-         name='api-merge-proposals')
+        name='api-merge-proposals')
     app.router.add_get('/queue', handle_queue, name='api-queue')
     app.router.add_get('/run', handle_run, name='api-run-list')
     app.router.add_get('/run/{run_id}', handle_run, name='api-run')
