@@ -15,6 +15,9 @@ parser.add_argument(
 parser.add_argument(
     '--refresh', action='store_true',
     help='Force run from scratch.')
+parser.add_argument(
+    '--offset', type=int, default=0,
+    help='Schedule offset.')
 args = parser.parse_args()
 with open(args.config, 'r') as f:
     config = read_config(f)
@@ -42,7 +45,7 @@ async def main(db, result_code):
                 conn2, packages[run.package].branch_url,
                 run.package, run.command.split(' '), run.suite,
                 estimated_duration=run.duration, requestor='reschedule',
-                refresh=args.refresh)
+                refresh=args.refresh, offset=args.offset)
 
 
 db = state.Database(config.database_location)
