@@ -251,7 +251,7 @@ async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
         async for (pkg, command, build_version, result_code, context,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
-                   main_branch_revision) in state.iter_publish_ready(
+                   main_branch_revision, unused_review_status) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             await publish_from_policy(
                     policy, conn, rate_limiter, vcs_manager, pkg, command,
