@@ -38,7 +38,6 @@ from silver_platter.proposal import (
     )
 from silver_platter.debian.lintian import (
     create_mp_description,
-    update_proposal_commit_message,
     )
 
 from breezy.plugins.propose.propose import (

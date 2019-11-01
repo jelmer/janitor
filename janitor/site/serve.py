@@ -439,6 +439,7 @@ if __name__ == '__main__':
                 app.topic_notifications.publish(['merge-proposal', msg])
 
         app.runner_status = None
+
         async def listen_to_runner(app):
             url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
             async for msg in pubsub_reader(app.http_client_session, url):
@@ -448,6 +449,7 @@ if __name__ == '__main__':
         for cb in [listen_to_publisher_publish, listen_to_publisher_mp,
                    listen_to_runner]:
             listener = app.loop.create_task(cb(app))
+
             async def stop_listener(app):
                 listener.cancel()
                 await listener

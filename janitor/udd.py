@@ -322,8 +322,8 @@ async def main():
     trace.note('Updating package metadata.')
     packages = []
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-               vcs_branch, vcs_browser, sid_version) in udd.iter_packages_with_metadata(
-                   args.packages):
+               vcs_branch, vcs_browser,
+               sid_version) in udd.iter_packages_with_metadata(args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
         if is_alioth_url(vcs_url):
@@ -342,7 +342,6 @@ async def main():
             if new_vcs_url != vcs_url:
                 trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
-
 
         if vcs_url and vcs_branch:
             (repo_url, orig_branch) = extract_vcs_url_branch(vcs_url)
