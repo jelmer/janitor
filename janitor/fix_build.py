@@ -45,6 +45,7 @@ from .build import attempt_build
 from .trace import note, warning
 from .sbuild_log import (
     MissingPythonModule,
+    MissingPythonDistribution,
     MissingCHeader,
     MissingPkgConfig,
     MissingCommand,
@@ -184,7 +185,7 @@ def get_package_for_python_module(module, python_version):
     return get_package_for_paths(paths, regex)
 
 
-def fix_missing_python_module(tree, error, committer=None):
+def targeted_python_versions(tree):
     with tree.get_file('debian/control') as f:
         control = Deb822(f)
     build_depends = PkgRelation.parse_relations(
@@ -192,25 +193,54 @@ def fix_missing_python_module(tree, error, committer=None):
     all_build_deps = set()
     for or_deps in build_depends:
         all_build_deps.update(or_dep['name'] for or_dep in or_deps)
-    has_pypy_build_deps = any(x.startswith('pypy') for x in all_build_deps)
-    has_cpy2_build_deps = any(x.startswith('python-') for x in all_build_deps)
-    has_cpy3_build_deps = any(x.startswith('python3-') for x in all_build_deps)
-    default = (not has_pypy_build_deps and
-               not has_cpy2_build_deps and
-               not has_cpy3_build_deps)
+    targeted = set()
+    if any(x.startswith('pypy') for x in all_build_deps):
+        targeted.add('pypy')
+    if any(x.startswith('python-') for x in all_build_deps):
+        targeted.add('cpython2')
+    if any(x.startswith('python3-') for x in all_build_deps):
+        targeted.add('cpython3')
+    return targeted
 
-    pypy_pkg = get_package_for_python_module(error.module, 'pypy')
-    py2_pkg = get_package_for_python_module(error.module, 'python2')
-    py3_pkg = get_package_for_python_module(error.module, 'python3')
+
+apt_cache = None
+
+
+def package_exists(package):
+    global apt_cache
+    if apt_cache is None:
+        import apt_pkg
+        apt_cache = apt_pkg.Cache()
+    for p in apt_cache.packages:
+        if p.name == package:
+            return True
+    return False
+
+
+def fix_missing_python_distribution(tree, error, committer=None):
+    targeted = targeted_python_versions(tree)
+    default = not targeted
+
+    pypy_pkg = 'pypy-%s' % error.distribution
+    if not package_exists(pypy_pkg):
+        pypy_pkg = None
+
+    py2_pkg = 'python-%s' % error.distribution
+    if not package_exists(py2_pkg):
+        py2_pkg = None
+
+    py3_pkg = 'python-%s' % error.distribution
+    if not package_exists(py3_pkg):
+        py3_pkg = None
 
     extra_build_deps = []
     if error.python_version == 2:
-        if has_pypy_build_deps:
+        if 'pypy' in targeted:
             if not pypy_pkg:
                 warning('no pypy package found for %s', error.module)
             else:
                 extra_build_deps.append(pypy_pkg)
-        if has_cpy2_build_deps or default:
+        if 'cpython2' in targeted or default:
             if not py2_pkg:
                 warning('no python 2 package found for %s', error.module)
                 return False
@@ -221,11 +251,55 @@ def fix_missing_python_module(tree, error, committer=None):
             return False
         extra_build_deps.append(py3_pkg)
     else:
-        if py3_pkg and (has_cpy3_build_deps or default):
+        if py3_pkg and ('cpython3' in targeted or default):
             extra_build_deps.append(py3_pkg)
-        if py2_pkg and (has_cpy2_build_deps or default):
+        if py2_pkg and ('cpython2' in targeted or default):
             extra_build_deps.append(py2_pkg)
-        if pypy_pkg and has_pypy_build_deps:
+        if pypy_pkg and 'pypy' in targeted:
+            extra_build_deps.append(pypy_pkg)
+
+    if not extra_build_deps:
+        return False
+
+    for dep_pkg in extra_build_deps:
+        assert dep_pkg is not None
+        if not add_build_dependency(
+                tree, dep_pkg, error.minimum_version, committer=committer):
+            return False
+    return True
+
+
+def fix_missing_python_module(tree, error, committer=None):
+    targeted = targeted_python_versions(tree)
+    default = (not targeted)
+
+    pypy_pkg = get_package_for_python_module(error.module, 'pypy')
+    py2_pkg = get_package_for_python_module(error.module, 'python2')
+    py3_pkg = get_package_for_python_module(error.module, 'python3')
+
+    extra_build_deps = []
+    if error.python_version == 2:
+        if 'pypy' in targeted:
+            if not pypy_pkg:
+                warning('no pypy package found for %s', error.module)
+            else:
+                extra_build_deps.append(pypy_pkg)
+        if 'cpython2' in targeted or default:
+            if not py2_pkg:
+                warning('no python 2 package found for %s', error.module)
+                return False
+            extra_build_deps.append(py2_pkg)
+    elif error.python_version == 3:
+        if not py3_pkg:
+            warning('no python 3 package found for %s', error.module)
+            return False
+        extra_build_deps.append(py3_pkg)
+    else:
+        if py3_pkg and ('cpython3' in targeted or default):
+            extra_build_deps.append(py3_pkg)
+        if py2_pkg and ('cpython2' in targeted or default):
+            extra_build_deps.append(py2_pkg)
+        if pypy_pkg and 'pypy' in targeted:
             extra_build_deps.append(pypy_pkg)
 
     if not extra_build_deps:
@@ -388,6 +462,7 @@ def fix_missing_java_class(tree, error, committer=None):
 
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
+    (MissingPythonDistribution, fix_missing_python_distribution),
     (MissingCHeader, fix_missing_c_header),
     (MissingPkgConfig, fix_missing_pkg_config),
     (MissingCommand, fix_missing_command),

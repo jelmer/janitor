@@ -23,6 +23,7 @@ from janitor.sbuild_log import (
     CcacheError,
     MissingCHeader,
     MissingPythonModule,
+    MissingPythonDistribution,
     MissingGoPackage,
     MissingFile,
     MissingMavenArtifacts,
@@ -95,24 +96,24 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'distutils.errors.DistutilsError: Could not find suitable '
             'distribution for Requirement.parse(\'pytest-runner\')'],
-            1, MissingPythonModule('pytest-runner', None))
+            1, MissingPythonDistribution('pytest-runner', None))
         self.run_test([
             "distutils.errors.DistutilsError: Could not find suitable "
             "distribution for Requirement.parse('certifi>=2019.3.9')"],
-            1, MissingPythonModule('certifi', None, '2019.3.9'))
+            1, MissingPythonDistribution('certifi', None, '2019.3.9'))
         self.run_test([
             'distutils.errors.DistutilsError: Could not find suitable '
             'distribution for Requirement.parse(\'cffi; '
             'platform_python_implementation == "CPython"\')'], 1,
-            MissingPythonModule('cffi', None))
+            MissingPythonDistribution('cffi', None))
         self.run_test([
             'error: Could not find suitable distribution for '
             'Requirement.parse(\'gitlab\')'], 1,
-            MissingPythonModule('gitlab', None))
+            MissingPythonDistribution('gitlab', None))
         self.run_test([
             'pkg_resources.DistributionNotFound: The \'configparser>=3.5\' '
             'distribution was not found and is required by importlib-metadata'
-            ], 1, MissingPythonModule('configparser', None, '3.5'))
+            ], 1, MissingPythonDistribution('configparser', None, '3.5'))
 
     def test_pytest_import(self):
         self.run_test([

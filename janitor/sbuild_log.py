@@ -249,7 +249,7 @@ def find_failed_stage(lines):
 
 class MissingPythonModule(object):
 
-    kind = 'missing-python-dep'
+    kind = 'missing-python-module'
 
     def __init__(self, module, python_version=None, minimum_version=None):
         self.module = module
@@ -279,6 +279,39 @@ class MissingPythonModule(object):
             self.minimum_version)
 
 
+class MissingPythonDistribution(object):
+
+    kind = 'missing-python-distribution'
+
+    def __init__(self, distribution, python_version=None,
+                 minimum_version=None):
+        self.distribution = distribution
+        self.python_version = python_version
+        self.minimum_version = minimum_version
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            other.distribution == self.distribution and \
+            other.python_version == self.python_version and \
+            other.minimum_version == self.minimum_version
+
+    def __str__(self):
+        if self.python_version:
+            ret = "Missing python %d distribution: " % self.python_version
+        else:
+            ret = "Missing python distribution: "
+        ret += self.distribution
+        if self.minimum_version:
+            return ret + " (>= %s)" % self.minimum_version
+        else:
+            return ret
+
+    def __repr__(self):
+        return "%s(%r, python_version=%r, minimum_version=%r)" % (
+            type(self).__name__, self.distribution, self.python_version,
+            self.minimum_version)
+
+
 def python_module_not_found(m):
     try:
         return MissingPythonModule(m.group(2), python_version=None)
@@ -298,10 +331,10 @@ def python_reqs_not_found(m):
     expr = m.group(2)
     if '>=' in expr:
         pkg, minimum = expr.split('>=')
-        return MissingPythonModule(pkg.strip(), None, minimum.strip())
+        return MissingPythonDistribution(pkg.strip(), None, minimum.strip())
     expr = expr.split(';')[0]
     if ' ' not in expr:
-        return MissingPythonModule(expr, None)
+        return MissingPythonDistribution(expr, None)
     # Hmm
     return None
 
@@ -321,7 +354,7 @@ def pkg_resources_distribution_not_found(m):
     expr = m.group(1)
     if '>=' in expr:
         pkg, minimum = expr.split('>=')
-        return MissingPythonModule(pkg.strip(), None, minimum.strip())
+        return MissingPythonDistribution(pkg.strip(), None, minimum.strip())
     return None
 
 
