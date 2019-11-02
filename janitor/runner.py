@@ -187,6 +187,25 @@ class WorkerResult(object):
                 worker_result.get('revision'))
 
 
+async def run_subprocess(args, env, log_path=None):
+    if log_path:
+        read, write = os.pipe()
+        p = await asyncio.create_subprocess_exec(
+            *args, env=env, stdout=write, stderr=write,
+            stdin=asyncio.subprocess.PIPE)
+        p.stdin.close()
+        os.close(write)
+        tee = await asyncio.create_subprocess_exec('tee', log_path, stdin=read)
+        os.close(read)
+        await tee.wait()
+        return await p.wait()
+    else:
+        p = await asyncio.create_subprocess_exec(
+            *args, env=env, stdin=asyncio.subprocess.PIPE)
+        p.stdin.close()
+        return await p.wait()
+
+
 async def invoke_subprocess_worker(
         worker_kind, main_branch, env, command, output_directory,
         resume_branch=None, cached_branch=None,
@@ -228,20 +247,7 @@ async def invoke_subprocess_worker(
         args.append('--last-build-version=%s' % last_build_version)
 
     args.extend(command)
-
-    if log_path:
-        read, write = os.pipe()
-        p = await asyncio.create_subprocess_exec(
-            *args, env=subprocess_env, stdout=write, stderr=write)
-        os.close(write)
-        tee = await asyncio.create_subprocess_exec('tee', log_path, stdin=read)
-        os.close(read)
-        await tee.wait()
-        return await p.wait()
-    else:
-        p = await asyncio.create_subprocess_exec(
-            *args, env=subprocess_env)
-        return await p.wait()
+    return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
 async def process_one(
