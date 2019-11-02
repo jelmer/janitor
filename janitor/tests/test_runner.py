@@ -15,17 +15,24 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from __future__ import absolute_import
+import asyncio
+import os
 
-import unittest
+from breezy.tests import TestCaseWithTransport
+
+from janitor.runner import run_subprocess
 
 
-def test_suite():
-    names = [
-        'runner',
-        'sbuild_log',
-        'worker',
-        ]
-    module_names = [__name__ + '.test_' + name for name in names]
-    loader = unittest.TestLoader()
-    return loader.loadTestsFromNames(module_names)
+class RunSubprocessTests(TestCaseWithTransport):
+
+    def test_run_simple(self):
+        self.build_tree_contents([('test', '')])
+
+        asyncio.run(run_subprocess(
+            ['cat', os.path.join(self.test_dir, 'test')], {}))
+
+    def test_read_from_stdin(self):
+        self.build_tree_contents([('test', '')])
+
+        asyncio.run(run_subprocess(
+            ['cat'], {}))

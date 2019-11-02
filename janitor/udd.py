@@ -39,7 +39,7 @@ from lintian_brush.salsa import (
     guess_repository_url,
     )
 from lintian_brush.vcs import (
-    extract_vcs_url_branch,
+    split_vcs_url,
     fixup_broken_git_url,
     )
 
@@ -345,9 +345,11 @@ async def main():
                 vcs_url = new_vcs_url
 
         if vcs_url and vcs_branch:
-            (repo_url, orig_branch) = extract_vcs_url_branch(vcs_url)
+            (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
             if orig_branch != vcs_branch:
                 new_vcs_url = '%s -b %s' % (repo_url, vcs_branch)
+                if subpath:
+                    new_vcs_url = "%s [%s]" % (new_vcs_url, subpath)
                 trace.note('Fixing up branch name from vcswatch: %s -> %s',
                            vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
