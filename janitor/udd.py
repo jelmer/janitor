@@ -227,6 +227,7 @@ select distinct on (sources.source) sources.source,
     coalesce(vcswatch.url, sources.vcs_url),
     vcswatch.branch,
     coalesce(vcswatch.browser, sources.vcs_browser),
+    status as vcswatch_status,
     sources.version
     from sources left join popcon_src on sources.source = popcon_src.source
     left join vcswatch on vcswatch.source = sources.source
@@ -322,7 +323,7 @@ async def main():
     trace.note('Updating package metadata.')
     packages = []
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-               vcs_branch, vcs_browser,
+               vcs_branch, vcs_browser, vcswatch_status,
                sid_version) in udd.iter_packages_with_metadata(args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
@@ -367,9 +368,9 @@ async def main():
             removed = Version(sid_version) <= removals[name]
 
         packages.append((
-                name, branch_url, maintainer_email,
-                uploader_emails, sid_version,
-                vcs_type, vcs_url, vcs_browser, insts, removed))
+            name, branch_url, maintainer_email, uploader_emails,
+            sid_version, vcs_type, vcs_url, vcs_browser, vcswatch_status,
+            insts, removed))
     async with db.acquire() as conn:
         await state.store_packages(conn, packages)
 

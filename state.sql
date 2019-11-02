@@ -1,3 +1,4 @@
+CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits');
 CREATE TABLE IF NOT EXISTS package (
    name text not null,
    branch_url text not null,
@@ -9,6 +10,7 @@ CREATE TABLE IF NOT EXISTS package (
    vcs_browse text,
    popcon_inst integer,
    removed boolean default false,
+   vcswatch_status vcswatch_status,
    primary key(name)
 );
 CREATE INDEX ON package (removed);
