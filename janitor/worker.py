@@ -515,7 +515,9 @@ def process_package(vcs_url, env, command, output_directory,
             ws.main_branch.last_revision().decode())
 
         if not ws.local_tree.has_filename('debian/control'):
-            if ws.local_tree.has_filename('control'):
+            if not ws.local_tree.has_filename('debian') and (
+                    ws.local_tree.has_filename('control') or
+                    ws.local_tree.has_filename('control.in')):
                 raise WorkerFailure(
                     'control-files-in-root',
                     'control files live in root rather than debian/ '
