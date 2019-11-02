@@ -369,7 +369,8 @@ async def main():
 
         packages.append((
             name, branch_url, maintainer_email, uploader_emails,
-            sid_version, vcs_type, vcs_url, vcs_browser, vcswatch_status,
+            sid_version, vcs_type, vcs_url, vcs_browser,
+            vcswatch_status.lower() if vcswatch_status else None,
             insts, removed))
     async with db.acquire() as conn:
         await state.store_packages(conn, packages)

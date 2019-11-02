@@ -1,4 +1,4 @@
-CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits');
+CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
 CREATE TABLE IF NOT EXISTS package (
    name text not null,
    branch_url text not null,

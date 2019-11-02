@@ -147,7 +147,7 @@ async def store_publish(conn, package, branch_name, main_branch_revision,
 class Package(object):
 
     def __init__(self, name, maintainer_email, uploader_emails, branch_url,
-                 vcs_type, vcs_url, vcs_browse, removed):
+                 vcs_type, vcs_url, vcs_browse, removed, vcswatch_status):
         self.name = name
         self.maintainer_email = maintainer_email
         self.uploader_emails = uploader_emails
@@ -156,11 +156,12 @@ class Package(object):
         self.vcs_url = vcs_url
         self.vcs_browse = vcs_browse
         self.removed = removed
+        self.vcswatch_status = vcswatch_status
 
     @classmethod
     def from_row(cls, row):
         return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6],
-                   row[7])
+                   row[7], row[8])
 
     def __lt__(self, other):
         return tuple(self) < tuple(other)
@@ -168,7 +169,7 @@ class Package(object):
     def __tuple__(self):
         return (self.name, self.maintainer_email, self.uploader_emails,
                 self.branch_url, self.vcs_type, self.vcs_url, self.vcs_browse,
-                self.removed)
+                self.removed, self.vcswatch_status)
 
 
 async def iter_packages(conn, package=None):
@@ -181,7 +182,8 @@ SELECT
   vcs_type,
   vcs_url,
   vcs_browse,
-  removed
+  removed,
+  vcswatch_status
 FROM
   package
 """
@@ -211,7 +213,8 @@ SELECT
   vcs_type,
   vcs_url,
   vcs_browse,
-  removed
+  removed,
+  vcswatch_status
 FROM
   package
 WHERE
@@ -989,6 +992,7 @@ SELECT
   package.vcs_url,
   package.vcs_browse,
   package.removed,
+  package.vcswatch_status,
   candidate.suite,
   candidate.context,
   candidate.value
@@ -1005,7 +1009,7 @@ INNER JOIN package on package.name = candidate.package
     elif packages is not None:
         query += " WHERE package = ANY($1::text[])"
         args.append(packages)
-    return [([Package.from_row(row)] + list(row[8:]))
+    return [([Package.from_row(row)] + list(row[9:]))
             for row in await conn.fetch(query, *args)]
 
 

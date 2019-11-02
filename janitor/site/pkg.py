@@ -206,6 +206,7 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
 async def generate_pkg_file(db, package, merge_proposals, runs):
     kwargs = {}
     kwargs['package'] = package.name
+    kwargs['vcswatch_status'] = package.vcswatch_status
     kwargs['maintainer_email'] = package.maintainer_email
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
