@@ -15,6 +15,11 @@
 {% if removed %}
 <li class="removed-in-unstable">This package is removed in unstable.</li>
 {% endif %}
+{% if vcswatch_status == 'commits' %}
+<li class="vcswatch-commits">This package has unuploaded commits.</li>
+{% elif vcswatch_status == 'new' %}
+<li class="vcswatch-new">This package has unuploaded versions.</li>
+{% endif %}
 </ul>
 
 <div class="section" id="suites">
