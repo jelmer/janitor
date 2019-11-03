@@ -20,8 +20,11 @@ from aiohttp import web
 import asyncio
 import json
 
+from janitor.trace import warning
+
 
 class Subscription(object):
+    """A pubsub subscription."""
 
     def __init__(self, topic):
         self.topic = topic
@@ -38,6 +41,7 @@ class Subscription(object):
 
 
 class Topic(object):
+    """A pubsub topic."""
 
     def __init__(self, repeat_last=False):
         self.subscriptions = set()
@@ -63,14 +67,21 @@ async def pubsub_handler(topic, request):
     return ws
 
 
-async def pubsub_reader(session, url):
-    ws = await session.ws_connect(url)
+async def pubsub_reader(session, url, reconnect_interval=60):
     while True:
-        msg = await ws.receive()
+        ws = await session.ws_connect(url)
+        while True:
+            msg = await ws.receive()
 
-        if msg.type == aiohttp.WSMsgType.text:
-            yield msg.json()
-        elif msg.type == aiohttp.WSMsgType.closed:
-            break
-        elif msg.type == aiohttp.WSMsgType.error:
-            break
+            if msg.type == aiohttp.WSMsgType.text:
+                yield msg.json()
+            elif msg.type == aiohttp.WSMsgType.closed:
+                break
+            elif msg.type == aiohttp.WSMsgType.error:
+                warning('Error on websocket: %s', ws.exception())
+                break
+        if reconnect_interval is None:
+            return
+        trace.note(
+            'Waiting %d seconds before reconnecting...', reconnect_interval)
+        await asyncio.sleep(reconnect_interval)
