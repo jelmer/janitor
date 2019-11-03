@@ -880,6 +880,12 @@ build_failure_regexps = [
     (r'dh: The --before option is not supported any longer \(#932537\). '
      r'Use override targets instead.', None),
     ('(.*):([0-9]+): undefined reference to `(.*)\'', None),
+    ('dh(.*): debhelper compat level specified both in debian/compat '
+     'and via build-dependency on debhelper-compat', None),
+    ('dh(.*): Please specify the compatibility level in debian/compat',
+     None),
+    ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
+     'but --add-udeb=(.*) was passed!?', None),
 ]
 
 compiled_build_failure_regexps = [
