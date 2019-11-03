@@ -81,6 +81,22 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '(tried in ., debian/tmp)'],
             1)
 
+    def test_dh_compat_dupe(self):
+        self.run_test([
+            'dh_autoreconf: debhelper compat level specified both in '
+            'debian/compat and via build-dependency on debhelper-compat'], 1)
+
+    def test_dh_compat_missing(self):
+        self.run_test([
+            'dh_clean: Please specify the compatibility level in '
+            'debian/compat'], 1)
+
+    def test_dh_udeb_shared_library(self):
+        self.run_test([
+            'dh_makeshlibs: The udeb libepoxy0-udeb (>= 1.3) does not contain'
+            ' any shared libraries but --add-udeb=libepoxy0-udeb (>= 1.3) '
+            'was passed!?'], 1)
+
     def test_dh_systemd(self):
         self.run_test([
             'dh: unable to load addon systemd: dh: The systemd-sequence is '
