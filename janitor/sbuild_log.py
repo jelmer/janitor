@@ -870,6 +870,9 @@ build_failure_regexps = [
     (r'/usr/bin/ld: cannot find -l(.*)', ld_missing_lib),
     (r'Could not find gem \'([^ ]+) \(~> (.*)\)\', which is required by gem.*',
      ruby_missing_gem),
+    (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(~> (.*)\) '
+     r'among [0-9]+ total gem\(s\) \(Gem::MissingSpecError\)',
+     ruby_missing_gem),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '

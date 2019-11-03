@@ -342,6 +342,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Could not find gem \'childprocess (~> 0.5)\', which is '
             'required by gem \'selenium-webdriver\', in any of the sources.'],
             1, MissingRubyGem('childprocess', '0.5'))
+        self.run_test([
+            '/usr/lib/ruby/2.5.0/rubygems/dependency.rb:310:in `to_specs\': '
+            'Could not find \'http-parser\' (~> 1.2.0) among 59 total gem(s) '
+            '(Gem::MissingSpecError)'], 1,
+            MissingRubyGem('http-parser', '1.2.0'))
 
     def test_missing_java_class(self):
         self.run_test("""\
