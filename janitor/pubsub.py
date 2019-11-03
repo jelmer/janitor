@@ -20,7 +20,7 @@ from aiohttp import web
 import asyncio
 import json
 
-from janitor.trace import warning
+from janitor.trace import note, warning
 
 
 class Subscription(object):
@@ -82,6 +82,6 @@ async def pubsub_reader(session, url, reconnect_interval=60):
                 break
         if reconnect_interval is None:
             return
-        trace.note(
+        note(
             'Waiting %d seconds before reconnecting...', reconnect_interval)
         await asyncio.sleep(reconnect_interval)
