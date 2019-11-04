@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block page_title %}Policy Preferences{% endblock %}
+{% block body %}
+<div class="section" id="policy-preferences">
+<h1>Policy Preferences</h1>
+
+
+<form>
+    <label for="allow-reformatting">Allow reformatting:</label>
+    <input type="checkbox" name="allow-reformatting">
+    <label for="mode">Allow reformatting:</label>
+    <select name="publish-mode">
+        <option value="propose">propose</option>
+	<option value="push">push</option>
+	<option value="build-only">build-only</option>
+	<option value="skip">skip</option>
+    </select>
+</form>
+
+{% endblock %}

@@ -1204,3 +1204,19 @@ WHERE name = $1 AND %(version_match2)s
 async def set_run_review_status(conn, run_id, review_status):
     await conn.execute('UPDATE run SET review_status = $1 WHERE id = $2',
                        review_status, run_id)
+
+
+async def iter_vcs_regressions(conn):
+    query = """\
+select
+  package.name,
+  run.id,
+  run.result_code,
+  package.vcswatch_status
+from
+  last_runs run left join package on run.package = package.name
+where
+  result_code = 'branch-missing' and
+  vcswatch_status in ('old', 'new', 'commits', 'ok')
+"""
+    return await conn.fetch(query)

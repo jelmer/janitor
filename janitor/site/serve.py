@@ -251,6 +251,16 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_vcs_regressions(request):
+        from janitor.site import env
+        template = env.get_template('vcs-regressions.html')
+        async with request.app.database.acquire() as conn:
+            regressions = await state.iter_vcs_regressions(conn)
+        text = await template.render_async(regressions=regressions)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_run(request):
         from .pkg import generate_run_file
         from .. import state
@@ -574,6 +584,10 @@ if __name__ == '__main__':
     app.router.add_get(
         '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log,
         name='logfile')
+    app.router.add_get(
+        '/cupboard/vcs-regressions/',
+        handle_vcs_regressions,
+        name='vcs-regressions')
     app.router.add_get(
         '/login', handle_login,
         name='login')
