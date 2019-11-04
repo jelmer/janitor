@@ -1216,7 +1216,13 @@ select
 from
   last_runs run left join package on run.package = package.name
 where
-  result_code = 'branch-missing' and
+  result_code in (
+    'branch-missing',
+    'branch-unavailable',
+    '401-unauthorized',
+    'hosted-on-alioth'
+  )
+and
   vcswatch_status in ('old', 'new', 'commits', 'ok')
 """
     return await conn.fetch(query)
