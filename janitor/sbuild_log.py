@@ -895,14 +895,17 @@ compiled_build_failure_regexps = [
     (re.compile(regexp), cb) for (regexp, cb) in build_failure_regexps]
 
 
-LOOK_BACK = 50
+DEFAULT_LOOK_BACK = 50
 
 
-def strip_useless_build_tail(lines):
+def strip_useless_build_tail(lines, look_back=None):
+    if look_back is None:
+        look_back = DEFAULT_LOOK_BACK
+
     # Strip off unuseful tail
-    for i, line in enumerate(lines[-LOOK_BACK:]):
+    for i, line in enumerate(lines[-look_back:]):
         if line.startswith('Build finished at '):
-            lines = lines[:len(lines)-(LOOK_BACK-i)]
+            lines = lines[:len(lines)-(look_back-i)]
             if lines and lines[-1] == ('-' * 80 + '\n'):
                 lines = lines[:-1]
             break
