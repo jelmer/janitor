@@ -1,0 +1,22 @@
+digraph janitor {
+
+    node [style="filled" shape=box fontname="Arial" fillcolor=lightgreen];
+
+    "db" [style="filled" shape=cylinder fillcolor=lightblue];
+
+    "site 1" -> "runner";
+    "site 2" -> "runner";
+    "site 1" -> "publisher";
+    "site 2" -> "publisher";
+    "runner" -> "publisher";
+    "site 1" -> "db";
+    "site 2" -> "db";
+    "runner" -> "worker 1";
+    "runner" -> "worker 2";
+    "publisher" -> "db";
+    "runner" -> "db";
+
+    "udd" -> "db";
+    "db" -> "scheduler";
+    "scheduler" -> "db";
+}
