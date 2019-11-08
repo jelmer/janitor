@@ -30,18 +30,21 @@ from janitor.vcs import (
 
 
 def format_duration(duration):
-    total_seconds = duration.seconds
-    seconds = duration.seconds % 60
-    total_minutes = total_seconds // 60
-    minutes = total_minutes % 60
-    total_hours = total_minutes // 24
-    hours = total_hours % 24
-    days = total_hours // 24
-    if days:
-        return '%dd%02dh' % (days, hours)
+    weeks = duration.days // 7
+    days = duration.days % 7
+    if weeks:
+        return "%dw%dd" % (weeks, days)
+    if duration.days:
+        return "%dd%dh" % (duration.days, duration.seconds // (60 * 60))
+    hours = duration.seconds // (60 * 60)
+    seconds = duration.seconds % (60 * 60)
+    minutes = seconds // 60
+    seconds %= 60
     if hours:
-        return '%dh%02dm' % (hours, minutes)
-    return '%dm%02ds' % (minutes, seconds)
+        return "%dh%dm" % (hours, minutes)
+    if minutes:
+        return "%dm%ds" % (minutes, seconds)
+    return "%ds" % seconds
 
 
 def format_timestamp(ts):
