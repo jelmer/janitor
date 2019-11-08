@@ -15,18 +15,18 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from __future__ import absolute_import
+from datetime import timedelta
+
+from janitor.site import format_duration
 
 import unittest
 
 
-def test_suite():
-    names = [
-        'runner',
-        'sbuild_log',
-        'site',
-        'worker',
-        ]
-    module_names = [__name__ + '.test_' + name for name in names]
-    loader = unittest.TestLoader()
-    return loader.loadTestsFromNames(module_names)
+class FormatDurationTests(unittest.TestCase):
+
+    def test_some(self):
+        self.assertEqual('10s', format_duration(timedelta(seconds=10)))
+        self.assertEqual('1m10s', format_duration(timedelta(seconds=70)))
+        self.assertEqual('1h0m', format_duration(timedelta(hours=1)))
+        self.assertEqual('1d1h', format_duration(timedelta(days=1, hours=1)))
+        self.assertEqual('2w1d', format_duration(timedelta(weeks=2, days=1)))
