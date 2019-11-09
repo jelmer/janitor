@@ -35,6 +35,7 @@ from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
 from silver_platter.utils import (
+    open_branch_containing,
     open_branch,
     BranchMissing,
     BranchUnavailable,
@@ -70,15 +71,8 @@ def is_alioth_url(url):
         'hg.debian.org', 'git.debian.org', 'alioth.debian.org')
 
 
-def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
-    if ' [' in vcs_url and vcs_url.endswith(']'):
-        subpath = vcs_url[vcs_url.rindex('['):vcs_url.rindex(']')]
-        vcs_url = vcs_url[:vcs_url.rindex('[')].rstrip()
-    else:
-        subpath = None
-    try:
-        return open_branch(vcs_url, possible_transports, vcs_type), subpath
-    except BranchUnavailable as e:
+def _convert_branch_exception(vcs_url, e):
+    if isinstance(e, BranchUnavailable):
         if str(e).startswith('Unsupported protocol for url '):
             if ('anonscm.debian.org' in str(e) or
                     'svn.debian.org' in str(e)):
@@ -93,20 +87,30 @@ def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
             code = '401-unauthorized'
         else:
             code = 'branch-unavailable'
-        raise BranchOpenFailure(code, str(e))
-    except BranchMissing as e:
+        return BranchOpenFailure(code, str(e))
+    if isinstance(e, BranchMissing):
         if str(e).startswith('Branch does not exist: Not a branch: '
                              '"https://anonscm.debian.org'):
             code = 'hosted-on-alioth'
         else:
             code = 'branch-missing'
-        raise BranchOpenFailure(code, str(e))
-    except KeyError as e:
-        if e.args == ('www-authenticate not found',):
-            raise BranchOpenFailure(
-                '401-without-www-authenticate', str(e))
-        else:
-            raise
+        return BranchOpenFailure(code, str(e))
+    return None
+
+
+def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
+    try:
+        return open_branch(vcs_url, possible_transports, vcs_type)
+    except (BranchUnavailable, BranchMissing) as e:
+        raise _convert_branch_exception(vcs_url, e)
+
+
+def open_branch_containing_ext(
+        vcs_url, possible_transports=None, vcs_type=None):
+    try:
+        return open_branch_containing(vcs_url, possible_transports, vcs_type)
+    except (BranchUnavailable, BranchMissing) as e:
+        raise _convert_branch_exception(vcs_url, e)
 
 
 class MirrorFailure(Exception):
