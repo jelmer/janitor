@@ -182,6 +182,12 @@ class LintianBrushWorker(SubWorker):
             minimum_certainty = DEFAULT_MINIMUM_CERTAINTY
 
         with local_tree.lock_write():
+            if control_files_in_root(local_tree):
+                raise WorkerFailure(
+                    'control-files-in-root',
+                    'control files live in root rather than debian/ '
+                    '(LarstIQ mode)')
+
             overall_result = run_lintian_fixers(
                     local_tree, fixers,
                     committer=self.committer,
@@ -244,6 +250,12 @@ class NewUpstreamWorker(SubWorker):
                      base_metadata):
         # Make sure that the quilt patches applied in the first place..
         with local_tree.lock_write():
+            if control_files_in_root(local_tree):
+                raise WorkerFailure(
+                    'control-files-in-root',
+                    'control files live in root rather than debian/ '
+                    '(LarstIQ mode)')
+
             try:
                 result = merge_upstream(
                     tree=local_tree, snapshot=self.args.snapshot,
@@ -434,6 +446,12 @@ def tree_set_changelog_version(tree, build_version):
 debian_info = distro_info.DebianDistroInfo()
 
 
+def control_files_in_root(tree):
+    return not tree.local_tree.has_filename('debian') and (
+        tree.local_tree.has_filename('control') or
+        tree.local_tree.has_filename('control.in'))
+
+
 def process_package(vcs_url, env, command, output_directory,
                     metadata, build_command=None, pre_check_command=None,
                     post_check_command=None, possible_transports=None,
@@ -514,14 +532,10 @@ def process_package(vcs_url, env, command, output_directory,
         metadata['revision'] = metadata['main_branch_revision'] = (
             ws.main_branch.last_revision().decode())
 
-        if not ws.local_tree.has_filename('debian/control'):
-            if not ws.local_tree.has_filename('debian') and (
-                    ws.local_tree.has_filename('control') or
-                    ws.local_tree.has_filename('control.in')):
-                raise WorkerFailure(
-                    'control-files-in-root',
-                    'control files live in root rather than debian/ '
-                    '(LarstIQ mode)')
+        if not any([ws.local_tree.has_filename(name)
+                    for name in [
+                     'debian/control', 'debian/control.in', 'control',
+                     'control.in']]):
             raise WorkerFailure(
                 'missing-control-file',
                 'missing control file: debian/control')
