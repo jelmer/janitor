@@ -133,7 +133,10 @@ async def handle_schedule(request):
         if package is None:
             return web.json_response(
                 {'reason': 'Package not found'}, status=404)
-        requestor = 'user from web UI'
+        if request.debsso_email:
+            requestor = request.debsso_email
+        else:
+            requestor = 'user from web UI'
         if package.branch_url is None:
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
