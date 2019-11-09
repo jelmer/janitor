@@ -40,6 +40,9 @@ from prometheus_client import (
     Histogram,
 )
 
+from silver_platter.debian import (
+    select_preferred_probers,
+    )
 from silver_platter.proposal import (
     find_existing_proposed,
     enable_tag_pushing,
@@ -256,7 +259,7 @@ async def process_one(
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
-        use_cached_only=False, refresh=False):
+        use_cached_only=False, refresh=False, vcs_type=None):
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
@@ -277,9 +280,11 @@ async def process_one(
         raise AssertionError('Unknown command %s' % command[0])
 
     if not use_cached_only:
+        probers = select_preferred_probers(vcs_type)
         try:
             main_branch, subpath = open_branch_ext(
-                vcs_url, possible_transports=possible_transports)
+                vcs_url, possible_transports=possible_transports,
+                probers=probers)
         except BranchOpenFailure as e:
             return JanitorResult(
                 pkg, log_id=log_id, description=e.description, code=e.code,
