@@ -278,8 +278,7 @@ if __name__ == '__main__':
             headers={'Cache-Control': 'max-age=600'})
 
     async def handle_vcs_regressions(request):
-        from janitor.site import env
-        template = env.get_template('vcs-regressions.html')
+        template = request.app.jinja_env.get_template('vcs-regressions.html')
         async with request.app.database.acquire() as conn:
             regressions = await state.iter_vcs_regressions(conn)
         text = await template.render_async(regressions=regressions)
@@ -630,6 +629,8 @@ if __name__ == '__main__':
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
     app.database = state.Database(config.database_location)
+    from janitor.site import env
+    app.jinja_env = env
     setup_debsso(app)
     setup_metrics(app)
     app.router.add_get(
