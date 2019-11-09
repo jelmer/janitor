@@ -228,7 +228,8 @@ select distinct on (sources.source) sources.source,
     vcswatch.branch,
     coalesce(vcswatch.browser, sources.vcs_browser),
     status as vcswatch_status,
-    sources.version
+    sources.version,
+    vcswatch.version
     from sources left join popcon_src on sources.source = popcon_src.source
     left join vcswatch on vcswatch.source = sources.source
 where sources.release = 'sid'
@@ -373,7 +374,7 @@ async def main():
             name, branch_url, maintainer_email, uploader_emails,
             sid_version, vcs_type, vcs_url, vcs_browser,
             vcswatch_status.lower() if vcswatch_status else None,
-            insts, removed))
+            vcswatch_version, insts, removed))
     async with db.acquire() as conn:
         await state.store_packages(conn, packages)
 

@@ -96,11 +96,14 @@ $("#{{ propose_id }}").click(function() {
 {% endif %}
 {% endmacro %}
 
-{% macro display_branch_url(vcs_browse, vcs_url) %}
+{% macro display_branch_url(vcs_browse, vcs_url, vcswatch_version=None) %}
 {% if vcs_browse %}
 <a href="{{ vcs_browse }}">{{ vcs_url }}</a>
 {% else %}
 <a href="{{ vcs_url }}">{{ vcs_url }}</a>
+{% endif %}
+{% if vcswatch_version %}
+(taken from version <b>{{ vcswatch_version }}</b>)
 {% endif %}
 {% endmacro %}
 

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS package (
    popcon_inst integer,
    removed boolean default false,
    vcswatch_status vcswatch_status,
+   vcswatch_version debversion,
    primary key(name)
 );
 CREATE INDEX ON package (removed);

@@ -22,7 +22,7 @@
 <li>Last processed: {{ format_timestamp(previous_runs[0].times[1]) }} (took {{ format_duration(previous_runs[0].times[1] - previous_runs[0].times[0]) }})</li>
 {% endif %}
 {% if vcs_url %}
-<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
+<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
 {% endif %}
 {% if candidate_tags - fixed_tags %}
 <li>Tags that might be fixable: {% for tag in candidate_tags - fixed_tags %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}</li>
