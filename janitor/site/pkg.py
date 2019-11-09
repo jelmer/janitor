@@ -115,6 +115,7 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
     kwargs['queue_position'] = queue_position
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
+    kwargs['vcswatch_version'] = package.vcswatch_version
 
     async def show_diff():
         if not run.revision or run.revision == run.main_branch_revision:
