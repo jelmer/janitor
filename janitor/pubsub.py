@@ -17,6 +17,7 @@
 
 import aiohttp
 from aiohttp import web
+from aiohttp.client_exceptions import ClientResponseError
 import asyncio
 import json
 
@@ -69,17 +70,21 @@ async def pubsub_handler(topic, request):
 
 async def pubsub_reader(session, url, reconnect_interval=60):
     while True:
-        ws = await session.ws_connect(url)
-        while True:
-            msg = await ws.receive()
+        try:
+            ws = await session.ws_connect(url)
+        except ClientResponseError as e:
+            warning('Unable to connect: %s' % e)
+        else:
+            while True:
+                msg = await ws.receive()
 
-            if msg.type == aiohttp.WSMsgType.text:
-                yield msg.json()
-            elif msg.type == aiohttp.WSMsgType.closed:
-                break
-            elif msg.type == aiohttp.WSMsgType.error:
-                warning('Error on websocket: %s', ws.exception())
-                break
+                if msg.type == aiohttp.WSMsgType.text:
+                    yield msg.json()
+                elif msg.type == aiohttp.WSMsgType.closed:
+                    break
+                elif msg.type == aiohttp.WSMsgType.error:
+                    warning('Error on websocket: %s', ws.exception())
+                    break
         if reconnect_interval is None:
             return
         note(
