@@ -741,15 +741,19 @@ ORDER BY package, command, start_time DESC
         yield Run.from_row(row)
 
 
-async def stats_by_result_codes(conn):
+async def stats_by_result_codes(conn, suite=None):
     query = """\
 select result_code, count(result_code) from
-last_runs group by 1 order by 2 desc
-"""
-    return await conn.fetch(query)
+last_runs"""
+    args = []
+    if suite:
+        args.append(suite)
+        query += " WHERE suite = $1"
+    query += " group by 1 order by 2 desc"
+    return await conn.fetch(query, *args)
 
 
-async def iter_last_runs(conn, result_code):
+async def iter_last_runs(conn, result_code, suite=None):
     query = """
 SELECT
   id,
@@ -773,10 +777,14 @@ SELECT
   review_status
 FROM last_runs
 WHERE result_code = $1
-ORDER BY start_time DESC
 """
+    args = [result_code]
+    if suite:
+        args.append(suite)
+        query += " AND suite = $2"
+    query += " ORDER BY start_time DESC"
     async with conn.transaction():
-        async for row in conn.cursor(query, result_code):
+        async for row in conn.cursor(query, *args):
             yield Run.from_row(row)
 
 
