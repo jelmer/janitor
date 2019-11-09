@@ -1,6 +1,6 @@
 CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
 CREATE TABLE IF NOT EXISTS package (
-   name text not null,
+   name text not null check (name similar to '[a-z0-9][a-z0-9+-.]+'),
    branch_url text not null,
    maintainer_email text not null,
    uploader_emails text[] not null,
