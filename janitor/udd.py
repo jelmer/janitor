@@ -325,7 +325,8 @@ async def main():
     packages = []
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
                vcs_branch, vcs_browser, vcswatch_status,
-               sid_version) in udd.iter_packages_with_metadata(args.packages):
+               sid_version, vcswatch_version) in udd.iter_packages_with_metadata(
+                   args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
         if is_alioth_url(vcs_url):
