@@ -34,6 +34,7 @@ from breezy.errors import (
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
+from silver_platter.debian import select_probers
 from silver_platter.utils import (
     open_branch_containing,
     open_branch,
@@ -98,17 +99,18 @@ def _convert_branch_exception(vcs_url, e):
     return None
 
 
-def open_branch_ext(vcs_url, possible_transports=None, vcs_type=None):
+def open_branch_ext(vcs_url, possible_transports=None, probers=None):
     try:
-        return open_branch(vcs_url, possible_transports, vcs_type)
+        return open_branch(vcs_url, possible_transports, probers=probers)
     except (BranchUnavailable, BranchMissing) as e:
         raise _convert_branch_exception(vcs_url, e)
 
 
 def open_branch_containing_ext(
-        vcs_url, possible_transports=None, vcs_type=None):
+        vcs_url, possible_transports=None, probers=None):
     try:
-        return open_branch_containing(vcs_url, possible_transports, vcs_type)
+        return open_branch_containing(
+            vcs_url, possible_transports, probers=probers)
     except (BranchUnavailable, BranchMissing) as e:
         raise _convert_branch_exception(vcs_url, e)
 
