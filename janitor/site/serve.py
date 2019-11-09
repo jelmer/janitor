@@ -55,6 +55,25 @@ async def read_apt_file_from_fs(suite, filename, max_age):
     return web.FileResponse(path, headers=headers)
 
 
+@asyncio.coroutine
+def metrics_middleware(app, handler):
+    @asyncio.coroutine
+    def wrapper(request):
+        dn = request.headers.get('SSL_CLIENT_VERIFY_S_DN')
+        if cn and request.headers.get('SSL_CLIENT_VERIFY') == 'success':
+            m = re.match('.*CN=(?[^/,]+)', dn)
+            if m:
+                request.debsso_email = m.group(1)
+        response = yield from handler(request)
+        if request.debsso_email:
+            response.headers['X-DebSSO-User'] = request.debsso_email
+        return response
+
+
+def setup_metrics(app):
+    app.middlewares.insert(0, debsso_middleware)
+
+
 if __name__ == '__main__':
     import argparse
     import functools
@@ -606,6 +625,7 @@ if __name__ == '__main__':
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
     app.database = state.Database(config.database_location)
+    setup_debsso_login(app)
     setup_metrics(app)
     app.router.add_get(
         '/ws/notifications',
