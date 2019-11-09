@@ -257,7 +257,7 @@ async def handle_run_post(request):
                 run = await state.get_run(conn, run_id)
                 package = await state.get_package(conn, run.package)
                 await schedule(
-                    conn, request.app.policy, package, run.suite,
+                    conn, request.app.policy_config, package, run.suite,
                     refresh=True, requestor='reviewer')
                 review_status = 'rejected'
             await state.set_run_review_status(conn, run_id, review_status)
@@ -433,6 +433,11 @@ async def handle_report(request):
 async def handle_publish_ready(request):
     suite = request.match_info.get('suite')
     review_status = request.query.get('review-status')
+    limit = request.query.get('limit', 200)
+    if limit:
+        limit = int(limit)
+    else:
+        limit = None
     for_publishing = set()
     ret = []
     async with request.app.db.acquire() as conn:
@@ -449,7 +454,7 @@ async def handle_publish_ready(request):
                     'propose', 'attempt-push', 'push-derived', 'push'):
                 for_publishing.add(log_id)
             ret.append((package, log_id))
-    ret.sort(key=lambda x: x[1] in for_publishing, reverse=True)
+    ret.sort(key=lambda x: (x[1] not in for_publishing, x[0]))
     return web.json_response(ret, status=200)
 
 
