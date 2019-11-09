@@ -19,11 +19,7 @@
     <script>
 window.onload = function() {
 const url = 'wss://janitor.debian.net/ws/notifications';
-const connection = new WebSocket(url)
-
-connection.onopen = () => {
-  connection.send('hey');
-}
+const connection = new WebSocket(url);
 
 connection.onerror = (error) => {
   console.log(`WebSocket error: ${error}`);
