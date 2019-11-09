@@ -447,9 +447,9 @@ debian_info = distro_info.DebianDistroInfo()
 
 
 def control_files_in_root(tree):
-    return not tree.local_tree.has_filename('debian') and (
-        tree.local_tree.has_filename('control') or
-        tree.local_tree.has_filename('control.in'))
+    return not tree.has_filename('debian') and (
+        tree.has_filename('control') or
+        tree.has_filename('control.in'))
 
 
 def process_package(vcs_url, env, command, output_directory,
