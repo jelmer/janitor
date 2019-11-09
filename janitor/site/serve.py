@@ -16,6 +16,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
+import asyncio
+
+
 async def read_apt_file_from_s3(
         request, session, s3_location, suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
@@ -56,21 +59,23 @@ async def read_apt_file_from_fs(suite, filename, max_age):
 
 
 @asyncio.coroutine
-def metrics_middleware(app, handler):
+def debsso_middleware(app, handler):
     @asyncio.coroutine
     def wrapper(request):
-        dn = request.headers.get('SSL_CLIENT_VERIFY_S_DN')
-        if cn and request.headers.get('SSL_CLIENT_VERIFY') == 'success':
-            m = re.match('.*CN=(?[^/,]+)', dn)
+        dn = request.headers.get('SSL_CLIENT_S_DN')
+        request.debsso_email = None
+        if dn and request.headers.get('SSL_CLIENT_VERIFY') == 'SUCCESS':
+            m = re.match('.*CN=([^/,]+)', dn)
             if m:
                 request.debsso_email = m.group(1)
         response = yield from handler(request)
         if request.debsso_email:
             response.headers['X-DebSSO-User'] = request.debsso_email
         return response
+    return wrapper
 
 
-def setup_metrics(app):
+def setup_debsso(app):
     app.middlewares.insert(0, debsso_middleware)
 
 
@@ -198,7 +203,7 @@ if __name__ == '__main__':
     async def handle_login(request):
         return web.Response(
             content_type='text/plain',
-            text=repr(request.headers))
+            text=repr(request.debsso_email))
 
     async def handle_pkg_list(request):
         # TODO(jelmer): The javascript plugin thingy should just redirect to
@@ -625,7 +630,7 @@ if __name__ == '__main__':
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
     app.database = state.Database(config.database_location)
-    setup_debsso_login(app)
+    setup_debsso(app)
     setup_metrics(app)
     app.router.add_get(
         '/ws/notifications',
