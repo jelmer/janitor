@@ -20,6 +20,7 @@
 from breezy import urlutils
 
 from breezy.config import GlobalStack
+from breezy.git import RemoteGitProber
 
 from datetime import datetime, timedelta
 
@@ -98,7 +99,7 @@ async def update_gitlab_branches(conn, vcs_result_dir, host):
             try:
                 branch, unused_subpath = open_branch_ext(
                     url, possible_transports=possible_transports,
-                    vcs_type='git')
+                    probers=[RemoteGitProber])
             except BranchOpenFailure as e:
                 await state.update_branch_status(
                     conn, url, last_scanned=datetime.now(), status=e.code,
