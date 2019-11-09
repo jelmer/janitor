@@ -16,9 +16,9 @@
 <li class="removed-in-unstable">This package is removed in unstable.</li>
 {% endif %}
 {% if vcswatch_status == 'commits' %}
-<li class="vcswatch-commits">This package has unuploaded commits.</li>
+<li class="vcswatch-commits">This package has <a href="https://qa.debian.org/cgi-bin/vcswatch?package={{ package }}">unuploaded commits</a>.</li>
 {% elif vcswatch_status == 'new' %}
-<li class="vcswatch-new">This package has unuploaded versions.</li>
+<li class="vcswatch-new">This package has <a href="https://qa.debian.org/cgi-bin/vcswatch?package={{ package }}">unuploaded versions</a>.</li>
 {% endif %}
 </ul>
 
