@@ -18,7 +18,7 @@ janitor had trouble accessing.</p>
 </tr>
 </thead>
 <tbody valign="top">
-{% for package, run_id, result_code, vcswatch_status in packages %}
+{% for package, run_id, result_code, vcswatch_status in regressions %}
 <tr class="row-even">
 <td><a class="reference external" href="/cupboard/pkg/{{ package }}">{{ package }}</a></td>
 <td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ run_id }}">{{ result_code }}</a></td>
