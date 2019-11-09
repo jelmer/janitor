@@ -56,11 +56,12 @@ $(document).ready(function() {
 {% endif %}
 {% endif %}
 
-{% if suite != 'unchanged' %}
 {% if branch_name %}
+{% if suite != 'unchanged' %}
 {{ merge_command(package, branch_name, vcs) }}
+{% endif %}
 {% else %}
-{% if result_code not in ('missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown') %}
+{% if result_code not in ('nothing-to-do', 'missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown') %}
 {% if build_log_name %}
 {% with f = get_log(build_log_name) %}
 {{ include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
