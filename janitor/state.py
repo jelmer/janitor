@@ -53,14 +53,15 @@ async def store_packages(conn, packages):
     Args:
       packages: list of tuples with (
         name, branch_url, maintainer_email, uploader_emails, unstable_version,
-        vcs_type, vcs_url, vcs_browse, vcswatch_status, popcon_inst, removed)
+        vcs_type, vcs_url, vcs_browse, vcswatch_status, vcswatch_version,
+        popcon_inst, removed)
     """
     await conn.executemany(
         "INSERT INTO package "
         "(name, branch_url, maintainer_email, uploader_emails, "
         "unstable_version, vcs_type, vcs_url, vcs_browse, vcswatch_status, "
-        "popcon_inst, removed) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) "
+        "vcswatch_version, popcon_inst, removed) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) "
         "ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "maintainer_email = EXCLUDED.maintainer_email, "
@@ -70,6 +71,7 @@ async def store_packages(conn, packages):
         "vcs_url = EXCLUDED.vcs_url, "
         "vcs_browse = EXCLUDED.vcs_browse, "
         "vcswatch_status = EXCLUDED.vcswatch_status, "
+        "vcswatch_version = EXCLUDED.vcswatch_version, "
         "popcon_inst = EXCLUDED.popcon_inst, "
         "removed = EXCLUDED.removed",
         packages)
@@ -147,7 +149,8 @@ async def store_publish(conn, package, branch_name, main_branch_revision,
 class Package(object):
 
     def __init__(self, name, maintainer_email, uploader_emails, branch_url,
-                 vcs_type, vcs_url, vcs_browse, removed, vcswatch_status):
+                 vcs_type, vcs_url, vcs_browse, removed, vcswatch_status,
+                 vcswatch_version):
         self.name = name
         self.maintainer_email = maintainer_email
         self.uploader_emails = uploader_emails
@@ -157,11 +160,12 @@ class Package(object):
         self.vcs_browse = vcs_browse
         self.removed = removed
         self.vcswatch_status = vcswatch_status
+        self.vcswatch_version = vcswatch_version
 
     @classmethod
     def from_row(cls, row):
         return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6],
-                   row[7], row[8])
+                   row[7], row[8], row[9])
 
     def __lt__(self, other):
         return tuple(self) < tuple(other)
@@ -169,7 +173,7 @@ class Package(object):
     def __tuple__(self):
         return (self.name, self.maintainer_email, self.uploader_emails,
                 self.branch_url, self.vcs_type, self.vcs_url, self.vcs_browse,
-                self.removed, self.vcswatch_status)
+                self.removed, self.vcswatch_status, vcswatch_version)
 
 
 async def iter_packages(conn, package=None):
@@ -183,7 +187,8 @@ SELECT
   vcs_url,
   vcs_browse,
   removed,
-  vcswatch_status
+  vcswatch_status,
+  vcswatch_version
 FROM
   package
 """
@@ -214,7 +219,8 @@ SELECT
   vcs_url,
   vcs_browse,
   removed,
-  vcswatch_status
+  vcswatch_status,
+  vcswatch_version
 FROM
   package
 WHERE
@@ -1001,6 +1007,7 @@ SELECT
   package.vcs_browse,
   package.removed,
   package.vcswatch_status,
+  package.vcswatch_version,
   candidate.suite,
   candidate.context,
   candidate.value
@@ -1017,7 +1024,7 @@ INNER JOIN package on package.name = candidate.package
     elif packages is not None:
         query += " WHERE package = ANY($1::text[])"
         args.append(packages)
-    return [([Package.from_row(row)] + list(row[9:]))
+    return [([Package.from_row(row)] + list(row[10:]))
             for row in await conn.fetch(query, *args)]
 
 
