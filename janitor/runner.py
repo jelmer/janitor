@@ -546,6 +546,7 @@ class QueueProcessor(object):
 
         with tempfile.TemporaryDirectory() as output_directory:
             self.per_run_directory[item.id] = output_directory
+            # TODO(jelmer): pass in vcs_type
             result = await process_one(
                 self.database, output_directory, self.worker_kind,
                 item.branch_url, item.package, item.env, item.command,
