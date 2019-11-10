@@ -1265,6 +1265,7 @@ select
   count(review_status)
 from
   last_runs
-where result_code = 'success';
+where result_code = 'success'
+group by 1
 """
     return await conn.fetch(query)
