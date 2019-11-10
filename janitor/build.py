@@ -75,7 +75,7 @@ def get_latest_changelog_version(local_tree, subpath=''):
 
 
 def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
-          distribution=None):
+          distribution=None, subpath=''):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if result_dir:
         args.append('--result-dir=%s' % result_dir)
@@ -87,7 +87,7 @@ def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
     note('Building debian packages, running %r.', build_command)
     try:
         subprocess.check_call(
-            args, cwd=local_tree.basedir, stdout=outf, stderr=outf,
+            args, cwd=local_tree.abspath(subpath), stdout=outf, stderr=outf,
             env=env)
     except subprocess.CalledProcessError:
         raise BuildFailedError()
