@@ -17,7 +17,7 @@
 
 import aiohttp
 from aiohttp import web
-from aiohttp.client_exceptions import ClientResponseError
+from aiohttp.client_exceptions import ClientResponseError, ClientConnectorError
 import asyncio
 import json
 
@@ -72,7 +72,7 @@ async def pubsub_reader(session, url, reconnect_interval=60):
     while True:
         try:
             ws = await session.ws_connect(url)
-        except ClientResponseError as e:
+        except (ClientResponseError, ClientConnectorError) as e:
             warning('Unable to connect: %s' % e)
         else:
             while True:
