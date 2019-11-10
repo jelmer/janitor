@@ -63,7 +63,7 @@ async def process_all_build_failures(db):
             todo.append(
                 reprocess_run(db, package, log_id, result_code, description))
     for i in range(0, len(todo), 100):
-        await asyncio.gather(*todo[i:i+100])
+        await asyncio.wait(set(todo[i:i+100]))
 
 
 db = state.Database(config.database_location)
