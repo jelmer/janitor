@@ -343,7 +343,9 @@ def fix_missing_pkg_config(tree, error, committer=None):
             regex=True)
     if package is None:
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_build_dependency(
+        tree, package, committer=committer,
+        minimum_version=error.minimum_version)
 
 
 def fix_missing_command(tree, error, committer=None):
