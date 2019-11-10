@@ -221,6 +221,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'meson.build:10:0: ERROR: Dependency "gssdp-1.2" not '
             'found, tried pkgconfig'], 1, MissingPkgConfig('gssdp-1.2'))
+        self.run_test([
+            'meson.build:84:0: ERROR: Invalid version of dependency, '
+            'need \'libpeas-1.0\' [\'>= 1.24.0\'] found \'1.22.0\'.'], 1,
+            MissingPkgConfig('libpeas-1.0', '1.24.0'))
 
     def test_dh_with_order(self):
         self.run_test([
