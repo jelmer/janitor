@@ -508,7 +508,7 @@ ORDER BY priority ASC, id ASC
 async def iter_queue(conn, limit=None):
     query = """
 SELECT
-    queue.branch_url,
+    package.branch_url,
     queue.package,
     queue.committer,
     queue.command,
@@ -520,6 +520,7 @@ SELECT
     queue.requestor
 FROM
     queue
+LEFT JOIN package ON package.name = queue.package
 ORDER BY
 queue.priority ASC,
 queue.id ASC
@@ -533,7 +534,7 @@ queue.id ASC
 async def iter_queue_with_last_run(conn, limit=None):
     query = """
 SELECT
-      queue.branch_url,
+      package.branch_url,
       queue.package,
       queue.committer,
       queue.command,
@@ -554,6 +555,9 @@ SELECT
           SELECT id FROM run WHERE
             package = queue.package AND run.suite = queue.suite
           ORDER BY run.start_time desc LIMIT 1)
+  LEFT JOIN
+      package
+  ON package.name = queue.package
   ORDER BY
   queue.priority ASC,
   queue.id ASC
@@ -568,12 +572,12 @@ async def drop_queue_item(conn, queue_id):
     await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
-async def add_to_queue(conn, branch_url, package, command, suite, offset=0,
+async def add_to_queue(conn, package, command, suite, offset=0,
                        context=None, committer=None, estimated_duration=None,
                        refresh=False, requestor=None):
     await conn.execute(
         "INSERT INTO queue "
-        "(branch_url, package, command, committer, priority, context, "
+        "(package, command, committer, priority, context, "
         "estimated_duration, suite, refresh, requestor) "
         "VALUES "
         "($1, $2, $3, $4,"
@@ -581,10 +585,9 @@ async def add_to_queue(conn, branch_url, package, command, suite, offset=0,
         "$7, $8, $9, $10) ON CONFLICT (package, suite) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "estimated_duration = EXCLUDED.estimated_duration, "
-        "branch_url = EXCLUDED.branch_url, "
         "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor "
         "WHERE queue.priority >= EXCLUDED.priority",
-        branch_url, package, ' '.join(command), committer,
+        package, ' '.join(command), committer,
         offset, context, estimated_duration, suite, refresh, requestor)
     return True
 
