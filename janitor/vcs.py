@@ -39,6 +39,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    BranchUnsupported,
     )
 
 from .trace import note
@@ -73,13 +74,7 @@ def is_alioth_url(url):
 
 def _convert_branch_exception(vcs_url, e):
     if isinstance(e, BranchUnavailable):
-        if str(e).startswith('Unsupported protocol for url '):
-            if ('anonscm.debian.org' in str(e) or
-                    'svn.debian.org' in str(e)):
-                code = 'hosted-on-alioth'
-            else:
-                code = 'unsupported-vcs-protocol'
-        elif 'http code 429: Too Many Requests' in str(e):
+        if 'http code 429: Too Many Requests' in str(e):
             code = 'too-many-requests'
         elif is_alioth_url(vcs_url):
             code = 'hosted-on-alioth'
@@ -95,13 +90,24 @@ def _convert_branch_exception(vcs_url, e):
         else:
             code = 'branch-missing'
         return BranchOpenFailure(code, str(e))
+    if isinstance(e, BranchUnsupported):
+        if str(e).startswith('Unsupported protocol for url '):
+            if ('anonscm.debian.org' in str(e) or
+                    'svn.debian.org' in str(e)):
+                code = 'hosted-on-alioth'
+            else:
+                code = 'unsupported-vcs-protocol'
+        else:
+            code = 'unsupported-vcs'
+        return BranchOpenFailure(code, str(e))
+
     return None
 
 
 def open_branch_ext(vcs_url, possible_transports=None, probers=None):
     try:
         return open_branch(vcs_url, possible_transports, probers=probers)
-    except (BranchUnavailable, BranchMissing) as e:
+    except (BranchUnavailable, BranchMissing, BranchUnsupported) as e:
         raise _convert_branch_exception(vcs_url, e)
 
 
@@ -110,7 +116,7 @@ def open_branch_containing_ext(
     try:
         return open_branch_containing(
             vcs_url, possible_transports, probers=probers)
-    except (BranchUnavailable, BranchMissing) as e:
+    except (BranchUnavailable, BranchMissing, BranchUnsupported) as e:
         raise _convert_branch_exception(vcs_url, e)
 
 
