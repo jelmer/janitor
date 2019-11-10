@@ -479,7 +479,9 @@ FIXERS = [
 ]
 
 
-def resolve_error(tree, error, committer=None):
+def resolve_error(tree, error, committer=None, subpath=''):
+    if subpath:
+        raise NotImplementedError
     for error_cls, fixer in FIXERS:
         if isinstance(error, error_cls):
             return fixer(tree, error, committer)
@@ -490,13 +492,14 @@ def resolve_error(tree, error, committer=None):
 def build_incrementally(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
-        committer=None, max_iterations=DEFAULT_MAX_ITERATIONS):
+        committer=None, max_iterations=DEFAULT_MAX_ITERATIONS,
+        subpath=''):
     fixed_errors = []
     while True:
         try:
             return attempt_build(
                 local_tree, suffix, build_suite, output_directory,
-                build_command, build_changelog_entry)
+                build_command, build_changelog_entry, subpath=subpath)
         except SbuildFailure as e:
             if e.error is None:
                 warning('Build failed with unidentified error. Giving up.')
@@ -508,9 +511,11 @@ def build_incrementally(
                     and len(fixed_errors) > max_iterations:
                 warning('Last fix did not address the issue. Giving up.')
                 raise
-            reset_tree(local_tree)
+            reset_tree(local_tree, subpath)
             try:
-                if not resolve_error(local_tree, e.error, committer=committer):
+                if not resolve_error(
+                        local_tree, e.error, committer=committer,
+                        subpath=subpath):
                     warning('Failed to resolve error %r. Giving up.', e.error)
                     raise
             except CircularDependency:

@@ -24,6 +24,7 @@ import os
 import subprocess
 import sys
 
+from breezy import osutils
 from breezy.config import GlobalStack
 from breezy.errors import (
     NoRoundtrippingSupport,
@@ -440,13 +441,14 @@ class WorkerFailure(Exception):
         self.description = description
 
 
-def tree_set_changelog_version(tree, build_version):
-    with tree.get_file('debian/changelog') as f:
+def tree_set_changelog_version(tree, build_version, subpath=''):
+    cl_path = osutils.pathjoin(subpath, 'debian/changelog')
+    with tree.get_file(cl_path) as f:
         cl = Changelog(f)
     if Version(str(cl.version) + '~') > Version(build_version):
         return
     cl.set_version(build_version)
-    with open(tree.abspath('debian/changelog'), 'w') as f:
+    with open(tree.abspath(cl_path), 'w') as f:
         cl.write_to_open_file(f)
 
 
@@ -596,12 +598,13 @@ def process_package(vcs_url, env, command, output_directory,
                 # This allows us to upload incremented versions for subsequent
                 # runs.
                 tree_set_changelog_version(
-                    ws.local_tree, last_build_version)
+                    ws.local_tree, last_build_version, subpath=subpath)
             try:
                 (changes_name, cl_version) = build_incrementally(
                     ws.local_tree, '~' + subworker.build_version_suffix(),
                     build_suite, output_directory,
-                    build_command, committer=env.get('COMMITTER'))
+                    build_command, committer=env.get('COMMITTER'),
+                    subpath=subpath)
             except MissingUpstreamTarball:
                 raise WorkerFailure(
                     'build-missing-upstream-source',
