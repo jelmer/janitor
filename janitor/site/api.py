@@ -84,7 +84,7 @@ async def schedule(conn, policy, package, suite, offset=None,
     command = full_command(suite, update_changelog)
     estimated_duration = await estimate_duration(conn, package.name, suite)
     await state.add_to_queue(
-        conn, package.branch_url, package.name, command, suite, offset,
+        conn, package.name, command, suite, offset,
         estimated_duration=estimated_duration, refresh=refresh,
         requestor=requestor, committer=committer)
     return offset, estimated_duration

@@ -42,8 +42,7 @@ async def main(db, result_code):
                 continue
             print('Rescheduling %s, %s' % (run.package, run.suite))
             await state.add_to_queue(
-                conn2, packages[run.package].branch_url,
-                run.package, run.command.split(' '), run.suite,
+                conn2, run.package, run.command.split(' '), run.suite,
                 estimated_duration=run.duration, requestor='reschedule',
                 refresh=args.refresh, offset=args.offset)
 

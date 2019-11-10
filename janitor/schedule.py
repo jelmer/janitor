@@ -25,9 +25,6 @@ __all__ = [
 from datetime import datetime, timedelta
 from debian.deb822 import PkgRelation
 
-from silver_platter.debian import (
-    convert_debian_vcs_url,
-)
 from . import (
     state,
     trace,
@@ -98,12 +95,7 @@ def full_command(suite, update_changelog):
 
 async def schedule_from_candidates(policy, iter_candidates):
     for package, suite, context, value in iter_candidates:
-        if package.vcs_url is None:
-            continue
-        try:
-            vcs_url = convert_debian_vcs_url(package.vcs_type, package.vcs_url)
-        except ValueError as e:
-            trace.note('%s: %s', package.name, e)
+        if package.branch_url is None:
             continue
 
         publish_mode, update_changelog, committer = apply_policy(
@@ -119,7 +111,7 @@ async def schedule_from_candidates(policy, iter_candidates):
         entry_command = full_command(suite, update_changelog)
 
         yield (
-            vcs_url,
+            package.name,
             {'COMMITTER': committer,
              'PACKAGE': package.name,
              'CONTEXT': context,
@@ -190,10 +182,9 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
                   if p.removed)
     max_inst = max([(v or 0) for v in popcon.values()])
     trace.note('Maximum inst count: %d', max_inst)
-    for vcs_url, env, command, suite, value in todo:
-        assert vcs_url is not None
+    for package, env, command, suite, value in todo:
+        assert package is not None
         assert value > 0, "Value: %s" % value
-        package = env['PACKAGE']
         if package in removed:
             continue
         estimated_duration = await estimate_duration(
@@ -222,7 +213,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
 
         if not dry_run:
             added = await state.add_to_queue(
-                conn, vcs_url, package, command, suite, offset=int(offset),
+                conn, package, command, suite, offset=int(offset),
                 estimated_duration=estimated_duration,
                 context=env.get('CONTEXT'), committer=env.get('COMMITTER'),
                 requestor='scheduler')

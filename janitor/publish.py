@@ -664,8 +664,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             if is_conflicted(mp):
                 note('%s is conflicted. Rescheduling.', mp.url)
                 await state.add_to_queue(
-                    conn, mp_run.branch_url, mp_run.package,
-                    shlex.split(mp_run.command),
+                    conn, mp_run.package, shlex.split(mp_run.command),
                     mp_run.suite, offset=-2, refresh=True,
                     requestor='publisher')
 
