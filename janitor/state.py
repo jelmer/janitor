@@ -555,7 +555,7 @@ SELECT
       queue.requestor,
       package.vcs_type,
       run.id,
-      run.result_code,
+      run.result_code
   FROM
       queue
   LEFT JOIN
