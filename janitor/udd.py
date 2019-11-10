@@ -29,7 +29,9 @@ from silver_platter.debian import (
 )
 from . import trace
 from .config import read_config
-from .vcs import is_alioth_url
+from .vcs import (
+    is_alioth_url,
+    )
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
     )
@@ -41,6 +43,8 @@ from lintian_brush.salsa import (
 from lintian_brush.vcs import (
     split_vcs_url,
     fixup_broken_git_url,
+    canonicalize_vcs_url,
+    unsplit_vcs_url,
     )
 
 DEFAULT_VALUE_UNCHANGED = 60
@@ -349,17 +353,16 @@ async def main():
         if vcs_url and vcs_branch:
             (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
             if orig_branch != vcs_branch:
-                new_vcs_url = '%s -b %s' % (repo_url, vcs_branch)
-                if subpath:
-                    new_vcs_url = '%s [%s]' % (new_vcs_url, subpath)
+                new_vcs_url = unsplit_vcs_url(repo_url, vcs_branch, subpath)
                 trace.note('Fixing up branch name from vcswatch: %s -> %s',
                            vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
 
         if vcs_type is not None:
+            # Drop the subpath, we're storing it separately.
             (url, branch, subpath) = split_vcs_url(vcs_url)
-            if branch:
-                url = '%s -b %s' % (url, branch)
+            url = unsplit_vcs_url(url, branch)
+            url = canonicalize_vcs_url(vcs_type, url)
             try:
                 branch_url = convert_debian_vcs_url(
                     vcs_type.capitalize(), url)
