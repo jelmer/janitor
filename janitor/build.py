@@ -28,6 +28,7 @@ import subprocess
 
 from debian.changelog import Changelog
 
+from breezy import osutils
 from breezy.plugins.debian.util import (
     changes_filename,
     get_build_architecture,
@@ -67,9 +68,8 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
 
 
 def get_latest_changelog_version(local_tree, subpath=''):
-    with open(os.path.join(
-            local_tree.local_abspath(subpath), 'debian', 'changelog'),
-            'r') as f:
+    path = osutils.pathjoin(subpath, 'debian/changelog')
+    with local_tree.get_file(path) as f:
         cl = Changelog(f, max_blocks=1)
         return cl.package, cl.version
 
@@ -98,7 +98,7 @@ def attempt_build(
         build_changelog_entry='Build for debian-janitor apt repository.',
         subpath=''):
     add_dummy_changelog_entry(
-        local_tree.local_abspath(subpath), suffix, build_suite,
+        local_tree.abspath(subpath), suffix, build_suite,
         build_changelog_entry)
     build_log_path = os.path.join(output_directory, 'build.log')
     try:
