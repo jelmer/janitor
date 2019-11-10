@@ -891,6 +891,8 @@ build_failure_regexps = [
     (r'dh: The --before option is not supported any longer \(#932537\). '
      r'Use override targets instead.', None),
     ('(.*):([0-9]+): undefined reference to `(.*)\'', None),
+    ('(.*):([0-9]+): multiple definition of `(.*)\'; (.*):([0-9]+): '
+     'first defined here', None),
     ('dh(.*): debhelper compat level specified both in debian/compat '
      'and via build-dependency on debhelper-compat', None),
     ('dh(.*): Please specify the compatibility level in debian/compat',
