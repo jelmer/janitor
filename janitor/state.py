@@ -576,8 +576,8 @@ SELECT
         query += " LIMIT %d" % limit
     for row in await conn.fetch(query):
         yield (
-            QueueItem.from_row(row[:len(QueueItem.__slots__)]),
-            row[10], row[11])
+            QueueItem.from_row(row[:-2]),
+            row[-2], row[-1])
 
 
 async def drop_queue_item(conn, queue_id):
