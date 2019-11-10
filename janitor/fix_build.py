@@ -264,7 +264,8 @@ def fix_missing_python_distribution(tree, error, committer=None):
     for dep_pkg in extra_build_deps:
         assert dep_pkg is not None
         if not add_build_dependency(
-                tree, dep_pkg, error.minimum_version, committer=committer):
+                tree, dep_pkg, minimum_version=error.minimum_version,
+                committer=committer):
             return False
     return True
 

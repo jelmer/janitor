@@ -212,6 +212,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test(['make[1]: ./docker: Command not found'], None)
         self.run_test([
             'make: dh_elpa: Command not found'], 1, MissingCommand('dh_elpa'))
+        self.run_test([
+            '/bin/bash: valac: command not found'], 1,
+            MissingCommand('valac'))
 
     def test_pkg_config_missing(self):
         self.run_test([

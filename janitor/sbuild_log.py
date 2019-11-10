@@ -832,6 +832,7 @@ build_failure_regexps = [
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
+    (r'\/bin\/bash: (.*): command not found', command_missing),
     (r'/usr/bin/env: ‘(.*)’: No such file or directory',
      command_missing),
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
