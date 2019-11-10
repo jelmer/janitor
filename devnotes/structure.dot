@@ -4,15 +4,20 @@ digraph janitor {
 
     "db" [style="filled" shape=cylinder fillcolor=lightblue];
 
+    "apache 1" -> "site 1";
+    "apache 1" -> "site 2";
+    "apache 2" -> "site 1";
+    "apache 2" -> "site 2";
+
     "site 1" -> "runner";
     "site 2" -> "runner";
     "site 1" -> "publisher";
     "site 2" -> "publisher";
-    "runner" -> "publisher";
+    "runner" -> "publisher" [style=dotted];
     "site 1" -> "db";
     "site 2" -> "db";
-    "runner" -> "worker 1";
-    "runner" -> "worker 2";
+    "worker 1" -> "runner";
+    "worker 2" -> "runner";
     "publisher" -> "db";
     "runner" -> "db";
 
