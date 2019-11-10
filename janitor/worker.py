@@ -676,7 +676,8 @@ def main(argv=None):
         type=str, default=None)
     parser.add_argument(
         '--subpath', type=str,
-        help='Path in the branch under which the package lives.')
+        help='Path in the branch under which the package lives.',
+        default='')
     parser.add_argument(
         '--build-command',
         help='Build package to verify it.', type=str,
