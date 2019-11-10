@@ -215,7 +215,7 @@ async def invoke_subprocess_worker(
         pre_check=None, post_check=None,
         build_command=None, log_path=None,
         resume_branch_result=None,
-        last_build_version=None):
+        last_build_version=None, subpath=None):
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
@@ -240,6 +240,8 @@ async def invoke_subprocess_worker(
         args.append('--post-check=%s' % post_check)
     if build_command:
         args.append('--build-command=%s' % build_command)
+    if subpath:
+        args.append('--subpath=%s' % subpath)
     if resume_branch_result:
         resume_result_path = os.path.join(
             output_directory, 'previous_result.json')
@@ -292,6 +294,7 @@ async def process_one(
                 logfilenames=[])
 
         if subpath:
+            # TODO(jelmer): cluster all packages for a single repository
             return JanitorResult(
                 pkg, log_id=log_id, code='package-in-subpath',
                 description=(
@@ -366,7 +369,8 @@ async def process_one(
             pre_check=pre_check, post_check=post_check,
             build_command=build_command, log_path=log_path,
             resume_branch_result=resume_branch_result,
-            last_build_version=last_build_version)
+            last_build_version=last_build_version,
+            subpath=subpath)
 
     logfilenames = []
     for name in os.listdir(output_directory):

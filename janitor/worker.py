@@ -106,7 +106,7 @@ class SubWorker(object):
         """
 
     def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata):
+                     base_metadata, subpath=None):
         """Make the actual changes to a tree.
 
         Args:
@@ -115,6 +115,7 @@ class SubWorker(object):
           metadata: JSON Dictionary that can be used for storing results
           base_metadata: Optional JSON Dictionary with results of
             any previous runs this one is based on
+          subpath: Path in the branch where the package resides
         """
         raise NotImplementedError(self.make_changes)
 
@@ -158,7 +159,7 @@ class LintianBrushWorker(SubWorker):
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata):
+                     base_metadata, subpath=None):
         fixers = get_fixers(
             available_lintian_fixers(), tags=self.args.tags)
 
@@ -196,7 +197,7 @@ class LintianBrushWorker(SubWorker):
                     minimum_certainty=minimum_certainty,
                     allow_reformatting=allow_reformatting,
                     trust_package=TRUST_PACKAGE,
-                    net_access=True)
+                    net_access=True, subpath=(subpath or '.'))
 
         if overall_result.failed_fixers:
             for fixer_name, failure in overall_result.failed_fixers.items():
@@ -247,7 +248,13 @@ class NewUpstreamWorker(SubWorker):
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata):
+                     base_metadata, subpath=None):
+        if subpath:
+            raise WorkerFailure(
+                code='package-in-subpath',
+                description=(
+                    'The package is stored in a subpath rather than the '
+                    'repository root.'))
         # Make sure that the quilt patches applied in the first place..
         with local_tree.lock_write():
             if control_files_in_root(local_tree):
@@ -405,7 +412,7 @@ class JustBuildWorker(SubWorker):
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata):
+                     base_metadata, subpath=None):
         return None
 
     def build_suite(self):
@@ -458,7 +465,7 @@ def process_package(vcs_url, env, command, output_directory,
                     possible_hosters=None, resume_branch_url=None,
                     cached_branch_url=None, tgz_repo=False,
                     last_build_version=None,
-                    resume_subworker_result=None):
+                    resume_subworker_result=None, subpath=None):
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg
@@ -566,7 +573,7 @@ def process_package(vcs_url, env, command, output_directory,
         try:
             description = subworker.make_changes(
                 ws.local_tree, provide_context, metadata['subworker'],
-                resume_subworker_result)
+                resume_subworker_result, subpath=subpath)
         finally:
             metadata['revision'] = (
                 ws.local_tree.branch.last_revision().decode())
@@ -665,6 +672,9 @@ def main(argv=None):
         help='Command to run to check package before pushing.',
         type=str, default=None)
     parser.add_argument(
+        '--subpath', type=str,
+        help='Path in the branch under which the package lives.')
+    parser.add_argument(
         '--build-command',
         help='Build package to verify it.', type=str,
         default='sbuild -A -s -v -d$DISTRIBUTION --build-dep-resolver=aspcud')
@@ -702,6 +712,7 @@ def main(argv=None):
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,
             cached_branch_url=args.cached_branch_url,
+            subpath=args.subpath,
             tgz_repo=args.tgz_repo,
             last_build_version=args.last_build_version,
             resume_subworker_result=resume_subworker_result)
