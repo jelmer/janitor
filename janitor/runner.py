@@ -546,7 +546,6 @@ class QueueProcessor(object):
 
         with tempfile.TemporaryDirectory() as output_directory:
             self.per_run_directory[item.id] = output_directory
-            # TODO(jelmer): pass in vcs_type
             result = await process_one(
                 self.database, output_directory, self.worker_kind,
                 item.branch_url, item.package, item.env, item.command,
@@ -555,7 +554,8 @@ class QueueProcessor(object):
                 dry_run=self.dry_run, incoming=self.incoming,
                 debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
                 logfile_manager=self.logfile_manager,
-                use_cached_only=self.use_cached_only, refresh=item.refresh)
+                use_cached_only=self.use_cached_only, refresh=item.refresh,
+                vcs_type=item.vcs_type)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())

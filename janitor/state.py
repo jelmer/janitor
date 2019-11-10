@@ -433,10 +433,11 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
 class QueueItem(object):
 
     __slots__ = ['id', 'branch_url', 'package', 'env', 'command',
-                 'estimated_duration', 'suite', 'refresh', 'requestor']
+                 'estimated_duration', 'suite', 'refresh', 'requestor',
+                 'vcs_type']
 
     def __init__(self, id, branch_url, package, env, command,
-                 estimated_duration, suite, refresh, requestor):
+                 estimated_duration, suite, refresh, requestor, vcs_type):
         self.id = id
         self.package = package
         self.branch_url = branch_url
@@ -446,12 +447,13 @@ class QueueItem(object):
         self.suite = suite
         self.refresh = refresh
         self.requestor = requestor
+        self.vcs_type = vcs_type
 
     @classmethod
     def from_row(cls, row):
         (branch_url, package, committer,
             command, context, queue_id, estimated_duration,
-            suite, refresh, requestor) = row
+            suite, refresh, requestor, vcs_type) = row
         env = {
             'COMMITTER': committer or None,
             'CONTEXT': context,
@@ -461,12 +463,13 @@ class QueueItem(object):
                 package=package, env=env,
                 command=shlex.split(command),
                 estimated_duration=estimated_duration,
-                suite=suite, refresh=refresh, requestor=requestor)
+                suite=suite, refresh=refresh, requestor=requestor,
+                vcs_type=vcs_type)
 
     def _tuple(self):
         return (self.id, self.branch_url, self.package, self.env, self.command,
                 self.estimated_duration, self.suite, self.refresh,
-                self.requestor)
+                self.requestor, self.vcs_type)
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
@@ -517,7 +520,8 @@ SELECT
     queue.estimated_duration,
     queue.suite,
     queue.refresh,
-    queue.requestor
+    queue.requestor,
+    package.vcs_type
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -544,8 +548,9 @@ SELECT
       queue.suite,
       queue.refresh,
       queue.requestor,
+      package.vcs_type,
       run.id,
-      run.result_code
+      run.result_code,
   FROM
       queue
   LEFT JOIN
@@ -565,7 +570,9 @@ SELECT
     if limit:
         query += " LIMIT %d" % limit
     for row in await conn.fetch(query):
-        yield QueueItem.from_row(row[:10]), row[10], row[11]
+        yield (
+            QueueItem.from_row(row[:len(QueueItem.__slots__)]),
+            row[10], row[11])
 
 
 async def drop_queue_item(conn, queue_id):
