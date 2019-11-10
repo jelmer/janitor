@@ -343,6 +343,13 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             "./testFortranCompiler.f:4: undefined reference to `sgemm_'",
             ], 1)
 
+    def test_multiple_definition(self):
+        self.run_test([
+            './dconf-paths.c:249: multiple definition of '
+            '`dconf_is_rel_dir\'; client/libdconf-client.a(dconf-paths.c.o):'
+            './obj-x86_64-linux-gnu/../common/dconf-paths.c:249: '
+            'first defined here'], 1)
+
     def test_missing_ruby_gem(self):
         self.run_test([
             'Could not find gem \'childprocess (~> 0.5)\', which is '
