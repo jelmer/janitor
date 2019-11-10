@@ -62,6 +62,17 @@ LINTIAN_BRUSH_TAG_DEFAULT_VALUE = 5
 DEFAULT_ESTIMATED_DURATION = 15
 
 
+def estimate_lintian_fixes_value(tags):
+    if not (set(tags) - set(DEFAULT_ADDON_FIXERS)):
+        value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
+    else:
+        value = DEFAULT_VALUE_LINTIAN_BRUSH
+    for tag in tags:
+        value += LINTIAN_BRUSH_TAG_VALUES.get(
+            tag, LINTIAN_BRUSH_TAG_DEFAULT_VALUE)
+    return value
+
+
 async def connect_udd_mirror():
     """Connect to the public UDD mirror."""
     return await asyncpg.connect(
@@ -158,13 +169,7 @@ and vcs_type != ''"""
             self, packages, available_fixers):
         async for package, tags in self.iter_source_packages_by_lintian(
                 available_fixers, packages if packages else None):
-            if not (set(tags) - set(DEFAULT_ADDON_FIXERS)):
-                value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
-            else:
-                value = DEFAULT_VALUE_LINTIAN_BRUSH
-            for tag in tags:
-                value += LINTIAN_BRUSH_TAG_VALUES.get(
-                    tag, LINTIAN_BRUSH_TAG_DEFAULT_VALUE)
+            value = estimate_lintian_fixes_value(tags)
             context = ' '.join(sorted(tags))
             yield package, 'lintian-fixes', context, value
 
