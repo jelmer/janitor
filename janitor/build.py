@@ -66,9 +66,10 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
         stderr=subprocess.DEVNULL)
 
 
-def get_latest_changelog_version(local_tree):
+def get_latest_changelog_version(local_tree, subpath=''):
     with open(os.path.join(
-            local_tree.basedir, 'debian', 'changelog'), 'r') as f:
+            local_tree.local_abspath(subpath), 'debian', 'changelog'),
+            'r') as f:
         cl = Changelog(f, max_blocks=1)
         return cl.package, cl.version
 
@@ -94,19 +95,23 @@ def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
 
 def attempt_build(
         local_tree, suffix, build_suite, output_directory, build_command,
-        build_changelog_entry='Build for debian-janitor apt repository.'):
+        build_changelog_entry='Build for debian-janitor apt repository.',
+        subpath=''):
     add_dummy_changelog_entry(
-        local_tree.basedir, suffix, build_suite, build_changelog_entry)
+        local_tree.local_abspath(subpath), suffix, build_suite,
+        build_changelog_entry)
     build_log_path = os.path.join(output_directory, 'build.log')
     try:
         with open(build_log_path, 'w') as f:
             build(local_tree, outf=f, build_command=build_command,
-                  result_dir=output_directory, distribution=build_suite)
+                  result_dir=output_directory, distribution=build_suite,
+                  subpath=subpath)
     except BuildFailedError:
         with open(build_log_path, 'rb') as f:
             raise worker_failure_from_sbuild_log(f)
 
-    (cl_package, cl_version) = get_latest_changelog_version(local_tree)
+    (cl_package, cl_version) = get_latest_changelog_version(
+        local_tree, subpath)
     changes_name = changes_filename(
         cl_package, cl_version, get_build_architecture())
     changes_path = os.path.join(output_directory, changes_name)

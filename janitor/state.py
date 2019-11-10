@@ -52,9 +52,9 @@ async def store_packages(conn, packages):
 
     Args:
       packages: list of tuples with (
-        name, branch_url, subpath, maintainer_email, uploader_emails, unstable_version,
-        vcs_type, vcs_url, vcs_browse, vcswatch_status, vcswatch_version,
-        popcon_inst, removed)
+        name, branch_url, subpath, maintainer_email, uploader_emails,
+        unstable_version, vcs_type, vcs_url, vcs_browse, vcswatch_status,
+        vcswatch_version, popcon_inst, removed)
     """
     await conn.executemany(
         "INSERT INTO package "

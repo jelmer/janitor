@@ -329,7 +329,6 @@ async def main():
                    args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
-
         if is_alioth_url(vcs_url):
             salsa_url = guess_repository_url(name, maintainer_email)
             if not salsa_url:
