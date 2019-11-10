@@ -329,6 +329,7 @@ async def main():
                    args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
+
         if is_alioth_url(vcs_url):
             salsa_url = guess_repository_url(name, maintainer_email)
             if not salsa_url:
@@ -351,19 +352,23 @@ async def main():
             if orig_branch != vcs_branch:
                 new_vcs_url = '%s -b %s' % (repo_url, vcs_branch)
                 if subpath:
-                    new_vcs_url = "%s [%s]" % (new_vcs_url, subpath)
+                    new_vcs_url = '%s [%s]' % (new_vcs_url, subpath)
                 trace.note('Fixing up branch name from vcswatch: %s -> %s',
                            vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
 
         if vcs_type is not None:
+            (url, branch, subpath) = split_vcs_url(vcs_url)
+            if branch:
+                url = '%s -b %s' % (url, branch)
             try:
                 branch_url = convert_debian_vcs_url(
-                    vcs_type.capitalize(), vcs_url)
+                    vcs_type.capitalize(), url)
             except ValueError as e:
                 trace.note('%s: %s', name, e)
                 branch_url = None
         else:
+            subpath = None
             branch_url = None
 
         if name not in removals:
@@ -372,7 +377,7 @@ async def main():
             removed = Version(sid_version) <= removals[name]
 
         packages.append((
-            name, branch_url, maintainer_email, uploader_emails,
+            name, branch_url, subpath, maintainer_email, uploader_emails,
             sid_version, vcs_type, vcs_url, vcs_browser,
             vcswatch_status.lower() if vcswatch_status else None,
             vcswatch_version, insts, removed))
