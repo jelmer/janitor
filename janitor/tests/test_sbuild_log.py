@@ -225,6 +225,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'meson.build:84:0: ERROR: Invalid version of dependency, '
             'need \'libpeas-1.0\' [\'>= 1.24.0\'] found \'1.22.0\'.'], 1,
             MissingPkgConfig('libpeas-1.0', '1.24.0'))
+        self.run_test([
+            'No package \'tepl-3\' found'], 1, MissingPkgConfig('tepl-3'))
 
     def test_dh_with_order(self):
         self.run_test([
