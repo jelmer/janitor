@@ -103,6 +103,9 @@ lintian_brush_fixer_failed_count = Gauge(
     'lintian_brush_fixer_failed_count',
     'Number of failures per lintian-brush fixer.',
     labelnames=('fixer', ))
+review_status_count = Gauge(
+    'reivew_status_count', 'Last runs by review status.',
+    labelnames=('review_status',))
 
 
 class NoChangesFile(Exception):
@@ -491,6 +494,8 @@ async def export_stats(db):
                 never_processed_count.labels(suite).set(count)
             for fixer, count in await state.iter_failed_lintian_fixers(conn):
                 lintian_brush_fixer_failed_count.labels(fixer).set(count)
+            for review_status, count in await state.iter_review_status(conn):
+                review_status_count.labels(review_status).set(count)
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)

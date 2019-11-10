@@ -1256,3 +1256,15 @@ and
   vcswatch_status in ('old', 'new', 'commits', 'ok')
 """
     return await conn.fetch(query)
+
+
+async def iter_review_status(conn):
+    query = """\
+select
+  review_status,
+  count(review_status)
+from
+  last_runs
+where result_code = 'success';
+"""
+    return await conn.fetch(query)
