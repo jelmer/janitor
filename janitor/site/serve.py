@@ -191,7 +191,8 @@ if __name__ == '__main__':
                 stats = await state.stats_by_result_codes(conn, suite=suite)
                 never_processed = sum(dict(
                     await state.get_never_processed(conn)).values())
-                text = await generate_result_code_index(stats, never_processed, suite)
+                text = await generate_result_code_index(
+                    stats, never_processed, suite)
             else:
                 runs = [run async for run in state.iter_last_runs(
                     conn, code, suite=suite)]

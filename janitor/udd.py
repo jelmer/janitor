@@ -324,8 +324,8 @@ async def main():
     trace.note('Updating package metadata.')
     packages = []
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-               vcs_branch, vcs_browser, vcswatch_status,
-               sid_version, vcswatch_version) in udd.iter_packages_with_metadata(
+               vcs_branch, vcs_browser, vcswatch_status, sid_version,
+               vcswatch_version) in udd.iter_packages_with_metadata(
                    args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
 

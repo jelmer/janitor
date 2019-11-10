@@ -34,7 +34,6 @@ from breezy.errors import (
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
-from silver_platter.debian import select_probers
 from silver_platter.utils import (
     open_branch_containing,
     open_branch,

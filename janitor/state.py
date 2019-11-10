@@ -173,7 +173,7 @@ class Package(object):
     def __tuple__(self):
         return (self.name, self.maintainer_email, self.uploader_emails,
                 self.branch_url, self.vcs_type, self.vcs_url, self.vcs_browse,
-                self.removed, self.vcswatch_status, vcswatch_version)
+                self.removed, self.vcswatch_status, self.vcswatch_version)
 
 
 async def iter_packages(conn, package=None):
