@@ -509,6 +509,10 @@ def meson_pkg_config_missing(m):
     return MissingPkgConfig(m.group(3))
 
 
+def meson_pkg_config_too_low(m):
+    return MissingPkgConfig(m.group(3), m.group(4))
+
+
 class DhWithOrderIncorrect(object):
 
     kind = 'debhelper-argument-order'
@@ -834,6 +838,9 @@ build_failure_regexps = [
      pkg_config_missing),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
      'tried pkgconfig', meson_pkg_config_missing),
+    ('meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
+     'need \'([^\']+)\' \\[\'>= ([^\']+)\'\\] found \'([^\']+)\'\\.',
+     meson_pkg_config_too_low),
     (r'dh: Unknown sequence --(.*) '
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
