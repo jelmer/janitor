@@ -288,7 +288,8 @@ class NewUpstreamWorker(SubWorker):
                 raise WorkerFailure(error_code, error_description)
             except UpstreamBranchUnavailable as e:
                 error_description = (
-                    "The upstream branch at %s was unavailable." % e.location)
+                    "The upstream branch at %s was unavailable: %s" % (
+                        e.location, e.error))
                 error_code = 'upstream-branch-unavailable'
                 raise WorkerFailure(error_code, error_description)
             except UpstreamMergeConflicted as e:
