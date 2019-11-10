@@ -259,7 +259,8 @@ async def process_one(
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
-        use_cached_only=False, refresh=False, vcs_type=None):
+        use_cached_only=False, refresh=False, vcs_type=None,
+        subpath=None):
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
@@ -282,7 +283,7 @@ async def process_one(
     if not use_cached_only:
         probers = select_preferred_probers(vcs_type)
         try:
-            main_branch, subpath = open_branch_ext(
+            main_branch = open_branch_ext(
                 vcs_url, possible_transports=possible_transports,
                 probers=probers)
         except BranchOpenFailure as e:
@@ -555,7 +556,7 @@ class QueueProcessor(object):
                 debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only, refresh=item.refresh,
-                vcs_type=item.vcs_type)
+                vcs_type=item.vcs_type, subpath=item.subpath)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())

@@ -52,18 +52,19 @@ async def store_packages(conn, packages):
 
     Args:
       packages: list of tuples with (
-        name, branch_url, maintainer_email, uploader_emails, unstable_version,
+        name, branch_url, subpath, maintainer_email, uploader_emails, unstable_version,
         vcs_type, vcs_url, vcs_browse, vcswatch_status, vcswatch_version,
         popcon_inst, removed)
     """
     await conn.executemany(
         "INSERT INTO package "
-        "(name, branch_url, maintainer_email, uploader_emails, "
+        "(name, branch_url, subpath, maintainer_email, uploader_emails, "
         "unstable_version, vcs_type, vcs_url, vcs_browse, vcswatch_status, "
         "vcswatch_version, popcon_inst, removed) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) "
         "ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
+        "subpath = EXCLUDED.subpath, "
         "maintainer_email = EXCLUDED.maintainer_email, "
         "uploader_emails = EXCLUDED.uploader_emails, "
         "unstable_version = EXCLUDED.unstable_version, "
@@ -432,15 +433,16 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
 
 class QueueItem(object):
 
-    __slots__ = ['id', 'branch_url', 'package', 'env', 'command',
+    __slots__ = ['id', 'branch_url', 'subpath', 'package', 'env', 'command',
                  'estimated_duration', 'suite', 'refresh', 'requestor',
                  'vcs_type']
 
-    def __init__(self, id, branch_url, package, env, command,
+    def __init__(self, id, branch_url, subpath, package, env, command,
                  estimated_duration, suite, refresh, requestor, vcs_type):
         self.id = id
         self.package = package
         self.branch_url = branch_url
+        self.subpath = subpath
         self.env = env
         self.command = command
         self.estimated_duration = estimated_duration
@@ -451,7 +453,7 @@ class QueueItem(object):
 
     @classmethod
     def from_row(cls, row):
-        (branch_url, package, committer,
+        (branch_url, subpath, package, committer,
             command, context, queue_id, estimated_duration,
             suite, refresh, requestor, vcs_type) = row
         env = {
@@ -460,6 +462,7 @@ class QueueItem(object):
         }
         return cls(
                 id=queue_id, branch_url=branch_url,
+                subpath=subpath,
                 package=package, env=env,
                 command=shlex.split(command),
                 estimated_duration=estimated_duration,
@@ -467,9 +470,9 @@ class QueueItem(object):
                 vcs_type=vcs_type)
 
     def _tuple(self):
-        return (self.id, self.branch_url, self.package, self.env, self.command,
-                self.estimated_duration, self.suite, self.refresh,
-                self.requestor, self.vcs_type)
+        return (self.id, self.branch_url, self.subpath, self.package, self.env,
+                self.command, self.estimated_duration, self.suite,
+                self.refresh, self.requestor, self.vcs_type)
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
@@ -512,6 +515,7 @@ async def iter_queue(conn, limit=None):
     query = """
 SELECT
     package.branch_url,
+    package.subpath,
     queue.package,
     queue.committer,
     queue.command,
@@ -539,6 +543,7 @@ async def iter_queue_with_last_run(conn, limit=None):
     query = """
 SELECT
       package.branch_url,
+      package.subpath,
       queue.package,
       queue.committer,
       queue.command,
