@@ -576,7 +576,7 @@ class MissingPerlFile(object):
 
     kind = 'missing-perl-file'
 
-    def __init__(self, filename, inc):
+    def __init__(self, filename, inc=None):
         self.filename = filename
         self.inc = inc
 
@@ -595,6 +595,10 @@ class MissingPerlFile(object):
 
 def perl_missing_file(m):
     return MissingPerlFile(m.group(1), m.group(2).split(' '))
+
+
+def perl_file_not_found(m):
+    return MissingPerlFile(m.group(1))
 
 
 class MissingMavenArtifacts(object):
@@ -850,6 +854,8 @@ build_failure_regexps = [
      perl_missing_module),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_file),
+    (r'Can\'t open perl script "(.*)": No such file or directory',
+     perl_file_not_found),
     (r'\[ERROR] Failed to execute goal on project .*: Could not resolve '
      r'dependencies for project .*: The following artifacts could not be '
      r'resolved: (.*): Cannot access central '

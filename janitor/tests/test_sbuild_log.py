@@ -276,6 +276,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
                 '/usr/share/perl5', '/usr/lib/x86_64-linux-gnu/perl/5.28',
                 '/usr/share/perl/5.28', '/usr/local/lib/site_perl',
                 '/usr/lib/x86_64-linux-gnu/perl-base']))
+        self.run_test([
+            'Can\'t open perl script "Makefile.PL": No such file or directory'
+            ], 1, MissingPerlFile('Makefile.PL'))
 
     def test_missing_maven_artifacts(self):
         self.run_test([
