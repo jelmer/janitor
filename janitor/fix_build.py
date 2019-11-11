@@ -60,6 +60,7 @@ from .sbuild_log import (
     MissingJavaClass,
     SbuildFailure,
     DhAddonLoadFailure,
+    AptFetchFailure,
     )
 
 
@@ -404,6 +405,10 @@ def fix_missing_dh_addon(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def retry_apt_failure(tree, error, committer=None):
+    return True
+
+
 def fix_missing_xml_entity(tree, error, committer=None):
     # Ideally we should be using the XML catalog for this, but hardcoding
     # a few URLs will do for now..
@@ -479,6 +484,7 @@ FIXERS = [
     (MissingLibrary, fix_missing_library),
     (MissingJavaClass, fix_missing_java_class),
     (DhAddonLoadFailure, fix_missing_dh_addon),
+    (AptFetchFailure, retry_apt_failure),
 ]
 
 

@@ -824,6 +824,28 @@ def r_missing_package(m):
     return MissingRPackage(deps[0])
 
 
+class FailedGoTest(object):
+
+    kind = 'failed-go-test'
+
+    def __init__(self, test):
+        self.test = test
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.test == other.test)
+
+    def __str__(self):
+        return 'failed go test: %s' % self.test
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.test)
+
+
+def go_test_failed(m):
+    return FailedGoTest(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -900,6 +922,7 @@ build_failure_regexps = [
      r_missing_package),
     (r'mv: cannot stat \'(.*)\': No such file or directory',
      file_not_found),
+    ('FAIL\t(.+\\/.+\\/.+)\t([0-9.]+)s', go_test_failed),
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
     (r'dh_install: Please use dh_missing '
@@ -918,6 +941,8 @@ build_failure_regexps = [
      ruby_missing_gem),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
+    (r'python3.[0-9]+: can\'t open file \'(.*)\': '
+     '[Errno 2] No such file or directory', file_not_found),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
      r'\(one is arch:all and the other not\)', None),
     (r'dh: unable to load addon systemd: dh: The systemd-sequence is '
