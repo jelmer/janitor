@@ -42,6 +42,7 @@ from janitor.sbuild_log import (
     DhAddonLoadFailure,
     NoSpaceOnDevice,
     DhWithOrderIncorrect,
+    FailedGoTest,
     )
 import unittest
 
@@ -401,6 +402,11 @@ arch:all and the other not)""".splitlines(), 1)
         self.run_test(
             ['dh_link: link destination debian/r-cran-crosstalk/usr/lib/R/'
              'site-library/crosstalk/lib/ionrangeslider is a directory'], 1)
+
+    def test_go_test(self):
+        self.run_test(
+            ['FAIL\tgithub.com/edsrzf/mmap-go\t0.083s'], 1,
+            FailedGoTest('github.com/edsrzf/mmap-go'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
