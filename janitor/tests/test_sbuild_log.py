@@ -389,6 +389,14 @@ arch:all and the other not)""".splitlines(), 1)
             "for package ‘testthat’"], 1,
             MissingRPackage('ellipsis'))
 
+    def test_mv_stat(self):
+        self.run_test(
+            ["mv: cannot stat '/usr/res/boss.png': No such file or directory"],
+            1, MissingFile('/usr/res/boss.png'))
+        self.run_test(
+            ["mv: cannot stat 'res/boss.png': No such file or directory"],
+            1)
+
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
 
