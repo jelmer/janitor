@@ -255,7 +255,7 @@ async def invoke_subprocess_worker(
         args.append('--last-build-version=%s' % last_build_version)
 
     args.extend(command)
-    return await run_subprocess(args, env=subprocess_env, log_path=log_path)
+    return await asyncio.run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
 async def process_one(
@@ -265,7 +265,7 @@ async def process_one(
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False, refresh=False, vcs_type=None,
-        subpath=None):
+        subpath=None, overall_timeout=None):
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
@@ -366,14 +366,23 @@ async def process_one(
             conn, pkg, suite)
 
     log_path = os.path.join(output_directory, 'worker.log')
-    retcode = await invoke_subprocess_worker(
-            worker_kind, main_branch, env, command, output_directory,
-            resume_branch=resume_branch, cached_branch=cached_branch,
-            pre_check=pre_check, post_check=post_check,
-            build_command=build_command, log_path=log_path,
-            resume_branch_result=resume_branch_result,
-            last_build_version=last_build_version,
-            subpath=subpath)
+    try:
+        retcode = await asyncio.wait_for(
+            invoke_subprocess_worker(
+                worker_kind, main_branch, env, command, output_directory,
+                resume_branch=resume_branch, cached_branch=cached_branch,
+                pre_check=pre_check, post_check=post_check,
+                build_command=build_command, log_path=log_path,
+                resume_branch_result=resume_branch_result,
+                last_build_version=last_build_version,
+                subpath=subpath, overall_timeout=overall_timeout),
+            timeout=overall_timeout)
+    except asyncio.TimeoutError:
+        return JanitorResult(
+            pkg, log_id=log_id,
+            code='timeout',
+            description='Run timed out after %d seconds' % overall_timeout,
+            logfilenames=[])
 
     logfilenames = []
     for name in os.listdir(output_directory):
@@ -507,7 +516,7 @@ class QueueProcessor(object):
             self, database, worker_kind, build_command, pre_check=None,
             post_check=None, dry_run=False, incoming=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
-            concurrency=1, use_cached_only=False):
+            concurrency=1, use_cached_only=False, overall_timeout=None):
         """Create a queue processor.
 
         Args:
@@ -533,6 +542,7 @@ class QueueProcessor(object):
         self.per_run_directory = {}
         self.topic_queue = Topic(repeat_last=True)
         self.topic_result = Topic()
+        self.overall_timeout = overall_timeout
 
     def status_json(self):
         return {'processing': [{
@@ -565,7 +575,8 @@ class QueueProcessor(object):
                 debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only, refresh=item.refresh,
-                vcs_type=item.vcs_type, subpath=item.subpath)
+                vcs_type=item.vcs_type, subpath=item.subpath,
+                overall_timeout=overall_timeout)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())
@@ -727,6 +738,9 @@ def main(argv=None):
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+    parser.add_argument(
+        '--overall-timeout', type=int, default=None,
+        help='Overall timeout per run (in seconds).')
 
     args = parser.parse_args()
 
@@ -748,7 +762,8 @@ def main(argv=None):
         args.debsign_keyid,
         vcs_manager,
         args.concurrency,
-        args.use_cached_only)
+        args.use_cached_only,
+        overall_timeout=args.overall_timeout)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(queue_processor.process()),
