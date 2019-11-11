@@ -896,6 +896,10 @@ build_failure_regexps = [
      r'Use override targets instead.', dh_until_unsupported),
     (r'dh: unable to load addon (.*): (.*) did not return a true '
      r'value at \(eval 11\) line ([0-9]+).', dh_addon_load_failure),
+    ('ERROR: dependencies (.*) are not available for package ‘(.*)’',
+     r_missing_package),
+    (r'mv: cannot stat \'(.*)\': No such file or directory',
+     file_not_found),
     (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
     (r'dh_install: Please use dh_missing '
@@ -930,8 +934,6 @@ build_failure_regexps = [
      None),
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
      'but --add-udeb=(.*) was passed!?', None),
-    ('ERROR: dependencies (.*) are not available for package ‘(.*)’',
-     r_missing_package),
 ]
 
 compiled_build_failure_regexps = [
