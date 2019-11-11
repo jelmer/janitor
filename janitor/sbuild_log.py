@@ -934,6 +934,7 @@ build_failure_regexps = [
      None),
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
      'but --add-udeb=(.*) was passed!?', None),
+    ('dh_link: link destination (.*) is a directory', None),
 ]
 
 compiled_build_failure_regexps = [
