@@ -801,7 +801,7 @@ def java_missing_class(m):
 
 
 build_failure_regexps = [
-    (r'make\[1\]: \*\*\* No rule to make target '
+    (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
     (r'[^:]+:\d+: (.*): No such file or directory',
         file_not_found),
