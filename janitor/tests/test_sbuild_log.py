@@ -397,6 +397,11 @@ arch:all and the other not)""".splitlines(), 1)
             ["mv: cannot stat 'res/boss.png': No such file or directory"],
             1)
 
+    def test_dh_link_error(self):
+        self.run_test(
+            ['dh_link: link destination debian/r-cran-crosstalk/usr/lib/R/'
+             'site-library/crosstalk/lib/ionrangeslider is a directory'], 1)
+
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
 
