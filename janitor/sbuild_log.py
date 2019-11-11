@@ -800,6 +800,30 @@ def java_missing_class(m):
     return MissingJavaClass(m.group(1))
 
 
+class MissingRPackage(object):
+
+    kind = 'missing-r-package'
+
+    def __init__(self, package):
+        self.package = package
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.package == other.package)
+
+    def __str__(self):
+        return 'missing R package: %s' % self.package
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.package)
+
+
+def r_missing_package(m):
+    fragment = m.group(1)
+    deps = [dep.strip('‘’ ') for dep in fragment.split(',')]
+    return MissingRPackage(deps[0])
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -906,6 +930,8 @@ build_failure_regexps = [
      None),
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
      'but --add-udeb=(.*) was passed!?', None),
+    ('ERROR: dependencies (.*) are not available for package ‘(.*)’',
+     r_missing_package),
 ]
 
 compiled_build_failure_regexps = [

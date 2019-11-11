@@ -36,6 +36,7 @@ from janitor.sbuild_log import (
     MissingXmlEntity,
     MissingLibrary,
     MissingJavaClass,
+    MissingRPackage,
     DhMissingUninstalled,
     DhUntilUnsupported,
     DhAddonLoadFailure,
@@ -381,6 +382,12 @@ Caused by: java.lang.ClassNotFoundException: org.codehaus.Xpp3r$Builder
         self.run_test("""\
 dh_installdocs: --link-doc not allowed between sympow and sympow-data (one is \
 arch:all and the other not)""".splitlines(), 1)
+
+    def test_r_missing(self):
+        self.run_test([
+            "ERROR: dependencies ‘ellipsis’, ‘pkgload’ are not available "
+            "for package ‘testthat’"], 1,
+            MissingRPackage('ellipsis'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
