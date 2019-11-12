@@ -653,10 +653,10 @@ WHERE
 
 async def iter_published_packages(conn, suite):
     return await conn.fetch("""
-select distinct package, build_version, unstable_version from run
-left join package on package.name = run.package
+select distinct on (package.name) package.name, build_version, unstable_version
+from run left join package on package.name = run.package
 where run.build_distribution = $1 and not package.removed
-order by package.name
+order by package.name, build_version desc
 """, suite)
 
 
@@ -1035,13 +1035,13 @@ WHERE NOT package.removed
 """
     args = []
     if suite is not None and packages is not None:
-        query += " WHERE package = ANY($1::text[]) AND suite = $2"
+        query += " AND package.name = ANY($1::text[]) AND suite = $2"
         args.extend([packages, suite])
     elif suite is not None:
-        query += " WHERE suite = $1"
+        query += " AND suite = $1"
         args.append(suite)
     elif packages is not None:
-        query += " WHERE package = ANY($1::text[])"
+        query += " AND package.name = ANY($1::text[])"
         args.append(packages)
     return [([Package.from_row(row)] + list(row[10:]))
             for row in await conn.fetch(query, *args)]
