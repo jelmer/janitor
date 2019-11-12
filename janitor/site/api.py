@@ -321,11 +321,12 @@ async def handle_published_packages(request):
     suite = request.match_info['suite']
     async with request.app.db.acquire() as conn:
         response_obj = []
-        for package, build_version in await state.iter_published_packages(
-                conn, suite):
+        for package, build_version, archive_version in (
+                await state.iter_published_packages(conn, suite)):
             response_obj.append({
                 'package': package,
-                'build_version': build_version})
+                'build_version': build_version,
+                'archive_version': archive_version})
     return web.json_response(response_obj)
 
 

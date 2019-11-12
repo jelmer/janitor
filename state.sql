@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS package (
    removed boolean default false,
    vcswatch_status vcswatch_status,
    vcswatch_version debversion,
+   upstream_branch_url text,
    primary key(name)
 );
 CREATE INDEX ON package (removed);

@@ -653,8 +653,11 @@ WHERE
 
 async def iter_published_packages(conn, suite):
     return await conn.fetch("""
-select distinct package, build_version from run where build_distribution = $1
-""", suite, )
+select distinct package, build_version, unstable_version from run
+left join package on package.name = run.package
+where run.build_distribution = $1 and not package.removed
+order by package.name
+""", suite)
 
 
 async def get_published_by_suite(conn):
@@ -1028,6 +1031,7 @@ SELECT
   candidate.value
 FROM candidate
 INNER JOIN package on package.name = candidate.package
+WHERE NOT package.removed
 """
     args = []
     if suite is not None and packages is not None:
@@ -1269,3 +1273,25 @@ where result_code = 'success'
 group by 1
 """
     return await conn.fetch(query)
+
+
+async def iter_missing_upstream_branch_packages(conn):
+    query = """\
+select
+  package.name,
+  package.unstable_version
+from
+  last_runs
+inner join package on last_runs.package = package.name
+where
+  result_code = 'upstream-branch-unknown' and
+  package.upstream_branch_url is null
+"""
+    for row in await conn.fetch(query):
+        yield row[0], row[1]
+
+
+async def set_upstream_branch_url(conn, package, url):
+    await conn.execute(
+        'update package set upstream_branch_url = $1 where name = $2',
+        url, package)
