@@ -80,6 +80,8 @@ def _convert_branch_exception(vcs_url, e):
             code = 'hosted-on-alioth'
         elif 'Unable to handle http code 401: Unauthorized' in str(e):
             code = '401-unauthorized'
+        elif 'Unable to handle http code 502: Bad Gateway' in str(e):
+            code = '502-bad-gateway'
         else:
             code = 'branch-unavailable'
         return BranchOpenFailure(code, str(e))
