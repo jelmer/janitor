@@ -57,6 +57,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'build-failed-stage-explain-bd-uninstallable',
     '502-bad-gateway',
     'worker-exception',
+    'build-failed-stage-create-session',
 ]
 
 # In some cases, we want to ignore certain results when guessing
