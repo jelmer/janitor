@@ -230,7 +230,7 @@ def fix_missing_python_distribution(tree, error, committer=None):
     if not package_exists(py2_pkg):
         py2_pkg = None
 
-    py3_pkg = 'python-%s' % error.distribution
+    py3_pkg = 'python3-%s' % error.distribution
     if not package_exists(py3_pkg):
         py3_pkg = None
 
