@@ -859,7 +859,7 @@ build_failure_regexps = [
      pkg_resources_distribution_not_found),
     (r'pluggy.manager.PluginValidationError: '
      r'Plugin \'.*\' could not be loaded: '
-     r'\(.* \(/usr/lib/python2.7/dist-packages\), '
+     r'\(.* \(/usr/lib/python2.[0-9]/dist-packages\), '
      r'Requirement.parse\(\'(.*)\'\)\)\!', python2_reqs_not_found),
     ('E   ImportError: cannot import name \'(.*)\' from \'(.*)\'',
      python_module_not_found),
