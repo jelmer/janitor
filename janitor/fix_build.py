@@ -153,21 +153,21 @@ def get_package_for_python_module(module, python_version):
     if python_version == 'python3':
         paths = [
             os.path.join(
-                '/usr/lib/python3.*/dist-packages',
+                '/usr/lib/python3\\.[0-9]+/dist-packages',
                 module.replace('.', '/'),
                 '__init__.py'),
             os.path.join(
-                '/usr/lib/python3.*/dist-packages',
+                '/usr/lib/python3\\.[0-9]+/dist-packages',
                 module.replace('.', '/') + '.py')]
         regex = True
     elif python_version == 'python2':
         paths = [
             os.path.join(
-                '/usr/lib/python2.*/dist-packages',
+                '/usr/lib/python2\\.[0-9]/dist-packages',
                 module.replace('.', '/'),
                 '__init__.py'),
             os.path.join(
-                '/usr/lib/python2.*/dist-packages',
+                '/usr/lib/python2\\.[0-9]/dist-packages',
                 module.replace('.', '/') + '.py')]
         regex = True
     elif python_version == 'pypy':
