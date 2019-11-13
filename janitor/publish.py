@@ -92,12 +92,16 @@ last_success_gauge = Gauge(
     'Last time a batch job successfully finished')
 
 
+class RateLimited(Exception):
+    """A rate limit was reached."""
+
+
 class RateLimiter(object):
 
     def set_mps_per_maintainer(self, mps_per_maintainer):
         raise NotImplementedError(self.set_mps_per_maintainer)
 
-    def allowed(self, maintainer_email):
+    def check_allowed(self, maintainer_email):
         raise NotImplementedError(self.allowed)
 
     def inc(self, maintainer_email):
@@ -113,14 +117,17 @@ class MaintainerRateLimiter(RateLimiter):
     def set_mps_per_maintainer(self, mps_per_maintainer):
         self._open_mps_per_maintainer = mps_per_maintainer['open']
 
-    def allowed(self, maintainer_email):
+    def check_allowed(self, maintainer_email):
         if not self._max_mps_per_maintainer:
-            return True
+            return
         if self._open_mps_per_maintainer is None:
             # Be conservative
-            return False
+            raise RateLimited('Open mps per maintainer not yet determined.')
         current = self._open_mps_per_maintainer.get(maintainer_email, 0)
-        return (current <= self._max_mps_per_maintainer)
+        if current > self._max_mps_per_maintainer:
+            raise RateLimited(
+                'Maintainer %s already has %d merge proposal open (max: %d)'
+                % (maintainer_email, current, self._max_mps_per_maintainer))
 
     def inc(self, maintainer_email):
         if self._open_mps_per_maintainer is None:
@@ -131,8 +138,8 @@ class MaintainerRateLimiter(RateLimiter):
 
 class NonRateLimiter(RateLimiter):
 
-    def allowed(self, email):
-        return True
+    def check_allowed(self, email):
+        pass
 
     def inc(self, maintainer_email):
         pass
@@ -148,17 +155,22 @@ class SlowStartRateLimiter(RateLimiter):
         self._open_mps_per_maintainer = None
         self._merged_mps_per_maintainer = None
 
-    def allowed(self, email):
+    def check_allowed(self, email):
         if (self._open_mps_per_maintainer is None or
                 self._merged_mps_per_maintainer is None):
             # Be conservative
-            return False
+            raise RateLimited('Open mps per maintainer not yet determined.')
         current = self._open_mps_per_maintainer.get(email, 0)
         if (self._max_mps_per_maintainer and
                 current >= self._max_mps_per_maintainer):
-            return False
+            raise RateLimited(
+                'Maintainer %s already has %d merge proposal open (absmax: %d)'
+                % (maintainer_email, current, self._max_mps_per_maintainer))
         limit = self._merged_mps_per_maintainer.get(email, 0) + 1
-        return (current < limit)
+        if current > limit:
+            raise RateLimited(
+                'Maintainer %s has %d merge proposals open (current cap: %d)'
+                % (maintainer_email, current, limit))
 
     def inc(self, maintainer_email):
         if self._open_mps_per_maintainer is None:
@@ -282,18 +294,16 @@ async def publish_from_policy(
     if await state.already_published(
             conn, pkg, branch_name, revision, mode):
         return
-    if not rate_limiter.allowed(maintainer_email) and \
-            mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
-        proposal_rate_limited_count.labels(
-            package=pkg, suite=suite).inc()
-        warning(
-            'Not creating proposal for %s, maximum number of open '
-            'merge proposals reached for maintainer %s', pkg,
-            maintainer_email)
-        if mode == MODE_PROPOSE:
-            mode = MODE_BUILD_ONLY
-        if mode == MODE_ATTEMPT_PUSH:
-            mode = MODE_PUSH
+    if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
+        try:
+            rate_limiter.check_allowed(maintainer_email)
+        except RateLimited as e:
+            proposal_rate_limited_count.labels(package=pkg, suite=suite).inc()
+            warning('Not creating proposal for %s: %s', pkg, e)
+            if mode == MODE_PROPOSE:
+                mode = MODE_BUILD_ONLY
+            if mode == MODE_ATTEMPT_PUSH:
+                mode = MODE_PUSH
     if mode == MODE_ATTEMPT_PUSH and \
             "salsa.debian.org/debian/" in main_branch_url:
         # Make sure we don't accidentally push to unsuspecting
