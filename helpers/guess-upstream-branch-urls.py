@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-import urllib.error
 
 from janitor import state
 from janitor.config import read_config
@@ -12,7 +11,8 @@ from lintian_brush.upstream_metadata import guess_from_launchpad
 
 async def main(db):
     async with db.acquire() as conn:
-        async for pkg, version in state.iter_missing_upstream_branch_packages(conn):
+        async for pkg, version in state.iter_missing_upstream_branch_packages(
+                conn):
             metadata = dict(guess_from_launchpad(pkg))
             try:
                 repo_url = metadata['Repository']

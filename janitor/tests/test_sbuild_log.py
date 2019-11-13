@@ -21,6 +21,7 @@ from janitor.sbuild_log import (
     find_apt_get_failure,
     find_build_failure_description,
     CcacheError,
+    DebhelperPatternNotFound,
     MissingCHeader,
     MissingPythonModule,
     MissingPythonDistribution,
@@ -81,7 +82,8 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'dh_installdocs: Cannot find (any matches for) "README.txt" '
             '(tried in ., debian/tmp)'],
-            1)
+            1, DebhelperPatternNotFound(
+                'README.txt', 'installdocs', ['.', 'debian/tmp']))
 
     def test_dh_compat_dupe(self):
         self.run_test([
@@ -407,6 +409,15 @@ arch:all and the other not)""".splitlines(), 1)
         self.run_test(
             ['FAIL\tgithub.com/edsrzf/mmap-go\t0.083s'], 1,
             FailedGoTest('github.com/edsrzf/mmap-go'))
+
+    def test_debhelper_pattern(self):
+        self.run_test(
+            ['dh_install: Cannot find (any matches for) '
+             '"server/etc/gnumed/gnumed-restore.conf" '
+             '(tried in ., debian/tmp)'], 1,
+            DebhelperPatternNotFound(
+                'server/etc/gnumed/gnumed-restore.conf', 'install',
+                ['.', 'debian/tmp']))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
