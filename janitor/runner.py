@@ -255,7 +255,8 @@ async def invoke_subprocess_worker(
         args.append('--last-build-version=%s' % last_build_version)
 
     args.extend(command)
-    return await asyncio.run_subprocess(args, env=subprocess_env, log_path=log_path)
+    return await asyncio.run_subprocess(
+        args, env=subprocess_env, log_path=log_path)
 
 
 async def process_one(
@@ -576,7 +577,7 @@ class QueueProcessor(object):
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only, refresh=item.refresh,
                 vcs_type=item.vcs_type, subpath=item.subpath,
-                overall_timeout=overall_timeout)
+                overall_timeout=self.overall_timeout)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())

@@ -846,6 +846,35 @@ def go_test_failed(m):
     return FailedGoTest(m.group(1))
 
 
+class DebhelperPatternNotFound(object):
+
+    kind = 'debhelper-pattern-not-found'
+
+    def __init__(self, pattern, tool, directories):
+        self.pattern = pattern
+        self.tool = tool
+        self.directories = directories
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.pattern == other.pattern and
+                self.tool == other.tool and
+                self.directories == other.directories)
+
+    def __str__(self):
+        return 'debhelper (%s) expansion failed for %r (directories: %r)' % (
+            self.tool, self.pattern, self.directories)
+
+    def __repr__(self):
+        return '%s(%r, %r, %r)' % (
+            type(self).__name__, self.pattern, self.tool, self.directories)
+
+
+def dh_pattern_no_matches(m):
+    return DebhelperPatternNotFound(
+        m.group(2), m.group(1), [d.strip() for d in m.group(3).split(',')])
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -923,8 +952,8 @@ build_failure_regexps = [
     (r'mv: cannot stat \'(.*)\': No such file or directory',
      file_not_found),
     ('FAIL\t(.+\\/.+\\/.+)\t([0-9.]+)s', go_test_failed),
-    (r'dh_.*: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
-     None),
+    (r'dh_(.*): Cannot find \(any matches for\) "(.*)" \(tried in (.*)\)',
+     dh_pattern_no_matches),
     (r'dh_install: Please use dh_missing '
      '--list-missing/--fail-missing instead', None),
     (r'dh_auto_clean: Please use the third-party "pybuild" build system '

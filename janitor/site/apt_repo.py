@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-from debian.changelog import Version
-
 from janitor import state
 from janitor.site import env
 
