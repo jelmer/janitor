@@ -949,6 +949,8 @@ build_failure_regexps = [
      r'value at \(eval 11\) line ([0-9]+).', dh_addon_load_failure),
     ('ERROR: dependencies (.*) are not available for package ‘(.*)’',
      r_missing_package),
+    ('ERROR: dependency ‘(.*)’ is not available for package ‘(.*)’',
+     r_missing_package),
     (r'mv: cannot stat \'(.*)\': No such file or directory',
      file_not_found),
     ('FAIL\t(.+\\/.+\\/.+)\t([0-9.]+)s', go_test_failed),
@@ -959,6 +961,7 @@ build_failure_regexps = [
     (r'dh_auto_clean: Please use the third-party "pybuild" build system '
      'instead of python-distutils', None),
     (r'configure: error: (.*)', None),
+    (r'config.status: error: (.*)', None),
     # A Python error, but not likely to be actionable. The previous
     # line will have the actual line that failed.
     (r'ImportError: cannot import name (.*)', None),
@@ -989,6 +992,8 @@ build_failure_regexps = [
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
      'but --add-udeb=(.*) was passed!?', None),
     ('dh_link: link destination (.*) is a directory', None),
+    ('dpkg-gensymbols: error: some symbols or patterns disappeared in the '
+     'symbols file: see diff output below', None),
 ]
 
 compiled_build_failure_regexps = [
