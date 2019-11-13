@@ -36,6 +36,9 @@ from silver_platter.proposal import (
     PermissionDenied,
     UnsupportedHoster,
     )
+from silver_platter.debian import (
+    pick_additional_colocated_branches,
+    )
 from silver_platter.debian.lintian import (
     create_mp_description,
     )
@@ -44,9 +47,6 @@ from breezy.plugins.propose.propose import (
     MergeProposalExists,
     )
 
-from . import (
-    ADDITIONAL_COLOCATED_BRANCHES,
-    )
 from .trace import warning
 
 
@@ -114,7 +114,8 @@ class BranchWorkspace(object):
         self.local_branch = local_branch
         self.resume_branch = resume_branch
         self.orig_revid = (resume_branch or main_branch).last_revision()
-        self.additional_colocated_branches = ADDITIONAL_COLOCATED_BRANCHES
+        self.additional_colocated_branches = (
+            pick_additional_colocated_branches(main_branch))
 
     def __enter__(self):
         return self

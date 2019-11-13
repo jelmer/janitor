@@ -34,6 +34,7 @@ from breezy.errors import (
 from silver_platter.debian import (
     MissingUpstreamTarball,
     Workspace,
+    pick_additional_colocated_branches,
 )
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
@@ -79,7 +80,6 @@ from silver_platter.utils import (
     BranchUnavailable,
 )
 
-from . import ADDITIONAL_COLOCATED_BRANCHES
 from .fix_build import build_incrementally
 from .build import (
     MissingChangesFile,
@@ -529,11 +529,12 @@ def process_package(vcs_url, env, command, output_directory,
     else:
         resume_branch = None
 
-    with Workspace(main_branch, resume_branch=resume_branch,
-                   cached_branch=cached_branch,
-                   path=os.path.join(output_directory, pkg),
-                   additional_colocated_branches=(
-                       ADDITIONAL_COLOCATED_BRANCHES)) as ws:
+    with Workspace(
+            main_branch, resume_branch=resume_branch,
+            cached_branch=cached_branch,
+            path=os.path.join(output_directory, pkg),
+            additional_colocated_branches=(
+                pick_additional_colocated_branches(main_branch))) as ws:
         if ws.local_tree.has_changes():
             if list(ws.local_tree.iter_references()):
                 raise WorkerFailure(

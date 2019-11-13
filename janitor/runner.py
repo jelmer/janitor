@@ -42,6 +42,7 @@ from prometheus_client import (
 
 from silver_platter.debian import (
     select_preferred_probers,
+    pick_additional_colocated_branches,
     )
 from silver_platter.proposal import (
     find_existing_proposed,
@@ -58,7 +59,6 @@ from silver_platter.utils import (
 
 from . import (
     state,
-    ADDITIONAL_COLOCATED_BRANCHES,
     )
 from .config import read_config
 from .logs import get_log_manager, ServiceUnavailable
@@ -458,7 +458,7 @@ async def process_one(
             main_branch, local_branch,
             pkg, branch_name,
             additional_colocated_branches=(
-                ADDITIONAL_COLOCATED_BRANCHES))
+                pick_additional_colocated_branches(main_branch)))
         result.branch_name = branch_name
 
     if result.changes_filename:
