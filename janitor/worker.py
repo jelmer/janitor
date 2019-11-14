@@ -371,7 +371,11 @@ class NewUpstreamWorker(SubWorker):
 
             if local_tree.has_filename('debian/patches/series'):
                 try:
-                    refresh_quilt_patches(local_tree, committer=self.committer)
+                    refresh_quilt_patches(
+                        local_tree,
+                        old_version=result.old_upstream_version,
+                        new_version=result.new_upstream_version,
+                        committer=self.committer)
                 except QuiltError as e:
                     error_description = (
                         "An error (%d) occurred refreshing quilt patches: "
