@@ -255,8 +255,7 @@ async def invoke_subprocess_worker(
         args.append('--last-build-version=%s' % last_build_version)
 
     args.extend(command)
-    return await asyncio.run_subprocess(
-        args, env=subprocess_env, log_path=log_path)
+    return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
 async def process_one(
@@ -376,7 +375,7 @@ async def process_one(
                 build_command=build_command, log_path=log_path,
                 resume_branch_result=resume_branch_result,
                 last_build_version=last_build_version,
-                subpath=subpath, overall_timeout=overall_timeout),
+                subpath=subpath),
             timeout=overall_timeout)
     except asyncio.TimeoutError:
         return JanitorResult(
