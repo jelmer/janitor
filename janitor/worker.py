@@ -592,8 +592,8 @@ def process_package(vcs_url, env, command, output_directory,
             if not ws.changes_since_main():
                 raise WorkerFailure('nothing-to-do', 'Nothing to do.')
 
-            if not ws.changes_since_resume():
-                raise WorkerFailure('nothing-new-to-do', 'Nothing new to do.')
+        if not ws.changes_since_resume():
+            raise WorkerFailure('nothing-new-to-do', 'Nothing new to do.')
 
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
