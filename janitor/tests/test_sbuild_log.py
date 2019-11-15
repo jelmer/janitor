@@ -304,6 +304,14 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
                 'org.junit.jupiter:junit-jupiter-api:jar:5.4.0',
                 'org.junit.jupiter:junit-jupiter-params:jar:5.4.0',
                 'org.junit.jupiter:junit-jupiter-engine:jar:5.4.0']))
+        self.run_test([
+            '[ERROR] Failed to execute goal on project bookkeeper-server: '
+            'Could not resolve dependencies for project '
+            'org.apache.bookkeeper:bookkeeper-server:jar:4.4.0: Cannot '
+            'access central (https://repo.maven.apache.org/maven2) in '
+            'offline mode and the artifact io.netty:netty:jar:debian '
+            'has not been downloaded from it before. -> [Help 1]'], 1,
+            MissingMavenArtifacts(['io.netty:netty:jar:debian']))
 
     def test_dh_missing_uninstalled(self):
         self.run_test([
