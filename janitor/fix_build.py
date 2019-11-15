@@ -473,9 +473,9 @@ def fix_missing_maven_artifacts(tree, error, committer=None):
     artifact = error.artifacts[0]
     (group_id, artifact_id, kind, version) = artifact.split(':')
     paths = [os.path.join(
-        '/usr/share/maven-repo', group_id.replace(':', '/'),
-        artifact_id, version, '%s-%s.%s' % (artifact_id, version, kind))]
-    package = get_package_for_paths(paths)
+        '/usr/share/maven-repo', group_id.replace('.', '/'),
+        '.*' + artifact_id, version, '.*%s-%s.%s' % (artifact_id, version, kind))]
+    package = get_package_for_paths(paths, regex=True)
     if package is None:
         warning('no package for artifact %s', artifact)
         return False
