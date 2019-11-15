@@ -61,6 +61,7 @@ from .sbuild_log import (
     SbuildFailure,
     DhAddonLoadFailure,
     AptFetchFailure,
+    MissingMavenArtifacts,
     )
 
 
@@ -468,6 +469,19 @@ def fix_missing_java_class(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_maven_artifacts(tree, error, committer=None):
+    artifact = error.artifacts[0]
+    (group_id, artifact_id, kind, version) = artifact.split(':')
+    paths = [os.path.join(
+        '/usr/share/maven-repo', group_id.replace(':', '/'),
+        artifact_id, version, '%s-%s.%s' % (artifact_id, version, kind))]
+    package = get_package_for_paths(paths)
+    if package is None:
+        warning('no package for artifact %s', artifact)
+        return False
+    return add_build_dependency(tree, package, committer=committer)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingPythonDistribution, fix_missing_python_distribution),
@@ -485,6 +499,7 @@ FIXERS = [
     (MissingJavaClass, fix_missing_java_class),
     (DhAddonLoadFailure, fix_missing_dh_addon),
     (AptFetchFailure, retry_apt_failure),
+    (MissingMavenArtifacts, fix_missing_maven_artifacts),
 ]
 
 
