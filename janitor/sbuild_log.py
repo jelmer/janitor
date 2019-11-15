@@ -938,6 +938,11 @@ build_failure_regexps = [
      r'\(https://repo\.maven\.apache\.org/maven2\) in offline mode and '
      r'the artifact .* has not been downloaded from it before..*',
      maven_missing_artifact),
+    (r'\[ERROR\] Failed to execute goal on project .*: Could not resolve '
+     r'dependencies for project .*: Cannot access central '
+     r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
+     r'artifact (.*) has not been downloaded from it before..*',
+     maven_missing_artifact),
     (r'dh_missing: (.*) exists in debian/.* but is not installed to anywhere',
      dh_missing_uninstalled),
     (r'I/O error : Attempt to load network entity (.*)',
