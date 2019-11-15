@@ -104,7 +104,7 @@ lintian_brush_fixer_failed_count = Gauge(
     'Number of failures per lintian-brush fixer.',
     labelnames=('fixer', ))
 review_status_count = Gauge(
-    'reivew_status_count', 'Last runs by review status.',
+    'review_status_count', 'Last runs by review status.',
     labelnames=('review_status',))
 
 
