@@ -68,6 +68,7 @@ from silver_platter.debian.upstream import (
     UpstreamMetadataSyntaxError,
     MissingChangelogError,
     QuiltPatchPushFailure,
+    update_packaging,
 )
 
 from silver_platter.utils import (
@@ -388,6 +389,8 @@ class NewUpstreamWorker(SubWorker):
                         % (e.patch_name, e.actual_error.extra))
                     error_code = 'quilt-refresh-error'
                     raise WorkerFailure(error_code, error_description)
+
+            update_packaging(local_tree, result.old_revision)
 
             report_context(result.new_upstream_version)
             metadata['old_upstream_version'] = result.old_upstream_version
