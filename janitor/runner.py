@@ -718,7 +718,7 @@ async def handle_debdiff(request):
             status=400,
             text='Invalid changes filename: %s' % new_changes_filename)
 
-    archive_path = request.app.queue_processor.archive_path
+    archive_path = request.app.archive_path
 
     old_changes_path = os.path.join(
         archive_path, old_suite, old_changes_filename)
@@ -728,21 +728,21 @@ async def handle_debdiff(request):
     if (not os.path.exists(old_changes_path) or
             not os.path.exists(new_changes_path)):
         return web.Response(
-            status=400, text='Changes files do not exist.')
+            status=400, text='One or both changes files do not exist.')
 
     return web.Response(
         body=await run_debdiff(old_changes_path, new_changes_path),
         content_type='text/diff')
 
 
-async def run_debdif(old_changes, new_changes):
+async def run_debdiff(old_changes, new_changes):
     args = ['debdiff', old_changes, new_changes]
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
-        stdout=output)
-    stdout, stderr = await proc.communicate()
-    return stdout.getvalue()
+        stdout=asyncio.subprocess.PIPE)
+    stdout, stderr = await p.communicate()
+    return stdout
 
 
 async def run_web_server(listen_addr, port, queue_processor, archive_path):
