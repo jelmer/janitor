@@ -390,7 +390,9 @@ class NewUpstreamWorker(SubWorker):
                     error_code = 'quilt-refresh-error'
                     raise WorkerFailure(error_code, error_description)
 
-            update_packaging(local_tree, result.old_revision)
+            old_tree = local_tree.branch.repository.revision_tree(
+                result.old_revision)
+            update_packaging(local_tree, old_tree)
 
             report_context(result.new_upstream_version)
             metadata['old_upstream_version'] = result.old_upstream_version
