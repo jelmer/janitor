@@ -1,12 +1,18 @@
 #!/usr/bin/python3
 
 from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
-import functools
 import urllib.parse
 
 from janitor.policy import apply_policy
 from janitor import state, SUITES
-from . import env, highlight_diff
+from . import (
+    env,
+    highlight_diff,
+    get_build_architecture,
+    changes_filename,
+    )
+
+
 
 from breezy.git.urls import git_url_to_bzr_url
 
@@ -31,7 +37,8 @@ async def handle_policy(request):
     return web.json_response(response_obj)
 
 
-async def handle_publish(publisher_url, request):
+async def handle_publish(request):
+    publisher_url = request.app.publisher_url
     package = request.match_info['package']
     suite = request.match_info['suite']
     post = await request.post()
@@ -41,22 +48,22 @@ async def handle_publish(publisher_url, request):
             {'error': 'Invalid mode', 'mode': mode}, status=400)
     url = urllib.parse.urljoin(
         publisher_url, '%s/%s/publish' % (suite, package))
-    async with ClientSession() as client:
-        try:
-            async with client.post(url, data={'mode': mode}) as resp:
-                if resp.status in (200, 202):
-                    return web.json_response(
-                        await resp.json(), status=resp.status)
-                else:
-                    return web.json_response(await resp.json(), status=400)
-        except ContentTypeError as e:
-            return web.json_response(
-                {'reason': 'publisher returned error %d' % e.code},
-                status=400)
-        except ClientConnectorError:
-            return web.json_response(
-                {'reason': 'unable to contact publisher'},
-                status=400)
+    try:
+        async with request.app.http_client_session.post(
+                url, data={'mode': mode}) as resp:
+            if resp.status in (200, 202):
+                return web.json_response(
+                    await resp.json(), status=resp.status)
+            else:
+                return web.json_response(await resp.json(), status=400)
+    except ContentTypeError as e:
+        return web.json_response(
+            {'reason': 'publisher returned error %d' % e.code},
+            status=400)
+    except ClientConnectorError:
+        return web.json_response(
+            {'reason': 'unable to contact publisher'},
+            status=400)
 
 
 async def get_package_from_gitlab_webhook(conn, body):
@@ -214,39 +221,80 @@ async def handle_queue(request):
         response_obj, headers={'Cache-Control': 'max-age=60'})
 
 
-async def handle_diff(publisher_url, request):
+async def handle_diff(request):
     run_id = request.match_info['run_id']
+    publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
-    async with ClientSession() as client:
-        try:
-            async with client.get(url) as resp:
-                if resp.status == 200:
-                    diff = await resp.read()
-                    for accept in request.headers.get('ACCEPT', '').split(','):
-                        if accept in ('text/x-diff', 'text/plain'):
-                            return web.Response(
-                                body=diff,
-                                content_type='text/x-diff',
-                                headers={'Cache-Control': 'max-age=3600'})
-                        if accept == 'text/html':
-                            return web.Response(
-                                text=highlight_diff(
-                                    diff.decode('utf-8', 'replace')),
-                                content_type='text/html',
-                                headers={'Cache-Control': 'max-age=3600'})
-                    raise web.HTTPNotAcceptable(
-                        text='Acceptable content types: '
-                             'text/html, text/x-diff')
-                else:
-                    return web.Response(body=await resp.read(), status=400)
-        except ContentTypeError as e:
-            return web.Response(
-                'publisher returned error %d' % e.code,
-                status=400)
-        except ClientConnectorError:
-            return web.json_response(
-                'unable to contact publisher',
-                status=400)
+    try:
+        async with request.app.http_client_session.get(url) as resp:
+            if resp.status == 200:
+                diff = await resp.read()
+                for accept in request.headers.get('ACCEPT', '').split(','):
+                    if accept in ('text/x-diff', 'text/plain'):
+                        return web.Response(
+                            body=diff,
+                            content_type='text/x-diff',
+                            headers={'Cache-Control': 'max-age=3600'})
+                    if accept == 'text/html':
+                        return web.Response(
+                            text=highlight_diff(
+                                diff.decode('utf-8', 'replace')),
+                            content_type='text/html',
+                            headers={'Cache-Control': 'max-age=3600'})
+                raise web.HTTPNotAcceptable(
+                    text='Acceptable content types: '
+                         'text/html, text/x-diff')
+            else:
+                return web.Response(body=await resp.read(), status=400)
+    except ContentTypeError as e:
+        return web.Response(
+            'publisher returned error %d' % e.code,
+            status=400)
+    except ClientConnectorError:
+        return web.json_response(
+            'unable to contact publisher',
+            status=400)
+
+
+async def handle_debdiff(request):
+    run_id = request.match_info['run_id']
+    async with request.app.db.acquire() as conn:
+        run = await state.get_run(conn, run_id)
+        if run is None:
+            raise web.HTTPNotFound(text='No such run: %s' % run_id)
+        unchanged_run = await state.get_unchanged_run(
+            conn, run.main_branch_revision)
+        if unchanged_run is None:
+            raise web.HTTPNotFound(
+                text='No matching unchanged build for %s' % run_id)
+    runner_url = request.app.runner_url
+    url = urllib.parse.urljoin(runner_url, 'diff/%s' % run_id)
+    payload = {
+        'old_suite': 'unchanged',
+        'new_suite': run.suite,
+        'old_changes_filename': changes_filename(
+            unchanged_run.package, unchanged_run.build_version,
+            get_build_architecture()),
+        'new_changes_filename': changes_filename(
+            run.package, run.build_version, get_build_architecture())
+    }
+    try:
+        async with request.app.http_client_session.post(
+                url, data=payload) as resp:
+            if resp.status == 200:
+                diff = await resp.read()
+                return web.Response(
+                    body=diff,
+                    content_type=resp.content_type,
+                    headers={'Cache-Control': 'max-age=3600'})
+    except ContentTypeError as e:
+        return web.Response(
+            'runner returned error %d' % e.code,
+            status=400)
+    except ClientConnectorError:
+        return web.json_response(
+            'unable to contact runner',
+            status=400)
 
 
 async def handle_run_post(request):
@@ -345,47 +393,46 @@ async def handle_global_policy(request):
 
 async def forward_to_runner(runner_url, path):
     url = urllib.parse.urljoin(runner_url, path)
-    async with ClientSession() as client:
-        try:
-            async with client.get(url) as resp:
-                return web.json_response(
-                    await resp.json(), status=resp.status)
-        except ContentTypeError as e:
-            return web.json_response({
-                'reason': 'runner returned error %s' % e},
-                status=400)
-        except ClientConnectorError:
-            return web.json_response({
-                'reason': 'unable to contact runner'},
-                status=500)
+    try:
+        async with request.app.http_client_session.get(url) as resp:
+            return web.json_response(
+                await resp.json(), status=resp.status)
+    except ContentTypeError as e:
+        return web.json_response({
+            'reason': 'runner returned error %s' % e},
+            status=400)
+    except ClientConnectorError:
+        return web.json_response({
+            'reason': 'unable to contact runner'},
+            status=500)
 
 
-async def handle_runner_status(runner_url, request):
-    return await forward_to_runner(runner_url, 'status')
+async def handle_runner_status(request):
+    return await forward_to_runner(request.app.runner_url, 'status')
 
 
-async def handle_runner_log_index(runner_url, request):
+async def handle_runner_log_index(request):
     run_id = request.match_info['run_id']
-    return await forward_to_runner(runner_url, 'log/%s' % run_id)
+    return await forward_to_runner(request.app.runner_url, 'log/%s' % run_id)
 
 
-async def handle_runner_log(runner_url, request):
+async def handle_runner_log(request):
     run_id = request.match_info['run_id']
     filename = request.match_info['filename']
-    url = urllib.parse.urljoin(runner_url, 'log/%s/%s' % (run_id, filename))
-    async with ClientSession() as client:
-        try:
-            async with client.get(url) as resp:
-                body = await resp.read()
-                return web.Response(body=body, status=resp.status)
-        except ContentTypeError as e:
-            return web.Response(
-                text='runner returned error %s' % e,
-                status=400)
-        except ClientConnectorError:
-            return web.Response(
-                text='unable to contact runner',
-                status=500)
+    url = urllib.parse.urljoin(
+        request.app.runner_url, 'log/%s/%s' % (run_id, filename))
+    try:
+        async with request.app.http_client_session.get(url) as resp:
+            body = await resp.read()
+            return web.Response(body=body, status=resp.status)
+    except ContentTypeError as e:
+        return web.Response(
+            text='runner returned error %s' % e,
+            status=400)
+    except ClientConnectorError:
+        return web.Response(
+            text='unable to contact runner',
+            status=500)
 
 
 async def handle_publish_id(request):
@@ -464,8 +511,11 @@ async def handle_publish_ready(request):
 
 def create_app(db, publisher_url, runner_url, policy_config):
     app = web.Application()
+    app.http_client_session = ClientSession()
     app.db = db
     app.policy_config = policy_config
+    app.publisher_url = publisher_url
+    app.runner_url = runner_url
     app.router.add_get(
         '/pkgnames', handle_packagename_list, name='api-package-names')
     app.router.add_get(
@@ -480,7 +530,7 @@ def create_app(db, publisher_url, runner_url, policy_config):
         handle_policy, name='api-package-policy')
     app.router.add_post(
         '/{suite}/pkg/{package}/publish',
-        functools.partial(handle_publish, publisher_url),
+        handle_publish)
         name='api-package-publish')
     app.router.add_post(
         '/{suite}/pkg/{package}/schedule', handle_schedule,
@@ -493,10 +543,11 @@ def create_app(db, publisher_url, runner_url, policy_config):
     app.router.add_get('/run/{run_id}', handle_run, name='api-run')
     app.router.add_post(
         '/run/{run_id}', handle_run_post, name='api-run-update')
+    app.router.add_get('/run/{run_id}/diff', handle_diff, name='api-run-diff')
     app.router.add_get(
-        '/run/{run_id}/diff',
-        functools.partial(handle_diff, publisher_url),
-        name='api-run-diff')
+        '/run/{run_id}/debdiff',
+        handle_debdiff,
+        name='api-run-debdiff')
     app.router.add_get(
         '/pkg/{package}/run', handle_run, name='api-package-run-list')
     app.router.add_get(
@@ -506,8 +557,11 @@ def create_app(db, publisher_url, runner_url, policy_config):
         name='api-package-run')
     app.router.add_get(
         '/pkg/{package}/run/{run_id}/diff',
-        functools.partial(handle_diff, publisher_url),
-        name='api-package-run-diff')
+        handle_diff, name='api-package-run-diff')
+    app.router.add_get(
+        '/pkg/{package}/run/{run_id}/debdiff',
+        handle_debdiff,
+        name='api-package-run-debdiff')
     app.router.add_get(
         '/package-branch', handle_package_branch, name='api-package-branch')
     app.router.add_get(
@@ -521,16 +575,15 @@ def create_app(db, publisher_url, runner_url, policy_config):
     app.router.add_get(
         '/publish/{publish_id}', handle_publish_id, name='publish-details')
     app.router.add_get(
-        '/runner/status', functools.partial(handle_runner_status, runner_url),
+        '/runner/status', handle_runner_status,
         name='api-runner-status')
     app.router.add_get(
         '/runner/log/{run_id}',
-        functools.partial(handle_runner_log_index, runner_url),
+        handle_runner_log_index,
         name='api-runner-log-list')
     app.router.add_get(
         '/runner/log/{run_id}/{filename}',
-        functools.partial(handle_runner_log, runner_url),
-        name='api-runner-log')
+        handle_runner_log, name='api-runner-log')
     app.router.add_get(
         '/{suite:' + '|'.join(SUITES) + '}/report',
         handle_report, name='api-report')
