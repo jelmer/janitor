@@ -159,8 +159,11 @@ def get_package_for_python_module(module, python_version):
                 '__init__.py'),
             os.path.join(
                 '/usr/lib/python3/dist-packages',
-                module.replace('.', '/') + '.py')]
-        regex = True
+                module.replace('.', '/') + '.py'),
+            os.path.join(
+                '/usr/lib/python3\\.[0-9]+/lib-dynload',
+                module.replace('.', '/') + '\\.cpython-.*\\.so'),
+            ]
     elif python_version == 'python2':
         paths = [
             os.path.join(
@@ -169,8 +172,10 @@ def get_package_for_python_module(module, python_version):
                 '__init__.py'),
             os.path.join(
                 '/usr/lib/python2\\.[0-9]/dist-packages',
-                module.replace('.', '/') + '.py')]
-        regex = True
+                module.replace('.', '/') + '.py'),
+            os.path.join(
+                '/usr/lib/python2.\\.[0-9]/lib-dynload',
+                module.replace('.', '/') + '.so')]
     elif python_version == 'pypy':
         paths = [
             os.path.join(
@@ -179,12 +184,15 @@ def get_package_for_python_module(module, python_version):
                 '__init__.py'),
             os.path.join(
                 '/usr/lib/pypy/dist-packages',
-                module.replace('.', '/') + '.py')]
-        regex = False
+                module.replace('.', '/') + '.py'),
+            os.path.join(
+                '/usr/lib/pypy/dist-packages',
+                module.replace('.', '/') + '\\.pypy-.*\\.so'),
+            ]
     else:
         raise AssertionError(
             'unknown python version %r' % python_version)
-    return get_package_for_paths(paths, regex)
+    return get_package_for_paths(paths, regex=True)
 
 
 def targeted_python_versions(tree):
