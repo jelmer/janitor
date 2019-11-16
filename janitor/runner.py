@@ -681,29 +681,44 @@ async def handle_log(request):
 async def handle_debdiff(request):
     post = await request.post()
 
-    old_suite = post['old_suite']
+    old_suite = post.get('old_suite', 'unchanged')
     if old_suite not in SUITES:
         return web.Response(
             status=400, text='Invalid old suite %s' % old_suite)
 
-    new_suite = post['new_suite']
+    try:
+        new_suite = post['new_suite']
+    except KeyError:
+        return web.Response(
+            status=400, text='Missing argument: new_suite')
+
     if new_suite not in SUITES:
         return web.Response(
             status=400, text='Invalid new suite %s' % new_suite)
 
-    old_changes_filename = post['old_changes_filename']
+    try:
+        old_changes_filename = post['old_changes_filename']
+    except KeyError:
+        return web.Response(
+            status=400, text='Missing argument: old_changes_filename')
+
     if '/' in old_changes_filename:
         return web.Response(
             status=400,
             text='Invalid changes filename: %s' % old_changes_filename)
 
-    new_changes_filename = post['new_changes_filename']
+    try:
+        new_changes_filename = post['new_changes_filename']
+    except KeyError:
+        return web.Response(
+            status=400, text='Missing argument: new_changes_filename')
+
     if '/' in new_changes_filename:
         return web.Response(
             status=400,
             text='Invalid changes filename: %s' % new_changes_filename)
 
-    incoming = request.queue_processor.incoming
+    incoming = request.app.queue_processor.incoming
 
     old_changes_path = os.path.join(
         incoming, old_suite, old_changes_filename)
