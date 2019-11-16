@@ -292,8 +292,8 @@ class NewUpstreamWorker(SubWorker):
                     "The upstream branch at %s was unavailable: %s" % (
                         e.location, e.error))
                 error_code = 'upstream-branch-unavailable'
-                if 'Fossil branches are not yet supported' in e.error:
-                    error_code = 'unsupported-vcs-fossil'
+                if 'Fossil branches are not yet supported' in str(e.error):
+                    error_code = 'upstream-unsupported-vcs-fossil'
                 raise WorkerFailure(error_code, error_description)
             except UpstreamMergeConflicted as e:
                 error_description = "Upstream version %s conflicted." % (
