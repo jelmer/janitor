@@ -316,6 +316,24 @@ class Run(object):
         return getattr(self, self.__slots__[i])
 
 
+async def get_unchanged_run(conn, main_branch_revision):
+    query = """
+SELECT
+    id, command, start_time, finish_time, description, package,
+    build_version, build_distribution, result_code,
+    branch_name, main_branch_revision, revision, context, result, suite,
+    instigated_context, branch_url, logfilenames, review_status
+FROM
+    run
+WHERE
+    suite = 'unchanged' AND main_branch_revision = $1
+"""
+    row = await conn.fetchrow(query, main_branch_revision)
+    if row is not None:
+        return Run.from_row(row)
+    return None
+
+
 async def iter_runs(conn, package=None, run_id=None, limit=None):
     """Iterate over runs.
 
