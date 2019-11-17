@@ -7,7 +7,7 @@
 <div class="section" id="{{ run_id }}">
 <h1>Run of {{ suite }} for {{ package }}</h1>
 
-<ul class="simple">
+<ul class="metadata">
 <li>Package: <a class="reference external" href="..">{{ package }}</a> (<a href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a>)</li>
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
