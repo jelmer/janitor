@@ -5,9 +5,6 @@ from io import BytesIO
 import urllib.parse
 
 from janitor import state
-from janitor.build import (
-    changes_filename,
-)
 from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
@@ -20,8 +17,8 @@ from janitor.logs import LogRetrievalError
 from janitor.site import (
     changes_get_binaries,
     env,
-    get_build_architecture,
     get_vcs_type,
+    run_changes_filename,
     open_changes_file,
     highlight_diff,
 )
@@ -140,9 +137,7 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
         return [l.decode('utf-8', 'replace') for l in f.readlines()]
     kwargs['read_file'] = read_file
     if run.build_version:
-        kwargs['changes_name'] = changes_filename(
-            run.package, run.build_version,
-            get_build_architecture())
+        kwargs['changes_name'] = run_changes_filename(run)
     else:
         kwargs['changes_name'] = None
 

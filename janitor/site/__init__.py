@@ -22,7 +22,11 @@ import json
 import os
 import urllib.parse
 
-from janitor import SUITES
+from janitor import (
+    SUITES,
+    DEFAULT_BUILD_ARCH,
+    )
+from janitor.build import changes_filename
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
@@ -81,9 +85,8 @@ env.globals.update(cache_url_git=CACHE_URL_GIT)
 env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 
 
-def get_build_architecture():
-    # TODO(jelmer): don't hardcode this
-    return "amd64"
+def run_changes_filename(run):
+    return changes_filename(run.package, run.build_version, DEFAULT_BUILD_ARCH)
 
 
 def highlight_diff(diff):

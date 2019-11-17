@@ -4,12 +4,11 @@ from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import urllib.parse
 
 from janitor.policy import apply_policy
-from janitor import state, SUITES
+from janitor import state, SUITES, DEFAULT_BUILD_ARCH
 from . import (
     env,
     highlight_diff,
-    get_build_architecture,
-    changes_filename,
+    run_changes_filename,
     )
 
 
@@ -268,15 +267,12 @@ async def handle_debdiff(request):
             raise web.HTTPNotFound(
                 text='No matching unchanged build for %s' % run_id)
     runner_url = request.app.runner_url
-    url = urllib.parse.urljoin(runner_url, 'diff/%s' % run_id)
+    url = urllib.parse.urljoin(runner_url, 'debdiff')
     payload = {
         'old_suite': 'unchanged',
         'new_suite': run.suite,
-        'old_changes_filename': changes_filename(
-            unchanged_run.package, unchanged_run.build_version,
-            get_build_architecture()),
-        'new_changes_filename': changes_filename(
-            run.package, run.build_version, get_build_architecture())
+        'old_changes_filename': run_changes_filename(unchanged_run),
+        'new_changes_filename': run_changes_filename(run),
     }
     try:
         async with request.app.http_client_session.post(
@@ -287,6 +283,8 @@ async def handle_debdiff(request):
                     body=diff,
                     content_type=resp.content_type,
                     headers={'Cache-Control': 'max-age=3600'})
+            else:
+                return web.Response(body=await resp.read(), status=400)
     except ContentTypeError as e:
         return web.Response(
             'runner returned error %d' % e.code,
@@ -339,7 +337,7 @@ async def handle_run(request):
                 'finish_time': finish_time.isoformat(),
                 'command': run.command,
                 'description': run.description,
-                'package': run.package_name,
+                'package': run.package,
                 'build_info': build_info,
                 'result_code': run.result_code,
                 'branch_name': run.branch_name,
@@ -530,7 +528,7 @@ def create_app(db, publisher_url, runner_url, policy_config):
         handle_policy, name='api-package-policy')
     app.router.add_post(
         '/{suite}/pkg/{package}/publish',
-        handle_publish)
+        handle_publish,
         name='api-package-publish')
     app.router.add_post(
         '/{suite}/pkg/{package}/schedule', handle_schedule,

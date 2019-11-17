@@ -5,15 +5,12 @@ import asyncio
 import sys
 
 from janitor import state
-from janitor.build import (
-    changes_filename,
-)
 
 from janitor.site import (
     changes_get_binaries,
     env,
-    get_build_architecture,
     open_changes_file,
+    run_changes_filename,
 )
 
 
@@ -92,9 +89,7 @@ async def generate_pkg_file(db, package, suite, run_id=None):
         'queue_wait_time': queue_wait_time,
         }
     if run and run.build_version:
-        kwargs['changes_name'] = changes_filename(
-            run.package, run.build_version,
-            get_build_architecture())
+        kwargs['changes_name'] = run_changes_filename(run)
         try:
             changes_file = open_changes_file(run, kwargs['changes_name'])
         except FileNotFoundError:

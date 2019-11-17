@@ -376,7 +376,7 @@ if __name__ == '__main__':
             developer = request.match_info['developer']
         except KeyError:
             developer = request.query.get('developer')
-        if '@' not in developer:
+        if developer and '@' not in developer:
             developer = '%s@debian.org' % developer
         text = await generate_developer_table_page(
             request.app.database, developer)
