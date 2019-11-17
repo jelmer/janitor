@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from aiohttp import ClientConnectorError
+import json
 import urllib.parse
 
 from janitor import state
@@ -11,14 +12,16 @@ from janitor.site import (
 
 
 async def generate_review(conn, client, publisher_url, suite=None):
-    async for (package_name, command, build_version, result_code, context,
-               start_time, run_id, revision, result, branch_name, suite,
-               maintainer_email, uploader_emails, branch_url,
-               main_branch_revision, review_status
-               ) in state.iter_publish_ready(
-                       conn, review_status=['unreviewed'], limit=1,
-                       suite=suite):
-        break
+    entries = [entry async for entry in
+               state.iter_publish_ready(
+                       conn, review_status=['unreviewed'], limit=40,
+                       suite=suite)]
+
+    (package_name, command, build_version, result_code, context,
+                   start_time, run_id, revision, result, branch_name, suite,
+                   maintainer_email, uploader_emails, branch_url,
+                   main_branch_revision, review_status
+                   ) = entries.pop(0)
 
     async def show_diff():
         if not revision or revision == main_branch_revision:
@@ -39,6 +42,8 @@ async def generate_review(conn, client, publisher_url, suite=None):
         'highlight_diff': highlight_diff,
         'run_id': run_id,
         'suite': suite,
+        'json_dumps': json.dumps,
+        'todo': [entry[6] for entry in entries],
         }
     template = env.get_template('review.html')
     return await template.render_async(**kwargs)

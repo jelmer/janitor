@@ -18,7 +18,7 @@ function loadRun(package, run_id) {
     $('#run-id').attr('value', run_id);
 }
 
-var todo = [];
+var todo = {{ json_dumps(todo) }};
 
 $(function() {
   loadRun('{{ package_name }}', '{{ run_id }}');
