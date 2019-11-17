@@ -18,7 +18,7 @@ function loadRun(package, run_id) {
     $('#run-id').attr('value', run_id);
 }
 
-var todo = {{ json_dumps(todo) }};
+var todo = {{ json_dumps(todo)|safe }};
 
 $(function() {
   loadRun('{{ package_name }}', '{{ run_id }}');
@@ -35,6 +35,7 @@ $(function() {
 
 function submitReview(status) {
     var run_id = $('#run-id').val();
+    console.log("Submitting review " + status + " for run " + run_id);
     $.post('/api/run/' + run_id, {'review-status': status});
     var newJob = todo[0];
     todo.shift();
