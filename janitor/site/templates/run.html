@@ -99,6 +99,22 @@ $(document).ready(function() {
 
 {% endif %}
 
+{% set debdiff = show_debdiff() %}
+{% if debdiff %}
+<h3>Debdiff</h3>
+
+{% if debdiff.split('\n')|length < 200 %}
+
+<pre>
+{{ debdiff }}
+</pre>
+
+{% else %}
+<p>Debdiff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/debdiff">raw debdiff</a>.</p>
+{% endif %}
+
+{% endif %}
+
 {% if changes_name %}
 <h2>Resulting package</h2>
 <p>Changes filename: <a class="reference external" href="/{{ build_distribution }}/{{ changes_name }}">{{ changes_name }}</a></p>
