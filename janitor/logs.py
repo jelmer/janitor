@@ -157,11 +157,11 @@ class GCSLogFilemanager(LogFileManager):
         object_name = self._get_object_name(pkg, run_id, name)
         try:
             blob = await self.bucket.get_blob(object_name, self.session)
+            return BytesIO(gzip.decompress(await blob.download()))
         except ClientResponseError as e:
             if e.status == 404:
                 raise FileNotFoundError(name)
             raise
-        return BytesIO(gzip.decompress(await blob.download()))
 
     async def import_log(self, pkg, run_id, orig_path):
         object_name = self._get_object_name(
