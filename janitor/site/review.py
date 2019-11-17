@@ -42,7 +42,7 @@ async def generate_review(conn, client, publisher_url, suite=None):
         'run_id': run_id,
         'suite': suite,
         'json_dumps': json.dumps,
-        'todo': [entry[6] for entry in entries],
+        'todo': [(entry[0], entry[6]) for entry in entries],
         }
     template = env.get_template('review.html')
     return await template.render_async(**kwargs)
