@@ -678,6 +678,25 @@ async def handle_log(request):
         return web.Response(text='No such logfile: %s' % filename, status=404)
 
 
+async def handle_changes(request):
+    filename = request.match_info['filename']
+    if '/' in filename:
+        return web.Response(
+            text='Invalid filename %s' % request.match_info['filename'],
+            status=400)
+
+    full_path = os.path.join(
+        request.app.archive_path,
+        request.match_info['suite'],
+        filename)
+
+    if os.path.exists(full_path):
+        return web.FileResponse(full_path)
+    else:
+        return web.Response(
+            text='No such changes file : %s' % filename, status=404)
+
+
 async def handle_debdiff(request):
     post = await request.post()
 
@@ -752,6 +771,9 @@ async def run_web_server(listen_addr, port, queue_processor, archive_path):
     setup_metrics(app)
     app.router.add_get('/status', handle_status)
     app.router.add_post('/debdiff', handle_debdiff)
+    app.router.add_get(
+        '/{suite:' + '|'.join(SUITES) + '}'
+        '/{filename}/changes', handle_changes)
     app.router.add_get('/log/{run_id}', handle_log_index)
     app.router.add_get('/log/{run_id}/{filename}', handle_log)
     app.router.add_get('/ws/queue', functools.partial(
