@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, ClientConnectorError
+from aiohttp import ClientConnectorError
 from debian.deb822 import Changes
 from jinja2 import Environment, PackageLoader, select_autoescape
 import json
@@ -55,20 +55,19 @@ def format_timestamp(ts):
     return ts.isoformat(timespec='minutes')
 
 
-async def get_vcs_type(publisher_url, package):
+async def get_vcs_type(client, publisher_url, package):
     url = urllib.parse.urljoin(publisher_url, 'vcs-type/%s' % package)
-    async with ClientSession() as client:
-        try:
-            async with client.get(url) as resp:
-                if resp.status == 200:
-                    ret = (await resp.read()).decode('utf-8', 'replace')
-                    if ret == "":
-                        ret = None
-                else:
+    try:
+        async with client.get(url) as resp:
+            if resp.status == 200:
+                ret = (await resp.read()).decode('utf-8', 'replace')
+                if ret == "":
                     ret = None
-            return ret
-        except ClientConnectorError as e:
-            return 'Unable to retrieve diff; error %s' % e
+            else:
+                ret = None
+        return ret
+    except ClientConnectorError as e:
+        return 'Unable to retrieve diff; error %s' % e
 
 
 env = Environment(
@@ -96,13 +95,22 @@ def highlight_diff(diff):
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
-def open_changes_file(run, changes_name):
-    path = os.path.join(
-            os.path.dirname(__file__), '..', '..',
-            "public_html", run.build_distribution, changes_name)
-    return open(path, 'rb')
-
-
 def changes_get_binaries(cf):
     changes = Changes(cf)
     return changes['Binary'].split(' ')
+
+
+async def open_changes_file(client, runner_url, suite, changes_file):
+    url = urllib.parse.urljoin(
+        runner_url, '/archive/%s/%s' % (suite, changes_file))
+    try:
+        async with client.get(url) as resp
+            if resp.status == 200
+                ret = BytesIO(await resp.read())
+            elif resp.status == 404:
+                raise FileNotFoundError(changes_file)
+            else:
+                ret = BytesIO()
+        return ret
+    except ClientConnectorError as e:
+        raise EnvironmentError(e)

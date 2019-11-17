@@ -100,7 +100,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
             return 'Unable to retrieve diff; error %s' % e
 
     async def vcs_type():
-        return await get_vcs_type(publisher_url, run.package)
+        return await get_vcs_type(client, publisher_url, run.package)
 
     kwargs = {
         'package': package.name,

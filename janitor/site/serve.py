@@ -299,6 +299,7 @@ if __name__ == '__main__':
         text = await generate_run_file(
             request.app.database,
             request.app.http_client_session,
+            request.app.runner_url,
             logfile_manager, run, request.app.publisher_url)
         return web.Response(
             content_type='text/html', text=text,
@@ -390,7 +391,9 @@ if __name__ == '__main__':
         run_id = request.match_info.get('run_id')
         try:
             text = await generate_pkg_file(
-                request.app.database, pkg, suite, run_id)
+                request.app.database, request.app.http_client_session,
+                request.app.runner_url,
+                pkg, suite, run_id)
         except KeyError:
             raise web.HTTPNotFound()
         return web.Response(
