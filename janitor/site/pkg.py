@@ -85,7 +85,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(db, client, logfile_manager, run, publisher_url):
+async def generate_run_file(db, client, runner_url, logfile_manager, run, publisher_url):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -142,14 +142,17 @@ async def generate_run_file(db, client, logfile_manager, run, publisher_url):
         kwargs['changes_name'] = None
 
     async def vcs_type():
-        return await get_vcs_type(publisher_url, run.package)
+        return await get_vcs_type(client, publisher_url, run.package)
     kwargs['vcs_type'] = vcs_type
     kwargs['in_line_boundaries'] = in_line_boundaries
     if kwargs['changes_name']:
         try:
-            changes_file = open_changes_file(run, kwargs['changes_name'])
+            changes_file = await open_changes_file(
+                client, runner_url, run.suite, kwargs['changes_name'])
         except FileNotFoundError:
             pass
+        except EnvironmentError:
+            pass  # Perhaps do some logging?
         else:
             kwargs['binary_packages'] = []
             for binary in changes_get_binaries(changes_file):

@@ -678,7 +678,7 @@ async def handle_log(request):
         return web.Response(text='No such logfile: %s' % filename, status=404)
 
 
-async def handle_changes(request):
+async def handle_archive_file(request):
     filename = request.match_info['filename']
     if '/' in filename:
         return web.Response(
@@ -772,8 +772,9 @@ async def run_web_server(listen_addr, port, queue_processor, archive_path):
     app.router.add_get('/status', handle_status)
     app.router.add_post('/debdiff', handle_debdiff)
     app.router.add_get(
+        '/archive'
         '/{suite:' + '|'.join(SUITES) + '}'
-        '/{filename}/changes', handle_changes)
+        '/{filename}', handle_archive_file)
     app.router.add_get('/log/{run_id}', handle_log_index)
     app.router.add_get('/log/{run_id}/{filename}', handle_log)
     app.router.add_get('/ws/queue', functools.partial(
