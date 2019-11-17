@@ -622,3 +622,8 @@ tr.package-proposal {
 li.removed-in-unstable {
   font-weight: bolder;
 }
+
+ul.metadata {
+  list-style: none;
+  background-color: lightyellow;
+}
