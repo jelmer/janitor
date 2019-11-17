@@ -104,8 +104,8 @@ async def open_changes_file(client, runner_url, suite, changes_file):
     url = urllib.parse.urljoin(
         runner_url, '/archive/%s/%s' % (suite, changes_file))
     try:
-        async with client.get(url) as resp
-            if resp.status == 200
+        async with client.get(url) as resp:
+            if resp.status == 200:
                 ret = BytesIO(await resp.read())
             elif resp.status == 404:
                 raise FileNotFoundError(changes_file)
