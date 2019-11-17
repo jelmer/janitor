@@ -101,10 +101,12 @@ async def generate_run_file(db, client, runner_url, logfile_manager, run, publis
     kwargs['result'] = run.result
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
-    kwargs['enumerate'] = enumerate
     kwargs['branch_url'] = run.branch_url
     kwargs['review_status'] = run.review_status
     async with db.acquire() as conn:
+        if run.main_branch_revision:
+            kwargs['unchanged_run'] = await state.get_unchanged_run(
+                conn, run.main_branch_revision)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package)
         package = await state.get_package(conn, run.package)
@@ -129,6 +131,19 @@ async def generate_run_file(db, client, runner_url, logfile_manager, run, publis
             return 'Unable to retrieve diff; error %s' % e
 
     kwargs['show_diff'] = show_diff
+
+    async def show_debdiff():
+        if not run.build_version or not run.main_branch_revision:
+            return ''
+        try:
+            debdiff = get_debdiff(client, runner_url, run, unchanged_run)
+            return debdiff.decode('utf-8', 'replace')
+        except FileNotFoundError:
+            return ''
+        except ClientConnectorError as e:
+            return 'Error retrieving debdiff: %s' % e
+
+    kwargs['show_debdiff'] = show_debdiff
     kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
     kwargs['suite'] = run.suite

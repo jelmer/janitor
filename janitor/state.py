@@ -324,10 +324,9 @@ SELECT
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status
 FROM
-    run
+    last_runs
 WHERE
-    suite = 'unchanged' AND main_branch_revision = $1 AND
-    build_version IS NOT NULL
+    suite = 'unchanged' AND main_branch_revision = $1
 """
     if isinstance(main_branch_revision, bytes):
         main_branch_revision = main_branch_revision.decode('utf-8')

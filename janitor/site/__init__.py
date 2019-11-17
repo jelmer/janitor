@@ -82,6 +82,7 @@ env.globals.update(suites=SUITES)
 env.globals.update(json_dumps=json.dumps)
 env.globals.update(cache_url_git=CACHE_URL_GIT)
 env.globals.update(cache_url_bzr=CACHE_URL_BZR)
+env.globals.update(enumerate=enumerate)
 
 
 def run_changes_filename(run):
@@ -114,3 +115,18 @@ async def open_changes_file(client, runner_url, suite, changes_file):
         return ret
     except ClientConnectorError as e:
         raise EnvironmentError(e)
+
+
+async def get_debdiff(client, runner_url, run, unchanged_run):
+    url = urllib.parse.urljoin(runner_url, 'debdiff')
+    payload = {
+        'old_suite': 'unchanged',
+        'new_suite': run.suite,
+        'old_changes_filename': run_changes_filename(unchanged_run),
+        'new_changes_filename': run_changes_filename(run),
+    }
+    async with client.post(url, data=payload) as resp:
+        if resp.status == 200:
+            return await resp.read()
+        else:
+            raise ClientConnectorError(await resp.read())

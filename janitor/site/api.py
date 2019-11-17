@@ -9,6 +9,7 @@ from . import (
     env,
     highlight_diff,
     run_changes_filename,
+    get_debdiff,
     )
 
 
@@ -266,33 +267,22 @@ async def handle_debdiff(request):
         if unchanged_run is None:
             raise web.HTTPNotFound(
                 text='No matching unchanged build for %s' % run_id)
-    runner_url = request.app.runner_url
-    url = urllib.parse.urljoin(runner_url, 'debdiff')
-    payload = {
-        'old_suite': 'unchanged',
-        'new_suite': run.suite,
-        'old_changes_filename': run_changes_filename(unchanged_run),
-        'new_changes_filename': run_changes_filename(run),
-    }
+
     try:
-        async with request.app.http_client_session.post(
-                url, data=payload) as resp:
-            if resp.status == 200:
-                diff = await resp.read()
-                return web.Response(
-                    body=diff,
-                    content_type=resp.content_type,
-                    headers={'Cache-Control': 'max-age=3600'})
-            else:
-                return web.Response(body=await resp.read(), status=400)
-    except ContentTypeError as e:
-        return web.Response(
-            'runner returned error %d' % e.code,
-            status=400)
+        debdiff = get_debdiff(
+            request.app.http_client_session, request.app.runner_url, run,
+            unchanged_run)
+    except FileNotFoundError:
+        raise web.HTTPNotFound(text='debdiff not calculated yet')
     except ClientConnectorError:
         return web.json_response(
             'unable to contact runner',
             status=400)
+    return web.Response(
+        body=debdiff,
+        content_type='text/x-diff',
+        headers={'Cache-Control': 'max-age=3600'})
+
 
 
 async def handle_run_post(request):
