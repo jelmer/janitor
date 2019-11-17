@@ -17,6 +17,7 @@
 
 from aiohttp import ClientConnectorError
 from debian.deb822 import Changes
+from io import BytesIO
 from jinja2 import Environment, PackageLoader, select_autoescape
 import json
 import os

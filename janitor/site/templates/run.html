@@ -41,7 +41,7 @@ $(document).ready(function() {
 {{ result_code_explanation(result_code, run) }}
 
 {% if revision and suite != 'unchanged' %}
-<li>Diff: <a href="/api/run/{{ run_id }}/diff">Raw diff</a></li>
+<li>Diff: <a href="/api/run/{{ run_id }}/diff">raw diff</a>, <a href="/api/run/{{ run_id }}/debdiff">raw debdiff</a></li>
 {% endif %}
 <!-- Command: {{ command }} -->
 </ul>

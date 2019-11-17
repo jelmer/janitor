@@ -269,7 +269,7 @@ async def handle_debdiff(request):
                 text='No matching unchanged build for %s' % run_id)
 
     try:
-        debdiff = get_debdiff(
+        debdiff = await get_debdiff(
             request.app.http_client_session, request.app.runner_url, run,
             unchanged_run)
     except FileNotFoundError:
