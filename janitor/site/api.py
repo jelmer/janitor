@@ -4,14 +4,12 @@ from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import urllib.parse
 
 from janitor.policy import apply_policy
-from janitor import state, SUITES, DEFAULT_BUILD_ARCH
+from janitor import state, SUITES
 from . import (
     env,
     highlight_diff,
-    run_changes_filename,
     get_debdiff,
     )
-
 
 
 from breezy.git.urls import git_url_to_bzr_url
@@ -284,7 +282,6 @@ async def handle_debdiff(request):
         headers={'Cache-Control': 'max-age=3600'})
 
 
-
 async def handle_run_post(request):
     run_id = request.match_info['run_id']
     post = await request.post()
@@ -379,10 +376,10 @@ async def handle_global_policy(request):
         headers={'Cache-Control': 'max-age=60'})
 
 
-async def forward_to_runner(runner_url, path):
+async def forward_to_runner(client, runner_url, path):
     url = urllib.parse.urljoin(runner_url, path)
     try:
-        async with request.app.http_client_session.get(url) as resp:
+        async with client.get(url) as resp:
             return web.json_response(
                 await resp.json(), status=resp.status)
     except ContentTypeError as e:
@@ -396,12 +393,15 @@ async def forward_to_runner(runner_url, path):
 
 
 async def handle_runner_status(request):
-    return await forward_to_runner(request.app.runner_url, 'status')
+    return await forward_to_runner(
+        request.app.http_client_session, request.app.runner_url, 'status')
 
 
 async def handle_runner_log_index(request):
     run_id = request.match_info['run_id']
-    return await forward_to_runner(request.app.runner_url, 'log/%s' % run_id)
+    return await forward_to_runner(
+        request.app.http_client_session, request.app.runner_url,
+        'log/%s' % run_id)
 
 
 async def handle_runner_log(request):

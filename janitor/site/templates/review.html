@@ -27,7 +27,7 @@ $(function() {
      url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?review-status=unreviewed',
      dataType: 'json',
      success: function(data) {
-     if (data[0][1] == '{{run_id}}') { data.shift(); }
+         if (data[0][1] == '{{run_id}}') { data.shift(); }
          todo.push(...data);
      }
   });

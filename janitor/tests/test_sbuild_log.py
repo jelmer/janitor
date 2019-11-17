@@ -305,6 +305,17 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
                 'org.junit.jupiter:junit-jupiter-params:jar:5.4.0',
                 'org.junit.jupiter:junit-jupiter-engine:jar:5.4.0']))
         self.run_test([
+            '[ERROR] Failed to execute goal on project opennlp-uima: Could '
+            'not resolve dependencies for project '
+            'org.apache.opennlp:opennlp-uima:jar:1.9.2-SNAPSHOT: Cannot '
+            'access ApacheIncubatorRepository '
+            '(http://people.apache.org/repo/m2-incubating-repository/) in '
+            'offline mode and the artifact '
+            'org.apache.opennlp:opennlp-tools:jar:debian has not been '
+            'downloaded from it before. -> [Help 1]'], 1,
+            MissingMavenArtifacts(
+                ['org.apache.opennlp:opennlp-tools:jar:debian']))
+        self.run_test([
             '[ERROR] Failed to execute goal on project bookkeeper-server: '
             'Could not resolve dependencies for project '
             'org.apache.bookkeeper:bookkeeper-server:jar:4.4.0: Cannot '

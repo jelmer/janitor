@@ -86,7 +86,8 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(db, client, runner_url, logfile_manager, run, publisher_url):
+async def generate_run_file(db, client, runner_url, logfile_manager, run,
+                            publisher_url):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
