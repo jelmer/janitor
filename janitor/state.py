@@ -1316,3 +1316,9 @@ async def set_upstream_branch_url(conn, package, url):
     await conn.execute(
         'update package set upstream_branch_url = $1 where name = $2',
         url, package)
+
+
+async def update_branch_url(conn, package, vcs_type, vcs_url):
+    await conn.execute(
+        'update package set vcs_type = $1, branch_url = $2 '
+        'where name = $3', vcs_type, vcs_url, package)
