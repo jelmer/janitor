@@ -41,7 +41,7 @@ from prometheus_client import (
     Histogram,
 )
 
-from lintian_brush.vcs import (
+from lintian_brush.salsa import (
     guess_repository_url,
     salsa_url_from_alioth_url,
     )
@@ -266,14 +266,13 @@ async def invoke_subprocess_worker(
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
-async def open_guessed_salsa_branch(conn, pkg, possible_transports=None):
+async def open_guessed_salsa_branch(conn, pkg, vcs_url, possible_transports=None):
     package = await state.get_package(conn, pkg)
     salsa_url = guess_repository_url(package.name, package.maintainer_email)
     if not salsa_url:
         salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
     if salsa_url:
-        trace.note('Converting alioth URL: %s -> %s', vcs_url,
-                   salsa_url)
+        note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
         probers = select_probers('git')
         return open_branch_ext(
             salsa_url, possible_transports=possible_transports,
@@ -320,8 +319,8 @@ async def process_one(
                 # See if we can guess where the branch is.
                 async with db.acquire() as conn:
                     try:
-                        main_branch = open_guessed_salsa_branch(
-                            conn, pkg, possible_transports=possible_transports)
+                        main_branch = await open_guessed_salsa_branch(
+                            conn, pkg, vcs_url, possible_transports=possible_transports)
                     except BranchOpenFailure:
                         pass
             if main_branch is None:
