@@ -280,6 +280,26 @@ async def open_guessed_salsa_branch(conn, pkg, vcs_url, possible_transports=None
     return None
 
 
+async def open_branch_with_fallback(
+        db, pkg, vcs_type, vcs_url, possible_transports=None):
+    probers = select_preferred_probers(vcs_type)
+    try:
+        return open_branch_ext(
+            vcs_url, possible_transports=possible_transports,
+            probers=probers)
+    except BranchOpenFailure as e:
+        if e.code == 'hosted-on-alioth':
+            # See if we can guess where the branch is.
+            async with db.acquire() as conn:
+                try:
+                    return await open_guessed_salsa_branch(
+                        conn, pkg, vcs_url,
+                        possible_transports=possible_transports)
+                except BranchOpenFailure:
+                    raise e
+        raise
+
+
 async def process_one(
         db, output_directory, worker_kind, vcs_url, pkg, env, command,
         build_command, suite, pre_check=None, post_check=None,
@@ -308,25 +328,14 @@ async def process_one(
         raise AssertionError('Unknown command %s' % command[0])
 
     if not use_cached_only:
-        probers = select_preferred_probers(vcs_type)
         try:
-            main_branch = open_branch_ext(
-                vcs_url, possible_transports=possible_transports,
-                probers=probers)
+            main_branch = open_branch_with_fallback(
+                db, pkg, vcs_type, vcs_url,
+                possible_transports=possible_transports)
         except BranchOpenFailure as e:
-            main_branch = None
-            if e.code == 'hosted-on-alioth':
-                # See if we can guess where the branch is.
-                async with db.acquire() as conn:
-                    try:
-                        main_branch = await open_guessed_salsa_branch(
-                            conn, pkg, vcs_url, possible_transports=possible_transports)
-                    except BranchOpenFailure:
-                        pass
-            if main_branch is None:
-                return JanitorResult(
-                    pkg, log_id=log_id, description=e.description, code=e.code,
-                    logfilenames=[])
+            return JanitorResult(
+                pkg, log_id=log_id, description=e.description, code=e.code,
+                logfilenames=[])
 
         if subpath:
             # TODO(jelmer): cluster all packages for a single repository
