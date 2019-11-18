@@ -266,17 +266,25 @@ async def invoke_subprocess_worker(
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
-async def open_guessed_salsa_branch(conn, pkg, vcs_url, possible_transports=None):
+async def open_guessed_salsa_branch(
+        conn, pkg, vcs_type, vcs_url, possible_transports=None):
     package = await state.get_package(conn, pkg)
-    salsa_url = guess_repository_url(package.name, package.maintainer_email)
-    if not salsa_url:
-        salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
-    if salsa_url:
-        note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
-        probers = select_probers('git')
-        return open_branch_ext(
-            salsa_url, possible_transports=possible_transports,
-            probers=probers)
+    probers = select_probers('git')
+    for url in [
+            salsa_url_from_alioth_url(vcs_type, vcs_url),
+            guess_repository_url(package.name, package.maintainer_email),
+            ]:
+        if not url:
+            continue
+        try:
+            branch = open_branch_ext(
+                salsa_url, possible_transports=possible_transports,
+                probers=probers)
+        except BranchOpenFailure:
+            pass
+        else:
+            note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
+            return branch
     return None
 
 
@@ -293,13 +301,14 @@ async def open_branch_with_fallback(
             async with db.acquire() as conn:
                 try:
                     branch = await open_guessed_salsa_branch(
-                        conn, pkg, vcs_url,
+                        conn, pkg, vcs_type, vcs_url,
                         possible_transports=possible_transports)
                 except BranchOpenFailure:
                     raise e
                 else:
-                    await state.update_branch_url(
-                        conn, pkg, 'Git', branch.user_url)
+                    if branch:
+                        await state.update_branch_url(
+                            conn, pkg, 'Git', branch.user_url)
         raise
 
 
