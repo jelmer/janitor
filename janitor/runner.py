@@ -48,6 +48,7 @@ from lintian_brush.vcs import (
 
 from silver_platter.debian import (
     select_preferred_probers,
+    select_probers,
     pick_additional_colocated_branches,
     )
 from silver_platter.proposal import (
@@ -265,6 +266,21 @@ async def invoke_subprocess_worker(
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
+async def open_guessed_salsa_branch(conn, pkg, possible_transports=None):
+    package = await state.get_package(conn, pkg)
+    salsa_url = guess_repository_url(package.name, package.maintainer_email)
+    if not salsa_url:
+        salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
+    if salsa_url:
+        trace.note('Converting alioth URL: %s -> %s', vcs_url,
+                   salsa_url)
+        probers = select_probers('git')
+        return open_branch_ext(
+            salsa_url, possible_transports=possible_transports,
+            probers=probers)
+    return None
+
+
 async def process_one(
         db, output_directory, worker_kind, vcs_url, pkg, env, command,
         build_command, suite, pre_check=None, post_check=None,
@@ -301,18 +317,11 @@ async def process_one(
         except BranchOpenFailure as e:
             main_branch = None
             if e.code == 'hosted-on-alioth':
-                salsa_url = guess_repository_url(name, maintainer_email)
-                if not salsa_url:
-                    salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
-                if salsa_url:
-                    trace.note('Converting alioth URL: %s -> %s', vcs_url,
-                               salsa_url)
-                    probers = select_preferred_probers('git')
-                    vcs_url = salsa_url
+                # See if we can guess where the branch is.
+                async with db.acquire() as conn:
                     try:
-                        main_branch = open_branch_ext(
-                            vcs_url, possible_transports=possible_transports,
-                            probers=probers)
+                        main_branch = open_guessed_salsa_branch(
+                            conn, pkg, possible_transports=possible_transports)
                     except BranchOpenFailure:
                         pass
             if main_branch is None:
