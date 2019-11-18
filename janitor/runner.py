@@ -292,11 +292,14 @@ async def open_branch_with_fallback(
             # See if we can guess where the branch is.
             async with db.acquire() as conn:
                 try:
-                    return await open_guessed_salsa_branch(
+                    branch = await open_guessed_salsa_branch(
                         conn, pkg, vcs_url,
                         possible_transports=possible_transports)
                 except BranchOpenFailure:
                     raise e
+                else:
+                    await state.update_branch_url(
+                        conn, pkg, 'Git', branch.user_url)
         raise
 
 
