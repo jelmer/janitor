@@ -567,14 +567,6 @@ def process_package(vcs_url, env, command, output_directory,
         except PreCheckFailed as e:
             raise WorkerFailure('pre-check-failed', str(e))
 
-        try:
-            check_quilt_patches_apply(ws.local_tree)
-        except QuiltError as e:
-            error_description = (
-                "An error (%d) occurred running quilt in the original tree: "
-                "%s%s" % (e.retcode, e.stderr, e.extra))
-            raise WorkerFailure('before-quilt-error', error_description)
-
         metadata['subworker'] = {}
 
         def provide_context(c):
