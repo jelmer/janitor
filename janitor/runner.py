@@ -41,6 +41,11 @@ from prometheus_client import (
     Histogram,
 )
 
+from lintian_brush.vcs import (
+    guess_repository_url,
+    salsa_url_from_alioth_url,
+    )
+
 from silver_platter.debian import (
     select_preferred_probers,
     pick_additional_colocated_branches,
@@ -294,9 +299,26 @@ async def process_one(
                 vcs_url, possible_transports=possible_transports,
                 probers=probers)
         except BranchOpenFailure as e:
-            return JanitorResult(
-                pkg, log_id=log_id, description=e.description, code=e.code,
-                logfilenames=[])
+            main_branch = None
+            if e.code == 'hosted-on-alioth':
+                salsa_url = guess_repository_url(name, maintainer_email)
+                if not salsa_url:
+                    salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
+                if salsa_url:
+                    trace.note('Converting alioth URL: %s -> %s', vcs_url,
+                               salsa_url)
+                    probers = select_preferred_probers('git')
+                    vcs_url = salsa_url
+                    try:
+                        main_branch = open_branch_ext(
+                            vcs_url, possible_transports=possible_transports,
+                            probers=probers)
+                    except BranchOpenFailure:
+                        pass
+            if main_branch is None:
+                return JanitorResult(
+                    pkg, log_id=log_id, description=e.description, code=e.code,
+                    logfilenames=[])
 
         if subpath:
             # TODO(jelmer): cluster all packages for a single repository
