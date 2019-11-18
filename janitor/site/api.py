@@ -9,6 +9,7 @@ from . import (
     env,
     highlight_diff,
     get_debdiff,
+    DebdiffRetrievalError,
     )
 
 
@@ -272,9 +273,9 @@ async def handle_debdiff(request):
             unchanged_run)
     except FileNotFoundError:
         raise web.HTTPNotFound(text='debdiff not calculated yet')
-    except ClientConnectorError:
+    except DebdiffRetrievalError:
         return web.json_response(
-            'unable to contact runner',
+            'unable to contact runner for debdiff',
             status=400)
     return web.Response(
         body=debdiff,

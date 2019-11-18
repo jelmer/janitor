@@ -22,6 +22,7 @@ from janitor.site import (
     run_changes_filename,
     open_changes_file,
     highlight_diff,
+    DebdiffRetrievalError,
 )
 
 FAIL_BUILD_LOG_LEN = 15
@@ -145,7 +146,7 @@ async def generate_run_file(db, client, runner_url, logfile_manager, run,
             return debdiff.decode('utf-8', 'replace')
         except FileNotFoundError:
             return ''
-        except ClientConnectorError as e:
+        except DebdiffRetrievalError as e:
             return 'Error retrieving debdiff: %s' % e
 
     kwargs['show_debdiff'] = show_debdiff
