@@ -29,16 +29,8 @@ from silver_platter.debian import (
 )
 from . import trace
 from .config import read_config
-from .vcs import (
-    is_alioth_url,
-    )
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
-    )
-from lintian_brush.salsa import (
-    determine_browser_url as determine_salsa_browser_url,
-    salsa_url_from_alioth_url,
-    guess_repository_url,
     )
 from lintian_brush.vcs import (
     split_vcs_url,
@@ -337,17 +329,6 @@ async def main():
                vcswatch_version) in udd.iter_packages_with_metadata(
                    args.packages):
         uploader_emails = extract_uploader_emails(uploaders)
-
-        if is_alioth_url(vcs_url):
-            salsa_url = guess_repository_url(name, maintainer_email)
-            if not salsa_url:
-                salsa_url = salsa_url_from_alioth_url(vcs_type, vcs_url)
-            if salsa_url:
-                trace.note('Converting alioth URL: %s -> %s', vcs_url,
-                           salsa_url)
-                vcs_type = 'Git'
-                vcs_url = salsa_url
-                vcs_browser = determine_salsa_browser_url(salsa_url)
 
         if vcs_type and vcs_type.capitalize() == 'Git':
             new_vcs_url = fixup_broken_git_url(vcs_url)
