@@ -267,8 +267,9 @@ class NewUpstreamWorker(SubWorker):
 
             try:
                 result = merge_upstream(
-                    tree=local_tree, snapshot=self.args.snapshot,
-                    committer=self.committer, trust_package=TRUST_PACKAGE)
+                    tree=local_tree, subpath=(subpath or ''),
+                    snapshot=self.args.snapshot, committer=self.committer,
+                    trust_package=TRUST_PACKAGE)
             except UpstreamAlreadyImported as e:
                 report_context(e.version)
                 metadata['upstream_version'] = e.version
