@@ -308,7 +308,7 @@ async def open_branch_with_fallback(
                 else:
                     if branch:
                         await state.update_branch_url(
-                            conn, pkg, 'Git', branch.user_url)
+                            conn, pkg, 'Git', branch.user_url.rstrip('/'))
         raise
 
 
