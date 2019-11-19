@@ -129,7 +129,7 @@ async def get_debdiff(client, runner_url, run, unchanged_run):
         'old_changes_filename': run_changes_filename(unchanged_run),
         'new_changes_filename': run_changes_filename(run),
     }
-    try;
+    try:
         async with client.post(url, data=payload) as resp:
             if resp.status == 200:
                 return await resp.read()
