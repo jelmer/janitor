@@ -122,13 +122,14 @@ class NoChangesFile(Exception):
 
 class JanitorResult(object):
 
-    def __init__(self, pkg, log_id, description=None,
+    def __init__(self, pkg, log_id, branch_url, description=None,
                  code=None, build_distribution=None, build_version=None,
                  changes_filename=None, worker_result=None,
                  logfilenames=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
+        self.branch_url = branch_url
         self.code = code
         self.build_distribution = build_distribution
         self.build_version = build_version
@@ -270,11 +271,11 @@ async def open_guessed_salsa_branch(
         conn, pkg, vcs_type, vcs_url, possible_transports=None):
     package = await state.get_package(conn, pkg)
     probers = select_probers('git')
-    for url in [
+    for salsa_url in [
             salsa_url_from_alioth_url(vcs_type, vcs_url),
             guess_repository_url(package.name, package.maintainer_email),
             ]:
-        if not url:
+        if not salsa_url:
             continue
         try:
             branch = open_branch_ext(
@@ -346,13 +347,17 @@ async def process_one(
                 possible_transports=possible_transports)
         except BranchOpenFailure as e:
             return JanitorResult(
-                pkg, log_id=log_id, description=e.description, code=e.code,
+                pkg, log_id=log_id, branch_url=vcs_url,
+                description=e.description, code=e.code,
                 logfilenames=[])
+        else:
+            branch_url = main_branch.user_url
 
         if subpath:
             # TODO(jelmer): cluster all packages for a single repository
             return JanitorResult(
-                pkg, log_id=log_id, code='package-in-subpath',
+                pkg, log_id=log_id, branch_url=branch_url,
+                code='package-in-subpath',
                 description=(
                     'The package is stored in a subpath rather than the '
                     'repository root.'),
@@ -396,7 +401,7 @@ async def process_one(
             main_branch = None
         if main_branch is None:
             return JanitorResult(
-                pkg, log_id=log_id,
+                pkg, log_id=log_id, branch_url=branch_url,
                 code='cached-branch-missing',
                 description='Missing cache branch for %s' % pkg,
                 logfilenames=[])
@@ -432,7 +437,7 @@ async def process_one(
             timeout=overall_timeout)
     except asyncio.TimeoutError:
         return JanitorResult(
-            pkg, log_id=log_id,
+            pkg, log_id=log_id, branch_url=branch_url,
             code='timeout',
             description='Run timed out after %d seconds' % overall_timeout,
             logfilenames=[])
@@ -462,7 +467,7 @@ async def process_one(
             description = 'Worker exited with return code %d' % retcode
 
         return JanitorResult(
-            pkg, log_id=log_id,
+            pkg, log_id=log_id, branch_url=branch_url,
             code='worker-failure',
             description=description,
             logfilenames=logfilenames)
@@ -477,11 +482,11 @@ async def process_one(
 
     if worker_result.code is not None:
         return JanitorResult(
-            pkg, log_id=log_id, worker_result=worker_result,
-            logfilenames=logfilenames)
+            pkg, log_id=log_id, branch_url=branch_url,
+            worker_result=worker_result, logfilenames=logfilenames)
 
     result = JanitorResult(
-        pkg, log_id=log_id,
+        pkg, log_id=log_id, branch_url=branch_url,
         code='success', worker_result=worker_result,
         logfilenames=logfilenames)
 
@@ -497,7 +502,7 @@ async def process_one(
         local_branch = open_branch(os.path.join(output_directory, pkg))
     except (BranchMissing, BranchUnavailable) as e:
         return JanitorResult(
-            pkg, log_id,
+            pkg, log_id, branch_url,
             description='result branch unavailable: %s' % e,
             code='result-branch-unavailable',
             worker_result=worker_result,
@@ -636,7 +641,7 @@ class QueueProcessor(object):
         if not self.dry_run:
             async with self.database.acquire() as conn:
                 await state.store_run(
-                    conn, result.log_id, item.package, item.branch_url,
+                    conn, result.log_id, item.package, result.branch_url,
                     start_time, finish_time, item.command,
                     result.description,
                     item.env.get('CONTEXT'),

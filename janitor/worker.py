@@ -47,7 +47,6 @@ from silver_platter.debian.lintian import (
 from lintian_brush.config import Config as LintianBrushConfig
 from lintian_brush import SUPPORTED_CERTAINTIES
 from silver_platter.debian.upstream import (
-    check_quilt_patches_apply,
     merge_upstream,
     refresh_quilt_patches,
     InconsistentSourceFormatError,
