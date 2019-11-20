@@ -310,6 +310,7 @@ async def open_branch_with_fallback(
                     if branch:
                         await state.update_branch_url(
                             conn, pkg, 'Git', branch.user_url.rstrip('/'))
+                        return branch
         raise
 
 
@@ -342,7 +343,7 @@ async def process_one(
 
     if not use_cached_only:
         try:
-            main_branch = open_branch_with_fallback(
+            main_branch = await open_branch_with_fallback(
                 db, pkg, vcs_type, vcs_url,
                 possible_transports=possible_transports)
         except BranchOpenFailure as e:
