@@ -98,9 +98,15 @@ def _convert_branch_exception(vcs_url, e):
                     'svn.debian.org' in str(e)):
                 code = 'hosted-on-alioth'
             else:
-                code = 'unsupported-vcs-protocol'
+                if 'svn://' in str(e):
+                    code = 'unsupported-vcs-svn'
+                else:
+                    code = 'unsupported-vcs-protocol'
         else:
-            code = 'unsupported-vcs'
+            if str(e).startswith('Subversion branches are not yet'):
+                code = 'unsupported-vcs-svn'
+            else:
+                code = 'unsupported-vcs'
         return BranchOpenFailure(code, str(e))
 
     return None

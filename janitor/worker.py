@@ -294,6 +294,11 @@ class NewUpstreamWorker(SubWorker):
                 error_code = 'upstream-branch-unavailable'
                 if 'Fossil branches are not yet supported' in str(e.error):
                     error_code = 'upstream-unsupported-vcs-fossil'
+                if 'Unsupported protocol for url' in str(e.error):
+                    if 'svn://' in str(e.error):
+                        error_code = 'upstream-unsupported-vcs-svn'
+                    else:
+                        error_code = 'upstream-unsupported-vcs'
                 raise WorkerFailure(error_code, error_description)
             except UpstreamMergeConflicted as e:
                 error_description = "Upstream version %s conflicted." % (
