@@ -321,13 +321,15 @@ async def process_one(
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False, refresh=False, vcs_type=None,
-        subpath=None, overall_timeout=None):
+        subpath=None, overall_timeout=None, upstream_branch_url=None):
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
 
     env = dict(env.items())
     env['PACKAGE'] = pkg
+    if upstream_branch_url:
+        env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
 
     # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
     if suite == "fresh-releases":
@@ -635,7 +637,8 @@ class QueueProcessor(object):
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only, refresh=item.refresh,
                 vcs_type=item.vcs_type, subpath=item.subpath,
-                overall_timeout=self.overall_timeout)
+                overall_timeout=self.overall_timeout,
+                upstream_branch_url=item.upstream_branch_url)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())

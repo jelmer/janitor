@@ -456,10 +456,11 @@ class QueueItem(object):
 
     __slots__ = ['id', 'branch_url', 'subpath', 'package', 'env', 'command',
                  'estimated_duration', 'suite', 'refresh', 'requestor',
-                 'vcs_type']
+                 'vcs_type', 'upstream_branch_url']
 
     def __init__(self, id, branch_url, subpath, package, env, command,
-                 estimated_duration, suite, refresh, requestor, vcs_type):
+                 estimated_duration, suite, refresh, requestor, vcs_type,
+                 upstream_branch_url):
         self.id = id
         self.package = package
         self.branch_url = branch_url
@@ -471,12 +472,14 @@ class QueueItem(object):
         self.refresh = refresh
         self.requestor = requestor
         self.vcs_type = vcs_type
+        self.upstream_branch_url = upstream_branch_url
 
     @classmethod
     def from_row(cls, row):
         (branch_url, subpath, package, committer,
             command, context, queue_id, estimated_duration,
-            suite, refresh, requestor, vcs_type) = row
+            suite, refresh, requestor, vcs_type,
+            upstream_branch_url) = row
         env = {
             'COMMITTER': committer or None,
             'CONTEXT': context,
@@ -488,12 +491,13 @@ class QueueItem(object):
                 command=shlex.split(command),
                 estimated_duration=estimated_duration,
                 suite=suite, refresh=refresh, requestor=requestor,
-                vcs_type=vcs_type)
+                vcs_type=vcs_type, upstream_branch_url=upstream_branch_url)
 
     def _tuple(self):
         return (self.id, self.branch_url, self.subpath, self.package, self.env,
                 self.command, self.estimated_duration, self.suite,
-                self.refresh, self.requestor, self.vcs_type)
+                self.refresh, self.requestor, self.vcs_type,
+                self.upstream_branch_url)
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
@@ -546,7 +550,8 @@ SELECT
     queue.suite,
     queue.refresh,
     queue.requestor,
-    package.vcs_type
+    package.vcs_type,
+    package.upstream_branch_url
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -575,6 +580,7 @@ SELECT
       queue.refresh,
       queue.requestor,
       package.vcs_type,
+      package.upstream_branch_url,
       run.id,
       run.result_code
   FROM
