@@ -188,16 +188,29 @@ def worker_failure_from_sbuild_log(f):
         description = 'build failed'
         if list(paragraphs.keys()) == [None]:
             for line in paragraphs[None][-4:]:
-                if line.startswith('brz: ERROR: '):
-                    (error, description) = parse_brz_error(
-                        line[len('brz: ERROR: '):])
-                    break
                 m = re.match(
                     'Patch (.*) does not apply \\(enforce with -f\\)\n', line)
                 if m:
                     patchname = m.group(1).split('/')[-1]
                     error = PatchApplicationFailed(patchname)
                     description = 'Patch %s failed to apply' % patchname
+                    break
+                m = re.match(
+                    r'dpkg-source: error: LC_ALL=C patch .* '
+                    r'--reject-file=- < .*\/debian\/patches\/([^ ]+) '
+                    r'subprocess returned exit status 1',
+                    line)
+                if m:
+                    patchname = m.group(1)
+                    error = PatchApplicationFailed(patchname)
+                    description = 'Patch %s failed to apply' % patchname
+                    break
+            else:
+                for line in paragraphs[None][-4:]:
+                    if line.startswith('brz: ERROR: '):
+                        (error, description) = parse_brz_error(
+                            line[len('brz: ERROR: '):])
+                        break
 
     return SbuildFailure(failed_stage, description, error=error)
 
