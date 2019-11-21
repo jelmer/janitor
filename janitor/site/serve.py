@@ -299,7 +299,7 @@ if __name__ == '__main__':
         text = await generate_run_file(
             request.app.database,
             request.app.http_client_session,
-            request.app.runner_url,
+            request.app.archiver_url,
             logfile_manager, run, request.app.publisher_url)
         return web.Response(
             content_type='text/html', text=text,
@@ -392,7 +392,7 @@ if __name__ == '__main__':
         try:
             text = await generate_pkg_file(
                 request.app.database, request.app.http_client_session,
-                request.app.runner_url,
+                request.app.archiver_url,
                 pkg, suite, run_id)
         except KeyError:
             raise web.HTTPNotFound()
@@ -643,5 +643,6 @@ if __name__ == '__main__':
         name='ws-notifications')
     app.add_subapp(
         '/api', create_api_app(
-            app.database, args.publisher_url, args.runner_url, policy_config))
+            app.database, args.publisher_url, args.runner_url, args.runner_url,
+            policy_config))
     web.run_app(app, host=args.host, port=args.port)

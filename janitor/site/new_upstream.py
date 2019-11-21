@@ -15,7 +15,7 @@ from janitor.site import (
 
 
 async def generate_pkg_file(
-        db, client, runner_url, package, suite, run_id=None):
+        db, client, archiver_url, package, suite, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, package)
         if package is None:
@@ -93,7 +93,7 @@ async def generate_pkg_file(
         kwargs['changes_name'] = run_changes_filename(run)
         try:
             changes_file = await open_changes_file(
-                client, runner_url, run.suite, kwargs['changes_name'])
+                client, archiver_url, run.suite, kwargs['changes_name'])
         except FileNotFoundError:
             pass
         else:

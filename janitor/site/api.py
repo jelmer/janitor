@@ -269,7 +269,7 @@ async def handle_debdiff(request):
 
     try:
         debdiff = await get_debdiff(
-            request.app.http_client_session, request.app.runner_url, run,
+            request.app.http_client_session, request.app.archiver_url, run,
             unchanged_run)
     except FileNotFoundError:
         raise web.HTTPNotFound(text='debdiff not calculated yet')
@@ -498,13 +498,14 @@ async def handle_publish_ready(request):
     return web.json_response(ret, status=200)
 
 
-def create_app(db, publisher_url, runner_url, policy_config):
+def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app = web.Application()
     app.http_client_session = ClientSession()
     app.db = db
     app.policy_config = policy_config
     app.publisher_url = publisher_url
     app.runner_url = runner_url
+    app.archiver_url = archiver_url
     app.router.add_get(
         '/pkgnames', handle_packagename_list, name='api-package-names')
     app.router.add_get(
