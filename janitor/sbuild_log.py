@@ -187,7 +187,7 @@ def worker_failure_from_sbuild_log(f):
     if description is None:
         description = 'build failed'
         if list(paragraphs.keys()) == [None]:
-            for line in paragraphs[None][-4:]:
+            for line in reversed(paragraphs[None]):
                 m = re.match(
                     'Patch (.*) does not apply \\(enforce with -f\\)\n', line)
                 if m:
@@ -206,7 +206,7 @@ def worker_failure_from_sbuild_log(f):
                     description = 'Patch %s failed to apply' % patchname
                     break
             else:
-                for line in paragraphs[None][-4:]:
+                for line in reversed(paragraphs[None][-4:]):
                     if line.startswith('brz: ERROR: '):
                         (error, description) = parse_brz_error(
                             line[len('brz: ERROR: '):])
