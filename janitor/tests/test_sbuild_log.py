@@ -248,6 +248,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'x86_64-linux-gnu/8/cc1objplus\': No space left on device'], 1,
             NoSpaceOnDevice())
 
+    def test_segmentation_fault(self):
+        self.run_test([
+            '/bin/bash: line 3:  7392 Segmentation fault      '
+            'itstool -m "${mo}" ${d}/C/index.docbook ${d}/C/legal.xml'], 1)
+
     def test_missing_perl_module(self):
         self.run_test([
             'Converting tags.ledger... Can\'t locate String/Interpolate.pm in '

@@ -62,6 +62,7 @@ from .sbuild_log import (
     DhAddonLoadFailure,
     AptFetchFailure,
     MissingMavenArtifacts,
+    GnomeCommonMissing,
     )
 
 
@@ -490,6 +491,10 @@ def fix_missing_maven_artifacts(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def install_gnome_common(tree, error, committer=None):
+    return add_build_dependency(tree, 'gnome-common', committer=committer)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingPythonDistribution, fix_missing_python_distribution),
@@ -508,6 +513,7 @@ FIXERS = [
     (DhAddonLoadFailure, fix_missing_dh_addon),
     (AptFetchFailure, retry_apt_failure),
     (MissingMavenArtifacts, fix_missing_maven_artifacts),
+    (GnomeCommonMissing, install_gnome_common),
 ]
 
 

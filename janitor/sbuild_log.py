@@ -888,6 +888,27 @@ def dh_pattern_no_matches(m):
         m.group(2), m.group(1), [d.strip() for d in m.group(3).split(',')])
 
 
+class GnomeCommonMissing(object):
+
+    kind = 'gnome-common-missing'
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return 'gnome-common is not installed'
+
+    def __repr__(self):
+        return '%s()' % (type(self).__name__, )
+
+
+def gnome_common_missing(m):
+    return GnomeCommonMissing()
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -998,6 +1019,8 @@ build_failure_regexps = [
      java_missing_class),
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
      '[Errno 2] No such file or directory', file_not_found),
+    (r'You need to install gnome-common from the GNOME git',
+     gnome_common_missing),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
      r'\(one is arch:all and the other not\)', None),
     (r'dh: unable to load addon systemd: dh: The systemd-sequence is '
@@ -1022,6 +1045,26 @@ build_failure_regexps = [
 compiled_build_failure_regexps = [
     (re.compile(regexp), cb) for (regexp, cb) in build_failure_regexps]
 
+
+# Regexps that hint at an error of some sort, but not the error itself.
+secondary_build_failure_regexps = [
+    r'[^:]+: line [0-9]+:\s+[0-9]+ Segmentation fault.*',
+    r'.*(No space left on device).*',
+    r'dpkg-gencontrol: error: (.*)',
+    r'.*:[0-9]+:[0-9]+: (error|ERROR): (.*)',
+    r'FAIL: (.*)',
+    r'make\[[0-9]+\]: \*\*\* \[.*\] Error [0-9]+',
+    r'E: pybuild pybuild:[0-9]+: test: plugin [^ ]+ failed with:'
+    r'exit code=[0-9]+: .*',
+    r'chmod: cannot access \'.*\': No such file or directory',
+    r'dh_autoreconf: autoreconf .* returned exit code [0-9]+',
+    r'make: \*\*\* \[.*\] Error [0-9]+',
+    r'[^:]+: cannot stat \'.*\': No such file or directory',
+    r'[0-9]+ tests: [0-9]+ ok, [0-9]+ failure(s), [0-9]+ test(s) skipped',
+]
+
+compiled_secondary_build_failure_regexps = [
+    re.compile(regexp) for regexp in secondary_build_failure_regexps]
 
 DEFAULT_LOOK_BACK = 50
 
@@ -1067,6 +1110,12 @@ def find_build_failure_description(lines):
                 else:
                     err = None
                 return lineno + 1, line, err
+    for lineno in range(min(0, len(lines) - OFFSET), len(lines)):
+        line = lines[lineno].strip('\n')
+        for regexp in compiled_secondary_build_failure_regexps:
+            m = regexp.fullmatch(line.rstrip('\n'))
+            if m:
+                return lineno + 1, line, None
     return None, None, None
 
 
