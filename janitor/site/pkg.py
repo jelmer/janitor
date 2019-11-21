@@ -87,7 +87,7 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(db, client, runner_url, logfile_manager, run,
+async def generate_run_file(db, client, archiver_url, logfile_manager, run,
                             publisher_url):
     (start_time, finish_time) = run.times
     kwargs = {}
@@ -142,7 +142,7 @@ async def generate_run_file(db, client, runner_url, logfile_manager, run,
         if not unchanged_run or not unchanged_run.build_version:
             return ''
         try:
-            debdiff = await get_debdiff(client, runner_url, run, unchanged_run)
+            debdiff = await get_debdiff(client, archiver_url, run, unchanged_run)
             return debdiff.decode('utf-8', 'replace')
         except FileNotFoundError:
             return ''
@@ -169,7 +169,7 @@ async def generate_run_file(db, client, runner_url, logfile_manager, run,
     if kwargs['changes_name']:
         try:
             changes_file = await open_changes_file(
-                client, runner_url, run.suite, kwargs['changes_name'])
+                client, archiver_url, run.suite, kwargs['changes_name'])
         except FileNotFoundError:
             pass
         except EnvironmentError:

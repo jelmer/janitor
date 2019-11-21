@@ -101,9 +101,9 @@ def changes_get_binaries(cf):
     return changes['Binary'].split(' ')
 
 
-async def open_changes_file(client, runner_url, suite, changes_file):
+async def open_changes_file(client, archiver_url, suite, changes_file):
     url = urllib.parse.urljoin(
-        runner_url, '/archive/%s/%s' % (suite, changes_file))
+        archiver_url, '/archive/%s/%s' % (suite, changes_file))
     try:
         async with client.get(url) as resp:
             if resp.status == 200:
@@ -121,8 +121,8 @@ class DebdiffRetrievalError(Exception):
     """Error occurred while retrieving debdiff."""
 
 
-async def get_debdiff(client, runner_url, run, unchanged_run):
-    url = urllib.parse.urljoin(runner_url, 'debdiff')
+async def get_debdiff(client, archiver_url, run, unchanged_run):
+    url = urllib.parse.urljoin(archiver_url, 'debdiff')
     payload = {
         'old_suite': 'unchanged',
         'new_suite': run.suite,
