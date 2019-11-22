@@ -238,7 +238,7 @@ async def invoke_subprocess_worker(
         'ssh': 'janitor.ssh_worker',
         }[worker_kind.split(':')[0]]
     args = [sys.executable, '-m', worker_module,
-            '--branch-url=%s' % main_branch.user_url,
+            '--branch-url=%s' % main_branch.user_url.strip('/'),
             '--output-directory=%s' % output_directory]
     if ':' in worker_kind:
         args.append('--host=%s' % worker_kind.split(':')[1])
