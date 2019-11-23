@@ -580,8 +580,15 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
 
     async def update_proposal_status(mp, status, revision, package_name):
+        if status == 'merged':
+            try:
+                merged_by = mp.get_merged_by()
+            except (NotImplementedError, AttributeError):
+                merged_by = None
+        else:
+            merged_by = None
         await state.set_proposal_info(
-            conn, mp.url, status, revision, package_name)
+            conn, mp.url, status, revision, package_name, merged_by)
         topic_merge_proposal.publish(
             {'url': mp.url, 'status': status, 'package': package_name})
 

@@ -631,16 +631,17 @@ async def add_to_queue(conn, package, command, suite, offset=0,
     return True
 
 
-async def set_proposal_info(conn, url, status, revision, package):
+async def set_proposal_info(conn, url, status, revision, package, merged_by):
     await conn.execute("""
-INSERT INTO merge_proposal (url, status, revision, package)
-VALUES ($1, $2, $3, $4)
+INSERT INTO merge_proposal (url, status, revision, package, merged_by)
+VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (url)
 DO UPDATE SET
   status = EXCLUDED.status,
   revision = EXCLUDED.revision,
-  package = EXCLUDED.package
-""", url, status, revision.decode('utf-8'), package)
+  package = EXCLUDED.package,
+  merged_by = EXCLUDED.merged_by
+""", url, status, revision.decode('utf-8'), package, merged_by)
 
 
 async def queue_length(conn, minimum_priority=None):
