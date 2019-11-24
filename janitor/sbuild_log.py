@@ -1034,7 +1034,7 @@ build_failure_regexps = [
      command_missing),
     (r'dh_install: Please use dh_missing '
      '--list-missing/--fail-missing instead', None),
-    (r'dh_auto_clean: Please use the third-party "pybuild" build system '
+    (r'dh.*: Please use the third-party "pybuild" build system '
      'instead of python-distutils', None),
     (r'configure: error: (.*)', None),
     (r'config.status: error: (.*)', None),
@@ -1078,6 +1078,8 @@ build_failure_regexps = [
     (r'dpkg-gensymbols: error: some symbols or patterns disappeared in '
      r'the symbols file: see diff output below',
      None),
+    (r'Failed: [pytest] section in setup.cfg files is no longer '
+     r'supported, change to [tool:pytest] instead.', None),
 ]
 
 compiled_build_failure_regexps = [
@@ -1108,7 +1110,8 @@ secondary_build_failure_regexps = [
     r'cat: (.*): No such file or directory',
     # Random Python errors
     '^(SyntaxError|TypeError|ValueError|AttributeError|'
-    r'django.core.exceptions..*|RuntimeError): .*',
+    r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError'
+    r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
     r'[0-9]+ skips',
