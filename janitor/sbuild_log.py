@@ -483,6 +483,8 @@ def command_missing(m):
     command = m.group(1)
     if 'PKGBUILDDIR' in command:
         return None
+    if command.startswith('./') or command.startswith('../'):
+        return None
     return MissingCommand(command)
 
 
