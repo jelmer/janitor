@@ -480,7 +480,10 @@ class MissingCommand(object):
 
 
 def command_missing(m):
-    return MissingCommand(m.group(1))
+    command = m.group(1)
+    if 'PKGBUILDDIR' in command:
+        return None
+    return MissingCommand(command)
 
 
 class MissingPkgConfig(object):
@@ -817,24 +820,37 @@ class MissingRPackage(object):
 
     kind = 'missing-r-package'
 
-    def __init__(self, package):
+    def __init__(self, package, minimum_version=None):
         self.package = package
+        self.minimum_version = minimum_version
 
     def __eq__(self, other):
         return (isinstance(other, type(self)) and
-                self.package == other.package)
+                self.package == other.package and
+                self.minimum_version == other.minimum_version)
 
     def __str__(self):
-        return 'missing R package: %s' % self.package
+        if self.minimum_version:
+            return 'missing R package: %s (>= %s)' % (
+                self.package, self.minimum_version)
+        else:
+            return 'missing R package: %s' % self.package
 
     def __repr__(self):
-        return '%s(%r)' % (type(self).__name__, self.package)
+        return '%s(%r, %r)' % (
+            type(self).__name__, self.package, self.minimum_version)
 
 
 def r_missing_package(m):
     fragment = m.group(1)
     deps = [dep.strip('‘’ ') for dep in fragment.split(',')]
     return MissingRPackage(deps[0])
+
+
+def r_too_old(m):
+    package = m.group(1)
+    new_version = m.group(3)
+    return MissingRPackage(package, new_version)
 
 
 class FailedGoTest(object):
@@ -934,6 +950,8 @@ build_failure_regexps = [
      python3_module_not_found),
     (r'/usr/bin/python3: No module named (.*)', python3_module_not_found),
     ('.*: cannot find package "(.*)" in any of:', missing_go_package),
+    (r'ImportError: Error importing plugin ".*": No module named (.*)',
+     python_module_not_found),
     ('ImportError: No module named (.*)', python2_module_not_found),
     (r'[^:]+:\d+:\d+: fatal error: (.+\.h): No such file or directory',
      c_header_missing),
@@ -972,6 +990,11 @@ build_failure_regexps = [
      r'\(https://repo\.maven\.apache\.org/maven2\) in offline mode and '
      r'the artifact .* has not been downloaded from it before..*',
      maven_missing_artifact),
+    (r'\[ERROR\] Unresolveable build extension: Plugin (.*) or one of its '
+     r'dependencies could not be resolved: Cannot access central '
+     r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
+     r'artifact .* has not been downloaded from it before. @',
+     maven_missing_artifact),
     (r'\[ERROR\] Failed to execute goal on project .*: Could not resolve '
      r'dependencies for project .*: Cannot access '
      r'.* \([^\)]+\) in offline mode and the artifact '
@@ -995,11 +1018,16 @@ build_failure_regexps = [
      r_missing_package),
     ('ERROR: dependency ‘(.*)’ is not available for package ‘(.*)’',
      r_missing_package),
+    (r'  namespace ‘(.*)’ ([^ ]+) is being loaded, but >= ([^ ]+) is required',
+     r_too_old),
     (r'mv: cannot stat \'(.*)\': No such file or directory',
      file_not_found),
     ('FAIL\t(.+\\/.+\\/.+)\t([0-9.]+)s', go_test_failed),
     (r'dh_(.*): Cannot find \(any matches for\) "(.*)" \(tried in (.*)\)',
      dh_pattern_no_matches),
+    (r'Can\'t exec "(.*)": No such file or directory at '
+     r'/usr/share/perl5/Debian/Debhelper/Dh_Lib.pm line [0-9]+.',
+     command_missing),
     (r'dh_install: Please use dh_missing '
      '--list-missing/--fail-missing instead', None),
     (r'dh_auto_clean: Please use the third-party "pybuild" build system '
@@ -1029,6 +1057,7 @@ build_failure_regexps = [
     (r'dh: The --before option is not supported any longer \(#932537\). '
      r'Use override targets instead.', None),
     ('(.*):([0-9]+): undefined reference to `(.*)\'', None),
+    (r'\/usr\/bin\/ld: (.*): undefined reference to `(.*)\'', None),
     ('(.*):([0-9]+): multiple definition of `(.*)\'; (.*):([0-9]+): '
      'first defined here', None),
     ('dh(.*): debhelper compat level specified both in debian/compat '
@@ -1040,6 +1069,8 @@ build_failure_regexps = [
     ('dh_link: link destination (.*) is a directory', None),
     ('dpkg-gensymbols: error: some symbols or patterns disappeared in the '
      'symbols file: see diff output below', None),
+    (r'Invalid gemspec in \[.*\]: No such file or directory - (.*)',
+     command_missing),
 ]
 
 compiled_build_failure_regexps = [
@@ -1061,6 +1092,21 @@ secondary_build_failure_regexps = [
     r'make: \*\*\* \[.*\] Error [0-9]+',
     r'[^:]+: cannot stat \'.*\': No such file or directory',
     r'[0-9]+ tests: [0-9]+ ok, [0-9]+ failure(s), [0-9]+ test(s) skipped',
+    r'\*\*Error:\*\* (.*)',
+    r'Failed [0-9]+ tests? out of [0-9]+, [0-9.]+% okay.',
+    r'Failed [0-9]+\/[0-9]+ test programs. [0-9]+/[0-9]+ subtests failed.',
+    r'Original error was: (.*)',
+    r'[^:]+: error: (.*)',
+    r'^FAILED \(.*\)',
+    r'cat: (.*): No such file or directory',
+    # Random Python errors
+    '^(SyntaxError|TypeError|ValueError|AttributeError|'
+    r'django.core.exceptions..*|RuntimeError): .*',
+    # Rake
+    r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
+    r'[0-9]+ skips',
+    # Node
+    r'# failed [0-9]+ of [0-9]+ tests',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -1110,7 +1156,7 @@ def find_build_failure_description(lines):
                 else:
                     err = None
                 return lineno + 1, line, err
-    for lineno in range(min(0, len(lines) - OFFSET), len(lines)):
+    for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
         line = lines[lineno].strip('\n')
         for regexp in compiled_secondary_build_failure_regexps:
             m = regexp.fullmatch(line.rstrip('\n'))

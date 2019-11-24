@@ -653,6 +653,6 @@ if __name__ == '__main__':
         name='ws-notifications')
     app.add_subapp(
         '/api', create_api_app(
-            app.database, args.publisher_url, args.runner_url, args.archiver_url,
-            policy_config))
+            app.database, args.publisher_url, args.runner_url,
+            args.archiver_url, policy_config))
     web.run_app(app, host=args.host, port=args.port)

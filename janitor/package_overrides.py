@@ -24,7 +24,8 @@ from . import package_overrides_pb2
 
 def read_package_overrides(f):
     ret = {}
-    config = text_format.Parse(f.read(), package_overrides_pb2.OverrideConfig())
+    config = text_format.Parse(
+        f.read(), package_overrides_pb2.OverrideConfig())
     for override in config.package:
         ret[override.name] = override
     return ret
