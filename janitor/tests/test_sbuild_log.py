@@ -358,6 +358,15 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'has not been downloaded from it before. @'], 1,
             MissingMavenArtifacts(
                 ['org.apache.felix:maven-bundle-plugin:2.3.7']))
+        self.run_test([
+            '[ERROR] Plugin org.apache.maven.plugins:maven-jar-plugin:2.6 '
+            'or one of its dependencies could not be resolved: Cannot access '
+            'central (https://repo.maven.apache.org/maven2) in offline mode '
+            'and the artifact '
+            'org.apache.maven.plugins:maven-jar-plugin:jar:2.6 has not been '
+            'downloaded from it before. -> [Help 1]'], 1,
+            MissingMavenArtifacts(
+                ['org.apache.maven.plugins:maven-jar-plugin:2.6']))
 
     def test_dh_missing_uninstalled(self):
         self.run_test([

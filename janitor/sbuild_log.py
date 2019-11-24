@@ -1038,6 +1038,11 @@ build_failure_regexps = [
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      r'artifact .* has not been downloaded from it before. @',
      maven_missing_artifact),
+    (r'\[ERROR\] Plugin (.*) or one of its dependencies could not be '
+     r'resolved: Cannot access central '
+     r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
+     r'artifact .* has not been downloaded from it before. -> \[Help 1\]',
+     maven_missing_artifact),
     (r'\[ERROR\] Failed to execute goal on project .*: Could not resolve '
      r'dependencies for project .*: Cannot access '
      r'.* \([^\)]+\) in offline mode and the artifact '
@@ -1160,6 +1165,8 @@ secondary_build_failure_regexps = [
     r'[0-9]+ skips',
     # Node
     r'# failed [0-9]+ of [0-9]+ tests',
+    # Pytest
+    r'(.*).py:[0-9]+: AssertionError',
 ]
 
 compiled_secondary_build_failure_regexps = [
