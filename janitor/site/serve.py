@@ -108,6 +108,10 @@ if __name__ == '__main__':
         default='http://localhost:9911/',
         help='URL for runner.')
     parser.add_argument(
+        '--archiver-url', type=str,
+        default='http://localhost:9914/',
+        help='URL for runner.')
+    parser.add_argument(
         "--policy",
         help="Policy file to read.", type=str,
         default=os.path.join(
@@ -629,6 +633,7 @@ if __name__ == '__main__':
     app.http_client_session = ClientSession()
     app.topic_notifications = Topic()
     app.runner_url = args.runner_url
+    app.archiver_url = args.archiver_url
     app.policy = policy_config
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
@@ -643,6 +648,6 @@ if __name__ == '__main__':
         name='ws-notifications')
     app.add_subapp(
         '/api', create_api_app(
-            app.database, args.publisher_url, args.runner_url, args.runner_url,
+            app.database, args.publisher_url, args.runner_url, args.archiver_url,
             policy_config))
     web.run_app(app, host=args.host, port=args.port)
