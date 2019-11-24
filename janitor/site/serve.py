@@ -193,8 +193,12 @@ if __name__ == '__main__':
         async with request.app.database.acquire() as conn:
             if not code:
                 stats = await state.stats_by_result_codes(conn, suite=suite)
+                if suite:
+                    suites = [suite]
+                else:
+                    suites = None
                 never_processed = sum(dict(
-                    await state.get_never_processed(conn)).values())
+                    await state.get_never_processed(conn, suites)).values())
                 text = await generate_result_code_index(
                     stats, never_processed, suite)
             else:
