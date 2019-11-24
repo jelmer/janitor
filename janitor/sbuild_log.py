@@ -1075,6 +1075,9 @@ build_failure_regexps = [
      'symbols file: see diff output below', None),
     (r'Invalid gemspec in \[.*\]: No such file or directory - (.*)',
      command_missing),
+    (r'dpkg-gensymbols: error: some symbols or patterns disappeared in '
+     r'the symbols file: see diff output below',
+     None),
 ]
 
 compiled_build_failure_regexps = [
