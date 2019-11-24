@@ -479,10 +479,26 @@ class MissingCommand(object):
         return "%s(%r)" % (type(self).__name__, self.command)
 
 
+class MissingConfigure(object):
+
+    kind = 'missing-configure'
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return "Missing configure script"
+
+    def __repr__(self):
+        return "%s()" % (type(self).__name__, )
+
+
 def command_missing(m):
     command = m.group(1)
     if 'PKGBUILDDIR' in command:
         return None
+    if command == './configure':
+        return MissingConfigure()
     if command.startswith('./') or command.startswith('../'):
         return None
     return MissingCommand(command)
