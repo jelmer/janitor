@@ -377,6 +377,8 @@ class NewUpstreamWorker(SubWorker):
                 error_code = 'missing-upstream-tarball'
                 raise WorkerFailure(error_code, error_description)
 
+            report_context(result.new_upstream_version)
+
             if local_tree.has_filename('debian/patches/series'):
                 try:
                     refresh_quilt_patches(
@@ -399,9 +401,8 @@ class NewUpstreamWorker(SubWorker):
 
             old_tree = local_tree.branch.repository.revision_tree(
                 result.old_revision)
-            update_packaging(local_tree, old_tree)
+            metadata['notes'] = update_packaging(local_tree, old_tree)
 
-            report_context(result.new_upstream_version)
             metadata['old_upstream_version'] = result.old_upstream_version
             metadata['upstream_version'] = result.new_upstream_version
             if result.upstream_branch:
