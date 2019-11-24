@@ -290,8 +290,6 @@ async def main():
     with open(args.config, 'r') as f:
         config = read_config(f)
 
-    state.DEFAULT_URL = config.database_location
-
     tags = set()
     available_fixers = list(available_lintian_fixers())
     for fixer in available_fixers:
