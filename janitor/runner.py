@@ -19,7 +19,6 @@ from aiohttp import web
 import asyncio
 from datetime import datetime
 import functools
-from io import BytesIO
 import json
 import os
 import signal
@@ -66,7 +65,6 @@ from silver_platter.utils import (
 
 from . import (
     state,
-    SUITES,
     )
 from .config import read_config
 from .logs import get_log_manager, ServiceUnavailable
@@ -238,7 +236,7 @@ async def invoke_subprocess_worker(
         'ssh': 'janitor.ssh_worker',
         }[worker_kind.split(':')[0]]
     args = [sys.executable, '-m', worker_module,
-            '--branch-url=%s' % main_branch.user_url.strip('/'),
+            '--branch-url=%s' % main_branch.user_url.rstrip('/'),
             '--output-directory=%s' % output_directory]
     if ':' in worker_kind:
         args.append('--host=%s' % worker_kind.split(':')[1])
@@ -738,103 +736,12 @@ async def handle_log(request):
         return web.Response(text='No such logfile: %s' % filename, status=404)
 
 
-async def handle_archive_file(request):
-    filename = request.match_info['filename']
-    if '/' in filename:
-        return web.Response(
-            text='Invalid filename %s' % request.match_info['filename'],
-            status=400)
-
-    full_path = os.path.join(
-        request.app.archive_path,
-        request.match_info['suite'],
-        filename)
-
-    if os.path.exists(full_path):
-        return web.FileResponse(full_path)
-    else:
-        return web.Response(
-            text='No such changes file : %s' % filename, status=404)
-
-
-async def handle_debdiff(request):
-    post = await request.post()
-
-    old_suite = post.get('old_suite', 'unchanged')
-    if old_suite not in SUITES:
-        return web.Response(
-            status=400, text='Invalid old suite %s' % old_suite)
-
-    try:
-        new_suite = post['new_suite']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: new_suite')
-
-    if new_suite not in SUITES:
-        return web.Response(
-            status=400, text='Invalid new suite %s' % new_suite)
-
-    try:
-        old_changes_filename = post['old_changes_filename']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: old_changes_filename')
-
-    if '/' in old_changes_filename:
-        return web.Response(
-            status=400,
-            text='Invalid changes filename: %s' % old_changes_filename)
-
-    try:
-        new_changes_filename = post['new_changes_filename']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: new_changes_filename')
-
-    if '/' in new_changes_filename:
-        return web.Response(
-            status=400,
-            text='Invalid changes filename: %s' % new_changes_filename)
-
-    archive_path = request.app.archive_path
-
-    old_changes_path = os.path.join(
-        archive_path, old_suite, old_changes_filename)
-    new_changes_path = os.path.join(
-        archive_path, new_suite, new_changes_filename)
-
-    if (not os.path.exists(old_changes_path) or
-            not os.path.exists(new_changes_path)):
-        return web.Response(
-            status=400, text='One or both changes files do not exist.')
-
-    return web.Response(
-        body=await run_debdiff(old_changes_path, new_changes_path),
-        content_type='text/diff')
-
-
-async def run_debdiff(old_changes, new_changes):
-    args = ['debdiff', old_changes, new_changes]
-    stdout = BytesIO()
-    p = await asyncio.create_subprocess_exec(
-        *args, stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE)
-    stdout, stderr = await p.communicate()
-    return stdout
-
-
 async def run_web_server(listen_addr, port, queue_processor, archive_path):
     app = web.Application()
     app.queue_processor = queue_processor
     app.archive_path = archive_path
     setup_metrics(app)
     app.router.add_get('/status', handle_status)
-    app.router.add_post('/debdiff', handle_debdiff)
-    app.router.add_get(
-        '/archive'
-        '/{suite:' + '|'.join(SUITES) + '}'
-        '/{filename}', handle_archive_file)
     app.router.add_get('/log/{run_id}', handle_log_index)
     app.router.add_get('/log/{run_id}/{filename}', handle_log)
     app.router.add_get('/ws/queue', functools.partial(
