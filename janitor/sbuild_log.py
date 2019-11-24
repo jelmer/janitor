@@ -996,6 +996,8 @@ build_failure_regexps = [
     ('ImportError: No module named (.*)', python2_module_not_found),
     (r'[^:]+:\d+:\d+: fatal error: (.+\.h): No such file or directory',
      c_header_missing),
+    (r'[^:]+\.[ch]:\d+:\d+: fatal error: (.+): No such file or directory',
+     c_header_missing),
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
@@ -1025,6 +1027,9 @@ build_failure_regexps = [
      perl_missing_module),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_file),
+    (r'Could not open \'(.*)\': No such file or directory at '
+     r'\/usr\/share\/perl\/[0-9.]+\/ExtUtils\/MM_Unix.pm line [0-9]+.',
+     perl_file_not_found),
     (r'Can\'t open perl script "(.*)": No such file or directory',
      perl_file_not_found),
     (r'\[ERROR] Failed to execute goal on project .*: Could not resolve '
@@ -1150,6 +1155,7 @@ secondary_build_failure_regexps = [
     r'[^:]+: cannot stat \'.*\': No such file or directory',
     r'[0-9]+ tests: [0-9]+ ok, [0-9]+ failure(s), [0-9]+ test(s) skipped',
     r'\*\*Error:\*\* (.*)',
+    r'^Error: (.*)',
     r'Failed [0-9]+ tests? out of [0-9]+, [0-9.]+% okay.',
     r'Failed [0-9]+\/[0-9]+ test programs. [0-9]+/[0-9]+ subtests failed.',
     r'Original error was: (.*)',
@@ -1167,6 +1173,13 @@ secondary_build_failure_regexps = [
     r'# failed [0-9]+ of [0-9]+ tests',
     # Pytest
     r'(.*).py:[0-9]+: AssertionError',
+    # Perl
+    r'  Failed tests:  [0-9-]+',
+    # Go
+    'FAIL\t(.*)\t[0-9.]+s',
+    r'.*.go:[0-9]+:[0-9]+: (?!note:).*',
+    # Ld
+    r'\/usr\/bin\/ld: cannot open output file (.*): No such file or directory',
 ]
 
 compiled_secondary_build_failure_regexps = [

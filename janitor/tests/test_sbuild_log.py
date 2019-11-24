@@ -197,6 +197,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/<<PKGBUILDDIR>>/Kernel/Operation_Vector.cpp:15:10: '
             'fatal error: petscvec.h: No such file or directory'], 1,
             MissingCHeader('petscvec.h'))
+        self.run_test([
+            'src/bubble.h:27:10: fatal error: DBlurEffectWidget: '
+            'No such file or directory'], 1,
+            MissingCHeader('DBlurEffectWidget'))
 
     def test_node_module_missing(self):
         self.run_test([
