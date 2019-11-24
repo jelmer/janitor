@@ -1327,6 +1327,17 @@ async def set_upstream_branch_url(conn, package, url):
         url, package)
 
 
+async def iter_upstream_branch_urls(conn):
+    query = """
+select
+  name,
+  upstream_branch_url
+from package
+where upstream_branch_url is not null
+"""
+    return await conn.fetch(query)
+
+
 async def update_branch_url(conn, package, vcs_type, vcs_url):
     await conn.execute(
         'update package set vcs_type = $1, branch_url = $2 '
