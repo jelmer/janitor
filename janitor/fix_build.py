@@ -36,6 +36,10 @@ from lintian_brush.control import (
     update_control,
     )
 from lintian_brush.reformatting import FormattingUnpreservable
+from lintian_brush.rules import (
+    dh_invoke_add_with,
+    update_rules,
+    )
 from silver_platter.debian import (
     debcommit,
     DEFAULT_BUILDER,
@@ -58,6 +62,7 @@ from .sbuild_log import (
     MissingRubyGem,
     MissingLibrary,
     MissingJavaClass,
+    MissingConfigure,
     SbuildFailure,
     DhAddonLoadFailure,
     AptFetchFailure,
@@ -478,6 +483,23 @@ def fix_missing_java_class(tree, error, committer=None):
     return add_build_dependency(tree, package, committer=committer)
 
 
+def fix_missing_configure(tree, error, committer=None):
+    if (not tree.has_filename('configure.ac') and
+            not tree.has_filename('configure.in')):
+        return False
+
+    def add_with_autoreconf(line, target):
+        if target != b'%':
+            return line
+        if not line.startswith(b'dh '):
+            return line
+        return dh_invoke_add_with(line, b'autoreconf')
+
+    if not update_rules(command_line_cb=add_with_autoreconf):
+        return False
+    return add_build_dependency(tree, 'dh-autoreconf', committer=committer)
+
+
 def fix_missing_maven_artifacts(tree, error, committer=None):
     artifact = error.artifacts[0]
     (group_id, artifact_id, kind, version) = artifact.split(':')
@@ -510,6 +532,7 @@ FIXERS = [
     (MissingRubyGem, fix_missing_ruby_gem),
     (MissingLibrary, fix_missing_library),
     (MissingJavaClass, fix_missing_java_class),
+    (MissingConfigure, fix_missing_configure),
     (DhAddonLoadFailure, fix_missing_dh_addon),
     (AptFetchFailure, retry_apt_failure),
     (MissingMavenArtifacts, fix_missing_maven_artifacts),
