@@ -349,6 +349,7 @@ if __name__ == '__main__':
 
     async def handle_lintian_fixes_pkg(request):
         from .lintian_fixes import generate_pkg_file
+        # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
