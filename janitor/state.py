@@ -750,7 +750,7 @@ SELECT
   logfilenames,
   review_status
 FROM
-  unabsorbed_runs
+  last_unabsorbed_runs
 WHERE package = $1 AND suite = $2
 ORDER BY package, command DESC, start_time DESC
 LIMIT 1
@@ -785,7 +785,7 @@ SELECT DISTINCT ON (package)
   logfilenames,
   review_status
 FROM
-  unabsorbed_runs
+  last_unabsorbed_runs
 WHERE suite = $1 AND package = ANY($2::text[])
 ORDER BY package, command, start_time DESC
 """
@@ -896,7 +896,7 @@ SELECT DISTINCT ON (package, suite)
   main_branch_revision,
   run.review_status
 FROM
-  unabsorbed_runs AS run
+  last_unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
 WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
 """

@@ -122,7 +122,7 @@ CREATE OR REPLACE VIEW last_runs AS
   WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
   ORDER BY package, suite, start_time DESC;
 
-CREATE OR REPLACE VIEW unabsorbed_runs AS
+CREATE OR REPLACE VIEW last_unabsorbed_runs AS
   SELECT * FROM last_runs WHERE
      result_code NOT in ('nothing-to-do', 'success') OR (
      revision is not null AND
