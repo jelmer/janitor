@@ -22,6 +22,7 @@ from janitor.sbuild_log import (
     find_build_failure_description,
     CcacheError,
     DebhelperPatternNotFound,
+    MissingConfigure,
     MissingCHeader,
     MissingPythonModule,
     MissingPythonDistribution,
@@ -235,6 +236,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'dbus-run-session: failed to exec \'xvfb-run\': '
             'No such file or directory'], 1,
             MissingCommand('xvfb-run'))
+        self.run_test(
+            ['/bin/sh: 1: ./configure: not found'], 1,
+            MissingConfigure())
 
     def test_pkg_config_missing(self):
         self.run_test([
