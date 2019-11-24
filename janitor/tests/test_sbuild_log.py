@@ -148,11 +148,15 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '(pytest 3.10.1 (/usr/lib/python2.7/dist-packages), '
             'Requirement.parse(\'pytest>=4.4.0\'))!'], 1,
             MissingPythonModule('pytest', 2, '4.4.0'))
+        self.run_test(
+                ['ImportError: Error importing plugin '
+                 '"tests.plugins.mock_libudev": No module named mock'], 1,
 
     def test_python2_import(self):
         self.run_test(
                 ['ImportError: No module named pytz'], 1,
                 MissingPythonModule('pytz', 2))
+                MissingPythonModule('mock'))
         self.run_test(
                 ['ImportError: cannot import name SubfieldBase'], 1,
                 None)
@@ -219,6 +223,14 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             '/bin/bash: valac: command not found'], 1,
             MissingCommand('valac'))
+        self.run_test([
+            'Can\'t exec "cmake": No such file or directory at '
+            '/usr/share/perl5/Debian/Debhelper/Dh_Lib.pm line 484.'], 1,
+            MissingCommand('cmake'))
+        self.run_test([
+            'Invalid gemspec in [unicorn.gemspec]: '
+            'No such file or directory - git'],
+            1, MissingCommand('git'))
 
     def test_pkg_config_missing(self):
         self.run_test([
@@ -328,6 +340,15 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'offline mode and the artifact io.netty:netty:jar:debian '
             'has not been downloaded from it before. -> [Help 1]'], 1,
             MissingMavenArtifacts(['io.netty:netty:jar:debian']))
+        self.run_test([
+            '[ERROR] Unresolveable build extension: Plugin '
+            'org.apache.felix:maven-bundle-plugin:2.3.7 or one of its '
+            'dependencies could not be resolved: Cannot access central '
+            '(https://repo.maven.apache.org/maven2) in offline mode and '
+            'the artifact org.apache.felix:maven-bundle-plugin:jar:2.3.7 '
+            'has not been downloaded from it before. @'], 1,
+            MissingMavenArtifacts(
+                ['org.apache.felix:maven-bundle-plugin:2.3.7']))
 
     def test_dh_missing_uninstalled(self):
         self.run_test([
@@ -415,6 +436,10 @@ arch:all and the other not)""".splitlines(), 1)
             "ERROR: dependencies ‘ellipsis’, ‘pkgload’ are not available "
             "for package ‘testthat’"], 1,
             MissingRPackage('ellipsis'))
+        self.run_test([
+            '  namespace ‘DBI’ 1.0.0 is being loaded, '
+            'but >= 1.0.0.9003 is required'],
+            1, MissingRPackage('DBI', '1.0.0.9003'))
 
     def test_mv_stat(self):
         self.run_test(
