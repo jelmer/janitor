@@ -33,6 +33,7 @@ from lintian_brush import reset_tree
 from lintian_brush.control import (
     ensure_some_version,
     ensure_minimum_version,
+    get_debhelper_compat_version,
     update_control,
     )
 from lintian_brush.reformatting import FormattingUnpreservable
@@ -488,16 +489,20 @@ def fix_missing_configure(tree, error, committer=None):
             not tree.has_filename('configure.in')):
         return False
 
-    def add_with_autoreconf(line, target):
-        if target != b'%':
-            return line
-        if not line.startswith(b'dh '):
-            return line
-        return dh_invoke_add_with(line, b'autoreconf')
+    # Debhelper >= 10 depends on dh-autoreconf and enables autoreconf by
+    # default.
+    if get_debhelper_compat_version(tree.abspath('.')) < 10:
+        def add_with_autoreconf(line, target):
+            if target != b'%':
+                return line
+            if not line.startswith(b'dh '):
+                return line
+            return dh_invoke_add_with(line, b'autoreconf')
 
-    if not update_rules(command_line_cb=add_with_autoreconf):
-        return False
-    return add_build_dependency(tree, 'dh-autoreconf', committer=committer)
+        if update_rules(command_line_cb=add_with_autoreconf):
+            return add_build_dependency(
+                tree, 'dh-autoreconf', committer=committer)
+    return False
 
 
 def fix_missing_maven_artifacts(tree, error, committer=None):
