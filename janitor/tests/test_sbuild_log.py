@@ -151,12 +151,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test(
                 ['ImportError: Error importing plugin '
                  '"tests.plugins.mock_libudev": No module named mock'], 1,
+                MissingPythonModule('mock'))
 
     def test_python2_import(self):
         self.run_test(
                 ['ImportError: No module named pytz'], 1,
                 MissingPythonModule('pytz', 2))
-                MissingPythonModule('mock'))
         self.run_test(
                 ['ImportError: cannot import name SubfieldBase'], 1,
                 None)
@@ -231,6 +231,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Invalid gemspec in [unicorn.gemspec]: '
             'No such file or directory - git'],
             1, MissingCommand('git'))
+        self.run_test([
+            'dbus-run-session: failed to exec \'xvfb-run\': '
+            'No such file or directory'], 1,
+            MissingCommand('xvfb-run'))
 
     def test_pkg_config_missing(self):
         self.run_test([
