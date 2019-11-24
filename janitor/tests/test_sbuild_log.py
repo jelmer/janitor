@@ -472,6 +472,11 @@ arch:all and the other not)""".splitlines(), 1)
                 'server/etc/gnumed/gnumed-restore.conf', 'install',
                 ['.', 'debian/tmp']))
 
+    def test_symbols(self):
+        self.run_test([
+            'dpkg-gensymbols: error: some symbols or patterns disappeared in '
+            'the symbols file: see diff output below'], 1, None)
+
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
 
