@@ -943,6 +943,29 @@ def gnome_common_missing(m):
     return GnomeCommonMissing()
 
 
+class MissingAutoconfMacro(object):
+
+    kind = 'missing-autoconf-macro'
+
+    def __init__(self, macro):
+        self.macro = macro
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, type(self)) and
+            self.macro == other.macro)
+
+    def __str__(self):
+        return "autoconf macro %s missing" % self.macro
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.macro)
+
+
+def autoconf_undefined_macro(m):
+    return MissingAutoconfMacro(m.group(2))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1071,6 +1094,8 @@ build_failure_regexps = [
      '[Errno 2] No such file or directory', file_not_found),
     (r'You need to install gnome-common from the GNOME git',
      gnome_common_missing),
+    (r'configure.(in|ac):[0-9]+: error: possibly undefined macro: (.*)',
+     autoconf_undefined_macro),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
      r'\(one is arch:all and the other not\)', None),
     (r'dh: unable to load addon systemd: dh: The systemd-sequence is '

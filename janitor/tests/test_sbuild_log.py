@@ -39,6 +39,7 @@ from janitor.sbuild_log import (
     MissingLibrary,
     MissingJavaClass,
     MissingRPackage,
+    MissingAutoconfMacro,
     DhMissingUninstalled,
     DhUntilUnsupported,
     DhAddonLoadFailure,
@@ -485,6 +486,12 @@ arch:all and the other not)""".splitlines(), 1)
         self.run_test([
             'dpkg-gensymbols: error: some symbols or patterns disappeared in '
             'the symbols file: see diff output below'], 1, None)
+
+    def test_autoconf_macro(self):
+        self.run_test([
+            'configure.in:1802: error: possibly undefined macro: '
+            'AC_CHECK_CCA'],
+            1, MissingAutoconfMacro('AC_CHECK_CCA'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
