@@ -419,6 +419,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Could not find \'http-parser\' (~> 1.2.0) among 59 total gem(s) '
             '(Gem::MissingSpecError)'], 1,
             MissingRubyGem('http-parser', '1.2.0'))
+        self.run_test([
+            '/usr/lib/ruby/2.5.0/rubygems/dependency.rb:312:in `to_specs\': '
+            'Could not find \'celluloid\' (~> 0.17.3) - did find: '
+            '[celluloid-0.16.0] (Gem::MissingSpecVersionError)'], 1,
+            MissingRubyGem('celluloid', '0.17.3'))
 
     def test_missing_java_class(self):
         self.run_test("""\

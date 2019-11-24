@@ -1047,6 +1047,8 @@ build_failure_regexps = [
     (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(~> (.*)\) '
      r'among [0-9]+ total gem\(s\) \(Gem::MissingSpecError\)',
      ruby_missing_gem),
+    (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(~> (.*)\) '
+     r'- .* \(Gem::MissingSpecVersionError\)', ruby_missing_gem),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
