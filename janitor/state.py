@@ -1094,14 +1094,16 @@ async def iter_packages_by_maintainer(conn, maintainer):
         maintainer)]
 
 
-async def get_never_processed(conn):
+async def get_never_processed(conn, suites=None):
+    if suites is None:
+        suites = list(SUITES)
     query = """\
 SELECT suite, COUNT(suite) FROM package p CROSS JOIN UNNEST ($1::text[]) suite
 WHERE NOT EXISTS
 (SELECT FROM run WHERE run.package = p.name AND run.suite = suite)
 GROUP BY suite
     """
-    return await conn.fetch(query, list(SUITES))
+    return await conn.fetch(query, suites)
 
 
 async def iter_by_suite_result_code(conn):
