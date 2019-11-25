@@ -449,6 +449,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Could not find \'celluloid\' (~> 0.17.3) - did find: '
             '[celluloid-0.16.0] (Gem::MissingSpecVersionError)'], 1,
             MissingRubyGem('celluloid', '0.17.3'))
+        self.run_test([
+            '/usr/lib/ruby/2.5.0/rubygems/dependency.rb:312:in `to_specs\': '
+            'Could not find \'i18n\' (~> 0.7) - did find: [i18n-1.5.3] '
+            '(Gem::MissingSpecVersionError)'], 1,
+            MissingRubyGem('i18n', '0.7'))
 
     def test_missing_java_class(self):
         self.run_test("""\

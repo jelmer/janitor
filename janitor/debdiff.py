@@ -50,7 +50,7 @@ def filter_boring(debdiff):
                 if not line.startswith('Installed-Size: ')
                 and not line.startswith('Version: ')]
         if any([line.strip() for line in paragraph]):
-            ret.append((title, paragraphs))
+            ret.append((title, paragraph))
 
     lines = []
     for title, paragraph in ret:
