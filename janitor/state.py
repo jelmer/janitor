@@ -476,12 +476,11 @@ class QueueItem(object):
 
     @classmethod
     def from_row(cls, row):
-        (branch_url, subpath, package, committer,
+        (branch_url, subpath, package,
             command, context, queue_id, estimated_duration,
             suite, refresh, requestor, vcs_type,
             upstream_branch_url) = row
         env = {
-            'COMMITTER': committer or None,
             'CONTEXT': context,
         }
         return cls(
@@ -542,7 +541,6 @@ SELECT
     package.branch_url,
     package.subpath,
     queue.package,
-    queue.committer,
     queue.command,
     queue.context,
     queue.id,
@@ -571,7 +569,6 @@ SELECT
       package.branch_url,
       package.subpath,
       queue.package,
-      queue.committer,
       queue.command,
       queue.context,
       queue.id,
@@ -612,21 +609,21 @@ async def drop_queue_item(conn, queue_id):
 
 
 async def add_to_queue(conn, package, command, suite, offset=0,
-                       context=None, committer=None, estimated_duration=None,
+                       context=None, estimated_duration=None,
                        refresh=False, requestor=None):
     await conn.execute(
         "INSERT INTO queue "
-        "(package, command, committer, priority, context, "
+        "(package, command, priority, context, "
         "estimated_duration, suite, refresh, requestor) "
         "VALUES "
-        "($1, $2, $3, "
-        "(SELECT COALESCE(MIN(priority), 0) FROM queue) + $4, $5, "
-        "$6, $7, $8, $9) ON CONFLICT (package, suite) DO UPDATE SET "
+        "($1, $2, "
+        "(SELECT COALESCE(MIN(priority), 0) FROM queue) + $3, $4, "
+        "$5, $6, $7, $8) ON CONFLICT (package, suite) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "estimated_duration = EXCLUDED.estimated_duration, "
         "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor "
         "WHERE queue.priority >= EXCLUDED.priority",
-        package, ' '.join(command), committer,
+        package, ' '.join(command),
         offset, context, estimated_duration, suite, refresh, requestor)
     return True
 

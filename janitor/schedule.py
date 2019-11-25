@@ -100,7 +100,7 @@ async def schedule_from_candidates(policy, iter_candidates):
         if package.branch_url is None:
             continue
 
-        publish_mode, update_changelog, committer = apply_policy(
+        publish_mode, update_changelog = apply_policy(
             policy, suite,
             package.name, package.maintainer_email, package.uploader_emails)
 
@@ -114,8 +114,7 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         yield (
             package.name,
-            {'COMMITTER': committer,
-             'PACKAGE': package.name,
+            {'PACKAGE': package.name,
              'CONTEXT': context,
              'UPLOADER_EMAILS': ','.join(package.uploader_emails),
              'MAINTAINER_EMAIL': package.maintainer_email},
@@ -217,8 +216,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
             added = await state.add_to_queue(
                 conn, package, command, suite, offset=int(offset),
                 estimated_duration=estimated_duration,
-                context=env.get('CONTEXT'), committer=env.get('COMMITTER'),
-                requestor='scheduler')
+                context=env.get('CONTEXT'), requestor='scheduler')
         else:
             added = True
         if added:

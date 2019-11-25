@@ -87,7 +87,6 @@ CREATE TABLE IF NOT EXISTS queue (
    package text not null,
    suite suite not null,
    command text not null,
-   committer text null,
    priority bigint default 0 not null,
    foreign key (package) references package(name),
    -- Some subworker-specific indication of what we are expecting to do.

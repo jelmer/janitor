@@ -319,13 +319,16 @@ async def process_one(
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False, refresh=False, vcs_type=None,
-        subpath=None, overall_timeout=None, upstream_branch_url=None):
+        subpath=None, overall_timeout=None, upstream_branch_url=None,
+        committer=None):
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
 
     env = dict(env.items())
     env['PACKAGE'] = pkg
+    if committer:
+        env['COMMITTER'] = committer
     if upstream_branch_url:
         env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
 
@@ -575,7 +578,8 @@ class QueueProcessor(object):
             self, database, worker_kind, build_command, pre_check=None,
             post_check=None, dry_run=False, incoming=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
-            concurrency=1, use_cached_only=False, overall_timeout=None):
+            concurrency=1, use_cached_only=False, overall_timeout=None,
+            committer=None):
         """Create a queue processor.
 
         Args:
@@ -602,6 +606,7 @@ class QueueProcessor(object):
         self.topic_queue = Topic(repeat_last=True)
         self.topic_result = Topic()
         self.overall_timeout = overall_timeout
+        self.committer = committer
 
     def status_json(self):
         return {'processing': [{
@@ -636,7 +641,8 @@ class QueueProcessor(object):
                 use_cached_only=self.use_cached_only, refresh=item.refresh,
                 vcs_type=item.vcs_type, subpath=item.subpath,
                 overall_timeout=self.overall_timeout,
-                upstream_branch_url=item.upstream_branch_url)
+                upstream_branch_url=item.upstream_branch_url,
+                committer=self.committer)
         finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
             finish_time.timestamp() - start_time.timestamp())
@@ -827,7 +833,8 @@ def main(argv=None):
         vcs_manager,
         args.concurrency,
         args.use_cached_only,
-        overall_timeout=args.overall_timeout)
+        overall_timeout=args.overall_timeout,
+        committer=config.committer)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(queue_processor.process()),

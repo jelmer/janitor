@@ -286,7 +286,7 @@ async def publish_from_policy(
         dry_run=False):
 
     publish_id = str(uuid.uuid4())
-    mode, unused_update_changelog, unused_committer = apply_policy(
+    mode, unused_update_changelog = apply_policy(
         policy, suite, pkg, maintainer_email,
         uploader_emails or [])
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):

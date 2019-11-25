@@ -45,7 +45,6 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
     field = suite.replace('-', '_')
     mode = policy_pb2.skip
     update_changelog = 'auto'
-    committer = None
     for policy in config.policy:
         if (policy.match and
                 not any([matches(m, package_name, maintainer, uploaders)
@@ -55,8 +54,6 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
             mode = getattr(policy, field)
         if policy.changelog is not None:
             update_changelog = policy.changelog
-        if policy.committer is not None:
-            committer = policy.committer
     return (
         {policy_pb2.propose: 'propose',
          policy_pb2.attempt_push: 'attempt-push',
@@ -67,5 +64,4 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
         {policy_pb2.auto: 'auto',
          policy_pb2.update_changelog: 'update',
          policy_pb2.leave_changelog: 'leave',
-         }[update_changelog],
-        committer if committer else None)
+         }[update_changelog])
