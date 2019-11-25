@@ -22,8 +22,8 @@ from janitor.sbuild_log import (
     find_build_failure_description,
     CcacheError,
     DebhelperPatternNotFound,
-    Inactivity,
     MissingConfigure,
+    MissingConfigStatusInput,
     MissingCHeader,
     MissingPythonModule,
     MissingPythonDistribution,
@@ -510,10 +510,11 @@ arch:all and the other not)""".splitlines(), 1)
             'AC_CHECK_CCA'],
             1, MissingAutoconfMacro('AC_CHECK_CCA'))
 
-    def test_inactivity(self):
+    def test_config_status_input(self):
         self.run_test([
-            'E: Build killed with signal TERM after 150 minutes of inactivity',
-            ], 1, Inactivity(150))
+            'config.status: error: cannot find input file: '
+            '`po/Makefile.in.in\''], 1,
+            MissingConfigStatusInput('po/Makefile.in.in'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):

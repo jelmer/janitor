@@ -49,6 +49,7 @@ from silver_platter.debian import (
 from .build import attempt_build
 from .trace import note, warning
 from .sbuild_log import (
+    MissingConfigStatusInput,
     MissingPythonModule,
     MissingPythonDistribution,
     MissingCHeader,
@@ -146,7 +147,7 @@ def get_package_for_paths(paths, regex=False):
         if candidates:
             break
     if len(candidates) == 0:
-        warning('No packages found that contain %r', path)
+        warning('No packages found that contain %r', paths)
         return None
     if len(candidates) > 1:
         warning('More than 1 packages found that contain %r: %r',
@@ -449,10 +450,10 @@ def fix_missing_library(tree, error, committer=None):
     paths = [os.path.join('/usr/lib/lib%s.so' % error.library),
              os.path.join('/usr/lib/.*/lib%s.so' % error.library),
              os.path.join('/usr/lib/lib%s.a' % error.library),
-             os.path.join('/usr/lib/.*/lib%.a' % error.library)]
+             os.path.join('/usr/lib/.*/lib%s.a' % error.library)]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
-        warning('no package for library %s', error.name)
+        warning('no package for library %s', error.library)
         return False
     return add_build_dependency(tree, package, committer=committer)
 
@@ -522,6 +523,20 @@ def install_gnome_common(tree, error, committer=None):
     return add_build_dependency(tree, 'gnome-common', committer=committer)
 
 
+def fix_missing_config_status_input(tree, error, committer=None):
+    if not tree.has_filename('autogen.sh'):
+        return False
+
+    def add_autogen(mf):
+        rule = mf.get_rule(b'override_dh_autoreconf')
+        if rule:
+            return
+        rule = mf.add_rule(b'override_dh_autoreconf')
+        rule.append_command(b'dh_autoreconf ./autogen.sh')
+
+    return update_rules(makefile_cb=add_autogen)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingPythonDistribution, fix_missing_python_distribution),
@@ -542,6 +557,7 @@ FIXERS = [
     (AptFetchFailure, retry_apt_failure),
     (MissingMavenArtifacts, fix_missing_maven_artifacts),
     (GnomeCommonMissing, install_gnome_common),
+    (MissingConfigStatusInput, fix_missing_config_status_input),
 ]
 
 
