@@ -966,25 +966,25 @@ def autoconf_undefined_macro(m):
     return MissingAutoconfMacro(m.group(2))
 
 
-class Inactivity(object):
+class MissingConfigStatusInput(object):
 
-    kind = 'inactivity'
+    kind = 'missing-config.status-input'
 
-    def __init__(self, timeout):
-        self.timeout = timeout
+    def __init__(self, path):
+        self.path = path
 
     def __eq__(self, other):
-        return isinstance(other, type(self)) and other.timeout == self.timeout
+        return isinstance(other, type(self)) and self.path == other.path
 
     def __str__(self):
-        return "Timeout after %d minutes" % self.timeout
+        return "missing config.status input %s" % self.path
 
     def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, self.timeout)
+        return "%s(%r)" % (type(self).__name__, self.path)
 
 
-def inactivity_killed(m):
-    return Inactivity(int(m.group(1)))
+def config_status_input_missing(m):
+    return MissingConfigStatusInput(m.group(1))
 
 
 build_failure_regexps = [
@@ -1127,6 +1127,8 @@ build_failure_regexps = [
      gnome_common_missing),
     (r'configure.(in|ac):[0-9]+: error: possibly undefined macro: (.*)',
      autoconf_undefined_macro),
+    (r'config.status: error: cannot find input file: `(.*)\'',
+     config_status_input_missing),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
      r'\(one is arch:all and the other not\)', None),
     (r'dh: unable to load addon systemd: dh: The systemd-sequence is '
@@ -1154,8 +1156,6 @@ build_failure_regexps = [
      None),
     (r'Failed: [pytest] section in setup.cfg files is no longer '
      r'supported, change to [tool:pytest] instead.', None),
-    (r'E: Build killed with signal TERM after ([0-9]+) minutes of '
-     r'inactivity', inactivity_killed),
 ]
 
 compiled_build_failure_regexps = [
@@ -1205,6 +1205,7 @@ secondary_build_failure_regexps = [
     r'\/usr\/bin\/ld: cannot open output file (.*): No such file or directory',
     r'configure: error: (.*)',
     r'config.status: error: (.*)',
+    r'E: Build killed with signal TERM after ([0-9]+) minutes of inactivity',
 ]
 
 compiled_secondary_build_failure_regexps = [
