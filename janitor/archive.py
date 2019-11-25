@@ -23,13 +23,8 @@ import sys
 from aiohttp import web
 
 from . import SUITES
+from .archive import filter_boring, run_debdiff
 from .prometheus import setup_metrics
-
-
-def filter_boring(debdiff):
-    # TODO(jelmer): Filter out boring bits: Installed-Size, janitor-specific
-    # version sizes.
-    return debdiff
 
 
 async def handle_debdiff(request):
@@ -89,16 +84,6 @@ async def handle_debdiff(request):
         debdiff = filter_boring(debdiff)
 
     return web.Response(body=debdiff, content_type='text/diff')
-
-
-async def run_debdiff(old_changes, new_changes):
-    args = ['debdiff', old_changes, new_changes]
-    stdout = BytesIO()
-    p = await asyncio.create_subprocess_exec(
-        *args, stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE)
-    stdout, stderr = await p.communicate()
-    return stdout
 
 
 async def handle_archive_file(request):
