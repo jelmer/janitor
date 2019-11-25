@@ -610,14 +610,16 @@ async def drop_queue_item(conn, queue_id):
 
 async def add_to_queue(conn, package, command, suite, offset=0,
                        context=None, estimated_duration=None,
-                       refresh=False, requestor=None):
+                       refresh=False, requestor=None, requestor_relative=False):
     await conn.execute(
         "INSERT INTO queue "
         "(package, command, priority, context, "
         "estimated_duration, suite, refresh, requestor) "
         "VALUES "
         "($1, $2, "
-        "(SELECT COALESCE(MIN(priority), 0) FROM queue) + $3, $4, "
+        "(SELECT COALESCE(MIN(priority), 0) FROM queue " +
+        ("WHERE requestor = $8" if requestor_relative else "") +
+        ") + $3, $4, "
         "$5, $6, $7, $8) ON CONFLICT (package, suite) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "estimated_duration = EXCLUDED.estimated_duration, "
