@@ -27,6 +27,7 @@ from janitor import (
     DEFAULT_BUILD_ARCH,
     )
 from janitor.build import changes_filename
+from janitor.debdiff import iter_sections
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
@@ -77,7 +78,14 @@ env = Environment(
 )
 
 def htmlize_debdiff(debdiff):
-    return "<pre>%s</pre>"
+    ret = []
+    for title, lines in iter_sections(debdiff.decode()):
+        if title:
+            ret.append("<h3>%s</h3>" % title)
+        ret.append("<pre>")
+        ret.extend(lines)
+        ret.append("</pre>")
+    return "\n".join(ret)
 
 
 env.globals.update(format_duration=format_duration)

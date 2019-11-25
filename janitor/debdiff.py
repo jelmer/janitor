@@ -19,6 +19,24 @@ import asyncio
 from io import BytesIO
 
 
+def iter_debdiff(text):
+    lines = list(text.splitlines())
+    title = None
+    paragraph = []
+    for i, line in enumerate(lines):
+        if (i > 0 and
+                line.startswith('---') and
+                line.strip('-') == '' and
+                line.count('-') == len(lines[i-1])):
+            yield title, paragraph
+            title = line[i-1]
+            paragraph = []
+        else:
+            paragraph.append(line)
+    if paragraph:
+        yield title, paragraph
+
+
 def filter_boring(debdiff):
     # TODO(jelmer): Filter out boring bits: Installed-Size, janitor-specific
     # version sizes.
