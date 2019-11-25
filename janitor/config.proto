@@ -10,4 +10,6 @@ message Config {
   optional string apt_location = 3;
 
   optional string database_location = 4;
+
+  optional string committer = 5;
 }

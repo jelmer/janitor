@@ -1,4 +1,7 @@
-# vim: ft=proto
 apt_location: 'http://storage.googleapis.com/debian-janitor-apt/'
 logs_location: 'https://s3.nl-ams.scw.cloud'
 vcs_location: '/home/janitor/vcs'
+database_location: 'postgresql://janitor@example.com:5432/janitor'
+# Set the default committer; if unset defaults to current users' preferences
+# (i.e. ~/.gitconfig)
+committer: 'Debian Janitor <janitor@jelmer.uk>'

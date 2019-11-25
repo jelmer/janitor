@@ -25,13 +25,12 @@ async def handle_policy(request):
                 {'reason': 'Package not found'}, status=404)
     suite_policies = {}
     for suite in SUITES:
-        (publish_policy, changelog_policy, committer) = apply_policy(
+        (publish_policy, changelog_policy) = apply_policy(
             request.app.policy_config, suite, package.name,
             package.maintainer_email, package.uploader_emails)
         suite_policies[suite] = {
             'publish_policy': publish_policy,
-            'changelog_policy': changelog_policy,
-            'committer': committer}
+            'changelog_policy': changelog_policy}
     response_obj = {'by_suite': suite_policies}
     return web.json_response(response_obj)
 
@@ -84,7 +83,7 @@ async def schedule(conn, policy, package, suite, offset=None,
         estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET)
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
-    unused_publish_mode, update_changelog, committer = apply_policy(
+    unused_publish_mode, update_changelog = apply_policy(
         policy, suite,
         package.name, package.maintainer_email, package.uploader_emails)
     command = full_command(suite, update_changelog)
@@ -92,7 +91,7 @@ async def schedule(conn, policy, package, suite, offset=None,
     await state.add_to_queue(
         conn, package.name, command, suite, offset,
         estimated_duration=estimated_duration, refresh=refresh,
-        requestor=requestor, committer=committer)
+        requestor=requestor)
     return offset, estimated_duration
 
 
@@ -487,7 +486,7 @@ async def handle_publish_ready(request):
                    main_branch_revision, review_status
                    ) in state.iter_publish_ready(
                        conn, suite=suite, review_status=review_status):
-            (publish_policy, changelog_policy, committer) = apply_policy(
+            (publish_policy, changelog_policy) = apply_policy(
                 request.app.policy_config, suite, package,
                 maintainer_email, uploader_emails)
             if publish_policy in (
