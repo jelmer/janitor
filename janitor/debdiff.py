@@ -17,6 +17,7 @@
 
 import asyncio
 from io import BytesIO
+import re
 
 
 def iter_sections(text):
@@ -35,9 +36,29 @@ def iter_sections(text):
 
 
 def filter_boring(debdiff):
-    # TODO(jelmer): Filter out boring bits: Installed-Size, janitor-specific
-    # version sizes.
-    return debdiff
+    ret = []
+    for title, paragraph in iter_sections():
+        if not title:
+            ret.append((title, paragraph))
+            continue
+        if re.match(
+                r'Control files of package .*: lines which differ '
+                r'\(wdiff format\)',
+                title):
+            paragraph = [
+                line for line in paragraph
+                if not line.startswith('Installed-Size: ')
+                and not line.startswith('Version: ')]
+        if any([line.strip() for line in paragraph]):
+            ret.append((title, paragraphs))
+
+    lines = []
+    for title, paragraph in ret:
+        if title is not None:
+            lines.append(title)
+            lines.append(len(title) * '-')
+        lines.extend(paragraph)
+    return '\n'.join(lines)
 
 
 async def run_debdiff(old_changes, new_changes):
