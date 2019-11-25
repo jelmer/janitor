@@ -17,7 +17,7 @@
 {% endif %}
 <li>Start time: {{ format_timestamp(start_time) }}</li>
 <li>Duration: {{ format_duration(finish_time - start_time) }}</li>
-<li>Status: {{ display_result_code(result_code)|safe }}{% if unchanged_run %} (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}">run</a> without changes: {{ display_result_code(result_code)|safe }}){% endif %}</li>
+<li>Status: {{ display_result_code(result_code)|safe }}{% if unchanged_run and suite != 'unchanged' %} (<a href="/cupboard/pkg/{{ unchanged_run.package }}/{{ unchanged_run.id }}">run</a> without changes: {{ display_result_code(result_code)|safe }}){% endif %}</li>
 <li>Description: {{ description }}</li>
 {% if result_code in ('success', 'nothing-to-do') %}
 <li>Review Status: <select id="review-status" name='review-status'>
