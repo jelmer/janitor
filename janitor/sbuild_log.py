@@ -1028,7 +1028,7 @@ build_failure_regexps = [
      command_missing),
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
      command_missing),
-    (r'make\[\d+\]: ([^\.].*): Command not found', command_missing),
+    (r'make\[[0-9]+\]: ([^\.].*): Command not found', command_missing),
     (r'make: ([^\.].*): Command not found', command_missing),
     (r'.*: failed to exec \'(.*)\': No such file or directory',
      command_missing),
