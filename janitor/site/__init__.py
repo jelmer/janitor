@@ -87,12 +87,16 @@ def highlight_diff(diff):
 
 def htmlize_debdiff(debdiff):
     ret = []
-    for title, lines in iter_sections(debdiff.decode()):
+    for title, lines in iter_sections(debdiff):
         if title:
             ret.append("<h4>%s</h4>" % title)
-        ret.append("<pre>")
-        ret.extend(lines)
-        ret.append("</pre>")
+            ret.append("<pre>")
+            ret.extend(lines)
+            ret.append("</pre>")
+        else:
+            ret.append("<p>")
+            ret.extend(lines)
+            ret.append("</p>")
     return "\n".join(ret)
 
 
@@ -136,7 +140,8 @@ class DebdiffRetrievalError(Exception):
     """Error occurred while retrieving debdiff."""
 
 
-async def get_debdiff(client, archiver_url, run, unchanged_run):
+async def get_debdiff(client, archiver_url, run, unchanged_run,
+                      filter_boring=False):
     url = urllib.parse.urljoin(archiver_url, 'debdiff')
     payload = {
         'old_suite': 'unchanged',
@@ -144,6 +149,8 @@ async def get_debdiff(client, archiver_url, run, unchanged_run):
         'old_changes_filename': run_changes_filename(unchanged_run),
         'new_changes_filename': run_changes_filename(run),
     }
+    if filter_boring:
+        payload["filter_boring"] = "yes"
     try:
         async with client.post(url, data=payload) as resp:
             if resp.status == 200:
