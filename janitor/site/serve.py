@@ -79,6 +79,11 @@ def setup_debsso(app):
     app.middlewares.insert(0, debsso_middleware)
 
 
+def iter_accept(request):
+    return [
+        h.strip() for h in request.headers.get('Accept', '*/*').split(',')]
+
+
 if __name__ == '__main__':
     import argparse
     import functools
