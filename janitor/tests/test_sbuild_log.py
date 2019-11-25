@@ -224,6 +224,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'make[1]: docker: Command not found'], 1,
             MissingCommand('docker'))
+        self.run_test([
+            'make[1]: git: Command not found'], 1,
+            MissingCommand('git'))
         self.run_test(['make[1]: ./docker: Command not found'], None)
         self.run_test([
             'make: dh_elpa: Command not found'], 1, MissingCommand('dh_elpa'))
