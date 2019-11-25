@@ -65,3 +65,35 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
          policy_pb2.update_changelog: 'update',
          policy_pb2.leave_changelog: 'leave',
          }[update_changelog])
+
+
+async def main(args):
+    from .config import read_config
+    from . import state, SUITES
+
+    with open('policy.conf', 'r') as f:
+        policy = read_policy(f)
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
+
+    db = state.Database(config.database_location)
+    async with db.acquire() as conn:
+        for package in await state.iter_packages(conn):
+            for suite in SUITES:
+                publish_mode, changelog_mode = apply_policy(
+                    policy, suite, package.name, package.maintainer_email,
+                    package.uploader_emails)
+                await state.update_publish_policy(
+                    conn, package.name, suite, publish_mode, changelog_mode)
+
+
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
+    args = parser.parse_args()
+    asyncio.run(main(args))

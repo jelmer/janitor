@@ -1342,3 +1342,15 @@ async def update_branch_url(conn, package, vcs_type, vcs_url):
     await conn.execute(
         'update package set vcs_type = $1, branch_url = $2 '
         'where name = $3', vcs_type, vcs_url, package)
+
+
+async def update_publish_policy(
+        conn, name, suite, publish_mode, changelog_mode):
+    await conn.execute(
+        'INSERT INTO publish_policy '
+        '(package, suite, mode, update_changelog)'
+        'VALUES ($1, $2, $3, $4) '
+        'ON CONFLICT (package, suite) DO UPDATE SET '
+        'mode = EXCLUDED.mode, '
+        'update_changelog = EXCLUDED.update_changelog',
+        name, suite, publish_mode, changelog_mode)

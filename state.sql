@@ -112,6 +112,15 @@ CREATE TABLE IF NOT EXISTS candidate (
    unique(package, suite),
    foreign key (package) references package(name)
 );
+CREATE TYPE changelog_mode AS ENUM('auto', 'update', 'leave');
+CREATE TABLE IF NOT EXISTS publish_policy (
+   package text not null,
+   suite suite not null,
+   mode publish_mode default 'build-only',
+   update_changelog changelog_mode default 'auto',
+   foreign key (package) references package(name),
+   unique(package, suite)
+);
 CREATE INDEX ON candidate (suite);
 CREATE OR REPLACE VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
