@@ -19,19 +19,16 @@ import asyncio
 from io import BytesIO
 
 
-def iter_debdiff(text):
-    lines = list(text.splitlines())
+def iter_sections(text):
+    lines = list(text.splitlines(False))
     title = None
     paragraph = []
     for i, line in enumerate(lines):
-        if (i > 0 and
-                line.startswith('---') and
-                line.strip('-') == '' and
-                line.count('-') == len(lines[i-1])):
+        if i+1 < len(lines) and lines[i+1] == (len(line) * '-'):
             yield title, paragraph
-            title = line[i-1]
+            title = line
             paragraph = []
-        else:
+        elif paragraph or not line.startswith('---'):
             paragraph.append(line)
     if paragraph:
         yield title, paragraph

@@ -610,7 +610,8 @@ async def drop_queue_item(conn, queue_id):
 
 async def add_to_queue(conn, package, command, suite, offset=0,
                        context=None, estimated_duration=None,
-                       refresh=False, requestor=None, requestor_relative=False):
+                       refresh=False, requestor=None,
+                       requestor_relative=False):
     await conn.execute(
         "INSERT INTO queue "
         "(package, command, priority, context, "
