@@ -21,7 +21,6 @@ from janitor.site import (
     get_vcs_type,
     run_changes_filename,
     open_changes_file,
-    highlight_diff,
     DebdiffRetrievalError,
 )
 
@@ -151,7 +150,6 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
             return 'Error retrieving debdiff: %s' % e
 
     kwargs['show_debdiff'] = show_debdiff
-    kwargs['highlight_diff'] = highlight_diff
     kwargs['max'] = max
     kwargs['suite'] = run.suite
 

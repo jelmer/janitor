@@ -7,7 +7,6 @@ import urllib.parse
 from janitor import state
 from janitor.site import (
     env,
-    highlight_diff,
     )
 
 
@@ -38,7 +37,6 @@ async def generate_review(conn, client, publisher_url, suite=None):
     kwargs = {
         'show_diff': show_diff,
         'package_name': package_name,
-        'highlight_diff': highlight_diff,
         'run_id': run_id,
         'suite': suite,
         'json_dumps': json.dumps,

@@ -8,7 +8,6 @@ from janitor.policy import apply_policy
 from janitor.site import (
     env,
     get_vcs_type,
-    highlight_diff,
     )
 
 from silver_platter.debian.lintian import (
@@ -122,7 +121,6 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
         'result': result,
         'suite': SUITE,
         'show_diff': show_diff,
-        'highlight_diff': highlight_diff,
         'branch_name': branch_name,
         'previous_runs': previous_runs,
         'run': run,
