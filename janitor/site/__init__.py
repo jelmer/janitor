@@ -90,9 +90,17 @@ def htmlize_debdiff(debdiff):
     for title, lines in iter_sections(debdiff):
         if title:
             ret.append("<h4>%s</h4>" % title)
-            ret.append("<pre>")
-            ret.extend(lines)
-            ret.append("</pre>")
+            if re.match(
+                    r'Control files of package .*: lines which differ '
+                    r'\(wdiff format\)',
+                    title):
+                ret.append("<ul>")
+                ret.extend(["<li>%s</li>" % line for line in lines])
+                ret.append("</ul>")
+            else:
+                ret.append("<pre>")
+                ret.extend(lines)
+                ret.append("</pre>")
         else:
             ret.append("<p>")
             ret.extend(lines)
