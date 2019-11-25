@@ -966,6 +966,27 @@ def autoconf_undefined_macro(m):
     return MissingAutoconfMacro(m.group(2))
 
 
+class Inactivity(object):
+
+    kind = 'inactivity'
+
+    def __init__(self, timeout):
+        self.timeout = timeout
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and other.timeout == self.timeout
+
+    def __str__(self):
+        return "Timeout after %d minutes" % self.timeout
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.timeout)
+
+
+def inactivity_killed(m):
+    return Inactivity(int(m.group(1)))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1012,6 +1033,8 @@ build_failure_regexps = [
     (r'.*: failed to exec \'(.*)\': No such file or directory',
      command_missing),
     (r'No package \'([^\']+)\' found', pkg_config_missing),
+    (r'Requested \'(.*)\' but version of ([^ ]+) is ([^ ]+)',
+     pkg_config_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
@@ -1085,8 +1108,6 @@ build_failure_regexps = [
      '--list-missing/--fail-missing instead', None),
     (r'dh.*: Please use the third-party "pybuild" build system '
      'instead of python-distutils', None),
-    (r'configure: error: (.*)', None),
-    (r'config.status: error: (.*)', None),
     # A Python error, but not likely to be actionable. The previous
     # line will have the actual line that failed.
     (r'ImportError: cannot import name (.*)', None),
@@ -1133,6 +1154,8 @@ build_failure_regexps = [
      None),
     (r'Failed: [pytest] section in setup.cfg files is no longer '
      r'supported, change to [tool:pytest] instead.', None),
+    (r'E: Build killed with signal TERM after ([0-9]+) minutes of '
+     r'inactivity', inactivity_killed),
 ]
 
 compiled_build_failure_regexps = [
@@ -1180,6 +1203,8 @@ secondary_build_failure_regexps = [
     r'.*.go:[0-9]+:[0-9]+: (?!note:).*',
     # Ld
     r'\/usr\/bin\/ld: cannot open output file (.*): No such file or directory',
+    r'configure: error: (.*)',
+    r'config.status: error: (.*)',
 ]
 
 compiled_secondary_build_failure_regexps = [
