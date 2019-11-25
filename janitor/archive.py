@@ -26,6 +26,12 @@ from . import SUITES
 from .prometheus import setup_metrics
 
 
+def filter_boring(debdiff):
+    # TODO(jelmer): Filter out boring bits: Installed-Size, janitor-specific
+    # version sizes.
+    return debdiff
+
+
 async def handle_debdiff(request):
     post = await request.post()
 
@@ -78,9 +84,11 @@ async def handle_debdiff(request):
         return web.Response(
             status=400, text='One or both changes files do not exist.')
 
-    return web.Response(
-        body=await run_debdiff(old_changes_path, new_changes_path),
-        content_type='text/diff')
+    debdiff = await run_debdiff(old_changes_path, new_changes_path)
+    if 'ignore_boring' in post:
+        debdiff = filter_boring(debdiff)
+
+    return web.Response(body=debdiff, content_type='text/diff')
 
 
 async def run_debdiff(old_changes, new_changes):
