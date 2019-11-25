@@ -17,7 +17,7 @@ async def run_ssh_worker(hostname, package, logf, output_directory, args,
     async with asyncssh.connect(hostname) as conn:
         result = await conn.run('mktemp -d', check=True)
         remote_output_directory = result.stdout.strip()
-        remote_janitor_dir = '/tmp/debian-janitor'
+        remote_janitor_dir = '$HOME/debian-janitor'
         git_command = """\
 if test -d %s
 then
