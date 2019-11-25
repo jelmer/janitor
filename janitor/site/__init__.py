@@ -20,6 +20,7 @@ from debian.deb822 import Changes
 from io import BytesIO
 from jinja2 import Environment, PackageLoader, select_autoescape
 import json
+import re
 import urllib.parse
 
 from janitor import (
@@ -95,7 +96,8 @@ def htmlize_debdiff(debdiff):
                     r'\(wdiff format\)',
                     title):
                 ret.append("<ul>")
-                ret.extend(["<li>%s</li>" % line for line in lines])
+                ret.extend(
+                    ["<li>%s</li>" % line for line in lines if line.strip()])
                 ret.append("</ul>")
             else:
                 ret.append("<pre>")
