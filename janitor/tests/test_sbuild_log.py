@@ -22,6 +22,7 @@ from janitor.sbuild_log import (
     find_build_failure_description,
     CcacheError,
     DebhelperPatternNotFound,
+    Inactivity,
     MissingConfigure,
     MissingCHeader,
     MissingPythonModule,
@@ -259,6 +260,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             MissingPkgConfig('libpeas-1.0', '1.24.0'))
         self.run_test([
             'No package \'tepl-3\' found'], 1, MissingPkgConfig('tepl-3'))
+        self.run_test([
+            'Requested \'vte-2.91 >= 0.59.0\' but version of vte is 0.58.2'],
+            1, MissingPkgConfig('vte-2.91', '0.59.0'))
 
     def test_dh_with_order(self):
         self.run_test([
@@ -505,6 +509,11 @@ arch:all and the other not)""".splitlines(), 1)
             'configure.in:1802: error: possibly undefined macro: '
             'AC_CHECK_CCA'],
             1, MissingAutoconfMacro('AC_CHECK_CCA'))
+
+    def test_inactivity(self):
+        self.run_test([
+            'E: Build killed with signal TERM after 150 minutes of inactivity',
+            ], 1, Inactivity(150))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
