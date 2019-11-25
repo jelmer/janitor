@@ -1241,7 +1241,8 @@ def find_build_failure_description(lines):
     Returns:
       tuple with (line offset, line, error object)
     """
-    OFFSET = 80
+    OFFSET = 150
+    # We search backwards for clear errors.
     for i in range(1, OFFSET):
         lineno = len(lines) - i
         if lineno < 0:
@@ -1255,6 +1256,7 @@ def find_build_failure_description(lines):
                 else:
                     err = None
                 return lineno + 1, line, err
+    # And forwards for vague ("secondary") errors.
     for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
         line = lines[lineno].strip('\n')
         for regexp in compiled_secondary_build_failure_regexps:
