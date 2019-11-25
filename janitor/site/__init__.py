@@ -76,6 +76,10 @@ env = Environment(
     enable_async=True,
 )
 
+def htmlize_debdiff(debdiff):
+    return "<pre>%s</pre>"
+
+
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
 env.globals.update(suites=SUITES)
@@ -83,6 +87,8 @@ env.globals.update(json_dumps=json.dumps)
 env.globals.update(cache_url_git=CACHE_URL_GIT)
 env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 env.globals.update(enumerate=enumerate)
+env.globals.update(highlight_diff=highlight_diff)
+env.globals.update(htmlize_debdiff=htmlize_debdiff)
 
 
 def run_changes_filename(run):
