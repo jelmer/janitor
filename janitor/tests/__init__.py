@@ -22,6 +22,7 @@ import unittest
 
 def test_suite():
     names = [
+        'debdiff',
         'runner',
         'sbuild_log',
         'site',

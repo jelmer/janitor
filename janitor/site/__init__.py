@@ -77,11 +77,19 @@ env = Environment(
     enable_async=True,
 )
 
+
+def highlight_diff(diff):
+    from pygments import highlight
+    from pygments.lexers.diff import DiffLexer
+    from pygments.formatters import HtmlFormatter
+    return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
+
+
 def htmlize_debdiff(debdiff):
     ret = []
     for title, lines in iter_sections(debdiff.decode()):
         if title:
-            ret.append("<h3>%s</h3>" % title)
+            ret.append("<h4>%s</h4>" % title)
         ret.append("<pre>")
         ret.extend(lines)
         ret.append("</pre>")
@@ -101,13 +109,6 @@ env.globals.update(htmlize_debdiff=htmlize_debdiff)
 
 def run_changes_filename(run):
     return changes_filename(run.package, run.build_version, DEFAULT_BUILD_ARCH)
-
-
-def highlight_diff(diff):
-    from pygments import highlight
-    from pygments.lexers.diff import DiffLexer
-    from pygments.formatters import HtmlFormatter
-    return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
 def changes_get_binaries(cf):
