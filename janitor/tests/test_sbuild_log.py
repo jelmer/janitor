@@ -524,6 +524,12 @@ arch:all and the other not)""".splitlines(), 1)
             '`po/Makefile.in.in\''], 1,
             MissingConfigStatusInput('po/Makefile.in.in'))
 
+    def test_cp(self):
+        self.run_test([
+            'cp: cannot stat '
+            '\'/<<PKGBUILDDIR>>/debian/patches/lshw-gtk.desktop\': '
+            'No such file or directory'], 1, None)
+
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
 

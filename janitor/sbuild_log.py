@@ -1156,6 +1156,7 @@ build_failure_regexps = [
      None),
     (r'Failed: [pytest] section in setup.cfg files is no longer '
      r'supported, change to [tool:pytest] instead.', None),
+    (r'cp: cannot stat \'(.*)\': No such file or directory', None),
 ]
 
 compiled_build_failure_regexps = [
