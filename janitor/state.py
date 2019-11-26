@@ -894,10 +894,13 @@ SELECT DISTINCT ON (package, suite)
   package.uploader_emails,
   package.branch_url,
   main_branch_revision,
-  run.review_status
+  run.review_status,
+  publish_policy.mode
 FROM
   last_unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
+LEFT JOIN publish_policy ON
+    publish_policy.package = run.package AND publish_policy.suite = run.suite
 WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
 """
     if suite is not None:
