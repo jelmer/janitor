@@ -325,6 +325,7 @@ def publish_one(
         if mode == MODE_PUSH:
             warning('Unsupported hoster (%s), will attempt to push to %s',
                     e, main_branch.user_url)
+        hoster = None
     else:
         try:
             (resume_branch, overwrite, existing_proposal) = (
