@@ -265,30 +265,28 @@ async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
                    main_branch_revision,
-                   unused_review_status) in state.iter_publish_ready(
+                   unused_review_status, publish_mode) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             await publish_from_policy(
-                    policy, conn, rate_limiter, vcs_manager, pkg, command,
+                    conn, rate_limiter, vcs_manager, pkg, command,
                     build_version, result_code, context, start_time, log_id,
                     revision, subworker_result, branch_name, suite,
                     maintainer_email, uploader_emails, main_branch_url,
                     main_branch_revision, topic_publish,
                     possible_hosters=possible_hosters,
-                    possible_transports=possible_transports, dry_run=dry_run)
+                    possible_transports=possible_transports, dry_run=dry_run,
+                    mode=publish_mode)
 
 
 async def publish_from_policy(
-        policy, conn, rate_limiter, vcs_manager, pkg, command, build_version,
+        conn, rate_limiter, vcs_manager, pkg, command, build_version,
         result_code, context, start_time, log_id, revision, subworker_result,
         branch_name, suite, maintainer_email, uploader_emails, main_branch_url,
-        main_branch_revision, topic_publish, possible_hosters=None,
+        main_branch_revision, topic_publish, mode, possible_hosters=None,
         possible_transports=None,
         dry_run=False):
 
     publish_id = str(uuid.uuid4())
-    mode, unused_update_changelog = apply_policy(
-        policy, suite, pkg, maintainer_email,
-        uploader_emails or [])
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
     if await state.already_published(
@@ -705,6 +703,9 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
             async with db.acquire() as conn:
                 package = await state.get_package(conn, result['package'])
                 run = await state.get_run(conn, result['log_id'])
+                mode, unused_update_changelog = apply_policy(
+                    policy, run.suite, run.package, package.maintainer_email,
+                    package.uploader_emails or [])
                 await publish_from_policy(
                     policy, conn, rate_limiter, vcs_manager,
                     run.package, run.command, run.build_version,
@@ -712,7 +713,7 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
                     run.revision, run.result, run.branch_name, run.suite,
                     package.maintainer_email, package.uploader_emails,
                     package.branch_url, run.main_branch_revision,
-                    topic_publish, dry_run=dry_run)
+                    topic_publish, dry_run=dry_run, mode=mode)
 
 
 def main(argv=None):

@@ -31,7 +31,7 @@ def matches(match, package_name, package_maintainer, package_uploaders):
             return False
     package_uploader_emails = [
         parseaddr(uploader)[1]
-        for uploader in package_uploaders]
+        for uploader in (package_uploaders or [])]
     for uploader in match.uploader:
         if uploader not in package_uploader_emails:
             return False

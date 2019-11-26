@@ -448,7 +448,7 @@ async def handle_report(request):
         async for (package, command, build_version, result_code, context,
                    start_time, log_id, revision, result, branch_name, suite,
                    maintainer_email, uploader_emails, branch_url,
-                   main_branch_revision, review_status
+                   main_branch_revision, review_status, publish_mode
                    ) in state.iter_publish_ready(
                        conn, suite=suite):
             data = {
@@ -483,12 +483,9 @@ async def handle_publish_ready(request):
         async for (package, command, build_version, result_code, context,
                    start_time, log_id, revision, result, branch_name, suite,
                    maintainer_email, uploader_emails, branch_url,
-                   main_branch_revision, review_status
+                   main_branch_revision, review_status, publish_policy
                    ) in state.iter_publish_ready(
                        conn, suite=suite, review_status=review_status):
-            (publish_policy, changelog_policy) = apply_policy(
-                request.app.policy_config, suite, package,
-                maintainer_email, uploader_emails)
             if publish_policy in (
                     'propose', 'attempt-push', 'push-derived', 'push'):
                 for_publishing.add(log_id)
