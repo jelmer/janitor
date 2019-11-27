@@ -96,13 +96,19 @@ pull requests in Subversion would be.</p>
 <div class="section" id="#how-do-i-prevent-the-janitor-from-making-certain-changes">
 <h3><a class="toc-backref" href="#id20">How do I prevent the janitor from making certain changes?</a></h3>
 <p>You may want to tweak the behaviour of the janitor for certain packages.
-Configuration can be set in <i>debian/lintian-brush.conf</i>. For example,
-to prevent any changes that are incompatible with oldstable, add the following
-contents:</p>
+Configuration can be set in the <i>debian/lintian-brush.conf</i> in the
+package. For example, to prevent any changes that are incompatible with
+<b>oldstable</b>, add the following contents:</p>
 
 <pre>
 compat-release = oldstable
 </pre>
+
+<p>(the default <i>compat-release</i> is <b>stable</b>)</p>
+
+<p>For a full list of supported options, see the <a
+href="https://dyn.manpages.debian.org/buster/lintian-brush/lintian-brush.conf.5.en.html">lintian-brush.conf(5)</a>
+manual page.</p>
 
 </div>
 <div class="section" id="won-t-this-mean-i-get-a-pull-request-for-each-bit-of-trailing-whitespace">
