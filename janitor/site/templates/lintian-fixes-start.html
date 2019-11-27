@@ -29,6 +29,7 @@ GitHub, GitLab, Launchpad).</p>
 <li><a class="reference internal" href="#how-are-repositories-located" id="id10">How are repositories located?</a></li>
 <li><a class="reference internal" href="#what-repositories-are-supported" id="id11">What repositories are supported?</a></li>
 <li><a class="reference internal" href="#what-kind-of-changes-are-made" id="id12">What kind of changes are made?</a></li>
+<li><a class="reference internal" href="#how-do-i-prevent-the-janitor-from-making-certain-changes" id="id20">How do I prevent the janitor from making certain changes?</a></li>
 <li><a class="reference internal" href="#won-t-this-mean-i-get-a-pull-request-for-each-bit-of-trailing-whitespace" id="id13">Won’t this mean I get a pull request for each bit of trailing whitespace?</a></li>
 <li><a class="reference internal" href="#the-bot-is-proposing-an-incorrect-change-where-do-i-report-this" id="id14">The bot is proposing an incorrect change. Where do I report this?</a></li>
 <li><a class="reference internal" href="#the-bot-is-doing-something-else-wrong-where-do-i-report-this" id="id15">The bot is doing something else wrong. Where do I report this?</a></li>
@@ -91,6 +92,18 @@ pull requests in Subversion would be.</p>
    {% endfor %}
 {% endfor %}
 </ul>
+</div>
+<div class="section" id="#how-do-i-prevent-the-janitor-from-making-certain-changes">
+<h3><a class="toc-backref" href="#id20">How do I prevent the janitor from making certain changes?</a></h3>
+<p>You may want to tweak the behaviour of the janitor for certain packages.
+Configuration can be set in <i>debian/lintian-brush.conf</i>. For example,
+to prevent any changes that are incompatible with oldstable, add the following
+contents:</p>
+
+<pre>
+compat-release = oldstable
+</pre>
+
 </div>
 <div class="section" id="won-t-this-mean-i-get-a-pull-request-for-each-bit-of-trailing-whitespace">
 <h3><a class="toc-backref" href="#id13">Won’t this mean I get a pull request for each bit of trailing whitespace?</a></h3>
