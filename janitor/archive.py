@@ -108,11 +108,11 @@ async def run_web_server(listen_addr, port, archive_path):
     app = web.Application()
     app.archive_path = archive_path
     setup_metrics(app)
-    app.router.add_post('/debdiff', handle_debdiff)
+    app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
     app.router.add_get(
         '/archive'
         '/{suite:' + '|'.join(SUITES) + '}'
-        '/{filename}', handle_archive_file)
+        '/{filename}', handle_archive_file, name='file')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
