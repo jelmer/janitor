@@ -466,7 +466,9 @@ async def process_one(
     if retcode != 0:
         if retcode < 0:
             description = 'Worker killed with signal %d' % abs(retcode)
+            code = 'worker-killed'
         else:
+            code = 'worker-failure'
             try:
                 with open(log_path, 'r') as f:
                     description = list(f.readlines())[-1]
@@ -475,7 +477,7 @@ async def process_one(
 
         return JanitorResult(
             pkg, log_id=log_id, branch_url=branch_url,
-            code='worker-failure',
+            code=code,
             description=description,
             logfilenames=logfilenames)
 
