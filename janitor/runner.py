@@ -464,11 +464,14 @@ async def process_one(
                 logfilenames.append(name)
 
     if retcode != 0:
-        try:
-            with open(log_path, 'r') as f:
-                description = list(f.readlines())[-1]
-        except FileNotFoundError:
-            description = 'Worker exited with return code %d' % retcode
+        if retcode < 0:
+            description = 'Worker killed with signal %d' % abs(retcode)
+        else:
+            try:
+                with open(log_path, 'r') as f:
+                    description = list(f.readlines())[-1]
+            except FileNotFoundError:
+                description = 'Worker exited with return code %d' % retcode
 
         return JanitorResult(
             pkg, log_id=log_id, branch_url=branch_url,
