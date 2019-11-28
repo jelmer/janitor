@@ -275,11 +275,13 @@ async def open_guessed_salsa_branch(
             ]:
         if not salsa_url:
             continue
+
+        note('Trying to access salsa URL %s instead.', salsa_url)
         try:
             branch = open_branch_ext(
                 salsa_url, possible_transports=possible_transports,
                 probers=probers)
-        except BranchOpenFailure:
+        except BranchOpenFailure as e:
             pass
         else:
             note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
@@ -296,6 +298,8 @@ async def open_branch_with_fallback(
             probers=probers)
     except BranchOpenFailure as e:
         if e.code == 'hosted-on-alioth':
+            note('Branch %s is hosted on alioth. Trying some other options..',
+                 vcs_url)
             # See if we can guess where the branch is.
             async with db.acquire() as conn:
                 try:
