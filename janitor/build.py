@@ -93,13 +93,9 @@ def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
         raise BuildFailedError()
 
 
-def attempt_build(
-        local_tree, suffix, build_suite, output_directory, build_command,
-        build_changelog_entry='Build for debian-janitor apt repository.',
+def build_once(
+        local_tree, build_suite, output_directory, build_command,
         subpath=''):
-    add_dummy_changelog_entry(
-        local_tree.abspath(subpath), suffix, build_suite,
-        build_changelog_entry)
     build_log_path = os.path.join(output_directory, 'build.log')
     try:
         with open(build_log_path, 'w') as f:
@@ -118,3 +114,14 @@ def attempt_build(
     if not os.path.exists(changes_path):
         raise MissingChangesFile(changes_name)
     return (changes_name, cl_version)
+
+
+def attempt_build(
+        local_tree, suffix, build_suite, output_directory, build_command,
+        build_changelog_entry='Build for debian-janitor apt repository.',
+        subpath=''):
+    add_dummy_changelog_entry(
+        local_tree.abspath(subpath), suffix, build_suite,
+        build_changelog_entry)
+    return build_once(
+        local_tree, build_suite, output_directory, build_command, subpath)
