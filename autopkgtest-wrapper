@@ -2,4 +2,5 @@
 autopkgtest "$@"
 # autopkgtest(1) mentions that 4 indicates a skipped test. Ignore those:
 aptexit=$(($?&~4))
+echo "Exiting with $aptexit"
 exit $aptexit

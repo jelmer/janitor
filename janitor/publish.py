@@ -264,18 +264,17 @@ async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
         async for (pkg, command, build_version, result_code, context,
                    start_time, log_id, revision, subworker_result, branch_name,
                    suite, maintainer_email, uploader_emails, main_branch_url,
-                   main_branch_revision,
-                   unused_review_status, publish_mode) in state.iter_publish_ready(
+                   main_branch_revision, unused_review_status,
+                   publish_mode) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             await publish_from_policy(
                     conn, rate_limiter, vcs_manager, pkg, command,
                     build_version, result_code, context, start_time, log_id,
                     revision, subworker_result, branch_name, suite,
                     maintainer_email, uploader_emails, main_branch_url,
-                    main_branch_revision, topic_publish,
+                    main_branch_revision, topic_publish, publish_mode,
                     possible_hosters=possible_hosters,
-                    possible_transports=possible_transports, dry_run=dry_run,
-                    mode=publish_mode)
+                    possible_transports=possible_transports, dry_run=dry_run)
 
 
 async def publish_from_policy(
@@ -283,8 +282,7 @@ async def publish_from_policy(
         result_code, context, start_time, log_id, revision, subworker_result,
         branch_name, suite, maintainer_email, uploader_emails, main_branch_url,
         main_branch_revision, topic_publish, mode, possible_hosters=None,
-        possible_transports=None,
-        dry_run=False):
+        possible_transports=None, dry_run=False):
 
     publish_id = str(uuid.uuid4())
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
@@ -704,13 +702,13 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
                     policy, run.suite, run.package, package.maintainer_email,
                     package.uploader_emails or [])
                 await publish_from_policy(
-                    policy, conn, rate_limiter, vcs_manager,
+                    conn, rate_limiter, vcs_manager,
                     run.package, run.command, run.build_version,
                     run.result_code, run.context, run.times[0], run.id,
                     run.revision, run.result, run.branch_name, run.suite,
                     package.maintainer_email, package.uploader_emails,
                     package.branch_url, run.main_branch_revision,
-                    topic_publish, dry_run=dry_run, mode=mode)
+                    topic_publish, mode, dry_run=dry_run)
 
 
 def main(argv=None):
