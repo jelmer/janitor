@@ -249,7 +249,7 @@ async def publish_one(
     raise PublishFailure(mode, 'publisher-invalid-response', stderr.decode())
 
 
-async def publish_pending_new(db, rate_limiter, policy, vcs_manager,
+async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, dry_run=False,
                               reviewed_only=False):
     possible_hosters = []
@@ -384,7 +384,8 @@ async def publish_and_store(
             {'id': publish_id, 'proposal_url': proposal_url or None})
 
 
-async def publish_request(dry_run, request):
+async def publish_request(request):
+    dry_run = request.app.dry_run
     vcs_manager = request.app.vcs_manager
     rate_limiter = request.app.rate_limiter
     package = request.match_info['package']
@@ -522,10 +523,9 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.rate_limiter = rate_limiter
     app.topic_publish = topic_publish
     app.topic_merge_proposal = topic_merge_proposal
+    app.dry_run = dry_run
     setup_metrics(app)
-    app.router.add_post(
-        "/{suite}/{package}/publish",
-        functools.partial(publish_request, dry_run))
+    app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/diff/{run_id}", diff_request)
     app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
     app.router.add_route(
@@ -537,11 +537,34 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.router.add_get(
         '/ws/merge-proposal', functools.partial(
             pubsub_handler, topic_merge_proposal))
+    app.router.add_get('/scan', scan_request)
+    app.router.add_get('/autopublish', autopublish_request)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
     note('Listening on %s:%s', listen_addr, port)
     await site.start()
+
+
+async def scan_request(request):
+    async def scan():
+        async with request.app.db.acquire() as conn:
+            await check_existing(
+                conn, request.app.rate_limiter,
+                request.app.vcs_manager, request.app.topic_merge_proposal, request.app.dry_run)
+    request.loop.create_task(scan())
+
+
+async def autopublish_request(request):
+    reviewed_only = ('reviewed_only' in request.query)
+
+    async def autopublish():
+        await publish_pending_new(
+            request.app.db, request.app.rate_limiter, request.app.vcs_manager,
+            dry_run=request.app.dry_run, topic_publish=request.app.topic_publish,
+            reviewed_only=reviewed_only)
+
+    request.loop.create_task(autopublish())
 
 
 async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
@@ -554,7 +577,7 @@ async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
         await asyncio.sleep(interval)
         if auto_publish:
             await publish_pending_new(
-                db, rate_limiter, policy, vcs_manager, dry_run=dry_run,
+                db, rate_limiter, vcs_manager, dry_run=dry_run,
                 topic_publish=topic_publish, reviewed_only=reviewed_only)
 
 
@@ -788,7 +811,7 @@ def main(argv=None):
     db = state.Database(config.database_location)
     if args.once:
         loop.run_until_complete(publish_pending_new(
-            db, rate_limiter, policy, dry_run=args.dry_run,
+            db, rate_limiter, dry_run=args.dry_run,
             vcs_manager=vcs_manager, topic_publish=topic_publish,
             reviewed_only=args.reviewed_only))
 
