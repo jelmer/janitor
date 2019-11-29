@@ -196,7 +196,7 @@ async def publish_one(
         mode, log_id, maintainer_email, vcs_manager, branch_name,
         dry_run=False, possible_hosters=None,
         possible_transports=None, allow_create_proposal=None):
-    assert mode in SUPPORTED_MODES
+    assert mode in SUPPORTED_MODES, 'mode is %r' % mode
     local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
         raise PublishFailure(
@@ -285,7 +285,7 @@ async def publish_from_policy(
         possible_transports=None, dry_run=False):
 
     publish_id = str(uuid.uuid4())
-    if mode in (MODE_BUILD_ONLY, MODE_SKIP):
+    if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
         return
     if await state.already_published(
             conn, pkg, branch_name, revision, mode):
