@@ -878,7 +878,7 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
 async def iter_publish_ready(conn, suite=None, review_status=None, limit=None):
     args = []
     query = """
-SELECT DISTINCT ON (package, suite)
+SELECT DISTINCT ON (run.package, run.suite)
   package.name,
   run.command,
   run.build_version,
@@ -915,8 +915,8 @@ WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
 
     query += """
 ORDER BY
-  package,
-  suite,
+  run.package,
+  run.suite,
   finish_time DESC
 """
     if limit is not None:
@@ -1277,6 +1277,7 @@ async def iter_vcs_regressions(conn):
     query = """\
 select
   package.name,
+  run.suite,
   run.id,
   run.result_code,
   package.vcswatch_status

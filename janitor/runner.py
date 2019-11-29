@@ -281,7 +281,7 @@ async def open_guessed_salsa_branch(
             branch = open_branch_ext(
                 salsa_url, possible_transports=possible_transports,
                 probers=probers)
-        except BranchOpenFailure as e:
+        except BranchOpenFailure:
             pass
         else:
             note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)

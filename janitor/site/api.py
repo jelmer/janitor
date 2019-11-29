@@ -220,15 +220,22 @@ async def handle_queue(request):
 
 
 async def handle_diff(request):
-    run_id = request.match_info['run_id']
+    try:
+        run_id = request.match_info['run_id']
+    except KeyError:
+        async with request.app.db.acquire() as conn:
+            run = await state.get_last_unabsorbed_run(
+                conn, request.match_info['package'],
+                request.match_info['suite'])
+        run_id = run.id
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
     try:
         async with request.app.http_client_session.get(url) as resp:
             if resp.status == 200:
                 diff = await resp.read()
-                for accept in request.headers.get('ACCEPT', '').split(','):
-                    if accept in ('text/x-diff', 'text/plain'):
+                for accept in request.headers.get('ACCEPT', '*/*').split(','):
+                    if accept in ('text/x-diff', 'text/plain', '*/*'):
                         return web.Response(
                             body=diff,
                             content_type='text/x-diff',
@@ -521,6 +528,9 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_post(
         '/{suite}/pkg/{package}/schedule', handle_schedule,
         name='api-package-schedule')
+    app.router.add_get(
+        '/{suite}/pkg/{package}/diff', handle_diff,
+        name='api-package-diff')
     app.router.add_get(
         '/merge-proposals', handle_merge_proposal_list,
         name='api-merge-proposals')
