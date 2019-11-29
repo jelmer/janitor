@@ -33,7 +33,8 @@ $(function() {
   });
 });
 
-function submitReview(status) {
+function submitReview(elem, status) {
+    elem.blur();
     var run_id = $('#run-id').val();
     console.log("Submitting review " + status + " for run " + run_id);
     $.post('/api/run/' + run_id, {'review-status': status});
@@ -46,9 +47,9 @@ function submitReview(status) {
 
 <form action="/cupboard/review" method="POST">
 <input type="hidden" name="run_id" id='run-id' value="{{ run_id }}"/>
-<input class='review-button' type="submit" name="review_status" value="Approved" accesskey="a" onclick="submitReview('approved')">
-<input class='review-button' type="submit" name="review_status" value="Rejected" accesskey="r" onclick="submitReview('rejected')">
-<input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview('reschedule')">
+<input class='review-button' type="submit" name="review_status" value="Approved" accesskey="a" onclick="submitReview(this, 'approved')">
+<input class='review-button' type="submit" name="review_status" value="Rejected" accesskey="r" onclick="submitReview(this, 'rejected')">
+<input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview(this ,'reschedule')">
 </form>
 
 <p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}" id="full-run-link">Full Run</a></p>
