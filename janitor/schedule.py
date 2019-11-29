@@ -217,7 +217,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
                 conn, package, command, suite, offset=int(offset),
                 estimated_duration=estimated_duration,
                 context=env.get('CONTEXT'), requestor='scheduler',
-                requestor_relative=True)
+                requestor_relative=True, estimated_value=estimated_value)
         else:
             added = True
         if added:
