@@ -904,7 +904,7 @@ LEFT JOIN publish_policy ON
 WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
 """
     if suite is not None:
-        query += " AND suite = $1 "
+        query += " AND run.suite = $1 "
         args.append(suite)
     if review_status is not None:
         if not isinstance(review_status, list):
