@@ -1,6 +1,6 @@
 #!/bin/bash
 autopkgtest "$@"
-# autopkgtest(1) mentions that 4 indicates a skipped test. Ignore those:
-aptexit=$(($?&~4))
+# autopkgtest(1) mentions that 2 indicates a skipped test. Ignore those:
+aptexit=$(($?&~2))
 echo "Exiting with $aptexit"
 exit $aptexit
