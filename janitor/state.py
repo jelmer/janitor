@@ -1358,3 +1358,7 @@ async def update_publish_policy(
         'mode = EXCLUDED.mode, '
         'update_changelog = EXCLUDED.update_changelog',
         name, suite, publish_mode, changelog_mode)
+
+
+async def iter_publish_policy(conn):
+    return await conn.fetch('SELECT package, suite, mode FROM publish_policy')

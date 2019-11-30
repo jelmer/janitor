@@ -537,8 +537,8 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.router.add_get(
         '/ws/merge-proposal', functools.partial(
             pubsub_handler, topic_merge_proposal))
-    app.router.add_get('/scan', scan_request)
-    app.router.add_get('/autopublish', autopublish_request)
+    app.router.add_post('/scan', scan_request)
+    app.router.add_post('/autopublish', autopublish_request)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
