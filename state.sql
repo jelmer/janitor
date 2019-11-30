@@ -67,7 +67,7 @@ CREATE INDEX ON run (package, suite);
 CREATE INDEX ON run (suite);
 CREATE INDEX ON run (build_distribution);
 CREATE INDEX ON run (result_code);
-CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived');
+CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived', 'skip');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
    package text not null,
