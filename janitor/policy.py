@@ -77,15 +77,20 @@ async def main(args):
     with open(args.config, 'r') as f:
         config = read_config(f)
 
+    current_policy = {}
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
+        for package, suite, publish_policy in await state.iter_publish_policy(conn):
+            current_policy[(package, suite)] = publish_policy
         for package in await state.iter_packages(conn):
             for suite in SUITES:
                 publish_mode, changelog_mode = apply_policy(
                     policy, suite, package.name, package.maintainer_email,
                     package.uploader_emails)
-                await state.update_publish_policy(
-                    conn, package.name, suite, publish_mode, changelog_mode)
+                if current_policy.get((package.name, suite)) != publish_mode:
+                    print('%s/%s -> %s' % (package.name, suite, publish_mode))
+                    await state.update_publish_policy(
+                        conn, package.name, suite, publish_mode, changelog_mode)
 
 
 if __name__ == '__main__':

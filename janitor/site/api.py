@@ -5,7 +5,7 @@ import urllib.parse
 
 from janitor.policy import apply_policy
 from janitor import state, SUITES, DEFAULT_BUILD_ARCH
-from . import ( 
+from . import (
     env,
     highlight_diff,
     get_debdiff,
@@ -340,6 +340,30 @@ async def handle_run(request):
         response_obj, headers={'Cache-Control': 'max-age=600'})
 
 
+async def handle_publish_scan(request):
+    publisher_url = request.app.publisher_url
+    url = urllib.parse.urljoin(publisher_url, '/scan')
+    try:
+        async with request.app.http_client_session.post(url) as resp:
+            return web.Response(body=await resp.read(), status=resp.status)
+    except ClientConnectorError:
+        return web.json_response(
+            'unable to contact publisher',
+            status=400)
+
+
+async def handle_publish_autopublish(request):
+    publisher_url = request.app.publisher_url
+    url = urllib.parse.urljoin(publisher_url, '/autopublish')
+    try:
+        async with request.app.http_client_session.post(url) as resp:
+            return web.Response(body=await resp.read(), status=resp.status)
+    except ClientConnectorError:
+        return web.json_response(
+            'unable to contact publisher',
+            status=400)
+
+
 async def handle_package_branch(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
@@ -536,6 +560,12 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         name='api-merge-proposals')
     app.router.add_get('/queue', handle_queue, name='api-queue')
     app.router.add_get('/run', handle_run, name='api-run-list')
+    app.router.add_post(
+        '/publish/scan', handle_publish_scan,
+        name='api-publish-scan')
+    app.router.add_post(
+        '/publish/autopublish', handle_publish_autopublish,
+        name='api-publish-autopublish')
     app.router.add_get('/run/{run_id}', handle_run, name='api-run')
     app.router.add_post(
         '/run/{run_id}', handle_run_post, name='api-run-update')
