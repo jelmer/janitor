@@ -85,9 +85,13 @@ class CircularDependency(Exception):
 
 def add_dependency(
         tree, context, package, minimum_version=None, committer=None):
-    if context == 'build':
+    if context == ('build', ):
         return add_build_dependency(
             tree, package, minimum_version=minimum_version,
+            committer=committer)
+    elif context[0] == 'autopkgtest':
+        return add_test_dependency(
+            tree, context[1], package, minimum_version=minimum_version,
             committer=committer)
     else:
         raise AssertionError('context %r invalid' % context)
@@ -129,6 +133,51 @@ def add_build_dependency(tree, package, minimum_version=None,
     note("Adding build dependency: %s", desc)
     subprocess.check_call(
         ["dch", "Add missing dependency on %s." % desc],
+        cwd=tree.basedir, stderr=subprocess.DEVNULL)
+    with tree.lock_write():
+        try:
+            debcommit(tree, committer=committer)
+        except PointlessCommit:
+            return False
+        else:
+            return True
+
+
+def add_test_dependency(tree, testname, package, minimum_version=None,
+                        committer=None):
+    if not isinstance(package, str):
+        raise TypeError(package)
+
+    def add_test_dep(control):
+        if control["Tests"] != testname:
+            return
+        if minimum_version:
+            control["Depends"] = ensure_minimum_version(
+                control["Depends"],
+                package, minimum_version)
+        else:
+            control["Depends"] = ensure_some_version(
+                control["Depends"], package)
+
+    try:
+        if not update_control(
+                source_package_cb=add_test_dep,
+                path=os.path.join(tree.basedir, 'debian/tests/control')):
+            return False
+    except FormattingUnpreservable as e:
+        note('Unable to edit %s in a way that preserves formatting.',
+             e.path)
+        return False
+
+    if minimum_version:
+        desc = "%s (>= %s)" % (package, minimum_version)
+    else:
+        desc = package
+
+    note("Adding dependency to test %s: %s", testname, desc)
+    subprocess.check_call(
+        ["dch", "Add missing dependency for test %s on %s." % (
+            testname, desc)],
         cwd=tree.basedir, stderr=subprocess.DEVNULL)
     with tree.lock_write():
         try:
@@ -597,7 +646,7 @@ def build_incrementally(
             if e.error is None:
                 warning('Build failed with unidentified error. Giving up.')
                 raise
-            if e.error in fixed_errors:
+            if (e.error, e.context) in fixed_errors:
                 warning('Error was still not fixed on second try. Giving up.')
                 raise
             if max_iterations is not None \
@@ -615,7 +664,7 @@ def build_incrementally(
                 warning('Unable to fix %r; it would introduce a circular '
                         'dependency.', e.error)
                 raise e
-            fixed_errors.append(e.error)
+            fixed_errors.append((e.error, e.context))
             if os.path.exists(os.path.join(output_directory, 'build.log')):
                 i = 1
                 while os.path.exists(
