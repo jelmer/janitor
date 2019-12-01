@@ -191,11 +191,16 @@ class PublishFailure(Exception):
         self.description = description
 
 
+def select_reviewers(maintainer_email, uploader_emails):
+    return None
+
+
 async def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, maintainer_email, vcs_manager, branch_name,
         dry_run=False, possible_hosters=None,
-        possible_transports=None, allow_create_proposal=None):
+        possible_transports=None, allow_create_proposal=None,
+        reviewers=None):
     assert mode in SUPPORTED_MODES, 'mode is %r' % mode
     local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
@@ -213,6 +218,7 @@ async def publish_one(
         'local_branch_url': local_branch.user_url,
         'mode': mode,
         'log_id': log_id,
+        'reviewers': reviewers,
         'allow_create_proposal': allow_create_proposal}
 
     args = [sys.executable, '-m', 'janitor.publish_one']
@@ -305,6 +311,7 @@ async def publish_from_policy(
         mode = MODE_PROPOSE
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
+    reviewers = select_reviewers(maintainer_email, uploader_emails)
     note('Publishing %s / %r (mode: %s)', pkg, command, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
@@ -312,7 +319,8 @@ async def publish_from_policy(
             main_branch_url, mode, log_id, maintainer_email,
             vcs_manager=vcs_manager, branch_name=branch_name,
             dry_run=dry_run, possible_hosters=possible_hosters,
-            possible_transports=possible_transports)
+            possible_transports=possible_transports,
+            reviewers=reviewers)
     except PublishFailure as e:
         code = e.code
         description = e.description
@@ -349,13 +357,14 @@ async def diff_request(request):
 async def publish_and_store(
         db, topic_publish, publish_id, run, mode, maintainer_email,
         vcs_manager, rate_limiter, dry_run=False, allow_create_proposal=True):
+    reviewers = select_reviewers(maintainer_email, uploader_emails)
     async with db.acquire() as conn:
         try:
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
                 run.branch_url, mode, run.id, maintainer_email, vcs_manager,
                 run.branch_name, dry_run=dry_run, possible_hosters=None,
-                possible_transports=None,
+                possible_transports=None, reviewers=reviewers,
                 allow_create_proposal=allow_create_proposal)
         except PublishFailure as e:
             await state.store_publish(
@@ -667,6 +676,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             continue
 
         if last_run != mp_run:
+            reviewers = select_reviewers(maintainer_email, uploader_emails)
             publish_id = str(uuid.uuid4())
             note('%s needs to be updated.', mp.url)
             try:
@@ -675,7 +685,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                     last_run.result, last_run.branch_url, MODE_PROPOSE,
                     last_run.id, maintainer_email,
                     vcs_manager=vcs_manager, branch_name=last_run.branch_name,
-                    dry_run=dry_run, allow_create_proposal=True)
+                    dry_run=dry_run, allow_create_proposal=True,
+                    reviewers=reviewers)
             except PublishFailure as e:
                 note('%s: Updating merge proposal failed: %s (%s)',
                      mp.url, e.code, e.description)
