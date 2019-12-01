@@ -30,10 +30,11 @@ __all__ = [
 class SbuildFailure(Exception):
     """Sbuild failed to run."""
 
-    def __init__(self, stage, description, error=None):
+    def __init__(self, stage, description, error=None, context=None):
         self.stage = stage
         self.description = description
         self.error = error
+        self.context = context
 
 
 SBUILD_FOCUS_SECTION = {
@@ -164,6 +165,7 @@ def worker_failure_from_sbuild_log(f):
         # command.
         failed_stage = 'autopkgtest'
     description = None
+    context = None
     error = None
     section_lines = paragraphs.get(focus_section, [])
     if failed_stage in ('build', 'autopkgtest'):
@@ -172,11 +174,14 @@ def worker_failure_from_sbuild_log(f):
             section_lines)
         if error:
             description = str(error)
-        if not description and failed_stage == 'autopkgtest':
-            offset, description, error = find_autopkgtest_failure_description(
-                section_lines)
-            if error:
-                description = str(error)
+            context = ('build', )
+        if failed_stage == 'autopkgtest':
+            (apt_offset, apt_description, testname) = (
+                find_autopkgtest_failure_description(section_lines))
+            if apt_description and not description:
+                description = apt_description
+                offset = apt_offset
+            context = ('autopkgtest', testname)
     if failed_stage == 'apt-get-update':
         focus_section, offset, description, error = (
                 find_apt_get_update_failure(paragraphs))
@@ -217,7 +222,8 @@ def worker_failure_from_sbuild_log(f):
                             line[len('brz: ERROR: '):])
                         break
 
-    return SbuildFailure(failed_stage, description, error=error)
+    return SbuildFailure(
+        failed_stage, description, error=error, context=context)
 
 
 def parse_sbuild_log(f):
@@ -1276,7 +1282,7 @@ def find_autopkgtest_failure_description(lines):
     """Find the autopkgtest failure in output.
 
     Returns:
-      tuple with (line offset, line, error object)
+      tuple with (line offset, line, testname)
     """
     OFFSET = 20
     for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
@@ -1284,7 +1290,7 @@ def find_autopkgtest_failure_description(lines):
         m = re.match('([^ ]+)([ ]+)FAIL (.+)', line)
         if m:
             description = 'Test %s failed: %s' % (m.group(1), m.group(3))
-            return lineno + 1, description, None
+            return lineno + 1, description, m.group(1)
 
     return None, None, None
 
