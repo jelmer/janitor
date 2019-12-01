@@ -192,6 +192,8 @@ def search_apt_file(path, regex=False):
     args = ['/usr/bin/apt-file', 'search', '-l']
     if regex:
         args.append('-x')
+    else:
+        args.append('-F')
     args.append(path)
     try:
         return subprocess.check_output(args).decode().splitlines()
