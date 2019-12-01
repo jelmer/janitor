@@ -5,11 +5,13 @@ import pydle
 from janitor.pubsub import pubsub_reader
 
 import re
+from urllib.parse import urljoin
 
 
 class JanitorNotifier(pydle.Client):
 
     def __init__(self, channel, **kwargs):
+        self.url = kwargs.pop('url')
         super(JanitorNotifier, self).__init__(**kwargs)
         self._channel = channel
         self._runner_status = None
@@ -44,11 +46,21 @@ class JanitorNotifier(pydle.Client):
                     'Currently processing: ' + ', '.join(status_strs) + '.')
             else:
                 await self.message(target, 'Current runner status unknown.')
+        if message == 'scan':
+            url = urljoin(self.url, 'api/publish/scan')
+            async with ClientSession() as session, session.post(
+                    url, data={'mode': mode}) as resp:
+                if resp.status in (200, 202):
+                    await self.message(target, 'Merge proposal scan started.')
+                else:
+                    await self.message(
+                        target, 'Merge proposal scan failed: %d.' % resp.status)
 
 
 async def main(args):
     notifier = JanitorNotifier(
-        args.channel, nickname=args.nick, realname=args.fullname)
+        args.channel, nickname=args.nick, realname=args.fullname,
+        url=args.url)
     loop = asyncio.get_event_loop()
     asyncio.ensure_future(
         notifier.connect(args.server, tls=True, tls_verify=False), loop=loop)
@@ -68,6 +80,9 @@ if __name__ == '__main__':
     parser.add_argument('--nick', help='IRC nick', default='janitor-notify')
     parser.add_argument(
         '--channel', help='IRC channel', default='#debian-janitor')
+    parser.add_argument(
+        '--url', help='Janitor URL',
+        default='https://janitor.debian.net/')
     parser.add_argument(
         '--notifications-url', help='URL to retrieve notifications from',
         default='wss://janitor.debian.net/ws/notifications')
