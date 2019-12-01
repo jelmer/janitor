@@ -80,7 +80,8 @@ async def main(args):
     current_policy = {}
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
-        for package, suite, publish_policy in await state.iter_publish_policy(conn):
+        for package, suite, publish_policy in await state.iter_publish_policy(
+                conn):
             current_policy[(package, suite)] = publish_policy
         for package in await state.iter_packages(conn):
             for suite in SUITES:
@@ -90,7 +91,8 @@ async def main(args):
                 if current_policy.get((package.name, suite)) != publish_mode:
                     print('%s/%s -> %s' % (package.name, suite, publish_mode))
                     await state.update_publish_policy(
-                        conn, package.name, suite, publish_mode, changelog_mode)
+                        conn, package.name, suite, publish_mode,
+                        changelog_mode)
 
 
 if __name__ == '__main__':

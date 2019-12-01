@@ -4,7 +4,7 @@ from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import urllib.parse
 
 from janitor.policy import apply_policy
-from janitor import state, SUITES, DEFAULT_BUILD_ARCH
+from janitor import state, SUITES
 from . import (
     env,
     highlight_diff,

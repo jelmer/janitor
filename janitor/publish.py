@@ -551,7 +551,8 @@ async def scan_request(request):
         async with request.app.db.acquire() as conn:
             await check_existing(
                 conn, request.app.rate_limiter,
-                request.app.vcs_manager, request.app.topic_merge_proposal, request.app.dry_run)
+                request.app.vcs_manager, request.app.topic_merge_proposal,
+                request.app.dry_run)
     request.loop.create_task(scan())
 
 
@@ -561,7 +562,8 @@ async def autopublish_request(request):
     async def autopublish():
         await publish_pending_new(
             request.app.db, request.app.rate_limiter, request.app.vcs_manager,
-            dry_run=request.app.dry_run, topic_publish=request.app.topic_publish,
+            dry_run=request.app.dry_run,
+            topic_publish=request.app.topic_publish,
             reviewed_only=reviewed_only)
 
     request.loop.create_task(autopublish())

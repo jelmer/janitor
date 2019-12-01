@@ -83,6 +83,16 @@ class CircularDependency(Exception):
         self.package = package
 
 
+def add_dependency(
+        tree, context, package, minimum_version=None, committer=None):
+    if context == 'build':
+        return add_build_dependency(
+            tree, package, minimum_version=minimum_version,
+            committer=committer)
+    else:
+        raise AssertionError('context %r invalid' % context)
+
+
 def add_build_dependency(tree, package, minimum_version=None,
                          committer=None):
     if not isinstance(package, str):
@@ -235,7 +245,7 @@ def package_exists(package):
     return False
 
 
-def fix_missing_python_distribution(tree, error, committer=None):
+def fix_missing_python_distribution(tree, error, context, committer=None):
     targeted = targeted_python_versions(tree)
     default = not targeted
 
@@ -281,14 +291,14 @@ def fix_missing_python_distribution(tree, error, committer=None):
 
     for dep_pkg in extra_build_deps:
         assert dep_pkg is not None
-        if not add_build_dependency(
-                tree, dep_pkg, minimum_version=error.minimum_version,
+        if not add_dependency(
+                tree, context, dep_pkg, minimum_version=error.minimum_version,
                 committer=committer):
             return False
     return True
 
 
-def fix_missing_python_module(tree, error, committer=None):
+def fix_missing_python_module(tree, error, context, committer=None):
     targeted = targeted_python_versions(tree)
     default = (not targeted)
 
@@ -326,22 +336,23 @@ def fix_missing_python_module(tree, error, committer=None):
 
     for dep_pkg in extra_build_deps:
         assert dep_pkg is not None
-        if not add_build_dependency(
-                tree, dep_pkg, error.minimum_version, committer=committer):
+        if not add_dependency(
+                tree, context, dep_pkg, error.minimum_version,
+                committer=committer):
             return False
     return True
 
 
-def fix_missing_go_package(tree, error, committer=None):
+def fix_missing_go_package(tree, error, context, committer=None):
     package = get_package_for_paths(
         [os.path.join('/usr/share/gocode/src', error.package)],
         regex=False)
     if package is None:
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_c_header(tree, error, committer=None):
+def fix_missing_c_header(tree, error, context, committer=None):
     package = get_package_for_paths(
         [os.path.join('/usr/include', error.header)], regex=False)
     if package is None:
@@ -349,10 +360,10 @@ def fix_missing_c_header(tree, error, committer=None):
             [os.path.join('/usr/include', '.*', error.header)], regex=True)
     if package is None:
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_pkg_config(tree, error, committer=None):
+def fix_missing_pkg_config(tree, error, context, committer=None):
     package = get_package_for_paths(
         [os.path.join('/usr/lib/pkgconfig', error.module + '.pc')])
     if package is None:
@@ -362,12 +373,12 @@ def fix_missing_pkg_config(tree, error, committer=None):
             regex=True)
     if package is None:
         return False
-    return add_build_dependency(
-        tree, package, committer=committer,
+    return add_dependency(
+        tree, context, package, committer=committer,
         minimum_version=error.minimum_version)
 
 
-def fix_missing_command(tree, error, committer=None):
+def fix_missing_command(tree, error, context, committer=None):
     if os.path.isabs(error.command):
         paths = [error.command]
     else:
@@ -377,17 +388,17 @@ def fix_missing_command(tree, error, committer=None):
     package = get_package_for_paths(paths)
     if package is None:
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_file(tree, error, committer=None):
+def fix_missing_file(tree, error, context, committer=None):
     package = get_package_for_paths([error.path])
     if package is None:
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_perl_file(tree, error, committer=None):
+def fix_missing_perl_file(tree, error, context, committer=None):
     paths = [os.path.join(inc, error.filename) for inc in error.inc]
     package = get_package_for_paths(paths, regex=False)
     if package is None:
@@ -397,10 +408,10 @@ def fix_missing_perl_file(tree, error, committer=None):
         else:
             warning('perl file %s not found.', error.filename)
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_node_module(tree, error, committer=None):
+def fix_missing_node_module(tree, error, context, committer=None):
     paths = [
         '/usr/share/nodejs/.*/node_modules/%s/package.json' % error.module,
         '/usr/lib/nodejs/%s/package.json' % error.module,
@@ -410,23 +421,23 @@ def fix_missing_node_module(tree, error, committer=None):
         warning('no node package found for %s.',
                 error.module)
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_dh_addon(tree, error, committer=None):
+def fix_missing_dh_addon(tree, error, context, committer=None):
     paths = [os.path.join('/usr/share/perl5', error.path)]
     package = get_package_for_paths(paths)
     if package is None:
         warning('no package for debhelper addon %s', error.name)
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def retry_apt_failure(tree, error, committer=None):
+def retry_apt_failure(tree, error, context, committer=None):
     return True
 
 
-def fix_missing_xml_entity(tree, error, committer=None):
+def fix_missing_xml_entity(tree, error, context, committer=None):
     # Ideally we should be using the XML catalog for this, but hardcoding
     # a few URLs will do for now..
     URL_MAP = {
@@ -443,10 +454,10 @@ def fix_missing_xml_entity(tree, error, committer=None):
     package = get_package_for_paths([search_path], regex=False)
     if package is None:
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_library(tree, error, committer=None):
+def fix_missing_library(tree, error, context, committer=None):
     paths = [os.path.join('/usr/lib/lib%s.so' % error.library),
              os.path.join('/usr/lib/.*/lib%s.so' % error.library),
              os.path.join('/usr/lib/lib%s.a' % error.library),
@@ -455,19 +466,19 @@ def fix_missing_library(tree, error, committer=None):
     if package is None:
         warning('no package for library %s', error.library)
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_ruby_gem(tree, error, committer=None):
+def fix_missing_ruby_gem(tree, error, context, committer=None):
     paths = [os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.gem)]
     package = get_package_for_paths(paths)
     if package is None:
         warning('no package for gem %s', error.gem)
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_java_class(tree, error, committer=None):
+def fix_missing_java_class(tree, error, context, committer=None):
     # Unfortunately this only finds classes in jars installed on the host
     # system :(
     output = subprocess.check_output(
@@ -482,10 +493,10 @@ def fix_missing_java_class(tree, error, committer=None):
     if package is None:
         warning('no package for files in %r', classpath)
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_configure(tree, error, committer=None):
+def fix_missing_configure(tree, error, context, committer=None):
     if (not tree.has_filename('configure.ac') and
             not tree.has_filename('configure.in')):
         return False
@@ -501,12 +512,12 @@ def fix_missing_configure(tree, error, committer=None):
             return dh_invoke_add_with(line, b'autoreconf')
 
         if update_rules(command_line_cb=add_with_autoreconf):
-            return add_build_dependency(
-                tree, 'dh-autoreconf', committer=committer)
+            return add_dependency(
+                tree, context, 'dh-autoreconf', committer=committer)
     return False
 
 
-def fix_missing_maven_artifacts(tree, error, committer=None):
+def fix_missing_maven_artifacts(tree, error, context, committer=None):
     artifact = error.artifacts[0]
     (group_id, artifact_id, kind, version) = artifact.split(':')
     paths = [os.path.join(
@@ -516,14 +527,14 @@ def fix_missing_maven_artifacts(tree, error, committer=None):
     if package is None:
         warning('no package for artifact %s', artifact)
         return False
-    return add_build_dependency(tree, package, committer=committer)
+    return add_dependency(tree, context, package, committer=committer)
 
 
-def install_gnome_common(tree, error, committer=None):
-    return add_build_dependency(tree, 'gnome-common', committer=committer)
+def install_gnome_common(tree, error, context, committer=None):
+    return add_dependency(tree, context, 'gnome-common', committer=committer)
 
 
-def fix_missing_config_status_input(tree, error, committer=None):
+def fix_missing_config_status_input(tree, error, context, committer=None):
     if not tree.has_filename('autogen.sh'):
         return False
 
@@ -561,12 +572,12 @@ FIXERS = [
 ]
 
 
-def resolve_error(tree, error, committer=None, subpath=''):
+def resolve_error(tree, error, context, committer=None, subpath=''):
     if subpath:
         raise NotImplementedError
     for error_cls, fixer in FIXERS:
         if isinstance(error, error_cls):
-            return fixer(tree, error, committer)
+            return fixer(tree, error, context, committer)
     warning('No fixer found for %r', error)
     return False
 
@@ -596,7 +607,7 @@ def build_incrementally(
             reset_tree(local_tree, subpath)
             try:
                 if not resolve_error(
-                        local_tree, e.error, committer=committer,
+                        local_tree, e.error, e.context, committer=committer,
                         subpath=subpath):
                     warning('Failed to resolve error %r. Giving up.', e.error)
                     raise
