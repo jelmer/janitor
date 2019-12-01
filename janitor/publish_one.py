@@ -132,7 +132,7 @@ class BranchWorkspace(object):
 
     def propose(self, name, description, hoster=None, existing_proposal=None,
                 overwrite_existing=None, labels=None, dry_run=False,
-                commit_message=None):
+                commit_message=None, reviewers=None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return propose_changes(
@@ -143,7 +143,8 @@ class BranchWorkspace(object):
             overwrite_existing=overwrite_existing,
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
-            additional_colocated_branches=self.additional_colocated_branches)
+            additional_colocated_branches=self.additional_colocated_branches,
+            reviewers=reviewers)
 
     def push(self, hoster=None, dry_run=False):
         if hoster is None:
@@ -166,7 +167,7 @@ def publish(
         suite, pkg, subrunner, mode, hoster,
         main_branch, local_branch, resume_branch=None,
         dry_run=False, log_id=None, existing_proposal=None,
-        allow_create_proposal=False):
+        allow_create_proposal=False, reviewers=None):
     def get_proposal_description(existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
@@ -208,7 +209,7 @@ def publish(
                 allow_create_proposal=allow_create_proposal,
                 overwrite_existing=True,
                 existing_proposal=existing_proposal,
-                labels=labels)
+                labels=labels, reviewers=reviewers)
         except NoSuchProject as e:
             raise PublishFailure(
                 description='project %s was not found' % e.project,
@@ -281,7 +282,7 @@ class NewUpstreamPublisher(object):
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, local_branch_url,
-        dry_run=False, possible_hosters=None,
+        dry_run=False, reviewers=None, possible_hosters=None,
         possible_transports=None, allow_create_proposal=None):
 
     if command.startswith('new-upstream'):
@@ -345,7 +346,7 @@ def publish_one(
     try:
         publish_result = publish(
             suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
-            resume_branch,
+            resume_branch, reviewers=reviewers,
             dry_run=dry_run, log_id=log_id,
             existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal)
@@ -374,7 +375,8 @@ if __name__ == '__main__':
             request['command'], request['subworker_result'],
             request['main_branch_url'], request['mode'], request['log_id'],
             request['local_branch_url'], request['dry-run'],
-            possible_hosters=None, possible_transports=None,
+            request['reviewers'], possible_hosters=None,
+            possible_transports=None,
             allow_create_proposal=request['allow_create_proposal'])
     except PublishFailure as e:
         json.dump({'code': e.code, 'description': e.description}, sys.stdout)
