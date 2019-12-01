@@ -172,6 +172,11 @@ def worker_failure_from_sbuild_log(f):
             section_lines)
         if error:
             description = str(error)
+        if not description and failed_stage == 'autopkgtest':
+            offset, description, error = find_autopkgtest_failure_description(
+                section_lines)
+            if error:
+                description = str(error)
     if failed_stage == 'apt-get-update':
         focus_section, offset, description, error = (
                 find_apt_get_update_failure(paragraphs))
@@ -1264,6 +1269,23 @@ def find_build_failure_description(lines):
             m = regexp.fullmatch(line.rstrip('\n'))
             if m:
                 return lineno + 1, line, None
+    return None, None, None
+
+
+def find_autopkgtest_failure_description(lines):
+    """Find the autopkgtest failure in output.
+
+    Returns:
+      tuple with (line offset, line, error object)
+    """
+    OFFSET = 20
+    for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
+        line = lines[lineno].strip('\n')
+        m = re.match('([^ ]+)([ ]+)FAIL (.+)', line)
+        if m:
+            description = 'Test %s failed: %s' % (m.group(1), m.group(3))
+            return lineno + 1, description, None
+
     return None, None, None
 
 
