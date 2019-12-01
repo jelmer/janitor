@@ -554,6 +554,7 @@ async def scan_request(request):
                 request.app.vcs_manager, request.app.topic_merge_proposal,
                 request.app.dry_run)
     request.loop.create_task(scan())
+    return web.Response(status=202, text="Scan started.")
 
 
 async def autopublish_request(request):
@@ -567,6 +568,7 @@ async def autopublish_request(request):
             reviewed_only=reviewed_only)
 
     request.loop.create_task(autopublish())
+    return web.Response(status=202, text="Autopublish started.")
 
 
 async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
