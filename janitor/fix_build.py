@@ -132,7 +132,7 @@ def add_build_dependency(tree, package, minimum_version=None,
 
     note("Adding build dependency: %s", desc)
     subprocess.check_call(
-        ["dch", "Add missing dependency on %s." % desc],
+        ["dch", "Add missing build dependency on %s." % desc],
         cwd=tree.basedir, stderr=subprocess.DEVNULL)
     with tree.lock_write():
         try:
