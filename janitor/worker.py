@@ -743,6 +743,7 @@ def main(argv=None):
         metadata['description'] = str(e)
         raise
     else:
+        # TODO(jelmer): Set metadata['value']
         metadata['code'] = None
         metadata['description'] = result.description
         metadata['changes_filename'] = result.changes_filename

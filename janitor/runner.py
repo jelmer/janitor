@@ -180,13 +180,14 @@ class WorkerResult(object):
     """The result from a worker."""
 
     def __init__(self, code, description, context=None, subworker=None,
-                 main_branch_revision=None, revision=None):
+                 main_branch_revision=None, revision=None, value=None):
         self.code = code
         self.description = description
         self.context = context
         self.subworker = subworker
         self.main_branch_revision = main_branch_revision
         self.revision = revision
+        self.value = value
 
     @classmethod
     def from_file(cls, path):
@@ -197,7 +198,7 @@ class WorkerResult(object):
                 worker_result.get('code'), worker_result.get('description'),
                 worker_result.get('context'), worker_result.get('subworker'),
                 worker_result.get('main_branch_revision'),
-                worker_result.get('revision'))
+                worker_result.get('revision'), worker_result.get('value'))
 
 
 async def run_subprocess(args, env, log_path=None):
@@ -671,7 +672,8 @@ class QueueProcessor(object):
                     revision=result.revision,
                     subworker_result=result.subworker_result,
                     suite=item.suite,
-                    logfilenames=result.logfilenames)
+                    logfilenames=result.logfilenames,
+                    value=result.value)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.started[item]
