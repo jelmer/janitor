@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from email.utils import parseaddr
+from fnmatch import fnmatch
 from google.protobuf import text_format
 
 from . import policy_pb2
@@ -27,16 +28,16 @@ def read_policy(f):
 
 def matches(match, package_name, package_maintainer, package_uploaders):
     for maintainer in match.maintainer:
-        if maintainer != parseaddr(package_maintainer)[1]:
+        if not fnmatch(parseaddr(package_maintainer)[1], maintainer):
             return False
     package_uploader_emails = [
         parseaddr(uploader)[1]
         for uploader in (package_uploaders or [])]
     for uploader in match.uploader:
-        if uploader not in package_uploader_emails:
+        if not any([fnmatch(u, uploader) for u in package_uploader_emails]):
             return False
     for source_package in match.source_package:
-        if source_package != package_name:
+        if not fnmatch(package_name, source_package):
             return False
     return True
 
