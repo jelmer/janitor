@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS run (
    branch_url text not null,
    logfilenames text[] not null,
    review_status review_status not null default 'unreviewed',
+   value integer,
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );
