@@ -198,7 +198,7 @@ def select_reviewers(maintainer_email, uploader_emails):
 async def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, maintainer_email, vcs_manager, branch_name,
-        dry_run=False, possible_hosters=None,
+        topic_merge_proposal, rate_limiter, dry_run=False, possible_hosters=None,
         possible_transports=None, allow_create_proposal=None,
         reviewers=None):
     assert mode in SUPPORTED_MODES, 'mode is %r' % mode
@@ -246,9 +246,12 @@ async def publish_one(
         is_new = response.get('is_new')
 
         if proposal_url and is_new:
+            topic_merge_proposal.publish(
+                {'url': mp.url, 'status': status, 'package': package_name})
+
             merge_proposal_count.labels(status='open').inc()
-            open_proposal_count.labels(
-                maintainer=maintainer_email).inc()
+            rate_limiter.inc(maintainer_email)
+            open_proposal_count.labels(maintainer=maintainer_email).inc()
 
         return proposal_url, branch_name, is_new
 
@@ -256,7 +259,7 @@ async def publish_one(
 
 
 async def publish_pending_new(db, rate_limiter, vcs_manager,
-                              topic_publish, dry_run=False,
+                              topic_publish, topic_merge_proposal, dry_run=False,
                               reviewed_only=False):
     possible_hosters = []
     possible_transports = []
@@ -278,8 +281,8 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                     build_version, result_code, context, start_time, log_id,
                     revision, subworker_result, branch_name, suite,
                     maintainer_email, uploader_emails, main_branch_url,
-                    main_branch_revision, topic_publish, publish_mode,
-                    possible_hosters=possible_hosters,
+                    main_branch_revision, topic_publish, topic_merge_proposal,
+                    publish_mode, possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run)
 
 
@@ -287,8 +290,8 @@ async def publish_from_policy(
         conn, rate_limiter, vcs_manager, pkg, command, build_version,
         result_code, context, start_time, log_id, revision, subworker_result,
         branch_name, suite, maintainer_email, uploader_emails, main_branch_url,
-        main_branch_revision, topic_publish, mode, possible_hosters=None,
-        possible_transports=None, dry_run=False):
+        main_branch_revision, topic_publish, topic_merge_proposal, mode,
+        possible_hosters=None, possible_transports=None, dry_run=False):
 
     publish_id = str(uuid.uuid4())
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
@@ -318,9 +321,10 @@ async def publish_from_policy(
             suite, pkg, command, subworker_result,
             main_branch_url, mode, log_id, maintainer_email,
             vcs_manager=vcs_manager, branch_name=branch_name,
+            topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run, possible_hosters=possible_hosters,
             possible_transports=possible_transports,
-            reviewers=reviewers)
+            reviewers=reviewers, rate_limiter=rate_limiter)
     except PublishFailure as e:
         code = e.code
         description = e.description
@@ -330,9 +334,6 @@ async def publish_from_policy(
     else:
         code = 'success'
         description = 'Success'
-        if proposal_url and is_new:
-            rate_limiter.inc(maintainer_email)
-            open_proposal_count.labels(maintainer=maintainer_email).inc()
 
     await state.store_publish(
         conn, pkg, branch_name, main_branch_revision,
@@ -355,8 +356,9 @@ async def diff_request(request):
 
 
 async def publish_and_store(
-        db, topic_publish, publish_id, run, mode, maintainer_email,
-        vcs_manager, rate_limiter, dry_run=False, allow_create_proposal=True):
+        db, topic_publish, topic_merge_proposal, publish_id, run, mode,
+        maintainer_email, vcs_manager, rate_limiter, dry_run=False,
+        allow_create_proposal=True):
     reviewers = select_reviewers(maintainer_email, uploader_emails)
     async with db.acquire() as conn:
         try:
@@ -365,7 +367,9 @@ async def publish_and_store(
                 run.branch_url, mode, run.id, maintainer_email, vcs_manager,
                 run.branch_name, dry_run=dry_run, possible_hosters=None,
                 possible_transports=None, reviewers=reviewers,
-                allow_create_proposal=allow_create_proposal)
+                allow_create_proposal=allow_create_proposal,
+                topic_merge_proposal=topic_merge_proposal,
+                rate_limiter=rate_limiter)
         except PublishFailure as e:
             await state.store_publish(
                 conn, run.package, run.branch_name,
@@ -377,10 +381,6 @@ async def publish_and_store(
                 'code': e.code,
                 'description': e.description})
             return
-
-        if proposal_url and is_new:
-            rate_limiter.inc(maintainer_email)
-            open_proposal_count.labels(maintainer=maintainer_email).inc()
 
         await state.store_publish(
             conn, run.package, branch_name,
@@ -574,6 +574,7 @@ async def autopublish_request(request):
             request.app.db, request.app.rate_limiter, request.app.vcs_manager,
             dry_run=request.app.dry_run,
             topic_publish=request.app.topic_publish,
+            topic_merge_proposal=request.app.topic_merge_proposal,
             reviewed_only=reviewed_only)
 
     request.loop.create_task(autopublish())
@@ -591,7 +592,9 @@ async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
         if auto_publish:
             await publish_pending_new(
                 db, rate_limiter, vcs_manager, dry_run=dry_run,
-                topic_publish=topic_publish, reviewed_only=reviewed_only)
+                topic_publish=topic_publish,
+                topic_merge_proposal=topic_merge_proposal,
+                reviewed_only=reviewed_only)
 
 
 def is_conflicted(mp):
@@ -686,7 +689,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                     last_run.id, maintainer_email,
                     vcs_manager=vcs_manager, branch_name=last_run.branch_name,
                     dry_run=dry_run, allow_create_proposal=True,
-                    reviewers=reviewers)
+                    reviewers=reviewers, topic_merge_proposal=topic_merge_proposal,
+                    rate_limiter=rate_limiter)
             except PublishFailure as e:
                 note('%s: Updating merge proposal failed: %s (%s)',
                      mp.url, e.code, e.description)
@@ -725,7 +729,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
 
 
 async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
-                           topic_publish, dry_run=False):
+                           topic_publish, topic_merge_proposal, dry_run=False):
     from aiohttp.client import ClientSession
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')
@@ -746,7 +750,7 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
                     run.revision, run.result, run.branch_name, run.suite,
                     package.maintainer_email, package.uploader_emails,
                     package.branch_url, run.main_branch_revision,
-                    topic_publish, mode, dry_run=dry_run)
+                    topic_publish, topic_merge_proposal, mode, dry_run=dry_run)
 
 
 def main(argv=None):
@@ -828,6 +832,7 @@ def main(argv=None):
         loop.run_until_complete(publish_pending_new(
             db, rate_limiter, dry_run=args.dry_run,
             vcs_manager=vcs_manager, topic_publish=topic_publish,
+            topic_merge_proposal=topic_merge_proposal,
             reviewed_only=args.reviewed_only))
 
         last_success_gauge.set_to_current_time()
@@ -855,7 +860,7 @@ def main(argv=None):
                 listen_to_runner(
                     db, policy, rate_limiter, vcs_manager,
                     args.runner_url, topic_publish,
-                    dry_run=args.dry_run)))
+                    topic_merge_proposal, dry_run=args.dry_run)))
         loop.run_until_complete(asyncio.gather(*tasks))
 
 
