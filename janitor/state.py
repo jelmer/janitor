@@ -933,7 +933,7 @@ ORDER BY
         query += " LIMIT %d" % limit
     async with conn.transaction():
         async for record in conn.cursor(query, *args):
-            yield Run.from_row(record[:19]), *row[19:]
+            yield [Run.from_row(record[:19])] + row[19:]
 
 
 async def iter_unscanned_branches(conn, last_scanned_minimum):
