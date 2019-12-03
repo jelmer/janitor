@@ -634,7 +634,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
         await state.set_proposal_info(
             conn, mp.url, status, revision, package_name, merged_by)
         topic_merge_proposal.publish(
-            {'url': mp.url, 'status': status, 'package': package_name})
+           {'url': mp.url, 'status': status, 'package': package_name,
+            'merged_by': merged_by})
 
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
