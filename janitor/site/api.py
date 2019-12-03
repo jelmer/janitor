@@ -3,7 +3,6 @@
 from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import urllib.parse
 
-from janitor.policy import apply_policy
 from janitor import state, SUITES
 from . import (
     env,
@@ -18,19 +17,20 @@ from breezy.git.urls import git_url_to_bzr_url
 
 async def handle_policy(request):
     package = request.match_info['package']
-    async with request.app.db.acquire() as conn:
-        package = await state.get_package(conn, package)
-        if package is None:
-            return web.json_response(
-                {'reason': 'Package not found'}, status=404)
     suite_policies = {}
-    for suite in SUITES:
-        (publish_policy, changelog_policy) = apply_policy(
-            request.app.policy_config, suite, package.name,
-            package.maintainer_email, package.uploader_emails)
+    async with request.app.db.acquire() as conn:
+        async for unused_package, suite, policy in state.iter_publish_policy(
+                conn, package):
+            suite_policies[suite] = policy
+    if not suite_policies:
+        return web.json_response(
+            {'reason': 'Package not found'}, status=404)
+    for suite, (publish_policy,
+                changelog_policy, compat_release) in suite_policies.items():
         suite_policies[suite] = {
             'publish_policy': publish_policy,
-            'changelog_policy': changelog_policy}
+            'changelog_policy': changelog_policy,
+            'compat_release': compat_release}
     response_obj = {'by_suite': suite_policies}
     return web.json_response(response_obj)
 
@@ -77,15 +77,14 @@ async def get_package_from_gitlab_webhook(conn, body):
     return package
 
 
-async def schedule(conn, policy, package, suite, offset=None,
+async def schedule(conn, package, suite, offset=None,
                    refresh=False, requestor=None):
     from ..schedule import (
         estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET)
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
-    unused_publish_mode, update_changelog = apply_policy(
-        policy, suite,
-        package.name, package.maintainer_email, package.uploader_emails)
+    (unused_publish_policy, changelog_policy, compat_release) = (
+        await state.get_publish_policy(conn, package.name, suite))
     command = full_command(suite, update_changelog)
     estimated_duration = await estimate_duration(conn, package.name, suite)
     await state.add_to_queue(
@@ -114,9 +113,7 @@ async def handle_webhook(request):
         # urlutils.basename(body['project']['path_with_namespace'])?
         requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
         for suite in SUITES:
-            await schedule(
-                conn, request.app.policy_config, package, suite,
-                requestor=requestor)
+            await schedule(conn, package, suite, requestor=requestor)
         return web.json_response({})
 
 
@@ -146,7 +143,7 @@ async def handle_schedule(request):
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
         offset, estimated_duration = await schedule(
-            conn, request.app.policy_config, package, suite, offset, refresh,
+            conn, package, suite, offset, refresh,
             requestor=requestor)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package.name)
@@ -300,8 +297,8 @@ async def handle_run_post(request):
                 run = await state.get_run(conn, run_id)
                 package = await state.get_package(conn, run.package)
                 await schedule(
-                    conn, request.app.policy_config, package, run.suite,
-                    refresh=True, requestor='reviewer')
+                    conn, package, run.suite, refresh=True,
+                    requestor='reviewer')
                 review_status = 'rejected'
             await state.set_run_review_status(conn, run_id, review_status)
     return web.json_response(

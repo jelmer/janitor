@@ -100,7 +100,7 @@ async def schedule_from_candidates(policy, iter_candidates):
         if package.branch_url is None:
             continue
 
-        publish_mode, update_changelog = apply_policy(
+        publish_mode, update_changelog, compat_release = apply_policy(
             policy, suite,
             package.name, package.maintainer_email, package.uploader_emails)
 

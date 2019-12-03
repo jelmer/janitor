@@ -1352,16 +1352,32 @@ async def update_branch_url(conn, package, vcs_type, vcs_url):
 
 
 async def update_publish_policy(
-        conn, name, suite, publish_mode, changelog_mode):
+        conn, name, suite, publish_mode, changelog_mode, compat_release):
     await conn.execute(
         'INSERT INTO publish_policy '
-        '(package, suite, mode, update_changelog)'
-        'VALUES ($1, $2, $3, $4) '
+        '(package, suite, mode, update_changelog, compat_release)'
+        'VALUES ($1, $2, $3, $4, $5) '
         'ON CONFLICT (package, suite) DO UPDATE SET '
         'mode = EXCLUDED.mode, '
-        'update_changelog = EXCLUDED.update_changelog',
-        name, suite, publish_mode, changelog_mode)
+        'update_changelog = EXCLUDED.update_changelog, '
+        'compat_release = EXCLUDED.compat_release',
+        name, suite, publish_mode, changelog_mode, compat_release)
 
 
-async def iter_publish_policy(conn):
-    return await conn.fetch('SELECT package, suite, mode FROM publish_policy')
+async def iter_publish_policy(conn, package=None):
+    query = (
+        'SELECT package, suite, mode, changelog_mode, compat_release '
+        'FROM publish_policy')
+    args = []
+    if package:
+        query += ' WHERE package = $1'
+        args.append(package)
+    for row in await conn.fetch(query, *args):
+        yield row[0], row[1], tuple(row[2:])
+
+
+async def get_publish_policy(conn, package, suite):
+    return await conn.fetchrow(
+        'SELECT mode, changelog_mode, compat_release '
+        'FROM publish_policy WHERE package = $1 AND suite = $2', package,
+        suite)
