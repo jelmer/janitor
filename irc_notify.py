@@ -48,8 +48,7 @@ class JanitorNotifier(pydle.Client):
                 await self.message(target, 'Current runner status unknown.')
         if message == 'scan':
             url = urljoin(self.url, 'api/publish/scan')
-            async with ClientSession() as session, session.post(
-                    url, data={'mode': mode}) as resp:
+            async with ClientSession() as session, session.post(url) as resp:
                 if resp.status in (200, 202):
                     await self.message(target, 'Merge proposal scan started.')
                 else:
