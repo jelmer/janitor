@@ -27,8 +27,9 @@ def read_policy(f):
 
 
 def matches(match, package_name, package_maintainer, package_uploaders):
+    package_maintainer_email = parseaddr(package_maintainer)[1]
     for maintainer in match.maintainer:
-        if not fnmatch(parseaddr(package_maintainer)[1], maintainer):
+        if not fnmatch(package_maintainer_email, maintainer):
             return False
     package_uploader_emails = [
         parseaddr(uploader)[1]
