@@ -167,7 +167,7 @@ class SlowStartRateLimiter(RateLimiter):
                 'Maintainer %s already has %d merge proposal open (absmax: %d)'
                 % (email, current, self._max_mps_per_maintainer))
         limit = self._merged_mps_per_maintainer.get(email, 0) + 1
-        if current > limit:
+        if current >= limit:
             raise RateLimited(
                 'Maintainer %s has %d merge proposals open (current cap: %d)'
                 % (email, current, limit))
