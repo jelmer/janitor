@@ -85,7 +85,7 @@ async def schedule(conn, package, suite, offset=None,
         offset = DEFAULT_SCHEDULE_OFFSET
     (unused_publish_policy, changelog_policy, compat_release) = (
         await state.get_publish_policy(conn, package.name, suite))
-    command = full_command(suite, update_changelog)
+    command = full_command(suite, update_changelog, compat_release)
     estimated_duration = await estimate_duration(conn, package.name, suite)
     await state.add_to_queue(
         conn, package.name, command, suite, offset,
