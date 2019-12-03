@@ -15,6 +15,9 @@
 {% if changelog_policy != 'auto' %}
 <li>Changelog update policy: {{ changelog_policy }}</li>
 {% endif %}
+{% if compat_release %}
+<li>Release compatibility: {{ compat_release }}</li>
+{% endif %}
 {% if removed %}
 <li class="removed-in-unstable">This package is removed in unstable.</li>
 {% endif %}
