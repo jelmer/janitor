@@ -247,7 +247,7 @@ async def publish_one(
 
         if proposal_url and is_new:
             topic_merge_proposal.publish(
-                {'url': mp.url, 'status': status, 'package': package_name})
+                {'url': proposal_url, 'status': 'open', 'package': pkg})
 
             merge_proposal_count.labels(status='open').inc()
             rate_limiter.inc(maintainer_email)
@@ -357,8 +357,8 @@ async def diff_request(request):
 
 async def publish_and_store(
         db, topic_publish, topic_merge_proposal, publish_id, run, mode,
-        maintainer_email, vcs_manager, rate_limiter, dry_run=False,
-        allow_create_proposal=True):
+        maintainer_email, uploader_emails, vcs_manager, rate_limiter,
+        dry_run=False, allow_create_proposal=True):
     reviewers = select_reviewers(maintainer_email, uploader_emails)
     async with db.acquire() as conn:
         try:
@@ -423,7 +423,8 @@ async def publish_request(request):
     request.loop.create_task(publish_and_store(
         request.app.db, request.app.topic_publish,
         publish_id, run, mode, package.maintainer_email,
-        vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
+        package.uploader_emails, vcs_manager=vcs_manager,
+        rate_limiter=rate_limiter, dry_run=dry_run,
         allow_create_proposal=True))
 
     return web.json_response(
@@ -679,7 +680,6 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             continue
 
         if last_run != mp_run:
-            reviewers = select_reviewers(maintainer_email, uploader_emails)
             publish_id = str(uuid.uuid4())
             note('%s needs to be updated.', mp.url)
             try:
@@ -689,7 +689,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                     last_run.id, maintainer_email,
                     vcs_manager=vcs_manager, branch_name=last_run.branch_name,
                     dry_run=dry_run, allow_create_proposal=True,
-                    reviewers=reviewers, topic_merge_proposal=topic_merge_proposal,
+                    reviewers=None, topic_merge_proposal=topic_merge_proposal,
                     rate_limiter=rate_limiter)
             except PublishFailure as e:
                 note('%s: Updating merge proposal failed: %s (%s)',
