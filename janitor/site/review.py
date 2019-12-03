@@ -16,10 +16,9 @@ async def generate_review(conn, client, publisher_url, suite=None):
                        conn, review_status=['unreviewed'], limit=40,
                        suite=suite)]
 
-    (package_name, command, build_version, result_code, context,
-     start_time, run_id, revision, result, branch_name, suite,
-     maintainer_email, uploader_emails, branch_url,
-     main_branch_revision, review_status, publish_mode) = entries.pop(0)
+    (run, maintainer_email, uploader_emails, branch_url,
+     review_status, publish_mode, changelog_mode,
+     compat_release) = entries.pop(0)
 
     async def show_diff():
         if not revision or revision == main_branch_revision:

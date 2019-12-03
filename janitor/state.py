@@ -625,7 +625,8 @@ async def add_to_queue(conn, package, command, suite, offset=0,
         "$5, $6, $7, $8) ON CONFLICT (package, suite) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "estimated_duration = EXCLUDED.estimated_duration, "
-        "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor "
+        "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
+        "command = EXCLUDED.command "
         "WHERE queue.priority >= EXCLUDED.priority",
         package, ' '.join(command),
         offset, context, estimated_duration, suite, refresh, requestor)
@@ -880,23 +881,31 @@ async def iter_publish_ready(conn, suite=None, review_status=None, limit=None):
     args = []
     query = """
 SELECT DISTINCT ON (run.package, run.suite)
-  package.name,
-  run.command,
-  run.build_version,
-  run.result_code,
-  run.context,
-  run.start_time,
   run.id,
-  run.revision,
-  run.result,
+  run.command,
+  run.start_time,
+  run.finish_time,
+  run.description,
+  run.package,
+  run.build_version,
+  run.build_distribution,
+  run.result_code,
   run.branch_name,
+  run.main_branch_revision,
+  run.revision,
+  run.context,
+  run.result,
   run.suite,
+  run.instigated_context,
+  run.branch_url,
+  run.logfilenames,
+  run.review_status,
   package.maintainer_email,
   package.uploader_emails,
   package.branch_url,
-  main_branch_revision,
-  run.review_status,
-  publish_policy.mode
+  publish_policy.mode,
+  publish_policy.update_changelog,
+  publish_policy.compat_releaes
 FROM
   last_unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
@@ -924,7 +933,7 @@ ORDER BY
         query += " LIMIT %d" % limit
     async with conn.transaction():
         async for record in conn.cursor(query, *args):
-            yield record
+            yield Run.from_row(record[:19]), *row[19:]
 
 
 async def iter_unscanned_branches(conn, last_scanned_minimum):
@@ -1065,7 +1074,7 @@ SELECT
   candidate.value
 FROM candidate
 INNER JOIN package on package.name = candidate.package
-WHERE NOT package.removed
+WHERE NOT package.removed 
 """
     args = []
     if suite is not None and packages is not None:

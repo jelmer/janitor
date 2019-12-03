@@ -83,7 +83,7 @@ async def schedule(conn, package, suite, offset=None,
         estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET)
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
-    (unused_publish_policy, changelog_policy, compat_release) = (
+    (unused_publish_policy, update_changelog, compat_release) = (
         await state.get_publish_policy(conn, package.name, suite))
     command = full_command(suite, update_changelog, compat_release)
     estimated_duration = await estimate_duration(conn, package.name, suite)
@@ -454,9 +454,12 @@ async def handle_runner_log(request):
 async def handle_publish_id(request):
     publish_id = request.match_info['publish_id']
     async with request.app.db.acquire() as conn:
+        publish = await state.get_publish(conn, publish_id)
+        if publish is None:
+            raise web.HTTPNotFound(text='no such publish: %s' % publish_id)
         (package, branch_name, main_branch_revision, revision, mode,
          merge_proposal_url, result_code,
-         description) = await state.get_publish(conn, publish_id)
+         description) = publish
     return web.json_response({
         'package': package,
         'branch': branch_name,
@@ -473,10 +476,8 @@ async def handle_report(request):
     suite = request.match_info['suite']
     report = {}
     async with request.app.db.acquire() as conn:
-        async for (package, command, build_version, result_code, context,
-                   start_time, log_id, revision, result, branch_name, suite,
-                   maintainer_email, uploader_emails, branch_url,
-                   main_branch_revision, review_status, publish_mode
+        async for (run, maintainer_email, uploader_emails, branch_url,
+                   review_status, publish_mode, changelog_mode, compat_release
                    ) in state.iter_publish_ready(
                        conn, suite=suite):
             data = {
@@ -508,11 +509,9 @@ async def handle_publish_ready(request):
     for_publishing = set()
     ret = []
     async with request.app.db.acquire() as conn:
-        async for (package, command, build_version, result_code, context,
-                   start_time, log_id, revision, result, branch_name, suite,
-                   maintainer_email, uploader_emails, branch_url,
-                   main_branch_revision, review_status, publish_policy
-                   ) in state.iter_publish_ready(
+        async for (run, maintainer_email, uploader_emails, branch_url,
+                   review_status, publish_policy, changelog_mode,
+                   compat_release) in state.iter_publish_ready(
                        conn, suite=suite, review_status=review_status):
             if publish_policy in (
                     'propose', 'attempt-push', 'push-derived', 'push'):
