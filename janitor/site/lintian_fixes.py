@@ -4,7 +4,6 @@ from aiohttp import ClientConnectorError
 import urllib.parse
 
 from janitor import state
-from janitor.policy import apply_policy
 from janitor.site import (
     env,
     get_vcs_type,
@@ -35,9 +34,8 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
             merge_proposals = [
                 (url, status) for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=SUITE)]
-        (publish_policy, changelog_policy) = apply_policy(
-            policy, SUITE, package.name, package.maintainer_email,
-            package.uploader_emails)
+        (publish_policy, changelog_policy,
+         compat_release) = await state.get_publish_policy(conn, package.name, SUITE)
         if run is None:
             # No runs recorded
             command = None
@@ -134,6 +132,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
         'publish_policy': publish_policy,
         'fixed_tags': fixed_tags,
         'changelog_policy': changelog_policy,
+        'compat_release': compat_release,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)

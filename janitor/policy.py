@@ -47,6 +47,7 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
     field = suite.replace('-', '_')
     mode = policy_pb2.skip
     update_changelog = 'auto'
+    compat_release = None
     for policy in config.policy:
         if (policy.match and
                 not any([matches(m, package_name, maintainer, uploaders)
@@ -56,6 +57,8 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
             mode = getattr(policy, field)
         if policy.changelog is not None:
             update_changelog = policy.changelog
+        if policy.compat_release is not None:
+            compat_release = policy.compat_release
     return (
         {policy_pb2.propose: 'propose',
          policy_pb2.attempt_push: 'attempt-push',
@@ -66,7 +69,8 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
         {policy_pb2.auto: 'auto',
          policy_pb2.update_changelog: 'update',
          policy_pb2.leave_changelog: 'leave',
-         }[update_changelog])
+         }[update_changelog],
+        compat_release)
 
 
 async def main(args):
@@ -82,19 +86,17 @@ async def main(args):
     current_policy = {}
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
-        for package, suite, publish_policy in await state.iter_publish_policy(
-                conn):
-            current_policy[(package, suite)] = publish_policy
+        async for (package, suite, cur_pol) in state.iter_publish_policy(conn):
+            current_policy[(package, suite)] = cur_pol
         for package in await state.iter_packages(conn):
             for suite in SUITES:
-                publish_mode, changelog_mode = apply_policy(
+                package_policy = apply_policy(
                     policy, suite, package.name, package.maintainer_email,
                     package.uploader_emails)
-                if current_policy.get((package.name, suite)) != publish_mode:
-                    print('%s/%s -> %s' % (package.name, suite, publish_mode))
+                if current_policy.get((package.name, suite)) != package_policy:
+                    print('%s/%s -> %r' % (package.name, suite, package_policy))
                     await state.update_publish_policy(
-                        conn, package.name, suite, publish_mode,
-                        changelog_mode)
+                        conn, package.name, suite, *package_policy)
 
 
 if __name__ == '__main__':

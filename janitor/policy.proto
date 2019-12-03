@@ -52,6 +52,9 @@ message Policy {
     // Changelog update mode
     optional ChangelogMode changelog = 3;
 
+    // Oldest release to stay compatible with.
+    optional string compat_release = 5;
+
     // Fixers to apply
     repeated string lintian_fixers = 4;
 }

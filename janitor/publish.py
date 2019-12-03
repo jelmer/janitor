@@ -48,10 +48,6 @@ from . import (
     state,
     )
 from .config import read_config
-from .policy import (
-    read_policy,
-    apply_policy,
-    )
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .trace import note, warning
@@ -582,7 +578,7 @@ async def autopublish_request(request):
     return web.Response(status=202, text="Autopublish started.")
 
 
-async def process_queue_loop(db, rate_limiter, policy, dry_run, vcs_manager,
+async def process_queue_loop(db, rate_limiter, dry_run, vcs_manager,
                              interval, topic_merge_proposal, topic_publish,
                              auto_publish=True, reviewed_only=False):
     while True:
@@ -728,7 +724,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
         open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
 
-async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
+async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                            topic_publish, topic_merge_proposal, dry_run=False):
     from aiohttp.client import ClientSession
     import urllib.parse
@@ -738,11 +734,12 @@ async def listen_to_runner(db, policy, rate_limiter, vcs_manager, runner_url,
             if result['code'] != 'success':
                 continue
             async with db.acquire() as conn:
+                # TODO(jelmer): Fold these into a single query ?
                 package = await state.get_package(conn, result['package'])
                 run = await state.get_run(conn, result['log_id'])
-                mode, unused_update_changelog = apply_policy(
-                    policy, run.suite, run.package, package.maintainer_email,
-                    package.uploader_emails or [])
+                mode, unused_update_changelog, unused_compat_release = (
+                    await state.get_publish_policy(
+                        conn, run.package, run.suite))
                 await publish_from_policy(
                     conn, rate_limiter, vcs_manager,
                     run.package, run.command, run.build_version,
@@ -765,10 +762,6 @@ def main(argv=None):
         "--dry-run",
         help="Create branches but don't push or propose anything.",
         action="store_true", default=False)
-    parser.add_argument(
-        "--policy",
-        help="Policy file to read.", type=str,
-        default='policy.conf')
     parser.add_argument(
         '--prometheus', type=str,
         help='Prometheus push gateway to export to.')
@@ -803,9 +796,6 @@ def main(argv=None):
         action='store_true', help='Only publish changes that were reviewed.')
 
     args = parser.parse_args()
-
-    with open(args.policy, 'r') as f:
-        policy = read_policy(f)
 
     with open(args.config, 'r') as f:
         config = read_config(f)
@@ -843,7 +833,7 @@ def main(argv=None):
     else:
         tasks = [
             loop.create_task(process_queue_loop(
-                db, rate_limiter, policy, dry_run=args.dry_run,
+                db, rate_limiter, dry_run=args.dry_run,
                 vcs_manager=vcs_manager, interval=args.interval,
                 topic_merge_proposal=topic_merge_proposal,
                 topic_publish=topic_publish,
@@ -858,7 +848,7 @@ def main(argv=None):
         if args.runner_url:
             tasks.append(loop.create_task(
                 listen_to_runner(
-                    db, policy, rate_limiter, vcs_manager,
+                    db, rate_limiter, vcs_manager,
                     args.runner_url, topic_publish,
                     topic_merge_proposal, dry_run=args.dry_run)))
         loop.run_until_complete(asyncio.gather(*tasks))
