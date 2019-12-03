@@ -291,7 +291,7 @@ async def open_guessed_salsa_branch(
 
 
 async def open_branch_with_fallback(
-        db, pkg, vcs_type, vcs_url, possible_transports=None):
+        conn, pkg, vcs_type, vcs_url, possible_transports=None):
     probers = select_preferred_probers(vcs_type)
     try:
         return open_branch_ext(
@@ -301,19 +301,17 @@ async def open_branch_with_fallback(
         if e.code == 'hosted-on-alioth':
             note('Branch %s is hosted on alioth. Trying some other options..',
                  vcs_url)
-            # See if we can guess where the branch is.
-            async with db.acquire() as conn:
-                try:
-                    branch = await open_guessed_salsa_branch(
-                        conn, pkg, vcs_type, vcs_url,
-                        possible_transports=possible_transports)
-                except BranchOpenFailure:
-                    raise e
-                else:
-                    if branch:
-                        await state.update_branch_url(
-                            conn, pkg, 'Git', branch.user_url.rstrip('/'))
-                        return branch
+            try:
+                branch = await open_guessed_salsa_branch(
+                    conn, pkg, vcs_type, vcs_url,
+                    possible_transports=possible_transports)
+            except BranchOpenFailure:
+                raise e
+            else:
+                if branch:
+                    await state.update_branch_url(
+                        conn, pkg, 'Git', branch.user_url.rstrip('/'))
+                    return branch
         raise
 
 
@@ -350,17 +348,24 @@ async def process_one(
         raise AssertionError('Unknown command %s' % command[0])
 
     if not use_cached_only:
-        try:
-            main_branch = await open_branch_with_fallback(
-                db, pkg, vcs_type, vcs_url,
-                possible_transports=possible_transports)
-        except BranchOpenFailure as e:
-            return JanitorResult(
-                pkg, log_id=log_id, branch_url=vcs_url,
-                description=e.description, code=e.code,
-                logfilenames=[])
-        else:
-            branch_url = main_branch.user_url
+        async with db.acquire() as conn:
+            try:
+                main_branch = await open_branch_with_fallback(
+                    conn, pkg, vcs_type, vcs_url,
+                    possible_transports=possible_transports)
+            except BranchOpenFailure as e:
+                await state.update_branch_status(
+                    conn, vcs_url, status=e.code, description=e.description,
+                    revision=None)
+                return JanitorResult(
+                    pkg, log_id=log_id, branch_url=vcs_url,
+                    description=e.description, code=e.code,
+                    logfilenames=[])
+            else:
+                branch_url = main_branch.user_url
+                await state.update_branch_status(
+                    conn, vcs_url, status='success',
+                    revision=main_branch.last_revision())
 
         if subpath:
             # TODO(jelmer): cluster all packages for a single repository

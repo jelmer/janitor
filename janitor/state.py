@@ -956,8 +956,10 @@ LEFT JOIN branch ON package.branch_url = branch.url
 
 
 async def update_branch_status(
-        conn, branch_url, last_scanned=None, status=None, revision=None,
-        description=None):
+        conn, branch_url, last_scanned=datetime.datetime.now, status=None,
+        revision=None, description=None):
+    if callable(last_scanned):
+        last_scanned = last_scanned()
     await conn.execute(
         "INSERT INTO branch (url, status, revision, last_scanned, "
         "description) VALUES ($1, $2, $3, $4, $5) "
