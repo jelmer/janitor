@@ -81,7 +81,7 @@ PUBLISH_MODE_VALUE = {
     }
 
 
-def full_command(suite, update_changelog):
+def full_command(suite, update_changelog, compat_release):
     entry_command = list(SUITE_TO_COMMAND[suite])
     if update_changelog == "update":
         entry_command.append("--update-changelog")
@@ -92,6 +92,8 @@ def full_command(suite, update_changelog):
     else:
         raise ValueError(
             "Invalid value %r for update_changelog" % update_changelog)
+    if suite == 'lintian-fixes' and compat_release:
+        entry_command.append("--compat-release=%s" % compat_release)
     return entry_command
 
 
@@ -110,7 +112,7 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         value += PUBLISH_MODE_VALUE[publish_mode]
 
-        entry_command = full_command(suite, update_changelog)
+        entry_command = full_command(suite, update_changelog, compat_release)
 
         yield (
             package.name,

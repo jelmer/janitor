@@ -57,7 +57,7 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
             mode = getattr(policy, field)
         if policy.changelog is not None:
             update_changelog = policy.changelog
-        if policy.compat_release is not None:
+        if policy.compat_release:
             compat_release = policy.compat_release
     return (
         {policy_pb2.propose: 'propose',

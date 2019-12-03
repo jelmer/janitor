@@ -1366,7 +1366,7 @@ async def update_publish_policy(
 
 async def iter_publish_policy(conn, package=None):
     query = (
-        'SELECT package, suite, mode, changelog_mode, compat_release '
+        'SELECT package, suite, mode, update_changelog, compat_release '
         'FROM publish_policy')
     args = []
     if package:
@@ -1378,6 +1378,6 @@ async def iter_publish_policy(conn, package=None):
 
 async def get_publish_policy(conn, package, suite):
     return await conn.fetchrow(
-        'SELECT mode, changelog_mode, compat_release '
+        'SELECT mode, update_changelog, compat_release '
         'FROM publish_policy WHERE package = $1 AND suite = $2', package,
         suite)
