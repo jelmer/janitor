@@ -259,6 +259,6 @@ async def generate_ready_list(db, suite, review_status=None):
     template = env.get_template('ready-list.html')
     async with db.acquire() as conn:
         runs = [
-            run async for run in state.iter_publish_ready(
+            row async for row in state.iter_publish_ready(
                 conn, suite=suite, review_status=review_status)]
     return await template.render_async(runs=runs, suite=suite)

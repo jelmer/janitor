@@ -197,6 +197,13 @@ async def publish_one(
         topic_merge_proposal, rate_limiter, dry_run=False, possible_hosters=None,
         possible_transports=None, allow_create_proposal=None,
         reviewers=None):
+    """Publish a single run in some form.
+
+    Args:
+      suite: The suite name
+      pkg: Package name
+      command: Command that was run
+    """
     assert mode in SUPPORTED_MODES, 'mode is %r' % mode
     local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
@@ -266,41 +273,49 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
         review_status = ['approved', 'unreviewed']
 
     async with db.acquire() as conn1, db.acquire() as conn:
-        async for (pkg, command, build_version, result_code, context,
-                   start_time, log_id, revision, subworker_result, branch_name,
-                   suite, maintainer_email, uploader_emails, main_branch_url,
-                   main_branch_revision, unused_review_status,
-                   publish_mode) in state.iter_publish_ready(
+        async for (run, maintainer_email, uploader_emails, main_branch_url,
+                   unused_review_status, publish_mode,
+                   update_changelog, compat_release) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             await publish_from_policy(
-                    conn, rate_limiter, vcs_manager, pkg, command,
-                    build_version, result_code, context, start_time, log_id,
-                    revision, subworker_result, branch_name, suite,
+                    conn, rate_limiter, vcs_manager, run.package, run.command,
+                    run.build_version, run.result_code, run.context, run.times[0], run.id,
+                    run.revision, run.result, run.branch_name, run.suite,
                     maintainer_email, uploader_emails, main_branch_url,
-                    main_branch_revision, topic_publish, topic_merge_proposal,
-                    publish_mode, possible_hosters=possible_hosters,
+                    run.main_branch_revision, topic_publish, topic_merge_proposal,
+                    publish_mode, update_changelog, compat_release,
+                    possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run)
 
 
 async def publish_from_policy(
-        conn, rate_limiter, vcs_manager, pkg, command, build_version,
-        result_code, context, start_time, log_id, revision, subworker_result,
-        branch_name, suite, maintainer_email, uploader_emails, main_branch_url,
-        main_branch_revision, topic_publish, topic_merge_proposal, mode,
-        possible_hosters=None, possible_transports=None, dry_run=False):
+        conn, rate_limiter, vcs_manager, run, maintainer_email,
+        uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
+        mode, update_changelog, compat_release, possible_hosters=None,
+        possible_transports=None, dry_run=False):
+
+    expected_command = ' '.join(
+        full_command(suite, update_changelog, compat_release))
+    if expected_command != run.command:
+        warning(
+            'Not publishing %s/%s: command is different (policy changed?). '
+            'Build used %r, now: %r',
+            run.package, run.suite, run.command, expected_command)
+        return
 
     publish_id = str(uuid.uuid4())
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
         return
     if await state.already_published(
-            conn, pkg, branch_name, revision, mode):
+            conn, run.package, run.branch_name, run.revision, mode):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         try:
             rate_limiter.check_allowed(maintainer_email)
         except RateLimited as e:
-            proposal_rate_limited_count.labels(package=pkg, suite=suite).inc()
-            warning('Not creating proposal for %s: %s', pkg, e)
+            proposal_rate_limited_count.labels(
+                package=run.package, suite=run.suite).inc()
+            warning('Not creating proposal for %s: %s', run.package, e)
             mode = MODE_BUILD_ONLY
     if mode == MODE_ATTEMPT_PUSH and \
             "salsa.debian.org/debian/" in main_branch_url:
@@ -311,12 +326,12 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
     reviewers = select_reviewers(maintainer_email, uploader_emails)
-    note('Publishing %s / %r (mode: %s)', pkg, command, mode)
+    note('Publishing %s / %r (mode: %s)', run.package, run.command, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
-            suite, pkg, command, subworker_result,
-            main_branch_url, mode, log_id, maintainer_email,
-            vcs_manager=vcs_manager, branch_name=branch_name,
+            run.suite, run.package, run.command, subworker_result,
+            main_branch_url, mode, run.id, maintainer_email,
+            vcs_manager=vcs_manager, branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run, possible_hosters=possible_hosters,
             possible_transports=possible_transports,
@@ -332,8 +347,8 @@ async def publish_from_policy(
         description = 'Success'
 
     await state.store_publish(
-        conn, pkg, branch_name, main_branch_revision,
-        revision, mode, code, description,
+        conn, run.package, branch_name, run.main_branch_revision,
+        run.revision, mode, code, description,
         proposal_url if proposal_url else None,
         publish_id=publish_id)
 
@@ -737,17 +752,15 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                 # TODO(jelmer): Fold these into a single query ?
                 package = await state.get_package(conn, result['package'])
                 run = await state.get_run(conn, result['log_id'])
-                mode, unused_update_changelog, unused_compat_release = (
+                mode, update_changelog, compat_release = (
                     await state.get_publish_policy(
                         conn, run.package, run.suite))
                 await publish_from_policy(
                     conn, rate_limiter, vcs_manager,
-                    run.package, run.command, run.build_version,
-                    run.result_code, run.context, run.times[0], run.id,
-                    run.revision, run.result, run.branch_name, run.suite,
-                    package.maintainer_email, package.uploader_emails,
-                    package.branch_url, run.main_branch_revision,
-                    topic_publish, topic_merge_proposal, mode, dry_run=dry_run)
+                    run, package.maintainer_email, package.uploader_emails,
+                    package.branch_url,
+                    topic_publish, topic_merge_proposal, mode,
+                    update_changelog, compat_release, dry_run=dry_run)
 
 
 def main(argv=None):
