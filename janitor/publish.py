@@ -293,14 +293,20 @@ async def publish_from_policy(
         uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
         mode, update_changelog, compat_release, possible_hosters=None,
         possible_transports=None, dry_run=False):
+    from .schedule import full_command, estimate_duration
 
     expected_command = ' '.join(
-        full_command(suite, update_changelog, compat_release))
+        full_command(run.suite, update_changelog, compat_release))
     if expected_command != run.command:
         warning(
             'Not publishing %s/%s: command is different (policy changed?). '
-            'Build used %r, now: %r',
+            'Build used %r, now: %r. Rescheduling.',
             run.package, run.suite, run.command, expected_command)
+        estimated_duration = await estimate_duration(conn, run.name, run.suite)
+        await state.add_to_queue(
+            conn, run.package, expected_command, run.suite, -2,
+            estimated_duration=estimated_duration, refresh=True,
+            requestor='publisher')
         return
 
     publish_id = str(uuid.uuid4())
