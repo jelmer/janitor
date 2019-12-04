@@ -21,9 +21,9 @@ async def generate_review(conn, client, publisher_url, suite=None):
      compat_release) = entries.pop(0)
 
     async def show_diff():
-        if not revision or revision == main_branch_revision:
+        if not run.revision or run.revision == run.main_branch_revision:
             return ''
-        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
+        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -35,9 +35,9 @@ async def generate_review(conn, client, publisher_url, suite=None):
             return 'Unable to retrieve diff; error %s' % e
     kwargs = {
         'show_diff': show_diff,
-        'package_name': package_name,
-        'run_id': run_id,
-        'suite': suite,
+        'package_name': run.package,
+        'run_id': run.id,
+        'suite': run.suite,
         'json_dumps': json.dumps,
         'todo': [(entry[0], entry[6]) for entry in entries],
         }

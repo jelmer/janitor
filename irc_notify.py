@@ -53,7 +53,8 @@ class JanitorNotifier(pydle.Client):
                     await self.message(target, 'Merge proposal scan started.')
                 else:
                     await self.message(
-                        target, 'Merge proposal scan failed: %d.' % resp.status)
+                        target,
+                        'Merge proposal scan failed: %d.' % resp.status)
 
 
 async def main(args):
@@ -67,7 +68,8 @@ async def main(args):
         async for msg in pubsub_reader(session, args.notifications_url):
             if msg[0] == 'merge-proposal' and msg[1]['status'] == 'merged':
                 await notifier.notify_merged(
-                    msg[1]['url'], msg[1].get('package'), msg[1].get('merged_by'))
+                    msg[1]['url'], msg[1].get('package'),
+                    msg[1].get('merged_by'))
             if msg[0] == 'queue':
                 await notifier.set_runner_status(msg[1])
 

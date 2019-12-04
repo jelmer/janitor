@@ -459,9 +459,9 @@ if __name__ == '__main__':
             review_status = post['review_status'].lower()
             if review_status == 'reschedule':
                 review_status = 'rejected'
-                from .api import schedule
-                await schedule(
-                    conn, request.app.policy, package, run.suite,
+                from ..schedule import do_schedule
+                await do_schedule(
+                    conn, package, run.suite,
                     refresh=True, requestor='reviewer')
             await state.set_run_review_status(
                 conn, post['run_id'], review_status)

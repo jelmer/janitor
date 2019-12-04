@@ -35,7 +35,8 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
                 (url, status) for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=SUITE)]
         (publish_policy, changelog_policy,
-         compat_release) = await state.get_publish_policy(conn, package.name, SUITE)
+         compat_release) = await state.get_publish_policy(
+             conn, package.name, SUITE)
         if run is None:
             # No runs recorded
             command = None

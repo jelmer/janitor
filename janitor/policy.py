@@ -94,7 +94,8 @@ async def main(args):
                     policy, suite, package.name, package.maintainer_email,
                     package.uploader_emails)
                 if current_policy.get((package.name, suite)) != package_policy:
-                    print('%s/%s -> %r' % (package.name, suite, package_policy))
+                    print('%s/%s -> %r' % (
+                        package.name, suite, package_policy))
                     await state.update_publish_policy(
                         conn, package.name, suite, *package_policy)
 
