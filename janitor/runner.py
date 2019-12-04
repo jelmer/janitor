@@ -143,11 +143,13 @@ class JanitorResult(object):
             self.main_branch_revision = worker_result.main_branch_revision
             self.subworker_result = worker_result.subworker
             self.revision = worker_result.revision
+            self.value = worker_result.value
         else:
             self.context = None
             self.main_branch_revision = None
             self.revision = None
             self.subworker_result = None
+            self.value = None
 
     def json(self):
         return {
@@ -161,6 +163,7 @@ class JanitorResult(object):
             'branch_name': self.branch_name,
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
+            'value': self.value,
         }
 
 

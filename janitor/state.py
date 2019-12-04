@@ -905,7 +905,7 @@ SELECT DISTINCT ON (run.package, run.suite)
   package.branch_url,
   publish_policy.mode,
   publish_policy.update_changelog,
-  publish_policy.compat_releaes
+  publish_policy.compat_release
 FROM
   last_unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
@@ -931,9 +931,8 @@ ORDER BY
 """
     if limit is not None:
         query += " LIMIT %d" % limit
-    async with conn.transaction():
-        async for record in conn.cursor(query, *args):
-            yield [Run.from_row(record[:19])] + row[19:]
+    for record in await conn.fetch(query, *args):
+        yield tuple([Run.from_row(record[:19])] + list(record[19:]))
 
 
 async def iter_unscanned_branches(conn, last_scanned_minimum):
