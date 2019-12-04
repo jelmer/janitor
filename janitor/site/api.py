@@ -10,6 +10,7 @@ from . import (
     get_debdiff,
     DebdiffRetrievalError,
     )
+from ..schedule import do_schedule
 
 
 from breezy.git.urls import git_url_to_bzr_url
@@ -77,23 +78,6 @@ async def get_package_from_gitlab_webhook(conn, body):
     return package
 
 
-async def schedule(conn, package, suite, offset=None,
-                   refresh=False, requestor=None):
-    from ..schedule import (
-        estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET)
-    if offset is None:
-        offset = DEFAULT_SCHEDULE_OFFSET
-    (unused_publish_policy, update_changelog, compat_release) = (
-        await state.get_publish_policy(conn, package.name, suite))
-    command = full_command(suite, update_changelog, compat_release)
-    estimated_duration = await estimate_duration(conn, package.name, suite)
-    await state.add_to_queue(
-        conn, package.name, command, suite, offset,
-        estimated_duration=estimated_duration, refresh=refresh,
-        requestor=requestor)
-    return offset, estimated_duration
-
-
 async def handle_webhook(request):
     if request.headers.get('Content-Type') != 'application/json':
         template = env.get_template('webhook.html')
@@ -113,7 +97,7 @@ async def handle_webhook(request):
         # urlutils.basename(body['project']['path_with_namespace'])?
         requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
         for suite in SUITES:
-            await schedule(conn, package, suite, requestor=requestor)
+            await do_schedule(conn, package, suite, requestor=requestor)
         return web.json_response({})
 
 
@@ -142,7 +126,7 @@ async def handle_schedule(request):
         if package.branch_url is None:
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
-        offset, estimated_duration = await schedule(
+        offset, estimated_duration = await do_schedule(
             conn, package, suite, offset, refresh,
             requestor=requestor)
         (queue_position, queue_wait_time) = await state.get_queue_position(
@@ -296,7 +280,7 @@ async def handle_run_post(request):
             if review_status == 'reschedule':
                 run = await state.get_run(conn, run_id)
                 package = await state.get_package(conn, run.package)
-                await schedule(
+                await do_schedule(
                     conn, package, run.suite, refresh=True,
                     requestor='reviewer')
                 review_status = 'rejected'
@@ -481,17 +465,17 @@ async def handle_report(request):
                    ) in state.iter_publish_ready(
                        conn, suite=suite):
             data = {
-                'timestamp': start_time.isoformat(),
+                'timestamp': run.times[0].isoformat(),
             }
-            if suite == 'lintian-fixes':
+            if run.suite == 'lintian-fixes':
                 data['fixed-tags'] = []
-                for entry in result['applied']:
+                for entry in run.result['applied']:
                     data['fixed-tags'].extend(entry['fixed_lintian_tags'])
-            if suite in ('fresh-releases', 'fresh-snapshots'):
-                data['upstream-version'] = result.get('upstream_version')
-                data['old-upstream-version'] = result.get(
+            if run.suite in ('fresh-releases', 'fresh-snapshots'):
+                data['upstream-version'] = run.result.get('upstream_version')
+                data['old-upstream-version'] = run.result.get(
                     'old_upstream_version')
-            report[package] = data
+            report[run.package] = data
     return web.json_response(
         report,
         headers={'Cache-Control': 'max-age=600'},
@@ -515,8 +499,8 @@ async def handle_publish_ready(request):
                        conn, suite=suite, review_status=review_status):
             if publish_policy in (
                     'propose', 'attempt-push', 'push-derived', 'push'):
-                for_publishing.add(log_id)
-            ret.append((package, log_id))
+                for_publishing.add(run.id)
+            ret.append((run.package, run.id))
     ret.sort(key=lambda x: (x[1] not in for_publishing, x[0]))
     return web.json_response(ret, status=200)
 

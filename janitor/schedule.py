@@ -298,6 +298,23 @@ async def main():
             registry=REGISTRY)
 
 
+async def do_schedule(conn, package, suite, offset=None,
+                      refresh=False, requestor=None):
+    from ..schedule import (
+        estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET)
+    if offset is None:
+        offset = DEFAULT_SCHEDULE_OFFSET
+    (unused_publish_policy, update_changelog, compat_release) = (
+        await state.get_publish_policy(conn, package.name, suite))
+    command = full_command(suite, update_changelog, compat_release)
+    estimated_duration = await estimate_duration(conn, package.name, suite)
+    await state.add_to_queue(
+        conn, package.name, command, suite, offset,
+        estimated_duration=estimated_duration, refresh=refresh,
+        requestor=requestor)
+    return offset, estimated_duration
+
+
 if __name__ == '__main__':
     import asyncio
     loop = asyncio.get_event_loop()

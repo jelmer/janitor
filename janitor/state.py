@@ -1073,7 +1073,7 @@ SELECT
   candidate.value
 FROM candidate
 INNER JOIN package on package.name = candidate.package
-WHERE NOT package.removed 
+WHERE NOT package.removed
 """
     args = []
     if suite is not None and packages is not None:

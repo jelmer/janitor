@@ -34,6 +34,7 @@ def read_package_overrides(f):
 async def main(args):
     from .config import read_config
     from . import state
+    from .schedule import do_schedule
     with open('package_overrides.conf', 'r') as f:
         overrides = read_package_overrides(f)
 
@@ -53,7 +54,10 @@ async def main(args):
                 continue
             await state.set_upstream_branch_url(conn, name, desired)
             print('Updating upstream branch URL for %s: %s' % (name, desired))
-            # TODO(jelmer): reschedule if desired is non-None?
+            if args.reschedule:
+                await do_schedule(
+                    conn, name, 'fresh-snapshots',
+                    requestor='package overrides')
 
 
 if __name__ == '__main__':
@@ -62,5 +66,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+    parser.add_argument(
+        '--reschedule', action='store_true',
+        help='Reschedule when updating.')
     args = parser.parse_args()
     asyncio.run(main(args))
