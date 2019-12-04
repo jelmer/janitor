@@ -1331,6 +1331,7 @@ inner join package on last_runs.package = package.name
 where
   result_code = 'upstream-branch-unknown' and
   package.upstream_branch_url is null
+order by package.name asc
 """
     for row in await conn.fetch(query):
         yield row[0], row[1]
