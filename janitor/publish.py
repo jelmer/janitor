@@ -274,15 +274,12 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
 
     async with db.acquire() as conn1, db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, main_branch_url,
-                   unused_review_status, publish_mode,
-                   update_changelog, compat_release) in state.iter_publish_ready(
+                   publish_mode, update_changelog, compat_release) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             await publish_from_policy(
-                    conn, rate_limiter, vcs_manager, run.package, run.command,
-                    run.build_version, run.result_code, run.context, run.times[0], run.id,
-                    run.revision, run.result, run.branch_name, run.suite,
+                    conn, rate_limiter, vcs_manager, run,
                     maintainer_email, uploader_emails, main_branch_url,
-                    run.main_branch_revision, topic_publish, topic_merge_proposal,
+                    topic_publish, topic_merge_proposal,
                     publish_mode, update_changelog, compat_release,
                     possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run)
@@ -295,6 +292,7 @@ async def publish_from_policy(
         possible_transports=None, dry_run=False):
     from .schedule import full_command, estimate_duration
 
+    from .schedule import full_command
     expected_command = ' '.join(
         full_command(run.suite, update_changelog, compat_release))
     if expected_command != run.command:
@@ -302,7 +300,7 @@ async def publish_from_policy(
             'Not publishing %s/%s: command is different (policy changed?). '
             'Build used %r, now: %r. Rescheduling.',
             run.package, run.suite, run.command, expected_command)
-        estimated_duration = await estimate_duration(conn, run.name, run.suite)
+        estimated_duration = await estimate_duration(conn, run.package, run.suite)
         await state.add_to_queue(
             conn, run.package, expected_command, run.suite, -2,
             estimated_duration=estimated_duration, refresh=True,
@@ -335,7 +333,7 @@ async def publish_from_policy(
     note('Publishing %s / %r (mode: %s)', run.package, run.command, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
-            run.suite, run.package, run.command, subworker_result,
+            run.suite, run.package, run.command, run.result,
             main_branch_url, mode, run.id, maintainer_email,
             vcs_manager=vcs_manager, branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
@@ -438,7 +436,7 @@ async def publish_request(request):
     publish_id = str(uuid.uuid4())
 
     request.loop.create_task(publish_and_store(
-        request.app.db, request.app.topic_publish,
+        request.app.db, request.app.topic_publish, request.app.topic_merge_proposal,
         publish_id, run, mode, package.maintainer_email,
         package.uploader_emails, vcs_manager=vcs_manager,
         rate_limiter=rate_limiter, dry_run=dry_run,

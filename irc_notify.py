@@ -25,7 +25,7 @@ class JanitorNotifier(pydle.Client):
     async def notify_merged(self, url, package, merged_by=None):
         await self.message(
             self._channel, 'Merge proposal %s (%s) merged%s.' %
-            (url, package, ((' by %s' % merged_by) if merged_by else ''))
+            (url, package, ((' by %s' % merged_by) if merged_by else '')))
 
     async def on_message(self, target, source, message):
         if not message.startswith(self.nickname + ': '):
