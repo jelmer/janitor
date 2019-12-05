@@ -928,7 +928,8 @@ WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
     query += """
 ORDER BY
   publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push') DESC,
-  finish_time DESC
+  run.finish_time DESC,
+  run.value DESC
 """
     if limit is not None:
         query += " LIMIT %d" % limit
