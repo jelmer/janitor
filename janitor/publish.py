@@ -86,7 +86,9 @@ merge_proposal_count = Gauge(
 last_success_gauge = Gauge(
     'job_last_success_unixtime',
     'Last time a batch job successfully finished')
-
+publish_ready_count = Gauge(
+    'publish_ready_count', 'Number of publish ready runs by status.',
+    labelnames=('review_status', 'publish_mode'))
 
 class RateLimited(Exception):
     """A rate limit was reached."""
@@ -259,6 +261,17 @@ async def publish_one(
         return proposal_url, branch_name, is_new
 
     raise PublishFailure(mode, 'publisher-invalid-response', stderr.decode())
+
+
+async def export_stats(db):
+    while True:
+        async with db.acquire() as conn:
+            async for (run, maintainer_email, uploader_emails, main_branch_url,
+                       publish_mode, update_changelog, compat_release,
+                       ) in state.iter_publish_ready(conn):
+                publish_ready_count.labels(
+                    review_status=run.review_status,
+                    publish_mode=publish_mode).inc()
 
 
 async def publish_pending_new(db, rate_limiter, vcs_manager,
@@ -870,7 +883,8 @@ def main(argv=None):
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
                     vcs_manager, db, topic_merge_proposal, topic_publish,
-                    args.dry_run))
+                    args.dry_run)),
+            loop.create_task(export_stats(db)),
         ]
         if args.runner_url:
             tasks.append(loop.create_task(

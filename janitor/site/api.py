@@ -460,7 +460,7 @@ async def handle_report(request):
     report = {}
     async with request.app.db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, branch_url,
-                   review_status, publish_mode, changelog_mode, compat_release
+                   publish_mode, changelog_mode, compat_release
                    ) in state.iter_publish_ready(
                        conn, suite=suite):
             data = {
