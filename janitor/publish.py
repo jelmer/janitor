@@ -273,6 +273,9 @@ async def export_stats(db):
                     review_status=run.review_status,
                     publish_mode=publish_mode).inc()
 
+        # Every 30 minutes
+        await asyncio.sleep(60 * 30)
+
 
 async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, topic_merge_proposal,
@@ -305,13 +308,12 @@ async def publish_from_policy(
         mode, update_changelog, compat_release, possible_hosters=None,
         possible_transports=None, dry_run=False):
     from .schedule import full_command, estimate_duration
-    expected_command = ' '.join(
-        full_command(run.suite, update_changelog, compat_release))
-    if expected_command != run.command:
+    expected_command = full_command(run.suite, update_changelog, compat_release)
+    if ' '.join(expected_command) != run.command:
         warning(
             'Not publishing %s/%s: command is different (policy changed?). '
             'Build used %r, now: %r. Rescheduling.',
-            run.package, run.suite, run.command, expected_command)
+            run.package, run.suite, run.command, ' '.join(expected_command))
         estimated_duration = await estimate_duration(
             conn, run.package, run.suite)
         await state.add_to_queue(
