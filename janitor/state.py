@@ -115,9 +115,9 @@ async def store_run(
         "INSERT INTO run (id, command, description, result_code, "
         "start_time, finish_time, package, instigated_context, context, "
         "build_version, build_distribution, main_branch_revision, "
-        "branch_name, revision, result, suite, branch_url, logfilenames) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
-        "$14, $15, $16, $17, $18, $19)",
+        "branch_name, revision, result, suite, branch_url, logfilenames, "
+        "value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
+        "$13, $14, $15, $16, $17, $18, $19)",
         run_id, ' '.join(command), description, result_code,
         start_time, finish_time, name, instigated_context, context,
         str(build_version) if build_version else None, build_distribution,
@@ -135,12 +135,11 @@ async def store_publish(conn, package, branch_name, main_branch_revision,
         main_branch_revision = main_branch_revision.decode('utf-8')
     if merge_proposal_url:
         await conn.execute(
-            "INSERT INTO merge_proposal (url, package, branch_name, status, "
-            "revision) VALUES ($1, $2, $3, 'open', $4) ON CONFLICT (url) "
+            "INSERT INTO merge_proposal (url, package, status, "
+            "revision) VALUES ($1, $2, 'open', $3) ON CONFLICT (url) "
             "DO UPDATE SET package = EXCLUDED.package, "
-            "branch_name = EXCLUDED.branch_name, "
             "revision = EXCLUDED.revision",
-            merge_proposal_url, package, branch_name, revision)
+            merge_proposal_url, package, revision)
     await conn.execute(
         "INSERT INTO publish (package, branch_name, "
         "main_branch_revision, revision, mode, result_code, description, "
@@ -637,7 +636,8 @@ async def add_to_queue(conn, package, command, suite, offset=0,
 
 async def set_proposal_info(conn, url, status, revision, package, merged_by):
     await conn.execute("""
-INSERT INTO merge_proposal (url, status, revision, package, merged_by)
+INSERT INTO merge_proposal (
+    url, status, revision, package, merged_by)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (url)
 DO UPDATE SET
@@ -1191,15 +1191,17 @@ ORDER BY timestamp DESC
 async def get_open_merge_proposal(conn, package, branch_name):
     query = """\
 SELECT
-    revision
+    merge_proposal.revision
 FROM
     merge_proposal
+INNER JOIN publish ON merge_proposal.url = publish.merge_proposal_url
 WHERE
-    status = 'open' AND
-    package = $1 AND
-    branch_name = $2
+    merge_proposal.status = 'open' AND
+    merge_proposal.package = $1 AND
+    publish.branch_name = $2
+ORDER BY timestamp DESC
 """
-    return await conn.fetchone(query, package, branch_name)
+    return await conn.fetchrow(query, package, branch_name)
 
 
 async def get_publish(conn, publish_id):

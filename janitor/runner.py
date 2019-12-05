@@ -366,9 +366,15 @@ async def process_one(
                     logfilenames=[])
             else:
                 branch_url = main_branch.user_url
-                await state.update_branch_status(
-                    conn, vcs_url, status='success',
-                    revision=main_branch.last_revision())
+                if vcs_url:
+                    await state.update_branch_status(
+                        conn, vcs_url, status='success',
+                        revision=main_branch.last_revision())
+                if vcs_url != branch_url:
+                    # Really, one of these should be called canonical_vcs_url..
+                    await state.update_branch_status(
+                        conn, branch_url, status='success',
+                        revision=main_branch.last_revision())
 
         if subpath:
             # TODO(jelmer): cluster all packages for a single repository
