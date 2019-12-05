@@ -882,7 +882,7 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
 async def iter_publish_ready(conn, suite=None, review_status=None, limit=None):
     args = []
     query = """
-SELECT DISTINCT ON (run.package, run.suite)
+SELECT
   run.id,
   run.command,
   run.start_time,
@@ -927,8 +927,7 @@ WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
 
     query += """
 ORDER BY
-  run.package,
-  run.suite,
+  publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push'),
   finish_time DESC
 """
     if limit is not None:
