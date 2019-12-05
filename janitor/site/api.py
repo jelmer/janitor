@@ -97,7 +97,7 @@ async def handle_webhook(request):
         # urlutils.basename(body['project']['path_with_namespace'])?
         requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
         for suite in SUITES:
-            await do_schedule(conn, package, suite, requestor=requestor)
+            await do_schedule(conn, package.name, suite, requestor=requestor)
         return web.json_response({})
 
 
@@ -127,7 +127,7 @@ async def handle_schedule(request):
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
         offset, estimated_duration = await do_schedule(
-            conn, package, suite, offset, refresh,
+            conn, package.name, suite, offset, refresh,
             requestor=requestor)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package.name)
@@ -279,9 +279,8 @@ async def handle_run_post(request):
             review_status = review_status.lower()
             if review_status == 'reschedule':
                 run = await state.get_run(conn, run_id)
-                package = await state.get_package(conn, run.package)
                 await do_schedule(
-                    conn, package, run.suite, refresh=True,
+                    conn, run.package, run.suite, refresh=True,
                     requestor='reviewer')
                 review_status = 'rejected'
             await state.set_run_review_status(conn, run_id, review_status)

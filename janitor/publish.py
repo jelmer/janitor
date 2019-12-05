@@ -329,6 +329,10 @@ async def publish_from_policy(
         mode = MODE_PROPOSE
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
+
+    # TODO(jelmer): Check that there are no conflicts
+    # https://salsa.debian.org/jelmer/debian-janitor/issues/80
+
     reviewers = select_reviewers(maintainer_email, uploader_emails)
     note('Publishing %s / %r (mode: %s)', run.package, run.command, mode)
     try:
@@ -357,7 +361,7 @@ async def publish_from_policy(
         publish_id=publish_id)
 
     topic_publish.publish(
-        {'id': publish_id, 'proposal_url': proposal_url or None})
+        {'id': publish_id, 'proposal_url': proposal_url or None, 'mode': mode})
 
 
 async def diff_request(request):
@@ -393,6 +397,7 @@ async def publish_and_store(
                 None, publish_id=publish_id)
             topic_publish.publish({
                 'publish_id': publish_id,
+                'mode': e.mode,
                 'code': e.code,
                 'description': e.description})
             return
@@ -405,7 +410,8 @@ async def publish_and_store(
             publish_id=publish_id)
 
         topic_publish.publish(
-            {'id': publish_id, 'proposal_url': proposal_url or None})
+            {'id': publish_id, 'proposal_url': proposal_url or None,
+             'mode': mode})
 
 
 async def publish_request(request):

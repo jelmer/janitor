@@ -455,13 +455,12 @@ if __name__ == '__main__':
         post = await request.post()
         async with request.app.database.acquire() as conn:
             run = await state.get_run(conn, post['run_id'])
-            package = await state.get_package(conn, run.package)
             review_status = post['review_status'].lower()
             if review_status == 'reschedule':
                 review_status = 'rejected'
                 from ..schedule import do_schedule
                 await do_schedule(
-                    conn, package, run.suite,
+                    conn, run.package, run.suite,
                     refresh=True, requestor='reviewer')
             await state.set_run_review_status(
                 conn, post['run_id'], review_status)
