@@ -135,10 +135,12 @@ async def store_publish(conn, package, branch_name, main_branch_revision,
         main_branch_revision = main_branch_revision.decode('utf-8')
     if merge_proposal_url:
         await conn.execute(
-            "INSERT INTO merge_proposal (url, package, status, revision) "
-            "VALUES ($1, $2, 'open', $3) ON CONFLICT (url) DO UPDATE SET "
-            "package = EXCLUDED.package, revision = EXCLUDED.revision",
-            merge_proposal_url, package, revision)
+            "INSERT INTO merge_proposal (url, package, branch_name, status, "
+            "revision) VALUES ($1, $2, $3, 'open', $4) ON CONFLICT (url) "
+            "DO UPDATE SET package = EXCLUDED.package, "
+            "branch_name = EXCLUDED.branch_name, "
+            "revision = EXCLUDED.revision",
+            merge_proposal_url, package, branch_name, revision)
     await conn.execute(
         "INSERT INTO publish (package, branch_name, "
         "main_branch_revision, revision, mode, result_code, description, "
@@ -1185,6 +1187,20 @@ ORDER BY timestamp DESC
         query += " LIMIT %d" % limit
     for row in await conn.fetch(query):
         yield row
+
+
+async def get_open_merge_proposal(conn, package, branch_name):
+    query = """\
+SELECT
+    revision
+FROM
+    merge_proposal
+WHERE
+    status = 'open' AND
+    package = $1 AND
+    branch_name = $2
+"""
+    return await conn.fetchone(query, package, branch_name)
 
 
 async def get_publish(conn, publish_id):

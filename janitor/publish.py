@@ -314,13 +314,16 @@ async def publish_from_policy(
             conn, run.package, run.branch_name, run.revision, mode):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
-        try:
-            rate_limiter.check_allowed(maintainer_email)
-        except RateLimited as e:
-            proposal_rate_limited_count.labels(
-                package=run.package, suite=run.suite).inc()
-            warning('Not creating proposal for %s: %s', run.package, e)
-            mode = MODE_BUILD_ONLY
+        open_mp = await state.get_open_merge_proposal(
+            conn, run.package, run.branch_name)
+        if not open_mp:
+            try:
+                rate_limiter.check_allowed(maintainer_email)
+            except RateLimited as e:
+                proposal_rate_limited_count.labels(
+                    package=run.package, suite=run.suite).inc()
+                warning('Not creating proposal for %s: %s', run.package, e)
+                mode = MODE_BUILD_ONLY
     if mode == MODE_ATTEMPT_PUSH and \
             "salsa.debian.org/debian/" in main_branch_url:
         # Make sure we don't accidentally push to unsuspecting
