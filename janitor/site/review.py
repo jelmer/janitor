@@ -17,7 +17,7 @@ async def generate_review(conn, client, publisher_url, suite=None):
                        suite=suite)]
 
     (run, maintainer_email, uploader_emails, branch_url,
-     review_status, publish_mode, changelog_mode,
+     publish_mode, changelog_mode,
      compat_release) = entries.pop(0)
 
     async def show_diff():
@@ -39,7 +39,7 @@ async def generate_review(conn, client, publisher_url, suite=None):
         'run_id': run.id,
         'suite': run.suite,
         'json_dumps': json.dumps,
-        'todo': [(entry[0], entry[6]) for entry in entries],
+        'todo': [(entry[0].package, entry[0].id) for entry in entries],
         }
     template = env.get_template('review.html')
     return await template.render_async(**kwargs)
