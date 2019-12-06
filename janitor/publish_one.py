@@ -27,6 +27,7 @@ from silver_platter.utils import (
 from silver_platter.proposal import (
     EmptyMergeProposal,
     get_hoster,
+    merge_conflicts,
     publish_changes as publish_changes_from_workspace,
     propose_changes,
     push_changes,
@@ -85,6 +86,13 @@ class PublishFailure(Exception):
     def __init__(self, code, description):
         self.code = code
         self.description = description
+
+
+class MergeConflict(Exception):
+
+    def __init__(self, main_branch, local_branch):
+        self.main_branch = main_branch
+        self.local_branch = local_branch
 
 
 def strip_janitor_blurb(text, suite):
@@ -199,6 +207,8 @@ def publish(
             labels = None
         else:
             labels = [suite]
+        if merge_conflicts(main_branch, local_branch):
+            raise MergeConflict(main_branch, local_branch)
         try:
             return publish_changes_from_workspace(
                 ws, mode, subrunner.branch_name(),
@@ -356,6 +366,10 @@ def publish_one(
             description=(
                 'No changes to propose; '
                 'changes made independently upstream?'))
+    except MergeConflict:
+        raise PublishFailure(
+            code='merge-conflict',
+            description='merge would conflict (upstream changes?)')
 
     return publish_result, branch_name
 
