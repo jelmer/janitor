@@ -307,7 +307,7 @@ async def publish_from_policy(
         uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
         mode, update_changelog, compat_release, possible_hosters=None,
         possible_transports=None, dry_run=False):
-    from .schedule import full_command, estimate_duration
+    from .schedule import full_command, estimate_duration, do_schedule
     expected_command = full_command(run.suite, update_changelog, compat_release)
     if ' '.join(expected_command) != run.command:
         warning(
@@ -319,7 +319,7 @@ async def publish_from_policy(
         await state.add_to_queue(
             conn, run.package, expected_command, run.suite, -2,
             estimated_duration=estimated_duration, refresh=True,
-            requestor='publisher')
+            requestor='publisher (changed policy)')
         return
 
     publish_id = str(uuid.uuid4())
@@ -363,6 +363,12 @@ async def publish_from_policy(
             possible_transports=possible_transports,
             reviewers=reviewers, rate_limiter=rate_limiter)
     except PublishFailure as e:
+        if e.code == 'merge-conflict':
+            note('Merge proposal would cause conflict; restarting.')
+            await do_schedule(
+                conn, run.package, run.suite,
+                requestor='publisher (pre-creation merge conflict)')
+            return
         code = e.code
         description = e.description
         branch_name = None
@@ -758,7 +764,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                 await state.add_to_queue(
                     conn, mp_run.package, shlex.split(mp_run.command),
                     mp_run.suite, offset=-2, refresh=True,
-                    requestor='publisher')
+                    requestor='publisher (merge conflict)')
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
