@@ -300,8 +300,6 @@ async def main():
 
 async def do_schedule(conn, package, suite, offset=None,
                       refresh=False, requestor=None):
-    from ..schedule import (
-        estimate_duration, full_command, DEFAULT_SCHEDULE_OFFSET)
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     (unused_publish_policy, update_changelog, compat_release) = (
