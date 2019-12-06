@@ -349,6 +349,11 @@ def publish_one(
                     code='project-not-found')
             resume_branch = None
             existing_proposal = None
+        except PermissionDenied as e:
+            raise PublishFailure(
+                description=(
+                    'Permission denied while finding existing proposal: %s' % e.extra),
+                code='permission-denied')
 
     if allow_create_proposal is None:
         allow_create_proposal = subrunner.allow_create_proposal()
