@@ -266,12 +266,17 @@ async def publish_one(
 async def export_stats(db):
     while True:
         async with db.acquire() as conn:
+            ready_count = {}
             async for (run, maintainer_email, uploader_emails, main_branch_url,
                        publish_mode, update_changelog, compat_release,
                        ) in state.iter_publish_ready(conn):
+                ready_count.setdefault((run.review_status, publish_mode), 0)
+                ready_count[(run.review_status, publish_mode)] += 1
+
+            for (review_status, publish_mode), count in ready_count.items():
                 publish_ready_count.labels(
-                    review_status=run.review_status,
-                    publish_mode=publish_mode).inc()
+                    review_status=review_status,
+                    publish_mode=publish_mode).set(count)
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
