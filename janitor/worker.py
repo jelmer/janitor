@@ -298,7 +298,9 @@ class NewUpstreamWorker(SubWorker):
                 if 'Fossil branches are not yet supported' in str(e.error):
                     error_code = 'upstream-unsupported-vcs-fossil'
                 if 'Mercurial branches are not yet supported.' in str(e.error):
-                    error_code = 'upstream-unsupported-vcs-mercurial'
+                    error_code = 'upstream-unsupported-vcs-hg'
+                if 'Subversion branches are not yet supported.' in str(e.error):
+                    error_code = 'upstream-unsupported-vcs-svn'
                 if 'Unsupported protocol for url' in str(e.error):
                     if 'svn://' in str(e.error):
                         error_code = 'upstream-unsupported-vcs-svn'
