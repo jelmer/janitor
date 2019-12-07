@@ -45,7 +45,10 @@ from silver_platter.debian.lintian import (
     DEFAULT_MINIMUM_CERTAINTY,
 )
 from lintian_brush.config import Config as LintianBrushConfig
-from lintian_brush import SUPPORTED_CERTAINTIES
+from lintian_brush import (
+    SUPPORTED_CERTAINTIES,
+    version_string as lintian_brush_version_string,
+    )
 from silver_platter.debian.upstream import (
     merge_upstream,
     refresh_quilt_patches,
@@ -720,6 +723,9 @@ def main(argv=None):
 
     metadata = {}
     start_time = datetime.now()
+    metadata['versions'] = {
+        'lintian-brush': lintian_brush_version_string,
+        }
     metadata['start_time'] = start_time.isoformat()
     try:
         result = process_package(
