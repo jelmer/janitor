@@ -41,7 +41,7 @@ async def main(db, start=None):
             override = config.package.add()
             override.name = pkg
             override.upstream_branch_url = urls[0][1]
-            print("# From %s" % name)
+            print("# From %s" % urls[0][0])
             text_format.PrintMessage(config, sys.stdout)
 
 parser = argparse.ArgumentParser('reschedule')
