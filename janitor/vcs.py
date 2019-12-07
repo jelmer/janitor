@@ -82,6 +82,8 @@ def _convert_branch_exception(vcs_url, e):
             code = '401-unauthorized'
         elif 'Unable to handle http code 502: Bad Gateway' in str(e):
             code = '502-bad-gateway'
+        elif str(e).startswith('Subversion branches are not yet'):
+            code = 'unsupported-vcs-svn'
         else:
             code = 'branch-unavailable'
         return BranchOpenFailure(code, str(e))
