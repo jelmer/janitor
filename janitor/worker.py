@@ -139,6 +139,9 @@ class LintianBrushWorker(SubWorker):
         subparser = argparse.ArgumentParser(prog='lintian-brush')
         subparser.add_argument("tags", nargs='*')
         subparser.add_argument(
+            '--exclude', action='append', type=str,
+            help="Exclude fixer.")
+        subparser.add_argument(
             '--no-update-changelog', action="store_false", default=None,
             dest="update_changelog", help="do not update the changelog")
         subparser.add_argument(
@@ -165,7 +168,8 @@ class LintianBrushWorker(SubWorker):
     def make_changes(self, local_tree, report_context, metadata,
                      base_metadata, subpath=None):
         fixers = get_fixers(
-            available_lintian_fixers(), tags=self.args.tags)
+            available_lintian_fixers(), tags=self.args.tags,
+            exclude=self.args.exclude)
 
         compat_release = self.args.compat_release
         allow_reformatting = self.args.allow_reformatting
