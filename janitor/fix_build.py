@@ -435,7 +435,7 @@ def fix_missing_command(tree, error, context, committer=None):
     else:
         paths = [
             os.path.join(dirname, error.command)
-            for dirname in ['/usr/bin']]
+            for dirname in ['/usr/bin', '/bin']]
     package = get_package_for_paths(paths)
     if package is None:
         return False
