@@ -18,12 +18,15 @@ parser.add_argument(
 parser.add_argument(
     '--offset', type=int, default=0,
     help='Schedule offset.')
+parser.add_argument(
+    '--rejected', action='store_true',
+    help='Process rejected runs only.')
 args = parser.parse_args()
 with open(args.config, 'r') as f:
     config = read_config(f)
 
 
-async def main(db, result_code):
+async def main(db, result_code, rejected):
     packages = {}
     async with db.acquire() as conn1, db.acquire() as conn2:
         for package in await state.iter_packages(conn1):
@@ -34,6 +37,8 @@ async def main(db, result_code):
         async for run in state.iter_last_runs(
                        conn1, result_code):
             if run.package not in packages:
+                continue
+            if rejected and run.review_status != 'rejected':
                 continue
             if packages[run.package].branch_url is None:
                 continue
@@ -48,4 +53,4 @@ async def main(db, result_code):
 
 
 db = state.Database(config.database_location)
-asyncio.run(main(db, args.result_code))
+asyncio.run(main(db, args.result_code, args.rejected))
