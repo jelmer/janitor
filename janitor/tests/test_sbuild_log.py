@@ -457,6 +457,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Could not find \'i18n\' (~> 0.7) - did find: [i18n-1.5.3] '
             '(Gem::MissingSpecVersionError)'], 1,
             MissingRubyGem('i18n', '0.7'))
+        self.run_test([
+            '/usr/lib/ruby/2.5.0/rubygems/dependency.rb:310:in `to_specs\': '
+            'Could not find \'sassc\' (>= 2.0.0) among 34 total gem(s) '
+            '(Gem::MissingSpecError)'], 1,
+            MissingRubyGem('sassc', '2.0.0'))
 
     def test_missing_java_class(self):
         self.run_test("""\

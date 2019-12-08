@@ -820,7 +820,15 @@ class MissingRubyGem(object):
 
 
 def ruby_missing_gem(m):
-    return MissingRubyGem(m.group(1), m.group(2))
+    minimum_version = None
+    for grp in m.group(2).split(','):
+        (cond, val) = grp.strip().split(' ', 1)
+        if cond == '>=':
+            minimum_version = val
+            break
+        if cond == '~>':
+            minimum_version = val
+    return MissingRubyGem(m.group(1), minimum_version)
 
 
 class MissingJavaClass(object):
@@ -1125,12 +1133,12 @@ build_failure_regexps = [
     # line will have the actual line that failed.
     (r'ImportError: cannot import name (.*)', None),
     (r'/usr/bin/ld: cannot find -l(.*)', ld_missing_lib),
-    (r'Could not find gem \'([^ ]+) \(~> (.*)\)\', which is required by gem.*',
-     ruby_missing_gem),
-    (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(~> (.*)\) '
+    (r'Could not find gem \'([^ ]+) \(([^)]+)\)\', '
+     r'which is required by gem.*', ruby_missing_gem),
+    (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(([^)]+)\) '
      r'among [0-9]+ total gem\(s\) \(Gem::MissingSpecError\)',
      ruby_missing_gem),
-    (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(~> (.*)\) '
+    (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(([^)]+)\) '
      r'- .* \(Gem::MissingSpecVersionError\)', ruby_missing_gem),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
