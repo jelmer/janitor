@@ -352,7 +352,8 @@ def publish_one(
         except PermissionDenied as e:
             raise PublishFailure(
                 description=(
-                    'Permission denied while finding existing proposal: %s' % e.extra),
+                    'Permission denied while finding existing proposal: %s' %
+                    e.extra),
                 code='permission-denied')
 
     if allow_create_proposal is None:
