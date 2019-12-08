@@ -620,7 +620,7 @@ async def scan_request(request):
 
 
 async def autopublish_request(request):
-    reviewed_only = ('reviewed_only' in request.query)
+    reviewed_only = ('unreviewed' not in request.query)
 
     async def autopublish():
         await publish_pending_new(
