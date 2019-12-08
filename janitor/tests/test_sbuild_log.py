@@ -266,6 +266,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             'Requested \'vte-2.91 >= 0.59.0\' but version of vte is 0.58.2'],
             1, MissingPkgConfig('vte-2.91', '0.59.0'))
+        self.run_test([
+            'configure: error: x86_64-linux-gnu-pkg-config sdl2 couldn\'t '
+            'be found'], 1, MissingPkgConfig('sdl2'))
 
     def test_dh_with_order(self):
         self.run_test([

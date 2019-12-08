@@ -1048,6 +1048,8 @@ build_failure_regexps = [
      pkg_config_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
      pkg_config_missing),
+    (r'configure: error: [a-z0-9_-]+-pkg-config (.*) couldn\'t be found',
+     pkg_config_missing),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
      'tried pkgconfig', meson_pkg_config_missing),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
