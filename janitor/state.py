@@ -927,7 +927,8 @@ WHERE result_code IN ('success', 'nothing-to-do') AND result IS NOT NULL
 
     query += """
 ORDER BY
-  publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push') DESC,
+  publish_policy.mode in (
+        'propose', 'attempt-push', 'push-derived', 'push') DESC,
   run.finish_time DESC
 """
     if limit is not None:

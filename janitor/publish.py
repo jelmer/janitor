@@ -90,6 +90,7 @@ publish_ready_count = Gauge(
     'publish_ready_count', 'Number of publish ready runs by status.',
     labelnames=('review_status', 'publish_mode'))
 
+
 class RateLimited(Exception):
     """A rate limit was reached."""
 
@@ -313,7 +314,8 @@ async def publish_from_policy(
         mode, update_changelog, compat_release, possible_hosters=None,
         possible_transports=None, dry_run=False):
     from .schedule import full_command, estimate_duration, do_schedule
-    expected_command = full_command(run.suite, update_changelog, compat_release)
+    expected_command = full_command(
+        run.suite, update_changelog, compat_release)
     if ' '.join(expected_command) != run.command:
         warning(
             'Not publishing %s/%s: command is different (policy changed?). '
