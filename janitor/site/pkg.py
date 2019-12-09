@@ -142,7 +142,8 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
             return ''
         try:
             debdiff = await get_debdiff(
-                client, archiver_url, run, unchanged_run)
+                client, archiver_url, run, unchanged_run,
+                filter_boring=True)
             return debdiff.decode('utf-8', 'replace')
         except FileNotFoundError:
             return ''
