@@ -89,7 +89,7 @@ if __name__ == '__main__':
     import functools
     import os
     import re
-    from janitor import SUITES
+    from janitor import SUITES, SUITE_REGEX
     from janitor import state
     from janitor.config import read_config
     from janitor.logs import get_log_manager
@@ -538,7 +538,7 @@ if __name__ == '__main__':
             '/%s/pkg/' % suite, handle_pkg_list,
             name='%s-package-list' % suite)
     app.router.add_get(
-        '/{suite:' + '|'.join(SUITES) + '}'
+        '/{suite:' + SUITE_REGEX + '}'
         '/{file:Contents-.*|InRelease|Packages.*|Release.*|'
         '.*.(changes|deb|buildinfo)}',
         handle_apt_file, name='apt-file')
