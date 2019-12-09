@@ -44,6 +44,14 @@ def matches(match, package_name, package_maintainer, package_uploaders):
     return True
 
 
+def known_suites(config):
+    ret = set()
+    for policy in config.policy:
+        for suite in policy.suite:
+            ret.add(suite.name)
+    return ret
+
+
 def apply_policy(config, suite, package_name, maintainer, uploaders):
     mode = policy_pb2.skip
     update_changelog = policy_pb2.auto
@@ -80,10 +88,12 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
 
 async def main(args):
     from .config import read_config
-    from . import state, SUITES
+    from . import state
 
     with open('policy.conf', 'r') as f:
         policy = read_policy(f)
+
+    suites = known_suites(policy)
 
     with open(args.config, 'r') as f:
         config = read_config(f)
@@ -94,7 +104,7 @@ async def main(args):
         async for (package, suite, cur_pol) in state.iter_publish_policy(conn):
             current_policy[(package, suite)] = cur_pol
         for package in await state.iter_packages(conn):
-            for suite in SUITES:
+            for suite in suites:
                 package_policy = apply_policy(
                     policy, suite, package.name, package.maintainer_email,
                     package.uploader_emails)
