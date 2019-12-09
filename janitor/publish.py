@@ -191,6 +191,7 @@ class PublishFailure(Exception):
 
 
 def select_reviewers(maintainer_email, uploader_emails):
+    # TODO(jelmer): Select some reviewers
     return None
 
 
@@ -900,7 +901,7 @@ def main(argv=None):
                     args.dry_run)),
             loop.create_task(export_stats(db)),
         ]
-        if args.runner_url:
+        if args.runner_url and not args.reviewed_only:
             tasks.append(loop.create_task(
                 listen_to_runner(
                     db, rate_limiter, vcs_manager,
