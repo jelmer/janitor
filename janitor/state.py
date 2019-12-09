@@ -907,7 +907,7 @@ SELECT
   package.branch_url,
   publish_policy.mode,
   publish_policy.update_changelog,
-  publish_policy.compat_release
+  publish_policy.command
 FROM
   last_unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
@@ -1379,21 +1379,22 @@ async def update_branch_url(conn, package, vcs_type, vcs_url):
 
 
 async def update_publish_policy(
-        conn, name, suite, publish_mode, changelog_mode, compat_release):
+        conn, name, suite, publish_mode, changelog_mode, command):
     await conn.execute(
         'INSERT INTO publish_policy '
-        '(package, suite, mode, update_changelog, compat_release)'
+        '(package, suite, mode, update_changelog, command) '
         'VALUES ($1, $2, $3, $4, $5) '
         'ON CONFLICT (package, suite) DO UPDATE SET '
         'mode = EXCLUDED.mode, '
         'update_changelog = EXCLUDED.update_changelog, '
-        'compat_release = EXCLUDED.compat_release',
-        name, suite, publish_mode, changelog_mode, compat_release)
+        'command = EXCLUDED.command',
+        name, suite, publish_mode, changelog_mode,
+        (' '.join(command) if command else None))
 
 
 async def iter_publish_policy(conn, package=None):
     query = (
-        'SELECT package, suite, mode, update_changelog, compat_release '
+        'SELECT package, suite, mode, update_changelog, command '
         'FROM publish_policy')
     args = []
     if package:
@@ -1405,6 +1406,6 @@ async def iter_publish_policy(conn, package=None):
 
 async def get_publish_policy(conn, package, suite):
     return await conn.fetchrow(
-        'SELECT mode, update_changelog, compat_release '
+        'SELECT mode, update_changelog, command '
         'FROM publish_policy WHERE package = $1 AND suite = $2', package,
         suite)

@@ -35,7 +35,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
                 (url, status) for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=SUITE)]
         (publish_policy, changelog_policy,
-         compat_release) = await state.get_publish_policy(
+         unused_command) = await state.get_publish_policy(
              conn, package.name, SUITE)
         if run is None:
             # No runs recorded
@@ -133,7 +133,6 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
         'publish_policy': publish_policy,
         'fixed_tags': fixed_tags,
         'changelog_policy': changelog_policy,
-        'compat_release': compat_release,
         }
     template = env.get_template('lintian-fixes-package.html')
     return await template.render_async(**kwargs)

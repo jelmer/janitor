@@ -27,11 +27,11 @@ async def handle_policy(request):
         return web.json_response(
             {'reason': 'Package not found'}, status=404)
     for suite, (publish_policy,
-                changelog_policy, compat_release) in suite_policies.items():
+                changelog_policy, command) in suite_policies.items():
         suite_policies[suite] = {
             'publish_policy': publish_policy,
             'changelog_policy': changelog_policy,
-            'compat_release': compat_release}
+            'command': command}
     response_obj = {'by_suite': suite_policies}
     return web.json_response(response_obj)
 
@@ -460,7 +460,7 @@ async def handle_report(request):
     report = {}
     async with request.app.db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, branch_url,
-                   publish_mode, changelog_mode, compat_release
+                   publish_mode, changelog_mode, command
                    ) in state.iter_publish_ready(
                        conn, suite=suite):
             data = {
@@ -494,7 +494,7 @@ async def handle_publish_ready(request):
     async with request.app.db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, branch_url,
                    review_status, publish_policy, changelog_mode,
-                   compat_release) in state.iter_publish_ready(
+                   command) in state.iter_publish_ready(
                        conn, suite=suite, review_status=review_status):
             if publish_policy in (
                     'propose', 'attempt-push', 'push-derived', 'push'):

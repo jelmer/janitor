@@ -269,7 +269,7 @@ async def export_stats(db):
         async with db.acquire() as conn:
             ready_count = {}
             async for (run, maintainer_email, uploader_emails, main_branch_url,
-                       publish_mode, update_changelog, compat_release,
+                       publish_mode, update_changelog, command,
                        ) in state.iter_publish_ready(conn):
                 ready_count.setdefault((run.review_status, publish_mode), 0)
                 ready_count[(run.review_status, publish_mode)] += 1
@@ -297,13 +297,13 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
     async with db.acquire() as conn1, db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, main_branch_url,
                    publish_mode, update_changelog,
-                   compat_release) in state.iter_publish_ready(
+                   command) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             await publish_from_policy(
                     conn, rate_limiter, vcs_manager, run,
                     maintainer_email, uploader_emails, main_branch_url,
                     topic_publish, topic_merge_proposal,
-                    publish_mode, update_changelog, compat_release,
+                    publish_mode, update_changelog, command,
                     possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run)
 
@@ -311,11 +311,10 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
 async def publish_from_policy(
         conn, rate_limiter, vcs_manager, run, maintainer_email,
         uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
-        mode, update_changelog, compat_release, possible_hosters=None,
+        mode, update_changelog, command, possible_hosters=None,
         possible_transports=None, dry_run=False):
     from .schedule import full_command, estimate_duration, do_schedule
-    expected_command = full_command(
-        run.suite, update_changelog, compat_release)
+    expected_command = full_command(run.suite, update_changelog, command)
     if ' '.join(expected_command) != run.command:
         warning(
             'Not publishing %s/%s: command is different (policy changed?). '
@@ -794,7 +793,7 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                 # TODO(jelmer): Fold these into a single query ?
                 package = await state.get_package(conn, result['package'])
                 run = await state.get_run(conn, result['log_id'])
-                mode, update_changelog, compat_release = (
+                mode, update_changelog, command = (
                     await state.get_publish_policy(
                         conn, run.package, run.suite))
                 await publish_from_policy(
@@ -802,7 +801,7 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                     run, package.maintainer_email, package.uploader_emails,
                     package.branch_url,
                     topic_publish, topic_merge_proposal, mode,
-                    update_changelog, compat_release, dry_run=dry_run)
+                    update_changelog, command, dry_run=dry_run)
 
 
 def main(argv=None):

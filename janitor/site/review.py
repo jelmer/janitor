@@ -18,7 +18,7 @@ async def generate_review(conn, client, publisher_url, suite=None):
 
     (run, maintainer_email, uploader_emails, branch_url,
      publish_mode, changelog_mode,
-     compat_release) = entries.pop(0)
+     command) = entries.pop(0)
 
     async def show_diff():
         if not run.revision or run.revision == run.main_branch_revision:

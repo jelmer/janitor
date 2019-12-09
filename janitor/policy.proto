@@ -39,24 +39,21 @@ message Match {
     repeated string source_package = 3;
 }
 
+message Suite {
+    optional string name = 1;
+
+    optional string command = 2;
+
+    optional Mode mode = 3;
+};
+
 message Policy {
     repeated Match match = 1;
 
-    // Mode
-    optional Mode lintian_fixes = 2;
-    optional Mode fresh_releases = 6;
-    optional Mode fresh_snapshots = 7;
-    // The only modes that are really relevant here are skip and build_only.
-    optional Mode unchanged = 8;
+    repeated Suite suite = 2;
 
     // Changelog update mode
     optional ChangelogMode changelog = 3;
-
-    // Oldest release to stay compatible with.
-    optional string compat_release = 5;
-
-    // Fixers to apply
-    repeated string lintian_fixers = 4;
 }
 
 message PolicyConfig {
