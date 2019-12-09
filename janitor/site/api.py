@@ -3,7 +3,7 @@
 from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import urllib.parse
 
-from janitor import state, SUITES
+from janitor import state, SUITE_REGEX, SUITES
 from . import (
     env,
     highlight_diff,
@@ -104,9 +104,6 @@ async def handle_webhook(request):
 async def handle_schedule(request):
     package = request.match_info['package']
     suite = request.match_info['suite']
-    if suite not in SUITES:
-        return web.json_response(
-            {'error': 'Unknown suite', 'suite': suite}, status=404)
     post = await request.post()
     offset = post.get('offset')
     try:
@@ -529,7 +526,7 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         handle_publish,
         name='api-package-publish')
     app.router.add_post(
-        '/{suite}/pkg/{package}/schedule', handle_schedule,
+        '/{suite:' + SUITE_REGEX + '}/pkg/{package}/schedule', handle_schedule,
         name='api-package-schedule')
     app.router.add_get(
         '/{suite}/pkg/{package}/diff', handle_diff,
@@ -590,13 +587,13 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         '/runner/log/{run_id}/{filename}',
         handle_runner_log, name='api-runner-log')
     app.router.add_get(
-        '/{suite:' + '|'.join(SUITES) + '}/report',
+        '/{suite:' + SUITE_REGEX + '}/report',
         handle_report, name='api-report')
     app.router.add_get(
         '/publish-ready',
         handle_publish_ready, name='api-publish-ready')
     app.router.add_get(
-        '/{suite:' + '|'.join(SUITES) + '}/publish-ready',
+        '/{suite:' + SUITE_REGEX + '}/publish-ready',
         handle_publish_ready, name='api-publish-ready-suite')
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)

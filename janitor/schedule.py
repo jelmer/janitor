@@ -24,7 +24,6 @@ __all__ = [
 
 from datetime import datetime, timedelta
 from debian.deb822 import PkgRelation
-import shlex
 
 from . import (
     state,
