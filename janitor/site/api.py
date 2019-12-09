@@ -254,7 +254,7 @@ async def handle_debdiff(request):
     try:
         debdiff = await get_debdiff(
             request.app.http_client_session, request.app.archiver_url, run,
-            unchanged_run)
+            unchanged_run, filter_boring=('filter_boring' in request.query))
     except FileNotFoundError:
         raise web.HTTPNotFound(text='debdiff not calculated yet')
     except DebdiffRetrievalError:
