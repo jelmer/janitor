@@ -84,7 +84,7 @@ PUBLISH_MODE_VALUE = {
 
 def full_command(suite, update_changelog, command):
     if command is not None:
-        entry_command = shlex.split(command)
+        entry_command = command
     else:
         entry_command = SUITE_TO_COMMAND[suite]
     if update_changelog == "update":
