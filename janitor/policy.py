@@ -17,6 +17,7 @@
 
 from email.utils import parseaddr
 from fnmatch import fnmatch
+import shlex
 from google.protobuf import text_format
 
 from . import policy_pb2
@@ -74,7 +75,7 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
          policy_pb2.update_changelog: 'update',
          policy_pb2.leave_changelog: 'leave',
          }[update_changelog],
-        command)
+        shlex.split(command))
 
 
 async def main(args):
