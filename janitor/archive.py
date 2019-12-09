@@ -17,20 +17,22 @@
 
 import asyncio
 import os
+import re
 import sys
 
 from aiohttp import web
 
-from . import SUITES
 from .archive import filter_boring, run_debdiff
 from .prometheus import setup_metrics
+
+suite_check = re.compile('^[a-z0-9-]+$')
 
 
 async def handle_debdiff(request):
     post = await request.post()
 
     old_suite = post.get('old_suite', 'unchanged')
-    if old_suite not in SUITES:
+    if not suite_check.match(old_suite):
         return web.Response(
             status=400, text='Invalid old suite %s' % old_suite)
 
@@ -40,7 +42,7 @@ async def handle_debdiff(request):
         return web.Response(
             status=400, text='Missing argument: new_suite')
 
-    if new_suite not in SUITES:
+    if not suite_check.match(new_suite):
         return web.Response(
             status=400, text='Invalid new suite %s' % new_suite)
 
@@ -111,7 +113,7 @@ async def run_web_server(listen_addr, port, archive_path):
     app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
     app.router.add_get(
         '/archive'
-        '/{suite:' + '|'.join(SUITES) + '}'
+        '/{suite:[a-z0-9-]+}'
         '/{filename}', handle_archive_file, name='file')
     runner = web.AppRunner(app)
     await runner.setup()
