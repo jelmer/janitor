@@ -139,3 +139,9 @@ CREATE OR REPLACE VIEW last_unabsorbed_runs AS
      revision != main_branch_revision AND
      revision NOT IN (SELECT revision FROM publish WHERE (mode = 'push' and result_code = 'success') OR (mode = 'propose' AND result_code = 'empty-merge-proposal')) AND
      revision NOT IN (SELECT revision FROM merge_proposal WHERE status = 'merged'));
+
+CREATE OR REPLACE VIEW merged_runs AS
+  SELECT run.*, merge_proposal.url, merge_proposal.merged_by
+  FROM run
+  INNER JOIN merge_proposal ON merge_proposal.revision = run.revision
+  WHERE result_code = 'success' and merge_proposal.status = 'merged';
