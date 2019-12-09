@@ -22,7 +22,7 @@ import sys
 
 from aiohttp import web
 
-from .archive import filter_boring, run_debdiff
+from .debdiff import run_debdiff, filter_boring
 from .prometheus import setup_metrics
 
 suite_check = re.compile('^[a-z0-9-]+$')
