@@ -29,6 +29,7 @@ import uuid
 from debian.deb822 import Changes
 
 from breezy import debug
+from breezy.errors import PermissionDenied
 from breezy.plugins.debian.util import (
     debsign,
     dget_changes,
@@ -400,6 +401,9 @@ async def process_one(
                         main_branch, hoster, branch_name))
             except NoSuchProject as e:
                 warning('Project %s not found', e.project)
+                resume_branch = None
+            except PermissionDenied as e:
+                warning('Unable to list existing proposals: %s', e)
                 resume_branch = None
 
         if resume_branch is None and vcs_manager:
