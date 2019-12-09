@@ -24,7 +24,6 @@ import re
 import urllib.parse
 
 from janitor import (
-    SUITES,
     DEFAULT_BUILD_ARCH,
     )
 from janitor.build import changes_filename
@@ -112,7 +111,6 @@ def htmlize_debdiff(debdiff):
 
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
-env.globals.update(suites=SUITES)
 env.globals.update(json_dumps=json.dumps)
 env.globals.update(cache_url_git=CACHE_URL_GIT)
 env.globals.update(cache_url_bzr=CACHE_URL_BZR)
