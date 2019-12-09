@@ -255,3 +255,12 @@ async def generate_regressions_list(db):
     async with db.acquire() as conn:
         packages = await state.iter_lintian_fixes_regressions(conn)
     return await template.render_async(packages=packages)
+
+
+async def render_start():
+    template = env.get_template('lintian-fixes-start.html')
+    import lintian_brush
+    from silver_platter.debian.lintian import DEFAULT_ADDON_FIXERS
+    return await template.render_async(
+        {'lintian_brush': lintian_brush,
+         'ADDON_FIXERS': DEFAULT_ADDON_FIXERS})

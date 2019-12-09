@@ -140,9 +140,9 @@ if __name__ == '__main__':
             headers={'Cache-Control': 'max-age=3600'})
 
     async def handle_lintian_fixes(request):
-        from .generate import render_lintian_fixes
+        from .lintian_fixes import render_start
         return web.Response(
-            content_type='text/html', text=await render_lintian_fixes(),
+            content_type='text/html', text=await render_start(),
             headers={'Cache-Control': 'max-age=3600'})
 
     async def handle_merge_proposals(suite, request):
