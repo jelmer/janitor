@@ -24,6 +24,7 @@ __all__ = [
 
 from datetime import datetime, timedelta
 from debian.deb822 import PkgRelation
+import shlex
 
 from . import (
     state,
@@ -81,8 +82,11 @@ PUBLISH_MODE_VALUE = {
     }
 
 
-def full_command(suite, update_changelog, compat_release):
-    entry_command = list(SUITE_TO_COMMAND[suite])
+def full_command(suite, update_changelog, command):
+    if command is not None:
+        entry_command = shlex.split(command)
+    else:
+        entry_command = SUITE_TO_COMMAND[suite]
     if update_changelog == "update":
         entry_command.append("--update-changelog")
     elif update_changelog == "leave":
@@ -92,8 +96,6 @@ def full_command(suite, update_changelog, compat_release):
     else:
         raise ValueError(
             "Invalid value %r for update_changelog" % update_changelog)
-    if suite == 'lintian-fixes' and compat_release:
-        entry_command.append("--compat-release=%s" % compat_release)
     return entry_command
 
 
@@ -102,9 +104,9 @@ async def schedule_from_candidates(policy, iter_candidates):
         if package.branch_url is None:
             continue
 
-        publish_mode, update_changelog, compat_release = apply_policy(
-            policy, suite,
-            package.name, package.maintainer_email, package.uploader_emails)
+        (publish_mode, update_changelog, command) = apply_policy(
+            policy, suite, package.name, package.maintainer_email,
+            package.uploader_emails)
 
         if publish_mode == 'skip':
             trace.mutter('%s: skipping, per policy', package.name)
@@ -112,7 +114,7 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         value += PUBLISH_MODE_VALUE[publish_mode]
 
-        entry_command = full_command(suite, update_changelog, compat_release)
+        entry_command = full_command(suite, update_changelog, command)
 
         yield (
             package.name,
@@ -302,9 +304,9 @@ async def do_schedule(conn, package, suite, offset=None,
                       refresh=False, requestor=None):
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
-    (unused_publish_policy, update_changelog, compat_release) = (
+    (unused_publish_policy, update_changelog, command) = (
         await state.get_publish_policy(conn, package, suite))
-    command = full_command(suite, update_changelog, compat_release)
+    command = full_command(suite, update_changelog, command)
     estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(
         conn, package, command, suite, offset,

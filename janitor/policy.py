@@ -44,21 +44,25 @@ def matches(match, package_name, package_maintainer, package_uploaders):
 
 
 def apply_policy(config, suite, package_name, maintainer, uploaders):
-    field = suite.replace('-', '_')
     mode = policy_pb2.skip
-    update_changelog = 'auto'
-    compat_release = None
+    update_changelog = policy_pb2.auto
+    command = None
     for policy in config.policy:
         if (policy.match and
                 not any([matches(m, package_name, maintainer, uploaders)
                          for m in policy.match])):
             continue
-        if field is not None and policy.HasField(field):
-            mode = getattr(policy, field)
-        if policy.changelog is not None:
+        if policy.HasField('changelog') is not None:
             update_changelog = policy.changelog
-        if policy.compat_release:
-            compat_release = policy.compat_release
+        for s in policy.suite:
+            if s.name == suite:
+                break
+        else:
+            continue
+        if s.HasField('mode'):
+            mode = s.mode
+        if s.command:
+            command = s.command
     return (
         {policy_pb2.propose: 'propose',
          policy_pb2.attempt_push: 'attempt-push',
@@ -70,7 +74,7 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
          policy_pb2.update_changelog: 'update',
          policy_pb2.leave_changelog: 'leave',
          }[update_changelog],
-        compat_release)
+        command)
 
 
 async def main(args):
