@@ -934,7 +934,9 @@ ORDER BY
     if limit is not None:
         query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
-        yield tuple([Run.from_row(record[:19])] + list(record[19:]))
+        yield tuple(
+            [Run.from_row(record[:19])] + list(record[19:-1]) +
+            [shlex.split(record[-1]) if record[-1] else None])
 
 
 async def iter_unscanned_branches(conn, last_scanned_minimum):
@@ -1401,11 +1403,14 @@ async def iter_publish_policy(conn, package=None):
         query += ' WHERE package = $1'
         args.append(package)
     for row in await conn.fetch(query, *args):
-        yield row[0], row[1], tuple(row[2:])
+        yield (row[0], row[1], (row[2], row[3],
+               shlex.split(row[4]) if row[4] else None))
 
 
 async def get_publish_policy(conn, package, suite):
-    return await conn.fetchrow(
+    row = await conn.fetchrow(
         'SELECT mode, update_changelog, command '
         'FROM publish_policy WHERE package = $1 AND suite = $2', package,
         suite)
+    if row:
+        return (row[0], row[1], shlex.split(row[2]) if row[2] else None)
