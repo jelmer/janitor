@@ -3,7 +3,7 @@
 from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
 import urllib.parse
 
-from janitor import state, SUITE_REGEX, SUITES
+from janitor import state, SUITE_REGEX
 from . import (
     env,
     highlight_diff,
@@ -96,7 +96,10 @@ async def handle_webhook(request):
         # TODO(jelmer: If nothing found, then maybe fall back to
         # urlutils.basename(body['project']['path_with_namespace'])?
         requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
-        for suite in SUITES:
+        async for package_name, suite, policy in state.iter_publish_policy(
+                package.name):
+            if policy[0] == 'skip':
+                continue
             await do_schedule(conn, package.name, suite, requestor=requestor)
         return web.json_response({})
 
