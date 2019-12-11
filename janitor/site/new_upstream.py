@@ -1,9 +1,5 @@
 #!/usr/bin/python3
 
-import argparse
-import asyncio
-import sys
-
 from janitor import state
 
 from janitor.site import (
@@ -115,12 +111,3 @@ async def generate_candidates(db, suite):
                       await state.iter_candidates(conn, suite=suite)]
     candidates.sort()
     return await template.render_async(candidates=candidates, suite=suite)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(prog='report-new-upstream-pkg')
-    parser.add_argument("package")
-    args = parser.parse_args()
-
-    loop = asyncio.get_event_loop()
-    sys.stdout.write(loop.run_until_complete(generate_pkg_file(args.package)))

@@ -15,9 +15,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import argparse
-import asyncio
-import sys
 from datetime import datetime, timedelta
 
 from janitor import state
@@ -95,16 +92,3 @@ async def write_queue(client, conn, only_command=None, limit=None,
     return await template.render_async(
         queue=get_queue(conn, only_command, limit),
         processing=processing)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('report-queue')
-    parser.add_argument(
-        '--command', type=str, help='Only display queue for specified command')
-    parser.add_argument(
-        '--limit', type=int, help='Limit to this number of entries',
-        default=100)
-    args = parser.parse_args()
-
-    loop = asyncio.get_event_loop()
-    sys.stdout.write(loop.run_until_complete(write_queue()))
