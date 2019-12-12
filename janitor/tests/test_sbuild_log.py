@@ -557,19 +557,19 @@ class FindAptGetFailureDescriptionTests(unittest.TestCase):
 
     def test_make_missing_rule(self):
         self.run_test(["""\
-E: Failed to fetch http://janitor.debian.net/lintian-fixes/Packages.xz  \
+E: Failed to fetch http://janitor.debian.net/blah/Packages.xz  \
 File has unexpected size (3385796 != 3385720). Mirror sync in progress? [IP]\
 """], 1, AptFetchFailure(
-            'http://janitor.debian.net/lintian-fixes/Packages.xz',
+            'http://janitor.debian.net/blah/Packages.xz',
             'File has unexpected size (3385796 != 3385720). '
             'Mirror sync in progress? [IP]'))
 
     def test_missing_release_file(self):
         self.run_test(["""\
-E: The repository 'https://janitor.debian.net lintian-fixes/ Release' \
+E: The repository 'https://janitor.debian.net blah/ Release' \
 does not have a Release file.\
 """], 1, AptMissingReleaseFile(
-            'http://janitor.debian.net/ lintian-fixes/ Release'))
+            'http://janitor.debian.net/ blah/ Release'))
 
     def test_vague(self):
         self.run_test(["E: Stuff is broken"], 1, None)
