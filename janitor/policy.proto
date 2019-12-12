@@ -39,7 +39,7 @@ message Match {
     repeated string source_package = 3;
 }
 
-message Suite {
+message SuitePolicy {
     optional string name = 1;
 
     optional string command = 2;
@@ -50,7 +50,7 @@ message Suite {
 message Policy {
     repeated Match match = 1;
 
-    repeated Suite suite = 2;
+    repeated SuitePolicy suite = 2;
 
     // Changelog update mode
     optional ChangelogMode changelog = 3;
