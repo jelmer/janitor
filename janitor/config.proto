@@ -12,4 +12,18 @@ message Config {
   optional string database_location = 4;
 
   optional string committer = 5;
+
+  repeated Suite suite = 6;
+}
+
+message Suite {
+  optional string name = 1;
+
+  optional string archive_description = 2;
+
+  optional string build_distribution = 3;
+
+  optional string build_suffix = 4;
+
+  optional string branch_name = 5;
 }
