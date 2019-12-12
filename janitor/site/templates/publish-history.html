@@ -5,6 +5,15 @@
 {% block body %}
  <div class="section" id="publish-history">
 <h1>Publish History</h1>
+<button id="scan">Refresh Merge Proposal Status</button>
+<button id="autopublish">Automatically Publish</button>
+
+<script>
+$(document).ready(function(){
+	$("#scan").click(function(){ $.post("/api/publish/scan"); });
+	$("#autopublish").click(function(){ $.post("/api/publish/autopublish"); });
+});
+</script>
 <p>Last {{ count }} publish actions:</p>
 <table class="docutils" border="1">
 <colgroup>
