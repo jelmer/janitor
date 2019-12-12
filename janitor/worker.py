@@ -212,6 +212,9 @@ class LintianBrushWorker(SubWorker):
                 note('Fixer %r failed to run:', fixer_name)
                 sys.stderr.write(failure.errors)
 
+        metadata['versions'] = {
+            'lintian-brush': lintian_brush_version_string,
+            }
         metadata['applied'] = []
         if base_metadata:
             metadata['applied'].extend(base_metadata['applied'])
@@ -730,9 +733,6 @@ def main(argv=None):
 
     metadata = {}
     start_time = datetime.now()
-    metadata['versions'] = {
-        'lintian-brush': lintian_brush_version_string,
-        }
     metadata['start_time'] = start_time.isoformat()
     try:
         result = process_package(
