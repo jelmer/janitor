@@ -89,7 +89,7 @@ if __name__ == '__main__':
     import functools
     import os
     import re
-    from janitor import SUITES, SUITE_REGEX
+    from janitor import SUITE_REGEX
     from janitor import state
     from janitor.config import read_config
     from janitor.logs import get_log_manager
@@ -265,7 +265,8 @@ if __name__ == '__main__':
                 merge_proposals.append((url, status, run))
             runs = state.iter_runs(conn, package=package.name)
             text = await generate_pkg_file(
-                request.app.database, package, merge_proposals, runs)
+                request.app.database, request.app.config,
+                package, merge_proposals, runs)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -522,21 +523,21 @@ if __name__ == '__main__':
     app.router.add_get(
         '/lintian-fixes/', handle_lintian_fixes,
         name='lintian-fixes-start')
-    for suite in SUITES:
+    for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
         app.router.add_get(
-            '/%s/merge-proposals' % suite,
-            functools.partial(handle_merge_proposals, suite),
-            name='%s-merge-proposals' % suite)
+            '/%s/merge-proposals' % suite.name,
+            functools.partial(handle_merge_proposals, suite.name),
+            name='%s-merge-proposals' % suite.name)
         app.router.add_get(
-            '/%s/ready' % suite,
-            functools.partial(handle_ready_proposals, suite),
-            name='%s-ready' % suite)
+            '/%s/ready' % suite.name,
+            functools.partial(handle_ready_proposals, suite.name),
+            name='%s-ready' % suite.name)
         app.router.add_get(
-            '/%s/maintainer' % suite, handle_maintainer_list,
-            name='%s-maintainer-list' % suite)
+            '/%s/maintainer' % suite.name, handle_maintainer_list,
+            name='%s-maintainer-list' % suite.name)
         app.router.add_get(
-            '/%s/pkg/' % suite, handle_pkg_list,
-            name='%s-package-list' % suite)
+            '/%s/pkg/' % suite.name, handle_pkg_list,
+            name='%s-package-list' % suite.name)
     app.router.add_get(
         '/{suite:' + SUITE_REGEX + '}'
         '/{file:Contents-.*|InRelease|Packages.*|Release.*|'
@@ -647,6 +648,7 @@ if __name__ == '__main__':
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
     app.database = state.Database(config.database_location)
+    app.config = config
     from janitor.site import env
     app.jinja_env = env
     setup_debsso(app)
