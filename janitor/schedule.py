@@ -115,13 +115,7 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         entry_command = full_command(suite, update_changelog, command)
 
-        yield (
-            package.name,
-            {'PACKAGE': package.name,
-             'CONTEXT': context,
-             'UPLOADER_EMAILS': ','.join(package.uploader_emails),
-             'MAINTAINER_EMAIL': package.maintainer_email},
-            entry_command, suite, value)
+        yield (package.name, context, entry_command, suite, value)
 
 
 async def estimate_success_probability(conn, package, suite, context=None):
@@ -186,7 +180,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
                   if p.removed)
     max_inst = max([(v or 0) for v in popcon.values()])
     trace.note('Maximum inst count: %d', max_inst)
-    for package, env, command, suite, value in todo:
+    for package, context, command, suite, value in todo:
         assert package is not None
         assert value > 0, "Value: %s" % value
         if package in removed:
@@ -194,7 +188,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
         estimated_duration = await estimate_duration(
             conn, package, suite)
         estimated_probability_of_success = await estimate_success_probability(
-            conn, package, suite, env.get('CONTEXT'))
+            conn, package, suite, context)
         assert (estimated_probability_of_success >= 0.0 and
                 estimated_probability_of_success <= 1.0), \
             "Probability of success: %s" % estimated_probability_of_success
@@ -219,7 +213,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
             added = await state.add_to_queue(
                 conn, package, command, suite, offset=int(offset),
                 estimated_duration=estimated_duration,
-                context=env.get('CONTEXT'), requestor='scheduler',
+                context=context, requestor='scheduler',
                 requestor_relative=True)
         else:
             added = True

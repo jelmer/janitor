@@ -679,11 +679,8 @@ class QueueProcessor(object):
                 await state.store_run(
                     conn, result.log_id, item.package, result.branch_url,
                     start_time, finish_time, item.command,
-                    result.description,
-                    item.env.get('CONTEXT'),
-                    result.context,
-                    result.main_branch_revision,
-                    result.code,
+                    result.description, item.env.context, result.context,
+                    result.main_branch_revision, result.code,
                     build_version=result.build_version,
                     build_distribution=result.build_distribution,
                     branch_name=result.branch_name,
