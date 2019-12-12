@@ -5,3 +5,35 @@ database_location: 'postgresql://janitor@example.com:5432/janitor'
 # Set the default committer; if unset defaults to current users' preferences
 # (i.e. ~/.gitconfig)
 committer: 'Debian Janitor <janitor@jelmer.uk>'
+
+suite {
+  name: "lintian-fixes"
+  archive_description: "Builds of lintian fixes"
+  build_distribution: "lintian-fixes"
+  branch_name: "lintian-fixes"
+  build_suffix: "jan+lint"
+}
+
+suite {
+  name: "unchanged"
+  archive_description: "Builds without any changes"
+  build_distribution: "unchanged"
+  branch_name: "master"
+  build_suffix: "jan+unchanged"
+}
+
+suite {
+  name: "fresh-releases"
+  archive_description: "Builds with new upstream versions merged"
+  build_distribution: "fresh-releases"
+  branch_name: "new-upstream"
+  build_suffix: "jan+nur"
+}
+
+suite {
+  name: "fresh-snapshots"
+  archive_description: "Builds with new upstream snapshots merged"
+  build_distribution: "fresh-snapshots"
+  branch_name: "new-upstream-snapshot"
+  build_suffix: "jan+nus"
+}
