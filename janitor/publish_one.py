@@ -201,14 +201,16 @@ def publish(
         return subrunner.get_proposal_commit_message(
             existing_commit_message)
 
+    with main_branch.lock_read(), local_branch.lock_read():
+        if merge_conflicts(main_branch, local_branch):
+            raise MergeConflict(main_branch, local_branch)
+
     with BranchWorkspace(
             main_branch, local_branch, resume_branch=resume_branch) as ws:
         if not hoster.supports_merge_proposal_labels:
             labels = None
         else:
             labels = [suite]
-        if merge_conflicts(main_branch, local_branch):
-            raise MergeConflict(main_branch, local_branch)
         try:
             return publish_changes_from_workspace(
                 ws, mode, subrunner.branch_name(),
