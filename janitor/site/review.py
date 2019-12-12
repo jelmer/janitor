@@ -15,6 +15,9 @@ async def generate_review(conn, client, publisher_url, suite=None):
                state.iter_publish_ready(
                        conn, review_status=['unreviewed'], limit=40,
                        suite=suite)]
+    if not entries:
+        template = env.get_template('review-done.html')
+        return await template.render_async()
 
     (run, maintainer_email, uploader_emails, branch_url,
      publish_mode, changelog_mode,
