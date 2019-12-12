@@ -456,18 +456,18 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
 
 class QueueItem(object):
 
-    __slots__ = ['id', 'branch_url', 'subpath', 'package', 'env', 'command',
-                 'estimated_duration', 'suite', 'refresh', 'requestor',
-                 'vcs_type', 'upstream_branch_url']
+    __slots__ = ['id', 'branch_url', 'subpath', 'package', 'context',
+                 'command', 'estimated_duration', 'suite', 'refresh',
+                 'requestor', 'vcs_type', 'upstream_branch_url']
 
-    def __init__(self, id, branch_url, subpath, package, env, command,
+    def __init__(self, id, branch_url, subpath, package, context, command,
                  estimated_duration, suite, refresh, requestor, vcs_type,
                  upstream_branch_url):
         self.id = id
         self.package = package
         self.branch_url = branch_url
         self.subpath = subpath
-        self.env = env
+        self.context = context
         self.command = command
         self.estimated_duration = estimated_duration
         self.suite = suite
@@ -482,22 +482,18 @@ class QueueItem(object):
             command, context, queue_id, estimated_duration,
             suite, refresh, requestor, vcs_type,
             upstream_branch_url) = row
-        env = {
-            'CONTEXT': context,
-        }
         return cls(
                 id=queue_id, branch_url=branch_url,
-                subpath=subpath,
-                package=package, env=env,
+                subpath=subpath, package=package, context=context,
                 command=shlex.split(command),
                 estimated_duration=estimated_duration,
                 suite=suite, refresh=refresh, requestor=requestor,
                 vcs_type=vcs_type, upstream_branch_url=upstream_branch_url)
 
     def _tuple(self):
-        return (self.id, self.branch_url, self.subpath, self.package, self.env,
-                self.command, self.estimated_duration, self.suite,
-                self.refresh, self.requestor, self.vcs_type,
+        return (self.id, self.branch_url, self.subpath, self.package,
+                self.context, self.command, self.estimated_duration,
+                self.suite, self.refresh, self.requestor, self.vcs_type,
                 self.upstream_branch_url)
 
     def __eq__(self, other):
