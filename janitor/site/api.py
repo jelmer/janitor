@@ -194,7 +194,7 @@ async def handle_queue(request):
                 'queue_id': entry.id,
                 'branch_url': entry.branch_url,
                 'package': entry.package,
-                'env': entry.env,
+                'context': entry.context,
                 'command': entry.command})
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=60'})
