@@ -254,6 +254,14 @@ async def handle_debdiff(request):
             raise web.HTTPNotFound(
                 text='No matching unchanged build for %s' % run_id)
 
+    if run.build_version is None:
+        raise web.HTTPNotFound(
+            text='Build %s was not successful' % run_id)
+
+    if unchanged_run.build_version is None:
+        raise web.HTTPNotFound(
+            text='Unchanged build %s was not successful' % unchanged_run.id)
+
     try:
         debdiff = await get_debdiff(
             request.app.http_client_session, request.app.archiver_url, run,
@@ -327,8 +335,8 @@ async def handle_publish_scan(request):
         async with request.app.http_client_session.post(url) as resp:
             return web.Response(body=await resp.read(), status=resp.status)
     except ClientConnectorError:
-        return web.json_response(
-            'unable to contact publisher',
+        return web.Response(
+            text='unable to contact publisher',
             status=400)
 
 
@@ -339,8 +347,8 @@ async def handle_publish_autopublish(request):
         async with request.app.http_client_session.post(url) as resp:
             return web.Response(body=await resp.read(), status=resp.status)
     except ClientConnectorError:
-        return web.json_response(
-            'unable to contact publisher',
+        return web.Response(
+            text='unable to contact publisher',
             status=400)
 
 
@@ -493,8 +501,8 @@ async def handle_publish_ready(request):
     ret = []
     async with request.app.db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, branch_url,
-                   review_status, publish_policy, changelog_mode,
-                   command) in state.iter_publish_ready(
+                   publish_policy, changelog_mode, command
+                   ) in state.iter_publish_ready(
                        conn, suite=suite, review_status=review_status):
             if publish_policy in (
                     'propose', 'attempt-push', 'push-derived', 'push'):
