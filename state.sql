@@ -1,6 +1,7 @@
 CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
+CREATE DOMAIN package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS package (
-   name text not null check (name similar to '[a-z0-9][a-z0-9+-.]+'),
+   name package_name,
    branch_url text not null,
    subpath text,
    maintainer_email text not null,
@@ -31,7 +32,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    foreign key (package) references package(name),
    primary key(url)
 );
-CREATE TYPE suite AS ENUM('lintian-fixes', 'fresh-releases', 'fresh-snapshots','unchanged');
+CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected');
 CREATE TABLE IF NOT EXISTS run (
    id text not null primary key,
@@ -53,7 +54,7 @@ CREATE TABLE IF NOT EXISTS run (
    branch_name text,
    revision text,
    result jsonb,
-   suite suite not null,
+   suite suite_name not null,
    branch_url text not null,
    logfilenames text[] not null,
    review_status review_status not null default 'unreviewed',
@@ -86,7 +87,7 @@ CREATE TABLE IF NOT EXISTS publish (
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    package text not null,
-   suite suite not null,
+   suite suite_name not null,
    command text not null,
    priority bigint default 0 not null,
    foreign key (package) references package(name),
@@ -107,7 +108,7 @@ CREATE TABLE IF NOT EXISTS branch (
 );
 CREATE TABLE IF NOT EXISTS candidate (
    package text not null,
-   suite suite not null,
+   suite suite_name not null,
    context text,
    value integer,
    unique(package, suite),
@@ -116,7 +117,7 @@ CREATE TABLE IF NOT EXISTS candidate (
 CREATE TYPE changelog_mode AS ENUM('auto', 'update', 'leave');
 CREATE TABLE IF NOT EXISTS publish_policy (
    package text not null,
-   suite suite not null,
+   suite suite_name not null,
    mode publish_mode default 'build-only',
    update_changelog changelog_mode default 'auto',
    command text[],
