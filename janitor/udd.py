@@ -163,7 +163,7 @@ and vcs_type != ''"""
                 available_fixers, packages if packages else None):
             value = estimate_lintian_fixes_value(tags)
             context = ' '.join(sorted(tags))
-            yield package, 'lintian-fixes', context, value
+            yield package, context, value
 
     async def iter_unchanged_candidates(self, packages=None):
         args = []
@@ -178,8 +178,7 @@ sources.release = 'sid'
             args.append(tuple(packages))
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], 'unchanged', None,
-                       DEFAULT_VALUE_UNCHANGED)
+                yield (row[0], None, DEFAULT_VALUE_UNCHANGED)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -198,8 +197,7 @@ sources.release = 'sid'
         query += " ORDER BY sources.source, sources.version DESC"
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], 'fresh-releases', row[1],
-                       DEFAULT_VALUE_NEW_UPSTREAM)
+                yield (row[0], row[1], DEFAULT_VALUE_NEW_UPSTREAM)
 
     async def iter_fresh_snapshots_candidates(self, packages):
         args = []
@@ -215,9 +213,7 @@ sources.release = 'sid'
         query += " ORDER BY sources.source, sources.version DESC"
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (
-                    row[0], 'fresh-snapshots',
-                    None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
+                yield (row[0], None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
 
     async def iter_packages_with_metadata(self, packages=None):
         args = []
@@ -381,16 +377,16 @@ async def main():
 
         for suite, candidate_fn in CANDIDATE_FNS:
             trace.note('Adding candidates for %s.', suite)
-            candidates = [entry async for entry in candidate_fn]
+            candidates = [
+                (package, suite, context, value)
+                async for (package, context, value) in candidate_fn]
             trace.note('Collected %d candidates for %s.',
                        len(candidates), suite)
             await state.store_candidates(conn, candidates)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(
-            args.prometheus, job='janitor.udd',
-            registry=REGISTRY)
+        push_to_gateway(args.prometheus, job='janitor.udd', registry=REGISTRY)
 
 
 if __name__ == '__main__':
