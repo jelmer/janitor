@@ -4,7 +4,7 @@ from aiohttp import ClientConnectorError
 from io import BytesIO
 import urllib.parse
 
-from janitor import state, SUITES
+from janitor import state
 from janitor.sbuild_log import (
     parse_sbuild_log,
     find_failed_stage,
@@ -223,7 +223,7 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
     return await template.render_async(**kwargs)
 
 
-async def generate_pkg_file(db, package, merge_proposals, runs):
+async def generate_pkg_file(db, config, package, merge_proposals, runs):
     kwargs = {}
     kwargs['package'] = package.name
     kwargs['vcswatch_status'] = package.vcswatch_status
@@ -233,7 +233,7 @@ async def generate_pkg_file(db, package, merge_proposals, runs):
     kwargs['merge_proposals'] = merge_proposals
     kwargs['runs'] = [run async for run in runs]
     kwargs['removed'] = package.removed
-    kwargs['suites'] = SUITES
+    kwargs['suites'] = [suite.name for suite in config.suite]
     async with db.acquire() as conn:
         kwargs['candidates'] = {
             suite: (context, value)
