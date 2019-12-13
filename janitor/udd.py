@@ -98,7 +98,7 @@ class UDD(object):
     def __init__(self, conn):
         self._conn = conn
 
-    async def iter_source_packages_by_lintian(self, tags, packages=None):
+    async def iter_lintian_fixes_candidates(self, packages, available_fixers):
         """Iterate over all of the packages affected by a set of tags."""
         package_rows = {}
         package_tags = {}
@@ -155,15 +155,10 @@ and vcs_type != ''"""
             package_tags.setdefault((row[0], row[1]), []).append(row[6])
         package_values = package_rows.values()
         for row in package_values:
-            yield (row[0], package_tags[row[0], row[1]])
-
-    async def iter_lintian_fixes_candidates(
-            self, packages, available_fixers):
-        async for package, tags in self.iter_source_packages_by_lintian(
-                available_fixers, packages if packages else None):
+            tags = sorted(package_tags[row[0], row[1]])
             value = estimate_lintian_fixes_value(tags)
             context = ' '.join(sorted(tags))
-            yield package, context, value
+            yield (row[0], context, value)
 
     async def iter_unchanged_candidates(self, packages=None):
         args = []
