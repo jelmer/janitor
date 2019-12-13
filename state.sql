@@ -146,3 +146,5 @@ CREATE OR REPLACE VIEW merged_runs AS
   FROM run
   INNER JOIN merge_proposal ON merge_proposal.revision = run.revision
   WHERE result_code = 'success' and merge_proposal.status = 'merged';
+
+create or replace view suites as select distinct suite as name from run;
