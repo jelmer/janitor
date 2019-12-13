@@ -21,7 +21,6 @@ import json
 import shlex
 import asyncpg
 from contextlib import asynccontextmanager
-from . import SUITES
 from breezy import urlutils
 
 
@@ -1109,15 +1108,23 @@ async def iter_packages_by_maintainer(conn, maintainer):
 
 
 async def get_never_processed(conn, suites=None):
-    if suites is None:
-        suites = list(SUITES)
-    query = """\
+    if suites is not None:
+        args = [suites]
+        query = """\
 SELECT suite, COUNT(suite) FROM package p CROSS JOIN UNNEST ($1::text[]) suite
 WHERE NOT EXISTS
 (SELECT FROM run WHERE run.package = p.name AND run.suite = suite)
 GROUP BY suite
     """
-    return await conn.fetch(query, suites)
+    else:
+        args = []
+        query = """\
+SELECT suites.name, COUNT(suites.name) FROM package p CROSS JOIN suites
+WHERE NOT EXISTS
+(SELECT FROM run WHERE run.package = p.name AND run.suite = suites.name)
+GROUP BY suites.name
+    """
+    return await conn.fetch(query, *args)
 
 
 async def iter_by_suite_result_code(conn):

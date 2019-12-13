@@ -32,7 +32,6 @@ _mod_http.default_user_agent = user_agent
 _mod_http.AbstractHTTPHandler._default_headers['User-agent'] = user_agent()
 
 
-SUITES = ['fresh-snapshots', 'fresh-releases', 'lintian-fixes', 'unchanged']
 SUITE_REGEX = '[a-z0-9-]+'
 
 DEFAULT_BUILD_ARCH = 'amd64'
