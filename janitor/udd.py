@@ -53,6 +53,16 @@ LINTIAN_BRUSH_TAG_DEFAULT_VALUE = 5
 # Default to 15 seconds
 DEFAULT_ESTIMATED_DURATION = 15
 
+DEFAULT_VALUE_MULTIARCH_HINT = 50
+MULTIARCH_HINTS_VALUE = {
+    'ma-foreign': 20,
+    'file-conflict': 50,
+    'ma-foreign-library': 20,
+    'dep-any': 20,
+    'ma-same': 20,
+    'arch-all': 20,
+}
+
 
 def estimate_lintian_fixes_value(tags):
     if not (set(tags) - set(DEFAULT_ADDON_FIXERS)):
@@ -103,7 +113,7 @@ class UDD(object):
         package_rows = {}
         package_tags = {}
 
-        args = [tuple(tags)]
+        args = [tuple(available_fixers)]
         query = """
 SELECT DISTINCT ON (sources.source)
     sources.source,
@@ -245,65 +255,37 @@ select name, version from package_removal where 'source' = any(arch_array)
         return await self._conn.fetch(query, *args)
 
 
-async def main():
-    import argparse
-    from janitor import state
-    from silver_platter.debian.lintian import (
-        available_lintian_fixers,
-    )
-    from prometheus_client import (
-        Counter,
-        Gauge,
-        push_to_gateway,
-        REGISTRY,
-    )
+async def iter_multiarch_fixes(packages=None):
+    from lintian_brush.multiarch_hints import (
+        download_multiarch_hints,
+        parse_multiarch_hints,
+        multiarch_hints_by_source,
+        )
+    with download_multiarch_hints() as f:
+        hints = parse_multiarch_hints(f)
+        bysource = multiarch_hints_by_source(hints)
+    for source, entries in bysource.items():
+        hints = [entry['link'].rsplit('#', 1)[-1] for entry in entries]
+        value = sum(map(MULTIARCH_HINTS_VALUE.__getitem__, hints)) + (
+            DEFAULT_VALUE_MULTIARCH_HINT)
+        yield source, ' '.join(sorted(hints)), value
 
-    parser = argparse.ArgumentParser(prog='candidates')
-    parser.add_argument("packages", nargs='*')
-    parser.add_argument(
-        "--dry-run",
-        help="Create branches but don't push or propose anything.",
-        action="store_true", default=False)
-    parser.add_argument('--prometheus', type=str,
-                        help='Prometheus push gateway to export to.')
-    parser.add_argument(
-        '--config', type=str, default='janitor.conf',
-        help='Path to configuration.')
 
-    args = parser.parse_args()
-
-    last_success_gauge = Gauge(
-        'job_last_success_unixtime',
-        'Last time a batch job successfully finished')
-    fixer_count = Counter(
-        'fixer_count', 'Number of selected fixers.')
-
-    with open(args.config, 'r') as f:
-        config = read_config(f)
-
-    tags = set()
-    available_fixers = list(available_lintian_fixers())
-    for fixer in available_fixers:
-        tags.update(fixer.lintian_tags)
-    fixer_count.inc(len(available_fixers))
-
-    udd = await UDD.public_udd_mirror()
-
-    db = state.Database(config.database_location)
-
+async def update_package_metadata(db, selected_packages=None):
     async with db.acquire() as conn:
         existing_packages = {
             package.name: package
             for package in await state.iter_packages(conn)}
 
         removals = {}
-        for name, version in await udd.iter_removals(packages=args.packages):
+        for name, version in await udd.iter_removals(
+                packages=selected_packages):
             if name not in removals:
                 removals[name] = Version(version)
             else:
                 removals[name] = max(Version(version), removals[name])
 
-        if not args.packages:
+        if not selected_packages:
             trace.note('Updating removals.')
             filtered_removals = [
                 (name, version) for (name, version) in removals.items()
@@ -316,7 +298,7 @@ async def main():
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
                vcs_branch, vcs_browser, vcswatch_status, sid_version,
                vcswatch_version) in udd.iter_packages_with_metadata(
-                   args.packages):
+                   selected_packages):
         uploader_emails = extract_uploader_emails(uploaders)
 
         if vcs_type and vcs_type.capitalize() == 'Git':
@@ -358,9 +340,66 @@ async def main():
             sid_version, vcs_type, vcs_url, vcs_browser,
             vcswatch_status.lower() if vcswatch_status else None,
             vcswatch_version, insts, removed))
-    async with db.acquire() as conn:
         await state.store_packages(conn, packages)
 
+
+async def main():
+    import argparse
+    from janitor import state
+    from silver_platter.debian.lintian import (
+        available_lintian_fixers,
+    )
+    from prometheus_client import (
+        Counter,
+        Gauge,
+        push_to_gateway,
+        REGISTRY,
+    )
+
+    parser = argparse.ArgumentParser(prog='candidates')
+    parser.add_argument("packages", nargs='*')
+    parser.add_argument(
+        "--dry-run",
+        help="Create branches but don't push or propose anything.",
+        action="store_true", default=False)
+    parser.add_argument('--prometheus', type=str,
+                        help='Prometheus push gateway to export to.')
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
+
+    parser.add_argument(
+        '--suite', type=str, action='append',
+        help='Suite to retrieve candidates for.')
+    parser.add_argument(
+        '--skip-package-metadata', action='store_true',
+        help='Skip updating of package information.')
+
+    args = parser.parse_args()
+
+    last_success_gauge = Gauge(
+        'job_last_success_unixtime',
+        'Last time a batch job successfully finished')
+    fixer_count = Counter(
+        'fixer_count', 'Number of selected fixers.')
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
+
+    tags = set()
+    available_fixers = list(available_lintian_fixers())
+    for fixer in available_fixers:
+        tags.update(fixer.lintian_tags)
+    fixer_count.inc(len(available_fixers))
+
+    udd = await UDD.public_udd_mirror()
+
+    db = state.Database(config.database_location)
+
+    if not args.skip_package_metadata:
+        await update_package_metadata(db, args.packages)
+
+    async with db.acquire() as conn:
         CANDIDATE_FNS = [
             ('unchanged', udd.iter_unchanged_candidates(args.packages)),
             ('lintian-fixes',
@@ -368,9 +407,13 @@ async def main():
             ('fresh-releases',
              udd.iter_fresh_releases_candidates(args.packages)),
             ('fresh-snapshots',
-             udd.iter_fresh_snapshots_candidates(args.packages))]
+             udd.iter_fresh_snapshots_candidates(args.packages)),
+            ('multiarch-fixes',
+             iter_multiarch_fixes(args.packages))]
 
         for suite, candidate_fn in CANDIDATE_FNS:
+            if args.suite and suite not in args.suite:
+                continue
             trace.note('Adding candidates for %s.', suite)
             candidates = [
                 (package, suite, context, value)
