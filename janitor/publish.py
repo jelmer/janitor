@@ -315,7 +315,10 @@ async def publish_from_policy(
         mode, update_changelog, command, possible_hosters=None,
         possible_transports=None, dry_run=False):
     from .schedule import full_command, estimate_duration, do_schedule
-    expected_command = full_command(run.suite, update_changelog, command)
+    if not command:
+        warning('no command set for %s', run.id)
+        return
+    expected_command = full_command(update_changelog, command)
     if ' '.join(expected_command) != run.command:
         warning(
             'Not publishing %s/%s: command is different (policy changed?). '

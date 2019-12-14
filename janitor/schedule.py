@@ -43,12 +43,6 @@ POPULARITY_WEIGHT = 1
 # Default estimation if there is no median for the suite or the package.
 DEFAULT_ESTIMATED_DURATION = 15
 DEFAULT_SCHEDULE_OFFSET = -1
-SUITE_TO_COMMAND = {
-    'lintian-fixes': ['lintian-brush'],
-    'fresh-releases': ['new-upstream'],
-    'fresh-snapshots': ['new-upstream', '--snapshot'],
-    'unchanged': ['just-build'],
-    }
 
 
 TRANSIENT_ERROR_RESULT_CODES = [
@@ -81,11 +75,8 @@ PUBLISH_MODE_VALUE = {
     }
 
 
-def full_command(suite, update_changelog, command):
-    if command is not None:
-        entry_command = command
-    else:
-        entry_command = SUITE_TO_COMMAND[suite]
+def full_command(update_changelog, command):
+    entry_command = command
     if update_changelog == "update":
         entry_command.append("--update-changelog")
     elif update_changelog == "leave":
@@ -113,7 +104,11 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         value += PUBLISH_MODE_VALUE[publish_mode]
 
-        entry_command = full_command(suite, update_changelog, command)
+        if not command:
+            trace.mutter('%s: skipping, no command set', package.name)
+            continue
+
+        entry_command = full_command(update_changelog, command)
 
         yield (package.name, context, entry_command, suite, value)
 
@@ -299,7 +294,9 @@ async def do_schedule(conn, package, suite, offset=None,
         offset = DEFAULT_SCHEDULE_OFFSET
     (unused_publish_policy, update_changelog, command) = (
         await state.get_publish_policy(conn, package, suite))
-    command = full_command(suite, update_changelog, command)
+    if not command:
+        return None, None
+    command = full_command(update_changelog, command)
     estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(
         conn, package, command, suite, offset,

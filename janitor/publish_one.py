@@ -40,9 +40,6 @@ from silver_platter.proposal import (
 from silver_platter.debian import (
     pick_additional_colocated_branches,
     )
-from silver_platter.debian.lintian import (
-    create_mp_description,
-    )
 
 from breezy.plugins.propose.propose import (
     MergeProposalExists,
@@ -243,6 +240,9 @@ class LintianBrushPublisher(object):
         return "lintian-fixes"
 
     def get_proposal_description(self, existing_description):
+        from silver_platter.debian.lintian import (
+            create_mp_description,
+            )
         return create_mp_description([l['summary'] for l in self.applied])
 
     def get_proposal_commit_message(self, existing_commit_message):
@@ -264,6 +264,27 @@ class LintianBrushPublisher(object):
 
     def allow_create_proposal(self):
         return self.applied and not self.add_on_only
+
+
+class MultiArchHintsPublisher(object):
+
+    def __init__(self, args):
+        self.args = args
+
+    def branch_name(self):
+        return "multiarch-hints"
+
+    def get_proposal_description(self, existing_description):
+        return 'Apply multi-arch hints.'
+
+    def get_proposal_commit_message(self, existing_commit_message):
+        return 'Apply multi-arch hints.'
+
+    def read_worker_result(self, result):
+        self.applied = result['applied-hints']
+
+    def allow_create_proposal(self):
+        return True
 
 
 class NewUpstreamPublisher(object):
@@ -301,6 +322,8 @@ def publish_one(
         subrunner = NewUpstreamPublisher(command)
     elif command.startswith('lintian-brush'):
         subrunner = LintianBrushPublisher(command)
+    elif command.startswith('apply-multiarch-hints'):
+        subrunner = MultiArchHintsPublisher(command)
     else:
         raise AssertionError('unknown command %r' % command)
 
