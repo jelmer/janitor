@@ -230,7 +230,8 @@ async def invoke_subprocess_worker(
         pre_check=None, post_check=None,
         build_command=None, log_path=None,
         resume_branch_result=None,
-        last_build_version=None, subpath=None):
+        last_build_version=None, subpath=None,
+        build_distribution=None, build_suffix=None):
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
@@ -265,6 +266,10 @@ async def invoke_subprocess_worker(
         args.append('--resume-result-path=%s' % resume_result_path)
     if last_build_version:
         args.append('--last-build-version=%s' % last_build_version)
+    if build_distribution:
+        args.append('--build-distribution=%s' % build_distribution)
+    if build_suffix:
+        args.append('--build-suffix=%s' % build_suffix)
 
     args.extend(command)
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
@@ -320,7 +325,7 @@ async def open_branch_with_fallback(
 
 
 async def process_one(
-        db, output_directory, worker_kind, vcs_url, pkg, env, command,
+        db, suite, output_directory, worker_kind, vcs_url, pkg, env, command,
         build_command, suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
@@ -339,17 +344,16 @@ async def process_one(
     if upstream_branch_url:
         env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
 
-    # TODO(jelmer): Ideally, there shouldn't be any command-specific code here.
-    if suite == "fresh-releases":
-        branch_name = 'new-upstream'
-    elif suite == "fresh-snapshots":
-        branch_name = 'new-upstream-snapshot'
-    elif suite == "lintian-fixes":
-        branch_name = "lintian-fixes"
-    elif suite == "unchanged":
-        branch_name = "master"
+    for s in config.suite:
+        if s.name == suite:
+            suite_config = s
+            break
     else:
-        raise AssertionError('Unknown command %s' % command[0])
+        return JanitorResult(
+            pkg, log_id=log_id,
+            code='unknown-suite',
+            description='Suite %s not in configuration' % suite,
+            logfilenames=[])
 
     if not use_cached_only:
         async with db.acquire() as conn:
@@ -398,7 +402,7 @@ async def process_one(
             try:
                 (resume_branch, unused_overwrite, unused_existing_proposal) = (
                     find_existing_proposed(
-                        main_branch, hoster, branch_name))
+                        main_branch, hoster, suite_config.branch_name))
             except NoSuchProject as e:
                 warning('Project %s not found', e.project)
                 resume_branch = None
@@ -408,7 +412,7 @@ async def process_one(
 
         if resume_branch is None and vcs_manager:
             resume_branch = vcs_manager.get_branch(
-                pkg, branch_name, get_vcs_abbreviation(main_branch))
+                pkg, suite_config.branch_name, get_vcs_abbreviation(main_branch))
 
         if resume_branch is not None:
             note('Resuming from %s', resume_branch.user_url)
@@ -433,7 +437,7 @@ async def process_one(
                 description='Missing cache branch for %s' % pkg,
                 logfilenames=[])
         note('Using cached branch %s', main_branch.user_url)
-        resume_branch = vcs_manager.get_branch(pkg, branch_name)
+        resume_branch = vcs_manager.get_branch(pkg, suite_config.branch_name)
         cached_branch = None
 
     if refresh and resume_branch:
@@ -460,7 +464,9 @@ async def process_one(
                 build_command=build_command, log_path=log_path,
                 resume_branch_result=resume_branch_result,
                 last_build_version=last_build_version,
-                subpath=subpath),
+                subpath=subpath,
+                build_distribution=suite_config.build_distribution,
+                build_suffix=suite_config.build_suffix),
             timeout=overall_timeout)
     except asyncio.TimeoutError:
         return JanitorResult(
@@ -545,10 +551,10 @@ async def process_one(
     if vcs_manager:
         vcs_manager.import_branches(
             main_branch, local_branch,
-            pkg, branch_name,
+            pkg, suite_config.branch_name,
             additional_colocated_branches=(
                 pick_additional_colocated_branches(main_branch)))
-        result.branch_name = branch_name
+        result.branch_name = suite_config.branch_name
 
     if result.changes_filename:
         changes_path = os.path.join(
@@ -603,7 +609,7 @@ async def export_stats(db):
 class QueueProcessor(object):
 
     def __init__(
-            self, database, worker_kind, build_command, pre_check=None,
+            self, database, config, worker_kind, build_command, pre_check=None,
             post_check=None, dry_run=False, incoming=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
             concurrency=1, use_cached_only=False, overall_timeout=None,
@@ -618,6 +624,7 @@ class QueueProcessor(object):
           incoming: directory to copy debian packages to
         """
         self.database = database
+        self.config = config
         self.worker_kind = worker_kind
         self.build_command = build_command
         self.pre_check = pre_check
@@ -659,7 +666,7 @@ class QueueProcessor(object):
         with tempfile.TemporaryDirectory() as output_directory:
             self.per_run_directory[item.id] = output_directory
             result = await process_one(
-                self.database, output_directory, self.worker_kind,
+                self.database, self.config, output_directory, self.worker_kind,
                 item.branch_url, item.package, item.env, item.command,
                 suite=item.suite, pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
@@ -851,6 +858,7 @@ def main(argv=None):
     db = state.Database(config.database_location)
     queue_processor = QueueProcessor(
         db,
+        config,
         args.worker,
         args.build_command,
         args.pre_check, args.post_check,
