@@ -85,6 +85,7 @@ from silver_platter.utils import (
 
 from .fix_build import build_incrementally
 from .build import (
+    build_once,
     MissingChangesFile,
     SbuildFailure,
 )
@@ -123,12 +124,85 @@ class SubWorker(object):
         """
         raise NotImplementedError(self.make_changes)
 
-    def build_suite(self):
-        """Returns the name of the suite to build for."""
-        raise NotImplementedError(self.build_suite)
 
-    def build_version_suffix(self):
-        raise NotImplementedError(self.build_version_suffix)
+class MultiArchHintsWorker(SubWorker):
+
+    def __init__(self, command, env):
+        subparser = argparse.ArgumentParser(prog='multiarch-fix')
+        # Hide the minimum-certainty option for the moment.
+        subparser.add_argument(
+            '--minimum-certainty',
+            type=str,
+            choices=SUPPORTED_CERTAINTIES,
+            default=None,
+            help=argparse.SUPPRESS)
+        subparser.add_argument(
+            '--no-update-changelog', action="store_false", default=None,
+            dest="update_changelog", help="do not update the changelog")
+        subparser.add_argument(
+            '--update-changelog', action="store_true", dest="update_changelog",
+            help="force updating of the changelog", default=None)
+        subparser.add_argument(
+            '--allow-reformatting', default=None, action='store_true',
+            help=argparse.SUPPRESS)
+        self.args = subparser.parse_args(command)
+
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata, subpath=None):
+        """Make the actual changes to a tree.
+
+        Args:
+          local_tree: Tree to make changes to
+          report_context: report context
+          metadata: JSON Dictionary that can be used for storing results
+          base_metadata: Optional JSON Dictionary with results of
+            any previous runs this one is based on
+          subpath: Path in the branch where the package resides
+        """
+        update_changelog = self.args.update_changelog
+        allow_reformatting = self.args.allow_reformatting
+        minimum_certainty = self.args.minimum_certainty
+        try:
+            cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
+        except FileNotFoundError:
+            pass
+        else:
+            if minimum_certainty is None:
+                minimum_certainty = cfg.minimum_certainty()
+            if allow_reformatting is None:
+                allow_reformatting = cfg.allow_reformatting()
+            if update_changelog is None:
+                update_changelog = cfg.update_changelog()
+
+        from lintian_brush.multiarch_hints import (
+            download_multiarch_hints,
+            parse_multiarch_hints,
+            multiarch_hints_by_binary,
+            MultiArchHintFixer,
+            APPLIERS,
+            )
+        from lintian_brush import (
+            run_lintian_fixer,
+            NoChanges,
+            )
+
+        note("Downloading multiarch hints.")
+        with download_multiarch_hints() as f:
+            hints = multiarch_hints_by_binary(parse_multiarch_hints(f))
+
+        try:
+            result, summary = run_lintian_fixer(
+                local_tree, MultiArchHintFixer(APPLIERS, hints),
+                update_changelog=update_changelog,
+                minimum_certainty=minimum_certainty,
+                subpath=subpath, allow_reformatting=allow_reformatting,
+                net_access=True)
+        except NoChanges:
+            raise WorkerFailure('nothing-to-do', 'no hints to apply')
+        else:
+            for binary, description, certainty in result.changes:
+                note('%s: %s' % (binary['Package'], description))
+            return "Applied multi-arch hints."
 
 
 class LintianBrushWorker(SubWorker):
@@ -240,12 +314,6 @@ class LintianBrushWorker(SubWorker):
                 tags.update(entry['fixed_lintian_tags'])
         return 'Applied fixes for %r' % tags
 
-    def build_suite(self):
-        return 'lintian-fixes'
-
-    def build_version_suffix(self):
-        return 'jan+lint'
-
 
 class NewUpstreamWorker(SubWorker):
 
@@ -260,13 +328,6 @@ class NewUpstreamWorker(SubWorker):
 
     def make_changes(self, local_tree, report_context, metadata,
                      base_metadata, subpath=None):
-        if subpath:
-            raise WorkerFailure(
-                code='package-in-subpath',
-                description=(
-                    'The package is stored in a subpath rather than the '
-                    'repository root.'))
-        # Make sure that the quilt patches applied in the first place..
         with local_tree.lock_write():
             if control_files_in_root(local_tree):
                 raise WorkerFailure(
@@ -426,18 +487,6 @@ class NewUpstreamWorker(SubWorker):
             return "Merged new upstream version %s" % (
                 result.new_upstream_version)
 
-    def build_suite(self):
-        if self.args.snapshot:
-            return 'fresh-snapshots'
-        else:
-            return 'fresh-releases'
-
-    def build_version_suffix(self):
-        if self.args.snapshot:
-            return 'jan+nus'
-        else:
-            return 'jan+nur'
-
 
 class JustBuildWorker(SubWorker):
 
@@ -448,12 +497,6 @@ class JustBuildWorker(SubWorker):
     def make_changes(self, local_tree, report_context, metadata,
                      base_metadata, subpath=None):
         return None
-
-    def build_suite(self):
-        return 'unchanged'
-
-    def build_version_suffix(self):
-        return 'jan+unchanged'
 
 
 class WorkerResult(object):
@@ -499,8 +542,9 @@ def process_package(vcs_url, env, command, output_directory,
                     post_check_command=None, possible_transports=None,
                     possible_hosters=None, resume_branch_url=None,
                     cached_branch_url=None, tgz_repo=False,
-                    last_build_version=None,
-                    resume_subworker_result=None, subpath=None):
+                    last_build_version=None, build_distribution=None,
+                    build_suffix=None, resume_subworker_result=None,
+                    subpath=None):
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg
@@ -518,7 +562,6 @@ def process_package(vcs_url, env, command, output_directory,
             'unknown-subcommand',
             'unknown subcommand %s' % command[0])
     subworker = subworker_cls(command[1:], env)
-    build_suite = subworker.build_suite()
     assert pkg is not None
 
     note('Processing: %s', pkg)
@@ -626,11 +669,16 @@ def process_package(vcs_url, env, command, output_directory,
                 tree_set_changelog_version(
                     ws.local_tree, last_build_version, subpath=subpath)
             try:
-                (changes_name, cl_version) = build_incrementally(
-                    ws.local_tree, '~' + subworker.build_version_suffix(),
-                    build_suite, output_directory,
-                    build_command, committer=env.get('COMMITTER'),
-                    subpath=subpath)
+                if not build_suffix:
+                    (changes_name, cl_version) = build_once(
+                        ws.local_tree, build_distribution, output_directory,
+                        build_command, subpath=subpath)
+                else:
+                    (changes_name, cl_version) = build_incrementally(
+                        ws.local_tree, '~' + build_suffix,
+                        build_distribution, output_directory,
+                        build_command, committer=env.get('COMMITTER'),
+                        subpath=subpath)
             except MissingUpstreamTarball:
                 raise WorkerFailure(
                     'build-missing-upstream-source',
@@ -652,7 +700,7 @@ def process_package(vcs_url, env, command, output_directory,
                 raise WorkerFailure(code, e.description)
             note('Built %s', changes_name)
         else:
-            build_suite = None
+            build_distribution = None
             changes_name = None
             cl_version = None
 
@@ -664,7 +712,7 @@ def process_package(vcs_url, env, command, output_directory,
             ws.defer_destroy()
         return WorkerResult(
             description,
-            build_distribution=build_suite,
+            build_distribution=build_distribution,
             changes_filename=changes_name,
             build_version=cl_version)
 
@@ -712,6 +760,9 @@ def main(argv=None):
         '--tgz-repo',
         help='Whether to create a tgz of the VCS repo.',
         action='store_true')
+    parser.add_argument(
+        '--build-distribution', type=str, help='Build distribution.')
+    parser.add_argument('--build-suffix', type=str, help='Build suffix.')
 
     parser.add_argument('command', nargs=argparse.REMAINDER)
 
@@ -742,7 +793,8 @@ def main(argv=None):
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,
             cached_branch_url=args.cached_branch_url,
-            subpath=args.subpath,
+            subpath=args.subpath, build_distribution=args.build_distribution,
+            build_suffix=args.build_suffix,
             tgz_repo=args.tgz_repo,
             last_build_version=args.last_build_version,
             resume_subworker_result=resume_subworker_result)
