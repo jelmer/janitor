@@ -200,7 +200,10 @@ class MultiArchHintsWorker(SubWorker):
         except NoChanges:
             raise WorkerFailure('nothing-to-do', 'no hints to apply')
         else:
-            for binary, description, certainty in result.changes:
+            metadata['applied-hints'] = [
+                hint
+                for (binary, hint, description, certainty) in result.changes]
+            for binary, hint, description, certainty in result.changes:
                 note('%s: %s' % (binary['Package'], description))
             return "Applied multi-arch hints."
 
@@ -557,6 +560,8 @@ def process_package(vcs_url, env, command, output_directory,
         subworker_cls = NewUpstreamWorker
     elif command[0] == 'just-build':
         subworker_cls = JustBuildWorker
+    elif command[0] == 'apply-multiarch-hints':
+        subworker_cls = MultiArchHintsWorker
     else:
         raise WorkerFailure(
             'unknown-subcommand',
