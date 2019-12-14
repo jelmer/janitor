@@ -287,7 +287,8 @@ class LintianBrushWorker(SubWorker):
                     minimum_certainty=minimum_certainty,
                     allow_reformatting=allow_reformatting,
                     trust_package=TRUST_PACKAGE,
-                    net_access=True, subpath=(subpath or '.'))
+                    net_access=True, subpath=(subpath or '.'),
+                    opinionated=False)
 
         if overall_result.failed_fixers:
             for fixer_name, failure in overall_result.failed_fixers.items():
