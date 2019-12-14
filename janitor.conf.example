@@ -37,3 +37,11 @@ suite {
   branch_name: "new-upstream-snapshot"
   build_suffix: "jan+nus"
 }
+
+suite {
+  name: "multiarch-fixes"
+  archive_description: "Build of multi arch fixes"
+  build_distribution: "multiarch-fixes"
+  branch_name: "multiarch-fixes"
+  build_suffix: "jan+maf"
+}
