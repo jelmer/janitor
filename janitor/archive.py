@@ -121,8 +121,30 @@ async def run_web_server(listen_addr, port, archive_path):
     await site.start()
 
 
+async def update_archive(config, archive_dir):
+    with tempdir.NamedTemporaryFile() as f:
+        with open('mini-dinstall.conf', 'r') as t:
+            f.write(t.read() % {'archive_dir': archive_dir})
+        for suite in config.suite:
+            f.write('[%s]\n' % suite.name)
+            f.write('experimental_release = 1\n')
+            f.write('release_label = %s\n' % suite.archive_description)
+            f.write('\n')
+
+        args = ['mini-dinstall', '-c', f.name)
+        await asyncio.create_subprocess_exec(*args)
+        await proc.wait()
+
+
+async def update_archive_loop(config, archive_dir):
+    while True:
+        await update_archive(config, archive_dir)
+        await asyncio.sleep(30 * 60)
+
+
 def main(argv=None):
     import argparse
+    from .config import read_config
     parser = argparse.ArgumentParser(prog='janitor.runner')
     parser.add_argument(
         '--listen-address', type=str,
@@ -133,12 +155,21 @@ def main(argv=None):
     parser.add_argument(
         '--archive', type=str,
         help='Path to the apt archive.')
+    parser.add_argument(
+        '--config', type=str, default='janitor.conf',
+        help='Path to configuration.')
+
     args = parser.parse_args()
+
+    with open(args.config, 'r') as f:
+        config = read_config(f)
+
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive)),
-        ))
+        ),
+        loop.create_task(update_archive_loop(config, args.archive)))
     loop.run_forever()
 
 
