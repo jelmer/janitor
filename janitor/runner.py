@@ -363,23 +363,17 @@ async def process_one(
                     possible_transports=possible_transports)
             except BranchOpenFailure as e:
                 await state.update_branch_status(
-                    conn, vcs_url, status=e.code, description=e.description,
-                    revision=None)
+                    conn, vcs_url, None, status=e.code,
+                    description=e.description, revision=None)
                 return JanitorResult(
                     pkg, log_id=log_id, branch_url=vcs_url,
                     description=e.description, code=e.code,
                     logfilenames=[])
             else:
                 branch_url = main_branch.user_url
-                if vcs_url:
-                    await state.update_branch_status(
-                        conn, vcs_url, status='success',
-                        revision=main_branch.last_revision())
-                if vcs_url != branch_url:
-                    # Really, one of these should be called canonical_vcs_url..
-                    await state.update_branch_status(
-                        conn, branch_url, status='success',
-                        revision=main_branch.last_revision())
+                await state.update_branch_status(
+                    conn, vcs_url, branch_url, status='success',
+                    revision=main_branch.last_revision())
 
         if subpath:
             # TODO(jelmer): cluster all packages for a single repository

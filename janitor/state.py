@@ -963,18 +963,21 @@ LEFT JOIN branch ON package.branch_url = branch.url
 
 
 async def update_branch_status(
-        conn, branch_url, last_scanned=datetime.datetime.now, status=None,
+        conn, branch_url, canonical_branch_url,
+        last_scanned=datetime.datetime.now, status=None,
         revision=None, description=None):
     if callable(last_scanned):
         last_scanned = last_scanned()
     await conn.execute(
-        "INSERT INTO branch (url, status, revision, last_scanned, "
-        "description) VALUES ($1, $2, $3, $4, $5) "
+        "INSERT INTO branch (url, canonical_url, status, revision, "
+        "last_scanned, description) VALUES ($1, $2, $3, $4, $5, $6) "
         "ON CONFLICT (url) DO UPDATE SET "
         "status = EXCLUDED.status, revision = EXCLUDED.revision, "
         "last_scanned = EXCLUDED.last_scanned, "
-        "description = EXCLUDED.description",
-        branch_url, status, revision.decode('utf-8') if revision else None,
+        "description = EXCLUDED.description, "
+        "canonical_url = EXCLUDED.canonical_url",
+        branch_url, canonical_branch_url,
+        status, revision.decode('utf-8') if revision else None,
         last_scanned, description)
 
 

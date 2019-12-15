@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS queue (
 CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE TABLE IF NOT EXISTS branch (
    url text not null primary key,
+   canonical_url text,
    revision text,
    last_scanned timestamp,
    status text,
