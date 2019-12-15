@@ -387,8 +387,8 @@ async def process_one(
                 pkg, log_id=log_id, branch_url=branch_url,
                 code='package-in-subpath',
                 description=(
-                    'The package is stored in a subpath rather than the '
-                    'repository root.'),
+                    'The package is stored in a subpath (%s) rather than the '
+                    'repository root.' % (subpath, )),
                 logfilenames=[])
 
         try:
