@@ -19,6 +19,7 @@ import asyncio
 import os
 import re
 import sys
+import tempfile
 
 from aiohttp import web
 
@@ -122,7 +123,7 @@ async def run_web_server(listen_addr, port, archive_path):
 
 
 async def update_archive(config, archive_dir):
-    with tempdir.NamedTemporaryFile() as f:
+    with tempfile.NamedTemporaryFile() as f:
         with open('mini-dinstall.conf', 'r') as t:
             f.write(t.read() % {'archive_dir': archive_dir})
         for suite in config.suite:
@@ -131,8 +132,8 @@ async def update_archive(config, archive_dir):
             f.write('release_label = %s\n' % suite.archive_description)
             f.write('\n')
 
-        args = ['mini-dinstall', '-c', f.name)
-        await asyncio.create_subprocess_exec(*args)
+        args = ['mini-dinstall', '-c', f.name]
+        proc = await asyncio.create_subprocess_exec(*args)
         await proc.wait()
 
 
@@ -168,8 +169,7 @@ def main(argv=None):
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive)),
-        ),
-        loop.create_task(update_archive_loop(config, args.archive)))
+        loop.create_task(update_archive_loop(config, args.archive))))
     loop.run_forever()
 
 
