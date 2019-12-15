@@ -27,7 +27,7 @@ import asyncpg
 from silver_platter.debian import (
     convert_debian_vcs_url,
 )
-from . import trace
+from . import state, trace
 from .config import read_config
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
@@ -138,7 +138,7 @@ WHERE tag = any($1::text[]) and package_type = 'source' AND vcs_type != ''
         for row in await self._conn.fetch(query, *args):
             package_rows[row[0]] = row[:6]
             package_tags.setdefault((row[0], row[1]), []).append(row[6])
-        args = [tuple(tags)]
+        args = [tuple(available_fixers)]
         query = """\
 SELECT DISTINCT ON (sources.source)
     sources.source,
@@ -271,7 +271,7 @@ async def iter_multiarch_fixes(packages=None):
         yield source, ' '.join(sorted(hints)), value
 
 
-async def update_package_metadata(db, selected_packages=None):
+async def update_package_metadata(db, udd, selected_packages=None):
     async with db.acquire() as conn:
         existing_packages = {
             package.name: package
@@ -397,7 +397,7 @@ async def main():
     db = state.Database(config.database_location)
 
     if not args.skip_package_metadata:
-        await update_package_metadata(db, args.packages)
+        await update_package_metadata(db, udd, args.packages)
 
     async with db.acquire() as conn:
         CANDIDATE_FNS = [

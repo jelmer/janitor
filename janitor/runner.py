@@ -325,7 +325,7 @@ async def open_branch_with_fallback(
 
 
 async def process_one(
-        db, suite, output_directory, worker_kind, vcs_url, pkg, env, command,
+        db, config, output_directory, worker_kind, vcs_url, pkg, env, command,
         build_command, suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
@@ -337,7 +337,7 @@ async def process_one(
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
 
-    env = dict(env.items())
+    env = {}
     env['PACKAGE'] = pkg
     if committer:
         env['COMMITTER'] = committer
@@ -412,7 +412,8 @@ async def process_one(
 
         if resume_branch is None and vcs_manager:
             resume_branch = vcs_manager.get_branch(
-                pkg, suite_config.branch_name, get_vcs_abbreviation(main_branch))
+                pkg, suite_config.branch_name,
+                get_vcs_abbreviation(main_branch))
 
         if resume_branch is not None:
             note('Resuming from %s', resume_branch.user_url)
@@ -667,7 +668,7 @@ class QueueProcessor(object):
             self.per_run_directory[item.id] = output_directory
             result = await process_one(
                 self.database, self.config, output_directory, self.worker_kind,
-                item.branch_url, item.package, item.env, item.command,
+                item.branch_url, item.package, item.command,
                 suite=item.suite, pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
                 dry_run=self.dry_run, incoming=self.incoming,
@@ -686,7 +687,7 @@ class QueueProcessor(object):
                 await state.store_run(
                     conn, result.log_id, item.package, result.branch_url,
                     start_time, finish_time, item.command,
-                    result.description, item.env.context, result.context,
+                    result.description, item.context, result.context,
                     result.main_branch_revision, result.code,
                     build_version=result.build_version,
                     build_distribution=result.build_distribution,
