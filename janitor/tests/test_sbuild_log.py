@@ -41,6 +41,7 @@ from janitor.sbuild_log import (
     MissingJavaClass,
     MissingRPackage,
     MissingAutoconfMacro,
+    MissingAutomakeInput,
     DhMissingUninstalled,
     DhUntilUnsupported,
     DhAddonLoadFailure,
@@ -537,6 +538,12 @@ arch:all and the other not)""".splitlines(), 1)
             'cp: cannot stat '
             '\'/<<PKGBUILDDIR>>/debian/patches/lshw-gtk.desktop\': '
             'No such file or directory'], 1, None)
+
+    def test_automake_input(self):
+        self.run_test([
+            'automake: error: cannot open < gtk-doc.make: '
+            'No such file or directory'], 1,
+            MissingAutomakeInput('gtk-doc.make'))
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):

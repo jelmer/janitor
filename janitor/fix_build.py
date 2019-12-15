@@ -65,6 +65,7 @@ from .sbuild_log import (
     MissingLibrary,
     MissingJavaClass,
     MissingConfigure,
+    MissingAutomakeInput,
     SbuildFailure,
     DhAddonLoadFailure,
     AptFetchFailure,
@@ -547,11 +548,7 @@ def fix_missing_java_class(tree, error, context, committer=None):
     return add_dependency(tree, context, package, committer=committer)
 
 
-def fix_missing_configure(tree, error, context, committer=None):
-    if (not tree.has_filename('configure.ac') and
-            not tree.has_filename('configure.in')):
-        return False
-
+def enable_dh_autoreconf(tree, context, committer):
     # Debhelper >= 10 depends on dh-autoreconf and enables autoreconf by
     # default.
     if get_debhelper_compat_version(tree.abspath('.')) < 10:
@@ -565,7 +562,20 @@ def fix_missing_configure(tree, error, context, committer=None):
         if update_rules(command_line_cb=add_with_autoreconf):
             return add_dependency(
                 tree, context, 'dh-autoreconf', committer=committer)
+
     return False
+
+
+def fix_missing_configure(tree, error, context, committer=None):
+    if (not tree.has_filename('configure.ac') and
+            not tree.has_filename('configure.in')):
+        return False
+
+    return enable_dh_autoreconf(tree, context, committer=committer)
+
+
+def fix_missing_automake_input(tree, error, context, committer=None):
+    return enable_dh_autoreconf(tree, context, committer=committer)
 
 
 def fix_missing_maven_artifacts(tree, error, context, committer=None):
@@ -615,6 +625,7 @@ FIXERS = [
     (MissingLibrary, fix_missing_library),
     (MissingJavaClass, fix_missing_java_class),
     (MissingConfigure, fix_missing_configure),
+    (MissingAutomakeInput, fix_missing_automake_input),
     (DhAddonLoadFailure, fix_missing_dh_addon),
     (AptFetchFailure, retry_apt_failure),
     (MissingMavenArtifacts, fix_missing_maven_artifacts),

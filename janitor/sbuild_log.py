@@ -962,6 +962,27 @@ def gnome_common_missing(m):
     return GnomeCommonMissing()
 
 
+class MissingAutomakeInput(object):
+
+    kind = 'missing-automake-input'
+
+    def __init__(self, path):
+        self.path = path
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.path == other.path
+
+    def __str__(self):
+        return 'automake input file %s missing' % self.path
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.path)
+
+
+def automake_input_missing(m):
+    return MissingAutomakeInput(m.group(1))
+
+
 class MissingAutoconfMacro(object):
 
     kind = 'missing-autoconf-macro'
@@ -1146,6 +1167,8 @@ build_failure_regexps = [
      '[Errno 2] No such file or directory', file_not_found),
     (r'You need to install gnome-common from the GNOME git',
      gnome_common_missing),
+    (r'automake: error: cannot open < (.*): No such file or directory',
+     automake_input_missing),
     (r'configure.(in|ac):[0-9]+: error: possibly undefined macro: (.*)',
      autoconf_undefined_macro),
     (r'config.status: error: cannot find input file: `(.*)\'',
@@ -1191,6 +1214,7 @@ secondary_build_failure_regexps = [
     r'dpkg-gencontrol: error: (.*)',
     r'.*:[0-9]+:[0-9]+: (error|ERROR): (.*)',
     r'FAIL: (.*)',
+    r'FAIL (.*) \(.*\)',
     r'make\[[0-9]+\]: \*\*\* \[.*\] Error [0-9]+',
     r'E: pybuild pybuild:[0-9]+: test: plugin [^ ]+ failed with:'
     r'exit code=[0-9]+: .*',
