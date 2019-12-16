@@ -532,21 +532,21 @@ if __name__ == '__main__':
     app.router.add_get(
         '/multiarch-fixes/', handle_multiarch_fixes,
         name='multiarch-fixes-start')
-    for suite in ['lintian-fixes', 'fresh-releases', 'fresh-snapshots']:
+    for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases']:
         app.router.add_get(
-            '/%s/merge-proposals' % suite.name,
-            functools.partial(handle_merge_proposals, suite.name),
-            name='%s-merge-proposals' % suite.name)
+            '/%s/merge-proposals' % suite,
+            functools.partial(handle_merge_proposals, suite),
+            name='%s-merge-proposals' % suite)
         app.router.add_get(
-            '/%s/ready' % suite.name,
-            functools.partial(handle_ready_proposals, suite.name),
-            name='%s-ready' % suite.name)
+            '/%s/ready' % suite,
+            functools.partial(handle_ready_proposals, suite),
+            name='%s-ready' % suite)
         app.router.add_get(
-            '/%s/maintainer' % suite.name, handle_maintainer_list,
-            name='%s-maintainer-list' % suite.name)
+            '/%s/maintainer' % suite, handle_maintainer_list,
+            name='%s-maintainer-list' % suite)
         app.router.add_get(
-            '/%s/pkg/' % suite.name, handle_pkg_list,
-            name='%s-package-list' % suite.name)
+            '/%s/pkg/' % suite, handle_pkg_list,
+            name='%s-package-list' % suite)
     app.router.add_get(
         '/{suite:' + SUITE_REGEX + '}'
         '/{file:Contents-.*|InRelease|Packages.*|Release.*|'

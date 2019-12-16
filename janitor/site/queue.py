@@ -67,6 +67,8 @@ async def get_queue(conn, only_command=None, limit=None):
                         map(lintian_tag_link, entry.context.split(' '))))
         elif entry.command[0] == 'just-build':
             description = 'Build without changes'
+        elif entry.command[0] == 'apply-multiarch-hints':
+            description = 'Apply multi-arch hints'
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:
