@@ -354,12 +354,11 @@ async def publish_from_policy(
         # Make sure we don't accidentally push to unsuspecting
         # collab-maint repositories, even if debian-janitor becomes a
         # member of "debian" in the future.
+        warning('Refusing to push directly to %s, switch back to propose.',
+                main_branch_url)
         mode = MODE_PROPOSE
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
-
-    # TODO(jelmer): Check that there are no conflicts
-    # https://salsa.debian.org/jelmer/debian-janitor/issues/80
 
     reviewers = select_reviewers(maintainer_email, uploader_emails)
     note('Publishing %s / %r (mode: %s)', run.package, run.command, mode)
@@ -393,6 +392,13 @@ async def publish_from_policy(
         run.revision, mode, code, description,
         proposal_url if proposal_url else None,
         publish_id=publish_id)
+
+    if code == 'success' and (
+            mode == 'push' or
+            (mode == 'attempt-push' and not proposal_url)):
+        # TODO(jelmer): Call state.update_branch_status() for the
+        # main branch URL
+        pass
 
     topic_publish.publish(
         {'id': publish_id, 'proposal_url': proposal_url or None, 'mode': mode})
@@ -743,7 +749,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                     last_run.suite, last_run.package, last_run.command,
                     last_run.result, last_run.branch_url, MODE_PROPOSE,
                     last_run.id, maintainer_email,
-                    vcs_manager=vcs_manager, branch_name=last_run.branch_name,
+                    vcs_manager=vcs_manager, branch_name=mp_run.branch_name,
                     dry_run=dry_run, allow_create_proposal=True,
                     reviewers=None, topic_merge_proposal=topic_merge_proposal,
                     rate_limiter=rate_limiter)
@@ -751,7 +757,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                 note('%s: Updating merge proposal failed: %s (%s)',
                      mp.url, e.code, e.description)
                 await state.store_publish(
-                    conn, last_run.package, last_run.branch_name,
+                    conn, last_run.package, mp_run.branch_name,
                     last_run.main_branch_revision,
                     last_run.revision, e.mode, e.code,
                     e.description, mp.url,
