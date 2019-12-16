@@ -27,6 +27,11 @@ class JanitorNotifier(pydle.Client):
             self._channel, 'Merge proposal %s (%s) merged%s.' %
             (url, package, ((' by %s' % merged_by) if merged_by else '')))
 
+    async def notify_pushed(self, url, package, suite):
+        await self.message(
+            self._channel, 'Pushed %s changes to %s (%s)' %
+            (suite, url, package))
+
     async def on_message(self, target, source, message):
         if not message.startswith(self.nickname + ': '):
             return
@@ -72,6 +77,11 @@ async def main(args):
                     msg[1].get('merged_by'))
             if msg[0] == 'queue':
                 await notifier.set_runner_status(msg[1])
+            if msg[0] == 'publish' and msg[1]['mode'] == 'push':
+                await notifier.notify_pushed(
+                    msg[1]['main_branch_url'], msg[1]['package'],
+                    msg[1]['suite'])
+
 
 if __name__ == '__main__':
     import argparse
