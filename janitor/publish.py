@@ -439,8 +439,18 @@ async def publish_and_store(
                 'publish_id': publish_id,
                 'mode': e.mode,
                 'code': e.code,
-                'description': e.description})
+                'description': e.description,
+                'package': run.package,
+                'suite': run.suite,
+                'main_branch_url': main_branch_url,
+                })
             return
+
+        if mode == MODE_ATTEMPT_PUSH:
+            if proposal_url:
+                mode = MODE_PROPOSE
+            else:
+                mode = MODE_PUSH
 
         await state.store_publish(
             conn, run.package, branch_name,
@@ -450,8 +460,14 @@ async def publish_and_store(
             publish_id=publish_id)
 
         topic_publish.publish(
-            {'id': publish_id, 'proposal_url': proposal_url or None,
-             'mode': mode})
+            {'id': publish_id,
+             'package': run.package,
+             'suite': run.suite,
+             'proposal_url': proposal_url or None,
+             'mode': mode,
+             'main_branch_url': main_branch_url,
+             'branch_name': branch_name,
+             'run_id': run.id})
 
 
 async def publish_request(request):
