@@ -27,7 +27,7 @@
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
 {% endif %}
-{% if 'lintian-brush' in result.get('versions', []) %}
+{% if result and 'lintian-brush' in result.get('versions', []) %}
 <li>lintian-brush version: {{ result['versions']['lintian-brush'] }}</li>
 {% endif %}
 {% if candidate_tags - fixed_tags %}

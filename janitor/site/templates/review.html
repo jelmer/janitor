@@ -38,14 +38,20 @@ function submitReview(elem, status) {
     var run_id = $('#run-id').val();
     console.log("Submitting review " + status + " for run " + run_id);
     $.post('/api/run/' + run_id, {'review-status': status});
-    var newJob = todo[0];
-    todo.shift();
-    loadRun(newJob[0], newJob[1]);
+    if (todo.length > 0) {
+      var newJob = todo[0];
+      todo.shift();
+      loadRun(newJob[0], newJob[1]);
+    } else {
+      $('#diff').replaceWith('All done!');
+      $('#options').remove();
+      $('#full-run-link').remove();
+    }
 }
 </script>
 
 
-<form action="/cupboard/review" method="POST">
+<form action="/cupboard/review" method="POST" id="options">
 <input type="hidden" name="run_id" id='run-id' value="{{ run_id }}"/>
 <input class='review-button' type="submit" name="review_status" value="Approved" accesskey="a" onclick="submitReview(this, 'approved')">
 <input class='review-button' type="submit" name="review_status" value="Rejected" accesskey="r" onclick="submitReview(this, 'rejected')">
