@@ -451,9 +451,13 @@ def fix_missing_file(tree, error, context, committer=None):
 
 
 def fix_missing_perl_file(tree, error, context, committer=None):
-    if error.inc is None and not os.path.isabs(error.filename):
-        return False
-    paths = [os.path.join(inc, error.filename) for inc in error.inc]
+    if error.inc is None:
+        if not os.path.isabs(error.filename):
+            return False
+        else:
+            paths = [error.filename]
+    else:
+        paths = [os.path.join(inc, error.filename) for inc in error.inc]
     package = get_package_for_paths(paths, regex=False)
     if package is None:
         if getattr(error, 'module', None):
