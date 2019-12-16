@@ -6,13 +6,13 @@
  <div class="section" id="history">
 <h1>Ready to publish</h1>
 <ul>
-{% for run, maintainer_email, uploader_emails, branch_url, review_status, publish_mode, changelog_mode, compat_release in runs %}
-<li><a href="pkg/{{ package_name }}/{{ run_id }}">{{ package_name }}</a>{% if command.startswith('lintian-brush ') %}
-{{ lintian_brush_summary(run_result['applied']) }}
-{% elif command.startswith('new-upstream ') %}
-{% if '--snapshot' in command %}: Merge new upstream snapshot <b>{{ run_result['upstream_version'] }}</b>
-{% else %}: Merge new upstream release <b>{{ run_result['upstream_version'] }}</b> {% endif %}
-{% else %}: Unknown command {{ command }}
+{% for run, maintainer_email, uploader_emails, branch_url, publish_mode, changelog_mode, compat_release in runs %}
+<li><a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>{% if run.command.startswith('lintian-brush') %}
+{{ lintian_brush_summary(run.result['applied']) }}
+{% elif run.command.startswith('new-upstream ') %}
+{% if '--snapshot' in run.command %}: Merge new upstream snapshot <b>{{ run.result['upstream_version'] }}</b>
+{% else %}: Merge new upstream release <b>{{ run.result['upstream_version'] }}</b> {% endif %}
+{% else %}: Unknown command {{ run.command }}
 {% endif %}
 </li>
 {% endfor %}
