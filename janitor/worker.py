@@ -185,7 +185,10 @@ class MultiArchHintsWorker(SubWorker):
             run_lintian_fixer,
             NoChanges,
             )
-        from lintian_brush.reformatting import FormattingUnpreservable
+        from lintian_brush.reformatting import (
+            FormattingUnpreservable,
+            GeneratedFile,
+            )
 
         note("Downloading multiarch hints.")
         with download_multiarch_hints() as f:
@@ -204,6 +207,10 @@ class MultiArchHintsWorker(SubWorker):
             raise WorkerFailure(
                 'formatting-unpreservable',
                 'unable to preserve formatting while editing')
+        except GeneratedFile as e:
+            raise WorkerFailure(
+                'generated-file',
+                'unable to edit generated file: %r' % e)
         else:
             metadata['applied-hints'] = [
                 hint
