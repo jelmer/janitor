@@ -1022,10 +1022,10 @@ where
 
 async def get_run_result_by_revision(conn, revision):
     row = await conn.fetchrow("""
-SELECT result, review_status FROM run WHERE revision = $1""",
+SELECT result, branch_name, review_status FROM run WHERE revision = $1""",
 revision.decode('utf-8'))
     if row is not None:
-        return row[0], row[1]
+        return row[0], row[1], row[2]
     return None, None
 
 
