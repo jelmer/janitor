@@ -1021,8 +1021,12 @@ where
 
 
 async def get_run_result_by_revision(conn, revision):
-    return await conn.fetchval("""
-SELECT result FROM run WHERE revision = $1""", revision.decode('utf-8'))
+    row = await conn.fetchrow("""
+SELECT result, review_status FROM run WHERE revision = $1""",
+revision.decode('utf-8'))
+    if row is not None:
+        return row[0], row[1]
+    return None, None
 
 
 async def get_last_build_version(conn, package, suite):

@@ -123,7 +123,7 @@ async def run_web_server(listen_addr, port, archive_path):
 
 
 async def update_archive(config, archive_dir):
-    with tempfile.NamedTemporaryFile() as f:
+    with tempfile.NamedTemporaryFile(mode='w') as f:
         with open('mini-dinstall.conf', 'r') as t:
             f.write(t.read() % {'archive_dir': archive_dir})
         for suite in config.suite:
@@ -131,6 +131,8 @@ async def update_archive(config, archive_dir):
             f.write('experimental_release = 1\n')
             f.write('release_label = %s\n' % suite.archive_description)
             f.write('\n')
+
+        f.flush()
 
         args = ['mini-dinstall', '-c', f.name]
         proc = await asyncio.create_subprocess_exec(*args)
