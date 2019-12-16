@@ -441,15 +441,17 @@ async def process_one(
 
     async with db.acquire() as conn:
         if resume_branch is not None:
-            resume_branch_result, review_status = (
+            resume_branch_result, resume_branch_name, resume_review_status = (
                     await state.get_run_result_by_revision(
                         conn, revision=resume_branch.last_revision()))
-            if review_status == 'rejected':
+            if resume_review_status == 'rejected':
                 note('Unsetting resume branch, since last run was rejected.')
                 resume_branch_result = None
                 resume_branch = None
+                resume_branch_name = None
         else:
             resume_branch_result = None
+            resume_branch_name = None
 
         last_build_version = await state.get_last_build_version(
             conn, pkg, suite)
@@ -521,7 +523,10 @@ async def process_one(
     if worker_result.code is not None:
         return JanitorResult(
             pkg, log_id=log_id, branch_url=branch_url,
-            worker_result=worker_result, logfilenames=logfilenames)
+            worker_result=worker_result, logfilenames=logfilenames,
+            branch_name=(
+                resume_branch_name
+                if worker_result.code == 'nothing-to-do' else None))
 
     result = JanitorResult(
         pkg, log_id=log_id, branch_url=branch_url,
