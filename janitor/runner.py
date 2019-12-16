@@ -325,7 +325,7 @@ async def open_branch_with_fallback(
 
 
 async def process_one(
-        db, config, output_directory, worker_kind, vcs_url, pkg, env, command,
+        db, config, output_directory, worker_kind, vcs_url, pkg, command,
         build_command, suite, pre_check=None, post_check=None,
         dry_run=False, incoming=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
@@ -441,8 +441,13 @@ async def process_one(
 
     async with db.acquire() as conn:
         if resume_branch is not None:
-            resume_branch_result = await state.get_run_result_by_revision(
-                conn, revision=resume_branch.last_revision())
+            resume_branch_result, review_status = (
+                    await state.get_run_result_by_revision(
+                        conn, revision=resume_branch.last_revision()))
+            if review_status == 'rejected':
+                note('Unsetting resume branch, since last run was rejected.')
+                resume_branch_result = None
+                resume_branch = None
         else:
             resume_branch_result = None
 
