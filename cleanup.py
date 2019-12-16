@@ -17,10 +17,10 @@ def projects_to_remove(instance):
     for mp in instance.iter_my_proposals():
         if not mp.is_closed() and not mp.is_merged():
             in_use.add(mp.get_source_project())
-    for project, base_project in instance.iter_my_projects():
-        if not base_project:
+    for project, is_fork in instance.iter_my_projects():
+        if not is_fork:
             continue
-        if project not in in_use:
+        if project in in_use:
             continue
         yield project
 
@@ -34,9 +34,8 @@ def main(argv=None):
     for name, hoster_cls in hosters.items():
         for instance in hoster_cls.iter_instances():
             for project in projects_to_remove(instance):
-                if args.dry_run:
-                    print('Would delete %s from %r' % (project, instance))
-                else:
+                print('Deleting %s from %r' % (project, instance))
+                if not args.dry_run:
                     instance.delete_project(project)
 
 
