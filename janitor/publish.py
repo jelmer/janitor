@@ -301,7 +301,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                    publish_mode, update_changelog,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status):
-            if push_limit is not None:
+            if push_limit is not None and mode in (MODE_PUSH, MODE_PUSH_DERIVED):
                 if push_limit > 0:
                     push_limit -= 1
                 else:
