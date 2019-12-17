@@ -393,21 +393,32 @@ async def publish_from_policy(
         code = 'success'
         description = 'Success'
 
+    if mode == MODE_ATTEMPT_PUSH:
+        if proposal_url:
+            mode = MODE_PROPOSE
+        else:
+            mode = MODE_PUSH
+
     await state.store_publish(
         conn, run.package, branch_name, run.main_branch_revision,
         run.revision, mode, code, description,
         proposal_url if proposal_url else None,
         publish_id=publish_id)
 
-    if code == 'success' and (
-            mode == 'push' or
-            (mode == 'attempt-push' and not proposal_url)):
+    if code == 'success' and mode == MODE_PUSH:
         # TODO(jelmer): Call state.update_branch_status() for the
         # main branch URL
         pass
 
     topic_publish.publish(
-        {'id': publish_id, 'proposal_url': proposal_url or None, 'mode': mode})
+        {'id': publish_id,
+         'package': run.package,
+         'suite': run.suite,
+         'proposal_url': proposal_url or None,
+         'mode': mode,
+         'main_branch_url': main_branch_url,
+         'branch_name': branch_name,
+         'run_id': run.id})
 
 
 async def diff_request(request):
