@@ -286,7 +286,8 @@ async def export_stats(db):
 
 async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, topic_merge_proposal,
-                              dry_run=False, reviewed_only=False):
+                              dry_run=False, reviewed_only=False,
+                              push_limit=None):
     possible_hosters = []
     possible_transports = []
 
@@ -300,6 +301,11 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                    publish_mode, update_changelog,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status):
+            if push_limit is not None:
+                if push_limit > 0:
+                    push_limit -= 1
+                else:
+                    continue
             await publish_from_policy(
                     conn, rate_limiter, vcs_manager, run,
                     maintainer_email, uploader_emails, main_branch_url,
@@ -603,7 +609,8 @@ async def get_vcs_type(request):
 
 
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
-                         topic_merge_proposal, topic_publish, dry_run=False):
+                         topic_merge_proposal, topic_publish, dry_run=False,
+                         push_limit=None):
     app = web.Application()
     app.vcs_manager = vcs_manager
     app.db = db
@@ -611,6 +618,7 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.topic_publish = topic_publish
     app.topic_merge_proposal = topic_merge_proposal
     app.dry_run = dry_run
+    app.push_limit = push_limit
     setup_metrics(app)
     app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/diff/{run_id}", diff_request)
@@ -653,7 +661,7 @@ async def autopublish_request(request):
             dry_run=request.app.dry_run,
             topic_publish=request.app.topic_publish,
             topic_merge_proposal=request.app.topic_merge_proposal,
-            reviewed_only=reviewed_only)
+            reviewed_only=reviewed_only, push_limit=request.app.push_limit)
 
     request.loop.create_task(autopublish())
     return web.Response(status=202, text="Autopublish started.")
@@ -661,7 +669,8 @@ async def autopublish_request(request):
 
 async def process_queue_loop(db, rate_limiter, dry_run, vcs_manager,
                              interval, topic_merge_proposal, topic_publish,
-                             auto_publish=True, reviewed_only=False):
+                             auto_publish=True, reviewed_only=False,
+                             push_limit=None):
     while True:
         async with db.acquire() as conn:
             await check_existing(
@@ -672,7 +681,7 @@ async def process_queue_loop(db, rate_limiter, dry_run, vcs_manager,
                 db, rate_limiter, vcs_manager, dry_run=dry_run,
                 topic_publish=topic_publish,
                 topic_merge_proposal=topic_merge_proposal,
-                reviewed_only=reviewed_only)
+                reviewed_only=reviewed_only, push_limit=push_limit)
 
 
 def is_conflicted(mp):
@@ -874,6 +883,8 @@ def main(argv=None):
     parser.add_argument(
         '--reviewed-only',
         action='store_true', help='Only publish changes that were reviewed.')
+    parser.add_argument(
+        '--push-limit', type=int, help='Limit number of pushes per cycle.')
 
     args = parser.parse_args()
 
@@ -918,12 +929,13 @@ def main(argv=None):
                 topic_merge_proposal=topic_merge_proposal,
                 topic_publish=topic_publish,
                 auto_publish=not args.no_auto_publish,
-                reviewed_only=args.reviewed_only)),
+                reviewed_only=args.reviewed_only,
+                push_limit=args.push_limit)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
                     vcs_manager, db, topic_merge_proposal, topic_publish,
-                    args.dry_run)),
+                    args.dry_run, push_limit=args.push_limit)),
             loop.create_task(export_stats(db)),
         ]
         if args.runner_url and not args.reviewed_only:
