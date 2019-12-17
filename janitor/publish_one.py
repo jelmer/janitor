@@ -41,6 +41,7 @@ from silver_platter.debian import (
     pick_additional_colocated_branches,
     )
 
+from breezy.errors import DivergedBranches
 from breezy.plugins.propose.propose import (
     MergeProposalExists,
     )
@@ -154,6 +155,16 @@ class BranchWorkspace(object):
     def push(self, hoster=None, dry_run=False):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
+
+        # Presumably breezy would do this check too, but we want to be *really*
+        # sure.
+        with self.local_branch.lock_read():
+            graph = self.local_branch.repository.get_graph()
+            if not graph.is_ancestor(
+                    self.main_branch.last_revision(),
+                    self.local_branch.last_revision()):
+                raise DivergedBranches(self.main_branch, self.local_branch)
+
         return push_changes(
             self.local_branch, self.main_branch, hoster=hoster,
             additional_colocated_branches=self.additional_colocated_branches,
