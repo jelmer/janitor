@@ -115,13 +115,15 @@ class BranchWorkspace(object):
     """Workspace-like object that doesn't use working trees.
     """
 
-    def __init__(self, main_branch, local_branch, resume_branch=None):
+    def __init__(self, main_branch, local_branch, resume_branch=None,
+                 push_colocated=None):
         self.main_branch = main_branch
         self.local_branch = local_branch
         self.resume_branch = resume_branch
         self.orig_revid = (resume_branch or main_branch).last_revision()
         self.additional_colocated_branches = (
             pick_additional_colocated_branches(main_branch))
+        self.push_colocated = push_colocated
 
     def __enter__(self):
         return self
@@ -165,9 +167,14 @@ class BranchWorkspace(object):
                     self.local_branch.last_revision()):
                 raise DivergedBranches(self.main_branch, self.local_branch)
 
+        if self.push_colocated:
+            additional_colocated_branches = self.additional_colocated_branches
+        else:
+            additional_colocated_branches = []
+
         return push_changes(
             self.local_branch, self.main_branch, hoster=hoster,
-            additional_colocated_branches=self.additional_colocated_branches,
+            additional_colocated_branches=additional_colocated_branches,
             dry_run=dry_run)
 
     def push_derived(self, name, hoster=None, overwrite_existing=False):
@@ -214,7 +221,8 @@ def publish(
             raise MergeConflict(main_branch, local_branch)
 
     with BranchWorkspace(
-            main_branch, local_branch, resume_branch=resume_branch) as ws:
+            main_branch, local_branch, resume_branch=resume_branch,
+            push_colocated=subrunner.push_colocated()) as ws:
         if not hoster.supports_merge_proposal_labels:
             labels = None
         else:
@@ -276,6 +284,9 @@ class LintianBrushPublisher(object):
     def allow_create_proposal(self):
         return self.applied and not self.add_on_only
 
+    def push_colocated(self):
+        return False
+
 
 class MultiArchHintsPublisher(object):
 
@@ -296,6 +307,9 @@ class MultiArchHintsPublisher(object):
 
     def allow_create_proposal(self):
         return True
+
+    def push_colocated(self):
+        return False
 
 
 class NewUpstreamPublisher(object):
@@ -320,6 +334,9 @@ class NewUpstreamPublisher(object):
 
     def allow_create_proposal(self):
         # No upstream release too small...
+        return True
+
+    def push_colocated(self):
         return True
 
 
