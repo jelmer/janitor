@@ -149,3 +149,9 @@ CREATE OR REPLACE VIEW merged_runs AS
   WHERE result_code = 'success' and merge_proposal.status = 'merged';
 
 create or replace view suites as select distinct suite as name from run;
+
+CREATE OR REPLACE VIEW absorbed_runs AS
+  SELECT * FROM run WHERE result_code = 'success' and revision in (select revision from publish where mode = 'push' and result_code = 'success') or revision in (select revision from merge_proposal where status = 'merged');
+
+CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
+  select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);

@@ -449,6 +449,13 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_lintian_fixes_stats(request):
+        from .lintian_fixes import generate_stats
+        text = await generate_stats(request.app.database)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_new_upstream_candidates(suite, request):
         from .new_upstream import generate_candidates
         text = await generate_candidates(
@@ -578,6 +585,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/lintian-fixes/candidates', handle_lintian_fixes_candidates,
         name='lintian-fixes-candidates')
+    app.route.radd_get(
+        '/lintian-fixes/stats', handle_lintian_fixes_stats,
+        name='lintian-fixes-stats')
     for suite in ['fresh-releases', 'fresh-snapshots']:
         app.router.add_get(
             '/%s/' % suite, functools.partial(handle_apt_repo, suite),

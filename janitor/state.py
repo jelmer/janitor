@@ -1424,3 +1424,9 @@ async def get_publish_policy(conn, package, suite):
         suite)
     if row:
         return (row[0], row[1], shlex.split(row[2]) if row[2] else None)
+
+
+async def iter_absorbed_lintian_fixes(conn):
+    return await conn.fetch(
+        "select unnest(fixed_lintian_tags), count(*) from absorbed_lintian_fixes "
+        "group by 1 order by 2 desc")

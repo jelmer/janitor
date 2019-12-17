@@ -257,6 +257,13 @@ async def generate_regressions_list(db):
     return await template.render_async(packages=packages)
 
 
+async def generate_stats(db):
+    template = env.get_template('lintian-fixes-stats.html')
+    async with db.acquire() as conn:
+        by_tag = await state.iter_absorbed_lintian_fixes(conn)
+    return await template.render_async(by_tag=by_tag)
+
+
 async def render_start():
     template = env.get_template('lintian-fixes-start.html')
     import lintian_brush

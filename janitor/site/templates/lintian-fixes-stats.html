@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% from "lintian-fixes-util.html" import lintian_tag_link %}
+{% block page_title %}Absorbed Lintian Fixes - Statistics{% endblock %}
+{% block body %}
+<div class="section" id="absorbed-lintian-fixes-stats">
+<h1>Absorbed Lintian Fixes - Statistics</h1>
+
+<table class="docutils" border="1">
+<thead valign="bottom">
+<tr class="row-odd">
+  <th class="head">Lintian Tag</th>
+  <th class="head">Count</th>
+</tr>
+</thead>
+<tbody valign="top" name="tag-table">
+{% for tag, count in by_tag %}
+<tr>
+    <td>{{ lintian_tag_link(tag) }}</td>
+    <td>{{ count }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+{% endblock %}
