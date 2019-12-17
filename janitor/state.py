@@ -1189,10 +1189,12 @@ WHERE
 async def iter_publish_history(conn, limit=None):
     query = """
 SELECT
-    package, branch_name, main_branch_revision, revision, mode,
-    merge_proposal_url, result_code, description
+    publish.package, publish.branch_name, publish.main_branch_revision,
+    publish.revision, publish.mode, publish.merge_proposal_url,
+    publish.result_code, publish.description, package.vcs_browse
 FROM
     publish
+JOIN package ON publish.package = package.name
 ORDER BY timestamp DESC
 """
     if limit:

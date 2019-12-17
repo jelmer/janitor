@@ -1,11 +1,16 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "lintian-fixes-sidebar.html" %}{% endblock %}
 {% from "lintian-fixes-util.html" import lintian_tag_link %}
 {% block page_title %}Absorbed Lintian Fixes - Statistics{% endblock %}
 {% block body %}
 <div class="section" id="absorbed-lintian-fixes-stats">
-<h1>Absorbed Lintian Fixes - Statistics</h1>
+<h1>Lintian Fixes - Statistics</h1>
 
+<div class="absorbed">
+<h2>Absorbed Fixes</h2>
+<p>Number of fixes that have either been pushed directly by the Janitor, or
+have been <a href="/lintian-fixes/merge-proposals">proposed as a merge request
+and then merged</a>.</p>
 <table class="docutils" border="1">
 <thead valign="bottom">
 <tr class="row-odd">
@@ -21,5 +26,6 @@
 </tr>
 {% endfor %}
 </table>
+</div>
 </div>
 {% endblock %}

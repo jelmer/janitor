@@ -30,11 +30,14 @@ $(document).ready(function(){
 </tr>
 </thead>
 <tbody valign="top">
-{% for package, branch_name, main_branch_revision, revision, mode, merge_proposal_url, result_code, description in history %}
+{% for package, branch_name, main_branch_revision, revision, mode, merge_proposal_url, result_code, description, vcs_browser in history %}
 <tr class="row-even"><td><a class="reference external" href="pkg/{{ package }}">{{ package }}</a></td>
 <td>{{ branch_name }}</td>
 <td>{{ mode }}</td>
-<td>{{ result_code }}: {{ description }}{% if merge_proposal_url %} - <a href="{{ merge_proposal_url }}">Merge Proposal</a>{% endif %}</td>
+<td>{{ result_code }}: {{ description }}
+{% if mode == 'propose' %}{% if merge_proposal_url %} - <a href="{{ merge_proposal_url }}">Merge Proposal</a>{% endif %}{% endif %}
+{% if mode == 'push' and result_code == 'success' %}{% if vcs_browser %} - <a href="{{ vcs_browser }}">Branch</a>{% endif %}{% endif %}
+</td>
 </tr>
 {% endfor %}
 </tbody>

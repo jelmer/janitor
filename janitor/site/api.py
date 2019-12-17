@@ -329,6 +329,8 @@ async def handle_run(request):
 
 
 async def handle_publish_scan(request):
+    if request.debsso_email != 'jelmer@debian.org':
+        return web.Response(text='Unauthorized', status=401)
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, '/scan')
     try:
@@ -341,6 +343,8 @@ async def handle_publish_scan(request):
 
 
 async def handle_publish_autopublish(request):
+    if request.debsso_email != 'jelmer@debian.org':
+        return web.Response(text='Unauthorized', status=401)
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, '/autopublish')
     try:

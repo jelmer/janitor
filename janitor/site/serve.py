@@ -585,7 +585,7 @@ if __name__ == '__main__':
     app.router.add_get(
         '/lintian-fixes/candidates', handle_lintian_fixes_candidates,
         name='lintian-fixes-candidates')
-    app.route.radd_get(
+    app.router.add_get(
         '/lintian-fixes/stats', handle_lintian_fixes_stats,
         name='lintian-fixes-stats')
     for suite in ['fresh-releases', 'fresh-snapshots']:
