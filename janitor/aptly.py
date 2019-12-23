@@ -15,7 +15,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession
 import asyncio
 import json
 from urllib.parse import urljoin
@@ -36,7 +35,7 @@ class Aptly(object):
 
     async def repos_list(self):
         url = urljoin(self.url, 'repos')
-        with self.session.get(url) as resp:
+        async with self.session.get(url) as resp:
             data = json.loads(await resp.text())
             if resp.status != 200:
                 raise AptlyError(resp.status, data)
@@ -45,14 +44,14 @@ class Aptly(object):
     async def repos_create(self, name, comment=None, default_distribution=None, default_component=None):
         headers = {'Content-Type': 'application/json'}
         url = urljoin(self.url, 'repos')
-        data = {}
+        data = {'Name': name}
         if comment is not None:
             data['Comment'] = comment
         if default_distribution is not None:
             data['DefaultDistribution'] = default_distribution
         if default_component is not None:
             data['DefaultComponent'] = default_component
-        with self.session.post(url, data=json.dumps(data), headers=headers) as resp:
+        async with self.session.post(url, data=json.dumps(data), headers=headers) as resp:
             data = json.loads(await resp.text())
             if resp.status != 201:
                 raise AptlyError(resp.status, data)
@@ -60,22 +59,39 @@ class Aptly(object):
 
     async def repos_delete(self, name):
         url = urljoin(self.url, 'repos/%s' % name)
-        with self.session.delete(url) as resp:
+        async with self.session.delete(url) as resp:
             data = json.loads(await resp.text())
             if resp.status != 200:
                 raise AptlyError(resp.status, data)
             return data
 
-    async def publish_update(self, prefix, suite, not_automatic=False):
+    async def publish(self, prefix, suite, distribution=None, architectures=None, not_automatic=None):
+        url = urljoin(self.url, 'publish/%s' % (prefix, ))
+        headers = {'Content-Type': 'application/json'}
+        data = {
+            'SourceKind': 'local',
+            'Sources': [{'Component': 'main', 'Name': suite}],
+            }
+        if not_automatic is not None:
+            data['NotAutomatic'] = 'yes' if not_automatic else 'no'
+        if distribution is not None:
+            data['Distribution'] = distribution
+        if architectures is not None:
+            data['Architectures'] = architectures
+        async with self.session.post(url, headers=headers, data=json.dumps(data)) as resp:
+            if resp.status != 201:
+                raise AptlyError(resp.status, await resp.text())
+            data = json.loads(await resp.text())
+            return data
+
+    async def publish_update(self, prefix, suite, force_overwrite=False):
         url = urljoin(self.url, 'publish/%s/%s' % (prefix, suite))
         headers = {'Content-Type': 'application/json'}
         data = {
-            'Prefix': prefix,
-            'SourceKind': 'local',
-            'NotAutomatic': 'yes' if not_automatic else 'no',
+            'ForceOverwrite': force_overwrite,
             }
-        with session.post(url, headers=headers, data=data) as resp:
-            data = json.loads(await resp.text())
+        async with self.session.put(url, headers=headers, data=json.dumps(data)) as resp:
             if resp.status != 200:
-                raise AptlyError(resp.status, data)
+                raise AptlyError(resp.status, await resp.text())
+            data = json.loads(await resp.text())
             return data

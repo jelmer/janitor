@@ -17,15 +17,16 @@
 
 from aiohttp import ClientSession
 import asyncio
+import json
 import os
 import re
 import sys
 import tempfile
-import urllib
+from urllib.parse import urljoin
 
 from aiohttp import web
 
-from .aptly import Aptly
+from .aptly import Aptly, AptlyError
 from .debdiff import run_debdiff, filter_boring
 from .prometheus import setup_metrics
 
@@ -148,30 +149,34 @@ async def update_archive_loop(config, archive_dir):
         await asyncio.sleep(30 * 60)
 
 
-async def update_aptly(session, config, aptly_url, archive_dir):
-    with ClientSession() as session:
-        aptly = Aptly(session, aptly_url)
-        for suite in config.suite:
-            await aptly.publish_update('.', suite.name, not_automatic=True)
+async def update_aptly(config, aptly):
+    for suite in config.suite:
+        await aptly.publish_update(':.', suite.name)
 
 
-async def update_aptly_loop(config, aptly_url, archive_dir):
-    with ClientSession() as session:
+async def update_aptly_loop(config, aptly_url):
+    async with ClientSession() as session:
         aptly = Aptly(session, aptly_url)
         existing_repos = await aptly.repos_list()
         existing_by_name = {r['Name']: r for r in existing_repos}
-        for suite in config:
+        for suite in config.suite:
             if suite.name in existing_by_name:
                 del existing_by_name[suite.name]
-                continue
-            await aptly.repos_create(suite.name)
-            del existing_by_name[suite.name]
-        for suite_name in removed:
+            else:
+                await aptly.repos_create(suite.name)
+            try:
+                await aptly.publish(
+                    ':.', suite.name, not_automatic=True, distribution=suite.name,
+                    architectures=['all', 'amd64'])
+            except AptlyError:
+                # maybe it's already published?
+                pass
+        for suite_name in existing_by_name:
             await aptly.repos_delete(suite_name)
 
-    while True:
-        await update_aptly(config, aptly_url, archive_dir)
-        await asyncio.sleep(30 * 60)
+        while True:
+            await update_aptly(config, aptly)
+            await asyncio.sleep(30 * 60)
 
 
 def main(argv=None):
@@ -191,7 +196,7 @@ def main(argv=None):
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
     parser.add_argument(
-        '--aptly-url', type=str, default='http://localhost:9115/api/',
+        '--aptly-url', type=str, default='http://localhost:9915/api/',
         help='URL for aptly API.')
 
     args = parser.parse_args()
@@ -204,7 +209,7 @@ def main(argv=None):
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive)),
         loop.create_task(update_archive_loop(config, args.archive)),
-        loop.create_task(update_aptly(config, args.aptly_url, args.archive))))
+        loop.create_task(update_aptly_loop(config, args.aptly_url))))
     loop.run_forever()
 
 
