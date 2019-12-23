@@ -168,9 +168,10 @@ async def update_aptly_loop(config, aptly_url):
                 await aptly.publish(
                     ':.', suite.name, not_automatic=True, distribution=suite.name,
                     architectures=['all', 'amd64'])
-            except AptlyError:
-                # maybe it's already published?
-                pass
+            except AptlyError as e:
+                # 400 indicates it's already published
+                if e.status != 400:
+                    raise
         for suite_name in existing_by_name:
             await aptly.repos_delete(suite_name)
 
