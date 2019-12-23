@@ -780,10 +780,9 @@ async def handle_log(request):
         return web.Response(text='No such logfile: %s' % filename, status=404)
 
 
-async def run_web_server(listen_addr, port, queue_processor, archive_path):
+async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
     app.queue_processor = queue_processor
-    app.archive_path = archive_path
     setup_metrics(app)
     app.router.add_get('/status', handle_status)
     app.router.add_get('/log/{run_id}', handle_log_index)
@@ -826,9 +825,6 @@ def main(argv=None):
     parser.add_argument(
         '--incoming', type=str,
         help='Path to copy built Debian packages into.')
-    parser.add_argument(
-        '--archive', type=str,
-        help='Path to the apt archive.')
     parser.add_argument(
         '--debsign-keyid', type=str,
         help='GPG key to sign Debian package with.')
@@ -880,7 +876,7 @@ def main(argv=None):
         loop.create_task(export_queue_length(db)),
         loop.create_task(export_stats(db)),
         loop.create_task(run_web_server(
-            args.listen_address, args.port, queue_processor, args.archive)),
+            args.listen_address, args.port, queue_processor)),
         ))
 
 
