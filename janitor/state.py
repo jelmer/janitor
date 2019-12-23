@@ -1432,3 +1432,8 @@ async def iter_absorbed_lintian_fixes(conn):
     return await conn.fetch(
         "select unnest(fixed_lintian_tags), count(*) from absorbed_lintian_fixes "
         "group by 1 order by 2 desc")
+
+
+async def get_successful_push_count(conn):
+    return await conn.fetchval(
+        "select count(*) from publish where result_code = 'success' and mode = 'push'")
