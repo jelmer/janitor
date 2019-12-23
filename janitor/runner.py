@@ -124,7 +124,7 @@ class JanitorResult(object):
     def __init__(self, pkg, log_id, branch_url, description=None,
                  code=None, build_distribution=None, build_version=None,
                  changes_filename=None, worker_result=None,
-                 logfilenames=None):
+                 logfilenames=None, branch_name=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
@@ -133,7 +133,7 @@ class JanitorResult(object):
         self.build_distribution = build_distribution
         self.build_version = build_version
         self.changes_filename = changes_filename
-        self.branch_name = None
+        self.branch_name = branch_name
         self.logfilenames = logfilenames
         if worker_result:
             self.context = worker_result.context
