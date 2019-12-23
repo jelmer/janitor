@@ -15,11 +15,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import ClientSession
 import asyncio
 import os
 import re
 import sys
 import tempfile
+import urllib
 
 from aiohttp import web
 
@@ -145,6 +147,28 @@ async def update_archive_loop(config, archive_dir):
         await asyncio.sleep(30 * 60)
 
 
+async def update_aptly(config, aptly_url, archive_dir):
+    with ClientSession() as session:
+        for suite in config.suite:
+            url = urllib.urljoin(aptly_url, 'publish//%s' % suite.name)
+            headers = {'Content-Type': 'application/json'}
+            data = {
+                'Prefix': '.',
+                'SourceKind': 'local',
+                'NotAutomatic': 'yes',
+                }
+            with session.post(url, headers=headers, data=data) as resp:
+                if resp.status != 200:
+                    print('Unable to publish %s: %d' % (
+                          suite.name, resp.status))
+
+
+async def update_aptly_loop(config, aptly_url, archive_dir):
+    while True:
+        await update_aptly(config, aptly_url, archive_dir)
+        await asyncio.sleep(30 * 60)
+
+
 def main(argv=None):
     import argparse
     from .config import read_config
@@ -161,6 +185,9 @@ def main(argv=None):
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+    parser.add_argument(
+        '--aptly-url', type=str, default='http://localhost:8080/api/',
+        help='URL for aptly API.')
 
     args = parser.parse_args()
 
@@ -171,7 +198,8 @@ def main(argv=None):
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive)),
-        loop.create_task(update_archive_loop(config, args.archive))))
+        loop.create_task(update_archive_loop(config, args.archive)),
+        loop.create_task(update_aptly(config, args.aptly_url, args.archive))))
     loop.run_forever()
 
 
