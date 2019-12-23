@@ -27,10 +27,15 @@ class JanitorNotifier(pydle.Client):
             self._channel, 'Merge proposal %s (%s) merged%s.' %
             (url, package, ((' by %s' % merged_by) if merged_by else '')))
 
-    async def notify_pushed(self, url, package, suite):
-        await self.message(
-            self._channel, 'Pushed %s changes to %s (%s)' %
-            (suite, url, package))
+    async def notify_pushed(self, url, package, suite, result):
+        msg = 'Pushed %s changes to %s (%s)' % (suite, url, package)
+        if suite == 'lintian-fixes':
+            tags = set()
+            for entry in result['applied']:
+                tags.update(entry['fixed_lintian_tags'])
+            if tags:
+                msg += ', fixing: %s.' % (', '.join(tags))
+        await self.message(self._channel, msg)
 
     async def on_message(self, target, source, message):
         if not message.startswith(self.nickname + ': '):
@@ -71,16 +76,19 @@ async def main(args):
         notifier.connect(args.server, tls=True, tls_verify=False), loop=loop)
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
+            print(msg)
             if msg[0] == 'merge-proposal' and msg[1]['status'] == 'merged':
                 await notifier.notify_merged(
                     msg[1]['url'], msg[1].get('package'),
                     msg[1].get('merged_by'))
             if msg[0] == 'queue':
                 await notifier.set_runner_status(msg[1])
-            if msg[0] == 'publish' and msg[1]['mode'] == 'push':
+            if (msg[0] == 'publish' and
+                    msg[1]['mode'] == 'push' and
+                    msg[1]['result_code'] == 'success'):
                 await notifier.notify_pushed(
                     msg[1]['main_branch_url'], msg[1]['package'],
-                    msg[1]['suite'])
+                    msg[1]['suite'], msg[1]['result'])
 
 
 if __name__ == '__main__':
