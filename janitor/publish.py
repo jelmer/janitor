@@ -26,6 +26,7 @@ import os
 import json
 import shlex
 import sys
+import time
 import uuid
 
 from prometheus_client import (
@@ -89,6 +90,8 @@ last_success_gauge = Gauge(
 publish_ready_count = Gauge(
     'publish_ready_count', 'Number of publish ready runs by status.',
     labelnames=('review_status', 'publish_mode'))
+successful_push_count = Gauge(
+    'successful_push_count', 'Number of successful pushes.')
 
 
 class RateLimited(Exception):
@@ -221,7 +224,7 @@ async def publish_one(
         'package': pkg,
         'command': command,
         'subworker_result': subworker_result,
-        'main_branch_url': main_branch_url,
+        'main_branch_url': main_branch_url.rstrip('/'),
         'local_branch_url': local_branch.user_url,
         'mode': mode,
         'log_id': log_id,
@@ -279,6 +282,9 @@ async def export_stats(db):
                 publish_ready_count.labels(
                     review_status=review_status,
                     publish_mode=publish_mode).set(count)
+        
+            push_count = await state.get_successful_push_count(conn)
+            successful_push_count.set(push_count)
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
@@ -288,6 +294,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, topic_merge_proposal,
                               dry_run=False, reviewed_only=False,
                               push_limit=None):
+    start = time.time()
     possible_hosters = []
     possible_transports = []
 
@@ -301,18 +308,23 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                    publish_mode, update_changelog,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status):
-            if push_limit is not None and mode in (MODE_PUSH, MODE_PUSH_DERIVED):
-                if push_limit > 0:
-                    push_limit -= 1
-                else:
+            if push_limit is not None and publish_mode in (MODE_PUSH, MODE_ATTEMPT_PUSH):
+                if push_limit == 0:
+                    note('Not pushing %s / %s: push limit reached',
+                         run.package, run.suite)
                     continue
-            await publish_from_policy(
+            actual_mode = await publish_from_policy(
                     conn, rate_limiter, vcs_manager, run,
                     maintainer_email, uploader_emails, main_branch_url,
                     topic_publish, topic_merge_proposal,
                     publish_mode, update_changelog, command,
                     possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run)
+            if actual_mode == MODE_PUSH and push_limit is not None:
+                push_limit -= 1
+
+    note('Done publishing pending changes; duration: %.2fs' % (
+         time.time() - start))
 
 
 async def publish_from_policy(
@@ -418,7 +430,12 @@ async def publish_from_policy(
          'mode': mode,
          'main_branch_url': main_branch_url,
          'branch_name': branch_name,
+         'result_code': code,
+         'result': run.result,
          'run_id': run.id})
+
+    if code == 'success':
+        return mode
 
 
 async def diff_request(request):
@@ -453,13 +470,14 @@ async def publish_and_store(
                 run.revision, e.mode, e.code, e.description,
                 None, publish_id=publish_id)
             topic_publish.publish({
-                'publish_id': publish_id,
+                'id': publish_id,
                 'mode': e.mode,
-                'code': e.code,
+                'result_code': e.code,
                 'description': e.description,
                 'package': run.package,
                 'suite': run.suite,
                 'main_branch_url': main_branch_url,
+                'result': run.result,
                 })
             return
 
@@ -484,6 +502,8 @@ async def publish_and_store(
              'mode': mode,
              'main_branch_url': main_branch_url,
              'branch_name': branch_name,
+             'result_code': 'success',
+             'result': run.result,
              'run_id': run.id})
 
 
