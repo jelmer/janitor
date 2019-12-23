@@ -51,7 +51,7 @@ class Aptly(object):
             data['DefaultDistribution'] = default_distribution
         if default_component is not None:
             data['DefaultComponent'] = default_component
-        async with self.session.post(url, data=json.dumps(data), headers=headers) as resp:
+        async with self.session.post(url, json=data, headers=headers) as resp:
             data = json.loads(await resp.text())
             if resp.status != 201:
                 raise AptlyError(resp.status, data)
@@ -78,7 +78,7 @@ class Aptly(object):
             data['Distribution'] = distribution
         if architectures is not None:
             data['Architectures'] = architectures
-        async with self.session.post(url, headers=headers, data=json.dumps(data)) as resp:
+        async with self.session.post(url, headers=headers, json=data) as resp:
             if resp.status != 201:
                 raise AptlyError(resp.status, await resp.text())
             data = json.loads(await resp.text())
@@ -90,7 +90,7 @@ class Aptly(object):
         data = {
             'ForceOverwrite': force_overwrite,
             }
-        async with self.session.put(url, headers=headers, data=json.dumps(data)) as resp:
+        async with self.session.put(url, headers=headers, json=data) as resp:
             if resp.status != 200:
                 raise AptlyError(resp.status, await resp.text())
             data = json.loads(await resp.text())
