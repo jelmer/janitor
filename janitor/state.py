@@ -899,7 +899,7 @@ SELECT
   run.review_status,
   package.maintainer_email,
   package.uploader_emails,
-  package.branch_url,
+  run.branch_url,
   publish_policy.mode,
   publish_policy.update_changelog,
   publish_policy.command
