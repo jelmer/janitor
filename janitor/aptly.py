@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import MultipartWriter
 import asyncio
 import json
 from urllib.parse import urljoin
@@ -64,6 +65,35 @@ class Aptly(object):
             if resp.status != 200:
                 raise AptlyError(resp.status, data)
             return data
+
+    async def repos_include(self, name, dirname, no_remove_files=None,
+                            force_replace=None, ignore_signature=None,
+                            accept_unsigned=None):
+        url = urljoin(self.url, 'repos/%s/include/%s' % (name, dirname))
+        data = {}
+        if no_remove_files is not None:
+            data['noRemoveFiles'] = '1' if no_remove_files else '0'
+        if force_replace is not None:
+            data['forceReplace'] = '1' if force_replace else '0'
+        if ignore_signature is not None:
+            data['ignoreSignature'] = '1' if ignore_signature else '0'
+        if accept_unsigned is not None:
+            data['acceptUnsigned'] = '1' if accept_unsigned else '0'
+        async with self.session.post(url, json=data) as resp:
+            if resp.status != 200:
+                raise AptlyError(resp.status, data)
+            return data
+
+    async def upload_files(self, name, dirname, files):
+        url = urljoin(self.url, 'files/%s' % (dirname, ))
+        async with MultipartWriter() as mpwriter:
+            for f in files:
+                mpwriter.append(f)
+            async with self.session.post(url, data=mpwriter) as resp:
+                data = json.loads(await resp.text())
+                if resp.status != 200:
+                    raise AptlyError(resp.status, data)
+                return data
 
     async def publish(self, prefix, suite, distribution=None, architectures=None, not_automatic=None):
         url = urljoin(self.url, 'publish/%s' % (prefix, ))
