@@ -69,9 +69,9 @@ IGNORE_RESULT_CODE.update(
 
 PUBLISH_MODE_VALUE = {
     'build-only': 0,
-    'push': 50,
-    'propose': 40,
-    'attempt-push': 45,
+    'push': 500,
+    'propose': 400,
+    'attempt-push': 450,
     }
 
 
