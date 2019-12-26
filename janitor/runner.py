@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import web
+from aiohttp import web, MultipartWriter, ClientSession
 import asyncio
 from datetime import datetime
 import functools
@@ -324,10 +324,24 @@ async def open_branch_with_fallback(
         raise
 
 
+async def upload_changes(changes_path, incoming_url):
+    with open(changes_path, 'r') as f:
+        dsc = Changes(f)
+    async with ClientSession() as session:
+        with MultipartWriter() as mpwriter:
+            for file_details in dsc['files']:
+                name = file_details['name']
+                path = os.path.join(os.path.dirname(changes_path), name)
+                mpwriter.append(open(path, 'rb'))
+            async with session.post(incoming_url, data=mpwriter) as resp:
+                if resp.status != 200:
+                    raise Exception('Error uploading files: %r' % await resp.text)
+
+
 async def process_one(
         db, config, output_directory, worker_kind, vcs_url, pkg, command,
         build_command, suite, pre_check=None, post_check=None,
-        dry_run=False, incoming=None, logfile_manager=None,
+        dry_run=False, incoming=None, incoming_url=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False, refresh=False, vcs_type=None,
@@ -567,6 +581,8 @@ async def process_one(
         debsign(changes_path, debsign_keyid)
         if incoming is not None:
             dget_changes(changes_path, incoming)
+        if incoming_url is not None:
+            await upload_changes(changes_path, incoming_url)
 
     return result
 
@@ -615,7 +631,7 @@ class QueueProcessor(object):
 
     def __init__(
             self, database, config, worker_kind, build_command, pre_check=None,
-            post_check=None, dry_run=False, incoming=None,
+            post_check=None, dry_run=False, incoming=None, incoming_url=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
             concurrency=1, use_cached_only=False, overall_timeout=None,
             committer=None):
@@ -627,6 +643,7 @@ class QueueProcessor(object):
           pre_check: Function to run prior to modifying a package
           post_check: Function to run after modifying a package
           incoming: directory to copy debian packages to
+          incoming_url: location to upload debian packages to
         """
         self.database = database
         self.config = config
@@ -636,6 +653,7 @@ class QueueProcessor(object):
         self.post_check = post_check
         self.dry_run = dry_run
         self.incoming = incoming
+        self.incoming_url = incoming_url
         self.logfile_manager = logfile_manager
         self.debsign_keyid = debsign_keyid
         self.vcs_manager = vcs_manager
@@ -676,6 +694,7 @@ class QueueProcessor(object):
                 suite=item.suite, pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
                 dry_run=self.dry_run, incoming=self.incoming,
+                incoming_url=self.incoming_url,
                 debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only, refresh=item.refresh,
@@ -826,6 +845,9 @@ def main(argv=None):
         '--incoming', type=str,
         help='Path to copy built Debian packages into.')
     parser.add_argument(
+        '--incoming-url', type=str,
+        help='URL to upload built Debian packages to.')
+    parser.add_argument(
         '--debsign-keyid', type=str,
         help='GPG key to sign Debian package with.')
     parser.add_argument(
@@ -863,7 +885,8 @@ def main(argv=None):
         args.worker,
         args.build_command,
         args.pre_check, args.post_check,
-        args.dry_run, args.incoming, logfile_manager,
+        args.dry_run, args.incoming, args.incoming_url,
+        logfile_manager,
         args.debsign_keyid,
         vcs_manager,
         args.concurrency,
