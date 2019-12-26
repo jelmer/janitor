@@ -345,7 +345,7 @@ async def upload_changes(changes_path, incoming_url):
 async def process_one(
         db, config, output_directory, worker_kind, vcs_url, pkg, command,
         build_command, suite, pre_check=None, post_check=None,
-        dry_run=False, incoming=None, incoming_url=None, logfile_manager=None,
+        dry_run=False, incoming_url=None, logfile_manager=None,
         debsign_keyid=None, vcs_manager=None,
         possible_transports=None, possible_hosters=None,
         use_cached_only=False, refresh=False, vcs_type=None,
@@ -583,8 +583,6 @@ async def process_one(
         changes_path = os.path.join(
             output_directory, result.changes_filename)
         debsign(changes_path, debsign_keyid)
-        if incoming is not None:
-            dget_changes(changes_path, incoming)
         if incoming_url is not None:
             await upload_changes(changes_path, incoming_url)
 
@@ -635,7 +633,7 @@ class QueueProcessor(object):
 
     def __init__(
             self, database, config, worker_kind, build_command, pre_check=None,
-            post_check=None, dry_run=False, incoming=None, incoming_url=None,
+            post_check=None, dry_run=False, incoming_url=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
             concurrency=1, use_cached_only=False, overall_timeout=None,
             committer=None):
@@ -646,7 +644,6 @@ class QueueProcessor(object):
           build_command: The command used to build packages
           pre_check: Function to run prior to modifying a package
           post_check: Function to run after modifying a package
-          incoming: directory to copy debian packages to
           incoming_url: location to upload debian packages to
         """
         self.database = database
@@ -656,7 +653,6 @@ class QueueProcessor(object):
         self.pre_check = pre_check
         self.post_check = post_check
         self.dry_run = dry_run
-        self.incoming = incoming
         self.incoming_url = incoming_url
         self.logfile_manager = logfile_manager
         self.debsign_keyid = debsign_keyid
@@ -697,8 +693,7 @@ class QueueProcessor(object):
                 item.branch_url, item.package, item.command,
                 suite=item.suite, pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
-                dry_run=self.dry_run, incoming=self.incoming,
-                incoming_url=self.incoming_url,
+                dry_run=self.dry_run, incoming_url=self.incoming_url,
                 debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only, refresh=item.refresh,
@@ -846,9 +841,6 @@ def main(argv=None):
         help="Create branches but don't push or propose anything.",
         action="store_true", default=False)
     parser.add_argument(
-        '--incoming', type=str,
-        help='Path to copy built Debian packages into.')
-    parser.add_argument(
         '--incoming-url', type=str,
         help='URL to upload built Debian packages to.')
     parser.add_argument(
@@ -889,7 +881,7 @@ def main(argv=None):
         args.worker,
         args.build_command,
         args.pre_check, args.post_check,
-        args.dry_run, args.incoming, args.incoming_url,
+        args.dry_run, args.incoming_url,
         logfile_manager,
         args.debsign_keyid,
         vcs_manager,
