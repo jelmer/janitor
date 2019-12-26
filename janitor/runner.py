@@ -324,6 +324,10 @@ async def open_branch_with_fallback(
         raise
 
 
+class UploadFailedError(Exception):
+    """Upload failed."""
+
+
 async def upload_changes(changes_path, incoming_url):
     with open(changes_path, 'r') as f:
         dsc = Changes(f)
@@ -335,7 +339,7 @@ async def upload_changes(changes_path, incoming_url):
                 mpwriter.append(open(path, 'rb'))
             async with session.post(incoming_url, data=mpwriter) as resp:
                 if resp.status != 200:
-                    raise Exception('Error uploading files: %r' % await resp.text)
+                    raise UploadFailedError(resp)
 
 
 async def process_one(
