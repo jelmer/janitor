@@ -480,7 +480,8 @@ if __name__ == '__main__':
                 conn, post['run_id'], review_status)
             text = await generate_review(
                 conn, request.app.http_client_session,
-                request.app.publisher_url, suite=run.suite)
+                request.app.archiver_url, request.app.publisher_url,
+                suite=run.suite)
         return web.Response(content_type='text/html', text=text)
 
     async def handle_review(request):
@@ -489,7 +490,8 @@ if __name__ == '__main__':
         async with request.app.database.acquire() as conn:
             text = await generate_review(
                 conn, request.app.http_client_session,
-                request.app.publisher_url, suite=suite)
+                request.app.archiver_url, request.app.publisher_url,
+                suite=suite)
         return web.Response(content_type='text/html', text=text)
 
     async def start_pubsub_forwarder(app):
