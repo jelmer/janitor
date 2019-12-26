@@ -22,7 +22,7 @@
 
 <h2>Source Code</h2>
 
-<p>The janitor itself is mostly written in Python, using the following libraries:</p>
+<p>The janitor itself is mostly written in Python, using the following libraries and services:</p>
 
 <ul>
     <li><a href="https://salsa.debian.org/python-debian-team/python-debian">python-debian</a> for parsing of Debian-related files</li>
@@ -37,6 +37,7 @@ GitLab, Launchpad).</li>
 affected by lintian tags that lintian-brush knows how to fix, clones the
  packaging branches, invokes lintian-brush and pushes back or creates
 merge proposals.</li>
+    <li><a class="reference external" href="https://aptly.info/">Aptly</a> is used for archive management.</a></li>
 </ul>
 
 <p>The source code is hosted <a href="https://salsa.debian.org/jelmer/debian-janitor">on Salsa</a>.</p>
