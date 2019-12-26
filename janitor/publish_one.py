@@ -79,6 +79,16 @@ https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
 """
 
 
+DEBDIFF_BLURB = """
+The binary debdiff can be found at
+https://janitor.debian.net/api/%(log_id)s/debdiff
+"""
+
+NO_DEBDIFF_BLURB = """
+These changes have no impact on the binary debdiff.
+"""
+
+
 class PublishFailure(Exception):
 
     def __init__(self, code, description):
@@ -108,6 +118,15 @@ def strip_janitor_blurb(text, suite):
 def add_janitor_blurb(text, pkg, log_id, suite):
     text += '\n' + (JANITOR_BLURB % {'suite': suite})
     text += (LOG_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
+    return text
+
+
+def add_debdiff_blurb(text, pkg, log_id, suite, debdiff):
+    if debdiff:
+        text += '\n' + NO_DEBDIFF_BLURB
+    else:
+        text += '\n' + (
+            DEBDIFF_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
     return text
 
 
@@ -190,7 +209,7 @@ def publish(
         suite, pkg, subrunner, mode, hoster,
         main_branch, local_branch, resume_branch=None,
         dry_run=False, log_id=None, existing_proposal=None,
-        allow_create_proposal=False, reviewers=None):
+        allow_create_proposal=False, reviewers=None, debdiff=None):
     def get_proposal_description(existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
@@ -202,9 +221,11 @@ def publish(
                 existing_description = None
         else:
             existing_description = None
-        description = subrunner.get_proposal_description(
-            existing_description)
-        return add_janitor_blurb(description, pkg, log_id, suite)
+        description = subrunner.get_proposal_description(existing_description)
+        description = add_janitor_blurb(description, pkg, log_id, suite)
+        if debdiff is not None:
+            add_debdiff_blurb(description, pkg, log_id, suite, debdiff)
+        return description
 
     def get_proposal_commit_message(existing_proposal):
         if existing_proposal:
