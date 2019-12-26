@@ -28,7 +28,7 @@ The janitor is made up out of multiple components:
   each package and stores the results.
 * one or more *workers* which are responsible for actual generating and
   building changes.
-* an *archiver* combined with a *repository manager* (mini-dinstall) that takes
+* an *archiver* combined with a *repository manager* (aptly) that takes
   care of managing the apt archives and publishes them
 
 Workers are fairly naive; they simply run a ``silver-platter`` subcommand
