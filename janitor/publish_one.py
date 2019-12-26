@@ -17,6 +17,8 @@
 
 """Publishing VCS changes."""
 
+import urllib
+import urllib.error
 import urllib.parse
 
 from silver_platter.utils import (
@@ -433,13 +435,24 @@ def publish_one(
     if allow_create_proposal is None:
         allow_create_proposal = subrunner.allow_create_proposal()
 
+    debdiff_url = 'https://janitor.debian.net/api/run/%s/debdiff' % log_id
+    try:
+        with urllib.urlopen(debdiff_url) as f:
+            debdiff = f.read()
+    except urllib.error.HTTPError as e:
+        if e.status == 404:
+            debdiff = None
+        else:
+            raise
+
     try:
         publish_result = publish(
             suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
             resume_branch, reviewers=reviewers,
             dry_run=dry_run, log_id=log_id,
             existing_proposal=existing_proposal,
-            allow_create_proposal=allow_create_proposal)
+            allow_create_proposal=allow_create_proposal,
+            debdiff=debdiff)
     except EmptyMergeProposal:
         raise PublishFailure(
             code='empty-merge-proposal',
