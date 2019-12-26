@@ -327,12 +327,12 @@ SELECT
 FROM
     last_runs
 WHERE
-    suite = 'unchanged' AND main_branch_revision = $1 AND
+    suite = 'unchanged' AND revision = $1 AND
     build_version IS NOT NULL
 """
-    if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode('utf-8')
-    row = await conn.fetchrow(query, main_branch_revision)
+    if isinstance(revision, bytes):
+        revision = revision.decode('utf-8')
+    row = await conn.fetchrow(query, revision)
     if row is not None:
         return Run.from_row(row)
     return None
