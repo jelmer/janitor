@@ -157,7 +157,7 @@ async def update_archive(config, archive_dir):
 
         f.flush()
 
-        args = ['mini-dinstall', '-c', f.name]
+        args = ['mini-dinstall', '-b', '-c', f.name]
         proc = await asyncio.create_subprocess_exec(*args)
         await proc.wait()
 
