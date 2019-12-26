@@ -17,6 +17,7 @@
 
 from aiohttp import ClientSession
 import asyncio
+from contextlib import ExitStack
 import json
 import os
 import re
@@ -26,6 +27,7 @@ from urllib.parse import urljoin
 import uuid
 
 from aiohttp import web
+from debian.deb822 import Changes
 
 from .aptly import Aptly, AptlyError
 from .debdiff import run_debdiff, filter_boring
@@ -145,7 +147,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir):
     await site.start()
 
 
-async def update_archive(config, archive_dir):
+async def update_mini_dinstall(config, archive_dir):
     with tempfile.NamedTemporaryFile(mode='w') as f:
         with open('mini-dinstall.conf', 'r') as t:
             f.write(t.read() % {'archive_dir': archive_dir})
@@ -162,29 +164,41 @@ async def update_archive(config, archive_dir):
         await proc.wait()
 
 
-async def update_archive_loop(config, archive_dir):
+async def update_archive_loop(config, archive_dir, aptly_url):
     while True:
-        await update_archive(config, archive_dir)
+        async with ClientSession() as session:
+            aptly = Aptly(session, aptly_url)
+            await update_aptly(config, aptly)
+        await update_mini_dinstall(config, archive_dir)
         await asyncio.sleep(30 * 60)
 
 
+async def upload_to_aptly(changes_path, aptly):
+    files = []
+    with open(changes_path, 'r') as f, ExitStack() as es:
+        changes = Changes(f)
+        distro = changes["Distribution"]
+        for file_details in dsc['files']:
+            path = os.path.join(os.path.dirname(changes_path), name)
+            f = open(path, 'rb')
+            files.append(f)
+            es.enter_context(f)
+    dirname = str(uuid.uuid4())
+    await aptly.upload_files(dirname, files)
+    await aptly.repos_include(distro, dirname)
+
+
 async def update_aptly(config, aptly):
+    for filename in os.listdir(incoming_dir):
+        if os.path.endswith('.changes'):
+            await upload_to_aptly(
+                os.path.join(incoming_dir, filename), aptly)
     for suite in config.suite:
         await aptly.publish_update(':.', suite.name)
-    with contextlib.ExitStack() as exit_stack:
-        files = []
-        for filename in os.listdir(incoming_dir):
-            f = open(filename, 'rb')
-            exit_stack.enter_context(f)
-            files.append(f)
-        dirname = str(uuid.uuid4())
-        await aptly.upload_files(dirname, files)
-        await aptly.repos_include('FIXME', dirname)
 
 
-async def update_aptly_loop(config, aptly_url):
+async def sync_aptly_metadata(config, aptly_url):
     async with ClientSession() as session:
-        aptly = Aptly(session, aptly_url)
         existing_repos = await aptly.repos_list()
         existing_by_name = {r['Name']: r for r in existing_repos}
         for suite in config.suite:
@@ -202,10 +216,6 @@ async def update_aptly_loop(config, aptly_url):
                     raise
         for suite_name in existing_by_name:
             await aptly.repos_delete(suite_name)
-
-        while True:
-            await update_aptly(config, aptly)
-            await asyncio.sleep(30 * 60)
 
 
 def main(argv=None):
@@ -241,7 +251,7 @@ def main(argv=None):
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive, args.incoming)),
         loop.create_task(update_archive_loop(config, args.archive))))
-        #loop.create_task(update_aptly_loop(config, args.aptly_url))))
+        loop.create_task(sync_aptly_metadata(config, args.aptly_url))))
     loop.run_forever()
 
 
