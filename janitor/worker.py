@@ -508,10 +508,15 @@ class JustBuildWorker(SubWorker):
 
     def __init__(self, command, env):
         subparser = argparse.ArgumentParser(prog='just-build')
+        subparser.add_argument(
+            '--revision', type=str,
+            help='Specific revision to build.')
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
                      base_metadata, subpath=None):
+        if self.args.revision:
+            local_tree.update(revision=self.args.revision.encode('utf-8'))
         return None
 
 
