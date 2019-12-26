@@ -17,6 +17,7 @@
 
 from aiohttp import web, MultipartWriter, ClientSession
 import asyncio
+from contextlib import ExitStack
 from datetime import datetime
 import functools
 import json
@@ -332,11 +333,13 @@ async def upload_changes(changes_path, incoming_url):
     with open(changes_path, 'r') as f:
         dsc = Changes(f)
     async with ClientSession() as session:
-        with MultipartWriter() as mpwriter:
+        with MultipartWriter() as mpwriter, ExitStack() as es:
             for file_details in dsc['files']:
                 name = file_details['name']
                 path = os.path.join(os.path.dirname(changes_path), name)
-                mpwriter.append(open(path, 'rb'))
+                f = open(path, 'rb')
+                es.enter_context(f)
+                mpwriter.append(f)
             async with session.post(incoming_url, data=mpwriter) as resp:
                 if resp.status != 200:
                     raise UploadFailedError(resp)
