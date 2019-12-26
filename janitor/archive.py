@@ -30,20 +30,24 @@ from aiohttp import web
 from .aptly import Aptly, AptlyError
 from .debdiff import run_debdiff, filter_boring
 from .prometheus import setup_metrics
+from .trace import note
 
 suite_check = re.compile('^[a-z0-9-]+$')
 
 
 async def handle_upload(request):
     reader = await request.multipart()
+    filenames = []
     while True:
         part = await reader.next()
         if part is None:
             break
         path = os.path.join(request.app.incoming_dir, part.filename)
+        filenames.append(part.filename)
         with open(path, 'wb') as f:
-            f.write(part.read(decode=False))
-    return web.Response(status=200, text='Uploaded files.')
+            f.write(await part.read(decode=False))
+    note('Uploaded files: %r', filenames)
+    return web.Response(status=200, text='Uploaded files: %r.' % filenames)
 
 
 async def handle_debdiff(request):
