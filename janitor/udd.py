@@ -271,7 +271,8 @@ async def iter_multiarch_fixes(packages=None):
         yield source, ' '.join(sorted(hints)), value
 
 
-async def update_package_metadata(db, udd, selected_packages=None):
+async def update_package_metadata(
+        db, udd, package_overrides, selected_packages=None):
     async with db.acquire() as conn:
         existing_packages = {
             package.name: package
@@ -299,6 +300,14 @@ async def update_package_metadata(db, udd, selected_packages=None):
                vcs_branch, vcs_browser, vcswatch_status, sid_version,
                vcswatch_version) in udd.iter_packages_with_metadata(
                    selected_packages):
+        try:
+            override = package[name]
+        except KeyError:
+            upstream_branch_url = None
+        else:
+            vcs_url = override.branch_url or vcs_url
+            upstream_branch_url = override.upstream_branch_url
+
         uploader_emails = extract_uploader_emails(uploaders)
 
         if vcs_type and vcs_type.capitalize() == 'Git':
@@ -339,13 +348,14 @@ async def update_package_metadata(db, udd, selected_packages=None):
             name, branch_url, subpath, maintainer_email, uploader_emails,
             sid_version, vcs_type, vcs_url, vcs_browser,
             vcswatch_status.lower() if vcswatch_status else None,
-            vcswatch_version, insts, removed))
+            vcswatch_version, insts, removed, upstream_branch_url))
         await state.store_packages(conn, packages)
 
 
 async def main():
     import argparse
     from janitor import state
+    from janitor.package_overrides import read_package_overrides
     from silver_platter.debian.lintian import (
         available_lintian_fixers,
     )
@@ -374,6 +384,9 @@ async def main():
     parser.add_argument(
         '--skip-package-metadata', action='store_true',
         help='Skip updating of package information.')
+    parser.add_argument(
+        '--package-overrides', type=str, default='package_overrides.conf',
+        help='Read package overrides.')
 
     args = parser.parse_args()
 
@@ -386,6 +399,9 @@ async def main():
     with open(args.config, 'r') as f:
         config = read_config(f)
 
+    with open(args.package_overrides, 'r') as f:
+        package_overrides = read_package_overrides(f)
+
     tags = set()
     available_fixers = list(available_lintian_fixers())
     for fixer in available_fixers:
@@ -397,7 +413,8 @@ async def main():
     db = state.Database(config.database_location)
 
     if not args.skip_package_metadata:
-        await update_package_metadata(db, udd, args.packages)
+        await update_package_metadata(
+            db, udd, package_overrides, args.packages)
 
     async with db.acquire() as conn:
         CANDIDATE_FNS = [
