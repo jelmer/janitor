@@ -17,9 +17,7 @@ def projects_to_remove(instance):
     for mp in instance.iter_my_proposals():
         if not mp.is_closed() and not mp.is_merged():
             in_use.add(mp.get_source_project())
-    for project, is_fork in instance.iter_my_projects():
-        if not is_fork:
-            continue
+    for project in instance.iter_my_forks():
         if project in in_use:
             continue
         yield project
