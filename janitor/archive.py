@@ -23,6 +23,7 @@ import re
 import sys
 import tempfile
 from urllib.parse import urljoin
+import uuid
 
 from aiohttp import web
 
@@ -31,6 +32,18 @@ from .debdiff import run_debdiff, filter_boring
 from .prometheus import setup_metrics
 
 suite_check = re.compile('^[a-z0-9-]+$')
+
+
+async def handle_upload(request):
+    reader = await request.multipart()
+    while True:
+        part = await reader.next()
+        if part is None:
+            break
+        path = os.path.join(request.app.incoming_dir, part.filename)
+        with open(path, 'wb') as f:
+            f.write(part.read(decode=False))
+    return web.Response(status=200, text='Uploaded files.')
 
 
 async def handle_debdiff(request):
@@ -111,10 +124,12 @@ async def handle_archive_file(request):
             text='No such changes file : %s' % filename, status=404)
 
 
-async def run_web_server(listen_addr, port, archive_path):
+async def run_web_server(listen_addr, port, archive_path, incoming_dir):
     app = web.Application()
     app.archive_path = archive_path
+    app.incoming_dir = incoming_dir
     setup_metrics(app)
+    app.router.add_post('/', handle_upload, name='upload')
     app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
     app.router.add_get(
         '/archive'
@@ -152,6 +167,15 @@ async def update_archive_loop(config, archive_dir):
 async def update_aptly(config, aptly):
     for suite in config.suite:
         await aptly.publish_update(':.', suite.name)
+    with contextlib.ExitStack() as exit_stack:
+        files = []
+        for filename in os.listdir(incoming_dir):
+            f = open(filename, 'rb')
+            exit_stack.enter_context(f)
+            files.append(f)
+        dirname = str(uuid.uuid4())
+        await aptly.upload_files(dirname, files)
+        await aptly.repos_include('FIXME', dirname)
 
 
 async def update_aptly_loop(config, aptly_url):
@@ -199,6 +223,9 @@ def main(argv=None):
     parser.add_argument(
         '--aptly-url', type=str, default='http://localhost:9915/api/',
         help='URL for aptly API.')
+    parser.add_argument(
+        '--incoming', type=str,
+        help='Path to incoming directory.')
 
     args = parser.parse_args()
 
@@ -208,9 +235,9 @@ def main(argv=None):
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_web_server(
-            args.listen_address, args.port, args.archive)),
-        loop.create_task(update_archive_loop(config, args.archive)),
-        loop.create_task(update_aptly_loop(config, args.aptly_url))))
+            args.listen_address, args.port, args.archive, args.incoming)),
+        loop.create_task(update_archive_loop(config, args.archive))))
+        #loop.create_task(update_aptly_loop(config, args.aptly_url))))
     loop.run_forever()
 
 
