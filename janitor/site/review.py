@@ -7,10 +7,11 @@ import urllib.parse
 from janitor import state
 from janitor.site import (
     env,
+    get_debdiff,
     )
 
 
-async def generate_review(conn, client, publisher_url, suite=None):
+async def generate_review(conn, client, archiver_url, publisher_url, suite=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
                        conn, review_status=['unreviewed'], limit=40,
@@ -36,8 +37,20 @@ async def generate_review(conn, client, publisher_url, suite=None):
                         'Unable to retrieve diff; error %d' % resp.status)
         except ClientConnectorError as e:
             return 'Unable to retrieve diff; error %s' % e
+
+    async def show_debdiff():
+        unchanged_run = await state.get_unchanged_run(run.main_branch_revision)
+        if unchanged_run is None:
+            return ''
+        try:
+            return await get_debdiff(
+                client, archiver_url, run, unchanged_run, filter_boring=True)
+        except DebdiffRetrievalError:
+            return 'Unable to retrieve debdiff'
+
     kwargs = {
         'show_diff': show_diff,
+        'show_debdiff': show_debdiff,
         'package_name': run.package,
         'run_id': run.id,
         'suite': run.suite,
