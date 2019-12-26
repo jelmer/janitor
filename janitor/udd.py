@@ -301,7 +301,7 @@ async def update_package_metadata(
                vcswatch_version) in udd.iter_packages_with_metadata(
                    selected_packages):
         try:
-            override = package[name]
+            override = package_overrides[name]
         except KeyError:
             upstream_branch_url = None
         else:
