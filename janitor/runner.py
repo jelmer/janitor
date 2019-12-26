@@ -330,6 +330,12 @@ class UploadFailedError(Exception):
 
 
 async def upload_changes(changes_path, incoming_url):
+    """Upload changes to the archiver.
+
+    Args:
+      changes_path: Changes path
+      incoming_url: Incoming URL
+    """
     with open(changes_path, 'r') as f:
         dsc = Changes(f)
     async with ClientSession() as session:
@@ -354,6 +360,7 @@ async def process_one(
         use_cached_only=False, refresh=False, vcs_type=None,
         subpath=None, overall_timeout=None, upstream_branch_url=None,
         committer=None):
+    start_time = datetime.now()
     note('Running %r on %s', command, pkg)
     packages_processed_count.inc()
     log_id = str(uuid.uuid4())
@@ -529,8 +536,7 @@ async def process_one(
 
         return JanitorResult(
             pkg, log_id=log_id, branch_url=branch_url,
-            code=code,
-            description=description,
+            code=code, description=description,
             logfilenames=logfilenames)
 
     json_result_path = os.path.join(output_directory, 'result.json')
@@ -588,7 +594,18 @@ async def process_one(
         debsign(changes_path, debsign_keyid)
         if incoming_url is not None:
             await upload_changes(changes_path, incoming_url)
-
+        if suite != 'unchanged':
+            async with db.acquire() as conn:
+                run = await state.get_unchanged_run(
+                    conn, worker_result.main_branch_revision)
+                if run is not None:
+                    duration = datetime.now() - start_time
+                    await conn.add_to_queue(
+                        conn, pkg,
+                        'just-build --revision=%s' %
+                            main_branch_revision.decode('utf-8'),
+                            'unchanged', offset=-10,
+                            estimated_duration=duration, requestor='control')
     return result
 
 
