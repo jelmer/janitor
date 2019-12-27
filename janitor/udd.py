@@ -265,6 +265,8 @@ async def iter_multiarch_fixes(packages=None):
         hints = parse_multiarch_hints(f)
         bysource = multiarch_hints_by_source(hints)
     for source, entries in bysource.items():
+        if packages is not None and source not in packages:
+            continue
         hints = [entry['link'].rsplit('#', 1)[-1] for entry in entries]
         value = sum(map(MULTIARCH_HINTS_VALUE.__getitem__, hints)) + (
             DEFAULT_VALUE_MULTIARCH_HINT)
@@ -294,62 +296,62 @@ async def update_package_metadata(
                 not existing_packages[name].removed]
             await state.update_removals(conn, filtered_removals)
 
-    trace.note('Updating package metadata.')
-    packages = []
-    async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-               vcs_branch, vcs_browser, vcswatch_status, sid_version,
-               vcswatch_version) in udd.iter_packages_with_metadata(
-                   selected_packages):
-        try:
-            override = package_overrides[name]
-        except KeyError:
-            upstream_branch_url = None
-        else:
-            vcs_url = override.branch_url or vcs_url
-            upstream_branch_url = override.upstream_branch_url
-
-        uploader_emails = extract_uploader_emails(uploaders)
-
-        if vcs_type and vcs_type.capitalize() == 'Git':
-            new_vcs_url = fixup_broken_git_url(vcs_url)
-            if new_vcs_url != vcs_url:
-                trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
-                vcs_url = new_vcs_url
-
-        if vcs_url and vcs_branch:
-            (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
-            if orig_branch != vcs_branch:
-                new_vcs_url = unsplit_vcs_url(repo_url, vcs_branch, subpath)
-                trace.note('Fixing up branch name from vcswatch: %s -> %s',
-                           vcs_url, new_vcs_url)
-                vcs_url = new_vcs_url
-
-        if vcs_type is not None:
-            # Drop the subpath, we're storing it separately.
-            (url, branch, subpath) = split_vcs_url(vcs_url)
-            url = unsplit_vcs_url(url, branch)
-            url = canonicalize_vcs_url(vcs_type, url)
+        trace.note('Updating package metadata.')
+        packages = []
+        async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
+                   vcs_branch, vcs_browser, vcswatch_status, sid_version,
+                   vcswatch_version) in udd.iter_packages_with_metadata(
+                       selected_packages):
             try:
-                branch_url = convert_debian_vcs_url(
-                    vcs_type.capitalize(), url)
-            except ValueError as e:
-                trace.note('%s: %s', name, e)
+                override = package_overrides[name]
+            except KeyError:
+                upstream_branch_url = None
+            else:
+                vcs_url = override.branch_url or vcs_url
+                upstream_branch_url = override.upstream_branch_url
+
+            uploader_emails = extract_uploader_emails(uploaders)
+
+            if vcs_type and vcs_type.capitalize() == 'Git':
+                new_vcs_url = fixup_broken_git_url(vcs_url)
+                if new_vcs_url != vcs_url:
+                    trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
+                    vcs_url = new_vcs_url
+
+            if vcs_url and vcs_branch:
+                (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
+                if orig_branch != vcs_branch:
+                    new_vcs_url = unsplit_vcs_url(repo_url, vcs_branch, subpath)
+                    trace.note('Fixing up branch name from vcswatch: %s -> %s',
+                               vcs_url, new_vcs_url)
+                    vcs_url = new_vcs_url
+
+            if vcs_type is not None:
+                # Drop the subpath, we're storing it separately.
+                (url, branch, subpath) = split_vcs_url(vcs_url)
+                url = unsplit_vcs_url(url, branch)
+                url = canonicalize_vcs_url(vcs_type, url)
+                try:
+                    branch_url = convert_debian_vcs_url(
+                        vcs_type.capitalize(), url)
+                except ValueError as e:
+                    trace.note('%s: %s', name, e)
+                    branch_url = None
+            else:
+                subpath = None
                 branch_url = None
-        else:
-            subpath = None
-            branch_url = None
 
-        if name not in removals:
-            removed = False
-        else:
-            removed = Version(sid_version) <= removals[name]
+            if name not in removals:
+                removed = False
+            else:
+                removed = Version(sid_version) <= removals[name]
 
-        packages.append((
-            name, branch_url, subpath, maintainer_email, uploader_emails,
-            sid_version, vcs_type, vcs_url, vcs_browser,
-            vcswatch_status.lower() if vcswatch_status else None,
-            vcswatch_version, insts, removed, upstream_branch_url))
-        await state.store_packages(conn, packages)
+            packages.append((
+                name, branch_url, subpath, maintainer_email, uploader_emails,
+                sid_version, vcs_type, vcs_url, vcs_browser,
+                vcswatch_status.lower() if vcswatch_status else None,
+                vcswatch_version, insts, removed, upstream_branch_url))
+            await state.store_packages(conn, packages)
 
 
 async def main():
