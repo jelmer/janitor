@@ -262,15 +262,17 @@ async def handle_debdiff(request):
         raise web.HTTPNotFound(
             text='Unchanged build %s was not successful' % unchanged_run.id)
 
+    filter_boring = ('filter_boring' in request.query)
+
     try:
         debdiff = await get_debdiff(
             request.app.http_client_session, request.app.archiver_url, run,
-            unchanged_run, filter_boring=('filter_boring' in request.query))
+            unchanged_run, filter_boring=filter_boring)
     except FileNotFoundError:
         raise web.HTTPNotFound(text='debdiff not calculated yet')
-    except DebdiffRetrievalError:
+    except DebdiffRetrievalError as e:
         return web.json_response(
-            'unable to contact runner for debdiff',
+            'unable to contact archiver for debdiff: %r',
             status=400)
     return web.Response(
         body=debdiff,
