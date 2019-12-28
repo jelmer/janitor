@@ -19,7 +19,7 @@
 import asyncio
 
 
-async def read_apt_file_from_s3(
+async def forward_apt_file_from_s3(
         request, session, s3_location, suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
     url = '%s/%s/%s' % (s3_location, suite, filename)
@@ -48,7 +48,7 @@ async def read_apt_file_from_s3(
     return response
 
 
-async def read_apt_file_from_fs(suite, filename, max_age):
+async def forward_apt_file_from_fs(suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
     path = os.path.join(
             os.path.dirname(__file__), '..', '..',
@@ -435,11 +435,11 @@ if __name__ == '__main__':
             max_age = 60
 
         if config.apt_location.startswith('http'):
-            return await read_apt_file_from_s3(
+            return await forward_apt_file_from_s3(
                 request, app.http_client_session, config.apt_location, suite,
                 file, max_age)
         else:
-            return await read_apt_file_from_fs(suite, file, max_age)
+            return await forward_apt_file_from_fs(suite, file, max_age)
 
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
