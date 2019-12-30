@@ -301,17 +301,26 @@ def fix_missing_python_distribution(tree, error, context, committer=None):
     targeted = targeted_python_versions(tree)
     default = not targeted
 
-    pypy_pkg = 'pypy-%s' % error.distribution
-    if not package_exists(pypy_pkg):
-        pypy_pkg = None
+    pypy_pkg = get_package_for_paths(
+        ['/usr/lib/pypy/dist-packages/%s-.*.egg-info'], regex=True)
+    if pypy_pkg is None:
+        pypy_pkg = 'pypy-%s' % error.distribution
+        if not package_exists(pypy_pkg):
+            pypy_pkg = None
 
-    py2_pkg = 'python-%s' % error.distribution
-    if not package_exists(py2_pkg):
-        py2_pkg = None
+    py2_pkg = get_package_for_paths(
+        ['/usr/lib/python2\\.[0-9]/dist-packages/%s-.*.egg-info'], regex=True)
+    if py2_pkg is None:
+        py2_pkg = 'python-%s' % error.distribution
+        if not package_exists(py2_pkg):
+            py2_pkg = None
 
-    py3_pkg = 'python3-%s' % error.distribution
-    if not package_exists(py3_pkg):
-        py3_pkg = None
+    py3_pkg = get_package_for_paths(
+        ['/usr/lib/python3/dist-packages/%s-.*.egg-info'], regex=True)
+    if py3_pkg is None:
+        py3_pkg = 'python3-%s' % error.distribution
+        if not package_exists(py3_pkg):
+            py3_pkg = None
 
     extra_build_deps = []
     if error.python_version == 2:
