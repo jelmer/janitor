@@ -13,6 +13,7 @@ from janitor import package_overrides_pb2
 from lintian_brush.upstream_metadata import (
     guess_from_launchpad,
     guess_from_aur,
+    guess_from_pecl,
     )
 
 
@@ -25,7 +26,9 @@ async def main(db, start=None):
             sys.stderr.write('Package: %s\n' % pkg)
             urls = []
             for name, guesser in [
-                    ('aur', guess_from_aur), ('lp', guess_from_launchpad)]:
+                    ('aur', guess_from_aur),
+                    ('lp', guess_from_launchpad),
+                    ('pecl', guess_from_pecl)]:
                 metadata = dict(guesser(pkg))
                 try:
                     repo_url = metadata['Repository']
