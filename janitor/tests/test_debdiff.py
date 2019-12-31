@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.debdiff import iter_sections
+from janitor.debdiff import iter_sections, filter_boring
 
 import unittest
 
@@ -73,3 +73,46 @@ Depends: xserver-blah (= [-1:1.7.9-2~jan+unchanged1)-] {+1:1.7.9-3~jan+lint1)+}
 Installed-Size: [-515-] {+204+}
 Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}
 """)))
+
+
+class FilterBoringTests(unittest.TestCase):
+
+    def test_just_versions(self):
+        debdiff = """\
+File lists identical (after any substitutions)
+
+Control files of package acpi-fakekey: lines which differ (wdiff format)
+------------------------------------------------------------------------
+Version: [-0.143-4~jan+unchanged1-] {+0.143-5~jan+lint1+}
+
+Control files of package acpi-fakekey-dbgsym: lines which differ (wdiff format)
+-------------------------------------------------------------------------------
+Depends: acpi-fakekey (= [-0.143-4~jan+unchanged1)-] {+0.143-5~jan+lint1)+}
+Version: [-0.143-4~jan+unchanged1-] {+0.143-5~jan+lint1+}
+
+Control files of package acpi-support: lines which differ (wdiff format)
+------------------------------------------------------------------------
+Version: [-0.143-4~jan+unchanged1-] {+0.143-5~jan+lint1+}
+
+Control files of package acpi-support-base: lines which differ (wdiff format)
+-----------------------------------------------------------------------------
+Version: [-0.143-4~jan+unchanged1-] {+0.143-5~jan+lint1+}
+"""
+        newdebdiff = filter_boring(
+            debdiff, '0.143-4~jan+unchanged1', '0.143-5~jan+lint1')
+        self.maxDiff = None
+        self.assertEqual(newdebdiff, """\
+File lists identical (after any substitutions)
+
+No differences were encountered between the control files of package \
+acpi-fakekey
+
+No differences were encountered between the control files of package \
+acpi-fakekey-dbgsym
+
+No differences were encountered between the control files of package \
+acpi-support
+
+No differences were encountered between the control files of package \
+acpi-support-base
+""")
