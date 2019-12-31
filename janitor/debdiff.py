@@ -35,22 +35,48 @@ def iter_sections(text):
         yield title, paragraph
 
 
-def filter_boring(debdiff):
+def filter_boring_wdiff(line, old_version, new_version):
+    if not line:
+        return line
+    field, changes = line.split(':', 1)
+    if field == 'Installed-Size':
+        return None
+    if field == 'Version':
+        return None
+    line = re.sub(
+        r'\[-%s(.*)-\] \{\+%s\1\+\}' % (
+            re.escape(old_version), re.escape(new_version)),
+        '', line)
+    if not re.findall(r'\[-.*-\] \{\+.*\+\}', line):
+        return None
+    return line
+
+
+def filter_boring(debdiff, old_version, new_version):
     ret = []
-    for title, paragraph in iter_sections():
+    for title, paragraph in iter_sections(debdiff):
         if not title:
             ret.append((title, paragraph))
             continue
-        if re.match(
-                r'Control files of package .*: lines which differ '
+        m = re.match(
+                r'Control files of package (.*): lines which differ '
                 r'\(wdiff format\)',
-                title):
+                title)
+        if m:
+            package = m.group(1)
             paragraph = [
-                line for line in paragraph
-                if not line.startswith('Installed-Size: ')
-                and not line.startswith('Version: ')]
+                filter_boring_wdiff(line, old_version, new_version)
+                for line in paragraph]
+            paragraph = [line for line in paragraph if line is not None]
+        else:
+            package = None
         if any([line.strip() for line in paragraph]):
             ret.append((title, paragraph))
+        else:
+            ret.append((
+                None,
+                ['No differences were encountered between the control files of '
+                 'package %s\n' % package]))
 
     lines = []
     for title, paragraph in ret:

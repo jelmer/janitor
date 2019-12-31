@@ -104,9 +104,16 @@ async def handle_debdiff(request):
         return web.Response(
             status=400, text='One or both changes files do not exist.')
 
+    with open(old_changes_path, 'r') as f:
+        old_changes = Changes(f)
+
+    with open(new_changes_path, 'r') as f:
+        new_changes = Changes(f)
+
     debdiff = await run_debdiff(old_changes_path, new_changes_path)
     if 'ignore_boring' in post:
-        debdiff = filter_boring(debdiff)
+        debdiff = filter_boring(
+            debdiff, old_changes['Version'], new_changes['Version'])
 
     return web.Response(body=debdiff, content_type='text/diff')
 
