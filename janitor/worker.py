@@ -27,6 +27,7 @@ import sys
 from breezy import osutils
 from breezy.config import GlobalStack
 from breezy.errors import (
+    InvalidNormalization,
     NoRoundtrippingSupport,
     MalformedTransform,
     )
@@ -465,6 +466,10 @@ class NewUpstreamWorker(SubWorker):
             except MissingUpstreamTarball as e:
                 error_description = str(e)
                 error_code = 'missing-upstream-tarball'
+                raise WorkerFailure(error_code, error_description)
+            except InvalidNormalization as e:
+                error_description = str(e)
+                error_code = 'invalid-path-normalization'
                 raise WorkerFailure(error_code, error_description)
 
             report_context(result.new_upstream_version)
