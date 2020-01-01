@@ -84,9 +84,9 @@ class Aptly(object):
                 raise AptlyError(resp.status, data)
             return data
 
-    async def upload_files(self, name, dirname, files):
+    async def upload_files(self, dirname, files):
         url = urljoin(self.url, 'files/%s' % (dirname, ))
-        async with MultipartWriter() as mpwriter:
+        with MultipartWriter("form-data") as mpwriter:
             for f in files:
                 mpwriter.append(f)
             async with self.session.post(url, data=mpwriter) as resp:
@@ -115,12 +115,16 @@ class Aptly(object):
             data = json.loads(await resp.text())
             return data
 
-    async def publish_update(self, prefix, suite, force_overwrite=False):
+    async def publish_update(self, prefix, suite, force_overwrite=None,
+                             acquire_by_hash=None):
         url = urljoin(self.url, 'publish/%s/%s' % (prefix, suite))
+        print(url)
         headers = {'Content-Type': 'application/json'}
-        data = {
-            'ForceOverwrite': force_overwrite,
-            }
+        data = {}
+        if force_overwrite is not None:
+            data['ForceOverwrite'] = force_overwrite
+        if acquire_by_hash is not None:
+            data['AcquireByHash'] = acquire_by_hash
         async with self.session.put(url, headers=headers, json=data) as resp:
             if resp.status != 200:
                 raise AptlyError(resp.status, await resp.text())

@@ -18,12 +18,10 @@
 from aiohttp import ClientSession
 import asyncio
 from contextlib import ExitStack
-import json
 import os
 import re
 import sys
 import tempfile
-from urllib.parse import urljoin
 import uuid
 
 from aiohttp import web
@@ -94,15 +92,27 @@ async def handle_debdiff(request):
 
     archive_path = request.app.archive_path
 
-    old_changes_path = os.path.join(
-        archive_path, old_suite, old_changes_filename)
-    new_changes_path = os.path.join(
-        archive_path, new_suite, new_changes_filename)
-
-    if (not os.path.exists(old_changes_path) or
-            not os.path.exists(new_changes_path)):
+    for path in [
+            os.path.join(request.app.incoming_dir, old_changes_filename),
+            os.path.join(archive_path, old_suite, old_changes_filename)]:
+        if os.path.exists(path):
+            old_changes_path = path
+            break
+    else:
         return web.Response(
-            status=400, text='One or both changes files do not exist.')
+            status=404, text='Old changes file %s does not exist.' % (
+                old_changes_filename))
+
+    for path in [
+            os.path.join(request.app.incoming_dir, new_changes_filename),
+            os.path.join(archive_path, new_suite, new_changes_filename)]:
+        if os.path.exists(path):
+            new_changes_path = path
+            break
+    else:
+        return web.Response(
+            status=404, text='New changes file %s does not exist.' % (
+                new_changes_filename))
 
     with open(old_changes_path, 'r') as f:
         old_changes = Changes(f)
@@ -111,9 +121,10 @@ async def handle_debdiff(request):
         new_changes = Changes(f)
 
     debdiff = await run_debdiff(old_changes_path, new_changes_path)
-    if 'ignore_boring' in post:
+    if 'filter_boring' in post:
         debdiff = filter_boring(
-            debdiff, old_changes['Version'], new_changes['Version'])
+            debdiff.decode(), old_changes['Version'],
+            new_changes['Version']).encode()
 
     return web.Response(body=debdiff, content_type='text/diff')
 
@@ -171,41 +182,49 @@ async def update_mini_dinstall(config, archive_dir):
         await proc.wait()
 
 
-async def update_archive_loop(config, archive_dir, aptly_url):
+async def update_archive_loop(config, archive_dir, incoming_dir, aptly_url):
     while True:
         async with ClientSession() as session:
             aptly = Aptly(session, aptly_url)
-            await update_aptly(config, aptly)
+            await update_aptly(incoming_dir, aptly)
+            for suite in config.suite:
+                await aptly.publish_update(':.', suite.name)
         await update_mini_dinstall(config, archive_dir)
         await asyncio.sleep(30 * 60)
 
 
 async def upload_to_aptly(changes_path, aptly):
+    dirname = str(uuid.uuid4())
     files = []
+    uploaded = []
     with open(changes_path, 'r') as f, ExitStack() as es:
         changes = Changes(f)
+        f.seek(0)
+        files.append(f)
         distro = changes["Distribution"]
-        for file_details in dsc['files']:
-            path = os.path.join(os.path.dirname(changes_path), name)
+        uploaded.append(os.path.basename(changes_path))
+        for file_details in changes['files']:
+            path = os.path.join(
+                os.path.dirname(changes_path), file_details['name'])
+            uploaded.append(file_details['name'])
             f = open(path, 'rb')
             files.append(f)
             es.enter_context(f)
-    dirname = str(uuid.uuid4())
-    await aptly.upload_files(dirname, files)
+        await aptly.upload_files(dirname, files)
     await aptly.repos_include(distro, dirname)
+    return uploaded
 
 
-async def update_aptly(config, aptly):
+async def update_aptly(incoming_dir, aptly):
     for filename in os.listdir(incoming_dir):
-        if os.path.endswith('.changes'):
-            await upload_to_aptly(
-                os.path.join(incoming_dir, filename), aptly)
-    for suite in config.suite:
-        await aptly.publish_update(':.', suite.name)
+        if filename.endswith('.changes'):
+            print('uploading %s' % filename)
+            await upload_to_aptly(os.path.join(incoming_dir, filename), aptly)
 
 
 async def sync_aptly_metadata(config, aptly_url):
     async with ClientSession() as session:
+        aptly = Aptly(session, aptly_url)
         existing_repos = await aptly.repos_list()
         existing_by_name = {r['Name']: r for r in existing_repos}
         for suite in config.suite:
@@ -257,7 +276,8 @@ def main(argv=None):
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive, args.incoming)),
-        loop.create_task(update_archive_loop(config, args.archive))))
+        loop.create_task(update_archive_loop(
+            config, args.archive, args.incoming, args.aptly_url)),
         loop.create_task(sync_aptly_metadata(config, args.aptly_url))))
     loop.run_forever()
 
