@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import web, MultipartWriter, ClientSession
+from aiohttp import web, MultipartWriter, ClientSession, ClientConnectionError
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
@@ -29,7 +29,7 @@ import uuid
 
 from debian.deb822 import Changes
 
-from breezy import debug
+from breezy import debug, urlutils
 from breezy.errors import PermissionDenied
 from breezy.plugins.debian.util import (
     debsign,
@@ -279,12 +279,15 @@ async def open_guessed_salsa_branch(
         conn, pkg, vcs_type, vcs_url, possible_transports=None):
     package = await state.get_package(conn, pkg)
     probers = select_probers('git')
+    vcs_url, params = urlutils.split_segment_parameters_raw(vcs_url)
     for salsa_url in [
             salsa_url_from_alioth_url(vcs_type, vcs_url),
             guess_repository_url(package.name, package.maintainer_email),
             ]:
         if not salsa_url:
             continue
+
+        salsa_url = urlutils.join_segment_parameters_raw(salsa_url, *params)
 
         note('Trying to access salsa URL %s instead.', salsa_url)
         try:
@@ -335,19 +338,25 @@ async def upload_changes(changes_path, incoming_url):
       changes_path: Changes path
       incoming_url: Incoming URL
     """
-    with open(changes_path, 'r') as f:
-        dsc = Changes(f)
     async with ClientSession() as session:
         with MultipartWriter() as mpwriter, ExitStack() as es:
+            f = open(changes_path, 'r')
+            dsc = Changes(f)
+            f.seek(0)
+            es.enter_context(f)
+            mpwriter.append(f)
             for file_details in dsc['files']:
                 name = file_details['name']
                 path = os.path.join(os.path.dirname(changes_path), name)
                 f = open(path, 'rb')
                 es.enter_context(f)
                 mpwriter.append(f)
-            async with session.post(incoming_url, data=mpwriter) as resp:
-                if resp.status != 200:
-                    raise UploadFailedError(resp)
+            try:
+                async with session.post(incoming_url, data=mpwriter) as resp:
+                    if resp.status != 200:
+                        raise UploadFailedError(resp)
+            except ClientConnectionError as e:
+                raise UploadFailedError(e)
 
 
 async def process_one(
@@ -592,17 +601,24 @@ async def process_one(
             output_directory, result.changes_filename)
         debsign(changes_path, debsign_keyid)
         if incoming_url is not None:
-            await upload_changes(changes_path, incoming_url)
+            try:
+                await upload_changes(changes_path, incoming_url)
+            except UploadFailedError as e:
+                warning('Unable to upload changes file %s: %r',
+                        result.changes_filename, e)
         if suite != 'unchanged':
             async with db.acquire() as conn:
                 run = await state.get_unchanged_run(
                     conn, worker_result.main_branch_revision)
-                if run is not None:
+                if run is None:
+                    note('Scheduling control run for %s.', pkg)
                     duration = datetime.now() - start_time
-                    await conn.add_to_queue(
-                        conn, pkg,
-                        'just-build --revision=%s' %
-                            worker_result.main_branch_revision.decode('utf-8'),
+                    await state.add_to_queue(
+                        conn, pkg, [
+                            'just-build',
+                            ('--revision=%s' %
+                             worker_result.main_branch_revision)
+                        ],
                         'unchanged', offset=-10,
                         estimated_duration=duration, requestor='control')
     return result
