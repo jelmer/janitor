@@ -41,14 +41,16 @@ async def generate_review(conn, client, archiver_url, publisher_url,
             return 'Unable to retrieve diff; error %s' % e
 
     async def show_debdiff():
-        unchanged_run = await state.get_unchanged_run(run.main_branch_revision)
+        unchanged_run = await state.get_unchanged_run(conn, run.main_branch_revision)
         if unchanged_run is None:
             return ''
         try:
             return await get_debdiff(
                 client, archiver_url, run, unchanged_run, filter_boring=True)
-        except DebdiffRetrievalError:
-            return 'Unable to retrieve debdiff'
+        except DebdiffRetrievalError as e:
+            return 'Unable to retrieve debdiff: %r' % e
+        except FileNotFoundError:
+            return ''
 
     kwargs = {
         'show_diff': show_diff,
