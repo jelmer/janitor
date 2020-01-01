@@ -169,8 +169,10 @@ async def get_debdiff(client, archiver_url, run, unchanged_run,
         async with client.post(url, data=payload) as resp:
             if resp.status == 200:
                 return await resp.read()
+            elif resp.status == 404:
+                raise FileNotFoundError
             else:
                 raise DebdiffRetrievalError(
-                    'Unable to get debdiff: %r' % await resp.read())
+                    'Unable to get debdiff: %s' % await resp.text())
     except ClientConnectorError as e:
         raise DebdiffRetrievalError(str(e))
