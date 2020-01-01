@@ -17,9 +17,9 @@
 
 """Publishing VCS changes."""
 
-import urllib
 import urllib.error
 import urllib.parse
+import urllib.request
 
 from silver_platter.utils import (
     open_branch,
@@ -437,7 +437,7 @@ def publish_one(
 
     debdiff_url = 'https://janitor.debian.net/api/run/%s/debdiff' % log_id
     try:
-        with urllib.urlopen(debdiff_url) as f:
+        with urllib.request.urlopen(debdiff_url) as f:
             debdiff = f.read()
     except urllib.error.HTTPError as e:
         if e.status == 404:
