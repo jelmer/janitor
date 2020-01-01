@@ -315,13 +315,15 @@ async def update_package_metadata(
             if vcs_type and vcs_type.capitalize() == 'Git':
                 new_vcs_url = fixup_broken_git_url(vcs_url)
                 if new_vcs_url != vcs_url:
-                    trace.note('Fixing up VCS URL: %s -> %s', vcs_url, new_vcs_url)
+                    trace.note('Fixing up VCS URL: %s -> %s',
+                               vcs_url, new_vcs_url)
                     vcs_url = new_vcs_url
 
             if vcs_url and vcs_branch:
                 (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
                 if orig_branch != vcs_branch:
-                    new_vcs_url = unsplit_vcs_url(repo_url, vcs_branch, subpath)
+                    new_vcs_url = unsplit_vcs_url(
+                        repo_url, vcs_branch, subpath)
                     trace.note('Fixing up branch name from vcswatch: %s -> %s',
                                vcs_url, new_vcs_url)
                     vcs_url = new_vcs_url

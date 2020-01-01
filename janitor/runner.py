@@ -33,7 +33,6 @@ from breezy import debug
 from breezy.errors import PermissionDenied
 from breezy.plugins.debian.util import (
     debsign,
-    dget_changes,
     )
 
 from prometheus_client import (
@@ -603,9 +602,9 @@ async def process_one(
                     await conn.add_to_queue(
                         conn, pkg,
                         'just-build --revision=%s' %
-                            main_branch_revision.decode('utf-8'),
-                            'unchanged', offset=-10,
-                            estimated_duration=duration, requestor='control')
+                            worker_result.main_branch_revision.decode('utf-8'),
+                        'unchanged', offset=-10,
+                        estimated_duration=duration, requestor='control')
     return result
 
 

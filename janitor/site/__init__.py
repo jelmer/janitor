@@ -104,8 +104,14 @@ def htmlize_debdiff(debdiff):
                 ret.append("</pre>")
         else:
             ret.append("<p>")
-            ret.extend(lines)
-            ret.append("</p>")
+            for line in lines:
+                if line.strip():
+                    ret.append(line)
+                else:
+                    ret.append("</p>")
+                    ret.append("<p>")
+            if ret[-1] == "<p>":
+                ret.pop(-1)
     return "\n".join(ret)
 
 

@@ -330,9 +330,9 @@ WHERE
     suite = 'unchanged' AND revision = $1 AND
     build_version IS NOT NULL
 """
-    if isinstance(revision, bytes):
-        revision = revision.decode('utf-8')
-    row = await conn.fetchrow(query, revision)
+    if isinstance(main_branch_revision, bytes):
+        main_branch_revision = main_branch_revision.decode('utf-8')
+    row = await conn.fetchrow(query, main_branch_revision)
     if row is not None:
         return Run.from_row(row)
     return None
@@ -1021,9 +1021,9 @@ where
 
 
 async def get_run_result_by_revision(conn, revision):
-    row = await conn.fetchrow("""
-SELECT result, branch_name, review_status FROM run WHERE revision = $1""",
-revision.decode('utf-8'))
+    row = await conn.fetchrow(
+        "SELECT result, branch_name, review_status FROM run "
+        "WHERE revision = $1", revision.decode('utf-8'))
     if row is not None:
         return row[0], row[1], row[2]
     return None, None
@@ -1430,10 +1430,11 @@ async def get_publish_policy(conn, package, suite):
 
 async def iter_absorbed_lintian_fixes(conn):
     return await conn.fetch(
-        "select unnest(fixed_lintian_tags), count(*) from absorbed_lintian_fixes "
-        "group by 1 order by 2 desc")
+        "select unnest(fixed_lintian_tags), count(*) from "
+        "absorbed_lintian_fixes group by 1 order by 2 desc")
 
 
 async def get_successful_push_count(conn):
     return await conn.fetchval(
-        "select count(*) from publish where result_code = 'success' and mode = 'push'")
+        "select count(*) from publish where result_code = "
+        "'success' and mode = 'push'")
