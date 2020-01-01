@@ -1026,7 +1026,7 @@ async def get_run_result_by_revision(conn, revision):
         "WHERE revision = $1", revision.decode('utf-8'))
     if row is not None:
         return row[0], row[1], row[2]
-    return None, None
+    return None, None, None
 
 
 async def get_last_build_version(conn, package, suite):
