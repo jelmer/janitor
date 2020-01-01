@@ -75,8 +75,8 @@ def filter_boring(debdiff, old_version, new_version):
         else:
             ret.append((
                 None,
-                ['No differences were encountered between the control files of '
-                 'package %s\n' % package]))
+                ['No differences were encountered between the control files '
+                 'of package %s\n' % package]))
 
     lines = []
     for title, paragraph in ret:

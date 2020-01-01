@@ -8,10 +8,12 @@ from janitor import state
 from janitor.site import (
     env,
     get_debdiff,
+    DebdiffRetrievalError,
     )
 
 
-async def generate_review(conn, client, archiver_url, publisher_url, suite=None):
+async def generate_review(conn, client, archiver_url, publisher_url,
+                          suite=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
                        conn, review_status=['unreviewed'], limit=40,

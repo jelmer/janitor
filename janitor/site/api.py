@@ -272,7 +272,7 @@ async def handle_debdiff(request):
         raise web.HTTPNotFound(text='debdiff not calculated yet')
     except DebdiffRetrievalError as e:
         return web.json_response(
-            'unable to contact archiver for debdiff: %r',
+            'unable to contact archiver for debdiff: %r' % e,
             status=400)
     return web.Response(
         body=debdiff,

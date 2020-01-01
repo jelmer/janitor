@@ -5,7 +5,7 @@ import sys
 import breezy
 import breezy.plugins
 import breezy.bzr
-import breezy.git
+import breezy.git  # noqa: F401
 
 from breezy.plugins.propose.propose import (
     hosters,

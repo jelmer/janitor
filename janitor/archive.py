@@ -215,8 +215,8 @@ async def sync_aptly_metadata(config, aptly_url):
                 await aptly.repos_create(suite.name)
             try:
                 await aptly.publish(
-                    ':.', suite.name, not_automatic=True, distribution=suite.name,
-                    architectures=['all', 'amd64'])
+                    ':.', suite.name, not_automatic=True,
+                    distribution=suite.name, architectures=['all', 'amd64'])
             except AptlyError as e:
                 # 400 indicates it's already published
                 if e.status != 400:

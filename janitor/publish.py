@@ -282,7 +282,7 @@ async def export_stats(db):
                 publish_ready_count.labels(
                     review_status=review_status,
                     publish_mode=publish_mode).set(count)
-        
+
             push_count = await state.get_successful_push_count(conn)
             successful_push_count.set(push_count)
 
@@ -308,7 +308,8 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                    publish_mode, update_changelog,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status):
-            if push_limit is not None and publish_mode in (MODE_PUSH, MODE_ATTEMPT_PUSH):
+            if push_limit is not None and publish_mode in (
+                    MODE_PUSH, MODE_ATTEMPT_PUSH):
                 if push_limit == 0:
                     note('Not pushing %s / %s: push limit reached',
                          run.package, run.suite)
@@ -476,7 +477,7 @@ async def publish_and_store(
                 'description': e.description,
                 'package': run.package,
                 'suite': run.suite,
-                'main_branch_url': main_branch_url,
+                'main_branch_url': run.branch_url,
                 'result': run.result,
                 })
             return
@@ -500,7 +501,7 @@ async def publish_and_store(
              'suite': run.suite,
              'proposal_url': proposal_url or None,
              'mode': mode,
-             'main_branch_url': main_branch_url,
+             'main_branch_url': run.branch_url,
              'branch_name': branch_name,
              'result_code': 'success',
              'result': run.result,

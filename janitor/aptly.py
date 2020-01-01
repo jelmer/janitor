@@ -16,7 +16,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import MultipartWriter
-import asyncio
 import json
 from urllib.parse import urljoin
 
@@ -42,7 +41,8 @@ class Aptly(object):
                 raise AptlyError(resp.status, data)
             return data
 
-    async def repos_create(self, name, comment=None, default_distribution=None, default_component=None):
+    async def repos_create(self, name, comment=None, default_distribution=None,
+                           default_component=None):
         headers = {'Content-Type': 'application/json'}
         url = urljoin(self.url, 'repos')
         data = {'Name': name}
@@ -95,7 +95,8 @@ class Aptly(object):
                     raise AptlyError(resp.status, data)
                 return data
 
-    async def publish(self, prefix, suite, distribution=None, architectures=None, not_automatic=None):
+    async def publish(self, prefix, suite, distribution=None,
+                      architectures=None, not_automatic=None):
         url = urljoin(self.url, 'publish/%s' % (prefix, ))
         headers = {'Content-Type': 'application/json'}
         data = {
