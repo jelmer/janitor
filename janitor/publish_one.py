@@ -67,6 +67,12 @@ This merge proposal was created automatically by the Janitor bot
 You can follow up to this merge proposal as you normally would.
 """
 
+JANITOR_BLURB_MD = """
+This merge proposal was created automatically by the
+[Janitor bot](https://janitor.debian.net/%(suite)s).
+
+You can follow up to this merge proposal as you normally would.
+"""
 
 OLD_JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot
@@ -81,17 +87,32 @@ Build and test logs for this branch can be found at
 https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
 """
 
+LOG_BLURB_MD = """
+Build and test logs for this branch can be found at
+https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
+"""
 
 DEBDIFF_BLURB = """
-This causes changes to the binary packages. See the build logs page
+These changes affect the binary packages. See the build logs page
 or download the full debdiff from
 https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1
+"""
+
+DEBDIFF_BLURB_MD = """
+These changes affect the binary packages; see the
+[debdiff](https://janitor.debian.net/api/run/\
+%(log_id)s/debdiff?filter_boring=1)
 """
 
 NO_DEBDIFF_BLURB = """
 These changes have no impact on the binary debdiff. See
 https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1 to
 download the raw debdiff.
+"""
+
+NO_DEBDIFF_BLURB_MD = """
+These changes have no impact on the [binary debdiff](
+https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1).
 """
 
 
@@ -110,28 +131,32 @@ class MergeConflict(Exception):
 
 
 def strip_janitor_blurb(text, suite):
-    try:
-        i = text.index(JANITOR_BLURB % {'suite': suite})
-    except ValueError:
-        pass
-    else:
-        return text[:i].strip()
-
-    i = text.index(OLD_JANITOR_BLURB)
-    return text[:i].strip()
-
-
-def add_janitor_blurb(text, pkg, log_id, suite):
-    text += '\n' + (JANITOR_BLURB % {'suite': suite})
-    text += (LOG_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
+    for blurb in [JANITOR_BLURB, OLD_JANITOR_BLURB, JANITOR_BLURB_MD]:
+        try:
+            i = text.index(blurb % {'suite': suite})
+        except ValueError:
+            pass
+        else:
+            return text[:i].strip()
     return text
 
 
-def add_debdiff_blurb(text, pkg, log_id, suite, debdiff):
+def add_janitor_blurb(format, text, pkg, log_id, suite):
+    text += '\n' + (
+        (JANITOR_BLURB_MD if format == 'markdown' else JANITOR_BLURB) %
+        {'suite': suite})
+    text += (
+        (LOG_BLURB_MD if format == 'markdown' else LOG_BLURB) %
+        {'package': pkg, 'log_id': log_id, 'suite': suite})
+    return text
+
+
+def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff):
     if not debdiff_is_empty(debdiff):
-        blurb = NO_DEBDIFF_BLURB
+        blurb = (
+            NO_DEBDIFF_BLURB_MD if format == 'markdown' else NO_DEBDIFF_BLURB)
     else:
-        blurb = DEBDIFF_BLURB
+        blurb = DEBDIFF_BLURB_MD if format == 'markdown' else DEBDIFF_BLURB
     text += '\n' + (blurb % {'package': pkg, 'log_id': log_id, 'suite': suite})
     return text
 
@@ -216,7 +241,7 @@ def publish(
         main_branch, local_branch, resume_branch=None,
         dry_run=False, log_id=None, existing_proposal=None,
         allow_create_proposal=False, reviewers=None, debdiff=None):
-    def get_proposal_description(existing_proposal):
+    def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
             try:
@@ -227,11 +252,13 @@ def publish(
                 existing_description = None
         else:
             existing_description = None
-        description = subrunner.get_proposal_description(existing_description)
-        description = add_janitor_blurb(description, pkg, log_id, suite)
+        description = subrunner.get_proposal_description(
+            description_format, existing_description)
+        description = add_janitor_blurb(
+            description_format, description, pkg, log_id, suite)
         if debdiff is not None:
             description = add_debdiff_blurb(
-                description, pkg, log_id, suite,
+                description_format, description, pkg, log_id, suite,
                 debdiff.decode('utf-8', 'replace'))
         return description
 
@@ -287,7 +314,7 @@ class LintianBrushPublisher(object):
     def branch_name(self):
         return "lintian-fixes"
 
-    def get_proposal_description(self, existing_description):
+    def get_proposal_description(self, format, existing_description):
         from silver_platter.debian.lintian import (
             create_mp_description,
             )
@@ -325,7 +352,7 @@ class MultiArchHintsPublisher(object):
     def branch_name(self):
         return "multiarch-hints"
 
-    def get_proposal_description(self, existing_description):
+    def get_proposal_description(self, format, existing_description):
         return 'Apply multi-arch hints.'
 
     def get_proposal_commit_message(self, existing_commit_message):
@@ -355,11 +382,11 @@ class NewUpstreamPublisher(object):
     def read_worker_result(self, result):
         self._upstream_version = result['upstream_version']
 
-    def get_proposal_description(self, existing_description):
+    def get_proposal_description(self, format, existing_description):
         return "New upstream version %s.\n" % self._upstream_version
 
     def get_proposal_commit_message(self, existing_commit_message):
-        return self.get_proposal_description(None)
+        return self.get_proposal_description('text', None)
 
     def allow_create_proposal(self):
         # No upstream release too small...
