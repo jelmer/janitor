@@ -45,7 +45,7 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         unchanged_run = await state.get_unchanged_run(
             conn, run.main_branch_revision)
         if unchanged_run is None:
-            return ''
+            return '<p>No control run</p>'
         try:
             text = await get_debdiff(
                 client, archiver_url, run, unchanged_run, filter_boring=True)
@@ -53,7 +53,7 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         except DebdiffRetrievalError as e:
             return 'Unable to retrieve debdiff: %r' % e
         except FileNotFoundError:
-            return ''
+            return '<p>No debdiff generated</p>'
 
     kwargs = {
         'show_diff': show_diff,

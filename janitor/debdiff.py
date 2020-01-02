@@ -74,19 +74,33 @@ def filter_boring(debdiff, old_version, new_version):
                 title)
         if m:
             package = m.group(1)
+            wdiff = True
+        elif title == 'Control files: lines which differ (wdiff format)':
+            package = None
+            wdiff = True
+        else:
+            package = None
+            wdiff = False
+        if wdiff:
             paragraph = [
                 filter_boring_wdiff(line, old_version, new_version)
                 for line in paragraph]
             paragraph = [line for line in paragraph if line is not None]
+            if any([line.strip() for line in paragraph]):
+                ret.append((title, paragraph))
+            else:
+                if package:
+                    ret.append((
+                        None,
+                        ['No differences were encountered between the control '
+                         'files of package %s' % package]))
+                else:
+                    ret.append((
+                        None,
+                        ['No differences were encountered in the control files'
+                        ]))
         else:
-            package = None
-        if any([line.strip() for line in paragraph]):
             ret.append((title, paragraph))
-        else:
-            ret.append((
-                None,
-                ['No differences were encountered between the control files '
-                 'of package %s' % package]))
 
     lines = []
     for title, paragraph in ret:

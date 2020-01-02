@@ -10,13 +10,19 @@
 </div>
 
 <div id='debdiff'>
-{{highlight_diff(show_debdiff())|safe}}
+{{show_debdiff()|safe}}
 </div>
 
 <script type="text/javascript">
 function loadRun(package, run_id) {
     $('#diff').load('/api/run/' + run_id + '/diff');
-    $('#debdiff').load('/api/run/' + run_id + '/debdiff');
+    $('#debdiff').load('/api/run/' + run_id + '/debdiff',
+	{'filter_boring': True},
+        function(responseText, textStatus, XMLHttpRequest) {
+	     if (XMLHttpRequest.status == 404) {
+   	         $('#debdiff').html('<p>No debdiff generated</p>');
+	     }
+	}
     $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
     $('#run-id').attr('value', run_id);
 }
