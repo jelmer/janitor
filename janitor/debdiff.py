@@ -106,3 +106,8 @@ async def run_debdiff(old_changes, new_changes):
         stdout=asyncio.subprocess.PIPE)
     stdout, stderr = await p.communicate()
     return stdout
+
+
+def debdiff_is_empty(debdiff):
+    return any(
+        [title is not None for (title, paragraph) in iter_sections(debdiff)])
