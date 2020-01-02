@@ -24,14 +24,24 @@ def iter_sections(text):
     lines = list(text.splitlines(False))
     title = None
     paragraph = []
-    for i, line in enumerate(lines):
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         if i+1 < len(lines) and lines[i+1] == (len(line) * '-'):
-            yield title, paragraph
+            if title or paragraph:
+                yield title, paragraph
             title = line
             paragraph = []
-        elif paragraph or not line.startswith('---'):
+            i += 1
+        elif not line.rstrip('\n'):
+            if title or paragraph:
+                yield title, paragraph
+            title = None
+            paragraph = []
+        else:
             paragraph.append(line)
-    if paragraph:
+        i += 1
+    if title or paragraph:
         yield title, paragraph
 
 
@@ -76,7 +86,7 @@ def filter_boring(debdiff, old_version, new_version):
             ret.append((
                 None,
                 ['No differences were encountered between the control files '
-                 'of package %s\n' % package]))
+                 'of package %s' % package]))
 
     lines = []
     for title, paragraph in ret:
@@ -84,6 +94,7 @@ def filter_boring(debdiff, old_version, new_version):
             lines.append(title)
             lines.append(len(title) * '-')
         lines.extend(paragraph)
+        lines.append('')
     return '\n'.join(lines)
 
 
