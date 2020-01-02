@@ -4,7 +4,7 @@ janitor.debian.net. Any code that is more generic should probably be
 in either ``silver-platter``, ``lintian-brush`` or ``breezy``.
 
 To change what packages the janitor considers for merge proposals,
-edit the `policy file <policy.conf>`_.
+edit the [policy file](policy.conf).
 
 Philosophy
 ==========
