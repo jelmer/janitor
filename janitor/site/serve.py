@@ -369,6 +369,7 @@ if __name__ == '__main__':
                 request.app.database,
                 request.app.policy,
                 request.app.http_client_session,
+                request.app.archiver_url,
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
