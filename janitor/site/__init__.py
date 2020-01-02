@@ -94,6 +94,12 @@ def htmlize_debdiff(debdiff):
                     r'Control files of package .*: lines which differ '
                     r'\(wdiff format\)',
                     title):
+                wdiff = True
+            elif title == 'Control files: lines which differ (wdiff format)':
+                wdiff = True
+            else:
+                wdiff = False
+            if wdiff:
                 ret.append("<ul>")
                 ret.extend(
                     ["<li>%s</li>" % line for line in lines if line.strip()])
@@ -106,6 +112,10 @@ def htmlize_debdiff(debdiff):
             ret.append("<p>")
             for line in lines:
                 if line.strip():
+                    line = re.sub(
+                        '^(No differences were encountered between the '
+                        'control files of package) (.*)$',
+                        '\\1 <b>\\2</b>', line)
                     ret.append(line)
                 else:
                     ret.append("</p>")
@@ -156,6 +166,10 @@ class DebdiffRetrievalError(Exception):
 
 async def get_debdiff(client, archiver_url, run, unchanged_run,
                       filter_boring=False):
+    if unchanged_run.build_version is None:
+        raise DebdiffRetrievalError('unchanged run not built')
+    if run.build_version is None:
+        raise DebdiffRetrievalError('run not built')
     url = urllib.parse.urljoin(archiver_url, 'debdiff')
     payload = {
         'old_suite': 'unchanged',
