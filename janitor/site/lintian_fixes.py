@@ -6,6 +6,7 @@ import urllib.parse
 from janitor import state
 from janitor.site import (
     env,
+    get_debdiff,
     get_vcs_type,
     )
 
@@ -17,8 +18,8 @@ from silver_platter.debian.lintian import (
 SUITE = 'lintian-fixes'
 
 
-async def generate_pkg_file(db, policy, client, publisher_url, package,
-                            run_id=None):
+async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
+                            package, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
         if package is None:
@@ -71,6 +72,12 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
             for applied in applied:
                 for tag in applied.get('fixed_lintian_tags', []):
                     fixed_tags.add(tag)
+            if run.main_branch_revision:
+                unchanged_run = await state.get_unchanged_run(
+                    conn, run.main_branch_revision)
+            else:
+                unchanged_run = None
+
         candidate = await state.get_candidate(conn, package.name, SUITE)
         if candidate is not None:
             candidate_context, candidate_value = candidate
@@ -97,11 +104,27 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
         except ClientConnectorError as e:
             return 'Unable to retrieve diff; error %s' % e
 
+    async def show_debdiff():
+        if not run.build_version or not run.main_branch_revision:
+            return ''
+        if not unchanged_run or not unchanged_run.build_version:
+            return ''
+        try:
+            debdiff = await get_debdiff(
+                client, archiver_url, run, unchanged_run,
+                filter_boring=True)
+            return debdiff.decode('utf-8', 'replace')
+        except FileNotFoundError:
+            return ''
+        except DebdiffRetrievalError as e:
+            return 'Error retrieving debdiff: %s' % e
+
     async def vcs_type():
         return await get_vcs_type(client, publisher_url, run.package)
 
     kwargs = {
         'package': package.name,
+        'unchanged_run': unchanged_run,
         'merge_proposals': merge_proposals,
         'maintainer_email': package.maintainer_email,
         'uploader_emails': package.uploader_emails,
@@ -120,6 +143,7 @@ async def generate_pkg_file(db, policy, client, publisher_url, package,
         'result': result,
         'suite': SUITE,
         'show_diff': show_diff,
+        'show_debdiff': show_debdiff,
         'branch_name': branch_name,
         'previous_runs': previous_runs,
         'run': run,
