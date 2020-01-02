@@ -83,14 +83,15 @@ https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
 
 
 DEBDIFF_BLURB = """
-The binary debdiff can be found at
+This causes changes to the binary packages. See the build logs page
+or download the full debdiff from
 https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1
 """
 
 NO_DEBDIFF_BLURB = """
 These changes have no impact on the binary debdiff. See
-https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1 for
-details.
+https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1 to
+download the raw debdiff.
 """
 
 
