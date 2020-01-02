@@ -48,7 +48,10 @@ from breezy.plugins.propose.propose import (
     MergeProposalExists,
     )
 
-from .debdiff import debdiff_is_empty
+from .debdiff import (
+    debdiff_is_empty,
+    markdownify_debdiff,
+    )
 from .trace import warning
 
 
@@ -92,13 +95,25 @@ Build and test logs for this branch can be found at
 https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
 """
 
-DEBDIFF_BLURB = """
+DEBDIFF_LINK_BLURB = """
 These changes affect the binary packages. See the build logs page
 or download the full debdiff from
 https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1
 """
 
 DEBDIFF_BLURB_MD = """
+These changes affect the binary packages:
+
+%(debdiff_md)s
+"""
+
+DEBDIFF_BLURB = """
+These changes affect the binary packages:
+
+%(debdiff)s
+"""
+
+DEBDIFF_LINK_BLURB_MD = """
 These changes affect the binary packages; see the
 [debdiff](https://janitor.debian.net/api/run/\
 %(log_id)s/debdiff?filter_boring=1)
@@ -155,9 +170,20 @@ def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff):
     if not debdiff_is_empty(debdiff):
         blurb = (
             NO_DEBDIFF_BLURB_MD if format == 'markdown' else NO_DEBDIFF_BLURB)
+    elif len(debdiff.splitlines(False)) < 20:
+        blurb = (
+            DEBDIFF_BLURB_MD if format == 'markdown' else DEBDIFF_BLURB)
     else:
-        blurb = DEBDIFF_BLURB_MD if format == 'markdown' else DEBDIFF_BLURB
-    text += '\n' + (blurb % {'package': pkg, 'log_id': log_id, 'suite': suite})
+        blurb = (
+            DEBDIFF_LINK_BLURB_MD
+            if format == 'markdown' else DEBDIFF_LINK_BLURB)
+    text += '\n' + (blurb % {
+        'package': pkg,
+        'log_id': log_id,
+        'suite': suite,
+        'debdiff': debdiff,
+        'debdiff_md': markdownify_debdiff(debdiff)
+        })
     return text
 
 
@@ -314,11 +340,13 @@ class LintianBrushPublisher(object):
     def branch_name(self):
         return "lintian-fixes"
 
-    def get_proposal_description(self, format, existing_description):
+    def get_proposal_description(
+            self, description_format, existing_description):
         from silver_platter.debian.lintian import (
             create_mp_description,
             )
-        return create_mp_description([l['summary'] for l in self.applied])
+        return create_mp_description(
+            description_format, [l['summary'] for l in self.applied])
 
     def get_proposal_commit_message(self, existing_commit_message):
         applied = []

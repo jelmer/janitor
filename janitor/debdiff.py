@@ -125,3 +125,43 @@ async def run_debdiff(old_changes, new_changes):
 def debdiff_is_empty(debdiff):
     return any(
         [title is not None for (title, paragraph) in iter_sections(debdiff)])
+
+
+def section_is_wdiff(title):
+    m = re.match(
+            r'Control files of package (.*): lines which differ '
+            r'\(wdiff format\)',
+            title)
+    if m:
+        return (True, m.group(1))
+    if title == 'Control files: lines which differ (wdiff format)':
+        return (True, None)
+    return (False, None)
+
+
+def markdownify_debdiff(debdiff):
+    ret = []
+    for title, lines in iter_sections(debdiff):
+        if title:
+            ret.append("## %s" % title)
+            wdiff, package = section_is_wdiff(title)
+            if wdiff:
+                ret.extend(
+                    ["* %s" % line for line in lines if line.strip()])
+            else:
+                for line in lines:
+                    ret.append('    ' + line)
+        else:
+            ret.append("")
+            for line in lines:
+                if line.strip():
+                    line = re.sub(
+                        '^(No differences were encountered between the '
+                        'control files of package) (.*)$',
+                        r'\1 \*\2\*', line)
+                    ret.append(line)
+                else:
+                    ret.append("")
+            if ret[-1] == "":
+                ret.pop(-1)
+    return "\n".join(ret)
