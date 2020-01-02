@@ -84,7 +84,7 @@ https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
 
 DEBDIFF_BLURB = """
 The binary debdiff can be found at
-https://janitor.debian.net/api/%(log_id)s/debdiff
+https://janitor.debian.net/api/%(log_id)s/debdiff?filter_boring=1
 """
 
 NO_DEBDIFF_BLURB = """
@@ -227,7 +227,9 @@ def publish(
         description = subrunner.get_proposal_description(existing_description)
         description = add_janitor_blurb(description, pkg, log_id, suite)
         if debdiff is not None:
-            add_debdiff_blurb(description, pkg, log_id, suite, debdiff)
+            description = add_debdiff_blurb(
+                description, pkg, log_id, suite,
+                debdiff.decode('utf-8', 'replace'))
         return description
 
     def get_proposal_commit_message(existing_proposal):
