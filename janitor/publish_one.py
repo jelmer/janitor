@@ -84,11 +84,13 @@ https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
 
 DEBDIFF_BLURB = """
 The binary debdiff can be found at
-https://janitor.debian.net/api/%(log_id)s/debdiff?filter_boring=1
+https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1
 """
 
 NO_DEBDIFF_BLURB = """
-These changes have no impact on the binary debdiff.
+These changes have no impact on the binary debdiff. See
+https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1 for
+details.
 """
 
 
@@ -126,10 +128,10 @@ def add_janitor_blurb(text, pkg, log_id, suite):
 
 def add_debdiff_blurb(text, pkg, log_id, suite, debdiff):
     if not debdiff_is_empty(debdiff):
-        text += '\n' + NO_DEBDIFF_BLURB
+        blurb = NO_DEBDIFF_BLURB
     else:
-        text += '\n' + (
-            DEBDIFF_BLURB % {'package': pkg, 'log_id': log_id, 'suite': suite})
+        blurb = DEBDIFF_BLURB
+    text += '\n' + (blurb % {'package': pkg, 'log_id': log_id, 'suite': suite})
     return text
 
 
