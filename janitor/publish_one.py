@@ -48,6 +48,7 @@ from breezy.plugins.propose.propose import (
     MergeProposalExists,
     )
 
+from .debdiff import debdiff_is_empty
 from .trace import warning
 
 
@@ -124,7 +125,7 @@ def add_janitor_blurb(text, pkg, log_id, suite):
 
 
 def add_debdiff_blurb(text, pkg, log_id, suite, debdiff):
-    if debdiff:
+    if not debdiff_is_empty(debdiff):
         text += '\n' + NO_DEBDIFF_BLURB
     else:
         text += '\n' + (
@@ -435,7 +436,9 @@ def publish_one(
     if allow_create_proposal is None:
         allow_create_proposal = subrunner.allow_create_proposal()
 
-    debdiff_url = 'https://janitor.debian.net/api/run/%s/debdiff' % log_id
+    debdiff_url = (
+        'https://janitor.debian.net/api/run/%s/debdiff?filter_boring=1'
+        % log_id)
     try:
         with urllib.request.urlopen(debdiff_url) as f:
             debdiff = f.read()
