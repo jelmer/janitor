@@ -8,6 +8,7 @@ from . import (
     env,
     highlight_diff,
     get_debdiff,
+    htmlize_debdiff,
     DebdiffRetrievalError,
     )
 from ..schedule import do_schedule
@@ -274,10 +275,21 @@ async def handle_debdiff(request):
         return web.json_response(
             'unable to contact archiver for debdiff: %r' % e,
             status=400)
-    return web.Response(
-        body=debdiff,
-        content_type='text/x-diff',
-        headers={'Cache-Control': 'max-age=3600'})
+
+    for accept in request.headers.get('ACCEPT', '*/*').split(','):
+        if accept in ('text/x-diff', 'text/plain', '*/*'):
+            return web.Response(
+                body=debdiff,
+                content_type='text/x-diff',
+                headers={'Cache-Control': 'max-age=3600'})
+        if accept == 'text/html':
+            return web.Response(
+                text=htmlize_debdiff(debdiff.decode('utf-8', 'replace')),
+                content_type='text/html',
+                headers={'Cache-Control': 'max-age=3600'})
+    raise web.HTTPNotAcceptable(
+        text='Acceptable content types: '
+             'text/html, text/x-diff')
 
 
 async def handle_run_post(request):
