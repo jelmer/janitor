@@ -185,6 +185,22 @@ sources.release = 'sid'
             async for row in self._conn.cursor(query, *args):
                 yield (row[0], None, DEFAULT_VALUE_UNCHANGED)
 
+    async def iter_orphan_candidates(self, packages=None):
+        args = []
+        query = """\
+SELECT DISTINCT ON (sources.source) sources.source, now() - orphaned_time, bug
+FROM sources
+JOIN orphaned_packages ON orphaned_packages.source = sources.source
+WHERE sources.vcs_url != '' AND sources.release = 'sid' AND
+orphaned_packages.type in ('O')
+"""
+        if packages is not None:
+            query += " AND sources.source = any($1::text[])"
+            args.append(tuple(packages))
+        async with self._conn.transaction():
+            async for row in self._conn.cursor(query, *args):
+                yield (row[0], None, DEFAULT_VALUE_UNCHANGED)
+
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
         query = """\
@@ -430,7 +446,10 @@ async def main():
             ('fresh-snapshots',
              udd.iter_fresh_snapshots_candidates(args.packages)),
             ('multiarch-fixes',
-             iter_multiarch_fixes(args.packages))]
+             iter_multiarch_fixes(args.packages)),
+            ('orphan',
+             udd.iter_orphan_candidates(args.packages))
+            ]
 
         for suite, candidate_fn in CANDIDATE_FNS:
             if args.suite and suite not in args.suite:
