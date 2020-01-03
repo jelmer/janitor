@@ -344,9 +344,14 @@ class LintianBrushPublisher(object):
             self, description_format, existing_description):
         from silver_platter.debian.lintian import (
             create_mp_description,
+            applied_entry_as_line,
             )
         return create_mp_description(
-            description_format, [l['summary'] for l in self.applied])
+            description_format, [
+                applied_entry_as_line(
+                    description_format, l.get('fixed_lintian_tags', []),
+                    l['summary'])
+                for l in self.applied])
 
     def get_proposal_commit_message(self, existing_commit_message):
         applied = []
