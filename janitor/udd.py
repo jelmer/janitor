@@ -193,7 +193,9 @@ SELECT DISTINCT ON (sources.source) sources.source, now() - orphaned_time, bug
 FROM sources
 JOIN orphaned_packages ON orphaned_packages.source = sources.source
 WHERE sources.vcs_url != '' AND sources.release = 'sid' AND
-orphaned_packages.type in ('O')
+orphaned_packages.type in ('O') AND
+(sources.uploaders != '' OR
+ sources.maintainer != 'Debian QA Group <packages@qa.debian.org>')
 """
         if packages is not None:
             query += " AND sources.source = any($1::text[])"
