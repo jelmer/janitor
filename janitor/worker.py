@@ -221,6 +221,48 @@ class MultiArchHintsWorker(SubWorker):
             return "Applied multi-arch hints."
 
 
+class OrphanWorker(SubWorker):
+
+    def __init__(self, command, env):
+        self.committer = env.get('COMMITTER')
+        subparser = argparse.ArgumentParser(prog='orphan')
+        from silver_platter.debian.orphan import OrphanChanger
+        self.changer = OrphanChanger()
+        self.changer.setup_parser(subparser)
+        subparser.add_argument(
+            '--no-update-changelog', action="store_false", default=None,
+            dest="update_changelog", help="do not update the changelog")
+        subparser.add_argument(
+            '--update-changelog', action="store_true", dest="update_changelog",
+            help="force updating of the changelog", default=None)
+        self.args = subparser.parse_args(command)
+
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata, subpath=None):
+        """Make the actual changes to a tree.
+
+        Args:
+          local_tree: Tree to make changes to
+          report_context: report context
+          metadata: JSON Dictionary that can be used for storing results
+          base_metadata: Optional JSON Dictionary with results of
+            any previous runs this one is based on
+          subpath: Path in the branch where the package resides
+        """
+        update_changelog = self.args.update_changelog
+        try:
+            cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
+        except FileNotFoundError:
+            pass
+        else:
+            if update_changelog is None:
+                update_changelog = cfg.update_changelog()
+        self.changer.make_changes(
+            local_tree, subpath=subpath, update_changelog=update_changelog,
+            committer=self.committer)
+        return 'Set maintainer to QA team.'
+
+
 class LintianBrushWorker(SubWorker):
     """Janitor-specific Lintian Fixer."""
 
@@ -591,6 +633,8 @@ def process_package(vcs_url, env, command, output_directory,
         subworker_cls = JustBuildWorker
     elif command[0] == 'apply-multiarch-hints':
         subworker_cls = MultiArchHintsWorker
+    elif command[0] == 'orphan':
+        subworker_cls = OrphanWorker
     else:
         raise WorkerFailure(
             'unknown-subcommand',
