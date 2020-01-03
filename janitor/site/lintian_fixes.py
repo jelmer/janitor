@@ -8,6 +8,7 @@ from janitor.site import (
     env,
     get_debdiff,
     get_vcs_type,
+    DebdiffRetrievalError,
     )
 
 from silver_platter.debian.lintian import (
