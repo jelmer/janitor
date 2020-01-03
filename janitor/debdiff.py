@@ -98,7 +98,7 @@ def filter_boring(debdiff, old_version, new_version):
                     ret.append((
                         None,
                         ['No differences were encountered in the control files'
-                        ]))
+                         ]))
         else:
             ret.append((title, paragraph))
 

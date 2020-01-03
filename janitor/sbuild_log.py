@@ -106,6 +106,17 @@ class UnknownMercurialExtraFields(object):
         return "Unknown Mercurial extra fields: %s" % self.field
 
 
+class UpstreamPGPSignatureVerificationFailed(object):
+
+    kdin = 'upstream-pgp-signature-verification-failed'
+
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return "Unable to verify the PGP signature on the upstream source"
+
+
 def find_preamble_failure_description(lines):
     OFFSET = 20
     for i in range(1, OFFSET):
@@ -140,6 +151,9 @@ def parse_brz_error(line):
         line)
     if m:
         error = UnknownMercurialExtraFields(m.group(2))
+        return (error, str(error))
+    if line == 'UScan failed to run: OpenPGP signature did not verify..':
+        error = UpstreamPGPSignatureVerificationFailed()
         return (error, str(error))
     return (None, line.strip())
 
