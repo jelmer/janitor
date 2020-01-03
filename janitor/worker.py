@@ -516,6 +516,12 @@ class JustBuildWorker(SubWorker):
         subparser.add_argument(
             '--revision', type=str,
             help='Specific revision to build.')
+        subparser.add_argument(
+            '--no-update-changelog', action="store_false", default=None,
+            dest="update_changelog", help="do not update the changelog")
+        subparser.add_argument(
+            '--update-changelog', action="store_true", dest="update_changelog",
+            help="force updating of the changelog", default=None)
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
