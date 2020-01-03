@@ -28,6 +28,8 @@ function loadRun(package, run_id) {
 }
 
 var todo = {{ json_dumps(todo)|safe }};
+var queued = new Set();
+todo.forEach(function(entry) { queued.add(entry[0]); });
 
 $(function() {
   loadRun('{{ package_name }}', '{{ run_id }}');
@@ -36,8 +38,12 @@ $(function() {
      url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?review-status=unreviewed',
      dataType: 'json',
      success: function(data) {
-         if (data[0][1] == '{{run_id}}') { data.shift(); }
-         todo.push(...data);
+         data.forEach(function(entry) {
+             if (!queued.has(entry[1])) {
+                 todo.push(entry);
+                 queued.add(entry[1]);
+             }
+         });
      }
   });
 });
