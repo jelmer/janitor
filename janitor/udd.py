@@ -39,7 +39,8 @@ from lintian_brush.vcs import (
     unsplit_vcs_url,
     )
 
-DEFAULT_VALUE_UNCHANGED = 60
+DEFAULT_VALUE_UNCHANGED = 20
+DEFAULT_VALUE_ORPHAN = 60
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
 DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
@@ -199,7 +200,7 @@ orphaned_packages.type in ('O')
             args.append(tuple(packages))
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], None, DEFAULT_VALUE_UNCHANGED)
+                yield (row[0], str(row[2]), DEFAULT_VALUE_ORPHAN)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -438,17 +439,18 @@ async def main():
 
     async with db.acquire() as conn:
         CANDIDATE_FNS = [
-            ('unchanged', udd.iter_unchanged_candidates(args.packages)),
+            ('unchanged', udd.iter_unchanged_candidates(
+                args.packages or None)),
             ('lintian-fixes',
-             udd.iter_lintian_fixes_candidates(args.packages, tags)),
+             udd.iter_lintian_fixes_candidates(args.packages or None, tags)),
             ('fresh-releases',
-             udd.iter_fresh_releases_candidates(args.packages)),
+             udd.iter_fresh_releases_candidates(args.packages or None)),
             ('fresh-snapshots',
-             udd.iter_fresh_snapshots_candidates(args.packages)),
+             udd.iter_fresh_snapshots_candidates(args.packages or None)),
             ('multiarch-fixes',
-             iter_multiarch_fixes(args.packages)),
+             iter_multiarch_fixes(args.packages or None)),
             ('orphan',
-             udd.iter_orphan_candidates(args.packages))
+             udd.iter_orphan_candidates(args.packages or None))
             ]
 
         for suite, candidate_fn in CANDIDATE_FNS:
