@@ -21,6 +21,9 @@ parser.add_argument(
 parser.add_argument(
     '--rejected', action='store_true',
     help='Process rejected runs only.')
+parser.add_argument(
+    '--suite', type=str,
+    help='Suite to process.')
 args = parser.parse_args()
 with open(args.config, 'r') as f:
     config = read_config(f)
@@ -34,7 +37,7 @@ async def main(db, result_code, rejected):
                 continue
             packages[package.name] = package
 
-        async for run in state.iter_last_runs(conn1, result_code):
+        async for run in state.iter_last_runs(conn1, result_code, suite=args.suite):
             if run.package not in packages:
                 continue
             if rejected and run.review_status != 'rejected':
