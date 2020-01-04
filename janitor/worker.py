@@ -877,6 +877,8 @@ def main(argv=None):
             last_build_version=args.last_build_version,
             resume_subworker_result=resume_subworker_result)
     except WorkerFailure as e:
+        if e.code == 'nothing-to-do' and resume_subworker_result:
+            e = WorkerFailure('nothing-new-to-do', e.description)
         metadata['code'] = e.code
         metadata['description'] = e.description
         note('Worker failed: %s', e.description)
