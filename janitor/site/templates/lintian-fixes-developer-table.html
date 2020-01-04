@@ -24,7 +24,7 @@
         {% if run %}
           {% if run.revision == run.main_branch_revision and result_code == 'nothing-to-do' %}
             Nothing to do
-          {% elif run.result_code in ('success', 'nothing-to-do') %}
+          {% elif run.result_code in ('success', 'nothing-new-to-do') %}
             {% for tag in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
           {% else %}
             {{ display_result_code(run.result_code)|safe }}

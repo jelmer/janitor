@@ -237,7 +237,7 @@ async def generate_developer_table_page(db, developer):
         if open_proposal:
             status = 'proposal'
         elif run and run.result and run.result_code in (
-                'success', 'nothing-to-do'):
+                'success', 'nothing-new-to-do'):
             status = 'unabsorbed'
         elif run and run.result_code != 'nothing-to-do':
             status = 'error'
