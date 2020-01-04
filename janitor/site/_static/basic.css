@@ -590,7 +590,7 @@ span.result-code-success {
     color: green;
 }
 
-span.result-code-nothing-to-do {
+span.result-code-nothing-to-do, span.result-code-nothing-new-to-do {
     color: grey;
 }
 
@@ -610,7 +610,7 @@ tr.package-candidates {
   background-color: beige;
 }
 
-tr.package-nothing-to-do {
+tr.package-nothing-to-do, tr.package-nothing-new-to-do {
   background-color: grey;
   opacity: 0.5;
 }
