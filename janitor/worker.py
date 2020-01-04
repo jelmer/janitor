@@ -723,6 +723,13 @@ def process_package(vcs_url, env, command, output_directory,
             description = subworker.make_changes(
                 ws.local_tree, provide_context, metadata['subworker'],
                 resume_subworker_result, subpath=subpath)
+        except WorkerFailure as e:
+            if (e.code == 'nothing-to-do' and
+                    resume_subworker_result is not None):
+                e = WorkerFailure('nothing-new-to-do', e.description)
+                raise e
+            else:
+                raise
         finally:
             metadata['revision'] = (
                 ws.local_tree.branch.last_revision().decode())
@@ -877,8 +884,6 @@ def main(argv=None):
             last_build_version=args.last_build_version,
             resume_subworker_result=resume_subworker_result)
     except WorkerFailure as e:
-        if e.code == 'nothing-to-do' and resume_subworker_result:
-            e = WorkerFailure('nothing-new-to-do', e.description)
         metadata['code'] = e.code
         metadata['description'] = e.description
         note('Worker failed: %s', e.description)
