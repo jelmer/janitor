@@ -134,8 +134,18 @@ CREATE OR REPLACE VIEW last_runs AS
   WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
   ORDER BY package, suite, start_time DESC;
 
+CREATE OR REPLACE VIEW last_effective_runs AS
+  SELECT DISTINCT ON (package, suite)
+  *
+  FROM
+  run
+  WHERE
+    NOT EXISTS (SELECT FROM package WHERE name = package and removed) AND
+    result_code != 'nothing-new-to-do'
+  ORDER BY package, suite, start_time DESC;
+
 CREATE OR REPLACE VIEW last_unabsorbed_runs AS
-  SELECT * FROM last_runs WHERE
+  SELECT * FROM last_effective_runs WHERE
      result_code NOT in ('nothing-to-do', 'success') OR (
      revision is not null AND
      revision != main_branch_revision AND
