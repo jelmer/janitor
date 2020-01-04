@@ -1020,10 +1020,11 @@ where
 """, tag)
 
 
-async def get_run_result_by_revision(conn, revision):
+async def get_run_result_by_revision(conn, suite, revision):
     row = await conn.fetchrow(
         "SELECT result, branch_name, review_status FROM run "
-        "WHERE revision = $1", revision.decode('utf-8'))
+        "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
+        suite, revision.decode('utf-8'))
     if row is not None:
         return row[0], row[1], row[2]
     return None, None, None

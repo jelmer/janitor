@@ -479,7 +479,7 @@ async def process_one(
         if resume_branch is not None:
             resume_branch_result, resume_branch_name, resume_review_status = (
                     await state.get_run_result_by_revision(
-                        conn, revision=resume_branch.last_revision()))
+                        conn, suite, revision=resume_branch.last_revision()))
             if resume_review_status == 'rejected':
                 note('Unsetting resume branch, since last run was rejected.')
                 resume_branch_result = None
