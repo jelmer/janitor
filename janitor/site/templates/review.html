@@ -27,7 +27,7 @@ function loadRun(package, run_id) {
     $('#run-id').attr('value', run_id);
 }
 
-var todo = {{ json_dumps(todo)|safe }};
+var todo = {{ todo|tojson }};
 var queued = new Set();
 todo.forEach(function(entry) { queued.add(entry[0]); });
 

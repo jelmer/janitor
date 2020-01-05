@@ -19,7 +19,6 @@ from aiohttp import ClientConnectorError
 from debian.deb822 import Changes
 from io import BytesIO
 from jinja2 import Environment, PackageLoader, select_autoescape
-import json
 import re
 import urllib.parse
 
@@ -127,7 +126,6 @@ def htmlize_debdiff(debdiff):
 
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
-env.globals.update(json_dumps=json.dumps)
 env.globals.update(cache_url_git=CACHE_URL_GIT)
 env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 env.globals.update(enumerate=enumerate)
