@@ -25,6 +25,10 @@ and then merged</a>.</p>
     <td>{{ count }}</td>
 </tr>
 {% endfor %}
+<tr>
+    <td><b>Total</b></td>
+    <td><b>{{ by_tag.values() | sum }}</b></td>
+</tr>
 </table>
 </div>
 </div>

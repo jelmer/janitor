@@ -33,7 +33,7 @@ cd {{ package }}
 <script>
 $(function() {
   $("#{{ id }}").click(function() {
-    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ json_dumps(data)|safe }}, function(data) {
+    $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ data|tojson }}, function(data) {
       console.log('Scheduled: ' + data.offset);
       $("#{{ id }}").replaceWith("<span>Scheduled new run at position " + data.queue_position + ".</span>");
     }, 'json')

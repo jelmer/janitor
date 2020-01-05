@@ -26,4 +26,6 @@ message Suite {
   optional string build_suffix = 4;
 
   optional string branch_name = 5;
+
+  repeated string extra_build_suite = 6;
 }

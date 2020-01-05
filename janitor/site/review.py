@@ -61,7 +61,6 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         'package_name': run.package,
         'run_id': run.id,
         'suite': run.suite,
-        'json_dumps': json.dumps,
         'todo': [(entry[0].package, entry[0].id) for entry in entries],
         }
     template = env.get_template('review.html')
