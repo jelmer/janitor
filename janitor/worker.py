@@ -126,10 +126,20 @@ class SubWorker(object):
         raise NotImplementedError(self.make_changes)
 
 
+common_parser = argparse.ArgumentParser('common options')
+common_parser.add_argument(
+    '--no-update-changelog', action="store_false", default=None,
+    dest="update_changelog", help="do not update the changelog")
+common_parser.add_argument(
+    '--update-changelog', action="store_true", dest="update_changelog",
+    help="force updating of the changelog", default=None)
+
+
 class MultiArchHintsWorker(SubWorker):
 
     def __init__(self, command, env):
-        subparser = argparse.ArgumentParser(prog='multiarch-fix')
+        subparser = argparse.ArgumentParser(
+            prog='multiarch-fix', parents=[common_parser])
         # Hide the minimum-certainty option for the moment.
         subparser.add_argument(
             '--minimum-certainty',
@@ -137,12 +147,6 @@ class MultiArchHintsWorker(SubWorker):
             choices=SUPPORTED_CERTAINTIES,
             default=None,
             help=argparse.SUPPRESS)
-        subparser.add_argument(
-            '--no-update-changelog', action="store_false", default=None,
-            dest="update_changelog", help="do not update the changelog")
-        subparser.add_argument(
-            '--update-changelog', action="store_true", dest="update_changelog",
-            help="force updating of the changelog", default=None)
         subparser.add_argument(
             '--allow-reformatting', default=None, action='store_true',
             help=argparse.SUPPRESS)
@@ -225,16 +229,11 @@ class OrphanWorker(SubWorker):
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(prog='orphan')
+        subparser = argparse.ArgumentParser(
+            prog='orphan', parents=[common_parser])
         from silver_platter.debian.orphan import OrphanChanger
         self.changer = OrphanChanger()
         self.changer.setup_parser(subparser)
-        subparser.add_argument(
-            '--no-update-changelog', action="store_false", default=None,
-            dest="update_changelog", help="do not update the changelog")
-        subparser.add_argument(
-            '--update-changelog', action="store_true", dest="update_changelog",
-            help="force updating of the changelog", default=None)
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
@@ -268,17 +267,12 @@ class LintianBrushWorker(SubWorker):
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(prog='lintian-brush')
+        subparser = argparse.ArgumentParser(
+            prog='lintian-brush', parents=[common_parser])
         subparser.add_argument("tags", nargs='*')
         subparser.add_argument(
             '--exclude', action='append', type=str,
             help="Exclude fixer.")
-        subparser.add_argument(
-            '--no-update-changelog', action="store_false", default=None,
-            dest="update_changelog", help="do not update the changelog")
-        subparser.add_argument(
-            '--update-changelog', action="store_true", dest="update_changelog",
-            help="force updating of the changelog", default=None)
         subparser.add_argument(
             '--compat-release', type=str, default=None,
             help='Oldest Debian release to be compatible with.')
@@ -378,7 +372,8 @@ class NewUpstreamWorker(SubWorker):
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(prog='new-upstream')
+        subparser = argparse.ArgumentParser(
+            prog='new-upstream', parents=[common_parser])
         subparser.add_argument(
             '--snapshot',
             help='Merge a new upstream snapshot rather than a release',
@@ -557,16 +552,11 @@ class NewUpstreamWorker(SubWorker):
 class JustBuildWorker(SubWorker):
 
     def __init__(self, command, env):
-        subparser = argparse.ArgumentParser(prog='just-build')
+        subparser = argparse.ArgumentParser(
+            prog='just-build', parents=[common_parser])
         subparser.add_argument(
             '--revision', type=str,
             help='Specific revision to build.')
-        subparser.add_argument(
-            '--no-update-changelog', action="store_false", default=None,
-            dest="update_changelog", help="do not update the changelog")
-        subparser.add_argument(
-            '--update-changelog', action="store_true", dest="update_changelog",
-            help="force updating of the changelog", default=None)
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
