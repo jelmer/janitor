@@ -81,7 +81,8 @@ async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
 
         candidate = await state.get_candidate(conn, package.name, SUITE)
         if candidate is not None:
-            candidate_context, candidate_value = candidate
+            (candidate_context, candidate_value,
+             candidate_success_chance) = candidate
         else:
             candidate_context = None
             candidate_value = None
@@ -149,6 +150,7 @@ async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
         'previous_runs': previous_runs,
         'run': run,
         'candidate_context': candidate_context,
+        'candidate_success_chance': candidate_success_chance,
         'candidate_tags':
             set(candidate_context.split(' ')) if candidate_context else set(),
         'candidate_value': candidate_value,
@@ -184,7 +186,7 @@ async def generate_candidates(db):
         supported_tags.update(fixer.lintian_tags)
     async with db.acquire() as conn:
         candidates = [(package.name, context.split(' '), value) for
-                      (package, suite, context, value) in
+                      (package, suite, context, value, success_chance) in
                       await state.iter_candidates(conn, suite=SUITE)]
         candidates.sort()
     return await template.render_async(

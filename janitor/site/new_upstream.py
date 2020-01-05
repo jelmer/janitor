@@ -28,7 +28,8 @@ async def generate_pkg_file(
                 await state.iter_proposals(conn, package.name, suite=suite)]
         candidate = await state.get_candidate(conn, package.name, suite)
         if candidate is not None:
-            candidate_context, candidate_value = candidate
+            (candidate_context, candidate_value,
+             candidate_success_chance) = candidate
         else:
             candidate_context = None
             candidate_value = None
@@ -77,6 +78,7 @@ async def generate_pkg_file(
         'result': result,
         'suite': suite,
         'candidate_version': candidate_context,
+        'candidate_success_chance': candidate_success_chance,
         'candidate_value': candidate_value,
         'previous_runs': previous_runs,
         'branch_name': branch_name,
@@ -106,8 +108,8 @@ async def generate_pkg_file(
 async def generate_candidates(db, suite):
     template = env.get_template('new-upstream-candidates.html')
     async with db.acquire() as conn:
-        candidates = [(package.name, context, value) for
-                      (package, suite, context, value) in
+        candidates = [(package.name, context, value, success_chance) for
+                      (package, suite, context, value, success_chance) in
                       await state.iter_candidates(conn, suite=suite)]
     candidates.sort()
     return await template.render_async(candidates=candidates, suite=suite)
