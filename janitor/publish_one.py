@@ -102,6 +102,8 @@ https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1
 """
 
 DEBDIFF_BLURB_MD = """
+## Debdiff
+
 These changes affect the binary packages:
 
 %(debdiff_md)s

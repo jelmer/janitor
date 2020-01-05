@@ -143,7 +143,7 @@ def markdownify_debdiff(debdiff):
     ret = []
     for title, lines in iter_sections(debdiff):
         if title:
-            ret.append("## %s" % title)
+            ret.append("### %s" % title)
             wdiff, package = section_is_wdiff(title)
             if wdiff:
                 ret.extend(
