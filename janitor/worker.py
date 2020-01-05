@@ -126,7 +126,7 @@ class SubWorker(object):
         raise NotImplementedError(self.make_changes)
 
 
-common_parser = argparse.ArgumentParser('common options')
+common_parser = argparse.ArgumentParser(add_help=False)
 common_parser.add_argument(
     '--no-update-changelog', action="store_false", default=None,
     dest="update_changelog", help="do not update the changelog")
