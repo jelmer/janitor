@@ -1100,6 +1100,48 @@ WHERE NOT package.removed
             for row in await conn.fetch(query, *args)]
 
 
+async def iter_candidates_with_policy(conn, packages=None, suite=None):
+    query = """
+SELECT
+  package.name,
+  package.maintainer_email,
+  package.uploader_emails,
+  package.branch_url,
+  package.vcs_type,
+  package.vcs_url,
+  package.vcs_browse,
+  package.removed,
+  package.vcswatch_status,
+  package.vcswatch_version,
+  candidate.suite,
+  candidate.context,
+  candidate.value,
+  candidate.success_chance,
+  publish_policy.mode,
+  publish_policy.update_changelog,
+  publish_policy.command
+FROM candidate
+INNER JOIN package on package.name = candidate.package
+LEFT JOIN publish_policy ON
+    publish_policy.package = package.name AND publish_policy.suite = candidate.suite
+WHERE NOT package.removed
+"""
+    args = []
+    if suite is not None and packages is not None:
+        query += " AND package.name = ANY($1::text[]) AND candidate.suite = $2"
+        args.extend([packages, suite])
+    elif suite is not None:
+        query += " AND candidate.suite = $1"
+        args.append(suite)
+    elif packages is not None:
+        query += " AND package.name = ANY($1::text[])"
+        args.append(packages)
+    return [(Package.from_row(row), row[10], row[11], row[12], row[13],
+             (row[14], row[15],
+              shlex.split(row[16]) if row[16] is not None else None))
+            for row in await conn.fetch(query, *args)]
+
+
 async def get_candidate(conn, package, suite):
     return await conn.fetchrow(
         "SELECT context, value, success_chance FROM candidate "
