@@ -58,11 +58,11 @@
 
 {% if not result_code %}
 
-{% if previous_runs and previous_runs[0].result_code == 'nothing-to-do' %}
+{% if run and run.result_code == 'nothing-to-do' %}
 <p>
 Nothing to do for {{ package }}.
 {% else %}
-<p>No recent successful runs for {{ package }}.</p>
+<p>No unpublished successful runs for {{ package }}.</p>
 {% endif %}
 
 {% else %}
@@ -126,14 +126,12 @@ Nothing to do for {{ package }}.
 
 {% endif %}
 
-{% if previous_runs and previous_runs[0].result_code not in ('nothing-to-do', 'success') %}
+{% if previous_runs and result_code not in ('nothing-to-do', 'success') %}
 <h3>Historical runs</h3>
 
 <ul>
 {% for previous_run in previous_runs %}
-{% if previous_run != run %}
 <li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code)|safe }}: {{ previous_run.description }}</a></li>
-{% endif %}
 {% endfor %}
 </ul>
 
