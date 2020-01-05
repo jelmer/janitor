@@ -52,6 +52,7 @@ async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
             branch_name = None
             branch_url = None
             fixed_tags = set()
+            unchanged_run = None
         else:
             command = run.command
             build_version = run.build_version
