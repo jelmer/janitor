@@ -389,7 +389,8 @@ async def process_one(
             pkg, log_id=log_id,
             code='unknown-suite',
             description='Suite %s not in configuration' % suite,
-            logfilenames=[])
+            logfilenames=[],
+            branch_url=vcs_url)
 
     if not use_cached_only:
         async with db.acquire() as conn:
