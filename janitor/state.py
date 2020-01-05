@@ -1123,7 +1123,8 @@ SELECT
 FROM candidate
 INNER JOIN package on package.name = candidate.package
 LEFT JOIN publish_policy ON
-    publish_policy.package = package.name AND publish_policy.suite = candidate.suite
+    publish_policy.package = package.name AND
+    publish_policy.suite = candidate.suite
 WHERE NOT package.removed
 """
     args = []

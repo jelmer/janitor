@@ -32,6 +32,7 @@ async def generate_pkg_file(
              candidate_success_chance) = candidate
         else:
             candidate_context = None
+            candidate_success_chance = None
             candidate_value = None
         if not run:
             command = None
