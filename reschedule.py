@@ -37,7 +37,8 @@ async def main(db, result_code, rejected):
                 continue
             packages[package.name] = package
 
-        async for run in state.iter_last_runs(conn1, result_code, suite=args.suite):
+        async for run in state.iter_last_runs(
+                conn1, result_code, suite=args.suite):
             if run.package not in packages:
                 continue
             if rejected and run.review_status != 'rejected':

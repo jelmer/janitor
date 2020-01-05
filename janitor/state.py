@@ -53,14 +53,14 @@ async def store_packages(conn, packages):
       packages: list of tuples with (
         name, branch_url, subpath, maintainer_email, uploader_emails,
         unstable_version, vcs_type, vcs_url, vcs_browse, vcswatch_status,
-        vcswatch_version, popcon_inst, removed)
+        vcswatch_version, popcon_inst, removed, upstream_branch_url)
     """
     await conn.executemany(
         "INSERT INTO package "
         "(name, branch_url, subpath, maintainer_email, uploader_emails, "
         "unstable_version, vcs_type, vcs_url, vcs_browse, vcswatch_status, "
-        "vcswatch_version, popcon_inst, removed) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) "
+        "vcswatch_version, popcon_inst, removed, upstream_branch_url) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) "
         "ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
@@ -73,7 +73,8 @@ async def store_packages(conn, packages):
         "vcswatch_status = EXCLUDED.vcswatch_status, "
         "vcswatch_version = EXCLUDED.vcswatch_version, "
         "popcon_inst = EXCLUDED.popcon_inst, "
-        "removed = EXCLUDED.removed",
+        "removed = EXCLUDED.removed, "
+        "upstream_branch_url = EXCLUDED.upstream_branch_url",
         packages)
 
 
@@ -1056,9 +1057,11 @@ WHERE """
 
 async def store_candidates(conn, entries):
     await conn.executemany(
-        "INSERT INTO candidate (package, suite, context, value) "
-        "VALUES ($1, $2, $3, $4) ON CONFLICT (package, suite) "
-        "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value",
+        "INSERT INTO candidate "
+        "(package, suite, context, value, success_chance) "
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
+        "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
+        "success_chance = EXCLUDED.success_chance",
         entries)
 
 
@@ -1077,7 +1080,8 @@ SELECT
   package.vcswatch_version,
   candidate.suite,
   candidate.context,
-  candidate.value
+  candidate.value,
+  candidate.success_chance
 FROM candidate
 INNER JOIN package on package.name = candidate.package
 WHERE NOT package.removed
@@ -1098,7 +1102,7 @@ WHERE NOT package.removed
 
 async def get_candidate(conn, package, suite):
     return await conn.fetchrow(
-        "SELECT context, value FROM candidate "
+        "SELECT context, value, success_chance FROM candidate "
         "WHERE package = $1 AND suite = $2", package, suite)
 
 

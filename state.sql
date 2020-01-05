@@ -112,6 +112,7 @@ CREATE TABLE IF NOT EXISTS candidate (
    suite suite_name not null,
    context text,
    value integer,
+   success_chance float,
    unique(package, suite),
    foreign key (package) references package(name)
 );

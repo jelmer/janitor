@@ -169,7 +169,7 @@ and vcs_type != ''"""
             tags = sorted(package_tags[row[0], row[1]])
             value = estimate_lintian_fixes_value(tags)
             context = ' '.join(sorted(tags))
-            yield (row[0], context, value)
+            yield (row[0], context, value, None)
 
     async def iter_unchanged_candidates(self, packages=None):
         args = []
@@ -184,7 +184,7 @@ sources.release = 'sid'
             args.append(tuple(packages))
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], None, DEFAULT_VALUE_UNCHANGED)
+                yield (row[0], None, DEFAULT_VALUE_UNCHANGED, None)
 
     async def iter_orphan_candidates(self, packages=None):
         args = []
@@ -202,7 +202,7 @@ orphaned_packages.type in ('O') AND
             args.append(tuple(packages))
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], str(row[2]), DEFAULT_VALUE_ORPHAN)
+                yield (row[0], str(row[2]), DEFAULT_VALUE_ORPHAN, None)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -221,13 +221,16 @@ sources.release = 'sid'
         query += " ORDER BY sources.source, sources.version DESC"
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], row[1], DEFAULT_VALUE_NEW_UPSTREAM)
+                yield (row[0], row[1], DEFAULT_VALUE_NEW_UPSTREAM, None)
 
     async def iter_fresh_snapshots_candidates(self, packages):
         args = []
         query = """\
 SELECT DISTINCT ON (sources.source)
-sources.source from sources
+sources.source, exists (
+    select from upstream_metadata where
+    key = 'Repository' and source = sources.source)
+from sources
 where sources.vcs_url != '' and position('-' in sources.version) > 0 AND
 sources.release = 'sid'
 """
@@ -237,7 +240,9 @@ sources.release = 'sid'
         query += " ORDER BY sources.source, sources.version DESC"
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS)
+                yield (
+                    row[0], None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS,
+                    1.0 if row[1] else 0.1)
 
     async def iter_packages_with_metadata(self, packages=None):
         args = []
@@ -289,7 +294,7 @@ async def iter_multiarch_fixes(packages=None):
         hints = [entry['link'].rsplit('#', 1)[-1] for entry in entries]
         value = sum(map(MULTIARCH_HINTS_VALUE.__getitem__, hints)) + (
             DEFAULT_VALUE_MULTIARCH_HINT)
-        yield source, ' '.join(sorted(hints)), value
+        yield source, ' '.join(sorted(hints)), value, None
 
 
 async def update_package_metadata(
@@ -460,8 +465,9 @@ async def main():
                 continue
             trace.note('Adding candidates for %s.', suite)
             candidates = [
-                (package, suite, context, value)
-                async for (package, context, value) in candidate_fn]
+                (package, suite, context, value, success_chance)
+                async for (package, context, value, success_chance)
+                in candidate_fn]
             trace.note('Collected %d candidates for %s.',
                        len(candidates), suite)
             await state.store_candidates(conn, candidates)

@@ -90,7 +90,7 @@ def full_command(update_changelog, command):
 
 
 async def schedule_from_candidates(policy, iter_candidates):
-    for package, suite, context, value in iter_candidates:
+    for package, suite, context, value, success_chance in iter_candidates:
         if package.branch_url is None:
             continue
 
@@ -110,7 +110,8 @@ async def schedule_from_candidates(policy, iter_candidates):
 
         entry_command = full_command(update_changelog, command)
 
-        yield (package.name, context, entry_command, suite, value)
+        yield (package.name, context, entry_command, suite, value,
+               success_chance)
 
 
 async def estimate_success_probability(conn, package, suite, context=None):
@@ -175,7 +176,7 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
                   if p.removed)
     max_inst = max([(v or 0) for v in popcon.values()])
     trace.note('Maximum inst count: %d', max_inst)
-    for package, context, command, suite, value in todo:
+    for package, context, command, suite, value, success_chance in todo:
         assert package is not None
         assert value > 0, "Value: %s" % value
         if package in removed:
@@ -187,6 +188,8 @@ async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
         assert (estimated_probability_of_success >= 0.0 and
                 estimated_probability_of_success <= 1.0), \
             "Probability of success: %s" % estimated_probability_of_success
+        if success_chance is not None:
+            success_chance *= estimated_probability_of_success
         estimated_cost = 50 + estimated_duration.total_seconds()
         assert estimated_cost > 0, "Estimated cost: %d" % estimated_cost
         estimated_popularity = max(popcon.get(package, 0), 10) / max_inst
@@ -258,6 +261,8 @@ async def main():
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+    parser.add_argument(
+        '--suite', type=str, help='Restrict to a specific suite.')
     parser.add_argument('packages', help='Package to process.', nargs='*')
 
     args = parser.parse_args()
@@ -276,7 +281,8 @@ async def main():
 
     async with db.acquire() as conn:
         iter_candidates = await state.iter_candidates(
-            conn, packages=(args.packages or None))
+            conn, packages=(args.packages or None),
+            suite=args.suite)
         todo = [x async for x in schedule_from_candidates(
             policy, iter_candidates)]
         await add_to_queue(conn, todo, dry_run=args.dry_run)
