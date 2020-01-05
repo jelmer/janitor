@@ -283,6 +283,7 @@ async def open_guessed_salsa_branch(
     for salsa_url in [
             salsa_url_from_alioth_url(vcs_type, vcs_url),
             guess_repository_url(package.name, package.maintainer_email),
+            'https://salsa.debian.org/debian/%s.git' % package.name,
             ]:
         if not salsa_url:
             continue
