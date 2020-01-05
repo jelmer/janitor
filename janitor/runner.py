@@ -280,13 +280,26 @@ async def open_guessed_salsa_branch(
     package = await state.get_package(conn, pkg)
     probers = select_probers('git')
     vcs_url, params = urlutils.split_segment_parameters_raw(vcs_url)
+
+    tried = set(vcs_url)
+
+    # These are the same transformations applied by vcswatc. The goal is mostly to get a URL
+    # that properly redirects.
+    https_alioth_url = re.sub(
+        r'(https?|git)://(anonscm|git).debian.org/(git/)?',
+        r'https://anonscm.debian.org/git/',
+        vcs_url)
+
     for salsa_url in [
+            https_alioth_url,
             salsa_url_from_alioth_url(vcs_type, vcs_url),
             guess_repository_url(package.name, package.maintainer_email),
             'https://salsa.debian.org/debian/%s.git' % package.name,
             ]:
-        if not salsa_url:
+        if not salsa_url or salsa_url in tried:
             continue
+
+        tried.add(salsa_url)
 
         salsa_url = urlutils.join_segment_parameters_raw(salsa_url, *params)
 
