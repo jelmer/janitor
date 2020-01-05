@@ -593,6 +593,9 @@ def fix_missing_configure(tree, error, context, committer=None):
 
 
 def fix_missing_automake_input(tree, error, context, committer=None):
+    # TODO(jelmer): If it's ./NEWS, ./AUTHORS or ./README that's missing, then
+    # try to set 'export AUTOMAKE = automake --foreign' in debian/rules.
+    # https://salsa.debian.org/jelmer/debian-janitor/issues/88
     return enable_dh_autoreconf(tree, context, committer=committer)
 
 
