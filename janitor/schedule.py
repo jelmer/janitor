@@ -31,11 +31,6 @@ from . import (
     )
 from .config import read_config
 
-from .policy import (
-    read_policy,
-    apply_policy,
-)
-
 SUCCESS_WEIGHT = 20
 POPULARITY_WEIGHT = 1
 
@@ -89,24 +84,23 @@ def full_command(update_changelog, command):
     return entry_command
 
 
-async def schedule_from_candidates(policy, iter_candidates):
-    for package, suite, context, value, success_chance in iter_candidates:
+async def schedule_from_candidates(iter_candidates_with_policy):
+    for package, suite, context, value, success_chance, publish_policy in (
+            iter_candidates_with_policy):
         if package.branch_url is None:
             continue
 
-        (publish_mode, update_changelog, command) = apply_policy(
-            policy, suite, package.name, package.maintainer_email,
-            package.uploader_emails)
+        (publish_mode, update_changelog, command) = publish_policy
 
         if publish_mode == 'skip':
             trace.mutter('%s: skipping, per policy', package.name)
             continue
 
-        value += PUBLISH_MODE_VALUE[publish_mode]
-
         if not command:
             trace.mutter('%s: skipping, no command set', package.name)
             continue
+
+        value += PUBLISH_MODE_VALUE[publish_mode]
 
         entry_command = full_command(update_changelog, command)
 
@@ -274,17 +268,14 @@ async def main():
     with open(args.config, 'r') as f:
         config = read_config(f)
 
-    with open(args.policy, 'r') as f:
-        policy = read_policy(f)
-
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
-        iter_candidates = await state.iter_candidates(
+        iter_candidates_with_policy = await state.iter_candidates_with_policy(
             conn, packages=(args.packages or None),
             suite=args.suite)
         todo = [x async for x in schedule_from_candidates(
-            policy, iter_candidates)]
+            iter_candidates_with_policy)]
         await add_to_queue(conn, todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()
