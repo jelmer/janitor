@@ -27,7 +27,7 @@ and then merged</a>.</p>
 {% endfor %}
 <tr>
     <td><b>Total</b></td>
-    <td><b>{{ by_tag.values() | sum }}</b></td>
+    <td><b>{{ by_tag | sum(attribute=1) }}</b></td>
 </tr>
 </table>
 </div>

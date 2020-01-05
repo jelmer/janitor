@@ -22,6 +22,7 @@ from datetime import datetime
 import functools
 import json
 import os
+import re
 import signal
 import sys
 import tempfile
@@ -283,8 +284,8 @@ async def open_guessed_salsa_branch(
 
     tried = set(vcs_url)
 
-    # These are the same transformations applied by vcswatc. The goal is mostly to get a URL
-    # that properly redirects.
+    # These are the same transformations applied by vcswatc. The goal is mostly
+    # to get a URL that properly redirects.
     https_alioth_url = re.sub(
         r'(https?|git)://(anonscm|git).debian.org/(git/)?',
         r'https://anonscm.debian.org/git/',
