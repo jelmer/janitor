@@ -19,8 +19,16 @@ import asyncio
 from io import BytesIO
 
 
-async def run_diffoscope(old_changes, new_changes):
-    args = ['diffoscope', old_changes, new_changes]
+async def run_diffoscope(old_changes, new_changes, content_type):
+    args = ['diffoscope',]
+    args.extend({
+        'application/json': ['--json=-'],
+        'text/plain': ['--text=-'],
+        'text/html': ['--html=-'],
+        'text/markdown': ['--markdown=-'],
+    })
+
+    args.extend([old_changes, new_changes])
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
