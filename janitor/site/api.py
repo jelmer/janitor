@@ -220,13 +220,19 @@ async def handle_diff(request):
                         return web.Response(
                             body=diff,
                             content_type='text/x-diff',
-                            headers={'Cache-Control': 'max-age=3600'})
+                            headers={
+                                'Cache-Control': 'max-age=3600',
+                                'Vary': 'Accept',
+                                })
                     if accept == 'text/html':
                         return web.Response(
                             text=highlight_diff(
                                 diff.decode('utf-8', 'replace')),
                             content_type='text/html',
-                            headers={'Cache-Control': 'max-age=3600'})
+                            headers={
+                                'Cache-Control': 'max-age=3600',
+                                'Vary': 'Accept',
+                                })
                 raise web.HTTPNotAcceptable(
                     text='Acceptable content types: '
                          'text/html, text/x-diff')
@@ -282,7 +288,9 @@ async def handle_debdiff(request):
     return web.Response(
         body=debdiff,
         content_type=content_type,
-        headers={'Cache-Control': 'max-age=3600'})
+        headers={
+            'Cache-Control': 'max-age=3600',
+            'Vary': 'Accept'})
 
 
 async def handle_run_post(request):
