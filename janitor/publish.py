@@ -18,6 +18,7 @@
 """Publishing VCS changes."""
 
 from aiohttp import web
+from datetime import datetime
 from http.client import parse_headers
 import asyncio
 import functools
@@ -436,7 +437,10 @@ async def publish_from_policy(
          'branch_name': branch_name,
          'result_code': code,
          'result': run.result,
-         'run_id': run.id})
+         'run_id': run.id,
+         'publish_delay': (
+             datetime.now() - run.times[1]).total_seconds()
+         })
 
     if code == 'success':
         return mode
@@ -484,6 +488,8 @@ async def publish_and_store(
                 'suite': run.suite,
                 'main_branch_url': run.branch_url,
                 'result': run.result,
+                'publish_delay': (
+                    datetime.now() - run.times[1]).total_seconds(),
                 })
             return
 
