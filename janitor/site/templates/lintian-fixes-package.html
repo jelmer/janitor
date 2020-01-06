@@ -35,7 +35,10 @@
 <!-- Candidate value: {{ candidate_value }} -->
 {% endif %}
 {% if queue_position %}
-<li>Queue position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
+<li id='queue-position.{{ package }}'>Queue position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
+{% else %}
+<li id='queue-position.{{ package }}'/>
+{% endif %}
 {% endif %}
 </ul>
 

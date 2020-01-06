@@ -36,8 +36,11 @@ $(document).ready(function() {
 </li>
 {% endif %}
 {% if queue_position %}
-<li><a href="/cupboard/queue">Queue</a> position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
+<li class='queue-position.{{ package }}'><a href="/cupboard/queue">Queue</a> position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
+{% else %}
+<li class='queue-position.{{ package }}' style='display:none'/>
 {% endif %}
+</span>
 
 {{ result_code_explanation(result_code, run) }}
 
