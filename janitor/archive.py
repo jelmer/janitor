@@ -31,11 +31,16 @@ from .aptly import Aptly, AptlyError
 from .debdiff import (
     run_debdiff,
     DebdiffError,
-    filter_boring,
+    filter_boring as filter_debdiff_boring,
     htmlize_debdiff,
     markdownify_debdiff,
     )
-from .diffoscope import run_diffoscope, format_diffoscope
+from .diffoscope import (
+    filter_boring as filter_diffoscope_boring,
+    filter_irrelevant as filter_diffoscope_irrelevant,
+    run_diffoscope,
+    format_diffoscope,
+    )
 from .prometheus import setup_metrics
 from .trace import note
 
@@ -137,8 +142,9 @@ async def handle_debdiff(request):
         debdiff = await run_debdiff(old_changes_path, new_changes_path)
     except DebdiffError as e:
         return web.Response(status=400, text=e.args[0])
+
     if 'filter_boring' in post:
-        debdiff = filter_boring(
+        debdiff = filter_debdiff_boring(
             debdiff.decode(), old_changes['Version'],
             new_changes['Version']).encode()
 
@@ -239,7 +245,20 @@ async def handle_diffoscope(request):
                  'text/html, text/plain, application/json, '
                  'application/markdown')
 
+    with open(old_changes_path, 'r') as f:
+        old_changes = Changes(f)
+
+    with open(new_changes_path, 'r') as f:
+        new_changes = Changes(f)
+
     diffoscope_diff = await run_diffoscope(old_changes_path, new_changes_path)
+
+    diffoscope_diff = filter_diffoscope_irrelevant(diffoscope_diff)
+
+    if 'filter_boring' in post:
+        diffoscope_diff = filter_diffoscope_boring(
+            diffoscope_diff, old_changes['Version'],
+            new_changes['Version'])
 
     debdiff = await format_diffoscope(diffoscope_diff, content_type)
 
