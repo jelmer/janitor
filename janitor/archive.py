@@ -253,12 +253,13 @@ async def handle_diffoscope(request):
 
     diffoscope_diff = await run_diffoscope(old_changes_path, new_changes_path)
 
-    diffoscope_diff = filter_diffoscope_irrelevant(diffoscope_diff)
+    filter_diffoscope_irrelevant(diffoscope_diff)
 
     if 'filter_boring' in post:
-        diffoscope_diff = filter_diffoscope_boring(
+        filter_diffoscope_boring(
             diffoscope_diff, old_changes['Version'],
-            new_changes['Version'])
+            new_changes['Version'], old_changes['Distribution'],
+            new_changes['Distribution'])
 
     debdiff = await format_diffoscope(diffoscope_diff, content_type)
 
