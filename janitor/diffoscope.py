@@ -85,7 +85,7 @@ def filter_irrelevant(diff):
 
 async def format_diffoscope(root_difference, content_type):
     if content_type == 'application/json':
-        return json.dumps(root_difference).encode('utf-8')
+        return json.dumps(root_difference)
     from diffoscope.readers.json import JSONReaderV1
     root_difference = JSONReaderV1().load_rec(root_difference)
     if content_type == 'text/html':
@@ -97,7 +97,7 @@ async def format_diffoscope(root_difference, content_type):
             p.output_html('-', root_difference)
         finally:
             sys.stdout = old_stdout
-        return f.getvalue().encode('utf-8')
+        return f.getvalue()
     if content_type == 'text/markdown':
         from diffoscope.presenters.markdown import MarkdownTextPresenter
         out = []
@@ -105,7 +105,7 @@ async def format_diffoscope(root_difference, content_type):
             out.append(t+'\n')
         p = MarkdownTextPresenter(printfn)
         p.start(root_difference)
-        return ''.join(out).encode('utf-8')
+        return ''.join(out)
     if content_type == 'text/plain':
         from diffoscope.presenters.text import TextPresenter
         out = []
@@ -113,7 +113,7 @@ async def format_diffoscope(root_difference, content_type):
             out.append(t+'\n')
         p = TextPresenter(printfn, False)
         p.start(root_difference)
-        return ''.join(out).encode('utf-8')
+        return ''.join(out)
     raise AssertionError('unknown content type %r' % content_type)
 
 
