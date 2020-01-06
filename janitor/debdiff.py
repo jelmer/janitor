@@ -140,6 +140,10 @@ def section_is_wdiff(title):
 
 
 def markdownify_debdiff(debdiff):
+    def fix_wdiff_md(line):
+        # GitLab markdown will render links but then not show the
+        # delta highlighting. This fools it into not autolinking:
+        return line.replace('://', '&#8203;://')
     ret = []
     for title, lines in iter_sections(debdiff):
         if title:
@@ -147,7 +151,8 @@ def markdownify_debdiff(debdiff):
             wdiff, package = section_is_wdiff(title)
             if wdiff:
                 ret.extend(
-                    ["* %s" % line for line in lines if line.strip()])
+                    ["* %s" % fix_wdiff_md(line)
+                     for line in lines if line.strip()])
             else:
                 for line in lines:
                     ret.append('    ' + line)
