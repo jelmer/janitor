@@ -17,7 +17,7 @@ from janitor.logs import LogRetrievalError
 from janitor.site import (
     changes_get_binaries,
     env,
-    get_debdiff,
+    get_archive_diff,
     get_vcs_type,
     run_changes_filename,
     open_changes_file,
@@ -141,9 +141,9 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
         if not unchanged_run or not unchanged_run.build_version:
             return ''
         try:
-            debdiff = await get_debdiff(
+            debdiff = await get_archive_diff(
                 client, archiver_url, run, unchanged_run,
-                filter_boring=True)
+                kind='debdiff', filter_boring=True)
             return debdiff.decode('utf-8', 'replace')
         except FileNotFoundError:
             return ''

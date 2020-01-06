@@ -7,7 +7,8 @@ from janitor import state, SUITE_REGEX
 from . import (
     env,
     highlight_diff,
-    get_debdiff,
+    get_archive_diff,
+    get_diffoscope,
     htmlize_debdiff,
     DebdiffRetrievalError,
     )
@@ -245,6 +246,7 @@ async def handle_diff(request):
 
 async def handle_debdiff(request):
     run_id = request.match_info['run_id']
+    kind = request.query.get('kind', 'debdiff')
     async with request.app.db.acquire() as conn:
         run = await state.get_run(conn, run_id)
         if run is None:
@@ -266,9 +268,9 @@ async def handle_debdiff(request):
     filter_boring = ('filter_boring' in request.query)
 
     try:
-        debdiff = await get_debdiff(
+        debdiff = await get_archive_iff(
             request.app.http_client_session, request.app.archiver_url, run,
-            unchanged_run, filter_boring=filter_boring)
+            unchanged_run, kind=kind, filter_boring=filter_boring)
     except FileNotFoundError:
         raise web.HTTPNotFound(
             text='debdiff not calculated yet (run: %s, unchanged run: %s)' % (
