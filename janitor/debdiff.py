@@ -121,7 +121,8 @@ async def run_debdiff(old_changes, new_changes):
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE)
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await p.communicate(b'')
     if p.returncode not in (0, 1):
         raise DebdiffError(stderr)
