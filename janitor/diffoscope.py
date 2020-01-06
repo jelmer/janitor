@@ -20,19 +20,66 @@ from io import BytesIO
 import os
 import json
 
+from breezy.patches import iter_hunks
+
 
 class DiffoscopeError(Exception):
     """An error occurred while running diffoscope."""
 
 
+def filter_boring_udiff(udiff, old_version, new_version, display_version):
+    old_version = old_version.encode('utf-8')
+    new_version = new_version.encode('utf-8')
+    display_version = display_version.encode('utf-8')
+    lines = iter([l.encode('utf-8') for l in udiff.splitlines(True)])
+    hunks = []
+    for hunk in iter_hunks(lines, allow_dirty=False):
+        for line in hunk.lines:
+            line.contents = line.contents.replace(old_version, display_version)
+            line.contents = line.contents.replace(new_version, display_version)
+        hunks.append(hunk)
+    return ''.join([hunk.as_bytes().decode('utf-8', 'replace')])
+
+
+def filter_boring_detail(detail, old_version, new_version, display_version):
+    if detail['unified_diff'] is not None:
+        detail['unified_diff'] = filter_boring_udiff(
+            detail['unified_diff'], old_version, new_version, display_version)
+    detail['source1'] = detail['source1'].replace(old_version, display_version)
+    detail['source2'] = detail['source2'].replace(new_version, display_version)
+    if detail.get('details'):
+        i = 0
+        for subdetail in list(detail['details']):
+            if not filter_boring_detail(
+                    subdetail, old_version, new_version, display_version):
+                continue
+            i += 1
+    return True
+
+
 def filter_boring(diff, old_version, new_version):
-    return diff
+    display_version = new_version.rsplit('~', 1)[0]
+    # Changes file differences
+    BORING_FIELDS = ['Date', 'Distribution', 'Version']
+    i = 0
+    for detail in list(diff['details']):
+        if (detail['source1'] in BORING_FIELDS and
+                detail['source2'] in BORING_FIELDS):
+            del diff['details'][i]
+            continue
+        if (detail['source1'].endswith('.buildinfo') and
+                detail['source2'].endswith('.buildinfo')):
+            del diff['details'][i]
+            continue
+        if not filter_boring_detail(
+                detail, old_version, new_version, display_version):
+            continue
+        i += 1
 
 
-def filter_irrelevant(diff_text):
+def filter_irrelevant(diff):
     diff['source1'] = os.path.basename(diff['source1'])
     diff['source2'] = os.path.basename(diff['source2'])
-    return diff
 
 
 async def format_diffoscope(diffoscope_diff, content_type):
@@ -57,7 +104,7 @@ async def format_diffoscope(diffoscope_diff, content_type):
 
 
 async def run_diffoscope(old_changes, new_changes):
-    args = ['diffoscope', '--json=-']
+    args = ['diffoscope', '--json=-', '--exclude-directory-metadata=yes']
     args.extend([old_changes, new_changes])
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
