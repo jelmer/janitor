@@ -23,7 +23,7 @@ class DiffoscopeError(Exception):
     """An error occurred while running diffoscope."""
 
 
-async def run_diffoscope(old_changes, new_changes, content_type):
+async def format_diffoscope(diffoscope_diff, content_type):
     args = ['diffoscope']
     args.extend({
         'application/json': ['--json=-'],
@@ -31,7 +31,20 @@ async def run_diffoscope(old_changes, new_changes, content_type):
         'text/html': ['--html=-'],
         'text/markdown': ['--markdown=-'],
     }[content_type])
+    args.extend(['-'])
+    stdout = BytesIO()
+    p = await asyncio.create_subprocess_exec(
+        *args, stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE)
+    stdout, stderr = await p.communicate(diffoscope_diff.encode('utf-8'))
+    if p.returncode not in (0, 1):
+        raise DiffoscopeError(stderr.decode(errors='replace'))
+    return stdout
 
+
+async def run_diffoscope(old_changes, new_changes):
+    args = ['diffoscope', '--json=-']
     args.extend([old_changes, new_changes])
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
@@ -41,4 +54,4 @@ async def run_diffoscope(old_changes, new_changes, content_type):
     stdout, stderr = await p.communicate(b'')
     if p.returncode not in (0, 1):
         raise DiffoscopeError(stderr.decode(errors='replace'))
-    return stdout
+    return stdout.decode('utf-8')

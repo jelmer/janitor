@@ -35,7 +35,7 @@ from .debdiff import (
     htmlize_debdiff,
     markdownify_debdiff,
     )
-from .diffoscope import run_diffoscope
+from .diffoscope import run_diffoscope, format_diffoscope
 from .prometheus import setup_metrics
 from .trace import note
 
@@ -239,8 +239,9 @@ async def handle_diffoscope(request):
                  'text/html, text/plain, application/json, '
                  'application/markdown')
 
-    debdiff = await run_diffoscope(
-        old_changes_path, new_changes_path, content_type=content_type)
+    diffoscope_diff = await run_diffoscope(old_changes_path, new_changes_path)
+
+    debdiff = await format_diffoscope(diffoscope_diff, content_type)
 
     return web.Response(body=debdiff, content_type=content_type)
 
