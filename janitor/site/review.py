@@ -45,7 +45,7 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         if unchanged_run is None:
             return '<p>No control run</p>'
         try:
-            text = await get_archive_diff(
+            text, content_type = await get_archive_diff(
                 client, archiver_url, run, unchanged_run,
                 kind='debdiff', filter_boring=True, accept='text/html')
             return text.decode('utf-8', 'replace')

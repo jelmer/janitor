@@ -512,8 +512,10 @@ def publish_one(
     debdiff_url = (
         'https://janitor.debian.net/api/run/%s/debdiff?filter_boring=1'
         % log_id)
+    headers = {'Accept': 'text/plain'}
+
     try:
-        with urllib.request.urlopen(debdiff_url) as f:
+        with urllib.request.urlopen(debdiff_url, headers=headers) as f:
             debdiff = f.read()
     except urllib.error.HTTPError as e:
         if e.status == 404:
