@@ -8,7 +8,6 @@ from . import (
     env,
     highlight_diff,
     get_archive_diff,
-    get_diffoscope,
     htmlize_debdiff,
     DebdiffRetrievalError,
     )
@@ -268,7 +267,7 @@ async def handle_debdiff(request):
     filter_boring = ('filter_boring' in request.query)
 
     try:
-        debdiff = await get_archive_iff(
+        debdiff = await get_archive_diff(
             request.app.http_client_session, request.app.archiver_url, run,
             unchanged_run, kind=kind, filter_boring=filter_boring)
     except FileNotFoundError:

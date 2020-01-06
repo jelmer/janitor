@@ -87,10 +87,10 @@ def highlight_diff(diff):
 def htmlize_debdiff(debdiff):
     def highlight_wdiff(line):
         line = re.sub(
-            r'\[-%s(.*)-\]',
+            r'\[-(.*)-\]',
             r'<span style="color:red;font-weight:bold">\1</span>', line)
         line = re.sub(
-            r'\{\+%s(.*)\+\}',
+            r'\{\+(.*)\+\}',
             r'<span style="color:green;font-weight:bold">\1</span>', line)
         return line
     ret = []
