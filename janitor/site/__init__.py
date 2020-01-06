@@ -19,14 +19,12 @@ from aiohttp import ClientConnectorError
 from debian.deb822 import Changes
 from io import BytesIO
 from jinja2 import Environment, PackageLoader, select_autoescape
-import re
 import urllib.parse
 
 from janitor import (
     DEFAULT_BUILD_ARCH,
     )
 from janitor.build import changes_filename
-from janitor.debdiff import iter_sections
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
