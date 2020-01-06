@@ -19,8 +19,12 @@ import asyncio
 from io import BytesIO
 
 
+class DiffoscopeError(Exception):
+    """An error occurred while running diffoscope."""
+
+
 async def run_diffoscope(old_changes, new_changes, content_type):
-    args = ['diffoscope',]
+    args = ['diffoscope']
     args.extend({
         'application/json': ['--json=-'],
         'text/plain': ['--text=-'],
@@ -33,5 +37,7 @@ async def run_diffoscope(old_changes, new_changes, content_type):
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE)
-    stdout, stderr = await p.communicate()
+    stdout, stderr = await p.communicate(b'')
+    if p.returncode not in (0, 1):
+        raise DiffoscopeError(stderr)
     return stdout

@@ -30,6 +30,7 @@ from debian.deb822 import Changes
 from .aptly import Aptly, AptlyError
 from .debdiff import (
     run_debdiff,
+    DebdiffError,
     filter_boring,
     htmlize_debdiff,
     markdownify_debdiff,
@@ -132,7 +133,10 @@ async def handle_debdiff(request):
     with open(new_changes_path, 'r') as f:
         new_changes = Changes(f)
 
-    debdiff = await run_debdiff(old_changes_path, new_changes_path)
+    try:
+        debdiff = await run_debdiff(old_changes_path, new_changes_path)
+    except DebdiffError as e:
+        return web.Response(status=400, text=e.args[0])
     if 'filter_boring' in post:
         debdiff = filter_boring(
             debdiff.decode(), old_changes['Version'],

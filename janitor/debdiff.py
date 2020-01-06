@@ -112,13 +112,19 @@ def filter_boring(debdiff, old_version, new_version):
     return '\n'.join(lines)
 
 
+class DebdiffError(Exception):
+    """Error occurred while running debdiff."""
+
+
 async def run_debdiff(old_changes, new_changes):
     args = ['debdiff', old_changes, new_changes]
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE)
-    stdout, stderr = await p.communicate()
+    stdout, stderr = await p.communicate(b'')
+    if p.returncode not in (0, 1):
+        raise DebdiffError(stderr)
     return stdout
 
 
@@ -219,6 +225,3 @@ def htmlize_debdiff(debdiff):
             if ret[-1] == "<p>":
                 ret.pop(-1)
     return "\n".join(ret)
-
-
-
