@@ -434,7 +434,8 @@ class NewUpstreamPublisher(object):
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, local_branch_url,
-        dry_run=False, reviewers=None, possible_hosters=None,
+        dry_run=False, reviewers=None, require_binary_diff=False,
+        possible_hosters=None,
         possible_transports=None, allow_create_proposal=None):
 
     if command.startswith('new-upstream'):
@@ -515,6 +516,11 @@ def publish_one(
         else:
             raise
 
+    if debdiff is None and require_binary_diff:
+        raise PublishFailure(
+            description='Binary debdiff is not available. No control build?',
+            code='missing-binary-diff')
+
     try:
         publish_result = publish(
             suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
@@ -552,8 +558,8 @@ if __name__ == '__main__':
             request['command'], request['subworker_result'],
             request['main_branch_url'], request['mode'], request['log_id'],
             request['local_branch_url'], request['dry-run'],
-            request['reviewers'], possible_hosters=None,
-            possible_transports=None,
+            request['reviewers'], request['require-binary-diff'],
+            possible_hosters=None, possible_transports=None,
             allow_create_proposal=request['allow_create_proposal'])
     except PublishFailure as e:
         json.dump({'code': e.code, 'description': e.description}, sys.stdout)
