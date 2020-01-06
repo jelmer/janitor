@@ -248,9 +248,9 @@ async def handle_diff(request):
             status=400)
 
 
-async def handle_debdiff(request):
+async def handle_archive_diff(request):
     run_id = request.match_info['run_id']
-    kind = request.query.get('kind', 'debdiff')
+    kind = request.match_info['kind']
     async with request.app.db.acquire() as conn:
         run = await state.get_run(conn, run_id)
         if run is None:
@@ -577,9 +577,9 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         '/run/{run_id}', handle_run_post, name='api-run-update')
     app.router.add_get('/run/{run_id}/diff', handle_diff, name='api-run-diff')
     app.router.add_get(
-        '/run/{run_id}/debdiff',
-        handle_debdiff,
-        name='api-run-debdiff')
+        '/run/{run_id}/{kind:debdiff|diffoscope}',
+        handle_archive_diff,
+        name='api-run-archive-diff')
     app.router.add_get(
         '/pkg/{package}/run', handle_run, name='api-package-run-list')
     app.router.add_get(
@@ -591,9 +591,9 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         '/pkg/{package}/run/{run_id}/diff',
         handle_diff, name='api-package-run-diff')
     app.router.add_get(
-        '/pkg/{package}/run/{run_id}/debdiff',
-        handle_debdiff,
-        name='api-package-run-debdiff')
+        '/pkg/{package}/run/{run_id}/{kind:debdiff|diffoscope}',
+        handle_archive_diff,
+        name='api-package-run-archive-diff')
     app.router.add_get(
         '/package-branch', handle_package_branch, name='api-package-branch')
     app.router.add_get(
