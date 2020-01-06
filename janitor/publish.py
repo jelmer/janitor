@@ -33,6 +33,7 @@ import uuid
 from prometheus_client import (
     Counter,
     Gauge,
+    Histogram,
     push_to_gateway,
     REGISTRY,
 )
@@ -93,6 +94,8 @@ publish_ready_count = Gauge(
     labelnames=('review_status', 'publish_mode'))
 successful_push_count = Gauge(
     'successful_push_count', 'Number of successful pushes.')
+publish_latency = Histogram(
+    'publish_latency', 'Delay between build finish and publish.')
 
 
 class RateLimited(Exception):
@@ -427,6 +430,10 @@ async def publish_from_policy(
         # main branch URL
         pass
 
+    if code == 'success':
+        publish_delay = datetime.now() - run.times[1]
+        publish_latency.observe(publish_delay.total_seconds())
+
     topic_publish.publish(
         {'id': publish_id,
          'package': run.package,
@@ -438,8 +445,7 @@ async def publish_from_policy(
          'result_code': code,
          'result': run.result,
          'run_id': run.id,
-         'publish_delay': (
-             datetime.now() - run.times[1]).total_seconds()
+         'publish_delay': publish_delay.total_seconds(),
          })
 
     if code == 'success':
@@ -488,8 +494,6 @@ async def publish_and_store(
                 'suite': run.suite,
                 'main_branch_url': run.branch_url,
                 'result': run.result,
-                'publish_delay': (
-                    datetime.now() - run.times[1]).total_seconds(),
                 })
             return
 
@@ -506,6 +510,9 @@ async def publish_and_store(
             proposal_url if proposal_url else None,
             publish_id=publish_id)
 
+        publish_delay = run.times[1] - datetime.now()
+        publish_latency.observe(publish_delay.total_seconds())
+
         topic_publish.publish(
             {'id': publish_id,
              'package': run.package,
@@ -516,6 +523,7 @@ async def publish_and_store(
              'branch_name': branch_name,
              'result_code': 'success',
              'result': run.result,
+             'publish_delay': publish_delay.total_seconds(),
              'run_id': run.id})
 
 
