@@ -29,6 +29,7 @@ from debian.deb822 import Changes
 
 from .aptly import Aptly, AptlyError
 from .debdiff import run_debdiff, filter_boring
+from .diffoscope import run_diffoscope
 from .prometheus import setup_metrics
 from .trace import note
 
@@ -48,6 +49,16 @@ async def handle_upload(request):
             f.write(await part.read(decode=False))
     note('Uploaded files: %r', filenames)
     return web.Response(status=200, text='Uploaded files: %r.' % filenames)
+
+
+def find_changes_path(incoming_dir, archive_dir, suite, changes_filename):
+    for path in [
+            os.path.join(incoming_dir, changes_filename),
+            os.path.join(archive_dir, suite, changes_filename)]:
+        if os.path.exists(path):
+            return path
+    else:
+        return None
 
 
 async def handle_debdiff(request):
@@ -92,24 +103,20 @@ async def handle_debdiff(request):
 
     archive_path = request.app.archive_path
 
-    for path in [
-            os.path.join(request.app.incoming_dir, old_changes_filename),
-            os.path.join(archive_path, old_suite, old_changes_filename)]:
-        if os.path.exists(path):
-            old_changes_path = path
-            break
-    else:
+    old_changes_path = find_changes_path(
+            request.app.incoming_dir, archive_path, old_suite,
+            old_changes_filename)
+
+    if old_changes_path is None:
         return web.Response(
             status=404, text='Old changes file %s does not exist.' % (
                 old_changes_filename))
 
-    for path in [
-            os.path.join(request.app.incoming_dir, new_changes_filename),
-            os.path.join(archive_path, new_suite, new_changes_filename)]:
-        if os.path.exists(path):
-            new_changes_path = path
-            break
-    else:
+    new_changes_path = find_changes_path(
+            request.app.incoming_dir, archive_path, new_suite,
+            new_changes_filename)
+
+    if new_changes_path is None:
         return web.Response(
             status=404, text='New changes file %s does not exist.' % (
                 new_changes_filename))
@@ -125,6 +132,71 @@ async def handle_debdiff(request):
         debdiff = filter_boring(
             debdiff.decode(), old_changes['Version'],
             new_changes['Version']).encode()
+
+    return web.Response(body=debdiff, content_type='text/diff')
+
+
+async def handle_diffoscope(request):
+    post = await request.post()
+
+    old_suite = post.get('old_suite', 'unchanged')
+    if not suite_check.match(old_suite):
+        return web.Response(
+            status=400, text='Invalid old suite %s' % old_suite)
+
+    try:
+        new_suite = post['new_suite']
+    except KeyError:
+        return web.Response(
+            status=400, text='Missing argument: new_suite')
+
+    if not suite_check.match(new_suite):
+        return web.Response(
+            status=400, text='Invalid new suite %s' % new_suite)
+
+    try:
+        old_changes_filename = post['old_changes_filename']
+    except KeyError:
+        return web.Response(
+            status=400, text='Missing argument: old_changes_filename')
+
+    if '/' in old_changes_filename:
+        return web.Response(
+            status=400,
+            text='Invalid changes filename: %s' % old_changes_filename)
+
+    try:
+        new_changes_filename = post['new_changes_filename']
+    except KeyError:
+        return web.Response(
+            status=400, text='Missing argument: new_changes_filename')
+
+    if '/' in new_changes_filename:
+        return web.Response(
+            status=400,
+            text='Invalid changes filename: %s' % new_changes_filename)
+
+    archive_path = request.app.archive_path
+
+    old_changes_path = find_changes_path(
+            request.app.incoming_dir, archive_path, old_suite,
+            old_changes_filename)
+
+    if old_changes_path is None:
+        return web.Response(
+            status=404, text='Old changes file %s does not exist.' % (
+                old_changes_filename))
+
+    new_changes_path = find_changes_path(
+            request.app.incoming_dir, archive_path, new_suite,
+            new_changes_filename)
+
+    if new_changes_path is None:
+        return web.Response(
+            status=404, text='New changes file %s does not exist.' % (
+                new_changes_filename))
+
+    debdiff = await run_diffoscope(old_changes_path, new_changes_path)
 
     return web.Response(body=debdiff, content_type='text/diff')
 
@@ -155,6 +227,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir):
     setup_metrics(app)
     app.router.add_post('/', handle_upload, name='upload')
     app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
+    app.router.add_post('/diffoscope', handle_diffoscope, name='diffoscope')
     app.router.add_get(
         '/archive'
         '/{suite:[a-z0-9-]+}'
