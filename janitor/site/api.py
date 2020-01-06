@@ -8,7 +8,6 @@ from . import (
     env,
     highlight_diff,
     get_archive_diff,
-    htmlize_debdiff,
     DebdiffRetrievalError,
     )
 from ..schedule import do_schedule
