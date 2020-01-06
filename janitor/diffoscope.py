@@ -16,9 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-from io import BytesIO
+from io import BytesIO, StringIO
 import os
 import json
+import sys
 
 from breezy.patches import iter_hunks
 
@@ -82,25 +83,38 @@ def filter_irrelevant(diff):
     diff['source2'] = os.path.basename(diff['source2'])
 
 
-async def format_diffoscope(diffoscope_diff, content_type):
-    args = ['diffoscope']
-    args.extend({
-        'application/json': ['--json=-'],
-        'text/plain': ['--text=-'],
-        'text/html': ['--html=-'],
-        'text/markdown': ['--markdown=-'],
-    }[content_type])
-    args.extend(['-'])
-    stdout = BytesIO()
-    p = await asyncio.create_subprocess_exec(
-        *args, stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
-    stdout, stderr = await p.communicate(
-        json.dumps(diffoscope_diff).encode('utf-8'))
-    if p.returncode not in (0, 1):
-        raise DiffoscopeError(stderr.decode(errors='replace'))
-    return stdout
+async def format_diffoscope(root_difference, content_type):
+    if content_type == 'application/json':
+        return json.dumps(root_difference).encode('utf-8')
+    from diffoscope.readers.json import JSONReaderV1
+    root_difference = JSONReaderV1().load_rec(root_difference)
+    if content_type == 'text/html':
+        from diffoscope.presenters.html.html import HTMLPresenter
+        p = HTMLPresenter()
+        old_stdout = sys.stdout
+        sys.stdout = f = StringIO()
+        try:
+            p.output_html('-', root_difference)
+        finally:
+            sys.stdout = old_stdout
+        return f.getvalue().encode('utf-8')
+    if content_type == 'text/markdown':
+        from diffoscope.presenters.markdown import MarkdownTextPresenter
+        out = []
+        def printfn(t=''):
+            out.append(t+'\n')
+        p = MarkdownTextPresenter(printfn)
+        p.start(root_difference)
+        return ''.join(out).encode('utf-8')
+    if content_type == 'text/plain':
+        from diffoscope.presenters.text import TextPresenter
+        out = []
+        def printfn(t=''):
+            out.append(t+'\n')
+        p = TextPresenter(printfn, False)
+        p.start(root_difference)
+        return ''.join(out).encode('utf-8')
+    raise AssertionError('unknown content type %r' % content_type)
 
 
 async def run_diffoscope(old_changes, new_changes):
