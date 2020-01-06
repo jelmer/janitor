@@ -51,7 +51,9 @@ $(document).ready(function() {
 {% endif %}
 
 {% if revision and suite != 'unchanged' %}
-<li>Diff: <a href="/api/run/{{ run_id }}/diff">raw diff</a>, {% if debdiff %}<a href="/api/run/{{ run_id }}/debdiff?filter_boring=true">raw debdiff</a>{% else %}debdiff is not available{% endif %}</li>
+<li>Diff: <a href="/api/run/{{ run_id }}/diff">raw diff</a>,
+{% if debdiff %}<a href="/api/run/{{ run_id }}/debdiff?filter_boring=true">raw debdiff</a>{% else %}debdiff is not available{% endif %}</li>
+{% if debdiff %}<a href="/api/run/{{ run_id }}/diffoscope">diffoscope (unfiltered)</a>{% else %}diffoscope diff is not available{% endif %}</li>
 {% endif %}
 <!-- Command: {{ command }} -->
 </ul>
