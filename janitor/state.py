@@ -330,6 +330,7 @@ FROM
 WHERE
     suite = 'unchanged' AND revision = $1 AND
     build_version IS NOT NULL
+ORDER BY finish_time DESC
 """
     if isinstance(main_branch_revision, bytes):
         main_branch_revision = main_branch_revision.decode('utf-8')
