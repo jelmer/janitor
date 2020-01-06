@@ -85,6 +85,14 @@ def highlight_diff(diff):
 
 
 def htmlize_debdiff(debdiff):
+    def highlight_wdiff(line):
+        line = re.sub(
+            r'\[-%s(.*)-\]',
+            r'<span style="color:red;font-weight:bold">\1</span>', line)
+        line = re.sub(
+            r'\{\+%s(.*)\+\}',
+            r'<span style="color:green;font-weight:bold">\1</span>', line)
+        return line
     ret = []
     for title, lines in iter_sections(debdiff):
         if title:
@@ -101,7 +109,8 @@ def htmlize_debdiff(debdiff):
             if wdiff:
                 ret.append("<ul>")
                 ret.extend(
-                    ["<li>%s</li>" % line for line in lines if line.strip()])
+                    ["<li>%s</li>" % highlight_wdiff(line)
+                     for line in lines if line.strip()])
                 ret.append("</ul>")
             else:
                 ret.append("<pre>")
