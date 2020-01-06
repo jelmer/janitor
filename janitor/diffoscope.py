@@ -58,7 +58,7 @@ def filter_boring_detail(detail, old_version, new_version, display_version):
     return True
 
 
-def filter_boring(diff, old_version, new_version):
+def filter_boring(diff, old_version, new_version, old_suite, new_suite):
     display_version = new_version.rsplit('~', 1)[0]
     # Changes file differences
     BORING_FIELDS = ['Date', 'Distribution', 'Version']
