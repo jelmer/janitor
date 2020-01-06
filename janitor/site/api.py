@@ -270,7 +270,9 @@ async def handle_debdiff(request):
             request.app.http_client_session, request.app.archiver_url, run,
             unchanged_run, filter_boring=filter_boring)
     except FileNotFoundError:
-        raise web.HTTPNotFound(text='debdiff not calculated yet')
+        raise web.HTTPNotFound(
+            text='debdiff not calculated yet (run: %s, unchanged run: %s)' % (
+                run.id, unchanged_run.id))
     except DebdiffRetrievalError as e:
         return web.json_response(
             'unable to contact archiver for debdiff: %r' % e,
