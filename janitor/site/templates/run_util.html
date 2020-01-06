@@ -36,6 +36,8 @@ $(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/schedule', {{ data|tojson }}, function(data) {
       console.log('Scheduled: ' + data.offset);
       $("#{{ id }}").replaceWith("<span>Scheduled new run at position " + data.queue_position + ".</span>");
+      $('.queue-position.{{ package }}').replaceWith('<a href="/cupboard/queue">Queue</a> position: ' + data.queue_position);
+      $('.queue-position.{{ package }}').attr('style', '')
     }, 'json')
     .fail(function(response) {
       $("#{{ id }}").replaceWith("<span>Failed to schedule new run: " + response.responseText + "</span>");
