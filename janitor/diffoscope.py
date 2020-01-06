@@ -40,5 +40,5 @@ async def run_diffoscope(old_changes, new_changes, content_type):
         stderr=asyncio.subprocess.PIPE)
     stdout, stderr = await p.communicate(b'')
     if p.returncode not in (0, 1):
-        raise DiffoscopeError(stderr)
+        raise DiffoscopeError(stderr.decode(errors='replace'))
     return stdout
