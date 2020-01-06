@@ -514,8 +514,9 @@ def publish_one(
         % log_id)
     headers = {'Accept': 'text/plain'}
 
+    request = urllib.request.Request(debdiff_url, headers=headers)
     try:
-        with urllib.request.urlopen(debdiff_url, headers=headers) as f:
+        with urllib.request.urlopen(request) as f:
             debdiff = f.read()
     except urllib.error.HTTPError as e:
         if e.status == 404:
