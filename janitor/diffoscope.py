@@ -17,10 +17,23 @@
 
 import asyncio
 from io import BytesIO
+import os
+import json
 
 
 class DiffoscopeError(Exception):
     """An error occurred while running diffoscope."""
+
+
+async def filter_boring(diff_text, old_version, new_version):
+    return diff_text
+
+
+async def filter_irrelevant(diff_text):
+    diff = json.loads(diff_text)
+    diff['source1'] = os.path.basename(diff['source1'])
+    diff['source2'] = os.path.basename(diff['source2'])
+    return json.dumps(diff)
 
 
 async def format_diffoscope(diffoscope_diff, content_type):
@@ -37,7 +50,8 @@ async def format_diffoscope(diffoscope_diff, content_type):
         *args, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE)
-    stdout, stderr = await p.communicate(diffoscope_diff.encode('utf-8'))
+    stdout, stderr = await p.communicate(
+        json.dumps(diffoscope_diff).encode('utf-8'))
     if p.returncode not in (0, 1):
         raise DiffoscopeError(stderr.decode(errors='replace'))
     return stdout
@@ -54,4 +68,4 @@ async def run_diffoscope(old_changes, new_changes):
     stdout, stderr = await p.communicate(b'')
     if p.returncode not in (0, 1):
         raise DiffoscopeError(stderr.decode(errors='replace'))
-    return stdout.decode('utf-8')
+    return json.loads(stdout.decode('utf-8'))
