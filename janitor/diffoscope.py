@@ -26,7 +26,7 @@ async def run_diffoscope(old_changes, new_changes, content_type):
         'text/plain': ['--text=-'],
         'text/html': ['--html=-'],
         'text/markdown': ['--markdown=-'],
-    })
+    }[content_type])
 
     args.extend([old_changes, new_changes])
     stdout = BytesIO()
