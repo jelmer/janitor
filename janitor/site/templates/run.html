@@ -118,7 +118,7 @@ Multi-arch fixes.'
 
 {% if debdiff.split('\n')|length < 200 %}
 
-{{ htmlize_debdiff(debdiff)|safe }}
+{{ debdiff|safe }}
 
 {% else %}
 <p>Debdiff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/debdiff?filter_boring=1">raw debdiff</a>.</p>

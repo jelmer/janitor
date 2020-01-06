@@ -267,9 +267,10 @@ async def handle_debdiff(request):
     filter_boring = ('filter_boring' in request.query)
 
     try:
-        debdiff = await get_archive_diff(
+        debdiff, content_type = await get_archive_diff(
             request.app.http_client_session, request.app.archiver_url, run,
-            unchanged_run, kind=kind, filter_boring=filter_boring)
+            unchanged_run, kind=kind, filter_boring=filter_boring,
+            accept=request.headers.get('ACCEPT', '*/*'))
     except FileNotFoundError:
         raise web.HTTPNotFound(
             text='debdiff not calculated yet (run: %s, unchanged run: %s)' % (
@@ -279,20 +280,10 @@ async def handle_debdiff(request):
             'unable to contact archiver for debdiff: %r' % e,
             status=400)
 
-    for accept in request.headers.get('ACCEPT', '*/*').split(','):
-        if accept in ('text/x-diff', 'text/plain', '*/*'):
-            return web.Response(
-                body=debdiff,
-                content_type='text/x-diff',
-                headers={'Cache-Control': 'max-age=3600'})
-        if accept == 'text/html':
-            return web.Response(
-                text=htmlize_debdiff(debdiff.decode('utf-8', 'replace')),
-                content_type='text/html',
-                headers={'Cache-Control': 'max-age=3600'})
-    raise web.HTTPNotAcceptable(
-        text='Acceptable content types: '
-             'text/html, text/x-diff')
+    return web.Response(
+        body=debdiff,
+        content_type=content_type,
+        headers={'Cache-Control': 'max-age=3600'})
 
 
 async def handle_run_post(request):

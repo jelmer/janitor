@@ -113,9 +113,9 @@ async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
         if not unchanged_run or not unchanged_run.build_version:
             return ''
         try:
-            debdiff = await get_archive_diff(
+            debdiff, content_type = await get_archive_diff(
                 client, archiver_url, run, unchanged_run,
-                kind='debdiff', filter_boring=True)
+                kind='debdiff', filter_boring=True, accept='text/html')
             return debdiff.decode('utf-8', 'replace')
         except FileNotFoundError:
             return ''
