@@ -6,7 +6,7 @@ import urllib.parse
 from janitor import state
 from janitor.site import (
     env,
-    get_debdiff,
+    get_archive_diff,
     get_vcs_type,
     DebdiffRetrievalError,
     )
@@ -113,9 +113,9 @@ async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
         if not unchanged_run or not unchanged_run.build_version:
             return ''
         try:
-            debdiff = await get_debdiff(
+            debdiff = await get_archive_diff(
                 client, archiver_url, run, unchanged_run,
-                filter_boring=True)
+                kind='debdiff', filter_boring=True)
             return debdiff.decode('utf-8', 'replace')
         except FileNotFoundError:
             return ''

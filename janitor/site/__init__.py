@@ -171,13 +171,15 @@ class DebdiffRetrievalError(Exception):
     """Error occurred while retrieving debdiff."""
 
 
-async def get_debdiff(client, archiver_url, run, unchanged_run,
-                      filter_boring=False):
+async def get_archive_diff(client, archiver_url, run, unchanged_run,
+                           kind, filter_boring=False):
     if unchanged_run.build_version is None:
         raise DebdiffRetrievalError('unchanged run not built')
     if run.build_version is None:
         raise DebdiffRetrievalError('run not built')
-    url = urllib.parse.urljoin(archiver_url, 'debdiff')
+    if kind not in ('debdiff', 'diffoscope'):
+        raise DebdiffRetrievalError('invalid diff kind %r' % kind)
+    url = urllib.parse.urljoin(archiver_url, kind)
     payload = {
         'old_suite': 'unchanged',
         'new_suite': run.suite,

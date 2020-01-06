@@ -6,7 +6,7 @@ import urllib.parse
 from janitor import state
 from janitor.site import (
     env,
-    get_debdiff,
+    get_archive_diff,
     htmlize_debdiff,
     DebdiffRetrievalError,
     )
@@ -46,8 +46,9 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         if unchanged_run is None:
             return '<p>No control run</p>'
         try:
-            text = await get_debdiff(
-                client, archiver_url, run, unchanged_run, filter_boring=True)
+            text = await get_archive_diff(
+                client, archiver_url, run, unchanged_run,
+                kind='debdiff', filter_boring=True)
             return htmlize_debdiff(text.decode('utf-8', 'replace'))
         except DebdiffRetrievalError as e:
             return 'Unable to retrieve debdiff: %r' % e
