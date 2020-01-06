@@ -7,7 +7,6 @@ from janitor import state
 from janitor.site import (
     env,
     get_archive_diff,
-    htmlize_debdiff,
     DebdiffRetrievalError,
     )
 
@@ -48,8 +47,8 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         try:
             text = await get_archive_diff(
                 client, archiver_url, run, unchanged_run,
-                kind='debdiff', filter_boring=True)
-            return htmlize_debdiff(text.decode('utf-8', 'replace'))
+                kind='debdiff', filter_boring=True, accept='text/html')
+            return text.decode('utf-8', 'replace')
         except DebdiffRetrievalError as e:
             return 'Unable to retrieve debdiff: %r' % e
         except FileNotFoundError:

@@ -28,7 +28,12 @@ from aiohttp import web
 from debian.deb822 import Changes
 
 from .aptly import Aptly, AptlyError
-from .debdiff import run_debdiff, filter_boring
+from .debdiff import (
+    run_debdiff,
+    filter_boring,
+    htmlize_debdiff,
+    markdownify_debdiff,
+    )
 from .diffoscope import run_diffoscope
 from .prometheus import setup_metrics
 from .trace import note
@@ -133,7 +138,22 @@ async def handle_debdiff(request):
             debdiff.decode(), old_changes['Version'],
             new_changes['Version']).encode()
 
-    return web.Response(body=debdiff, content_type='text/diff')
+    for accept in request.headers.get('ACCEPT', '*/*').split(','):
+        if accept in ('text/x-diff', 'text/plain', '*/*'):
+            return web.Response(
+                body=debdiff,
+                content_type='text/plain')
+        if accept == 'text/markdown':
+            return web.Response(
+                text=markdownify_debdiff(debdiff.decode('utf-8', 'replace')),
+                content_type='text/markdown')
+        if accept == 'text/html':
+            return web.Response(
+                text=htmlize_debdiff(debdiff.decode('utf-8', 'replace')),
+                content_type='text/html')
+    raise web.HTTPNotAcceptable(
+        text='Acceptable content types: '
+             'text/html, text/plain, text/markdown')
 
 
 async def handle_diffoscope(request):

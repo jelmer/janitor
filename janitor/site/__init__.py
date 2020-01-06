@@ -84,62 +84,12 @@ def highlight_diff(diff):
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
-def htmlize_debdiff(debdiff):
-    def highlight_wdiff(line):
-        line = re.sub(
-            r'\[-(.*)-\]',
-            r'<span style="color:red;font-weight:bold">\1</span>', line)
-        line = re.sub(
-            r'\{\+(.*)\+\}',
-            r'<span style="color:green;font-weight:bold">\1</span>', line)
-        return line
-    ret = []
-    for title, lines in iter_sections(debdiff):
-        if title:
-            ret.append("<h4>%s</h4>" % title)
-            if re.match(
-                    r'Control files of package .*: lines which differ '
-                    r'\(wdiff format\)',
-                    title):
-                wdiff = True
-            elif title == 'Control files: lines which differ (wdiff format)':
-                wdiff = True
-            else:
-                wdiff = False
-            if wdiff:
-                ret.append("<ul>")
-                ret.extend(
-                    ["<li>%s</li>" % highlight_wdiff(line)
-                     for line in lines if line.strip()])
-                ret.append("</ul>")
-            else:
-                ret.append("<pre>")
-                ret.extend(lines)
-                ret.append("</pre>")
-        else:
-            ret.append("<p>")
-            for line in lines:
-                if line.strip():
-                    line = re.sub(
-                        '^(No differences were encountered between the '
-                        'control files of package) (.*)$',
-                        '\\1 <b>\\2</b>', line)
-                    ret.append(line)
-                else:
-                    ret.append("</p>")
-                    ret.append("<p>")
-            if ret[-1] == "<p>":
-                ret.pop(-1)
-    return "\n".join(ret)
-
-
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
 env.globals.update(cache_url_git=CACHE_URL_GIT)
 env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 env.globals.update(enumerate=enumerate)
 env.globals.update(highlight_diff=highlight_diff)
-env.globals.update(htmlize_debdiff=htmlize_debdiff)
 
 
 def run_changes_filename(run):
@@ -172,7 +122,7 @@ class DebdiffRetrievalError(Exception):
 
 
 async def get_archive_diff(client, archiver_url, run, unchanged_run,
-                           kind, filter_boring=False):
+                           kind, accept=None, filter_boring=False):
     if unchanged_run.build_version is None:
         raise DebdiffRetrievalError('unchanged run not built')
     if run.build_version is None:
@@ -188,10 +138,16 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
     }
     if filter_boring:
         payload["filter_boring"] = "yes"
+    headers = {}
+    if accept:
+        headers['Accept'] = (
+            ', '.join(accept)
+            if isinstance(accept, list)
+            else accept)
     try:
-        async with client.post(url, data=payload) as resp:
+        async with client.post(url, data=payload, headers=headers) as resp:
             if resp.status == 200:
-                return await resp.read()
+                return await resp.read(), resp.content_type
             elif resp.status == 404:
                 raise FileNotFoundError
             else:
