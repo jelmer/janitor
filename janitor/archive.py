@@ -196,9 +196,29 @@ async def handle_diffoscope(request):
             status=404, text='New changes file %s does not exist.' % (
                 new_changes_filename))
 
-    debdiff = await run_diffoscope(old_changes_path, new_changes_path)
+    for accept in request.headers.get('ACCEPT', '*/*').split(','):
+        if accept in ('text/plain', '*/*'):
+            content_type = 'text/plain'
+            break
+        elif accept in ('text/html', ):
+            content_type = 'text/html'
+            break
+        elif accept in ('application/json', ):
+            content_type = 'application/json'
+            break
+        elif accept in ('text/markdown', ):
+            content_type = 'text/markdown'
+            break
+    else:
+        raise web.HTTPNotAcceptable(
+            text='Acceptable content types: '
+                 'text/html, text/plain, application/json, '
+                 'application/markdown')
 
-    return web.Response(body=debdiff, content_type='text/diff')
+    debdiff = await run_diffoscope(
+        old_changes_path, new_changes_path, content_type=content_type)
+
+    return web.Response(body=debdiff, content_type=content_type)
 
 
 async def handle_archive_file(request):
