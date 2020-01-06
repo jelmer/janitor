@@ -463,7 +463,7 @@ async def publish_and_store(
                 run.suite, run.package, run.command, run.result,
                 run.branch_url, mode, run.id, maintainer_email, vcs_manager,
                 run.branch_name, dry_run=dry_run,
-                require_binary_diff=args.require_binary_diff,
+                require_binary_diff=require_binary_diff,
                 possible_hosters=None, possible_transports=None,
                 reviewers=reviewers,
                 allow_create_proposal=allow_create_proposal,

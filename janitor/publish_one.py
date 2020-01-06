@@ -62,6 +62,11 @@ MODE_PUSH_DERIVED = 'push-derived'
 MODE_PROPOSE = 'propose'
 MODE_ATTEMPT_PUSH = 'attempt-push'
 
+# Maximum number of lines of debdiff to inline in the merge request
+# description. If this threshold is reached, we'll just include a link to the
+# debdiff.
+DEBDIFF_INLINE_THRESHOLD = 40
+
 
 JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot
@@ -172,7 +177,7 @@ def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff):
     if not debdiff_is_empty(debdiff):
         blurb = (
             NO_DEBDIFF_BLURB_MD if format == 'markdown' else NO_DEBDIFF_BLURB)
-    elif len(debdiff.splitlines(False)) < 20:
+    elif len(debdiff.splitlines(False)) < DEBDIFF_INLINE_THRESHOLD:
         blurb = (
             DEBDIFF_BLURB_MD if format == 'markdown' else DEBDIFF_BLURB)
     else:
