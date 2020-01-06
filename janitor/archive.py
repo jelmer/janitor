@@ -262,7 +262,7 @@ async def handle_diffoscope(request):
 
     debdiff = await format_diffoscope(diffoscope_diff, content_type)
 
-    return web.Response(body=debdiff, content_type=content_type)
+    return web.Response(text=debdiff, content_type=content_type)
 
 
 async def handle_archive_file(request):
