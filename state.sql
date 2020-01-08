@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    status merge_proposal_status NULL DEFAULT NULL,
    revision text,
    merged_by text,
+   merged_at timestamp,
    foreign key (package) references package(name),
    primary key(url)
 );

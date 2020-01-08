@@ -759,13 +759,18 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                 merged_by = mp.get_merged_by()
             except (NotImplementedError, AttributeError):
                 merged_by = None
+            try:
+                merged_at = mp.get_merged_at()
+            except (NotImplementedError, AttributeError):
+                merged_at = None
         else:
             merged_by = None
+            merged_at = None
         await state.set_proposal_info(
-            conn, mp.url, status, revision, package_name, merged_by)
+            conn, mp.url, status, revision, package_name, merged_by, merged_at)
         topic_merge_proposal.publish(
            {'url': mp.url, 'status': status, 'package': package_name,
-            'merged_by': merged_by})
+            'merged_by': merged_by, 'merged_at': merged_at})
 
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
