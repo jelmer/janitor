@@ -1321,7 +1321,7 @@ SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
    WHERE
     l.suite = 'lintian-fixes' AND
     u.suite = 'unchanged' AND
-    l.result_code NOT IN ('success', 'nothing-to-do') AND
+    l.result_code NOT IN ('success', 'nothing-to-do', 'nothing-new-to-do') AND
     u.result_code = 'success'
 """
     return await conn.fetch(query)
