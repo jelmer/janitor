@@ -746,17 +746,21 @@ def process_package(vcs_url, env, command, output_directory,
                 # runs.
                 tree_set_changelog_version(
                     ws.local_tree, last_build_version, subpath=subpath)
+
+            source_date_epoch = ws.local_tree.branch.repository.get_revision(
+                ws.main_branch.last_revision()).timestamp
             try:
                 if not build_suffix:
                     (changes_name, cl_version) = build_once(
                         ws.local_tree, build_distribution, output_directory,
-                        build_command, subpath=subpath)
+                        build_command, subpath=subpath,
+                        source_date_epoch=source_date_epoch)
                 else:
                     (changes_name, cl_version) = build_incrementally(
                         ws.local_tree, '~' + build_suffix,
                         build_distribution, output_directory,
                         build_command, committer=env.get('COMMITTER'),
-                        subpath=subpath)
+                        subpath=subpath, source_date_epoch=source_date_epoch)
             except MissingUpstreamTarball:
                 raise WorkerFailure(
                     'build-missing-upstream-source',
