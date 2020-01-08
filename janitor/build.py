@@ -75,7 +75,7 @@ def get_latest_changelog_version(local_tree, subpath=''):
 
 
 def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
-          distribution=None, subpath=''):
+          distribution=None, subpath='', source_date_epoch=None):
     args = ['brz', 'builddeb', '--builder=%s' % build_command]
     if result_dir:
         args.append('--result-dir=%s' % result_dir)
@@ -84,6 +84,8 @@ def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
     env = dict(os.environ.items())
     if distribution is not None:
         env['DISTRIBUTION'] = distribution
+    if source_date_epoch is not None:
+        env['SOURCE_DATE_EPOCH'] = '%d' % source_date_epoch
     note('Building debian packages, running %r.', build_command)
     try:
         subprocess.check_call(
@@ -95,13 +97,13 @@ def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
 
 def build_once(
         local_tree, build_suite, output_directory, build_command,
-        subpath=''):
+        subpath='', source_date_epoch=None):
     build_log_path = os.path.join(output_directory, 'build.log')
     try:
         with open(build_log_path, 'w') as f:
             build(local_tree, outf=f, build_command=build_command,
                   result_dir=output_directory, distribution=build_suite,
-                  subpath=subpath)
+                  subpath=subpath, source_date_epoch=source_date_epoch)
     except BuildFailedError:
         with open(build_log_path, 'rb') as f:
             raise worker_failure_from_sbuild_log(f)
@@ -119,9 +121,10 @@ def build_once(
 def attempt_build(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
-        subpath=''):
+        subpath='', source_date_epoch=None):
     add_dummy_changelog_entry(
         local_tree.abspath(subpath), suffix, build_suite,
         build_changelog_entry)
     return build_once(
-        local_tree, build_suite, output_directory, build_command, subpath)
+        local_tree, build_suite, output_directory, build_command, subpath,
+        source_date_epoch=source_date_epoch)

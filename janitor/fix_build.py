@@ -669,13 +669,14 @@ def build_incrementally(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
         committer=None, max_iterations=DEFAULT_MAX_ITERATIONS,
-        subpath=''):
+        subpath='', source_date_epoch=None):
     fixed_errors = []
     while True:
         try:
             return attempt_build(
                 local_tree, suffix, build_suite, output_directory,
-                build_command, build_changelog_entry, subpath=subpath)
+                build_command, build_changelog_entry, subpath=subpath,
+                source_date_epoch=source_date_epoch)
         except SbuildFailure as e:
             if e.error is None:
                 warning('Build failed with unidentified error. Giving up.')
