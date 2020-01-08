@@ -16,13 +16,14 @@
 <script type="text/javascript">
 function loadRun(package, run_id) {
     $('#diff').load('/api/run/' + run_id + '/diff');
-    $('#debdiff').load('/api/run/' + run_id + '/debdiff',
-	{'filter_boring': '1'},
+    $('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
+        undefined,
         function(responseText, textStatus, XMLHttpRequest) {
-	     if (XMLHttpRequest.status == 404) {
-   	         $('#debdiff').html('<p>No debdiff generated</p>');
-	     }
-    });
+             if (XMLHttpRequest.status == 404) {
+                  $('#debdiff').html('<p>No debdiff generated</p>');
+             }
+        }
+    );
     $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
     $('#run-id').attr('value', run_id);
 }
