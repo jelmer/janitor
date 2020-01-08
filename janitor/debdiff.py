@@ -54,10 +54,10 @@ def filter_boring_wdiff(line, old_version, new_version):
     if field == 'Version':
         return None
     line = re.sub(
-        r'\[-%s(.*)-\] \{\+%s\1\+\}' % (
+        r'\[-%s(.*?)-\] \{\+%s\1\+\}' % (
             re.escape(old_version), re.escape(new_version)),
         '', line)
-    if not re.findall(r'\[-.*-\] \{\+.*\+\}', line):
+    if not re.findall(r'\[-.*?-\] \{\+.*?\+\}', line):
         return None
     return line
 
@@ -170,7 +170,7 @@ def markdownify_debdiff(debdiff):
                     line = re.sub(
                         '^(No differences were encountered between the '
                         'control files of package) (.*)$',
-                        r'\1 \*\2\*', line)
+                        r'\1 \*\*\2\*\*', line)
                     ret.append(line)
                 else:
                     ret.append("")
@@ -182,10 +182,10 @@ def markdownify_debdiff(debdiff):
 def htmlize_debdiff(debdiff):
     def highlight_wdiff(line):
         line = re.sub(
-            r'\[-(.*)-\]',
+            r'\[-(.*?)-\]',
             r'<span style="color:red;font-weight:bold">\1</span>', line)
         line = re.sub(
-            r'\{\+(.*)\+\}',
+            r'\{\+(.*?)\+\}',
             r'<span style="color:green;font-weight:bold">\1</span>', line)
         return line
     ret = []
