@@ -137,6 +137,18 @@ These changes have no impact on the [binary debdiff](
 https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1).
 """
 
+DIFFOSCOPE_LINK_BLURB_MD = """
+You can also view the [diffoscope diff](
+https://janitor.debian.net/api/run/%(log_id)s/diffoscope?filter_boring=1)
+([unfiltered](https://janitor.debian.net/api/run/%(log_id)s/diffoscope)).
+"""
+
+DIFFOSCOPE_LINK_BLURB = """
+You can also view the diffoscope diff at
+https://janitor.debian.net/api/run/%(log_id)s/diffoscope?filter_boring=1,
+or unfiltered at https://janitor.debian.net/api/run/%(log_id)s/diffoscope.
+"""
+
 
 class PublishFailure(Exception):
 
@@ -190,6 +202,18 @@ def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff):
         'suite': suite,
         'debdiff': debdiff,
         'debdiff_md': markdownify_debdiff(debdiff)
+        })
+    return text
+
+
+def add_diffoscope_blurb(format, text, pkg, log_id, suite):
+    blurb = (
+       DIFFOSCOPE_LINK_BLURB_MD
+       if format == 'markdown' else DIFFOSCOPE_LINK_BLURB)
+    text += '\n' + (blurb % {
+        'package': pkg,
+        'log_id': log_id,
+        'suite': suite,
         })
     return text
 
@@ -293,6 +317,8 @@ def publish(
             description = add_debdiff_blurb(
                 description_format, description, pkg, log_id, suite,
                 debdiff.decode('utf-8', 'replace'))
+            description = add_diffoscope_blurb(
+                description_format, description, pkg, log_id, suite)
         return description
 
     def get_proposal_commit_message(existing_proposal):
