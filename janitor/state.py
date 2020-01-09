@@ -808,7 +808,7 @@ last_runs"""
     return await conn.fetch(query, *args)
 
 
-async def iter_last_runs(conn, result_code, suite=None):
+async def iter_last_runs(conn, result_code=None, suite=None, main_branch_revision=None):
     query = """
 SELECT
   id,
@@ -831,12 +831,20 @@ SELECT
   logfilenames,
   review_status
 FROM last_runs
-WHERE result_code = $1
 """
-    args = [result_code]
+    where = []
+    args = []
+    if result_code is not None:
+        args.append(result_code)
+        where.append('result_code = $%d' % len(args))
     if suite:
         args.append(suite)
-        query += " AND suite = $2"
+        where.append("suite = $%d" % len(args))
+    if main_branch_revision:
+        args.append(main_branch_revision)
+        where.append("main_branch_revision = $%d" % len(args))
+    if where:
+        query += " WHERE " + " AND ".join(where)
     query += " ORDER BY start_time DESC"
     async with conn.transaction():
         async for row in conn.cursor(query, *args):
