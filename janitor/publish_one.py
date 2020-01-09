@@ -550,7 +550,8 @@ def publish_one(
         else:
             raise
 
-    if debdiff is None and require_binary_diff:
+    if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
+            debdiff is None and require_binary_diff):
         raise PublishFailure(
             description='Binary debdiff is not available. No control build?',
             code='missing-binary-diff')
