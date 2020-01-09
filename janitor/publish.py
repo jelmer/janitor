@@ -891,6 +891,17 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
 async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                            topic_publish, topic_merge_proposal, dry_run=False,
                            require_binary_diff=False):
+    async def process_run(conn, run, package):
+        mode, update_changelog, command = (
+            await state.get_publish_policy(
+                conn, run.package, run.suite))
+        await publish_from_policy(
+            conn, rate_limiter, vcs_manager,
+            run, package.maintainer_email, package.uploader_emails,
+            package.branch_url,
+            topic_publish, topic_merge_proposal, mode,
+            update_changelog, command, dry_run=dry_run,
+            require_binary_diff=require_binary_diff)
     from aiohttp.client import ClientSession
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')
@@ -902,16 +913,15 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                 # TODO(jelmer): Fold these into a single query ?
                 package = await state.get_package(conn, result['package'])
                 run = await state.get_run(conn, result['log_id'])
-                mode, update_changelog, command = (
-                    await state.get_publish_policy(
-                        conn, run.package, run.suite))
-                await publish_from_policy(
-                    conn, rate_limiter, vcs_manager,
-                    run, package.maintainer_email, package.uploader_emails,
-                    package.branch_url,
-                    topic_publish, topic_merge_proposal, mode,
-                    update_changelog, command, dry_run=dry_run,
-                    require_binary_diff=require_binary_diff)
+                if run.suite != 'unchanged':
+                    await process_run(conn, run, package)
+                else:
+                    for run in await state.iter_last_runs(
+                            main_branch_revision=run.revision):
+                        if run.package != package.name:
+                            continue
+                        if run.suite != 'unchanged':
+                            await process_run(conn, run, package)
 
 
 def main(argv=None):
