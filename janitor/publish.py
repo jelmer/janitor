@@ -30,6 +30,8 @@ import sys
 import time
 import uuid
 
+from lintian_brush.vcs import determine_browser_url
+
 from prometheus_client import (
     Counter,
     Gauge,
@@ -434,19 +436,24 @@ async def publish_from_policy(
         publish_delay = datetime.now() - run.times[1]
         publish_latency.observe(publish_delay.total_seconds())
 
-    topic_publish.publish(
-        {'id': publish_id,
+    topic_entry = {
+        'id': publish_id,
          'package': run.package,
          'suite': run.suite,
          'proposal_url': proposal_url or None,
          'mode': mode,
          'main_branch_url': main_branch_url,
+         'main_branch_browse_url': determine_browser_url(
+             None, main_branch_url),
          'branch_name': branch_name,
          'result_code': code,
          'result': run.result,
          'run_id': run.id,
-         'publish_delay': publish_delay.total_seconds(),
-         })
+         'publish_delay': (
+             publish_delay.total_seconds() if publish_delay else None)
+         }
+
+    topic_publish.publish(topic_entry)
 
     if code == 'success':
         return mode
@@ -493,6 +500,8 @@ async def publish_and_store(
                 'package': run.package,
                 'suite': run.suite,
                 'main_branch_url': run.branch_url,
+                'main_branch_browse_url': determine_browser_url(
+                     None, run.branch_url),
                 'result': run.result,
                 })
             return
@@ -520,6 +529,8 @@ async def publish_and_store(
              'proposal_url': proposal_url or None,
              'mode': mode,
              'main_branch_url': run.branch_url,
+             'main_branch_browse_url': determine_browser_url(
+                 None, run.branch_url),
              'branch_name': branch_name,
              'result_code': 'success',
              'result': run.result,
