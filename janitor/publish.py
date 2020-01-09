@@ -435,6 +435,8 @@ async def publish_from_policy(
     if code == 'success':
         publish_delay = datetime.now() - run.times[1]
         publish_latency.observe(publish_delay.total_seconds())
+    else:
+        publish_delay = None
 
     topic_entry = {
         'id': publish_id,
@@ -659,7 +661,7 @@ async def bzr_backend(request):
     if not os.path.exists(full_path):
         raise web.HTTPNotFound()
     if not os.path.isfile(full_path):
-        raise web.Response(body=b'This is a directory.')
+        return web.Response(body=b'This is a directory.')
     return web.FileResponse(full_path)
 
 
