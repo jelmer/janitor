@@ -86,8 +86,10 @@ async def main(args):
             if (msg[0] == 'publish' and
                     msg[1]['mode'] == 'push' and
                     msg[1]['result_code'] == 'success'):
+                url = (msg[1]['main_branch_browse_url'] or
+                       msg[1]['main_branch_url'])
                 await notifier.notify_pushed(
-                    msg[1]['main_branch_url'], msg[1]['package'],
+                    url, msg[1]['package'],
                     msg[1]['suite'], msg[1]['result'])
 
 
