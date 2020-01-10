@@ -328,7 +328,8 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                     publish_mode, update_changelog, command,
                     possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run,
-                    require_binary_diff=require_binary_diff)
+                    require_binary_diff=require_binary_diff,
+                    force=False)
             if actual_mode == MODE_PUSH and push_limit is not None:
                 push_limit -= 1
 
@@ -340,7 +341,8 @@ async def publish_from_policy(
         conn, rate_limiter, vcs_manager, run, maintainer_email,
         uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
         mode, update_changelog, command, possible_hosters=None,
-        possible_transports=None, dry_run=False, require_binary_diff=False):
+        possible_transports=None, dry_run=False, require_binary_diff=False,
+        force=False):
     from .schedule import full_command, estimate_duration, do_schedule
     if not command:
         warning('no command set for %s', run.id)
@@ -362,7 +364,7 @@ async def publish_from_policy(
     publish_id = str(uuid.uuid4())
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
         return
-    if await state.already_published(
+    if not force and await state.already_published(
             conn, run.package, run.branch_name, run.revision, mode):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
@@ -903,7 +905,8 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
             package.branch_url,
             topic_publish, topic_merge_proposal, mode,
             update_changelog, command, dry_run=dry_run,
-            require_binary_diff=require_binary_diff)
+            require_binary_diff=require_binary_diff,
+            force=True)
     from aiohttp.client import ClientSession
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')
