@@ -528,10 +528,10 @@ def fix_missing_xml_entity(tree, error, context, committer=None):
 
 
 def fix_missing_library(tree, error, context, committer=None):
-    paths = [os.path.join('/usr/lib/lib%s.so' % error.library),
-             os.path.join('/usr/lib/.*/lib%s.so' % error.library),
-             os.path.join('/usr/lib/lib%s.a' % error.library),
-             os.path.join('/usr/lib/.*/lib%s.a' % error.library)]
+    paths = [os.path.join('/usr/lib/lib%s.so$' % error.library),
+             os.path.join('/usr/lib/.*/lib%s.so$' % error.library),
+             os.path.join('/usr/lib/lib%s.a$' % error.library),
+             os.path.join('/usr/lib/.*/lib%s.a$' % error.library)]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
         warning('no package for library %s', error.library)
