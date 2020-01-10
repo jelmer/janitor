@@ -30,7 +30,7 @@ function loadRun(package, run_id) {
 
 var todo = {{ todo|tojson }};
 var queued = new Set();
-todo.forEach(function(entry) { queued.add(entry[0]); });
+todo.forEach(function(entry) { queued.add(entry[1]); });
 
 $(function() {
   loadRun('{{ package_name }}', '{{ run_id }}');
