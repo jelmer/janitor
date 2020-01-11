@@ -43,13 +43,13 @@ def filter_boring_udiff(udiff, old_version, new_version, display_version):
     newlines = []
     for hunk in iter_hunks(lines, allow_dirty=False):
         for line in hunk.lines:
-            if isinstance(hunk, RemoveLine):
+            if isinstance(line, RemoveLine):
                 line.contents = line.contents.replace(old_version, display_version)
                 oldlines.append(line.contents)
-            elif isinstance(hunk, InsertLine):
+            elif isinstance(line, InsertLine):
                 line.contents = line.contents.replace(new_version, display_version)
                 newlines.append(line.contents)
-            elif isinstance(hunk, ContextLine):
+            elif isinstance(line, ContextLine):
                 oldlines.append(line.contents)
                 newlines.append(line.contents)
         hunks.append(hunk)
@@ -69,10 +69,10 @@ def filter_boring_detail(detail, old_version, new_version, display_version):
         for subdetail in list(detail['details']):
             if not filter_boring_detail(
                     subdetail, old_version, new_version, display_version):
+                del detail['details'][i]
                 continue
             i += 1
     if not detail.get('unified_diff') and not detail.get('details'):
-        detail.clear()
         return False
     return True
 
@@ -93,6 +93,7 @@ def filter_boring(diff, old_version, new_version, old_suite, new_suite):
             continue
         if not filter_boring_detail(
                 detail, old_version, new_version, display_version):
+            del diff['details'][i]
             continue
         i += 1
 
