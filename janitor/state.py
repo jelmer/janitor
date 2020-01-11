@@ -799,7 +799,7 @@ ORDER BY package, command, start_time DESC
 async def stats_by_result_codes(conn, suite=None):
     query = """\
 select (
-    case when result_code = 'nothing-to-do' then 'success'
+    case when result_code = 'nothing-new-to-do' then 'success'
     else result_code end), count(result_code) from last_runs
 """
     args = []
