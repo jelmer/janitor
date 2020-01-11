@@ -11,6 +11,16 @@ from janitor.site import (
     )
 
 
+async def generate_rejected(conn, suite=None):
+    entries = [
+        entry async for entry in
+        state.iter_publish_ready(
+            conn, review_status=['rejected'], suite=suite)]
+    template = env.get_template('rejected.html')
+    kwargs = {'entries': entries, 'suite': suite}
+    return await template.render_async(**kwargs)
+
+
 async def generate_review(conn, client, archiver_url, publisher_url,
                           suite=None):
     entries = [entry async for entry in
