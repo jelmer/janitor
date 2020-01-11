@@ -76,7 +76,6 @@ async def main(args):
         notifier.connect(args.server, tls=True, tls_verify=False), loop=loop)
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
-            print(msg)
             if msg[0] == 'merge-proposal' and msg[1]['status'] == 'merged':
                 await notifier.notify_merged(
                     msg[1]['url'], msg[1].get('package'),

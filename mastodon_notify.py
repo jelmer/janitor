@@ -37,7 +37,6 @@ async def main(args, mastodon):
     notifier = MastodonNotifier(mastodon)
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
-            print(msg)
             if msg[0] == 'merge-proposal' and msg[1]['status'] == 'merged':
                 await notifier.notify_merged(
                     msg[1]['url'], msg[1].get('package'),
