@@ -36,7 +36,10 @@ from lintian_brush.control import (
     get_debhelper_compat_version,
     update_control,
     )
-from lintian_brush.reformatting import FormattingUnpreservable
+from lintian_brush.reformatting import (
+    FormattingUnpreservable,
+    GeneratedFile,
+    )
 from lintian_brush.rules import (
     dh_invoke_add_with,
     update_rules,
@@ -660,7 +663,11 @@ def resolve_error(tree, error, context, committer=None, subpath=''):
         raise NotImplementedError
     for error_cls, fixer in FIXERS:
         if isinstance(error, error_cls):
-            return fixer(tree, error, context, committer)
+            try:
+                return fixer(tree, error, context, committer)
+            except GeneratedFile:
+                warning('Control file is generated, unable to edit.')
+                return False
     warning('No fixer found for %r', error)
     return False
 
