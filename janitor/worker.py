@@ -232,7 +232,7 @@ class OrphanWorker(SubWorker):
         subparser = argparse.ArgumentParser(
             prog='orphan', parents=[common_parser])
         from silver_platter.debian.orphan import OrphanChanger
-        self.changer = OrphanChanger()
+        self.changer = OrphanChanger(salsa_push=False)
         self.changer.setup_parser(subparser)
         self.args = subparser.parse_args(command)
 
@@ -256,10 +256,13 @@ class OrphanWorker(SubWorker):
         else:
             if update_changelog is None:
                 update_changelog = cfg.update_changelog()
-        self.changer.make_changes(
+        result = self.changer.make_changes(
             local_tree, subpath=subpath, update_changelog=update_changelog,
             committer=self.committer)
-        return 'Set maintainer to QA team.'
+        metadata['old_vcs_url'] = result.old_vcs_url
+        metadata['new_vcs_url'] = result.new_vcs_url
+        metadata['pushed'] = result.pushed
+        return 'Move package to QA team.'
 
 
 class LintianBrushWorker(SubWorker):
