@@ -21,7 +21,12 @@ import os
 import json
 import sys
 
-from breezy.patches import iter_hunks
+from breezy.patches import (
+    iter_hunks,
+    InsertLine,
+    RemoveLine,
+    ContextLine,
+    )
 
 
 class DiffoscopeError(Exception):
@@ -34,11 +39,22 @@ def filter_boring_udiff(udiff, old_version, new_version, display_version):
     display_version = display_version.encode('utf-8')
     lines = iter([l.encode('utf-8') for l in udiff.splitlines(True)])
     hunks = []
+    oldlines = []
+    newlines = []
     for hunk in iter_hunks(lines, allow_dirty=False):
         for line in hunk.lines:
-            line.contents = line.contents.replace(old_version, display_version)
-            line.contents = line.contents.replace(new_version, display_version)
+            if isinstance(hunk, RemoveLine):
+                line.contents = line.contents.replace(old_version, display_version)
+                oldlines.append(line.contents)
+            elif isinstance(hunk, InsertLine):
+                line.contents = line.contents.replace(new_version, display_version)
+                newlines.append(line.contents)
+            elif isinstance(hunk, ContextLine):
+                oldlines.append(line.contents)
+                newlines.append(line.contents)
         hunks.append(hunk)
+    if oldlines == newlines:
+        return None
     return ''.join([hunk.as_bytes().decode('utf-8', 'replace')])
 
 
