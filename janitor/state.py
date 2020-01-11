@@ -798,14 +798,14 @@ ORDER BY package, command, start_time DESC
 
 async def stats_by_result_codes(conn, suite=None):
     query = """\
-select result_code, count(result_code) from
-last_runs
-WHERE result_code != 'nothing-new-to-do'
+select (
+    case when result_code = 'nothing-to-do' then 'success'
+    else result_code end), count(result_code) from last_runs
 """
     args = []
     if suite:
         args.append(suite)
-        query += " AND suite = $1"
+        query += " WHERE suite = $1"
     query += " group by 1 order by 2 desc"
     return await conn.fetch(query, *args)
 
