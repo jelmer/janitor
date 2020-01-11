@@ -638,6 +638,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/cupboard/review', handle_review,
         name='cupboard-review')
+    app.router.add_get(
+        '/cupboard/rejected', handle_rejected,
+        name='cupboard-rejected')
     app.router.add_post(
         '/cupboard/review', handle_review_post,
         name='cupboard-review-post')
