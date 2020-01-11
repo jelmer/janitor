@@ -1,3 +1,4 @@
+{% extends "layout.html" %}
 {% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
 {% block page_title %}Rejected in Review{% endblock %}
 {% block body %}
@@ -6,7 +7,7 @@
 
 <ul>
 {% for (run, maintainer_email, uploader_emails, branch_url, publish_mode, changelog_mode, command) in entries %}
-   <li><a href="/cupboard/pkg/{{ run.package }}/run/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a></li>
+   <li><a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a></li>
 {% endfor %}
 </ul>
 

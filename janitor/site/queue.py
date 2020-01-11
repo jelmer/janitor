@@ -69,6 +69,8 @@ async def get_queue(conn, only_command=None, limit=None):
             description = 'Build without changes'
         elif entry.command[0] == 'apply-multiarch-hints':
             description = 'Apply multi-arch hints'
+        elif entry.command[0] == 'orphan':
+            description = 'Mark as orphaned'
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:
