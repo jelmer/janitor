@@ -1,0 +1,13 @@
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% block page_title %}Rejected in Review{% endblock %}
+{% block body %}
+<div class="section" id="rejected">
+<h1>Rejected runs during review</h1>
+
+<ul>
+{% for (run, maintainer_email, uploader_emails, branch_url, publish_mode, changelog_mode, command) in entries %}
+   <li><a href="/cupboard/pkg/{{ run.package }}/run/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a></li>
+{% endfor %}
+</ul>
+
+{% endblock %}

@@ -333,7 +333,6 @@ class RemoteVcsManager(VcsManager):
 
 
 def get_run_diff(vcs_manager, run):
-
     f = BytesIO()
     try:
         repo = vcs_manager.get_repository(run.package)

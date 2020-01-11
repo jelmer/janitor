@@ -465,6 +465,13 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_rejected(request):
+        from .review import generate_rejected
+        suite = request.query.get('suite')
+        async with request.app.database.acquire() as conn:
+            text = await generate_rejected(conn, suite=suite)
+        return web.Response(content_type='text/html', text=text)
+
     async def handle_review_post(request):
         from .review import generate_review
         post = await request.post()
