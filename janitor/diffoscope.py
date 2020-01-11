@@ -71,6 +71,9 @@ def filter_boring_detail(detail, old_version, new_version, display_version):
                     subdetail, old_version, new_version, display_version):
                 continue
             i += 1
+    if not detail.get('unified_diff') and not detail.get('details'):
+        detail.clear()
+        return False
     return True
 
 
