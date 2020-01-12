@@ -1,0 +1,38 @@
+<div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+<div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="/">Debian Janitor</a></h1>
+
+<h3><a href="/multiarch-fixes">Multi Arch Fixes</a></h3>
+
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="/multiarch-fixes/merge-proposals">Merge Proposals</a></li>
+<!--<li class="toctree-l1"><a class="reference internal" href="/lintian-fixes/ready">Ready Changes</a></li>-->
+<li class="toctree-l1"><a class="reference internal" href="/multiarch-fixes/candidates">Candidates</a></li>
+</ul>
+
+<p>
+See the status for a specific package:
+<form autocomplete="off" action="/multiarch-fixes/pkg">
+  <div class="sidebar-packages" style="width:300px;">
+    <input id="sidebar-package" type="text" name="package" class="typeahead" placeholder="Package">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p>
+
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#sidebar-package').typeahead(null, {
+  name: 'sidebar-packages',
+  source: packages
+});
+});
+</script>
+
+</div></div>
