@@ -217,10 +217,12 @@ class MultiArchHintsWorker(SubWorker):
                 'generated-file',
                 'unable to edit generated file: %r' % e)
         else:
-            metadata['applied-hints'] = [
-                hint
-                for (binary, hint, description, certainty) in result.changes]
-            for binary, hint, description, certainty in result.changes:
+            metadata['applied-hints'] = []
+            for (binary, hint, description, certainty) in result.changes:
+                entry = dict(hint.items())
+                entry['action'] = description
+                entry['certainty'] = certainty
+                metadata['applied-hints'].append(entry)
                 note('%s: %s' % (binary['Package'], description))
             return "Applied multi-arch hints."
 
