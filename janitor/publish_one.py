@@ -418,7 +418,25 @@ class MultiArchHintsPublisher(object):
         return "multiarch-hints"
 
     def get_proposal_description(self, format, existing_description):
-        return 'Apply multi-arch hints.'
+        text = 'Apply multi-arch hints.\n\n'
+        for entry in self.applied:
+            if format != 'markdown':
+                if 'action' in entry:
+                    text += '* %s: %s\n' % (
+                        entry['binary'], entry['action'])
+                else:
+                    text += '* %s: Fix %s\n' % (
+                        entry['binary'], entry['link'].split('#')[-1])
+            else:
+                if 'action' in entry:
+                    text += '* %s: [%s](%s)\n' % (
+                        entry['binary'], entry['action'], entry['link'])
+                else:
+                    text += '* %s: Fix [%s](%s)\n' % (
+                        entry['binary'], entry['link'].split('#')[-1],
+                        entry['link'])
+
+        return text
 
     def get_proposal_commit_message(self, existing_commit_message):
         return 'Apply multi-arch hints.'
