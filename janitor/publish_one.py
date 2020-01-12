@@ -76,7 +76,7 @@ You can follow up to this merge proposal as you normally would.
 """
 
 JANITOR_BLURB_MD = """
-This merge proposal was created automatically by the
+This merge proposal was created automatically by the \
 [Janitor bot](https://janitor.debian.net/%(suite)s).
 
 You can follow up to this merge proposal as you normally would.
@@ -88,7 +88,6 @@ This merge proposal was created automatically by the Janitor bot
 
 You can follow up to this merge proposal as you normally would.
 """
-
 
 LOG_BLURB = """
 Build and test logs for this branch can be found at
@@ -138,8 +137,8 @@ https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1).
 """
 
 DIFFOSCOPE_LINK_BLURB_MD = """
-You can also view the [diffoscope diff](
-https://janitor.debian.net/api/run/%(log_id)s/diffoscope?filter_boring=1)
+You can also view the [diffoscope diff](\
+https://janitor.debian.net/api/run/%(log_id)s/diffoscope?filter_boring=1) \
 ([unfiltered](https://janitor.debian.net/api/run/%(log_id)s/diffoscope)).
 """
 
