@@ -377,6 +377,24 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_multiarch_fixes_pkg(request):
+        from .multiarch_hints import generate_pkg_file
+        # TODO(jelmer): Handle Accept: text/diff
+        pkg = request.match_info['pkg']
+        run_id = request.match_info.get('run_id')
+        try:
+            text = await generate_pkg_file(
+                request.app.database,
+                request.app.policy,
+                request.app.http_client_session,
+                request.app.archiver_url,
+                request.app.publisher_url, pkg, run_id)
+        except KeyError:
+            raise web.HTTPNotFound()
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_lintian_fixes_tag_list(request):
         from .lintian_fixes import generate_tag_list
         async with request.app.database.acquire() as conn:
@@ -549,7 +567,8 @@ if __name__ == '__main__':
     app.router.add_get(
         '/multiarch-fixes/', handle_multiarch_fixes,
         name='multiarch-fixes-start')
-    for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases']:
+    for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
+                  'multiarch-fixes']:
         app.router.add_get(
             '/%s/merge-proposals' % suite,
             functools.partial(handle_merge_proposals, suite),
@@ -569,6 +588,12 @@ if __name__ == '__main__':
         '/{file:Contents-.*|InRelease|Packages.*|Release.*|'
         '.*.(changes|deb|buildinfo)}',
         handle_apt_file, name='apt-file')
+    app.router.add_get(
+        '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
+        name='multiarch-fixes-package')
+    app.router.add_get(
+        '/multiarch-fixes/pkg/{pkg}/{run_id}', handle_multiarch_fixes_pkg,
+        name='multiarch-fixes-package-run')
     app.router.add_get(
         '/unchanged', functools.partial(handle_apt_repo, 'unchanged'),
         name='unchanged-start')
