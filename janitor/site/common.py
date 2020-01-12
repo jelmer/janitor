@@ -12,7 +12,7 @@ from janitor.site import (
     )
 
 
-async def generate_pkg_context(db, policy, client, archiver_url, publisher_url,
+async def generate_pkg_context(db, suite, policy, client, archiver_url, publisher_url,
                                package, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
@@ -25,13 +25,13 @@ async def generate_pkg_context(db, policy, client, archiver_url, publisher_url,
             merge_proposals = []
         else:
             run = await state.get_last_unabsorbed_run(
-                conn, package.name, SUITE)
+                conn, package.name, suite)
             merge_proposals = [
                 (url, status) for (unused_package, url, status) in
-                await state.iter_proposals(conn, package.name, suite=SUITE)]
+                await state.iter_proposals(conn, package.name, suite=suite)]
         (publish_policy, changelog_policy,
          unused_command) = await state.get_publish_policy(
-             conn, package.name, SUITE)
+             conn, package.name, suite)
         if run is None:
             # No runs recorded
             command = None
@@ -62,18 +62,19 @@ async def generate_pkg_context(db, policy, client, archiver_url, publisher_url,
             else:
                 unchanged_run = None
 
-        candidate = await state.get_candidate(conn, package.name, SUITE)
+        candidate = await state.get_candidate(conn, package.name, suite)
         if candidate is not None:
             (candidate_context, candidate_value,
              candidate_success_chance) = candidate
         else:
             candidate_context = None
             candidate_value = None
+            candidate_success_chance = None
         previous_runs = [
             x async for x in
-            state.iter_previous_runs(conn, package.name, SUITE)]
+            state.iter_previous_runs(conn, package.name, suite)]
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, SUITE, package.name)
+            conn, suite, package.name)
 
     async def show_diff():
         if not run.revision or run.revision == run.main_branch_revision:
@@ -107,7 +108,7 @@ async def generate_pkg_context(db, policy, client, archiver_url, publisher_url,
     async def vcs_type():
         return await get_vcs_type(client, publisher_url, run.package)
 
-    kwargs = {
+    return {
         'package': package.name,
         'unchanged_run': unchanged_run,
         'merge_proposals': merge_proposals,
@@ -126,7 +127,7 @@ async def generate_pkg_context(db, policy, client, archiver_url, publisher_url,
         'finish_time': finish_time,
         'run_id': run_id,
         'result': result,
-        'suite': SUITE,
+        'suite': suite,
         'show_diff': show_diff,
         'show_debdiff': show_debdiff,
         'branch_name': branch_name,
@@ -141,7 +142,3 @@ async def generate_pkg_context(db, policy, client, archiver_url, publisher_url,
         'publish_policy': publish_policy,
         'changelog_policy': changelog_policy,
         }
-    template = env.get_template('lintian-fixes-package.html')
-    return await template.render_async(**kwargs)
-
-

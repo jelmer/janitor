@@ -95,8 +95,10 @@ $(document).ready(function() {
 {% from "lintian-fixes-util.html" import lintian_brush_summary %}
 {{ lintian_brush_summary(result['applied']) }}
 {% elif suite == 'multiarch-fixes' %}
-Multi-arch fixes.'
-{% else %}
+Multi-arch fixes.
+{% elif suite == 'orphan' %}
+Mark package as orphaned.
+{% elif suite in ('fresh-releases', 'fresh-snapshots') %}
 {% from "new_upstream_util.html" import new_upstream_summary %}
 {{ new_upstream_summary(result) }}
 {% endif %}

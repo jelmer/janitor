@@ -4,6 +4,8 @@
 {% include 'lintian-fixes-sidebar.html' %}
 {% elif suite == 'fresh-releases' or suite == 'fresh-snapshots' %}
 {% include 'new-upstream-sidebar.html' %}
+{% elif suite == 'multiarch-fixes' %}
+{% include 'multiarch-fixes-sidebar.html' %}
 {% endif %}
 {% endblock %}
 {% block page_title %}Merge Proposal Status{% endblock %}
