@@ -118,6 +118,10 @@ def build_once(
     return (changes_name, cl_version)
 
 
+def gbp_dch(path):
+    subprocess.check_call(['gbp', 'dch'], cwd=path)
+
+
 def attempt_build(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
