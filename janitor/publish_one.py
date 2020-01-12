@@ -443,6 +443,7 @@ class OrphanPublisher(object):
         return "orphan"
 
     def get_proposal_description(self, format, existing_description):
+        from silver_platter.debian.orphan import move_instructions
         text = "Move orphaned package to the QA team."
         if not self.pushed and self.new_vcs_url:
             text += """
@@ -450,6 +451,9 @@ class OrphanPublisher(object):
 Please move the repository from %(old_vcs_url)s to %(new_vcs_url)s,
 in alignment with the Vcs-Git changes.
 """ % ({'old_vcs_url': self.old_vcs_url, 'new_vcs_url': self.new_vcs_url})
+            text += '\n'.join(move_instructions(
+                self.package_name, self.salsa_user,
+                self.old_vcs_url, self.new_vcs_url))
 
     def get_proposal_commit_message(self, existing_commit_message):
         return 'Move package to the QA team.'
@@ -458,6 +462,12 @@ in alignment with the Vcs-Git changes.
         self.pushed = result['pushed']
         self.old_vcs_url = result['old_vcs_url']
         self.new_vcs_url = result['new_vcs_url']
+        try:
+            self.package_name = result['package_name']
+            self.salsa_user = result['salsa_user']
+        except KeyError:
+            self.salsa_user, self.package_name = urllib.parse.urlparse(
+                self.new_vcs_url).path.strip('/').split('/')
 
     def allow_create_proposal(self):
         return True
