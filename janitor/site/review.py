@@ -17,7 +17,7 @@ async def generate_rejected(conn, suite=None):
         state.iter_publish_ready(
             conn, review_status=['rejected'], suite=suite)]
     def entry_key(entry):
-        return entry.run.times[1]
+        return entry[0].times[1]
     entries.sort(key=entry_key, reverse=True)
     template = env.get_template('rejected.html')
     kwargs = {'entries': entries, 'suite': suite}
