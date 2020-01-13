@@ -10,7 +10,7 @@ from . import (
     get_archive_diff,
     DebdiffRetrievalError,
     )
-from ..schedule import do_schedule
+from ..schedule import do_schedule, do_schedule_control
 
 
 from breezy.git.urls import git_url_to_bzr_url
@@ -134,6 +134,45 @@ async def handle_schedule(request):
     response_obj = {
         'package': package.name,
         'suite': suite,
+        'offset': offset,
+        'estimated_duration_seconds': estimated_duration.total_seconds(),
+        'queue_position': queue_position,
+        'queue_wait_time': queue_wait_time.total_seconds(),
+        }
+    return web.json_response(response_obj)
+
+
+async def handle_schedule_control(request):
+    run_id = request.match_info['run_id']
+    post = await request.post()
+    offset = post.get('offset')
+    try:
+        refresh = bool(int(post.get('refresh', '0')))
+    except ValueError:
+        return web.json_response(
+            {'error': 'invalid boolean for refresh'}, status=400)
+    async with request.app.db.acquire() as conn:
+        run = await state.get_run(conn, run_id)
+        if run is None:
+            return web.json_response(
+                {'reason': 'Run not found'}, status=404)
+        package = await state.get_package(conn, run.package)
+        if request.debsso_email:
+            requestor = request.debsso_email
+        else:
+            requestor = 'user from web UI'
+        if package.branch_url is None:
+            return web.json_response(
+                {'reason': 'No branch URL defined.'}, status=400)
+        offset, estimated_duration = await do_schedule_control(
+            conn, package.name, offset, refresh,
+            requestor=requestor,
+            main_branch_revision=run.main_branch_revision)
+        (queue_position, queue_wait_time) = await state.get_queue_position(
+            conn, 'unchanged', package.name)
+    response_obj = {
+        'package': package.name,
+        'suite': 'unchanged',
         'offset': offset,
         'estimated_duration_seconds': estimated_duration.total_seconds(),
         'queue_position': queue_position,
@@ -573,6 +612,10 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         '/publish/autopublish', handle_publish_autopublish,
         name='api-publish-autopublish')
     app.router.add_get('/run/{run_id}', handle_run, name='api-run')
+    app.router.add_post(
+        '/run/{run_id}/schedule-control',
+        handle_schedule_control,
+        name='api-run-schedule-control')
     app.router.add_post(
         '/run/{run_id}', handle_run_post, name='api-run-update')
     app.router.add_get('/run/{run_id}/diff', handle_diff, name='api-run-diff')

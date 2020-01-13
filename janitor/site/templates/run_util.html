@@ -47,6 +47,24 @@ $(function() {
 </script>
 {% endmacro %}
 
+{% macro schedule_control_button(run_id, title="Schedule control run", id='schedule-control', data={}) %}
+<button id="{{ id }}">{{ title }}</button>
+
+<script>
+$(function() {
+  $("#{{ id }}").click(function() {
+    $.post('/api/run/{{ run_id }}/schedule-control', {{ data|tojson }}, function(data) {
+      console.log('Scheduled: ' + data.offset);
+      $("#{{ id }}").replaceWith("<span>Scheduled control run at position " + data.queue_position + ".</span>");
+    }, 'json')
+    .fail(function(response) {
+      $("#{{ id }}").replaceWith("<span>Failed to schedule control run: " + response.responseText + "</span>");
+    });
+  });
+});
+</script>
+{% endmacro %}
+
 {% macro publish_buttons(suite, package, id_suffix='') %}
 {% set propose_id="propose" + id_suffix %}
 {% set fork_id="push-derived" + id_suffix  %}

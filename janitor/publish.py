@@ -343,7 +343,12 @@ async def publish_from_policy(
         mode, update_changelog, command, possible_hosters=None,
         possible_transports=None, dry_run=False, require_binary_diff=False,
         force=False):
-    from .schedule import full_command, estimate_duration, do_schedule
+    from .schedule import (
+        full_command,
+        estimate_duration,
+        do_schedule,
+        do_schedule_control,
+        )
     if not command:
         warning('no command set for %s', run.id)
         return
@@ -407,6 +412,12 @@ async def publish_from_policy(
             await do_schedule(
                 conn, run.package, run.suite,
                 requestor='publisher (pre-creation merge conflict)')
+            return
+        if e.code == 'missing-binary-diff':
+            note('Missing binary diff; requesting control run.')
+            await do_schedule_control(
+                conn, run.package, run.main_branch_revision,
+                requestor='publisher (missing binary diff)')
             return
         code = e.code
         description = e.description
