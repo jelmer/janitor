@@ -586,11 +586,19 @@ span.result-code-failure {
     color: red;
 }
 
+span.result-code-transient-failure {
+    color: orange;
+}
+
 span.result-code-success {
     color: green;
 }
 
-span.result-code-nothing-to-do, span.result-code-nothing-new-to-do {
+span.result-code-nothing-new-to-do {
+    color: lightgreen;
+}
+
+span.result-code-nothing-to-do {
     color: grey;
 }
 
