@@ -421,12 +421,13 @@ class MultiArchHintsPublisher(object):
         text = 'Apply multi-arch hints.\n\n'
         for entry in self.applied:
             if format != 'markdown':
+                text += '## %s\n' % entry['binary']
                 if 'action' in entry:
-                    text += '* %s: %s\n' % (
-                        entry['binary'], entry['action'])
+                    text += entry['action'] + '\n'
                 else:
-                    text += '* %s: Fix %s\n' % (
-                        entry['binary'], entry['link'].split('#')[-1])
+                    text += 'Fix %s\n' % (entry['link'].split('#')[-1])
+                text += entry['description'] + '\n'
+                text += '\n'
             else:
                 if 'action' in entry:
                     text += '* %s: [%s](%s)\n' % (
@@ -435,6 +436,7 @@ class MultiArchHintsPublisher(object):
                     text += '* %s: Fix [%s](%s)\n' % (
                         entry['binary'], entry['link'].split('#')[-1],
                         entry['link'])
+                text += entry['description'] + '\n'
 
         return text
 
