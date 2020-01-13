@@ -25,6 +25,7 @@ from janitor import (
     DEFAULT_BUILD_ARCH,
     )
 from janitor.build import changes_filename
+from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import (
     CACHE_URL_BZR,
     CACHE_URL_GIT,
@@ -82,12 +83,21 @@ def highlight_diff(diff):
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
+def classify_result_code(result_code):
+    if result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'):
+        return result_code
+    if result_code in TRANSIENT_ERROR_RESULT_CODES:
+        return 'transient-failure'
+    return 'failure'
+
+
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
 env.globals.update(cache_url_git=CACHE_URL_GIT)
 env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 env.globals.update(enumerate=enumerate)
 env.globals.update(highlight_diff=highlight_diff)
+env.globals.update(classify_result_code=classify_result_code)
 
 
 def run_changes_filename(run):
