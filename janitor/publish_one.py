@@ -445,7 +445,11 @@ class MultiArchHintsPublisher(object):
         self.applied = result['applied-hints']
 
     def allow_create_proposal(self):
-        return True
+        for hint in self.applied:
+            kind = hint['link'].rsplit('#', 1)[1]
+            if kind in ('file-conflict', ):
+                return True
+        return False
 
     def push_colocated(self):
         return False
