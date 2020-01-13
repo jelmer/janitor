@@ -285,15 +285,25 @@ async def main():
             registry=REGISTRY)
 
 
+async def do_schedule_control(
+        conn, package, main_branch_revision, offset=None,
+        refresh=False, request=None):
+    return await do_schedule(
+        conn, package, 'unchanged', offset=offset, refresh=refresh,
+        request=request,
+        command='just-build --revision=%s' % main_branch_revision)
+
+
 async def do_schedule(conn, package, suite, offset=None,
-                      refresh=False, requestor=None):
+                      refresh=False, requestor=None, command=None):
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
-    (unused_publish_policy, update_changelog, command) = (
-        await state.get_publish_policy(conn, package, suite))
-    if not command:
-        return None, None
-    command = full_command(update_changelog, command)
+    if command is None:
+        (unused_publish_policy, update_changelog, command) = (
+            await state.get_publish_policy(conn, package, suite))
+        if not command:
+            return None, None
+        command = full_command(update_changelog, command)
     estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(
         conn, package, command, suite, offset,
