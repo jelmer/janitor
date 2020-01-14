@@ -287,10 +287,10 @@ async def main():
 
 async def do_schedule_control(
         conn, package, main_branch_revision, offset=None,
-        refresh=False, request=None):
+        refresh=False, requestor=None):
     return await do_schedule(
         conn, package, 'unchanged', offset=offset, refresh=refresh,
-        request=request,
+        requestor=requestor,
         command='just-build --revision=%s' % main_branch_revision)
 
 
