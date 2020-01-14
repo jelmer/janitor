@@ -422,7 +422,7 @@ class MultiArchHintsPublisher(object):
         for entry in self.applied:
             kind = entry['link'].split('#')[-1]
             if format == 'markdown':
-                text += '## %s\n' % entry['binary']
+                text += '* %s: ' % entry['binary']
                 if 'action' in entry:
                     text += entry['action']
                     text += 'This fixes: %s. [%s](%s)' % (
@@ -433,13 +433,12 @@ class MultiArchHintsPublisher(object):
 
                 text += '\n'
             else:
+                text += '* %s: ' % entry['binary']
                 if 'action' in entry:
-                    text += '* %s: %s. This fixes: %s (%s).\n' % (
-                        entry['binary'], entry['action'], entry['description'],
-                        kind)
+                    text += '%s. This fixes: %s (%s).\n' % (
+                        entry['action'], entry['description'], kind)
                 else:
-                    text += '* %s: Fix: %s (%s)\n' % (
-                        entry['binary'], entry['description'], kind)
+                    text += 'Fix: %s (%s)\n' % (entry['description'], kind)
 
         return text
 
