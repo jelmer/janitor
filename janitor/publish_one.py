@@ -425,10 +425,10 @@ class MultiArchHintsPublisher(object):
                 text += '* %s: ' % entry['binary']
                 if 'action' in entry:
                     text += entry['action']
-                    text += 'This fixes: %s. [%s](%s)' % (
+                    text += 'This fixes: %s. ([%s](%s))' % (
                         entry['description'], kind, entry['link'])
                 else:
-                    text += 'Fix: %s [%s](%s). ' % (
+                    text += 'Fix: %s. ([%s](%s))' % (
                         entry['description'], kind, entry['link'])
 
                 text += '\n'
