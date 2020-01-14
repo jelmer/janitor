@@ -421,25 +421,25 @@ class MultiArchHintsPublisher(object):
         text = 'Apply multi-arch hints.\n\n'
         for entry in self.applied:
             kind = entry['link'].split('#')[-1]
-            if format != 'markdown':
+            if format == 'markdown':
                 text += '## %s\n' % entry['binary']
                 if 'action' in entry:
                     text += entry['action']
                     text += 'This fixes: %s. [%s](%s)' % (
                         entry['description'], kind, entry['link'])
                 else:
-                    text += 'Fix a %s. ' % kind
-                    text += entry['description']
+                    text += 'Fix: %s [%s](%s). ' % (
+                        entry['description'], kind, entry['link'])
+
                 text += '\n'
             else:
                 if 'action' in entry:
-                    text += '* %s: [%s](%s)\n' % (
-                        entry['binary'], entry['action'], entry['link'])
+                    text += '* %s: %s. This fixes: %s (%s).\n' % (
+                        entry['binary'], entry['action'], entry['description'],
+                        kind)
                 else:
-                    text += '* %s: Fix [%s](%s)\n' % (
-                        entry['binary'], entry['link'].split('#')[-1],
-                        entry['link'])
-                text += entry['description'] + '\n'
+                    text += '* %s: Fix: %s (%s)\n' % (
+                        entry['binary'], entry['description'], kind)
 
         return text
 
