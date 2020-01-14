@@ -291,7 +291,7 @@ async def do_schedule_control(
     return await do_schedule(
         conn, package, 'unchanged', offset=offset, refresh=refresh,
         requestor=requestor,
-        command='just-build --revision=%s' % main_branch_revision)
+        command=['just-build --revision=%s' % main_branch_revision])
 
 
 async def do_schedule(conn, package, suite, offset=None,
