@@ -44,7 +44,7 @@ from silver_platter.debian import (
     )
 
 from breezy.errors import DivergedBranches
-from breezy.plugins.propose.propose import (
+from breezy.propose import (
     MergeProposalExists,
     )
 

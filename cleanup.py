@@ -7,7 +7,7 @@ import breezy.plugins
 import breezy.bzr
 import breezy.git  # noqa: F401
 
-from breezy.plugins.propose.propose import (
+from breezy.propose import (
     hosters,
     )
 
