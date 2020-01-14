@@ -420,13 +420,16 @@ class MultiArchHintsPublisher(object):
     def get_proposal_description(self, format, existing_description):
         text = 'Apply multi-arch hints.\n\n'
         for entry in self.applied:
+            kind = entry['link'].split('#')[-1]
             if format != 'markdown':
                 text += '## %s\n' % entry['binary']
                 if 'action' in entry:
-                    text += entry['action'] + '\n'
+                    text += entry['action']
+                    text += 'This fixes: %s. [%s](%s)' % (
+                        entry['description'], kind, entry['link'])
                 else:
-                    text += 'Fix %s\n' % (entry['link'].split('#')[-1])
-                text += entry['description'] + '\n'
+                    text += 'Fix a %s. ' % kind
+                    text += entry['description']
                 text += '\n'
             else:
                 if 'action' in entry:
