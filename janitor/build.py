@@ -63,8 +63,7 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
     """
     subprocess.check_call(
         ["dch", "-l" + suffix, "--no-auto-nmu", "--distribution", suite,
-            "--force-distribution", message], cwd=directory,
-        stderr=subprocess.DEVNULL)
+            "--force-distribution", message], cwd=directory)
 
 
 def get_latest_changelog_version(local_tree, subpath=''):
