@@ -424,7 +424,7 @@ class MultiArchHintsPublisher(object):
             if format == 'markdown':
                 text += '* %s: ' % entry['binary']
                 if 'action' in entry:
-                    text += entry['action']
+                    text += entry['action'] + ' '
                     text += 'This fixes: %s. ([%s](%s))' % (
                         entry['description'], kind, entry['link'])
                 else:
