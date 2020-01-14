@@ -222,7 +222,8 @@ async def publish_one(
     if local_branch is None:
         raise PublishFailure(
             mode, 'result-branch-not-found',
-            'can not find local branch for %s / %s' % (pkg, branch_name))
+            'can not find local branch for %s / %s (%s)' % (
+                pkg, branch_name, log_id))
 
     request = {
         'dry-run': dry_run,
