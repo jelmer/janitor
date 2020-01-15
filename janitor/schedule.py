@@ -288,6 +288,8 @@ async def main():
 async def do_schedule_control(
         conn, package, main_branch_revision, offset=None,
         refresh=False, requestor=None):
+    if isinstance(main_branch_revision, bytes):
+        main_branch_revision = main_branch_revision.decode('utf-8')
     return await do_schedule(
         conn, package, 'unchanged', offset=offset, refresh=refresh,
         requestor=requestor,
