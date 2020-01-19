@@ -36,6 +36,11 @@ class SbuildFailure(Exception):
         self.error = error
         self.context = context
 
+    def __repr__(self):
+        return '%s(%r, %r, error=%r, context=%r)' % (
+            type(self).__name__, self.stage, self.description,
+            self.error, self.context)
+
 
 SBUILD_FOCUS_SECTION = {
     'build': 'build',
@@ -108,7 +113,7 @@ class UnknownMercurialExtraFields(object):
 
 class UpstreamPGPSignatureVerificationFailed(object):
 
-    kdin = 'upstream-pgp-signature-verification-failed'
+    kind = 'upstream-pgp-signature-verification-failed'
 
     def __init__(self):
         pass
@@ -140,6 +145,7 @@ def find_preamble_failure_description(lines):
 
 
 def parse_brz_error(line):
+    line = line.strip()
     m = re.match(
         'Unable to find the needed upstream tarball for '
         'package (.*), version (.*)\\.', line)
@@ -155,7 +161,7 @@ def parse_brz_error(line):
     if line == 'UScan failed to run: OpenPGP signature did not verify..':
         error = UpstreamPGPSignatureVerificationFailed()
         return (error, str(error))
-    return (None, line.strip())
+    return (None, line)
 
 
 def worker_failure_from_sbuild_log(f):
@@ -1502,6 +1508,8 @@ def main(argv=None):
     parser.add_argument('path', type=str)
     args = parser.parse_args()
 
+    # TODO(jelmer): Return more data from worker_failure_from_sbuild_log and
+    # then use that here.
     section_offsets = {}
     section_lines = {}
     with open(args.path, 'rb') as f:
