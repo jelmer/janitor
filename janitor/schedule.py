@@ -47,6 +47,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     '502-bad-gateway',
     'worker-exception',
     'build-failed-stage-create-session',
+    'apt-get-update-missing-release-file',
 ]
 
 # In some cases, we want to ignore certain results when guessing
