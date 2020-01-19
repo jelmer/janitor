@@ -624,8 +624,8 @@ class MissingPerlModule(object):
             other.inc == self.inc
 
     def __str__(self):
-        return "Missing Perl module: %s (inc: %r)" % (
-            self.module, self.inc)
+        return "Missing Perl module: %s (filename: %r, inc: %r)" % (
+            self.filename, self.module, self.inc)
 
     def __repr__(self):
         return "%s(%r, %r, %r)" % (
