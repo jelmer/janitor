@@ -480,7 +480,8 @@ def fix_missing_perl_file(tree, error, context, committer=None):
             warning('no perl package found for %s (%r).',
                     error.module, error.filename)
         else:
-            warning('perl file %s not found.', error.filename)
+            warning('perl file %s not found (paths searched for: %r).',
+                    error.filename, paths)
         return False
     return add_dependency(tree, context, package, committer=committer)
 

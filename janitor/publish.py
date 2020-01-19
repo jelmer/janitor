@@ -453,7 +453,7 @@ async def publish_from_policy(
         publish_delay = None
 
     topic_entry = {
-        'id': publish_id,
+         'id': publish_id,
          'package': run.package,
          'suite': run.suite,
          'proposal_url': proposal_url or None,

@@ -1,12 +1,9 @@
 #!/usr/bin/python3
 
 from aiohttp.client import ClientSession
-import pydle
 from janitor.pubsub import pubsub_reader
 
-import re
 import sys
-from urllib.parse import urljoin
 
 from mastodon import Mastodon
 
@@ -33,7 +30,6 @@ class MastodonNotifier(object):
 
 
 async def main(args, mastodon):
-    loop = asyncio.get_event_loop()
     notifier = MastodonNotifier(mastodon)
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):

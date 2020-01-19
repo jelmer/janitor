@@ -44,10 +44,12 @@ def filter_boring_udiff(udiff, old_version, new_version, display_version):
     for hunk in iter_hunks(lines, allow_dirty=False):
         for line in hunk.lines:
             if isinstance(line, RemoveLine):
-                line.contents = line.contents.replace(old_version, display_version)
+                line.contents = line.contents.replace(
+                    old_version, display_version)
                 oldlines.append(line.contents)
             elif isinstance(line, InsertLine):
-                line.contents = line.contents.replace(new_version, display_version)
+                line.contents = line.contents.replace(
+                    new_version, display_version)
                 newlines.append(line.contents)
             elif isinstance(line, ContextLine):
                 oldlines.append(line.contents)
@@ -121,6 +123,7 @@ async def format_diffoscope(root_difference, content_type):
     if content_type == 'text/markdown':
         from diffoscope.presenters.markdown import MarkdownTextPresenter
         out = []
+
         def printfn(t=''):
             out.append(t+'\n')
         p = MarkdownTextPresenter(printfn)
@@ -129,6 +132,7 @@ async def format_diffoscope(root_difference, content_type):
     if content_type == 'text/plain':
         from diffoscope.presenters.text import TextPresenter
         out = []
+
         def printfn(t=''):
             out.append(t+'\n')
         p = TextPresenter(printfn, False)

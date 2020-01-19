@@ -5,6 +5,9 @@ from silver_platter.debian.lintian import (
     available_lintian_fixers,
     )
 
+from . import env
+from .. import state
+
 
 SUITE = 'lintian-fixes'
 
