@@ -440,6 +440,10 @@ class MultiArchHintsPublisher(object):
                 else:
                     text += 'Fix: %s (%s)\n' % (entry['description'], kind)
 
+        text += """
+These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
+"""
+
         return text
 
     def get_proposal_commit_message(self, existing_commit_message):

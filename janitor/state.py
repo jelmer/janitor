@@ -810,7 +810,8 @@ select (
     return await conn.fetch(query, *args)
 
 
-async def iter_last_runs(conn, result_code=None, suite=None, main_branch_revision=None):
+async def iter_last_runs(conn, result_code=None, suite=None,
+                         main_branch_revision=None):
     query = """
 SELECT
   id,

@@ -5,15 +5,14 @@ import urllib.parse
 
 from janitor import state
 from janitor.site import (
-    env,
     get_archive_diff,
     get_vcs_type,
     DebdiffRetrievalError,
     )
 
 
-async def generate_pkg_context(db, suite, policy, client, archiver_url, publisher_url,
-                               package, run_id=None):
+async def generate_pkg_context(db, suite, policy, client, archiver_url,
+                               publisher_url, package, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
         if package is None:
