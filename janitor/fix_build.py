@@ -69,6 +69,7 @@ from .sbuild_log import (
     MissingJavaClass,
     MissingConfigure,
     MissingAutomakeInput,
+    MissingRPackage,
     SbuildFailure,
     DhAddonLoadFailure,
     AptFetchFailure,
@@ -551,6 +552,17 @@ def fix_missing_ruby_gem(tree, error, context, committer=None):
     return add_dependency(tree, context, package, committer=committer)
 
 
+def fix_missing_r_package(tree, error, context, committer=None):
+    paths = [os.path.join('/usr/lib/R/site-library/.*/R/%s$' % error.package)]
+    package = get_package_for_paths(paths, regex=True)
+    if package is None:
+        warning('no package for R package %s', error.package)
+        return False
+    return add_dependency(
+        tree, context, package, committer=committer,
+        minimum_version=error.minimum_version)
+
+
 def fix_missing_java_class(tree, error, context, committer=None):
     # Unfortunately this only finds classes in jars installed on the host
     # system :(
@@ -646,6 +658,7 @@ FIXERS = [
     (MissingXmlEntity, fix_missing_xml_entity),
     (MissingNodeModule, fix_missing_node_module),
     (MissingRubyGem, fix_missing_ruby_gem),
+    (MissingRPackage, fix_missing_r_package),
     (MissingLibrary, fix_missing_library),
     (MissingJavaClass, fix_missing_java_class),
     (MissingConfigure, fix_missing_configure),
