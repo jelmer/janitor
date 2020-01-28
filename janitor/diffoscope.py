@@ -105,7 +105,7 @@ def filter_irrelevant(diff):
     diff['source2'] = os.path.basename(diff['source2'])
 
 
-async def format_diffoscope(root_difference, content_type):
+async def format_diffoscope(root_difference, content_type, title):
     if content_type == 'application/json':
         return json.dumps(root_difference)
     from diffoscope.readers.json import JSONReaderV1
@@ -115,10 +115,13 @@ async def format_diffoscope(root_difference, content_type):
         p = HTMLPresenter()
         old_stdout = sys.stdout
         sys.stdout = f = StringIO()
+        old_argv = sys.argv
+        sys.argv = title.split(' ')
         try:
             p.output_html('-', root_difference)
         finally:
             sys.stdout = old_stdout
+            sys.argv = old_argv
         return f.getvalue()
     if content_type == 'text/markdown':
         from diffoscope.presenters.markdown import MarkdownTextPresenter
