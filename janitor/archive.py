@@ -255,15 +255,15 @@ async def handle_diffoscope(request):
 
     filter_diffoscope_irrelevant(diffoscope_diff)
 
-    title = 'Diffoscope for %s on %s' % (
-        new_changes['Source'], new_changes['Distribution'])
+    title = 'diffoscope for %s applied to %s' % (
+         new_changes['Distribution'], new_changes['Source'])
 
     if 'filter_boring' in post:
         filter_diffoscope_boring(
             diffoscope_diff, old_changes['Version'],
             new_changes['Version'], old_changes['Distribution'],
             new_changes['Distribution'])
-        title += ', with uninteresting changes filtered out'
+        title += ' (filtered)'
 
     debdiff = await format_diffoscope(
         diffoscope_diff, content_type,
