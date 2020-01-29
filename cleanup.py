@@ -10,6 +10,7 @@ import breezy.git  # noqa: F401
 from breezy.propose import (
     hosters,
     )
+import breezy.plugins.propose
 
 
 def projects_to_remove(instance):
