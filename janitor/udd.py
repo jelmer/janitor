@@ -123,14 +123,16 @@ SELECT DISTINCT ON (sources.source)
     sources.vcs_url,
     sources.maintainer_email,
     sources.uploaders,
-    lintian.tag
-FROM
-    lintian
-INNER JOIN sources ON
-    sources.source = lintian.package AND
-    sources.version = lintian.package_version AND
+    ARRAY(SELECT tag FROM lintian WHERE
+        sources.source = lintian.package AND
+        sources.version = lintian.package_version AND
+        lintian.package_type = 'source' AND
+        tag = any($1::text[])
+    )
+    FROM sources
+WHERE
     sources.release = 'sid'
-WHERE tag = any($1::text[]) and package_type = 'source' AND vcs_type != ''
+    AND vcs_type != ''
 """
         if packages is not None:
             query += " AND sources.source = any($2::text[])"
@@ -138,7 +140,7 @@ WHERE tag = any($1::text[]) and package_type = 'source' AND vcs_type != ''
         query += " ORDER BY sources.source, sources.version DESC"
         for row in await self._conn.fetch(query, *args):
             package_rows[row[0]] = row[:6]
-            package_tags.setdefault((row[0], row[1]), []).append(row[6])
+            package_tags[row[0]] = set(row[6])
         args = [tuple(available_fixers)]
         query = """\
 SELECT DISTINCT ON (sources.source)
@@ -148,25 +150,27 @@ SELECT DISTINCT ON (sources.source)
     sources.vcs_url,
     sources.maintainer_email,
     sources.uploaders,
-    lintian.tag
+    ARRAY(SELECT lintian.tag FROM lintian
+        INNER JOIN packages ON packages.package = lintian.package \
+        and packages.version = lintian.package_version \
+    WHERE
+        lintian.tag = any($1::text[]) AND
+        lintian.package_type = 'binary' AND
+        sources.version = packages.version and \
+        sources.source = packages.source
+    )
 FROM
-    lintian
-INNER JOIN packages ON packages.package = lintian.package \
-and packages.version = lintian.package_version \
-inner join sources on sources.version = packages.version and \
-sources.source = packages.source and sources.release = 'sid' \
-where lintian.tag = any($1::text[]) and lintian.package_type = 'binary' \
-and vcs_type != ''"""
+    sources
+WHERE sources.release = 'sid' AND vcs_type != ''"""
         if packages is not None:
             query += " AND sources.source = ANY($2::text[])"
             args.append(tuple(packages))
         query += " ORDER BY sources.source, sources.version DESC"
         for row in await self._conn.fetch(query, *args):
-            package_rows[row[0]] = row[:6]
-            package_tags.setdefault((row[0], row[1]), []).append(row[6])
+            package_tags.setdefault(row[0], set()).update(row[6])
         package_values = package_rows.values()
         for row in package_values:
-            tags = sorted(package_tags[row[0], row[1]])
+            tags = sorted(package_tags[row[0]])
             value = estimate_lintian_fixes_value(tags)
             context = ' '.join(sorted(tags))
             yield (row[0], context, value, None)
@@ -377,7 +381,7 @@ async def update_package_metadata(
                 sid_version, vcs_type, vcs_url, vcs_browser,
                 vcswatch_status.lower() if vcswatch_status else None,
                 vcswatch_version, insts, removed, upstream_branch_url))
-            await state.store_packages(conn, packages)
+        await state.store_packages(conn, packages)
 
 
 async def main():
