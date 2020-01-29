@@ -158,7 +158,7 @@ async def generate_regressions_list(db):
 async def generate_stats(db):
     template = env.get_template('lintian-fixes-stats.html')
     async with db.acquire() as conn:
-        by_tag = await state.iter_absorbed_lintian_fixes(conn)
+        by_tag = await state.iter_lintian_fixes_counts(conn)
     return await template.render_async(by_tag=by_tag)
 
 

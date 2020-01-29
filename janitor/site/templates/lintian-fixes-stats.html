@@ -7,27 +7,30 @@
 <h1>Lintian Fixes - Statistics</h1>
 
 <div class="absorbed">
-<h2>Absorbed Fixes</h2>
-<p>Number of fixes that have either been pushed directly by the Janitor, or
+<h2>Number of Fixes</h2>
+<p>Absorbed fixes are fixes that have either been pushed directly by the Janitor, or
 have been <a href="/lintian-fixes/merge-proposals">proposed as a merge request
 and then merged</a>.</p>
 <table class="docutils" border="1">
 <thead valign="bottom">
 <tr class="row-odd">
   <th class="head">Lintian Tag</th>
-  <th class="head">Count</th>
+  <th class="head">Number merged/pushed</th>
+  <th class="head">Ready but not yet merged/push</th>
 </tr>
 </thead>
 <tbody valign="top" name="tag-table">
-{% for tag, count in by_tag %}
+{% for tag, absorbed_count, unabsorbed_count, total_count in by_tag %}
 <tr>
     <td>{{ lintian_tag_link(tag) }}</td>
-    <td>{{ count }}</td>
+    <td>{{ absorbed_count }}</td>
+    <td>{{ unabsorbed_count }}</td>
 </tr>
 {% endfor %}
 <tr>
     <td><b>Total</b></td>
     <td><b>{{ by_tag | sum(attribute=1) }}</b></td>
+    <td><b>{{ by_tag | sum(attribute=2) }}</b></td>
 </tr>
 </table>
 </div>

@@ -167,3 +167,7 @@ CREATE OR REPLACE VIEW absorbed_runs AS
 
 CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
   select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
+
+
+CREATE OR REPLACE VIEW last_unabsorbed_lintian_fixes AS
+  select last_unabsorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from last_unabsorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]) WHERE result_code = 'success';

@@ -1490,10 +1490,20 @@ async def get_publish_policy(conn, package, suite):
         return (row[0], row[1], shlex.split(row[2]) if row[2] else None)
 
 
-async def iter_absorbed_lintian_fixes(conn):
-    return await conn.fetch(
-        "select unnest(fixed_lintian_tags), count(*) from "
-        "absorbed_lintian_fixes group by 1 order by 2 desc")
+async def iter_lintian_fixes_counts(conn):
+    return await conn.fetch("""
+SELECT absorbed.tag, absorbed.cnt, unabsorbed.cnt, absorbed.cnt+unabsorbed.cnt
+FROM (
+    SELECT UNNEST(fixed_lintian_tags) AS tag, count(*) AS cnt
+    FROM absorbed_lintian_fixes group by 1 order by 2 desc
+    ) AS absorbed
+LEFT JOIN (
+    SELECT UNNEST(fixed_lintian_tags) AS tag, count(*) AS cnt
+    FROM last_unabsorbed_lintian_fixes group by 1 order by 2 desc
+    ) AS unabsorbed
+ON absorbed.tag = unabsorbed.tag
+ORDER BY 4 DESC
+""")
 
 
 async def get_successful_push_count(conn):
