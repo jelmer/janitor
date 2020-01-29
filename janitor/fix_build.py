@@ -585,7 +585,8 @@ def fix_missing_java_class(tree, error, context, committer=None):
 def enable_dh_autoreconf(tree, context, committer):
     # Debhelper >= 10 depends on dh-autoreconf and enables autoreconf by
     # default.
-    if get_debhelper_compat_version(tree.abspath('.')) < 10:
+    debhelper_compat_version = get_debhelper_compat_version(tree.abspath('.'))
+    if debhelper_compat_version is not None and debhelper_compat_version < 10:
         def add_with_autoreconf(line, target):
             if target != b'%':
                 return line
