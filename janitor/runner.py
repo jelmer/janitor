@@ -515,7 +515,7 @@ async def process_one(
                 worker_kind, main_branch, env, command, output_directory,
                 resume_branch=resume_branch, cached_branch=cached_branch,
                 pre_check=pre_check, post_check=post_check,
-                build_command=build_command, log_path=log_path,
+                build_command=suite_config.build_command, log_path=log_path,
                 resume_branch_result=resume_branch_result,
                 last_build_version=last_build_version,
                 subpath=subpath,

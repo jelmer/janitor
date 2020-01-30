@@ -28,4 +28,6 @@ message Suite {
   optional string branch_name = 5;
 
   repeated string extra_build_suite = 6;
+
+  optional string build_command = 7;
 }

@@ -841,10 +841,6 @@ def main(argv=None):
         help='Path in the branch under which the package lives.',
         default='')
     parser.add_argument(
-        '--build-command',
-        help='Build package to verify it.', type=str,
-        default='sbuild -A -s -v -d$DISTRIBUTION --build-dep-resolver=aspcud')
-    parser.add_argument(
         '--tgz-repo',
         help='Whether to create a tgz of the VCS repo.',
         action='store_true')
@@ -877,7 +873,7 @@ def main(argv=None):
         result = process_package(
             args.branch_url, os.environ,
             args.command, output_directory, metadata,
-            build_command=args.build_command, pre_check_command=args.pre_check,
+            pre_check_command=args.pre_check,
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,
             cached_branch_url=args.cached_branch_url,
