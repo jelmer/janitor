@@ -29,7 +29,10 @@ from debian.deb822 import (
     )
 
 from breezy.commit import PointlessCommit
-from lintian_brush import reset_tree
+from lintian_brush import (
+    add_changelog_entry,
+    reset_tree,
+    )
 from lintian_brush.control import (
     ensure_some_version,
     ensure_minimum_version,
@@ -89,21 +92,24 @@ class CircularDependency(Exception):
 
 
 def add_dependency(
-        tree, context, package, minimum_version=None, committer=None):
+        tree, context, package, minimum_version=None, committer=None,
+        subpath='.', update_changelog=True):
     if context == ('build', ):
         return add_build_dependency(
             tree, package, minimum_version=minimum_version,
-            committer=committer)
+            committer=committer, subpath=subpath,
+            update_changelog=update_changelog)
     elif context[0] == 'autopkgtest':
         return add_test_dependency(
             tree, context[1], package, minimum_version=minimum_version,
-            committer=committer)
+            committer=committer, subpath=subpath,
+            update_changelog=update_changelog)
     else:
         raise AssertionError('context %r invalid' % context)
 
 
 def add_build_dependency(tree, package, minimum_version=None,
-                         committer=None):
+                         committer=None, subpath='.', update_changelog=True):
     if not isinstance(package, str):
         raise TypeError(package)
 
@@ -124,7 +130,7 @@ def add_build_dependency(tree, package, minimum_version=None,
         update_control(
             source_package_cb=add_build_dep,
             binary_package_cb=check_binary_pkg,
-            path=os.path.join(tree.basedir, 'debian/control'))
+            path=os.path.join(tree.abspath(subpath), 'debian/control'))
     except FormattingUnpreservable as e:
         note('Unable to edit %s in a way that preserves formatting.',
              e.path)
@@ -136,20 +142,13 @@ def add_build_dependency(tree, package, minimum_version=None,
         desc = package
 
     note("Adding build dependency: %s", desc)
-    subprocess.check_call(
-        ["dch", "Add missing build dependency on %s." % desc],
-        cwd=tree.basedir, stderr=subprocess.DEVNULL)
-    with tree.lock_write():
-        try:
-            debcommit(tree, committer=committer)
-        except PointlessCommit:
-            return False
-        else:
-            return True
+    return commit_debian_changes(
+        tree, subpath, "Add missing build dependency on %s." % desc,
+        committer=committer, update_changelog=update_changelog)
 
 
 def add_test_dependency(tree, testname, package, minimum_version=None,
-                        committer=None):
+                        committer=None, subpath='.', update_changelog=True):
     if not isinstance(package, str):
         raise TypeError(package)
 
@@ -167,7 +166,8 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
     try:
         if not update_control(
                 source_package_cb=add_test_dep,
-                path=os.path.join(tree.basedir, 'debian/tests/control')):
+                path=os.path.join(
+                    tree.abspath(subpath), 'debian/tests/control')):
             return False
     except FormattingUnpreservable as e:
         note('Unable to edit %s in a way that preserves formatting.',
@@ -180,13 +180,21 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
         desc = package
 
     note("Adding dependency to test %s: %s", testname, desc)
-    subprocess.check_call(
-        ["dch", "Add missing dependency for test %s on %s." % (
-            testname, desc)],
-        cwd=tree.basedir, stderr=subprocess.DEVNULL)
+    return commit_debian_changes(
+        tree, subpath,
+        "Add missing dependency for test %s on %s." % (testname, desc),
+        update_changelog=update_changelog)
+
+
+def commit_debian_changes(tree, subpath, summary, committer=None,
+                          update_changelog=True):
     with tree.lock_write():
         try:
-            debcommit(tree, committer=committer)
+            if update_changelog:
+                add_changelog_entry(tree, subpath, summary)
+                debcommit(tree, committer=committer)
+            else:
+                tree.commit(message=summary, committer=committer)
         except PointlessCommit:
             return False
         else:
@@ -301,7 +309,8 @@ def package_exists(package):
     return False
 
 
-def fix_missing_python_distribution(tree, error, context, committer=None):
+def fix_missing_python_distribution(
+        tree, error, context, committer=None, update_changelog=True):
     targeted = targeted_python_versions(tree)
     default = not targeted
 
@@ -361,12 +370,13 @@ def fix_missing_python_distribution(tree, error, context, committer=None):
         assert dep_pkg is not None
         if not add_dependency(
                 tree, context, dep_pkg, minimum_version=error.minimum_version,
-                committer=committer):
+                committer=committer, update_changelog=update_changelog):
             return False
     return True
 
 
-def fix_missing_python_module(tree, error, context, committer=None):
+def fix_missing_python_module(
+        tree, error, context, committer=None, update_changelog=True):
     targeted = targeted_python_versions(tree)
     default = (not targeted)
 
@@ -406,21 +416,25 @@ def fix_missing_python_module(tree, error, context, committer=None):
         assert dep_pkg is not None
         if not add_dependency(
                 tree, context, dep_pkg, error.minimum_version,
-                committer=committer):
+                committer=committer, update_changelog=update_changelog):
             return False
     return True
 
 
-def fix_missing_go_package(tree, error, context, committer=None):
+def fix_missing_go_package(
+        tree, error, context, committer=None, update_changelog=True):
     package = get_package_for_paths(
         [os.path.join('/usr/share/gocode/src', error.package)],
         regex=False)
     if package is None:
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_c_header(tree, error, context, committer=None):
+def fix_missing_c_header(
+        tree, error, context, committer=None, update_changelog=True):
     package = get_package_for_paths(
         [os.path.join('/usr/include', error.header)], regex=False)
     if package is None:
@@ -428,10 +442,13 @@ def fix_missing_c_header(tree, error, context, committer=None):
             [os.path.join('/usr/include', '.*', error.header)], regex=True)
     if package is None:
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_pkg_config(tree, error, context, committer=None):
+def fix_missing_pkg_config(
+        tree, error, context, committer=None, update_changelog=True):
     package = get_package_for_paths(
         [os.path.join('/usr/lib/pkgconfig', error.module + '.pc')])
     if package is None:
@@ -443,10 +460,12 @@ def fix_missing_pkg_config(tree, error, context, committer=None):
         return False
     return add_dependency(
         tree, context, package, committer=committer,
-        minimum_version=error.minimum_version)
+        minimum_version=error.minimum_version,
+        update_changelog=update_changelog)
 
 
-def fix_missing_command(tree, error, context, committer=None):
+def fix_missing_command(
+        tree, error, context, committer=None, update_changelog=True):
     if os.path.isabs(error.command):
         paths = [error.command]
     else:
@@ -456,17 +475,23 @@ def fix_missing_command(tree, error, context, committer=None):
     package = get_package_for_paths(paths)
     if package is None:
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_file(tree, error, context, committer=None):
+def fix_missing_file(
+        tree, error, context, committer=None, update_changelog=True):
     package = get_package_for_paths([error.path])
     if package is None:
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_perl_file(tree, error, context, committer=None):
+def fix_missing_perl_file(
+        tree, error, context, committer=None, update_changelog=True):
     if error.inc is None:
         if not os.path.isabs(error.filename):
             return False
@@ -483,10 +508,13 @@ def fix_missing_perl_file(tree, error, context, committer=None):
             warning('perl file %s not found (paths searched for: %r).',
                     error.filename, paths)
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_node_module(tree, error, context, committer=None):
+def fix_missing_node_module(
+        tree, error, context, committer=None, update_changelog=True):
     paths = [
         '/usr/share/nodejs/.*/node_modules/%s/package.json' % error.module,
         '/usr/lib/nodejs/%s/package.json' % error.module,
@@ -496,23 +524,30 @@ def fix_missing_node_module(tree, error, context, committer=None):
         warning('no node package found for %s.',
                 error.module)
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_dh_addon(tree, error, context, committer=None):
+def fix_missing_dh_addon(
+        tree, error, context, committer=None, update_changelog=True):
     paths = [os.path.join('/usr/share/perl5', error.path)]
     package = get_package_for_paths(paths)
     if package is None:
         warning('no package for debhelper addon %s', error.name)
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def retry_apt_failure(tree, error, context, committer=None):
+def retry_apt_failure(tree, error, context, committer=None,
+                      update_changelog=True):
     return True
 
 
-def fix_missing_xml_entity(tree, error, context, committer=None):
+def fix_missing_xml_entity(
+        tree, error, context, committer=None, update_changelog=True):
     # Ideally we should be using the XML catalog for this, but hardcoding
     # a few URLs will do for now..
     URL_MAP = {
@@ -529,10 +564,13 @@ def fix_missing_xml_entity(tree, error, context, committer=None):
     package = get_package_for_paths([search_path], regex=False)
     if package is None:
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_library(tree, error, context, committer=None):
+def fix_missing_library(
+        tree, error, context, committer=None, update_changelog=True):
     paths = [os.path.join('/usr/lib/lib%s.so$' % error.library),
              os.path.join('/usr/lib/.*/lib%s.so$' % error.library),
              os.path.join('/usr/lib/lib%s.a$' % error.library),
@@ -541,19 +579,25 @@ def fix_missing_library(tree, error, context, committer=None):
     if package is None:
         warning('no package for library %s', error.library)
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_ruby_gem(tree, error, context, committer=None):
+def fix_missing_ruby_gem(
+        tree, error, context, committer=None, update_changelog=True):
     paths = [os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.gem)]
     package = get_package_for_paths(paths)
     if package is None:
         warning('no package for gem %s', error.gem)
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_r_package(tree, error, context, committer=None):
+def fix_missing_r_package(
+        tree, error, context, committer=None, update_changelog=True):
     paths = [os.path.join('/usr/lib/R/site-library/.*/R/%s$' % error.package)]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
@@ -561,10 +605,12 @@ def fix_missing_r_package(tree, error, context, committer=None):
         return False
     return add_dependency(
         tree, context, package, committer=committer,
-        minimum_version=error.minimum_version)
+        minimum_version=error.minimum_version,
+        update_changelog=update_changelog)
 
 
-def fix_missing_java_class(tree, error, context, committer=None):
+def fix_missing_java_class(
+        tree, error, context, committer=None, update_changelog=True):
     # Unfortunately this only finds classes in jars installed on the host
     # system :(
     output = subprocess.check_output(
@@ -579,10 +625,12 @@ def fix_missing_java_class(tree, error, context, committer=None):
     if package is None:
         warning('no package for files in %r', classpath)
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def enable_dh_autoreconf(tree, context, committer):
+def enable_dh_autoreconf(tree, context, committer, update_changelog=True):
     # Debhelper >= 10 depends on dh-autoreconf and enables autoreconf by
     # default.
     debhelper_compat_version = get_debhelper_compat_version(tree.abspath('.'))
@@ -596,27 +644,33 @@ def enable_dh_autoreconf(tree, context, committer):
 
         if update_rules(command_line_cb=add_with_autoreconf):
             return add_dependency(
-                tree, context, 'dh-autoreconf', committer=committer)
+                tree, context, 'dh-autoreconf', committer=committer,
+                update_changelog=update_changelog)
 
     return False
 
 
-def fix_missing_configure(tree, error, context, committer=None):
+def fix_missing_configure(tree, error, context, committer=None,
+                          update_changelog=True):
     if (not tree.has_filename('configure.ac') and
             not tree.has_filename('configure.in')):
         return False
 
-    return enable_dh_autoreconf(tree, context, committer=committer)
+    return enable_dh_autoreconf(
+        tree, context, committer=committer, update_changelog=update_changelog)
 
 
-def fix_missing_automake_input(tree, error, context, committer=None):
+def fix_missing_automake_input(
+        tree, error, context, committer=None, update_changelog=True):
     # TODO(jelmer): If it's ./NEWS, ./AUTHORS or ./README that's missing, then
     # try to set 'export AUTOMAKE = automake --foreign' in debian/rules.
     # https://salsa.debian.org/jelmer/debian-janitor/issues/88
-    return enable_dh_autoreconf(tree, context, committer=committer)
+    return enable_dh_autoreconf(
+        tree, context, committer=committer, update_changelog=update_changelog)
 
 
-def fix_missing_maven_artifacts(tree, error, context, committer=None):
+def fix_missing_maven_artifacts(
+        tree, error, context, committer=None, update_changelog=True):
     artifact = error.artifacts[0]
     (group_id, artifact_id, kind, version) = artifact.split(':')
     paths = [os.path.join(
@@ -626,14 +680,20 @@ def fix_missing_maven_artifacts(tree, error, context, committer=None):
     if package is None:
         warning('no package for artifact %s', artifact)
         return False
-    return add_dependency(tree, context, package, committer=committer)
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
 
 
-def install_gnome_common(tree, error, context, committer=None):
-    return add_dependency(tree, context, 'gnome-common', committer=committer)
+def install_gnome_common(
+        tree, error, context, committer=None, update_changelog=True):
+    return add_dependency(
+        tree, context, 'gnome-common', committer=committer,
+        update_changelog=update_changelog)
 
 
-def fix_missing_config_status_input(tree, error, context, committer=None):
+def fix_missing_config_status_input(
+        tree, error, context, committer=None, update_changelog=True):
     if not tree.has_filename('autogen.sh'):
         return False
 
@@ -644,7 +704,15 @@ def fix_missing_config_status_input(tree, error, context, committer=None):
         rule = mf.add_rule(b'override_dh_autoreconf')
         rule.append_command(b'dh_autoreconf ./autogen.sh')
 
-    return update_rules(makefile_cb=add_autogen)
+    if not update_rules(makefile_cb=add_autogen):
+        return False
+
+    if update_changelog:
+        commit_debian_changes(
+            tree, '.', 'Run autogen.sh during build.', committer=committer,
+            update_changelog=update_changelog)
+
+    return True
 
 
 FIXERS = [
@@ -691,7 +759,7 @@ def build_incrementally(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
         committer=None, max_iterations=DEFAULT_MAX_ITERATIONS,
-        subpath='', source_date_epoch=None):
+        subpath='', source_date_epoch=None, update_changelog=True):
     fixed_errors = []
     while True:
         try:
@@ -749,13 +817,20 @@ def main(argv=None):
         '--build-command', type=str,
         help='Build command',
         default=(DEFAULT_BUILDER + ' -A -s -v -d$DISTRIBUTION'))
+    parser.add_argument(
+        '--no-update-changelog', action="store_false", default=None,
+        dest="update_changelog", help="do not update the changelog")
+    parser.add_argument(
+        '--update-changelog', action="store_true", dest="update_changelog",
+        help="force updating of the changelog", default=None)
 
     args = parser.parse_args()
     from breezy.workingtree import WorkingTree
     tree = WorkingTree.open('.')
     build_incrementally(
         tree, args.suffix, args.suite, args.output_directory,
-        args.build_command, committer=args.committer)
+        args.build_command, committer=args.committer,
+        update_changelog=args.update_changelog)
 
 
 if __name__ == '__main__':
