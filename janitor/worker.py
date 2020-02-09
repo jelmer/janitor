@@ -356,6 +356,7 @@ class LintianBrushWorker(SubWorker):
                 'summary': summary,
                 'description': result.description,
                 'fixed_lintian_tags': result.fixed_lintian_tags,
+                'revision_id': result.revision_id.decode('utf-8'),
                 'certainty': result.certainty})
         metadata['failed'] = {
             name: e.errors
