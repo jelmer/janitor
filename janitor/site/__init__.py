@@ -163,3 +163,12 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
                     'Unable to get debdiff: %s' % await resp.text())
     except ClientConnectorError as e:
         raise DebdiffRetrievalError(str(e))
+
+
+def is_admin(request):
+    return request.debsso_email == 'jelmer@debian.org'
+
+
+def check_admin(request):
+    if not is_admin(request):
+        return web.Response(text='Unauthorized', status=401)

@@ -5,6 +5,7 @@ import urllib.parse
 
 from janitor import state, SUITE_REGEX
 from . import (
+    check_admin,
     env,
     highlight_diff,
     get_archive_diff,
@@ -383,8 +384,7 @@ async def handle_run(request):
 
 
 async def handle_publish_scan(request):
-    if request.debsso_email != 'jelmer@debian.org':
-        return web.Response(text='Unauthorized', status=401)
+    check_admin(request)
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, '/scan')
     try:
@@ -397,8 +397,7 @@ async def handle_publish_scan(request):
 
 
 async def handle_publish_autopublish(request):
-    if request.debsso_email != 'jelmer@debian.org':
-        return web.Response(text='Unauthorized', status=401)
+    check_admin(request)
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, '/autopublish')
     try:
@@ -479,6 +478,24 @@ async def handle_runner_log_index(request):
     return await forward_to_runner(
         request.app.http_client_session, request.app.runner_url,
         'log/%s' % run_id)
+
+
+async def handle_runner_kill(request):
+    check_admin(request)
+    run_id = request.match_info['run_id']
+    url = urllib.parse.urljoin(request.app.runner_url, 'kill/%s' % run_id)
+    try:
+        async with request.app.http_client_session.post(url) as resp:
+            return web.json_response(
+                await resp.json(), status=resp.status)
+    except ContentTypeError as e:
+        return web.json_response({
+            'reason': 'runner returned error %s' % e},
+            status=400)
+    except ClientConnectorError:
+        return web.json_response({
+            'reason': 'unable to contact runner'},
+            status=500)
 
 
 async def handle_runner_log(request):
@@ -652,6 +669,10 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/runner/status', handle_runner_status,
         name='api-runner-status')
+    app.router.add_post(
+        '/runner/kill/{run_id}',
+        handle_runner_kill,
+        name='api-runner-kill')
     app.router.add_get(
         '/runner/log/{run_id}',
         handle_runner_log_index,

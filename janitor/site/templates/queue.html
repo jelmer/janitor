@@ -24,6 +24,8 @@
     <td>{{ entry['suite'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_duration(entry['current_duration']) }}</td>
+    <!-- TODO(jelmer): Link to logs -->
+    <!-- TODO(jelmer): Link to kill button, if user is admin -->
 </tr>
 {% endfor %}
 </table>
