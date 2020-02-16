@@ -1510,3 +1510,9 @@ async def get_successful_push_count(conn):
     return await conn.fetchval(
         "select count(*) from publish where result_code = "
         "'success' and mode = 'push'")
+
+
+async def get_publish_attempt_count(conn, revision):
+    return await conn.fetchval(
+        "select count(*) from publish where revision = $1",
+        revision.decode('utf-8'))

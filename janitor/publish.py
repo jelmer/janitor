@@ -316,6 +316,16 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                    publish_mode, update_changelog,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status):
+            # TODO(jelmer): next try in SQL query
+            attempt_count = await conn.get_publish_attempt_count(run.revision)
+            next_try_time = run.finish_time + (
+                2 ** attempt_count * timedelta(hours=1))
+            if datetime.now() < next_try_time:
+                note('Not attempting to push %s / %s (%s) due to '
+                     'exponential backoff. Next try in %s.',
+                     run.package, run.suite, run.id,
+                     next_try_time - datetime.now())
+                continue
             if push_limit is not None and publish_mode in (
                     MODE_PUSH, MODE_ATTEMPT_PUSH):
                 if push_limit == 0:
