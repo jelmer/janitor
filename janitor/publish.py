@@ -18,7 +18,7 @@
 """Publishing VCS changes."""
 
 from aiohttp import web
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.client import parse_headers
 import asyncio
 import functools
@@ -317,7 +317,8 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status):
             # TODO(jelmer): next try in SQL query
-            attempt_count = await conn.get_publish_attempt_count(run.revision)
+            attempt_count = await state.get_publish_attempt_count(
+                conn, run.revision)
             next_try_time = run.finish_time + (
                 2 ** attempt_count * timedelta(hours=1))
             if datetime.now() < next_try_time:
