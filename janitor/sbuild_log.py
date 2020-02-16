@@ -1185,6 +1185,7 @@ build_failure_regexps = [
      java_missing_class),
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
      '[Errno 2] No such file or directory', file_not_found),
+    (r'g\+\+: error: (.*): No such file or directory', file_not_found),
     (r'You need to install gnome-common from the GNOME git',
      gnome_common_missing),
     (r'automake: error: cannot open < (.*): No such file or directory',

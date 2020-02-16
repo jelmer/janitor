@@ -319,7 +319,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
             # TODO(jelmer): next try in SQL query
             attempt_count = await state.get_publish_attempt_count(
                 conn, run.revision)
-            next_try_time = run.finish_time + (
+            next_try_time = run.times[1] + (
                 2 ** attempt_count * timedelta(hours=1))
             if datetime.now() < next_try_time:
                 note('Not attempting to push %s / %s (%s) due to '
