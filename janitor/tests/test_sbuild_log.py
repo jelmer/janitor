@@ -82,6 +82,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'No such file or directory'], 1,
             MissingFile('/usr/share/openstack-pkg-tools/pkgos.make'))
 
+    def test_gxx_missing_file(self):
+        self.run_test([
+            'g++: error: /usr/lib/x86_64-linux-gnu/libGL.so: '
+            'No such file or directory'], 1,
+            MissingFile('/usr/lib/x86_64-linux-gnu/libGL.so'))
+
     def test_installdocs_missing(self):
         self.run_test([
             'dh_installdocs: Cannot find (any matches for) "README.txt" '

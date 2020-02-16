@@ -403,20 +403,22 @@ def get_suite_config(config, name):
 
 class ActiveRun(object):
 
-    def __init__(self, output_directory, pkg, suite, queue_id):
+    def __init__(self, output_directory, pkg, suite, queue_id,
+                 estimated_duration):
         self.start_time = datetime.now()
         self.output_directory = output_directory
         self.log_id = str(uuid.uuid4())
         self.pkg = pkg
         self.suite = suite
         self.queue_id = queue_id
+        self.estimated_duration = estimated_duration
 
     def kill(self):
         self._task.cancel()
 
     def json(self):
         return {
-            'queue_id': queue_id,
+            'queue_id': self.queue_id,
             'id': self.log_id,
             'package': self.pkg,
             'suite': self.suite,
@@ -793,22 +795,20 @@ class QueueProcessor(object):
                 upstream_branch_url=item.upstream_branch_url,
                 committer=self.committer)
         build_duration.labels(package=item.package, suite=item.suite).observe(
-            active_run.finish_time.timestamp() - active_run.start_time.timestamp())
+            active_run.finish_time.timestamp() -
+            active_run.start_time.timestamp())
         if not self.dry_run:
             async with self.database.acquire() as conn:
                 await state.store_run(
                     conn, result.log_id, item.package, result.branch_url,
-                    start_time, finish_time, item.command,
-                    result.description, item.context, result.context,
-                    result.main_branch_revision, result.code,
+                    active_run.start_time, active_run.finish_time,
+                    item.command, result.description, item.context,
+                    result.context, result.main_branch_revision, result.code,
                     build_version=result.build_version,
                     build_distribution=result.build_distribution,
-                    branch_name=result.branch_name,
-                    revision=result.revision,
-                    subworker_result=result.subworker_result,
-                    suite=item.suite,
-                    logfilenames=result.logfilenames,
-                    value=result.value)
+                    branch_name=result.branch_name, revision=result.revision,
+                    subworker_result=result.subworker_result, suite=item.suite,
+                    logfilenames=result.logfilenames, value=result.value)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[item.id]
@@ -869,6 +869,7 @@ async def handle_log_index(request):
 
 
 async def handle_kill(request):
+    queue_processor = request.app.queue_processor
     run_id = int(request.match_info['run_id'])
     try:
         ret = queue_processor.active_runs[run_id].json()
