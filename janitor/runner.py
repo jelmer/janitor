@@ -394,44 +394,72 @@ async def import_logs(output_directory, logfile_manager, pkg, log_id):
     return logfilenames
 
 
+def get_suite_config(config, name):
+    for s in config.suite:
+        if s.name == name:
+            return s
+    raise KeyError(name)
+
+
 class ActiveRun(object):
 
-    def __init__(self, output_directory):
+    def __init__(self, output_directory, pkg, suite, queue_id):
+        self.start_time = datetime.now()
         self.output_directory = output_directory
+        self.log_id = str(uuid.uuid4())
+        self.pkg = pkg
+        self.suite = suite
+        self.queue_id = queue_id
 
     def kill(self):
         self._task.cancel()
 
-    async def process(
-            self, db, config, worker_kind, vcs_url, pkg, command,
-            build_command, suite, pre_check=None, post_check=None,
+    def json(self):
+        return {
+            'queue_id': queue_id,
+            'id': self.log_id,
+            'package': self.pkg,
+            'suite': self.suite,
+            'estimated_duration':
+                self.estimated_duration.total_seconds()
+                if self.estimated_duration else None,
+            'current_duration':
+                (datetime.now() - self.start_time).total_seconds(),
+            'start_time': self.start_time.isoformat(),
+            }
+
+    async def process(self, *args, **kwargs):
+        try:
+            return await self._process(*args, **kwargs)
+        finally:
+            self.finish_time = datetime.now()
+
+    async def _process(
+            self, db, config, worker_kind, vcs_url, command,
+            build_command, pre_check=None, post_check=None,
             dry_run=False, incoming_url=None, logfile_manager=None,
             debsign_keyid=None, vcs_manager=None,
             possible_transports=None, possible_hosters=None,
             use_cached_only=False, refresh=False, vcs_type=None,
             subpath=None, overall_timeout=None, upstream_branch_url=None,
             committer=None):
-        start_time = datetime.now()
-        note('Running %r on %s', command, pkg)
+        note('Running %r on %s', command, self.pkg)
         packages_processed_count.inc()
-        log_id = str(uuid.uuid4())
 
         env = {}
-        env['PACKAGE'] = pkg
+        env['PACKAGE'] = self.pkg
         if committer:
             env['COMMITTER'] = committer
         if upstream_branch_url:
             env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
 
-        for s in config.suite:
-            if s.name == suite:
-                suite_config = s
-                break
-        else:
+        try:
+            suite_config = get_suite_config(config, self.suite)
+        except KeyError:
             return JanitorResult(
-                pkg, log_id=log_id,
+                self.pkg, log_id=self.log_id,
                 code='unknown-suite',
-                description='Suite %s not in configuration' % suite,
+                description='Suite %s not in configuration' % self.suite,
                 logfilenames=[],
                 branch_url=vcs_url)
 
@@ -439,14 +467,14 @@ class ActiveRun(object):
             async with db.acquire() as conn:
                 try:
                     main_branch = await open_branch_with_fallback(
-                        conn, pkg, vcs_type, vcs_url,
+                        conn, self.pkg, vcs_type, vcs_url,
                         possible_transports=possible_transports)
                 except BranchOpenFailure as e:
                     await state.update_branch_status(
                         conn, vcs_url, None, status=e.code,
                         description=e.description, revision=None)
                     return JanitorResult(
-                        pkg, log_id=log_id, branch_url=vcs_url,
+                        self.pkg, log_id=self.log_id, branch_url=vcs_url,
                         description=e.description, code=e.code,
                         logfilenames=[])
                 else:
@@ -458,7 +486,7 @@ class ActiveRun(object):
             if subpath:
                 # TODO(jelmer): cluster all packages for a single repository
                 return JanitorResult(
-                    pkg, log_id=log_id, branch_url=branch_url,
+                    self.pkg, log_id=self.log_id, branch_url=branch_url,
                     code='package-in-subpath',
                     description=(
                         'The package is stored in a subpath (%s) rather than '
@@ -487,7 +515,7 @@ class ActiveRun(object):
 
             if resume_branch is None and vcs_manager:
                 resume_branch = vcs_manager.get_branch(
-                    pkg, suite_config.branch_name,
+                    self.pkg, suite_config.branch_name,
                     get_vcs_abbreviation(main_branch))
 
             if resume_branch is not None:
@@ -495,7 +523,7 @@ class ActiveRun(object):
 
             if vcs_manager:
                 cached_branch = vcs_manager.get_branch(
-                    pkg, 'master', get_vcs_abbreviation(main_branch))
+                    self.pkg, 'master', get_vcs_abbreviation(main_branch))
             else:
                 cached_branch = None
 
@@ -503,18 +531,18 @@ class ActiveRun(object):
                 note('Using cached branch %s', cached_branch.user_url)
         else:
             if vcs_manager:
-                main_branch = vcs_manager.get_branch(pkg, 'master')
+                main_branch = vcs_manager.get_branch(self.pkg, 'master')
             else:
                 main_branch = None
             if main_branch is None:
                 return JanitorResult(
-                    pkg, log_id=log_id, branch_url=branch_url,
+                    self.pkg, log_id=self.log_id, branch_url=branch_url,
                     code='cached-branch-missing',
-                    description='Missing cache branch for %s' % pkg,
+                    description='Missing cache branch for %s' % self.pkg,
                     logfilenames=[])
             note('Using cached branch %s', main_branch.user_url)
             resume_branch = vcs_manager.get_branch(
-                pkg, suite_config.branch_name)
+                self.pkg, suite_config.branch_name)
             cached_branch = None
 
         if refresh and resume_branch:
@@ -525,7 +553,7 @@ class ActiveRun(object):
             if resume_branch is not None:
                 (resume_branch_result, resume_branch_name, resume_review_status
                  ) = await state.get_run_result_by_revision(
-                    conn, suite, revision=resume_branch.last_revision())
+                    conn, self.suite, revision=resume_branch.last_revision())
                 if resume_review_status == 'rejected':
                     note('Unsetting resume branch, since last run was '
                          'rejected.')
@@ -537,7 +565,7 @@ class ActiveRun(object):
                 resume_branch_name = None
 
             last_build_version = await state.get_last_build_version(
-                conn, pkg, suite)
+                conn, self.pkg, self.suite)
 
         log_path = os.path.join(self.output_directory, 'worker.log')
         try:
@@ -557,13 +585,13 @@ class ActiveRun(object):
             retcode = await self._task
         except asyncio.TimeoutError:
             return JanitorResult(
-                pkg, log_id=log_id, branch_url=branch_url,
+                self.pkg, log_id=self.log_id, branch_url=branch_url,
                 code='timeout',
                 description='Run timed out after %d seconds' % overall_timeout,
                 logfilenames=[])
 
         logfilenames = await import_logs(
-            self.output_directory, logfile_manager, pkg, log_id)
+            self.output_directory, logfile_manager, self.pkg, self.log_id)
 
         if retcode != 0:
             if retcode < 0:
@@ -578,7 +606,7 @@ class ActiveRun(object):
                     description = 'Worker exited with return code %d' % retcode
 
             return JanitorResult(
-                pkg, log_id=log_id, branch_url=branch_url,
+                self.pkg, log_id=self.log_id, branch_url=branch_url,
                 code=code, description=description,
                 logfilenames=logfilenames)
 
@@ -592,14 +620,14 @@ class ActiveRun(object):
 
         if worker_result.code is not None:
             return JanitorResult(
-                pkg, log_id=log_id, branch_url=branch_url,
+                self.pkg, log_id=self.log_id, branch_url=branch_url,
                 worker_result=worker_result, logfilenames=logfilenames,
                 branch_name=(
                     resume_branch_name
                     if worker_result.code == 'nothing-to-do' else None))
 
         result = JanitorResult(
-            pkg, log_id=log_id, branch_url=branch_url,
+            self.pkg, log_id=self.log_id, branch_url=branch_url,
             code='success', worker_result=worker_result,
             logfilenames=logfilenames)
 
@@ -613,10 +641,10 @@ class ActiveRun(object):
 
         try:
             local_branch = open_branch(
-                os.path.join(self.output_directory, pkg))
+                os.path.join(self.output_directory, self.pkg))
         except (BranchMissing, BranchUnavailable) as e:
             return JanitorResult(
-                pkg, log_id, branch_url,
+                self.pkg, self.log_id, branch_url,
                 description='result branch unavailable: %s' % e,
                 code='result-branch-unavailable',
                 worker_result=worker_result,
@@ -627,7 +655,7 @@ class ActiveRun(object):
         if vcs_manager:
             vcs_manager.import_branches(
                 main_branch, local_branch,
-                pkg, suite_config.branch_name,
+                self.pkg, suite_config.branch_name,
                 additional_colocated_branches=(
                     pick_additional_colocated_branches(main_branch)))
             result.branch_name = suite_config.branch_name
@@ -642,15 +670,15 @@ class ActiveRun(object):
                 except UploadFailedError as e:
                     warning('Unable to upload changes file %s: %r',
                             result.changes_filename, e)
-            if suite != 'unchanged':
+            if self.suite != 'unchanged':
                 async with db.acquire() as conn:
                     run = await state.get_unchanged_run(
                         conn, worker_result.main_branch_revision)
                     if run is None:
-                        note('Scheduling control run for %s.', pkg)
-                        duration = datetime.now() - start_time
+                        note('Scheduling control run for %s.', self.pkg)
+                        duration = datetime.now() - self.start_time
                         await state.add_to_queue(
-                            conn, pkg, [
+                            conn, self.pkg, [
                                 'just-build',
                                 ('--revision=%s' %
                                  worker_result.main_branch_revision)
@@ -730,7 +758,6 @@ class QueueProcessor(object):
         self.vcs_manager = vcs_manager
         self.concurrency = concurrency
         self.use_cached_only = use_cached_only
-        self.started = {}
         self.topic_queue = Topic(repeat_last=True)
         self.topic_result = Topic()
         self.overall_timeout = overall_timeout
@@ -738,32 +765,24 @@ class QueueProcessor(object):
         self.active_runs = {}
 
     def status_json(self):
-        return {'processing': [{
-                'id': item.id,
-                'package': item.package,
-                'suite': item.suite,
-                'estimated_duration':
-                    item.estimated_duration.total_seconds()
-                    if item.estimated_duration else None,
-                'current_duration':
-                    (datetime.now() - start_time).total_seconds(),
-                'start_time': start_time.isoformat(),
-                } for item, start_time in self.started.items()],
-                'concurrency': self.concurrency}
+        return {
+            'processing':
+                [active_run.json()
+                 for active_run in self.active_runs.values()],
+            'concurrency': self.concurrency}
 
     async def process_queue_item(self, item):
-        start_time = datetime.now()
-        self.started[item] = start_time
-
-        self.topic_queue.publish(self.status_json())
-
         with tempfile.TemporaryDirectory() as output_directory:
-            active_run = ActiveRun(output_directory)
+            active_run = ActiveRun(
+                output_directory, pkg=item.package, suite=item.suite,
+                estimated_duration=item.estimated_duration,
+                queue_id=item.id)
             self.active_runs[item.id] = active_run
+            self.topic_queue.publish(self.status_json())
             result = await active_run.process(
                 self.database, self.config, self.worker_kind,
-                item.branch_url, item.package, item.command,
-                suite=item.suite, pre_check=self.pre_check,
+                item.branch_url, item.command,
+                pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
                 dry_run=self.dry_run, incoming_url=self.incoming_url,
                 debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
@@ -773,9 +792,8 @@ class QueueProcessor(object):
                 overall_timeout=self.overall_timeout,
                 upstream_branch_url=item.upstream_branch_url,
                 committer=self.committer)
-        finish_time = datetime.now()
         build_duration.labels(package=item.package, suite=item.suite).observe(
-            finish_time.timestamp() - start_time.timestamp())
+            active_run.finish_time.timestamp() - active_run.start_time.timestamp())
         if not self.dry_run:
             async with self.database.acquire() as conn:
                 await state.store_run(
@@ -793,7 +811,6 @@ class QueueProcessor(object):
                     value=result.value)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
-        del self.started[item]
         del self.active_runs[item.id]
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
@@ -826,7 +843,7 @@ class QueueProcessor(object):
                         for i in enumerate(done):
                             async for item in state.iter_queue(
                                     conn, limit=self.concurrency):
-                                if item in self.started:
+                                if item.id in self.active_runs:
                                     continue
                                 todo.add(self.process_queue_item(item))
         finally:
@@ -853,7 +870,13 @@ async def handle_log_index(request):
 
 async def handle_kill(request):
     run_id = int(request.match_info['run_id'])
-    raise NotImplementedError('need to kill %r' % run_id)
+    try:
+        ret = queue_processor.active_runs[run_id].json()
+        queue_processor.active_runs[run_id].kill()
+    except KeyError:
+        return web.Response(
+            text='No such current run: %s' % run_id, status=404)
+    return web.json_response(ret)
 
 
 async def handle_log(request):
