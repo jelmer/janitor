@@ -829,6 +829,11 @@ async def handle_log_index(request):
         if os.path.isfile(os.path.join(directory, n))])
 
 
+async def handle_kill(request):
+    run_id = int(request.match_info['run_id'])
+    raise NotImplementedError
+
+
 async def handle_log(request):
     queue_processor = request.app.queue_processor
     run_id = int(request.match_info['run_id'])
@@ -856,6 +861,7 @@ async def run_web_server(listen_addr, port, queue_processor):
     app.router.add_get('/status', handle_status)
     app.router.add_get('/log/{run_id}', handle_log_index)
     app.router.add_get('/log/{run_id}/{filename}', handle_log)
+    app.router.add_post('/kill/{run_id}', handle_kill)
     app.router.add_get('/ws/queue', functools.partial(
         pubsub_handler, queue_processor.topic_queue))
     app.router.add_get('/ws/result', functools.partial(
