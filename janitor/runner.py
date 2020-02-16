@@ -374,161 +374,7 @@ async def upload_changes(changes_path, incoming_url):
                 raise UploadFailedError(e)
 
 
-async def process_one(
-        db, config, output_directory, worker_kind, vcs_url, pkg, command,
-        build_command, suite, pre_check=None, post_check=None,
-        dry_run=False, incoming_url=None, logfile_manager=None,
-        debsign_keyid=None, vcs_manager=None,
-        possible_transports=None, possible_hosters=None,
-        use_cached_only=False, refresh=False, vcs_type=None,
-        subpath=None, overall_timeout=None, upstream_branch_url=None,
-        committer=None):
-    start_time = datetime.now()
-    note('Running %r on %s', command, pkg)
-    packages_processed_count.inc()
-    log_id = str(uuid.uuid4())
-
-    env = {}
-    env['PACKAGE'] = pkg
-    if committer:
-        env['COMMITTER'] = committer
-    if upstream_branch_url:
-        env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
-
-    for s in config.suite:
-        if s.name == suite:
-            suite_config = s
-            break
-    else:
-        return JanitorResult(
-            pkg, log_id=log_id,
-            code='unknown-suite',
-            description='Suite %s not in configuration' % suite,
-            logfilenames=[],
-            branch_url=vcs_url)
-
-    if not use_cached_only:
-        async with db.acquire() as conn:
-            try:
-                main_branch = await open_branch_with_fallback(
-                    conn, pkg, vcs_type, vcs_url,
-                    possible_transports=possible_transports)
-            except BranchOpenFailure as e:
-                await state.update_branch_status(
-                    conn, vcs_url, None, status=e.code,
-                    description=e.description, revision=None)
-                return JanitorResult(
-                    pkg, log_id=log_id, branch_url=vcs_url,
-                    description=e.description, code=e.code,
-                    logfilenames=[])
-            else:
-                branch_url = main_branch.user_url
-                await state.update_branch_status(
-                    conn, vcs_url, branch_url, status='success',
-                    revision=main_branch.last_revision())
-
-        if subpath:
-            # TODO(jelmer): cluster all packages for a single repository
-            return JanitorResult(
-                pkg, log_id=log_id, branch_url=branch_url,
-                code='package-in-subpath',
-                description=(
-                    'The package is stored in a subpath (%s) rather than the '
-                    'repository root.' % (subpath, )),
-                logfilenames=[])
-
-        try:
-            hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
-        except UnsupportedHoster as e:
-            # We can't figure out what branch to resume from when there's no
-            # hoster that can tell us.
-            resume_branch = None
-            warning('Unsupported hoster (%s)', e)
-        else:
-            try:
-                (resume_branch, unused_overwrite, unused_existing_proposal) = (
-                    find_existing_proposed(
-                        main_branch, hoster, suite_config.branch_name))
-            except NoSuchProject as e:
-                warning('Project %s not found', e.project)
-                resume_branch = None
-            except PermissionDenied as e:
-                warning('Unable to list existing proposals: %s', e)
-                resume_branch = None
-
-        if resume_branch is None and vcs_manager:
-            resume_branch = vcs_manager.get_branch(
-                pkg, suite_config.branch_name,
-                get_vcs_abbreviation(main_branch))
-
-        if resume_branch is not None:
-            note('Resuming from %s', resume_branch.user_url)
-
-        if vcs_manager:
-            cached_branch = vcs_manager.get_branch(
-                pkg, 'master', get_vcs_abbreviation(main_branch))
-        else:
-            cached_branch = None
-
-        if cached_branch is not None:
-            note('Using cached branch %s', cached_branch.user_url)
-    else:
-        if vcs_manager:
-            main_branch = vcs_manager.get_branch(pkg, 'master')
-        else:
-            main_branch = None
-        if main_branch is None:
-            return JanitorResult(
-                pkg, log_id=log_id, branch_url=branch_url,
-                code='cached-branch-missing',
-                description='Missing cache branch for %s' % pkg,
-                logfilenames=[])
-        note('Using cached branch %s', main_branch.user_url)
-        resume_branch = vcs_manager.get_branch(pkg, suite_config.branch_name)
-        cached_branch = None
-
-    if refresh and resume_branch:
-        note('Since refresh was requested, ignoring resume branch.')
-        resume_branch = None
-
-    async with db.acquire() as conn:
-        if resume_branch is not None:
-            resume_branch_result, resume_branch_name, resume_review_status = (
-                    await state.get_run_result_by_revision(
-                        conn, suite, revision=resume_branch.last_revision()))
-            if resume_review_status == 'rejected':
-                note('Unsetting resume branch, since last run was rejected.')
-                resume_branch_result = None
-                resume_branch = None
-                resume_branch_name = None
-        else:
-            resume_branch_result = None
-            resume_branch_name = None
-
-        last_build_version = await state.get_last_build_version(
-            conn, pkg, suite)
-
-    log_path = os.path.join(output_directory, 'worker.log')
-    try:
-        retcode = await asyncio.wait_for(
-            invoke_subprocess_worker(
-                worker_kind, main_branch, env, command, output_directory,
-                resume_branch=resume_branch, cached_branch=cached_branch,
-                pre_check=pre_check, post_check=post_check,
-                build_command=suite_config.build_command, log_path=log_path,
-                resume_branch_result=resume_branch_result,
-                last_build_version=last_build_version,
-                subpath=subpath,
-                build_distribution=suite_config.build_distribution,
-                build_suffix=suite_config.build_suffix),
-            timeout=overall_timeout)
-    except asyncio.TimeoutError:
-        return JanitorResult(
-            pkg, log_id=log_id, branch_url=branch_url,
-            code='timeout',
-            description='Run timed out after %d seconds' % overall_timeout,
-            logfilenames=[])
-
+async def import_logs(output_directory, logfile_manager, pkg, log_id):
     logfilenames = []
     for name in os.listdir(output_directory):
         parts = name.split('.')
@@ -545,99 +391,273 @@ async def process_one(
                         name, e)
             else:
                 logfilenames.append(name)
+    return logfilenames
 
-    if retcode != 0:
-        if retcode < 0:
-            description = 'Worker killed with signal %d' % abs(retcode)
-            code = 'worker-killed'
+
+class ActiveRun(object):
+
+    def __init__(self, output_directory):
+        self.output_directory = output_directory
+
+    def kill(self):
+        self._task.cancel()
+
+    async def process(
+            self, db, config, worker_kind, vcs_url, pkg, command,
+            build_command, suite, pre_check=None, post_check=None,
+            dry_run=False, incoming_url=None, logfile_manager=None,
+            debsign_keyid=None, vcs_manager=None,
+            possible_transports=None, possible_hosters=None,
+            use_cached_only=False, refresh=False, vcs_type=None,
+            subpath=None, overall_timeout=None, upstream_branch_url=None,
+            committer=None):
+        start_time = datetime.now()
+        note('Running %r on %s', command, pkg)
+        packages_processed_count.inc()
+        log_id = str(uuid.uuid4())
+
+        env = {}
+        env['PACKAGE'] = pkg
+        if committer:
+            env['COMMITTER'] = committer
+        if upstream_branch_url:
+            env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
+
+        for s in config.suite:
+            if s.name == suite:
+                suite_config = s
+                break
         else:
-            code = 'worker-failure'
-            try:
-                with open(log_path, 'r') as f:
-                    description = list(f.readlines())[-1]
-            except FileNotFoundError:
-                description = 'Worker exited with return code %d' % retcode
+            return JanitorResult(
+                pkg, log_id=log_id,
+                code='unknown-suite',
+                description='Suite %s not in configuration' % suite,
+                logfilenames=[],
+                branch_url=vcs_url)
 
-        return JanitorResult(
-            pkg, log_id=log_id, branch_url=branch_url,
-            code=code, description=description,
-            logfilenames=logfilenames)
-
-    json_result_path = os.path.join(output_directory, 'result.json')
-    if os.path.exists(json_result_path):
-        worker_result = WorkerResult.from_file(json_result_path)
-    else:
-        worker_result = WorkerResult(
-            'worker-missing-result',
-            'Worker failed and did not write a result file.')
-
-    if worker_result.code is not None:
-        return JanitorResult(
-            pkg, log_id=log_id, branch_url=branch_url,
-            worker_result=worker_result, logfilenames=logfilenames,
-            branch_name=(
-                resume_branch_name
-                if worker_result.code == 'nothing-to-do' else None))
-
-    result = JanitorResult(
-        pkg, log_id=log_id, branch_url=branch_url,
-        code='success', worker_result=worker_result,
-        logfilenames=logfilenames)
-
-    try:
-        (result.changes_filename, result.build_version,
-         result.build_distribution) = find_changes(
-             output_directory, result.package)
-    except NoChangesFile as e:
-        # Oh, well.
-        note('No changes file found: %s', e)
-
-    try:
-        local_branch = open_branch(os.path.join(output_directory, pkg))
-    except (BranchMissing, BranchUnavailable) as e:
-        return JanitorResult(
-            pkg, log_id, branch_url,
-            description='result branch unavailable: %s' % e,
-            code='result-branch-unavailable',
-            worker_result=worker_result,
-            logfilenames=logfilenames)
-
-    enable_tag_pushing(local_branch)
-
-    if vcs_manager:
-        vcs_manager.import_branches(
-            main_branch, local_branch,
-            pkg, suite_config.branch_name,
-            additional_colocated_branches=(
-                pick_additional_colocated_branches(main_branch)))
-        result.branch_name = suite_config.branch_name
-
-    if result.changes_filename:
-        changes_path = os.path.join(
-            output_directory, result.changes_filename)
-        debsign(changes_path, debsign_keyid)
-        if incoming_url is not None:
-            try:
-                await upload_changes(changes_path, incoming_url)
-            except UploadFailedError as e:
-                warning('Unable to upload changes file %s: %r',
-                        result.changes_filename, e)
-        if suite != 'unchanged':
+        if not use_cached_only:
             async with db.acquire() as conn:
-                run = await state.get_unchanged_run(
-                    conn, worker_result.main_branch_revision)
-                if run is None:
-                    note('Scheduling control run for %s.', pkg)
-                    duration = datetime.now() - start_time
-                    await state.add_to_queue(
-                        conn, pkg, [
-                            'just-build',
-                            ('--revision=%s' %
-                             worker_result.main_branch_revision)
-                        ],
-                        'unchanged', offset=-10,
-                        estimated_duration=duration, requestor='control')
-    return result
+                try:
+                    main_branch = await open_branch_with_fallback(
+                        conn, pkg, vcs_type, vcs_url,
+                        possible_transports=possible_transports)
+                except BranchOpenFailure as e:
+                    await state.update_branch_status(
+                        conn, vcs_url, None, status=e.code,
+                        description=e.description, revision=None)
+                    return JanitorResult(
+                        pkg, log_id=log_id, branch_url=vcs_url,
+                        description=e.description, code=e.code,
+                        logfilenames=[])
+                else:
+                    branch_url = main_branch.user_url
+                    await state.update_branch_status(
+                        conn, vcs_url, branch_url, status='success',
+                        revision=main_branch.last_revision())
+
+            if subpath:
+                # TODO(jelmer): cluster all packages for a single repository
+                return JanitorResult(
+                    pkg, log_id=log_id, branch_url=branch_url,
+                    code='package-in-subpath',
+                    description=(
+                        'The package is stored in a subpath (%s) rather than '
+                        'the repository root.' % (subpath, )),
+                    logfilenames=[])
+
+            try:
+                hoster = get_hoster(
+                    main_branch, possible_hosters=possible_hosters)
+            except UnsupportedHoster as e:
+                # We can't figure out what branch to resume from when there's
+                # no hoster that can tell us.
+                resume_branch = None
+                warning('Unsupported hoster (%s)', e)
+            else:
+                try:
+                    (resume_branch, unused_overwrite,
+                     unused_existing_proposal) = find_existing_proposed(
+                            main_branch, hoster, suite_config.branch_name)
+                except NoSuchProject as e:
+                    warning('Project %s not found', e.project)
+                    resume_branch = None
+                except PermissionDenied as e:
+                    warning('Unable to list existing proposals: %s', e)
+                    resume_branch = None
+
+            if resume_branch is None and vcs_manager:
+                resume_branch = vcs_manager.get_branch(
+                    pkg, suite_config.branch_name,
+                    get_vcs_abbreviation(main_branch))
+
+            if resume_branch is not None:
+                note('Resuming from %s', resume_branch.user_url)
+
+            if vcs_manager:
+                cached_branch = vcs_manager.get_branch(
+                    pkg, 'master', get_vcs_abbreviation(main_branch))
+            else:
+                cached_branch = None
+
+            if cached_branch is not None:
+                note('Using cached branch %s', cached_branch.user_url)
+        else:
+            if vcs_manager:
+                main_branch = vcs_manager.get_branch(pkg, 'master')
+            else:
+                main_branch = None
+            if main_branch is None:
+                return JanitorResult(
+                    pkg, log_id=log_id, branch_url=branch_url,
+                    code='cached-branch-missing',
+                    description='Missing cache branch for %s' % pkg,
+                    logfilenames=[])
+            note('Using cached branch %s', main_branch.user_url)
+            resume_branch = vcs_manager.get_branch(
+                pkg, suite_config.branch_name)
+            cached_branch = None
+
+        if refresh and resume_branch:
+            note('Since refresh was requested, ignoring resume branch.')
+            resume_branch = None
+
+        async with db.acquire() as conn:
+            if resume_branch is not None:
+                (resume_branch_result, resume_branch_name, resume_review_status
+                 ) = await state.get_run_result_by_revision(
+                    conn, suite, revision=resume_branch.last_revision())
+                if resume_review_status == 'rejected':
+                    note('Unsetting resume branch, since last run was '
+                         'rejected.')
+                    resume_branch_result = None
+                    resume_branch = None
+                    resume_branch_name = None
+            else:
+                resume_branch_result = None
+                resume_branch_name = None
+
+            last_build_version = await state.get_last_build_version(
+                conn, pkg, suite)
+
+        log_path = os.path.join(self.output_directory, 'worker.log')
+        try:
+            self._task = asyncio.wait_for(
+                invoke_subprocess_worker(
+                    worker_kind, main_branch, env, command,
+                    self.output_directory, resume_branch=resume_branch,
+                    cached_branch=cached_branch, pre_check=pre_check,
+                    post_check=post_check,
+                    build_command=suite_config.build_command,
+                    log_path=log_path,
+                    resume_branch_result=resume_branch_result,
+                    last_build_version=last_build_version, subpath=subpath,
+                    build_distribution=suite_config.build_distribution,
+                    build_suffix=suite_config.build_suffix),
+                timeout=overall_timeout)
+            retcode = await self._task
+        except asyncio.TimeoutError:
+            return JanitorResult(
+                pkg, log_id=log_id, branch_url=branch_url,
+                code='timeout',
+                description='Run timed out after %d seconds' % overall_timeout,
+                logfilenames=[])
+
+        logfilenames = await import_logs(
+            self.output_directory, logfile_manager, pkg, log_id)
+
+        if retcode != 0:
+            if retcode < 0:
+                description = 'Worker killed with signal %d' % abs(retcode)
+                code = 'worker-killed'
+            else:
+                code = 'worker-failure'
+                try:
+                    with open(log_path, 'r') as f:
+                        description = list(f.readlines())[-1]
+                except FileNotFoundError:
+                    description = 'Worker exited with return code %d' % retcode
+
+            return JanitorResult(
+                pkg, log_id=log_id, branch_url=branch_url,
+                code=code, description=description,
+                logfilenames=logfilenames)
+
+        json_result_path = os.path.join(self.output_directory, 'result.json')
+        if os.path.exists(json_result_path):
+            worker_result = WorkerResult.from_file(json_result_path)
+        else:
+            worker_result = WorkerResult(
+                'worker-missing-result',
+                'Worker failed and did not write a result file.')
+
+        if worker_result.code is not None:
+            return JanitorResult(
+                pkg, log_id=log_id, branch_url=branch_url,
+                worker_result=worker_result, logfilenames=logfilenames,
+                branch_name=(
+                    resume_branch_name
+                    if worker_result.code == 'nothing-to-do' else None))
+
+        result = JanitorResult(
+            pkg, log_id=log_id, branch_url=branch_url,
+            code='success', worker_result=worker_result,
+            logfilenames=logfilenames)
+
+        try:
+            (result.changes_filename, result.build_version,
+             result.build_distribution) = find_changes(
+                 self.output_directory, result.package)
+        except NoChangesFile as e:
+            # Oh, well.
+            note('No changes file found: %s', e)
+
+        try:
+            local_branch = open_branch(
+                os.path.join(self.output_directory, pkg))
+        except (BranchMissing, BranchUnavailable) as e:
+            return JanitorResult(
+                pkg, log_id, branch_url,
+                description='result branch unavailable: %s' % e,
+                code='result-branch-unavailable',
+                worker_result=worker_result,
+                logfilenames=logfilenames)
+
+        enable_tag_pushing(local_branch)
+
+        if vcs_manager:
+            vcs_manager.import_branches(
+                main_branch, local_branch,
+                pkg, suite_config.branch_name,
+                additional_colocated_branches=(
+                    pick_additional_colocated_branches(main_branch)))
+            result.branch_name = suite_config.branch_name
+
+        if result.changes_filename:
+            changes_path = os.path.join(
+                self.output_directory, result.changes_filename)
+            debsign(changes_path, debsign_keyid)
+            if incoming_url is not None:
+                try:
+                    await upload_changes(changes_path, incoming_url)
+                except UploadFailedError as e:
+                    warning('Unable to upload changes file %s: %r',
+                            result.changes_filename, e)
+            if suite != 'unchanged':
+                async with db.acquire() as conn:
+                    run = await state.get_unchanged_run(
+                        conn, worker_result.main_branch_revision)
+                    if run is None:
+                        note('Scheduling control run for %s.', pkg)
+                        duration = datetime.now() - start_time
+                        await state.add_to_queue(
+                            conn, pkg, [
+                                'just-build',
+                                ('--revision=%s' %
+                                 worker_result.main_branch_revision)
+                            ],
+                            'unchanged', offset=-10,
+                            estimated_duration=duration, requestor='control')
+        return result
 
 
 async def export_queue_length(db):
@@ -711,11 +731,11 @@ class QueueProcessor(object):
         self.concurrency = concurrency
         self.use_cached_only = use_cached_only
         self.started = {}
-        self.per_run_directory = {}
         self.topic_queue = Topic(repeat_last=True)
         self.topic_result = Topic()
         self.overall_timeout = overall_timeout
         self.committer = committer
+        self.active_runs = {}
 
     def status_json(self):
         return {'processing': [{
@@ -738,9 +758,10 @@ class QueueProcessor(object):
         self.topic_queue.publish(self.status_json())
 
         with tempfile.TemporaryDirectory() as output_directory:
-            self.per_run_directory[item.id] = output_directory
-            result = await process_one(
-                self.database, self.config, output_directory, self.worker_kind,
+            active_run = ActiveRun(output_directory)
+            self.active_runs[item.id] = active_run
+            result = await active_run.process(
+                self.database, self.config, self.worker_kind,
                 item.branch_url, item.package, item.command,
                 suite=item.suite, pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
@@ -773,6 +794,7 @@ class QueueProcessor(object):
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.started[item]
+        del self.active_runs[item.id]
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
 
@@ -820,7 +842,7 @@ async def handle_log_index(request):
     queue_processor = request.app.queue_processor
     run_id = int(request.match_info['run_id'])
     try:
-        directory = queue_processor.per_run_directory[run_id]
+        directory = queue_processor.active_runs[run_id].output_directory
     except KeyError:
         return web.Response(
             text='No such current run: %s' % run_id, status=404)
@@ -831,7 +853,7 @@ async def handle_log_index(request):
 
 async def handle_kill(request):
     run_id = int(request.match_info['run_id'])
-    raise NotImplementedError
+    raise NotImplementedError('need to kill %r' % run_id)
 
 
 async def handle_log(request):
@@ -843,7 +865,7 @@ async def handle_log(request):
             text='Invalid filename %s' % request.match_info['filename'],
             status=400)
     try:
-        directory = queue_processor.per_run_directory[run_id]
+        directory = queue_processor.active_runs[run_id].output_directory
     except KeyError:
         return web.Response(
             text='No such current run: %s' % run_id, status=404)
