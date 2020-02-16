@@ -492,6 +492,13 @@ def fix_missing_file(
 
 def fix_missing_perl_file(
         tree, error, context, committer=None, update_changelog=True):
+
+    if (error.filename == 'Makefile.PL' and
+            not tree.has_filename('Makefile.PL') and
+            tree.has_filename('dist.ini')):
+        # TODO(jelmer): add dist-zilla add-on to debhelper
+        raise NotImplementedError
+
     if error.inc is None:
         if not os.path.isabs(error.filename):
             return False
