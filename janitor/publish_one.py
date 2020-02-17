@@ -351,7 +351,8 @@ def publish(
                 allow_create_proposal=allow_create_proposal,
                 overwrite_existing=True,
                 existing_proposal=existing_proposal,
-                labels=labels, reviewers=reviewers)
+                labels=labels, reviewers=reviewers,
+                tags=subrunner.tags())
         except NoSuchProject as e:
             raise PublishFailure(
                 description='project %s was not found' % e.project,
@@ -364,10 +365,36 @@ def publish(
                 description=str(e), code='merge-proposal-exists')
 
 
-class LintianBrushPublisher(object):
+class Publisher(object):
 
     def __init__(self, args):
         self.args = args
+
+    def branch_name(self):
+        raise NotImplementedError(self.branch_name)
+
+    def get_proposal_description(
+            self, description_format, existing_description):
+        raise NotImplementedError(self.get_proposal_description)
+
+    def read_worker_result(self, result):
+        raise NotImplementedError(self.read_worker_result)
+
+    def allow_create_proposal(self):
+        raise NotImplementedError(self.allow_create_proposal)
+
+    def push_colocated(self):
+        raise NotImplementedError(self.push_colocated)
+
+    def tags(self):
+        """Tags to push.
+
+        Returns: list of tags to push
+        """
+        raise NotImplementedError(self.tags)
+
+
+class LintianBrushPublisher(Publisher):
 
     def branch_name(self):
         return "lintian-fixes"
@@ -408,11 +435,11 @@ class LintianBrushPublisher(object):
     def push_colocated(self):
         return False
 
+    def tags(self):
+        return []
 
-class MultiArchHintsPublisher(object):
 
-    def __init__(self, args):
-        self.args = args
+class MultiArchHintsPublisher(Publisher):
 
     def branch_name(self):
         return "multiarch-hints"
@@ -462,11 +489,11 @@ These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
     def push_colocated(self):
         return False
 
+    def tags(self):
+        return []
 
-class OrphanPublisher(object):
 
-    def __init__(self, args):
-        self.args = args
+class OrphanPublisher(Publisher):
 
     def branch_name(self):
         return "orphan"
@@ -504,11 +531,11 @@ in alignment with the Vcs-Git changes.
     def push_colocated(self):
         return False
 
+    def tags(self):
+        return []
 
-class NewUpstreamPublisher(object):
 
-    def __init__(self, args):
-        self.args = args
+class NewUpstreamPublisher(Publisher):
 
     def branch_name(self):
         if '--snapshot' in self.args:
@@ -531,6 +558,12 @@ class NewUpstreamPublisher(object):
 
     def push_colocated(self):
         return True
+
+    def tags(self):
+        # TODO(jelmer): Get this information from worker_result
+        return [
+            'upstream/%s' % self._upstream_version,
+            ]
 
 
 def get_debdiff(log_id):
