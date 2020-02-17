@@ -47,10 +47,14 @@ async def handle_publish(request):
         return web.json_response(
             {'error': 'Invalid mode', 'mode': mode}, status=400)
     url = urllib.parse.urljoin(
-        publisher_url, '%s/%s/publish' % (suite, package))
+        publisher_url, '%s/%/publish' % (suite, package))
+    if request.debsso_email:
+        requestor = request.debsso_email
+    else:
+        requestor = 'user from web UI'
     try:
         async with request.app.http_client_session.post(
-                url, data={'mode': mode}) as resp:
+                url, data={'mode': mode, 'requestor': requestor}) as resp:
             if resp.status in (200, 202):
                 return web.json_response(
                     await resp.json(), status=resp.status)
