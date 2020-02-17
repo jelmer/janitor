@@ -341,7 +341,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                     possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run,
                     require_binary_diff=require_binary_diff,
-                    force=False)
+                    force=False, requestor='publisher (publish pending)')
             if actual_mode == MODE_PUSH and push_limit is not None:
                 push_limit -= 1
 
@@ -354,7 +354,7 @@ async def publish_from_policy(
         uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
         mode, update_changelog, command, possible_hosters=None,
         possible_transports=None, dry_run=False, require_binary_diff=False,
-        force=False):
+        force=False, requestor=None):
     from .schedule import (
         full_command,
         estimate_duration,
@@ -450,7 +450,7 @@ async def publish_from_policy(
         conn, run.package, branch_name, run.main_branch_revision,
         run.revision, mode, code, description,
         proposal_url if proposal_url else None,
-        publish_id=publish_id)
+        publish_id=publish_id, requestor=requestor)
 
     if code == 'success' and mode == MODE_PUSH:
         # TODO(jelmer): Call state.update_branch_status() for the
@@ -499,7 +499,8 @@ async def diff_request(request):
 async def publish_and_store(
         db, topic_publish, topic_merge_proposal, publish_id, run, mode,
         maintainer_email, uploader_emails, vcs_manager, rate_limiter,
-        dry_run=False, allow_create_proposal=True, require_binary_diff=False):
+        dry_run=False, allow_create_proposal=True, require_binary_diff=False,
+        requestor=None):
     reviewers = select_reviewers(maintainer_email, uploader_emails)
     async with db.acquire() as conn:
         try:
@@ -518,7 +519,7 @@ async def publish_and_store(
                 conn, run.package, run.branch_name,
                 run.main_branch_revision,
                 run.revision, e.mode, e.code, e.description,
-                None, publish_id=publish_id)
+                None, publish_id=publish_id, requestor=requestor)
             topic_publish.publish({
                 'id': publish_id,
                 'mode': e.mode,
@@ -544,7 +545,7 @@ async def publish_and_store(
             run.main_branch_revision,
             run.revision, mode, 'success', 'Success',
             proposal_url if proposal_url else None,
-            publish_id=publish_id)
+            publish_id=publish_id, requestor=requestor)
 
         publish_delay = run.times[1] - datetime.now()
         publish_latency.observe(publish_delay.total_seconds())
@@ -598,7 +599,7 @@ async def publish_request(request):
         package.maintainer_email, package.uploader_emails,
         vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
         allow_create_proposal=True,
-        require_binary_diff=False))
+        require_binary_diff=False, requestor=post.get('requestor')))
 
     return web.json_response(
         {'run_id': run.id, 'mode': mode, 'publish_id': publish_id},
@@ -790,6 +791,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
     mps_per_maintainer = {'open': {}, 'closed': {}, 'merged': {}}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0}
+    requestor = 'publisher (regular refresh)'
 
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'merged':
@@ -886,14 +888,16 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                     last_run.main_branch_revision,
                     last_run.revision, e.mode, e.code,
                     e.description, mp.url,
-                    publish_id=publish_id)
+                    publish_id=publish_id,
+                    requestor=requestor)
             else:
                 await state.store_publish(
                     conn, last_run.package, branch_name,
                     last_run.main_branch_revision,
                     last_run.revision, MODE_PROPOSE, 'success',
                     'Succesfully updated', mp_url,
-                    publish_id=publish_id)
+                    publish_id=publish_id,
+                    requestor=requestor)
 
                 assert not is_new, "Intended to update proposal %r" % mp_url
         else:
@@ -929,7 +933,7 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
             topic_publish, topic_merge_proposal, mode,
             update_changelog, command, dry_run=dry_run,
             require_binary_diff=require_binary_diff,
-            force=True)
+            force=True, requestor='runner')
     from aiohttp.client import ClientSession
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')

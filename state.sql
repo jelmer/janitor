@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS publish (
    merge_proposal_url text,
    result_code text not null,
    description text,
+   requestor text,
    timestamp timestamp default now(),
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)

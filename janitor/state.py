@@ -128,7 +128,8 @@ async def store_run(
 
 async def store_publish(conn, package, branch_name, main_branch_revision,
                         revision, mode, result_code, description,
-                        merge_proposal_url=None, publish_id=None):
+                        merge_proposal_url=None, publish_id=None,
+                        requestor=None):
     if isinstance(revision, bytes):
         revision = revision.decode('utf-8')
     if isinstance(main_branch_revision, bytes):
@@ -143,10 +144,11 @@ async def store_publish(conn, package, branch_name, main_branch_revision,
     await conn.execute(
         "INSERT INTO publish (package, branch_name, "
         "main_branch_revision, revision, mode, result_code, description, "
-        "merge_proposal_url, id) "
-        "values ($1, $2, $3, $4, $5, $6, $7, $8, $9) ",
+        "merge_proposal_url, id, requestor) "
+        "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ",
         package, branch_name, main_branch_revision, revision, mode,
-        result_code, description, merge_proposal_url, publish_id)
+        result_code, description, merge_proposal_url, publish_id,
+        requestor)
 
 
 class Package(object):
