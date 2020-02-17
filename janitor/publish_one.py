@@ -533,6 +533,23 @@ class NewUpstreamPublisher(object):
         return True
 
 
+def get_debdiff(log_id):
+    debdiff_url = (
+        'https://janitor.debian.net/api/run/%s/debdiff?filter_boring=1'
+        % log_id)
+    headers = {'Accept': 'text/plain'}
+
+    request = urllib.request.Request(debdiff_url, headers=headers)
+    try:
+        with urllib.request.urlopen(request) as f:
+            return f.read()
+    except urllib.error.HTTPError as e:
+        if e.status == 404:
+            return None
+        else:
+            raise
+
+
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, local_branch_url,
@@ -606,20 +623,7 @@ def publish_one(
     if allow_create_proposal is None:
         allow_create_proposal = subrunner.allow_create_proposal()
 
-    debdiff_url = (
-        'https://janitor.debian.net/api/run/%s/debdiff?filter_boring=1'
-        % log_id)
-    headers = {'Accept': 'text/plain'}
-
-    request = urllib.request.Request(debdiff_url, headers=headers)
-    try:
-        with urllib.request.urlopen(request) as f:
-            debdiff = f.read()
-    except urllib.error.HTTPError as e:
-        if e.status == 404:
-            debdiff = None
-        else:
-            raise
+    debdiff = get_debdiff(log_id)
 
     if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
             debdiff is None and require_binary_diff):
