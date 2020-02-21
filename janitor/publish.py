@@ -319,8 +319,11 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
             # TODO(jelmer): next try in SQL query
             attempt_count = await state.get_publish_attempt_count(
                 conn, run.revision)
-            next_try_time = run.times[1] + (
-                2 ** attempt_count * timedelta(hours=1))
+            try:
+                next_try_time = run.times[1] + (
+                    2 ** attempt_count * timedelta(hours=1))
+            except OverflowError:
+                continue
             if datetime.now() < next_try_time:
                 note('Not attempting to push %s / %s (%s) due to '
                      'exponential backoff. Next try in %s.',
@@ -424,13 +427,11 @@ async def publish_from_policy(
             await do_schedule(
                 conn, run.package, run.suite,
                 requestor='publisher (pre-creation merge conflict)')
-            return
-        if e.code == 'missing-binary-diff':
+        elif e.code == 'missing-binary-diff':
             note('Missing binary diff; requesting control run.')
             await do_schedule_control(
                 conn, run.package, run.main_branch_revision,
                 requestor='publisher (missing binary diff)')
-            return
         code = e.code
         description = e.description
         branch_name = None
