@@ -246,7 +246,7 @@ class BranchWorkspace(object):
 
     def propose(self, name, description, hoster=None, existing_proposal=None,
                 overwrite_existing=None, labels=None, dry_run=False,
-                commit_message=None, reviewers=None):
+                commit_message=None, reviewers=None, tags=None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return propose_changes(
@@ -258,9 +258,9 @@ class BranchWorkspace(object):
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
             additional_colocated_branches=self.additional_colocated_branches,
-            reviewers=reviewers)
+            reviewers=reviewers, tags=tags)
 
-    def push(self, hoster=None, dry_run=False):
+    def push(self, hoster=None, dry_run=False, tags=None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
 
@@ -281,21 +281,20 @@ class BranchWorkspace(object):
         return push_changes(
             self.local_branch, self.main_branch, hoster=hoster,
             additional_colocated_branches=additional_colocated_branches,
-            dry_run=dry_run)
+            dry_run=dry_run, tags=tags)
 
-    def push_derived(self, name, hoster=None, overwrite_existing=False):
+    def push_derived(self, name, hoster=None, overwrite_existing=False,
+                     tags=None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return push_derived_changes(
-            self.local_branch,
-            self.main_branch, hoster, name,
-            overwrite_existing=overwrite_existing)
+            self.local_branch, self.main_branch, hoster, name,
+            overwrite_existing=overwrite_existing, tags=tags)
 
 
 def publish(
-        suite, pkg, subrunner, mode, hoster,
-        main_branch, local_branch, resume_branch=None,
-        dry_run=False, log_id=None, existing_proposal=None,
+        suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
+        resume_branch=None, dry_run=False, log_id=None, existing_proposal=None,
         allow_create_proposal=False, reviewers=None, debdiff=None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
