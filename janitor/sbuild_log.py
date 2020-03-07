@@ -851,6 +851,28 @@ def ruby_missing_gem(m):
     return MissingRubyGem(m.group(1), minimum_version)
 
 
+class MissingPhpClass(object):
+
+    kind = 'missing-php-class'
+
+    def __init__(self, php_class):
+        self.php_class = php_class
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.php_class == other.php_class)
+
+    def __str__(self):
+        return 'missing PHP class: %s' % self.php_class
+
+    def __repr__(self):
+        return '%s(%r)' % (type(self).__name__, self.php_class)
+
+
+def php_missing_class(m):
+    return MissingPhpClass(m.group(1))
+
+
 class MissingJavaClass(object):
 
     kind = 'missing-java-class'
@@ -1181,6 +1203,8 @@ build_failure_regexps = [
      ruby_missing_gem),
     (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(([^)]+)\) '
      r'- .* \(Gem::MissingSpecVersionError\)', ruby_missing_gem),
+    (r'PHP Fatal error:  Uncaught Error: Class \'(.*)\' not found in '
+     r'(.*):([0-9]+)', php_missing_class),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
