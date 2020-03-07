@@ -35,6 +35,7 @@ from janitor.sbuild_log import (
     MissingPkgConfig,
     MissingPerlFile,
     MissingPerlModule,
+    MissingPhpClass,
     MissingRubyGem,
     MissingXmlEntity,
     MissingLibrary,
@@ -469,6 +470,14 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Could not find \'sassc\' (>= 2.0.0) among 34 total gem(s) '
             '(Gem::MissingSpecError)'], 1,
             MissingRubyGem('sassc', '2.0.0'))
+
+    def test_missing_php_class(self):
+        self.run_test([
+            'PHP Fatal error:  Uncaught Error: Class '
+            '\'PHPUnit_Framework_TestCase\' not found in '
+            '/tmp/autopkgtest.gO7h1t/build.b1p/src/Horde_Text_Diff-'
+            '2.2.0/test/Horde/Text/Diff/EngineTest.php:9'], 1,
+            MissingPhpClass('PHPUnit_Framework_TestCase'))
 
     def test_missing_java_class(self):
         self.run_test("""\
