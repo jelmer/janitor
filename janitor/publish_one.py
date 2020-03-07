@@ -351,7 +351,8 @@ def publish(
                 overwrite_existing=True,
                 existing_proposal=existing_proposal,
                 labels=labels, reviewers=reviewers,
-                tags=subrunner.tags())
+                tags=subrunner.tags(),
+                allow_collaboration=True)
         except NoSuchProject as e:
             raise PublishFailure(
                 description='project %s was not found' % e.project,
