@@ -556,7 +556,7 @@ def retry_apt_failure(tree, error, context, committer=None,
 
 def fix_missing_php_class(
         tree, error, context, committer=None, update_changelog=True):
-    path = '/usr/share/php/%s.php' % error.php_class.replace('_', '/')
+    path = '/usr/share/php/%s.php' % error.php_class.replace('\\', '/')
     package = get_package_for_paths([path])
     if package is None:
         warning('no package for PHP class %s', error.php_class)
