@@ -67,6 +67,7 @@ from .sbuild_log import (
     MissingPerlModule,
     MissingXmlEntity,
     MissingNodeModule,
+    MissingPhpClass,
     MissingRubyGem,
     MissingLibrary,
     MissingJavaClass,
@@ -553,6 +554,18 @@ def retry_apt_failure(tree, error, context, committer=None,
     return True
 
 
+def fix_missing_php_class(
+        tree, error, context, committer=None, update_changelog=True):
+    path = '/usr/share/php/%s.php' % error.php_class.replace('_', '/')
+    package = get_package_for_paths([path])
+    if package is None:
+        warning('no package for PHP class %s', error.php_class)
+        return False
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
+
+
 def fix_missing_xml_entity(
         tree, error, context, committer=None, update_changelog=True):
     # Ideally we should be using the XML catalog for this, but hardcoding
@@ -741,6 +754,7 @@ FIXERS = [
     (MissingConfigure, fix_missing_configure),
     (MissingAutomakeInput, fix_missing_automake_input),
     (DhAddonLoadFailure, fix_missing_dh_addon),
+    (MissingPhpClass, fix_missing_php_class),
     (AptFetchFailure, retry_apt_failure),
     (MissingMavenArtifacts, fix_missing_maven_artifacts),
     (GnomeCommonMissing, install_gnome_common),
