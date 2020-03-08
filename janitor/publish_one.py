@@ -246,7 +246,8 @@ class BranchWorkspace(object):
 
     def propose(self, name, description, hoster=None, existing_proposal=None,
                 overwrite_existing=None, labels=None, dry_run=False,
-                commit_message=None, reviewers=None, tags=None):
+                commit_message=None, reviewers=None, tags=None,
+                allow_collaboration=False):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return propose_changes(
@@ -258,7 +259,8 @@ class BranchWorkspace(object):
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
             additional_colocated_branches=self.additional_colocated_branches,
-            reviewers=reviewers, tags=tags)
+            reviewers=reviewers, tags=tags,
+            allow_collaboration=allow_collaboration)
 
     def push(self, hoster=None, dry_run=False, tags=None):
         if hoster is None:
