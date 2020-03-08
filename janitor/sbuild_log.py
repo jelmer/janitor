@@ -1214,6 +1214,7 @@ build_failure_regexps = [
     (r'Can\'t exec "(.*)": No such file or directory at '
      r'/usr/share/perl5/Debian/Debhelper/Dh_Lib.pm line [0-9]+.',
      command_missing),
+    (r'.*: error: (.*) command not found', command_missing),
     (r'dh_install: Please use dh_missing '
      '--list-missing/--fail-missing instead', None),
     (r'dh.*: Please use the third-party "pybuild" build system '
