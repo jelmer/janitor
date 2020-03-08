@@ -62,6 +62,7 @@ from .sbuild_log import (
     MissingPkgConfig,
     MissingCommand,
     MissingFile,
+    MissingSprocketsFile,
     MissingGoPackage,
     MissingPerlFile,
     MissingPerlModule,
@@ -491,6 +492,22 @@ def fix_missing_file(
         update_changelog=update_changelog)
 
 
+def fix_missing_sprockets_file(
+        tree, error, context, committer=None, update_changelog=True):
+    if error.content_type == 'application/javascript':
+        path = ('/usr/share/rubygems-integration/all/gems'
+                '/.*/lib/assets/javascripts/%s.js' % error.name)
+    else:
+        warning('unable to handle content type %s', error.content_type)
+        return False
+    package = get_package_for_paths([path], regex=True)
+    if package is None:
+        return False
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
+
+
 def fix_missing_perl_file(
         tree, error, context, committer=None, update_changelog=True):
 
@@ -742,6 +759,7 @@ FIXERS = [
     (MissingPkgConfig, fix_missing_pkg_config),
     (MissingCommand, fix_missing_command),
     (MissingFile, fix_missing_file),
+    (MissingSprocketsFile, fix_missing_sprockets_file),
     (MissingGoPackage, fix_missing_go_package),
     (MissingPerlFile, fix_missing_perl_file),
     (MissingPerlModule, fix_missing_perl_file),

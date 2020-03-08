@@ -430,22 +430,22 @@ class MissingSprocketsFile(object):
 
     kind = 'missing-sprockets-file'
 
-    def __init__(self, path, content_type):
-        self.path = path
+    def __init__(self, name, content_type):
+        self.name = name
         self.content_type = content_type
 
     def __eq__(self, other):
         return isinstance(other, type(self)) and \
-            self.path == other.path and \
+            self.name == other.name and \
             self.content_type == other.content_type
 
     def __str__(self):
         return "Missing sprockets file: %s (type: %s)" % (
-            self.path, self.content_type)
+            self.name, self.content_type)
 
     def __repr__(self):
         return "%s(%r, %r)" % (
-            type(self).__name__, self.path, self.content_type)
+            type(self).__name__, self.name, self.content_type)
 
 
 def sprockets_file_not_found(m):
