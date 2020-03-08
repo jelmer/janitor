@@ -495,8 +495,7 @@ def fix_missing_file(
 def fix_missing_sprockets_file(
         tree, error, context, committer=None, update_changelog=True):
     if error.content_type == 'application/javascript':
-        path = ('/usr/share/rubygems-integration/all/gems'
-                '/.*/lib/assets/javascripts/%s.js' % error.name)
+        path = '^/usr/share/.*/app/assets/javascripts/%s.js$' % error.name
     else:
         warning('unable to handle content type %s', error.content_type)
         return False
