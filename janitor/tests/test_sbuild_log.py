@@ -263,6 +263,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test(
             ['/bin/sh: 1: ./configure: not found'], 1,
             MissingConfigure())
+        self.run_test(
+            ['xvfb-run: error: xauth command not found'], 1,
+            MissingCommand('xauth'))
 
     def test_pkg_config_missing(self):
         self.run_test([
