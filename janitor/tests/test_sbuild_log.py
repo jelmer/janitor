@@ -42,6 +42,7 @@ from janitor.sbuild_log import (
     MissingJavaClass,
     MissingRPackage,
     MissingAutoconfMacro,
+    MissingSprocketsFile,
     MissingAutomakeInput,
     DhMissingUninstalled,
     DhUntilUnsupported,
@@ -82,6 +83,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'debian/rules:4: /usr/share/openstack-pkg-tools/pkgos.make: '
             'No such file or directory'], 1,
             MissingFile('/usr/share/openstack-pkg-tools/pkgos.make'))
+
+    def test_missing_sprockets_file(self):
+        self.run_test([
+            'Sprockets::FileNotFound: couldn\'t find file '
+            '\'activestorage\' with type \'application/javascript\''], 1,
+            MissingSprocketsFile('activestorage', 'application/javascript'))
 
     def test_gxx_missing_file(self):
         self.run_test([

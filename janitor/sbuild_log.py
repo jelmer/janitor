@@ -417,13 +417,39 @@ class MissingFile(object):
         return "Missing file: %s" % self.path
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.path)
+        return "%s(%r)" % (type(self).__name__, self.path)
 
 
 def file_not_found(m):
     if m.group(1).startswith('/'):
         return MissingFile(m.group(1))
     return None
+
+
+class MissingSprocketsFile(object):
+
+    kind = 'missing-sprockets-file'
+
+    def __init__(self, path, content_type):
+        self.path = path
+        self.content_type = content_type
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            self.path == other.path and \
+            self.content_type == other.content_type
+
+    def __str__(self):
+        return "Missing sprockets file: %s (type: %s)" % (
+            self.path, self.content_type)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.path, self.content_type)
+
+
+def sprockets_file_not_found(m):
+    return MissingSprocketsFile(m.group(1), m.group(2))
 
 
 class MissingGoPackage(object):
@@ -1210,6 +1236,8 @@ build_failure_regexps = [
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
      '[Errno 2] No such file or directory', file_not_found),
     (r'g\+\+: error: (.*): No such file or directory', file_not_found),
+    (r'Sprockets::FileNotFound: couldn\'t find file \'(.*)\' '
+     r'with type \'(.*)\'', sprockets_file_not_found),
     (r'You need to install gnome-common from the GNOME git',
      gnome_common_missing),
     (r'automake: error: cannot open < (.*): No such file or directory',
@@ -1246,6 +1274,7 @@ build_failure_regexps = [
     (r'Failed: [pytest] section in setup.cfg files is no longer '
      r'supported, change to [tool:pytest] instead.', None),
     (r'cp: cannot stat \'(.*)\': No such file or directory', None),
+    (r'PHP Fatal error: (.*)', None),
 ]
 
 compiled_build_failure_regexps = [
