@@ -61,7 +61,6 @@ CREATE TABLE IF NOT EXISTS run (
    review_status review_status not null default 'unreviewed',
    value integer,
    foreign key (package) references package(name),
-   foreign key (merge_proposal_url) references merge_proposal(url)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
 CREATE INDEX ON run (start_time);
