@@ -504,14 +504,10 @@ class OrphanPublisher(Publisher):
         from silver_platter.debian.orphan import move_instructions
         text = "Move orphaned package to the QA team."
         if not self.pushed and self.new_vcs_url:
-            text += """
-
-Please move the repository from %(old_vcs_url)s to %(new_vcs_url)s,
-in alignment with the Vcs-Git changes.
-""" % ({'old_vcs_url': self.old_vcs_url, 'new_vcs_url': self.new_vcs_url})
             text += '\n'.join(move_instructions(
                 self.package_name, self.salsa_user,
                 self.old_vcs_url, self.new_vcs_url))
+        return text
 
     def get_proposal_commit_message(self, existing_commit_message):
         return 'Move package to the QA team.'
@@ -598,6 +594,8 @@ def publish_one(
         subrunner = LintianBrushPublisher(command)
     elif command.startswith('apply-multiarch-hints'):
         subrunner = MultiArchHintsPublisher(command)
+    elif command.startswith('orphan'):
+        subrunner = OrphanPublisher(command)
     else:
         raise AssertionError('unknown command %r' % command)
 
