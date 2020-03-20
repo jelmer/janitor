@@ -478,7 +478,7 @@ async def main():
              iter_multiarch_fixes(args.packages or None)),
             ('orphan',
              udd.iter_orphan_candidates(args.packages or None)),
-            ('import-upload',
+            ('uncommitted',
              udd.iter_missing_commits(args.packags or None)),
             ]
 
