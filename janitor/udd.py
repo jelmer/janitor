@@ -208,6 +208,22 @@ orphaned_packages.type in ('O') AND
             async for row in self._conn.cursor(query, *args):
                 yield (row[0], str(row[2]), DEFAULT_VALUE_ORPHAN, None)
 
+    async def iter_missing_commits(self, packages=None):
+        args = []
+        query = """\
+SELECT sources.source, sources.version, vcswatch.url
+FROM vcswatch JOIN sources ON sources.source = vcswatch.source
+WHERE
+ vcswatch.status IN ('OLD', 'UNREL') AND
+ sources.release = 'sid'
+"""
+        if packages is not None:
+            query += " AND sources.source = any($1::text[])"
+            args.append(tuple(packages))
+        async with self._conn.transaction():
+            async for row in self._conn.cursor(query, *args):
+                yield (row[0], str(row[1]), DEFAULT_VALUE_UNCOMMITTED, None)
+
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
         query = """\
@@ -461,7 +477,9 @@ async def main():
             ('multiarch-fixes',
              iter_multiarch_fixes(args.packages or None)),
             ('orphan',
-             udd.iter_orphan_candidates(args.packages or None))
+             udd.iter_orphan_candidates(args.packages or None)),
+            ('import-upload',
+             udd.iter_missing_commits(args.packags or None)),
             ]
 
         for suite, candidate_fn in CANDIDATE_FNS:
