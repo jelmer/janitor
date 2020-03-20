@@ -71,6 +71,8 @@ async def get_queue(conn, only_command=None, limit=None):
             description = 'Apply multi-arch hints'
         elif entry.command[0] == 'orphan':
             description = 'Mark as orphaned'
+        elif entry.command[0] == 'import-upload':
+            description = 'Import archive changes missing from VCS'
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:

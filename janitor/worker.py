@@ -573,6 +573,25 @@ class JustBuildWorker(SubWorker):
         return None
 
 
+class UncommittedWorker(SubWorker):
+
+    def __init__(self, command, env):
+        self.committer = env.get('COMMITTER')
+        from silver_platter.debian.uncommitted import UncommittedChanger
+        self.changer = UncommittedChanger()
+        subparser = argparse.ArgumentParser(
+            prog='import-upload', parents=[common_parser])
+        self.changer.setup_parser(subparser)
+        self.args = subparser.parse_args(command)
+
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata, subpath=None):
+        result = self.changer.make_changes(
+            local_tree, subpath=subpath, committer=self.committer)
+        metadata['tags'] = result
+        return 'Import archive changes missing from the VCS.'
+
+
 class WorkerResult(object):
 
     def __init__(self, description, build_distribution=None,
@@ -635,6 +654,8 @@ def process_package(vcs_url, env, command, output_directory,
         subworker_cls = MultiArchHintsWorker
     elif command[0] == 'orphan':
         subworker_cls = OrphanWorker
+    elif command[0] == 'import-upload':
+        subworker_cls = UncommittedWorker
     else:
         raise WorkerFailure(
             'unknown-subcommand',

@@ -50,3 +50,12 @@ suite {
   build_suffix: "jan+maf"
   build_command: "sbuild"
 }
+
+suite {
+  name: "uncommitted"
+  archive_description: "Builds of packages missing in VCS"
+  build_distribution: "uncommitted"
+  branch_name: "uncommitted"
+  build_suffix: "jan+unc"
+  build_command: "sbuild"
+}

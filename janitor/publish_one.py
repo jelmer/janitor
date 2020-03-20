@@ -533,6 +533,30 @@ class OrphanPublisher(Publisher):
         return []
 
 
+class UncommittedPublisher(Publisher):
+
+    def branch_name(self):
+        return "uncommitted"
+
+    def get_proposal_description(self, format, existing_description):
+        return 'Import archive changes missing from the VCS.'
+
+    def get_proposal_commit_message(self, existing_commit_message):
+        return 'Import archive changes missing from the VCS.'
+
+    def read_worker_result(self, result):
+        self.tags = result['tags']
+
+    def allow_create_proposal(self):
+        return True
+
+    def push_colocated(self):
+        return False
+
+    def tags(self):
+        return [e[0] for e in self.tags]
+
+
 class NewUpstreamPublisher(Publisher):
 
     def branch_name(self):
@@ -596,6 +620,8 @@ def publish_one(
         subrunner = MultiArchHintsPublisher(command)
     elif command.startswith('orphan'):
         subrunner = OrphanPublisher(command)
+    elif command.startswith('import-upload'):
+        subrunner = UncommittedPublisher(command)
     else:
         raise AssertionError('unknown command %r' % command)
 
