@@ -41,6 +41,8 @@ from lintian_brush.vcs import (
 
 DEFAULT_VALUE_UNCHANGED = 20
 DEFAULT_VALUE_ORPHAN = 60
+DEFAULT_VALUE_UNCOMMITTED = 60
+UNCOMMITTED_NMU_BONUS = 10
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
 DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
@@ -222,7 +224,10 @@ WHERE
             args.append(tuple(packages))
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
-                yield (row[0], str(row[1]), DEFAULT_VALUE_UNCOMMITTED, None)
+                value = DEFAULT_VALUE_UNCOMMITTED
+                if 'nmu' in str(row[1]):
+                    value += UNCOMMITTED_NMU_BONUS
+                yield (row[0], str(row[1]), value, None)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -479,7 +484,7 @@ async def main():
             ('orphan',
              udd.iter_orphan_candidates(args.packages or None)),
             ('uncommitted',
-             udd.iter_missing_commits(args.packags or None)),
+             udd.iter_missing_commits(args.packages or None)),
             ]
 
         for suite, candidate_fn in CANDIDATE_FNS:
