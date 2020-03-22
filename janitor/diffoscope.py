@@ -144,14 +144,15 @@ async def format_diffoscope(root_difference, content_type, title):
     raise AssertionError('unknown content type %r' % content_type)
 
 
-async def run_diffoscope(old_changes, new_changes):
+async def run_diffoscope(old_changes, new_changes, preexec_fn=None):
     args = ['diffoscope', '--json=-', '--exclude-directory-metadata=yes']
     args.extend([old_changes, new_changes])
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
+        stderr=asyncio.subprocess.PIPE,
+        preexec_fn=preexec_fn)
     stdout, stderr = await p.communicate(b'')
     if p.returncode not in (0, 1):
         raise DiffoscopeError(stderr.decode(errors='replace'))
