@@ -588,7 +588,9 @@ class UncommittedWorker(SubWorker):
                      base_metadata, subpath=None):
         result = self.changer.make_changes(
             local_tree, subpath=subpath, committer=self.committer)
-        metadata['tags'] = result
+        metadata['tags'] = [
+            (tag_name, str(version))
+            for (tag_name, version) in result]
         return 'Import archive changes missing from the VCS.'
 
 
