@@ -587,7 +587,8 @@ class UncommittedWorker(SubWorker):
     def make_changes(self, local_tree, report_context, metadata,
                      base_metadata, subpath=None):
         result = self.changer.make_changes(
-            local_tree, subpath=subpath, committer=self.committer)
+            local_tree, subpath=subpath, committer=self.committer,
+            update_changelog=False)
         metadata['tags'] = [
             (tag_name, str(version))
             for (tag_name, version) in result]
