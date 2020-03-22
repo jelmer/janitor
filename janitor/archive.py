@@ -251,7 +251,15 @@ async def handle_diffoscope(request):
     with open(new_changes_path, 'r') as f:
         new_changes = Changes(f)
 
-    diffoscope_diff = await run_diffoscope(old_changes_path, new_changes_path)
+    def set_limits():
+        import resource
+        # Limit to 200Mb
+        resource.setrlimit(
+            resource.RLIMIT_AS, (200 * 1024 * 1024, 200 * 1024 * 1024))
+
+    diffoscope_diff = await run_diffoscope(
+        old_changes_path, new_changes_path,
+        set_limits)
 
     filter_diffoscope_irrelevant(diffoscope_diff)
 
