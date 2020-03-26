@@ -46,9 +46,11 @@ from silver_platter.debian.lintian import (
     DEFAULT_MINIMUM_CERTAINTY,
 )
 from lintian_brush.config import Config as LintianBrushConfig
+from lintian_brush.reformatting import GeneratedFile, FormattingUnpreservable
 from lintian_brush import (
     SUPPORTED_CERTAINTIES,
     version_string as lintian_brush_version_string,
+    NoChanges,
     )
 from silver_platter.debian.upstream import (
     merge_upstream,
@@ -165,6 +167,12 @@ class MultiArchHintsWorker(SubWorker):
         else:
             if update_changelog is None:
                 update_changelog = cfg.update_changelog()
+        if control_files_in_root(local_tree):
+            raise WorkerFailure(
+                'control-files-in-root',
+                'control files live in root rather than debian/ '
+                '(LarstIQ mode)')
+
         try:
             result = self.changer.make_changes(local_tree, subpath, None, None)
         except NoChanges:
