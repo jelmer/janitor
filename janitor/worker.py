@@ -140,16 +140,9 @@ class MultiArchHintsWorker(SubWorker):
     def __init__(self, command, env):
         subparser = argparse.ArgumentParser(
             prog='multiarch-fix', parents=[common_parser])
-        # Hide the minimum-certainty option for the moment.
-        subparser.add_argument(
-            '--minimum-certainty',
-            type=str,
-            choices=SUPPORTED_CERTAINTIES,
-            default=None,
-            help=argparse.SUPPRESS)
-        subparser.add_argument(
-            '--allow-reformatting', default=None, action='store_true',
-            help=argparse.SUPPRESS)
+        from silver_platter.debian.multiarch import MultiArchHintsChanger
+        self.changer = MultiArchHintsChanger()
+        self.changer.setup_parser(subparser)
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, report_context, metadata,
@@ -165,47 +158,15 @@ class MultiArchHintsWorker(SubWorker):
           subpath: Path in the branch where the package resides
         """
         update_changelog = self.args.update_changelog
-        allow_reformatting = self.args.allow_reformatting
-        minimum_certainty = self.args.minimum_certainty
         try:
             cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
         except FileNotFoundError:
             pass
         else:
-            if minimum_certainty is None:
-                minimum_certainty = cfg.minimum_certainty()
-            if allow_reformatting is None:
-                allow_reformatting = cfg.allow_reformatting()
             if update_changelog is None:
                 update_changelog = cfg.update_changelog()
-
-        from lintian_brush.multiarch_hints import (
-            download_multiarch_hints,
-            parse_multiarch_hints,
-            multiarch_hints_by_binary,
-            MultiArchHintFixer,
-            APPLIERS,
-            )
-        from lintian_brush import (
-            run_lintian_fixer,
-            NoChanges,
-            )
-        from lintian_brush.reformatting import (
-            FormattingUnpreservable,
-            GeneratedFile,
-            )
-
-        note("Downloading multiarch hints.")
-        with download_multiarch_hints() as f:
-            hints = multiarch_hints_by_binary(parse_multiarch_hints(f))
-
         try:
-            result, summary = run_lintian_fixer(
-                local_tree, MultiArchHintFixer(APPLIERS, hints),
-                update_changelog=update_changelog,
-                minimum_certainty=minimum_certainty,
-                subpath=subpath, allow_reformatting=allow_reformatting,
-                net_access=True)
+            result = self.changer.make_changes(local_tree, subpath, None, None)
         except NoChanges:
             raise WorkerFailure('nothing-to-do', 'no hints to apply')
         except FormattingUnpreservable:
