@@ -1402,6 +1402,7 @@ secondary_build_failure_regexps = [
     r'    \[javac\] [^: ]+:[0-9]+: error: (.*)',
     r'1\) TestChannelFeature: ([^:]+):([0-9]+): assert failed',
     r'cp: target \'(.*)\' is not a directory',
+    r'cp: cannot create regular file \'(.*)\': No such file or directory',
     r'couldn\'t determine home directory at (.*)',
 ]
 
@@ -1510,6 +1511,24 @@ class AutopkgtestTestbedFailure(object):
         return self.reason
 
 
+class AutopkgtestStderrFailure(object):
+
+    kind = 'stderr-output'
+
+    def __init__(self, stderr_line):
+        self.stderr_line = stderr_line
+
+    def __eq__(self, other):
+        return (isinstance(self, type(other)) and
+                self.stderr_line == other.stderr_line)
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.stderr_line)
+
+    def __str__(self):
+        return "output on stderr: %s" % self.stderr_line
+
+
 def find_autopkgtest_failure_description(lines):
     """Find the autopkgtest failure in output.
 
@@ -1532,6 +1551,11 @@ def find_autopkgtest_failure_description(lines):
                 lines[lineno+1])
             description = 'Test %s failed: %s' % (
                 testname, lines[lineno+2][len('badpkg: '):].rstrip('\n'))
+        elif reason.startswith('stderr: '):
+            error = AutopkgtestStderrFailure(reason[len('stderr: '):])
+            description = (
+                'Test %s failed due to unauthorized stderr output: %s' % (
+                    testname, error.stderr_line))
         else:
             error = None
             description = 'Test %s failed: %s' % (testname, reason)
