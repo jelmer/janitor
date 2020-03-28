@@ -26,6 +26,8 @@ __all__ = [
     'parse_sbuild_log',
 ]
 
+from .trace import warning
+
 
 class SbuildFailure(Exception):
     """Sbuild failed to run."""
@@ -196,12 +198,19 @@ def worker_failure_from_sbuild_log(f):
             description = str(error)
             context = ('build', )
         if failed_stage == 'autopkgtest':
-            (apt_offset, apt_description, testname) = (
+            (apt_offset, testname, apt_error, apt_description) = (
                 find_autopkgtest_failure_description(section_lines))
+            if apt_error and not error:
+                error = apt_error
+                if not apt_description:
+                    apt_description = str(apt_error)
             if apt_description and not description:
                 description = apt_description
                 offset = apt_offset
-            context = ('autopkgtest', testname)
+            if testname is not None:
+                context = ('autopkgtest', testname)
+            else:
+                context = ('autopkgtest', None)
     if failed_stage == 'apt-get-update':
         focus_section, offset, description, error = (
                 find_apt_get_update_failure(paragraphs))
@@ -1132,6 +1141,7 @@ build_failure_regexps = [
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
     (r'\/bin\/bash: (.*): command not found', command_missing),
+    (r'bash: (.*): command not found', command_missing),
     (r'/usr/bin/env: ‘(.*)’: No such file or directory',
      command_missing),
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
@@ -1217,7 +1227,7 @@ build_failure_regexps = [
     (r'.*: error: (.*) command not found', command_missing),
     (r'dh_install: Please use dh_missing '
      '--list-missing/--fail-missing instead', None),
-    (r'dh.*: Please use the third-party "pybuild" build system '
+    (r'dh([^:]*): Please use the third-party "pybuild" build system '
      'instead of python-distutils', None),
     # A Python error, but not likely to be actionable. The previous
     # line will have the actual line that failed.
@@ -1309,7 +1319,8 @@ secondary_build_failure_regexps = [
     # Random Python errors
     '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
-    r'testtools.matchers._impl.MismatchError|FileNotFoundError'
+    r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
+    'PermissionError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1388,21 +1399,100 @@ def find_build_failure_description(lines):
     return None, None, None
 
 
+class AutopkgtestDepsUnsatisfiable(object):
+
+    kind = 'badpkg'
+
+    def __init__(self, args):
+        self.args = args
+
+    @classmethod
+    def from_blame_line(cls, line):
+        args = []
+        entries = line[len('blame: '):].rstrip('\n').split(' ')
+        for entry in entries:
+            try:
+                (kind, arg) = entry.split(':', 1)
+            except ValueError:
+                kind = None
+                arg = entry
+            args.append((kind, arg))
+            if kind not in ('deb', 'arg', 'dsc', None):
+                warning('unknown entry %s on badpkg line', entry)
+        return cls(args)
+
+    def __eq__(self, other):
+        return type(self) == type(other) and \
+               self.args == other.args
+
+    def __repr__(self):
+        return "%s(args=%r)" % (type(self).__name__, self.args)
+
+
+class AutopkgtestTestbedFailure(object):
+
+    kind = 'testbed-failure'
+
+    def __init__(self, reason):
+        self.reason = reason
+
+    def __eq__(self, other):
+        return type(self) == type(other) and self.reason == other.reason
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.reason)
+
+    def __str__(self):
+        return self.reason
+
+
 def find_autopkgtest_failure_description(lines):
     """Find the autopkgtest failure in output.
 
     Returns:
-      tuple with (line offset, line, testname)
+      tuple with (line offset, testname, error, description)
     """
     OFFSET = 20
     for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
         line = lines[lineno].strip('\n')
         m = re.match('([^ ]+)([ ]+)FAIL (.+)', line)
-        if m:
-            description = 'Test %s failed: %s' % (m.group(1), m.group(3))
-            return lineno + 1, description, m.group(1)
+        if not m:
+            continue
+        reason = m.group(3)
+        testname = m.group(1)
+        if (reason == 'badpkg' and
+                lineno+2 < len(lines) and
+                lines[lineno+1].startswith('blame: ') and
+                lines[lineno+2].startswith('badpkg: ')):
+            error = AutopkgtestDepsUnsatisfiable.from_blame_line(
+                lines[lineno+1])
+            description = 'Test %s failed: %s' % (
+                testname, lines[lineno+2][len('badpkg: '):].rstrip('\n'))
+        else:
+            error = None
+            description = 'Test %s failed: %s' % (testname, reason)
+        return lineno + 1, testname, error, description
 
-    return None, None, None
+    testname = None
+    last = None
+    for line in lines:
+        m = re.match(
+            r'autopkgtest \[([0-9:]+)\]: test (.*): \[(\-+)',
+            line)
+        if m:
+            testname = m.group(2)
+            continue
+        m = re.match(
+            r'autopkgtest \[([0-9:]+)\]: ERROR: testbed failure: (.*)',
+            line)
+        if m:
+            last = (lineno + 1, AutopkgtestTestbedFailure(m.group(2)), None)
+            continue
+
+    if last is not None:
+        return last[0], testname, last[1], last[2]
+
+    return None, None, None, None
 
 
 class AptUpdateError(object):
