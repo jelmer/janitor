@@ -697,7 +697,7 @@ class FindAutopkgtestFailureDescriptionTests(unittest.TestCase):
 Removing autopkgtest-satdep (0) ...
 autopkgtest [06:59:00]: test phpunit: [-----------------------
 PHP Fatal error:  Declaration of Wicked_TestCase::setUp() must \
-be compatible with PHPUnit\Framework\TestCase::setUp(): void in \
+be compatible with PHPUnit\\Framework\\TestCase::setUp(): void in \
 /tmp/autopkgtest.5ShOBp/build.ViG/src/wicked-2.0.8/test/Wicked/\
 TestCase.php on line 31
 autopkgtest [06:59:01]: ERROR: testbed failure: testbed auxverb \
