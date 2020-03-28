@@ -18,7 +18,10 @@
 from janitor.sbuild_log import (
     AptFetchFailure,
     AptMissingReleaseFile,
+    AutopkgtestTestbedFailure,
+    AutopkgtestDepsUnsatisfiable,
     find_apt_get_failure,
+    find_autopkgtest_failure_description,
     find_build_failure_description,
     CcacheError,
     DebhelperPatternNotFound,
@@ -605,3 +608,99 @@ does not have a Release file.\
 
     def test_vague(self):
         self.run_test(["E: Stuff is broken"], 1, None)
+
+
+class FindAutopkgtestFailureDescriptionTests(unittest.TestCase):
+
+    def test_empty(self):
+        self.assertEqual(
+            (None, None, None, None),
+            find_autopkgtest_failure_description([]))
+
+    def test_no_match(self):
+        self.assertEqual(
+            (None, None, None, None),
+            find_autopkgtest_failure_description(['blalblala\n']))
+
+    def test_unknown_error(self):
+        self.assertEqual(
+            (1, 'python-bcolz', None, 'Test python-bcolz failed: some error'),
+            find_autopkgtest_failure_description(
+                ['python-bcolz         FAIL some error\n']))
+
+    def test_deps(self):
+        error = AutopkgtestDepsUnsatisfiable(
+            [('arg', '/home/janitor/tmp/tmppvupofwl/build-area/'
+              'bcolz-doc_1.2.1+ds2-4~jan+lint1_all.deb'),
+             ('deb', 'bcolz-doc'),
+             ('arg', '/home/janitor/tmp/tmppvupofwl/build-area/python-'
+              'bcolz-dbgsym_1.2.1+ds2-4~jan+lint1_amd64.deb'),
+             ('deb', 'python-bcolz-dbgsym'),
+             ('arg', '/home/janitor/tmp/'
+              'tmppvupofwl/build-area/python-bcolz_1.2.1+ds2-4~jan'
+              '+lint1_amd64.deb'),
+             ('deb', 'python-bcolz'),
+             ('arg', '/home/janitor/tmp/tmppvupofwl/build-area/'
+              'python3-bcolz-dbgsym_1.2.1+ds2-4~jan+lint1_amd64.deb'),
+             ('deb', 'python3-bcolz-dbgsym'),
+             ('arg', '/home/janitor/tmp/tmppvupofwl/build-area/python3-'
+              'bcolz_1.2.1+ds2-4~jan+lint1_amd64.deb'),
+             ('deb', 'python3-bcolz'),
+             (None, '/home/janitor/tmp/tmppvupofwl/build-area/'
+              'bcolz_1.2.1+ds2-4~jan+lint1.dsc')])
+
+        self.assertEqual(
+            (1, 'python-bcolz', error,
+             'Test python-bcolz failed: Test dependencies are unsatisfiable. '
+             'A common reason is that your testbed is out of date '
+             'with respect to the archive, and you need to use a '
+             'current testbed or run apt-get update or use -U.'),
+            find_autopkgtest_failure_description(
+                ['python-bcolz         FAIL badpkg\n',
+                 'blame: arg:/home/janitor/tmp/tmppvupofwl/build-area/'
+                 'bcolz-doc_1.2.1+ds2-4~jan+lint1_all.deb deb:bcolz-doc '
+                 'arg:/home/janitor/tmp/tmppvupofwl/build-area/python-'
+                 'bcolz-dbgsym_1.2.1+ds2-4~jan+lint1_amd64.deb '
+                 'deb:python-bcolz-dbgsym arg:/home/janitor/tmp/'
+                 'tmppvupofwl/build-area/python-bcolz_1.2.1+ds2-4~jan'
+                 '+lint1_amd64.deb deb:python-bcolz arg:/home/janitor/'
+                 'tmp/tmppvupofwl/build-area/python3-bcolz-dbgsym_1.2.1'
+                 '+ds2-4~jan+lint1_amd64.deb deb:python3-bcolz-dbgsym '
+                 'arg:/home/janitor/tmp/tmppvupofwl/build-area/python3-'
+                 'bcolz_1.2.1+ds2-4~jan+lint1_amd64.deb deb:python3-'
+                 'bcolz /home/janitor/tmp/tmppvupofwl/build-area/'
+                 'bcolz_1.2.1+ds2-4~jan+lint1.dsc\n',
+                 'badpkg: Test dependencies are unsatisfiable. '
+                 'A common reason is that your testbed is out of date '
+                 'with respect to the archive, and you need to use a '
+                 'current testbed or run apt-get update or use -U.\n']))
+
+    def test_testbed_failure(self):
+        error = AutopkgtestTestbedFailure(
+            'sent `copyup /tmp/autopkgtest.9IStGJ/build.0Pm/src/ '
+            '/tmp/autopkgtest.output.icg0g8e6/tests-tree/\', got '
+            '`timeout\', expected `ok...\'')
+        self.assertEqual(
+            (1, None, error, None),
+            find_autopkgtest_failure_description(
+                ['autopkgtest [12:46:18]: ERROR: testbed failure: sent '
+                 '`copyup /tmp/autopkgtest.9IStGJ/build.0Pm/src/ '
+                 '/tmp/autopkgtest.output.icg0g8e6/tests-tree/\', got '
+                 '`timeout\', expected `ok...\'\n']))
+
+    def test_testbed_failure_with_test(self):
+        error = AutopkgtestTestbedFailure(
+            'testbed auxverb failed with exit code 255')
+        self.assertEqual(
+            (5, 'phpunit', error, None),
+            find_autopkgtest_failure_description("""\
+Removing autopkgtest-satdep (0) ...
+autopkgtest [06:59:00]: test phpunit: [-----------------------
+PHP Fatal error:  Declaration of Wicked_TestCase::setUp() must \
+be compatible with PHPUnit\Framework\TestCase::setUp(): void in \
+/tmp/autopkgtest.5ShOBp/build.ViG/src/wicked-2.0.8/test/Wicked/\
+TestCase.php on line 31
+autopkgtest [06:59:01]: ERROR: testbed failure: testbed auxverb \
+failed with exit code 255
+Exiting with 16
+""".splitlines(True)))
