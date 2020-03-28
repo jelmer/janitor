@@ -435,6 +435,12 @@ def file_not_found(m):
     return None
 
 
+def interpreter_missing(m):
+    if m.group(2).startswith('/'):
+        return MissingFile(m.group(2))
+    return MissingCommand(m.group(2))
+
+
 class MissingSprocketsFile(object):
 
     kind = 'missing-sprockets-file'
@@ -781,6 +787,27 @@ class DhMissingUninstalled(object):
 
 def dh_missing_uninstalled(m):
     return DhMissingUninstalled(m.group(1))
+
+
+class DhLinkDestinationIsDirectory(object):
+
+    kind = 'dh-link-destination-is-directory'
+
+    def __init__(self, path):
+        self.path = path
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.path == other.path
+
+    def __str__(self):
+        return "Link destination %s is directory" % self.path
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.path)
+
+
+def dh_link_destination_is_dir(m):
+    return DhLinkDestinationIsDirectory(m.group(1))
 
 
 def maven_missing_artifact(m):
@@ -1142,6 +1169,8 @@ build_failure_regexps = [
     (r'sh: \d+: ([^ ]+): not found', command_missing),
     (r'\/bin\/bash: (.*): command not found', command_missing),
     (r'bash: (.*): command not found', command_missing),
+    (r'\/bin\/bash: (.*): (.*): bad interpreter: No such file or directory',
+     interpreter_missing),
     (r'/usr/bin/env: ‘(.*)’: No such file or directory',
      command_missing),
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
@@ -1157,6 +1186,8 @@ build_failure_regexps = [
      pkg_config_missing),
     (r'configure: error: [a-z0-9_-]+-pkg-config (.*) couldn\'t be found',
      pkg_config_missing),
+    (r'configure: error: C preprocessor "/lib/cpp" fails sanity check',
+     None),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
      'tried pkgconfig', meson_pkg_config_missing),
     ('meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
@@ -1203,6 +1234,8 @@ build_failure_regexps = [
      maven_missing_artifact),
     (r'dh_missing: (.*) exists in debian/.* but is not installed to anywhere',
      dh_missing_uninstalled),
+    (r'dh_link: link destination (.*) is a directory',
+     dh_link_destination_is_dir),
     (r'I/O error : Attempt to load network entity (.*)',
      xsltproc_network_entity),
     (r'ccache: error: (.*)', ccache_error),
@@ -1274,7 +1307,6 @@ build_failure_regexps = [
      None),
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
      'but --add-udeb=(.*) was passed!?', None),
-    ('dh_link: link destination (.*) is a directory', None),
     ('dpkg-gensymbols: error: some symbols or patterns disappeared in the '
      'symbols file: see diff output below', None),
     (r'Invalid gemspec in \[.*\]: No such file or directory - (.*)',
@@ -1320,7 +1352,7 @@ secondary_build_failure_regexps = [
     '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
-    'PermissionError|IndexError'
+    'PermissionError|IndexError|TypeError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1339,6 +1371,9 @@ secondary_build_failure_regexps = [
     r'configure: error: (.*)',
     r'config.status: error: (.*)',
     r'E: Build killed with signal TERM after ([0-9]+) minutes of inactivity',
+    r'    \[javac\]: [^: ]+:[0-9]+: error: (.*)',
+    r'1\) TestChannelFeature: ([^:]+):([0-9]+): assert failed',
+    r'cp: target \'(.*)\' is not a directory',
 ]
 
 compiled_secondary_build_failure_regexps = [

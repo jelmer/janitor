@@ -25,6 +25,7 @@ from janitor.sbuild_log import (
     find_build_failure_description,
     CcacheError,
     DebhelperPatternNotFound,
+    DhLinkDestinationIsDirectory,
     MissingConfigure,
     MissingConfigStatusInput,
     MissingCHeader,
@@ -98,6 +99,10 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'g++: error: /usr/lib/x86_64-linux-gnu/libGL.so: '
             'No such file or directory'], 1,
             MissingFile('/usr/lib/x86_64-linux-gnu/libGL.so'))
+        self.run_test([
+            '/bin/bash: /usr/bin/rst2man: /usr/bin/python: '
+            'bad interpreter: No such file or directory'], 1,
+            MissingFile('/usr/bin/python'))
 
     def test_installdocs_missing(self):
         self.run_test([
@@ -528,7 +533,10 @@ arch:all and the other not)""".splitlines(), 1)
     def test_dh_link_error(self):
         self.run_test(
             ['dh_link: link destination debian/r-cran-crosstalk/usr/lib/R/'
-             'site-library/crosstalk/lib/ionrangeslider is a directory'], 1)
+             'site-library/crosstalk/lib/ionrangeslider is a directory'], 1,
+            DhLinkDestinationIsDirectory(
+                'debian/r-cran-crosstalk/usr/lib/R/site-library/crosstalk/'
+                'lib/ionrangeslider'))
 
     def test_go_test(self):
         self.run_test(
