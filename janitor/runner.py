@@ -376,7 +376,7 @@ async def upload_changes(changes_path, incoming_url):
 
 async def import_logs(output_directory, logfile_manager, pkg, log_id):
     logfilenames = []
-    for entry in os.listdir(output_directory):
+    for entry in os.scandir(output_directory):
         if entry.is_dir():
             continue
         parts = entry.name.split('.')
