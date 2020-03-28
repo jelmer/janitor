@@ -1320,7 +1320,7 @@ secondary_build_failure_regexps = [
     '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
-    'PermissionError'
+    'PermissionError|IndexError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1481,6 +1481,15 @@ def find_autopkgtest_failure_description(lines):
             line)
         if m:
             testname = m.group(2)
+            continue
+        m = re.match(
+            r'autopkgtest \[([0-9:]+)\]: test (.*): (\-+)\]',
+            line)
+        if m:
+            if testname != m.group(2):
+                warning('unexpected test finish: %r != %r',
+                        testname, m.group(2))
+            testname = None
             continue
         m = re.match(
             r'autopkgtest \[([0-9:]+)\]: ERROR: testbed failure: (.*)',
