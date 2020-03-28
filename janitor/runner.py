@@ -376,21 +376,21 @@ async def upload_changes(changes_path, incoming_url):
 
 async def import_logs(output_directory, logfile_manager, pkg, log_id):
     logfilenames = []
-    for name in os.listdir(output_directory):
-        parts = name.split('.')
+    for entry in os.listdir(output_directory):
+        if entry.is_dir():
+            continue
+        parts = entry.name.split('.')
         if parts[-1] == 'log' or (
                 len(parts) == 3 and
                 parts[-2] == 'log' and
                 parts[-1].isdigit()):
-            src_build_log_path = os.path.join(output_directory, name)
             try:
-                await logfile_manager.import_log(
-                    pkg, log_id, src_build_log_path)
+                await logfile_manager.import_log(pkg, log_id, entry.path)
             except ServiceUnavailable as e:
                 warning('Unable to upload logfile %s: %s',
-                        name, e)
+                        entry.name, e)
             else:
-                logfilenames.append(name)
+                logfilenames.append(entry.name)
     return logfilenames
 
 
