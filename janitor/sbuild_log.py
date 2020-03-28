@@ -1307,7 +1307,7 @@ secondary_build_failure_regexps = [
     r'^FAILED \(.*\)',
     r'cat: (.*): No such file or directory',
     # Random Python errors
-    '^(SyntaxError|TypeError|ValueError|AttributeError|'
+    '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError'
     r'): .*',
     # Rake
