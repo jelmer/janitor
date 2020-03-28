@@ -99,6 +99,17 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'g++: error: /usr/lib/x86_64-linux-gnu/libGL.so: '
             'No such file or directory'], 1,
             MissingFile('/usr/lib/x86_64-linux-gnu/libGL.so'))
+
+    def test_python_missing_file(self):
+        self.run_test([
+            "python3.7: can't open file '/usr/bin/blah.py': "
+            "[Errno 2] No such file or directory"], 1,
+            MissingFile('/usr/bin/blah.py'))
+        self.run_test([
+            "python3.7: can't open file 'setup.py': "
+            "[Errno 2] No such file or directory"], 1)
+
+    def test_interpreter_missing(self):
         self.run_test([
             '/bin/bash: /usr/bin/rst2man: /usr/bin/python: '
             'bad interpreter: No such file or directory'], 1,

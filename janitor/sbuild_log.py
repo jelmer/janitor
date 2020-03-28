@@ -78,6 +78,23 @@ class DpkgUnwantedBinaryFiles(object):
         return "Tree has unwanted binary files."
 
 
+class MissingControlFile(object):
+
+    kind = 'missing-control-file'
+
+    def __init__(self, path):
+        self.path = path
+
+    def __eq__(self, other):
+        return isinstance(self, type(other)) and self.path == other.path
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.path)
+
+    def __str__(self):
+        return "Tree is missing control file %s" % self.path
+
+
 class UnableToFindUpstreamTarball(object):
 
     kind = 'unable-to-find-upstream-tarball'
@@ -142,6 +159,11 @@ def find_preamble_failure_description(lines):
         if re.match('dpkg-source: error: detected ([0-9]+) unwanted binary '
                     'file.*', line):
             err = DpkgUnwantedBinaryFiles()
+            return lineno + 1, line, err
+        m = re.match('dpkg-source: error: cannot read (.*/debian/control): '
+                     'No such file or directory', line)
+        if m:
+            err = MissingControlFile(m.group(1))
             return lineno + 1, line, err
     return None, None, None
 
@@ -430,7 +452,8 @@ class MissingFile(object):
 
 
 def file_not_found(m):
-    if m.group(1).startswith('/'):
+    if (m.group(1).startswith('/') and
+            not m.group(1).startswith('/<<PKGBUILDDIR>>')):
         return MissingFile(m.group(1))
     return None
 
@@ -1201,6 +1224,8 @@ build_failure_regexps = [
      perl_missing_module),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_file),
+    (r'python[0-9.]*: can\'t open file \'(.*)\': \[Errno 2\] '
+     r'No such file or directory', file_not_found),
     (r'Could not open \'(.*)\': No such file or directory at '
      r'\/usr\/share\/perl\/[0-9.]+\/ExtUtils\/MM_Unix.pm line [0-9]+.',
      perl_file_not_found),
@@ -1251,6 +1276,8 @@ build_failure_regexps = [
      r_too_old),
     (r'mv: cannot stat \'(.*)\': No such file or directory',
      file_not_found),
+    (r'IOError: \[Errno 2\] No such file or directory: \'(.*)\'',
+     file_not_found),
     ('FAIL\t(.+\\/.+\\/.+)\t([0-9.]+)s', go_test_failed),
     (r'dh_(.*): Cannot find \(any matches for\) "(.*)" \(tried in (.*)\)',
      dh_pattern_no_matches),
@@ -1280,6 +1307,7 @@ build_failure_regexps = [
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
      '[Errno 2] No such file or directory', file_not_found),
     (r'g\+\+: error: (.*): No such file or directory', file_not_found),
+    (r'strip: \'(.*)\': No such file', file_not_found),
     (r'Sprockets::FileNotFound: couldn\'t find file \'(.*)\' '
      r'with type \'(.*)\'', sprockets_file_not_found),
     (r'You need to install gnome-common from the GNOME git',
@@ -1371,9 +1399,10 @@ secondary_build_failure_regexps = [
     r'configure: error: (.*)',
     r'config.status: error: (.*)',
     r'E: Build killed with signal TERM after ([0-9]+) minutes of inactivity',
-    r'    \[javac\]: [^: ]+:[0-9]+: error: (.*)',
+    r'    \[javac\] [^: ]+:[0-9]+: error: (.*)',
     r'1\) TestChannelFeature: ([^:]+):([0-9]+): assert failed',
     r'cp: target \'(.*)\' is not a directory',
+    r'couldn\'t determine home directory at (.*)',
 ]
 
 compiled_secondary_build_failure_regexps = [
