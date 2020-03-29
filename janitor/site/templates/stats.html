@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% from "run_util.html" import display_result_code %}
+{% block page_title %}Statistics{% endblock %}
+{% block body %}
+<div class="section" id="stats">
+<h1>Statistics</h1>
+
+<div name="current">
+<h2>Merge Proposals by Hoster</h2>
+<table class="docutils" border="1">
+<thead valign="bottom">
+<tr class="row-odd">
+  <th class="head">Hoster</th>
+  <th class="head">Open</th>
+  <th class="head">Merged</th>
+  <th class="head">Closed</th>
+</tr>
+</thead>
+<tbody valign="top" name="queue-table">
+{% for hoster, data in by_hoster.items() %}
+<tr>
+    <td>{{ hoster }}</td>
+    <td>{{ data.get('open', 0) }}</td>
+    <td>{{ data.get('merged', 0) }}</td>
+    <td>{{ data.get('closed', 0) }}</td>
+</tr>
+{% endfor %}
+
+</tbody>
+</table>
+</div>
+{% endblock %}
