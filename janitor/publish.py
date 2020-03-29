@@ -797,7 +797,9 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'merged':
             merged_by = mp.get_merged_by()
-            merged_at = mp.get_merged_at().replace(tzinfo=None)
+            merged_at = mp.get_merged_at()
+            if merged_at is not None:
+                merged_at = merged_at.replace(tzinfo=None)
         else:
             merged_by = None
             merged_at = None
