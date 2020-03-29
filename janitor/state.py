@@ -1518,3 +1518,13 @@ async def get_publish_attempt_count(conn, revision):
     return await conn.fetchval(
         "select count(*) from publish where revision = $1",
         revision.decode('utf-8'))
+
+
+async def get_hoster_merge_proposal_stats(conn):
+    return await conn.fetch("""
+SELECT
+    REGEXP_REPLACE(url, '^(https?://)([^/]+)/.*', '\\2'),
+    status,
+    count(*)
+FROM merge_proposal group by 1, 2
+""")
