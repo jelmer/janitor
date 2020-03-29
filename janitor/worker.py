@@ -566,11 +566,8 @@ class UncommittedWorker(SubWorker):
 
 class WorkerResult(object):
 
-    def __init__(self, description, build_distribution=None,
-                 build_version=None, changes_filename=None):
+    def __init__(self, description, changes_filename=None):
         self.description = description
-        self.build_version = build_version
-        self.build_distribution = build_distribution
         self.changes_filename = changes_filename
 
 
@@ -782,9 +779,7 @@ def process_package(vcs_url, env, command, output_directory,
                 raise WorkerFailure(code, e.description)
             note('Built %s', changes_name)
         else:
-            build_distribution = None
             changes_name = None
-            cl_version = None
 
         if tgz_repo:
             subprocess.check_call(
@@ -794,9 +789,7 @@ def process_package(vcs_url, env, command, output_directory,
             ws.defer_destroy()
         return WorkerResult(
             description,
-            build_distribution=build_distribution,
-            changes_filename=changes_name,
-            build_version=cl_version)
+            changes_filename=changes_name)
 
 
 def main(argv=None):
@@ -893,11 +886,6 @@ def main(argv=None):
         # TODO(jelmer): Set metadata['value']
         metadata['code'] = None
         metadata['description'] = result.description
-        metadata['changes_filename'] = result.changes_filename
-        metadata['build_version'] = (
-            str(result.build_version)
-            if result.build_version else None)
-        metadata['build_distribution'] = result.build_distribution
         note('%s', result.description)
         if result.changes_filename is not None:
             note('Built %s.', result.changes_filename)
@@ -905,8 +893,6 @@ def main(argv=None):
     finally:
         finish_time = datetime.now()
         note('Elapsed time: %s', finish_time - start_time)
-        metadata['finish_time'] = finish_time.isoformat()
-        metadata['duration'] = (finish_time - start_time).seconds
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
             json.dump(metadata, f, indent=2)
 
