@@ -796,14 +796,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
 
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'merged':
-            try:
-                merged_by = mp.get_merged_by()
-            except (NotImplementedError, AttributeError):
-                merged_by = None
-            try:
-                merged_at = mp.get_merged_at().replace(tzinfo=None)
-            except (NotImplementedError, AttributeError):
-                merged_at = None
+            merged_by = mp.get_merged_by()
+            merged_at = mp.get_merged_at().replace(tzinfo=None)
         else:
             merged_by = None
             merged_at = None
