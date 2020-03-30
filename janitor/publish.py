@@ -795,6 +795,10 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
     requestor = 'publisher (regular refresh)'
 
     async def update_proposal_status(mp, status, revision, package_name):
+        if status == 'closed':
+            # TODO(jelmer): Check if changes were applied manually and mark
+            # as applied rather than closed?
+            pass
         if status == 'merged':
             merged_by = mp.get_merged_by()
             merged_at = mp.get_merged_at()
@@ -856,8 +860,6 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             # do.
             note('%s: Last run did not produce any changes, '
                  'closing proposal.', mp.url)
-            # TODO(jelmer): Check if changes were applied manually and mark
-            # as applied rather than closed?
             await update_proposal_status(mp, 'closed', revision, package_name)
             mp.close()
             continue
