@@ -789,9 +789,9 @@ def is_conflicted(mp):
 
 async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
                          dry_run=False):
-    mps_per_maintainer = {'open': {}, 'closed': {}, 'merged': {}}
+    mps_per_maintainer = {'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
     possible_transports = []
-    status_count = {'open': 0, 'closed': 0, 'merged': 0}
+    status_count = {'open': 0, 'closed': 0, 'merged': 0, 'applied': 0}
     requestor = 'publisher (regular refresh)'
 
     async def update_proposal_status(mp, status, revision, package_name):
@@ -856,6 +856,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
             # do.
             note('%s: Last run did not produce any changes, '
                  'closing proposal.', mp.url)
+            # TODO(jelmer): Check if changes were applied manually and mark
+            # as applied rather than closed?
             await update_proposal_status(mp, 'closed', revision, package_name)
             mp.close()
             continue
