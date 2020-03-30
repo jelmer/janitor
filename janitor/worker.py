@@ -227,9 +227,18 @@ class OrphanWorker(SubWorker):
         else:
             if update_changelog is None:
                 update_changelog = cfg.update_changelog()
-        result = self.changer.make_changes(
-            local_tree, subpath=subpath, update_changelog=update_changelog,
-            committer=self.committer)
+        try:
+            result = self.changer.make_changes(
+                local_tree, subpath=subpath, update_changelog=update_changelog,
+                committer=self.committer)
+        except FormattingUnpreservable:
+            raise WorkerFailure(
+                'formatting-unpreservable',
+                'unable to preserve formatting while editing')
+        except GeneratedFile as e:
+            raise WorkerFailure(
+                'generated-file',
+                'unable to edit generated file: %r' % e)
         metadata['old_vcs_url'] = result.old_vcs_url
         metadata['new_vcs_url'] = result.new_vcs_url
         metadata['pushed'] = result.pushed
