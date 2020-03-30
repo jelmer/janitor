@@ -22,7 +22,7 @@ CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
 CREATE INDEX ON package (maintainer_email);
 CREATE INDEX ON package (uploader_emails);
-CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged');
+CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text,
    url text not null,
@@ -152,18 +152,18 @@ CREATE OR REPLACE VIEW last_unabsorbed_runs AS
      revision is not null AND
      revision != main_branch_revision AND
      revision NOT IN (SELECT revision FROM publish WHERE (mode = 'push' and result_code = 'success') OR (mode = 'propose' AND result_code = 'empty-merge-proposal')) AND
-     revision NOT IN (SELECT revision FROM merge_proposal WHERE status = 'merged'));
+     revision NOT IN (SELECT revision FROM merge_proposal WHERE status in ('merged', 'applied')));
 
 CREATE OR REPLACE VIEW merged_runs AS
   SELECT run.*, merge_proposal.url, merge_proposal.merged_by
   FROM run
   INNER JOIN merge_proposal ON merge_proposal.revision = run.revision
-  WHERE result_code = 'success' and merge_proposal.status = 'merged';
+  WHERE result_code = 'success' and merge_proposal.status in ('merged', 'applied');
 
 create or replace view suites as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW absorbed_runs AS
-  SELECT * FROM run WHERE result_code = 'success' and revision in (select revision from publish where mode = 'push' and result_code = 'success') or revision in (select revision from merge_proposal where status = 'merged');
+  SELECT * FROM run WHERE result_code = 'success' and revision in (select revision from publish where mode = 'push' and result_code = 'success') or revision in (select revision from merge_proposal where status in ('merged', 'applied'));
 
 CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
   select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
