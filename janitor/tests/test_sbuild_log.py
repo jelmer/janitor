@@ -27,8 +27,10 @@ from janitor.sbuild_log import (
     DebhelperPatternNotFound,
     DhLinkDestinationIsDirectory,
     MissingConfigure,
+    MissingJVM,
     MissingConfigStatusInput,
     MissingCHeader,
+    MissingJDKFile,
     MissingPythonModule,
     MissingPythonDistribution,
     MissingGoPackage,
@@ -244,6 +246,9 @@ Call Stack (most recent call first):
         self.run_test([
             '/usr/bin/python3: No module named sphinx'], 1,
             MissingPythonModule('sphinx', 3))
+        self.run_test([
+            'Could not import extension sphinx.ext.pngmath (exception: '
+            'No module named pngmath)'], 1, MissingPythonModule('pngmath'))
 
     def test_go_missing(self):
         self.run_test([
@@ -264,6 +269,14 @@ Call Stack (most recent call first):
             'src/bubble.h:27:10: fatal error: DBlurEffectWidget: '
             'No such file or directory'], 1,
             MissingCHeader('DBlurEffectWidget'))
+
+    def test_missing_jdk_file(self):
+        self.run_test([
+            '> Could not find tools.jar. Please check that '
+            '/usr/lib/jvm/java-8-openjdk-amd64 contains a '
+            'valid JDK installation.',
+            ], 1, MissingJDKFile(
+                '/usr/lib/jvm/java-8-openjdk-amd64', 'tools.jar'))
 
     def test_node_module_missing(self):
         self.run_test([
@@ -313,6 +326,10 @@ Call Stack (most recent call first):
         self.run_test(
             ['xvfb-run: error: xauth command not found'], 1,
             MissingCommand('xauth'))
+        self.run_test(
+            ['meson.build:39:2: ERROR: Program(s) [\'wrc\'] '
+             'not found or not executable'], 1,
+            MissingCommand('wrc'))
 
     def test_pkg_config_missing(self):
         self.run_test([
@@ -322,6 +339,10 @@ Call Stack (most recent call first):
         self.run_test([
             'meson.build:10:0: ERROR: Dependency "gssdp-1.2" not '
             'found, tried pkgconfig'], 1, MissingPkgConfig('gssdp-1.2'))
+        self.run_test([
+            'src/plugins/sysprof/meson.build:3:0: '
+            'ERROR: Dependency "sysprof-3" not found, tried pkgconfig'],
+            1, MissingPkgConfig('sysprof-3'))
         self.run_test([
             'meson.build:84:0: ERROR: Invalid version of dependency, '
             'need \'libpeas-1.0\' [\'>= 1.24.0\'] found \'1.22.0\'.'], 1,
@@ -607,6 +628,12 @@ arch:all and the other not)""".splitlines(), 1)
             'config.status: error: cannot find input file: '
             '`po/Makefile.in.in\''], 1,
             MissingConfigStatusInput('po/Makefile.in.in'))
+
+    def test_jvm(self):
+        self.run_test([
+            'ERROR: JAVA_HOME is set to an invalid '
+            'directory: /usr/lib/jvm/default-java/'], 1,
+            MissingJVM())
 
     def test_cp(self):
         self.run_test([

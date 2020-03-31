@@ -67,6 +67,7 @@ from .sbuild_log import (
     MissingPerlFile,
     MissingPerlModule,
     MissingXmlEntity,
+    MissingJDKFile,
     MissingNodeModule,
     MissingPhpClass,
     MissingRubyGem,
@@ -582,6 +583,19 @@ def fix_missing_php_class(
         update_changelog=update_changelog)
 
 
+def fix_missing_jdk_file(
+        tree, error, context, committer=None, update_changelog=True):
+    path = error.jdk_path + '.*/' % error.filename
+    package = get_package_for_paths([path], regex=True)
+    if package is None:
+        warning('no package found for %s (JDK: %s) - regex %s',
+                error.filename, error.jdk_path, path)
+        return False
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
+
+
 def fix_missing_xml_entity(
         tree, error, context, committer=None, update_changelog=True):
     # Ideally we should be using the XML catalog for this, but hardcoding
@@ -776,6 +790,7 @@ FIXERS = [
     (MissingMavenArtifacts, fix_missing_maven_artifacts),
     (GnomeCommonMissing, install_gnome_common),
     (MissingConfigStatusInput, fix_missing_config_status_input),
+    (MissingJDKFile, fix_missing_jdk_file),
 ]
 
 
