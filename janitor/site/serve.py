@@ -653,7 +653,8 @@ if __name__ == '__main__':
                        name='result-code-list')
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes,
                        name='result-code')
-    app.router.add_get('/cupboard/stats', handle_cupboard_stats, 'cupboard-stats')
+    app.router.add_get(
+        '/cupboard/stats', handle_cupboard_stats, name='cupboard-stats')
     app.router.add_get(
         '/cupboard/maintainer', handle_maintainer_list, name='maintainer-list')
     app.router.add_get(

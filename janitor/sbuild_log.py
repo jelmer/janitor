@@ -1454,6 +1454,17 @@ def find_build_failure_description(lines):
                 else:
                     err = None
                 return lineno + 1, line, err
+        # Urgh, multi-line regexes---
+        m = re.fullmatch(
+            r'\s*The imported target \"(.*)\" references the file', line)
+        if m:
+            lineno += 1
+            while lineno < len(lines) and not lines[lineno].strip('\n'):
+                lineno += 1
+            if lines[lineno+2].startswith('  but this file does not exist.'):
+                m = re.fullmatch(r'\s*"(.*)"', lines[lineno].rstrip('\n'))
+                return lineno + 1, lines[lineno], MissingFile(m.group(1))
+
     # And forwards for vague ("secondary") errors.
     for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
         line = lines[lineno].strip('\n')

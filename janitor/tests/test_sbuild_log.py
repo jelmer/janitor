@@ -122,6 +122,34 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             1, DebhelperPatternNotFound(
                 'README.txt', 'installdocs', ['.', 'debian/tmp']))
 
+    def test_cmake_missing_file(self):
+        self.run_test("""\
+CMake Error at /usr/lib/x86_64-/cmake/Qt5Gui/Qt5GuiConfig.cmake:27 (message):
+  The imported target "Qt5::Gui" references the file
+
+     "/usr/lib/x86_64-linux-gnu/libEGL.so"
+
+  but this file does not exist.  Possible reasons include:
+
+  * The file was deleted, renamed, or moved to another location.
+
+  * An install or uninstall procedure did not complete successfully.
+
+  * The installation package was faulty and contained
+
+     "/usr/lib/x86_64-linux-gnu/cmake/Qt5Gui/Qt5GuiConfigExtras.cmake"
+
+  but not all the files it references.
+
+Call Stack (most recent call first):
+  /usr/lib/x86_64-linux-gnu/QtGui/Qt5Gui.cmake:63 (_qt5_Gui_check_file_exists)
+  /usr/lib/x86_64-linux-gnu/QtGui/Qt5Gui.cmake:85 (_qt5gui_find_extra_libs)
+  /usr/lib/x86_64-linux-gnu/QtGui/Qt5Gui.cmake:186 (include)
+  /usr/lib/x86_64-linux-gnu/QtWidgets/Qt5Widgets.cmake:101 (find_package)
+  /usr/lib/x86_64-linux-gnu/Qt/Qt5Config.cmake:28 (find_package)
+  CMakeLists.txt:34 (find_package)
+""".splitlines(True), 4, MissingFile('/usr/lib/x86_64-linux-gnu/libEGL.so'))
+
     def test_dh_compat_dupe(self):
         self.run_test([
             'dh_autoreconf: debhelper compat level specified both in '

@@ -50,9 +50,7 @@ setup(
     test_suite='janitor.tests.test_suite',
     install_requires=[
         'lintian-brush',
-        'silver-platter',
         'breezy',
-        'brz-debian',
         'jinja2',
     ]
 )
