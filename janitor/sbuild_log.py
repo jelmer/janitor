@@ -672,6 +672,10 @@ def meson_pkg_config_too_low(m):
     return MissingPkgConfig(m.group(3), m.group(4))
 
 
+def cmake_pkg_config_missing(m):
+    return MissingPkgConfig(m.group(1))
+
+
 class DhWithOrderIncorrect(object):
 
     kind = 'debhelper-argument-order'
@@ -1251,11 +1255,12 @@ build_failure_regexps = [
      command_missing),
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
      command_missing),
-    (r'make\[[0-9]+\]: ([^\.].*): Command not found', command_missing),
-    (r'make: ([^\.].*): Command not found', command_missing),
+    (r'make\[[0-9]+\]: (.*): Command not found', command_missing),
+    (r'make: (.*): Command not found', command_missing),
     (r'.*: failed to exec \'(.*)\': No such file or directory',
      command_missing),
     (r'No package \'([^\']+)\' found', pkg_config_missing),
+    (r'configure: error: No package \'([^\']+)\' found', pkg_config_missing),
     (r'Requested \'(.*)\' but version of ([^ ]+) is ([^ ]+)',
      pkg_config_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
@@ -1269,6 +1274,8 @@ build_failure_regexps = [
     ('.*meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
      'need \'([^\']+)\' \\[\'>= ([^\']+)\'\\] found \'([^\']+)\'\\.',
      meson_pkg_config_too_low),
+    (r'--   Package \'(.*)\', required by \'(.*)\', not found',
+     cmake_pkg_config_missing),
     (r'dh: Unknown sequence --(.*) '
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
@@ -1407,6 +1414,7 @@ build_failure_regexps = [
      r'supported, change to [tool:pytest] instead.', None),
     (r'cp: cannot stat \'(.*)\': No such file or directory', None),
     (r'PHP Fatal error: (.*)', None),
+    (r'sed: no input files', None),
 ]
 
 compiled_build_failure_regexps = [
@@ -1415,7 +1423,10 @@ compiled_build_failure_regexps = [
 
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
+    r'dh.*: Aborting due to earlier error',
+    r'dh.*: unknown option or error during option parsing; aborting',
     r'Could not import extension .* \(exception: .*\)',
+    r'configure.ac:[0-9]+: error: required file \'(.*)\' not found',
     r'dwz: Too few files for multifile optimization',
     r'[^:]+: line [0-9]+:\s+[0-9]+ Segmentation fault.*',
     r'.*(No space left on device).*',
@@ -1467,6 +1478,8 @@ secondary_build_failure_regexps = [
     r'cp: target \'(.*)\' is not a directory',
     r'cp: cannot create regular file \'(.*)\': No such file or directory',
     r'couldn\'t determine home directory at (.*)',
+    r'ln: failed to create symbolic link \'(.*)\': No such file or directory',
+    r'mkdir: cannot create directory ‘(.*)’: No such file or directory',
 ]
 
 compiled_secondary_build_failure_regexps = [

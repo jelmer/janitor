@@ -355,6 +355,13 @@ Call Stack (most recent call first):
         self.run_test([
             'configure: error: x86_64-linux-gnu-pkg-config sdl2 couldn\'t '
             'be found'], 1, MissingPkgConfig('sdl2'))
+        self.run_test([
+            'configure: error: No package \'libcrypto\' found'], 1,
+            MissingPkgConfig('libcrypto'))
+        self.run_test([
+            "-- Checking for module 'gtk+-3.0'",
+            "--   Package 'gtk+-3.0', required by 'virtual:world', not found"],
+            2, MissingPkgConfig('gtk+-3.0'))
 
     def test_dh_with_order(self):
         self.run_test([
