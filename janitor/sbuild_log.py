@@ -402,6 +402,10 @@ def python3_module_not_found(m):
     return MissingPythonModule(m.group(1), python_version=3)
 
 
+def sphinx_module_not_found(m):
+    return MissingPythonModule(m.group(1))
+
+
 def python_reqs_not_found(m):
     expr = m.group(2)
     if '>=' in expr:
@@ -456,6 +460,32 @@ def file_not_found(m):
             not m.group(1).startswith('/<<PKGBUILDDIR>>')):
         return MissingFile(m.group(1))
     return None
+
+
+class MissingJDKFile(object):
+
+    kind = 'missing-jdk-file'
+
+    def __init__(self, jdk_path, filename):
+        self.jdk_path = jdk_path
+        self.filename = filename
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+            self.jdk_path == other.jdk_path and \
+            self.filename == other.filename
+
+    def __str__(self):
+        return "Missing JDK file %s (JDK Path: %s)" % (
+            self.filename, self.jdk_path)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.jdk_path, self.filename)
+
+
+def jdk_file_missing(m):
+    return MissingJDKFile(m.group(2), m.group(1))
 
 
 def interpreter_missing(m):
@@ -1154,11 +1184,31 @@ def config_status_input_missing(m):
     return MissingConfigStatusInput(m.group(1))
 
 
+class MissingJVM(object):
+
+    kind = 'missing-jvm'
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        return isinstance(self, type(other))
+
+    def __str__(self):
+        return "Missing JVM"
+
+    def __repr__(self):
+        return "%s()" % (type(self).__name__)
+
+
+def jvm_missing(m):
+    return MissingJVM()
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
-    (r'[^:]+:\d+: (.*): No such file or directory',
-        file_not_found),
+    (r'[^:]+:\d+: (.*): No such file or directory', file_not_found),
     (r'(distutils.errors.DistutilsError|error): '
      r'Could not find suitable distribution '
      r'for Requirement.parse\(\'([^\']+)\'\)', python_reqs_not_found),
@@ -1175,6 +1225,8 @@ build_failure_regexps = [
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
+    (r'Could not import extension .* \(exception: No module named (.*)\)',
+     sphinx_module_not_found),
     ('E   ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
     (r'/usr/bin/python3: No module named (.*)', python3_module_not_found),
@@ -1187,6 +1239,7 @@ build_failure_regexps = [
     (r'[^:]+\.[ch]:\d+:\d+: fatal error: (.+): No such file or directory',
      c_header_missing),
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
+    (r'>> Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
@@ -1211,9 +1264,9 @@ build_failure_regexps = [
      pkg_config_missing),
     (r'configure: error: C preprocessor "/lib/cpp" fails sanity check',
      None),
-    ('meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
+    ('.*meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
      'tried pkgconfig', meson_pkg_config_missing),
-    ('meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
+    ('.*meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
      'need \'([^\']+)\' \\[\'>= ([^\']+)\'\\] found \'([^\']+)\'\\.',
      meson_pkg_config_too_low),
     (r'dh: Unknown sequence --(.*) '
@@ -1224,6 +1277,8 @@ build_failure_regexps = [
      perl_missing_module),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_file),
+    (r'> Could not find (.*). Please check that (.*) contains a valid JDK '
+     r'installation.', jdk_file_missing),
     (r'python[0-9.]*: can\'t open file \'(.*)\': \[Errno 2\] '
      r'No such file or directory', file_not_found),
     (r'Could not open \'(.*)\': No such file or directory at '
@@ -1318,6 +1373,8 @@ build_failure_regexps = [
      autoconf_undefined_macro),
     (r'config.status: error: cannot find input file: `(.*)\'',
      config_status_input_missing),
+    (r'ERROR: JAVA_HOME is set to an invalid directory: '
+     r'/usr/lib/jvm/default-java/', jvm_missing),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
      r'\(one is arch:all and the other not\)', None),
     (r'dh: unable to load addon systemd: dh: The systemd-sequence is '
@@ -1327,6 +1384,7 @@ build_failure_regexps = [
      r'Use override targets instead.', None),
     ('(.*):([0-9]+): undefined reference to `(.*)\'', None),
     (r'\/usr\/bin\/ld: (.*): undefined reference to `(.*)\'', None),
+    (r'\/usr\/bin\/ld: (.*): undefined reference to symbol \'(.*)\'', None),
     ('(.*):([0-9]+): multiple definition of `(.*)\'; (.*):([0-9]+): '
      'first defined here', None),
     ('dh(.*): debhelper compat level specified both in debian/compat '
@@ -1339,6 +1397,9 @@ build_failure_regexps = [
      'symbols file: see diff output below', None),
     (r'Invalid gemspec in \[.*\]: No such file or directory - (.*)',
      command_missing),
+    (r'.*meson.build:[0-9]+:[0-9]+: ERROR: Program\(s\) \[\'(.*)\'\] not '
+     r'found or not executable', command_missing),
+    (r'Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'dpkg-gensymbols: error: some symbols or patterns disappeared in '
      r'the symbols file: see diff output below',
      None),
@@ -1354,6 +1415,8 @@ compiled_build_failure_regexps = [
 
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
+    r'Could not import extension .* \(exception: .*\)',
+    r'dwz: Too few files for multifile optimization',
     r'[^:]+: line [0-9]+:\s+[0-9]+ Segmentation fault.*',
     r'.*(No space left on device).*',
     r'dpkg-gencontrol: error: (.*)',
@@ -1380,7 +1443,7 @@ secondary_build_failure_regexps = [
     '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
-    'PermissionError|IndexError|TypeError'
+    'PermissionError|IndexError|TypeError|AssertionError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
