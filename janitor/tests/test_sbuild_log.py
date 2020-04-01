@@ -117,6 +117,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'bad interpreter: No such file or directory'], 1,
             MissingFile('/usr/bin/python'))
 
+    def test_webpack_missing(self):
+        self.run_test([
+            "ERROR in Entry module not found: "
+            "Error: Can't resolve 'index.js' in '/<<PKGBUILDDIR>>'"], 1,
+            None)
+
     def test_installdocs_missing(self):
         self.run_test([
             'dh_installdocs: Cannot find (any matches for) "README.txt" '
@@ -150,6 +156,7 @@ Call Stack (most recent call first):
   /usr/lib/x86_64-linux-gnu/QtWidgets/Qt5Widgets.cmake:101 (find_package)
   /usr/lib/x86_64-linux-gnu/Qt/Qt5Config.cmake:28 (find_package)
   CMakeLists.txt:34 (find_package)
+dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
 """.splitlines(True), 4, MissingFile('/usr/lib/x86_64-linux-gnu/libEGL.so'))
 
     def test_dh_compat_dupe(self):
@@ -302,7 +309,7 @@ Call Stack (most recent call first):
         self.run_test([
             'make[1]: git: Command not found'], 1,
             MissingCommand('git'))
-        self.run_test(['make[1]: ./docker: Command not found'], None)
+        self.run_test(['make[1]: ./docker: Command not found'], 1, None)
         self.run_test([
             'make: dh_elpa: Command not found'], 1, MissingCommand('dh_elpa'))
         self.run_test([
@@ -521,6 +528,9 @@ Call Stack (most recent call first):
             MissingLibrary('pthreads'))
         self.run_test([
             "./testFortranCompiler.f:4: undefined reference to `sgemm_'",
+            ], 1)
+        self.run_test([
+            "writer.d:59: error: undefined reference to 'sam_hdr_parse_'",
             ], 1)
 
     def test_multiple_definition(self):
