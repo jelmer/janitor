@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from debian.deb822 import PkgRelation
+import posixpath
 import re
 import sys
 import yaml
@@ -459,6 +460,14 @@ def file_not_found(m):
     if (m.group(1).startswith('/') and
             not m.group(1).startswith('/<<PKGBUILDDIR>>')):
         return MissingFile(m.group(1))
+    return None
+
+
+def webpack_file_missing(m):
+    path = posixpath.join(m.group(2), m.group(1))
+    if (path.startswith('/') and
+            not path.startswith('/<<PKGBUILDDIR>>')):
+        return MissingFile(path)
     return None
 
 
@@ -1390,6 +1399,7 @@ build_failure_regexps = [
     (r'dh: The --before option is not supported any longer \(#932537\). '
      r'Use override targets instead.', None),
     ('(.*):([0-9]+): undefined reference to `(.*)\'', None),
+    ('(.*):([0-9]+): error: undefined reference to \'(.*)\'', None),
     (r'\/usr\/bin\/ld: (.*): undefined reference to `(.*)\'', None),
     (r'\/usr\/bin\/ld: (.*): undefined reference to symbol \'(.*)\'', None),
     ('(.*):([0-9]+): multiple definition of `(.*)\'; (.*):([0-9]+): '
@@ -1415,6 +1425,8 @@ build_failure_regexps = [
     (r'cp: cannot stat \'(.*)\': No such file or directory', None),
     (r'PHP Fatal error: (.*)', None),
     (r'sed: no input files', None),
+    (r'ERROR in Entry module not found: Error: Can\'t resolve '
+     r'\'(.*)\' in \'(.*)\'', webpack_file_missing),
 ]
 
 compiled_build_failure_regexps = [
@@ -1428,6 +1440,8 @@ secondary_build_failure_regexps = [
     r'Could not import extension .* \(exception: .*\)',
     r'configure.ac:[0-9]+: error: required file \'(.*)\' not found',
     r'dwz: Too few files for multifile optimization',
+    r'dh_dwz: dwz -q -- .* returned exit code [0-9]+',
+    r'help2man: can\'t get `--help\' info from .*',
     r'[^:]+: line [0-9]+:\s+[0-9]+ Segmentation fault.*',
     r'.*(No space left on device).*',
     r'dpkg-gencontrol: error: (.*)',
@@ -1454,7 +1468,7 @@ secondary_build_failure_regexps = [
     '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
-    'PermissionError|IndexError|TypeError|AssertionError'
+    'PermissionError|IndexError|TypeError|AssertionError|IOError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1516,12 +1530,16 @@ def find_build_failure_description(lines):
       tuple with (line offset, line, error object)
     """
     OFFSET = 150
+    # Is this cmake-specific, or rather just kf5 / qmake ?
+    cmake = False
     # We search backwards for clear errors.
     for i in range(1, OFFSET):
         lineno = len(lines) - i
         if lineno < 0:
             break
         line = lines[lineno].strip('\n')
+        if 'cmake' in line:
+            cmake = True
         for regexp, cb in compiled_build_failure_regexps:
             m = regexp.match(line)
             if m:
@@ -1530,10 +1548,15 @@ def find_build_failure_description(lines):
                 else:
                     err = None
                 return lineno + 1, line, err
+
+    if cmake:
+        pat = re.compile(
+            r'\s*The imported target \"(.*)\" references the file')
         # Urgh, multi-line regexes---
-        m = re.fullmatch(
-            r'\s*The imported target \"(.*)\" references the file', line)
-        if m:
+        for lineno in range(len(lines)):
+            m = re.fullmatch(pat, lines[lineno].rstrip('\n'))
+            if not m:
+                continue
             lineno += 1
             while lineno < len(lines) and not lines[lineno].strip('\n'):
                 lineno += 1
