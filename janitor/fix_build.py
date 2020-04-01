@@ -538,13 +538,17 @@ def fix_missing_perl_file(
         update_changelog=update_changelog)
 
 
+def get_package_for_node_package(node_package):
+    paths = [
+        '/usr/share/nodejs/.*/node_modules/%s/package.json' % node_package,
+        '/usr/lib/nodejs/%s/package.json' % node_package,
+        '/usr/share/nodejs/%s/package.json' % node_package]
+    return get_package_for_paths(paths, regex=True)
+
+
 def fix_missing_node_module(
         tree, error, context, committer=None, update_changelog=True):
-    paths = [
-        '/usr/share/nodejs/.*/node_modules/%s/package.json' % error.module,
-        '/usr/lib/nodejs/%s/package.json' % error.module,
-        '/usr/share/nodejs/%s/package.json' % error.module]
-    package = get_package_for_paths(paths, regex=True)
+    package = get_package_for_node_package(error.module)
     if package is None:
         warning('no node package found for %s.',
                 error.module)

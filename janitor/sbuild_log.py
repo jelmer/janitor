@@ -463,6 +463,11 @@ def file_not_found(m):
     return None
 
 
+def directory_not_found(m):
+    # TODO(jelmer): Should we report this separately?
+    return None
+
+
 def webpack_file_missing(m):
     path = posixpath.join(m.group(2), m.group(1))
     if (path.startswith('/') and
@@ -498,9 +503,11 @@ def jdk_file_missing(m):
 
 
 def interpreter_missing(m):
-    if m.group(2).startswith('/'):
-        return MissingFile(m.group(2))
-    return MissingCommand(m.group(2))
+    if m.group(1).startswith('/'):
+        if m.group(1).startswith('/<<PKGBUILDDIR>>'):
+            return None
+        return MissingFile(m.group(1))
+    return MissingCommand(m.group(1))
 
 
 class MissingSprocketsFile(object):
@@ -1218,6 +1225,27 @@ def jvm_missing(m):
     return MissingJVM()
 
 
+class UpstartFilePresent(object):
+
+    kind = 'upstart-file-present'
+
+    def __init__(self, filename):
+        self.filename = filename
+
+    def __eq__(self, other):
+        return isinstance(self, type(other))
+
+    def __str__(self):
+        return "Upstart file present: %s" % self.filename
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.filename)
+
+
+def dh_installinit_upstart_file(m):
+    return UpstartFilePresent(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1247,19 +1275,24 @@ build_failure_regexps = [
     (r'ImportError: Error importing plugin ".*": No module named (.*)',
      python_module_not_found),
     ('ImportError: No module named (.*)', python2_module_not_found),
-    (r'[^:]+:\d+:\d+: fatal error: (.+\.h): No such file or directory',
+    (r'[^:]+:\d+:\d+: fatal error: (.+\.h|.+\.hpp): No such file or directory',
      c_header_missing),
     (r'[^:]+\.[ch]:\d+:\d+: fatal error: (.+): No such file or directory',
      c_header_missing),
+    (r'✖ \[31mERROR:\[39m Cannot find module \'(.*)\'', node_module_missing),
     (r'Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'>> Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
+    (r'.*: 1: cd: can\'t cd to (.*)', directory_not_found),
     (r'\/bin\/bash: (.*): command not found', command_missing),
     (r'bash: (.*): command not found', command_missing),
-    (r'\/bin\/bash: (.*): (.*): bad interpreter: No such file or directory',
+    (r'env: ‘(.*)’: No such file or directory', interpreter_missing),
+    (r'\/bin\/bash: .*: (.*): bad interpreter: No such file or directory',
      interpreter_missing),
+    # SH error
+    (r'.*: [0-9]+: (.*): not found', command_missing),
     (r'/usr/bin/env: ‘(.*)’: No such file or directory',
      command_missing),
     (r'/usr/bin/env: \'(.*)\': No such file or directory',
@@ -1295,6 +1328,8 @@ build_failure_regexps = [
      perl_missing_file),
     (r'> Could not find (.*). Please check that (.*) contains a valid JDK '
      r'installation.', jdk_file_missing),
+    (r'install: cannot create regular file \'(.*)\': '
+     r'No such file or directory', None),
     (r'python[0-9.]*: can\'t open file \'(.*)\': \[Errno 2\] '
      r'No such file or directory', file_not_found),
     (r'Could not open \'(.*)\': No such file or directory at '
@@ -1312,6 +1347,10 @@ build_failure_regexps = [
      r'dependencies could not be resolved: Cannot access central '
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      r'artifact .* has not been downloaded from it before. @',
+     maven_missing_artifact),
+    (r'\[FATAL\] Non-resolvable parent POM for .*: Cannot access central '
+     r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
+     'artifact (.*) has not been downloaded from it before. .*',
      maven_missing_artifact),
     (r'\[ERROR\] Plugin (.*) or one of its dependencies could not be '
      r'resolved: Cannot access central '
@@ -1347,7 +1386,10 @@ build_failure_regexps = [
      r_too_old),
     (r'mv: cannot stat \'(.*)\': No such file or directory',
      file_not_found),
+    (r'mv: will not overwrite just-created \'(.*)\' with \'(.*)\'', None),
     (r'IOError: \[Errno 2\] No such file or directory: \'(.*)\'',
+     file_not_found),
+    (r'E   IOError: \[Errno 2\] No such file or directory: \'(.*)\'',
      file_not_found),
     ('FAIL\t(.+\\/.+\\/.+)\t([0-9.]+)s', go_test_failed),
     (r'dh_(.*): Cannot find \(any matches for\) "(.*)" \(tried in (.*)\)',
@@ -1381,7 +1423,7 @@ build_failure_regexps = [
     (r'strip: \'(.*)\': No such file', file_not_found),
     (r'Sprockets::FileNotFound: couldn\'t find file \'(.*)\' '
      r'with type \'(.*)\'', sprockets_file_not_found),
-    (r'You need to install gnome-common from the GNOME git',
+    (r'You need to install gnome-common from the GNOME (git|CVS)',
      gnome_common_missing),
     (r'automake: error: cannot open < (.*): No such file or directory',
      automake_input_missing),
@@ -1416,7 +1458,8 @@ build_failure_regexps = [
      command_missing),
     (r'.*meson.build:[0-9]+:[0-9]+: ERROR: Program\(s\) \[\'(.*)\'\] not '
      r'found or not executable', command_missing),
-    (r'Error: Cannot find module \'(.*)\'', node_module_missing),
+    (r'\s*Module not found: Error: Can\'t resolve \'(.*)\' in \'(.*)\'',
+     node_module_missing),
     (r'dpkg-gensymbols: error: some symbols or patterns disappeared in '
      r'the symbols file: see diff output below',
      None),
@@ -1425,8 +1468,48 @@ build_failure_regexps = [
     (r'cp: cannot stat \'(.*)\': No such file or directory', None),
     (r'PHP Fatal error: (.*)', None),
     (r'sed: no input files', None),
+    (r'sed: can\'t read (.*): No such file or directory',
+     file_not_found),
     (r'ERROR in Entry module not found: Error: Can\'t resolve '
      r'\'(.*)\' in \'(.*)\'', webpack_file_missing),
+    (r'.*:([0-9]+): element include: XInclude error : '
+     r'could not load (.*), and no fallback was found', None),
+    (r'E: The Debian version .* cannot be used as an ELPA version.',
+     None),
+    (r'convert convert: Image pixel limit exceeded '
+     r'\(see -limit Pixels\) \(-1\).',
+     None),
+    (r'ERROR: Sphinx requires at least Python (.*) to run.',
+     None),
+    (r'Can\'t find (.*) directory in (.*)', None),
+    (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
+    (r'.*\.vala:[0-9]+\.[0-9]+-[0-9]+.[0-9]+: error: (.*)',
+     None),
+    (r'.*.scala:[0-9]+: error: (.*)', None),
+    (r'(.*\.ts)\([0-9]+,[0-9]+\): error TS[0-9]+: (.*)', None),
+    (r'(.*.nim)\([0-9]+, [0-9]+\) Error: .*', None),
+    (r'dh_installinit: upstart jobs are no longer supported\!  '
+     r'Please remove (.*) and check if you need to add a conffile removal',
+     dh_installinit_upstart_file),
+    (r'find: paths must precede expression: .*', None),
+    (r'find: ‘(.*)’: No such file or directory', file_not_found),
+    (r'ninja: fatal: posix_spawn: Argument list too long', None),
+    ('ninja: fatal: chdir to \'(.*)\' - No such file or directory',
+     directory_not_found),
+    # Java
+    (r'error: Source option [0-9] is no longer supported. Use [0-9] or later.',
+     None),
+    (r'(dh.*|jh_build): -s/--same-arch has been removed; '
+     r'please use -a/--arch instead', None),
+    (r'dh_systemd_start: dh_systemd_start is no longer used in '
+     r'compat >= 11, please use dh_installsystemd instead', None),
+    (r'Trying patch (.*) at level 1 \.\.\. 0 \.\.\. 2 \.\.\. failure.', None),
+    (r'Project ERROR: Unknown module\(s\) in QT: (.*)', None),
+    (r'.*:[0-9]+: (.*) does not exist.', file_not_found),
+    # uglifyjs
+    (r'ERROR: can\'t read file: (.*)', file_not_found),
+    (r'jh_build: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
+     None),
 ]
 
 compiled_build_failure_regexps = [
@@ -1435,19 +1518,22 @@ compiled_build_failure_regexps = [
 
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
+    r'\!  ==> Fatal error occurred, no output PDF file produced\!',
+    r'Errors while running CTest',
     r'dh.*: Aborting due to earlier error',
     r'dh.*: unknown option or error during option parsing; aborting',
     r'Could not import extension .* \(exception: .*\)',
     r'configure.ac:[0-9]+: error: required file \'(.*)\' not found',
     r'dwz: Too few files for multifile optimization',
     r'dh_dwz: dwz -q -- .* returned exit code [0-9]+',
-    r'help2man: can\'t get `--help\' info from .*',
+    r'help2man: can\'t get `-?-help\' info from .*',
     r'[^:]+: line [0-9]+:\s+[0-9]+ Segmentation fault.*',
     r'.*(No space left on device).*',
     r'dpkg-gencontrol: error: (.*)',
     r'.*:[0-9]+:[0-9]+: (error|ERROR): (.*)',
     r'FAIL: (.*)',
     r'FAIL (.*) \(.*\)',
+    r'FAIL\s+(.*) \[.*\]',
     r'make\[[0-9]+\]: \*\*\* \[.*\] Error [0-9]+',
     r'E: pybuild pybuild:[0-9]+: test: plugin [^ ]+ failed with:'
     r'exit code=[0-9]+: .*',
@@ -1468,7 +1554,7 @@ secondary_build_failure_regexps = [
     '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
-    'PermissionError|IndexError|TypeError|AssertionError|IOError'
+    'PermissionError|IndexError|TypeError|AssertionError|IOError|ImportError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1492,8 +1578,17 @@ secondary_build_failure_regexps = [
     r'cp: target \'(.*)\' is not a directory',
     r'cp: cannot create regular file \'(.*)\': No such file or directory',
     r'couldn\'t determine home directory at (.*)',
+    r'ln: failed to create symbolic link \'(.*)\': File exists',
     r'ln: failed to create symbolic link \'(.*)\': No such file or directory',
+    r'ln: failed to create symbolic link \'(.*)\': Permission denied',
     r'mkdir: cannot create directory ‘(.*)’: No such file or directory',
+    r'Fatal error: .*',
+    r'ERROR: Test "(.*)" failed. Exiting.',
+    r'./configure: line [0-9]+: syntax error near unexpected token `.*\'',
+    # yarn
+    r'ERROR: There are no scenarios; must have at least one.',
+    # perl
+    r'Execution of (.*) aborted due to compilation errors.',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -1550,19 +1645,36 @@ def find_build_failure_description(lines):
                 return lineno + 1, line, err
 
     if cmake:
-        pat = re.compile(
+        missing_file_pat = re.compile(
             r'\s*The imported target \"(.*)\" references the file')
+        conf_file_pat = re.compile(
+            r'\s*Could not find a configuration file for package "(.*)".*')
         # Urgh, multi-line regexes---
         for lineno in range(len(lines)):
-            m = re.fullmatch(pat, lines[lineno].rstrip('\n'))
-            if not m:
-                continue
-            lineno += 1
-            while lineno < len(lines) and not lines[lineno].strip('\n'):
+            m = re.fullmatch(missing_file_pat, lines[lineno].rstrip('\n'))
+            if m:
                 lineno += 1
-            if lines[lineno+2].startswith('  but this file does not exist.'):
-                m = re.fullmatch(r'\s*"(.*)"', lines[lineno].rstrip('\n'))
-                return lineno + 1, lines[lineno], MissingFile(m.group(1))
+                while lineno < len(lines) and not lines[lineno].strip('\n'):
+                    lineno += 1
+                if lines[lineno+2].startswith(
+                        '  but this file does not exist.'):
+                    m = re.fullmatch(r'\s*"(.*)"', lines[lineno].rstrip('\n'))
+                    return lineno + 1, lines[lineno], MissingFile(m.group(1))
+                continue
+            m = re.fullmatch(conf_file_pat, lines[lineno].rstrip('\n'))
+            if m:
+                package = m.group(1)
+                m = re.match(
+                    r'.*requested version "(.*)"\.',
+                    lines[lineno+1].rstrip('\n'))
+                if not m:
+                    warning(
+                        'expected version string in line %r', lines[lineno+1])
+                    continue
+                version = m.group(1)
+                return (
+                    lineno + 1, lines[lineno],
+                    MissingPkgConfig(package, version))
 
     # And forwards for vague ("secondary") errors.
     for lineno in range(max(0, len(lines) - OFFSET), len(lines)):

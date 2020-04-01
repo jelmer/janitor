@@ -56,6 +56,7 @@ from janitor.sbuild_log import (
     NoSpaceOnDevice,
     DhWithOrderIncorrect,
     FailedGoTest,
+    UpstartFilePresent,
     )
 import unittest
 
@@ -90,6 +91,19 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'No such file or directory'], 1,
             MissingFile('/usr/share/openstack-pkg-tools/pkgos.make'))
 
+    def test_ioerror(self):
+        self.run_test([
+            'E   IOError: [Errno 2] No such file or directory: '
+            '\'/usr/lib/python2.7/poly1305/rfc7539.txt\''], 1,
+            MissingFile('/usr/lib/python2.7/poly1305/rfc7539.txt'))
+
+    def test_upstart_file_present(self):
+        self.run_test([
+            'dh_installinit: upstart jobs are no longer supported!  '
+            'Please remove debian/sddm.upstart and check if you '
+            'need to add a conffile removal'], 1,
+            UpstartFilePresent('debian/sddm.upstart'))
+
     def test_missing_sprockets_file(self):
         self.run_test([
             'Sprockets::FileNotFound: couldn\'t find file '
@@ -101,6 +115,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'g++: error: /usr/lib/x86_64-linux-gnu/libGL.so: '
             'No such file or directory'], 1,
             MissingFile('/usr/lib/x86_64-linux-gnu/libGL.so'))
+
+    def test_build_xml_missing_file(self):
+        self.run_test([
+            '/<<PKGBUILDDIR>>/build.xml:59: '
+            '/<<PKGBUILDDIR>>/lib does not exist.'], 1,
+            None)
 
     def test_python_missing_file(self):
         self.run_test([
@@ -116,6 +136,9 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/bin/bash: /usr/bin/rst2man: /usr/bin/python: '
             'bad interpreter: No such file or directory'], 1,
             MissingFile('/usr/bin/python'))
+        self.run_test([
+            'env: ‘/<<PKGBUILDDIR>>/socket-activate’: '
+            'No such file or directory'], 1, None)
 
     def test_webpack_missing(self):
         self.run_test([
@@ -338,6 +361,30 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
              'not found or not executable'], 1,
             MissingCommand('wrc'))
 
+    def test_ts_error(self):
+        self.run_test([
+            'blah/tokenizer.ts(175,21): error TS2532: '
+            'Object is possibly \'undefined\'.'], 1, None)
+
+    def test_nim_error(self):
+        self.run_test([
+            '/<<PKGBUILDDIR>>/msgpack4nim.nim(470, 6) '
+            'Error: usage of \'isNil\' is a user-defined error'], 1, None)
+
+    def test_scala_error(self):
+        self.run_test([
+            'core/src/main/scala/org/json4s/JsonFormat.scala:131: '
+            'error: No JSON deserializer found for type List[T]. '
+            'Try to implement an implicit Reader or JsonFormat for this type.'
+            ], 1, None)
+
+    def test_vala_error(self):
+        self.run_test([
+            '../src/Backend/FeedServer.vala:60.98-60.148: error: '
+            'The name `COLLECTION_CREATE_NONE\' does not exist in '
+            'the context of `Secret.CollectionCreateFlags\''], 1,
+            None)
+
     def test_pkg_config_missing(self):
         self.run_test([
             'configure: error: Package requirements '
@@ -481,6 +528,15 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'downloaded from it before. -> [Help 1]'], 1,
             MissingMavenArtifacts(
                 ['org.apache.maven.plugins:maven-jar-plugin:2.6']))
+
+        self.run_test([
+            '[FATAL] Non-resolvable parent POM for '
+            'org.joda:joda-convert:2.2.1: Cannot access central '
+            '(https://repo.maven.apache.org/maven2) in offline mode '
+            'and the artifact org.joda:joda-parent:pom:1.4.0 has not '
+            'been downloaded from it before. and \'parent.relativePath\' '
+            'points at wrong local POM @ line 8, column 10'], 1,
+            MissingMavenArtifacts(['org.joda:joda-parent:pom:1.4.0']))
 
     def test_dh_missing_uninstalled(self):
         self.run_test([
