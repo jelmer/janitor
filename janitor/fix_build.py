@@ -76,6 +76,7 @@ from .sbuild_log import (
     MissingConfigure,
     MissingAutomakeInput,
     MissingRPackage,
+    MissingRubyFile,
     SbuildFailure,
     DhAddonLoadFailure,
     AptFetchFailure,
@@ -640,10 +641,24 @@ def fix_missing_library(
 
 def fix_missing_ruby_gem(
         tree, error, context, committer=None, update_changelog=True):
-    paths = [os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.gem)]
+    paths = [os.path.join(
+        '/usr/share/rubygems-integration/all/'
+        'specifications/%s-.*\\.gemspec' % error.gem)]
     package = get_package_for_paths(paths)
     if package is None:
         warning('no package for gem %s', error.gem)
+        return False
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog)
+
+
+def fix_missing_ruby_file(
+        tree, error, context, committer=None, update_changelog=True):
+    paths = [os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.filename)]
+    package = get_package_for_paths(paths)
+    if package is None:
+        warning('no package for ruby file %s', error.filename)
         return False
     return add_dependency(
         tree, context, package, committer=committer,
@@ -795,6 +810,7 @@ FIXERS = [
     (GnomeCommonMissing, install_gnome_common),
     (MissingConfigStatusInput, fix_missing_config_status_input),
     (MissingJDKFile, fix_missing_jdk_file),
+    (MissingRubyFile, fix_missing_ruby_file),
 ]
 
 

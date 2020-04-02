@@ -182,6 +182,12 @@ Call Stack (most recent call first):
 dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
 """.splitlines(True), 4, MissingFile('/usr/lib/x86_64-linux-gnu/libEGL.so'))
 
+    def test_cmake_missing_command(self):
+        self.run_test([
+            '  Could NOT find Git (missing: GIT_EXECUTABLE)',
+            'dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args'],
+            1, MissingCommand('git'))
+
     def test_dh_compat_dupe(self):
         self.run_test([
             'dh_autoreconf: debhelper compat level specified both in '
@@ -312,6 +318,9 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
         self.run_test([
             'Error: Cannot find module \'tape\''], 1,
             MissingNodeModule('tape'))
+        self.run_test([
+            '✖ [31mERROR:[39m Cannot find module \'/<<PKGBUILDDIR>>/test\'',
+            ], 1, None)
 
     def test_command_missing(self):
         self.run_test([
@@ -452,6 +461,26 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
                 '/usr/share/perl5', '/usr/lib/x86_64-linux-gnu/perl/5.28',
                 '/usr/share/perl/5.28', '/usr/local/lib/site_perl',
                 '/usr/lib/x86_64-linux-gnu/perl-base']))
+        self.run_test([
+            'Can\'t locate Test/Needs.pm in @INC '
+            '(you may need to install the Test::Needs module) '
+            '(@INC contains: t/lib /<<PKGBUILDDIR>>/blib/lib '
+            '/<<PKGBUILDDIR>>/blib/arch /etc/perl '
+            '/usr/local/lib/x86_64-linux-gnu/perl/5.30.0 '
+            '/usr/local/share/perl/5.30.0 /usr/lib/x86_64-linux-gnu/perl5/5.30'
+            ' /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl/5.30 '
+            '/usr/share/perl/5.30 /usr/local/lib/site_perl '
+            '/usr/lib/x86_64-linux-gnu/perl-base .) at '
+            't/anon-basic.t line 7.'], 1,
+            MissingPerlModule('Test/Needs.pm', 'Test::Needs', [
+                't/lib', '/<<PKGBUILDDIR>>/blib/lib',
+                '/<<PKGBUILDDIR>>/blib/arch', '/etc/perl',
+                '/usr/local/lib/x86_64-linux-gnu/perl/5.30.0',
+                '/usr/local/share/perl/5.30.0',
+                '/usr/lib/x86_64-linux-gnu/perl5/5.30',
+                '/usr/share/perl5', '/usr/lib/x86_64-linux-gnu/perl/5.30',
+                '/usr/share/perl/5.30', '/usr/local/lib/site_perl',
+                '/usr/lib/x86_64-linux-gnu/perl-base', '.']))
 
     def test_missing_perl_file(self):
         self.run_test([
@@ -589,6 +618,13 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             "writer.d:59: error: undefined reference to 'sam_hdr_parse_'",
             ], 1)
 
+    def test_rspec(self):
+        self.run_test([
+            'rspec ./spec/acceptance/cookbook_resource_spec.rb:20 '
+            '# Client API operations downloading a cookbook when the '
+            'cookbook of the name/version is found downloads the '
+            'cookbook to the destination'], 1, None)
+
     def test_multiple_definition(self):
         self.run_test([
             './dconf-paths.c:249: multiple definition of '
@@ -654,6 +690,10 @@ arch:all and the other not)""".splitlines(), 1)
             '  namespace ‘DBI’ 1.0.0 is being loaded, '
             'but >= 1.0.0.9003 is required'],
             1, MissingRPackage('DBI', '1.0.0.9003'))
+        self.run_test([
+            '  namespace ‘spatstat.utils’ 1.13-0 is already loaded, '
+            'but >= 1.15.0 is required'], 1,
+            MissingRPackage('spatstat.utils', '1.15.0'))
 
     def test_mv_stat(self):
         self.run_test(

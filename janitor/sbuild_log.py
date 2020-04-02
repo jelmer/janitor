@@ -599,6 +599,8 @@ class MissingNodeModule(object):
 
 
 def node_module_missing(m):
+    if m.group(1).startswith('/<<PKGBUILDDIR>>/'):
+        return None
     return MissingNodeModule(m.group(1))
 
 
@@ -986,6 +988,28 @@ def ruby_missing_gem(m):
     return MissingRubyGem(m.group(1), minimum_version)
 
 
+class MissingRubyFile(object):
+
+    kind = 'missing-ruby-file'
+
+    def __init__(self, filename):
+        self.filename = filename
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.filename)
+
+    def __str__(self):
+        return "Missing ruby file: %s" % (self.filename, )
+
+    def __eq__(self, other):
+        return isinstance(self, type(other)) and \
+            self.filename == other.filename
+
+
+def ruby_missing_name(m):
+    return MissingRubyFile(m.group(1))
+
+
 class MissingPhpClass(object):
 
     kind = 'missing-php-class'
@@ -1279,9 +1303,15 @@ build_failure_regexps = [
      c_header_missing),
     (r'[^:]+\.[ch]:\d+:\d+: fatal error: (.+): No such file or directory',
      c_header_missing),
-    (r'✖ \[31mERROR:\[39m Cannot find module \'(.*)\'', node_module_missing),
-    (r'Error: Cannot find module \'(.*)\'', node_module_missing),
+    ('✖ \x1b\\[31mERROR:\x1b\\[39m Cannot find module \'(.*)\'',
+     node_module_missing),
+    (r'\s*Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'>> Error: Cannot find module \'(.*)\'', node_module_missing),
+    (r'>> Got an unexpected exception from the coffee-script compiler. '
+     r'The original exception was: Error: Cannot find module \'(.*)\'',
+     node_module_missing),
+    (r'\s*Module not found: Error: Can\'t resolve \'(.*)\' in \'(.*)\'',
+     node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
@@ -1384,9 +1414,14 @@ build_failure_regexps = [
      r_missing_package),
     (r'  namespace ‘(.*)’ ([^ ]+) is being loaded, but >= ([^ ]+) is required',
      r_too_old),
+    (r'  namespace ‘(.*)’ ([^ ]+) is already loaded, but >= ([^ ]+) '
+     r'is required', r_too_old),
     (r'mv: cannot stat \'(.*)\': No such file or directory',
      file_not_found),
-    (r'mv: will not overwrite just-created \'(.*)\' with \'(.*)\'', None),
+    (r'mv: cannot move \'.*\' to \'(.*)\': No such file or directory',
+     None),
+    (r'(/usr/bin/install|mv): '
+     r'will not overwrite just-created \'(.*)\' with \'(.*)\'', None),
     (r'IOError: \[Errno 2\] No such file or directory: \'(.*)\'',
      file_not_found),
     (r'E   IOError: \[Errno 2\] No such file or directory: \'(.*)\'',
@@ -1454,18 +1489,20 @@ build_failure_regexps = [
      'but --add-udeb=(.*) was passed!?', None),
     ('dpkg-gensymbols: error: some symbols or patterns disappeared in the '
      'symbols file: see diff output below', None),
+    (r'Failed to copy \'(.*)\': No such file or directory at '
+     r'/usr/share/dh-exec/dh-exec-install-rename line [0-9]+.*',
+     file_not_found),
     (r'Invalid gemspec in \[.*\]: No such file or directory - (.*)',
      command_missing),
     (r'.*meson.build:[0-9]+:[0-9]+: ERROR: Program\(s\) \[\'(.*)\'\] not '
      r'found or not executable', command_missing),
-    (r'\s*Module not found: Error: Can\'t resolve \'(.*)\' in \'(.*)\'',
-     node_module_missing),
     (r'dpkg-gensymbols: error: some symbols or patterns disappeared in '
      r'the symbols file: see diff output below',
      None),
     (r'Failed: [pytest] section in setup.cfg files is no longer '
      r'supported, change to [tool:pytest] instead.', None),
     (r'cp: cannot stat \'(.*)\': No such file or directory', None),
+    (r'cp: \'(.*)\' and \'(.*)\' are the same file', None),
     (r'PHP Fatal error: (.*)', None),
     (r'sed: no input files', None),
     (r'sed: can\'t read (.*): No such file or directory',
@@ -1482,6 +1519,7 @@ build_failure_regexps = [
     (r'ERROR: Sphinx requires at least Python (.*) to run.',
      None),
     (r'Can\'t find (.*) directory in (.*)', None),
+    (r'/bin/sh: [0-9]: cannot create .*: Directory nonexistent', None),
     (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
     (r'.*\.vala:[0-9]+\.[0-9]+-[0-9]+.[0-9]+: error: (.*)',
      None),
@@ -1504,12 +1542,45 @@ build_failure_regexps = [
     (r'dh_systemd_start: dh_systemd_start is no longer used in '
      r'compat >= 11, please use dh_installsystemd instead', None),
     (r'Trying patch (.*) at level 1 \.\.\. 0 \.\.\. 2 \.\.\. failure.', None),
+    # QMake
     (r'Project ERROR: Unknown module\(s\) in QT: (.*)', None),
+    (r'Project ERROR: (.*) development package not found',
+     pkg_config_missing),
     (r'.*:[0-9]+: (.*) does not exist.', file_not_found),
     # uglifyjs
     (r'ERROR: can\'t read file: (.*)', file_not_found),
     (r'jh_build: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
+    (r'.*.rb:[0-9]+:in `require_relative\': cannot load such file '
+     r'-- (.*) \(LoadError\)', None),
+    (r'.*.rb:[0-9]+:in `require\': cannot load such file '
+     r'-- (.*) \(LoadError\)', ruby_missing_name),
+    (r'LoadError: cannot load such file -- (.*)', ruby_missing_name),
+    (r'  cannot load such file -- (.*)',
+     ruby_missing_name),
+    (r'.*:[0-9]+:in `do_check_dependencies\': E: '
+     r'dependency resolution check requested but no working '
+     r'gemspec available \(RuntimeError\)', None),
+    (r'rm: cannot remove \'(.*)\': Is a directory', None),
+    # Invalid option from Python
+    (r'error: option .* not recognized', None),
+    # Invalid option from go
+    (r'flag provided but not defined: .*', None),
+    (r'CMake Error: The source directory "(.*)" does not exist.',
+     directory_not_found),
+    (r'/bin/sh: [0-9]+: cannot open (.*): No such file',
+     file_not_found),
+    (r'error: No member named \$memberName', None),
+    (r'/usr/bin/install: missing destination file operand after .*', None),
+    # Ruby
+    (r'rspec .*\.rb:[0-9]+ # (.*)', None),
+    # help2man
+    (r'Addendum (.*) does NOT apply to (.*) \(translation discarded\).',
+     None),
+    (r'dh_installchangelogs: copy\((.*), (.*)\): No such file or directory',
+     file_not_found),
+    (r'dh_installman: mv (.*) (.*): No such file or directory',
+     file_not_found),
 ]
 
 compiled_build_failure_regexps = [
@@ -1518,7 +1589,11 @@ compiled_build_failure_regexps = [
 
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
+    # QMake
+    r'Project ERROR: .*',
+    # pdflatex
     r'\!  ==> Fatal error occurred, no output PDF file produced\!',
+    # CTest
     r'Errors while running CTest',
     r'dh.*: Aborting due to earlier error',
     r'dh.*: unknown option or error during option parsing; aborting',
@@ -1551,10 +1626,11 @@ secondary_build_failure_regexps = [
     r'^FAILED \(.*\)',
     r'cat: (.*): No such file or directory',
     # Random Python errors
-    '^(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
+    '^(E  +)?(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
-    'PermissionError|IndexError|TypeError|AssertionError|IOError|ImportError'
+    r'PermissionError|IndexError|TypeError|AssertionError|IOError|ImportError|'
+    r'SerialException|OSError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1584,11 +1660,27 @@ secondary_build_failure_regexps = [
     r'mkdir: cannot create directory ‘(.*)’: No such file or directory',
     r'Fatal error: .*',
     r'ERROR: Test "(.*)" failed. Exiting.',
+    # scons
+    r'ERROR: test\(s\) failed in (.*)',
     r'./configure: line [0-9]+: syntax error near unexpected token `.*\'',
     # yarn
     r'ERROR: There are no scenarios; must have at least one.',
     # perl
     r'Execution of (.*) aborted due to compilation errors.',
+    r'ls: cannot access \'(.*)\': No such file or directory',
+    # ruby
+    r'Errno::ENOENT: No such file or directory - (.*)',
+    # Mocha
+    r'     AssertionError \[ERR_ASSERTION\]: Missing expected exception.',
+    # lt (C++)
+    r'.*: .*:[0-9]+: .*: Assertion `.*\' failed.',
+    r'(.*).xml: FAILED:',
+    # ninja
+    r'ninja: build stopped: subcommand failed.',
+    r'.*\.s:[0-9]+: Error: .*',
+    # rollup
+    r'\[\!\] Error: Unexpected token',
+    r'java.io.FileNotFoundException: (.*) \(No such file or directory\)',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -1649,8 +1741,13 @@ def find_build_failure_description(lines):
             r'\s*The imported target \"(.*)\" references the file')
         conf_file_pat = re.compile(
             r'\s*Could not find a configuration file for package "(.*)".*')
+        binary_pat = re.compile(r'  Could NOT find (.*) \(missing: .*\)')
         # Urgh, multi-line regexes---
         for lineno in range(len(lines)):
+            m = re.fullmatch(binary_pat, lines[lineno].rstrip('\n'))
+            if m:
+                return (lineno + 1, lines[lineno],
+                        MissingCommand(m.group(1).lower()))
             m = re.fullmatch(missing_file_pat, lines[lineno].rstrip('\n'))
             if m:
                 lineno += 1
