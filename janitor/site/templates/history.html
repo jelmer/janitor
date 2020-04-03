@@ -19,6 +19,7 @@
 <th class="head">Suite</th>
 <th class="head">Duration</th>
 <th class="head">Result</th>
+<th class="head">Summary</th>
 </tr>
 </thead>
 <tbody valign="top">
@@ -27,6 +28,7 @@
 <td><a href="/{{ run.suite}}">{{ run.suite }}</a></td>
 <td>{{ format_duration(run.duration) }}</td>
 <td><a class="reference external" href="pkg/{{ run.package }}/{{ run.id }}">{{ display_result_code(run.result_code)|safe }}</a></td>
+<td>{{ run.description }}</td>
 </tr>
 {% endfor %}
 </tbody>
