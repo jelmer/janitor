@@ -367,6 +367,11 @@ class NewUpstreamWorker(SubWorker):
 
     def make_changes(self, local_tree, report_context, metadata,
                      base_metadata, subpath=None):
+        if subpath not in ('', '.', None):
+            raise WorkerFailure(
+                'package-in-subpath',
+                'Package is not stored in the root but a subpath (%s)' %
+                subpath)
         with local_tree.lock_write():
             if control_files_in_root(local_tree):
                 raise WorkerFailure(
