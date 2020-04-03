@@ -20,6 +20,9 @@ from janitor.sbuild_log import (
     AptMissingReleaseFile,
     AutopkgtestTestbedFailure,
     AutopkgtestDepsUnsatisfiable,
+    AutopkgtestTimedOut,
+    AutopkgtestStderrFailure,
+    CMakeFilesMissing,
     find_apt_get_failure,
     find_autopkgtest_failure_description,
     find_build_failure_description,
@@ -187,6 +190,22 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             '  Could NOT find Git (missing: GIT_EXECUTABLE)',
             'dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args'],
             1, MissingCommand('git'))
+
+    def test_cmake_missing_cmake_files(self):
+        self.run_test("""\
+  Could not find a package configuration file provided by "sensor_msgs" with
+  any of the following names:
+
+    sensor_msgsConfig.cmake
+    sensor_msgs-config.cmake
+
+  Add the installation prefix of "sensor_msgs" to CMAKE_PREFIX_PATH or set
+  "sensor_msgs_DIR" to a directory containing one of the above files.  If
+  "sensor_msgs" provides a separate development package or SDK, be sure it
+  has been installed.
+dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
+""".splitlines(True), 1, CMakeFilesMissing([
+            'sensor_msgsConfig.cmake', 'sensor_msgs-config.cmake']))
 
     def test_dh_compat_dupe(self):
         self.run_test([
@@ -369,6 +388,10 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             ['meson.build:39:2: ERROR: Program(s) [\'wrc\'] '
              'not found or not executable'], 1,
             MissingCommand('wrc'))
+        self.run_test(
+            ['/tmp/autopkgtest.FnbV06/build.18W/src/debian/tests/'
+             'blas-testsuite: 7: dpkg-architecture: not found'],
+            1, MissingCommand('dpkg-architecture'))
 
     def test_ts_error(self):
         self.run_test([
@@ -694,6 +717,12 @@ arch:all and the other not)""".splitlines(), 1)
             '  namespace ‘spatstat.utils’ 1.13-0 is already loaded, '
             'but >= 1.15.0 is required'], 1,
             MissingRPackage('spatstat.utils', '1.15.0'))
+        self.run_test([
+            'Error in library(zeligverse) : there is no package called '
+            '\'zeligverse\''], 1, MissingRPackage('zeligverse'))
+        self.run_test(
+            ['there is no package called \'mockr\''], 1,
+            MissingRPackage('mockr'))
 
     def test_mv_stat(self):
         self.run_test(
@@ -815,6 +844,13 @@ class FindAutopkgtestFailureDescriptionTests(unittest.TestCase):
             find_autopkgtest_failure_description(
                 ['python-bcolz         FAIL some error\n']))
 
+    def test_timed_out(self):
+        error = AutopkgtestTimedOut()
+        self.assertEqual(
+            (1, 'unit-tests', error, 'timed out'),
+            find_autopkgtest_failure_description(
+                ['unit-tests           FAIL timed out']))
+
     def test_deps(self):
         error = AutopkgtestDepsUnsatisfiable(
             [('arg', '/home/janitor/tmp/tmppvupofwl/build-area/'
@@ -861,6 +897,64 @@ class FindAutopkgtestFailureDescriptionTests(unittest.TestCase):
                  'A common reason is that your testbed is out of date '
                  'with respect to the archive, and you need to use a '
                  'current testbed or run apt-get update or use -U.\n']))
+        error = AutopkgtestDepsUnsatisfiable(
+            [('arg', '/home/janitor/tmp/tmpgbn5jhou/build-area/cmake'
+              '-extras_1.3+17.04.20170310-6~jan+unchanged1_all.deb'),
+             ('deb', 'cmake-extras'),
+             (None, '/home/janitor/tmp/tmpgbn5jhou/'
+              'build-area/cmake-extras_1.3+17.04.20170310-6~jan.dsc')])
+        self.assertEqual(
+            (1, 'intltool', error,
+             'Test intltool failed: Test dependencies are unsatisfiable. '
+             'A common reason is that your testbed is out of date with '
+             'respect to the archive, and you need to use a current testbed '
+             'or run apt-get update or use -U.'),
+            find_autopkgtest_failure_description([
+                'intltool             FAIL badpkg',
+                'blame: arg:/home/janitor/tmp/tmpgbn5jhou/build-area/cmake'
+                '-extras_1.3+17.04.20170310-6~jan+unchanged1_all.deb '
+                'deb:cmake-extras /home/janitor/tmp/tmpgbn5jhou/'
+                'build-area/cmake-extras_1.3+17.04.20170310-6~jan.dsc',
+                'badpkg: Test dependencies are unsatisfiable. A common '
+                'reason is that your testbed is out of date with respect '
+                'to the archive, and you need to use a current testbed or '
+                'run apt-get update or use -U.']))
+
+    def test_stderr(self):
+        error = AutopkgtestStderrFailure('some output')
+        self.assertEqual(
+            (1, 'intltool', error,
+             'Test intltool failed due to unauthorized stderr output: '
+             'some output'),
+            find_autopkgtest_failure_description([
+                'intltool            FAIL stderr: some output',
+                'autopkgtest [20:49:00]: test intltool:'
+                '  - - - - - - - - - - stderr - - - - - - - - - -',
+                'some output',
+                'some more output',
+                'autopkgtest [20:49:00]: @@@@@@@@@@@@@@@@@@@@ summary',
+                'intltool            FAIL stderr: some output',
+                ]))
+        self.assertEqual(
+            (1, 'intltool', MissingCommand('ss'),
+             '/tmp/bla: 12: ss: not found'),
+            find_autopkgtest_failure_description([
+                'intltool            FAIL stderr: /tmp/bla: 12: ss: not found',
+                'autopkgtest [20:49:00]: test intltool:'
+                '  - - - - - - - - - - stderr - - - - - - - - - -',
+                '/tmp/bla: 12: ss: not found',
+                'some more output',
+                'autopkgtest [20:49:00]: @@@@@@@@@@@@@@@@@@@@ summary',
+                'intltool            FAIL stderr: /tmp/bla: 12: ss: not found',
+                ]))
+        self.assertEqual(
+            (1, 'command10', MissingCommand('uptime'),
+             'Can\'t exec "uptime": No such file or directory at '
+             '/usr/lib/nagios/plugins/check_uptime line 529.'),
+            find_autopkgtest_failure_description([
+                'command10            FAIL stderr: Can\'t exec "uptime": '
+                'No such file or directory at '
+                '/usr/lib/nagios/plugins/check_uptime line 529.']))
 
     def test_testbed_failure(self):
         error = AutopkgtestTestbedFailure(

@@ -694,6 +694,25 @@ def cmake_pkg_config_missing(m):
     return MissingPkgConfig(m.group(1))
 
 
+class CMakeFilesMissing(object):
+
+    kind = 'cmake-files-missing'
+
+    def __init__(self, filenames):
+        self.filenames = filenames
+
+    def __eq__(self, other):
+        return (isinstance(self, type(other)) and
+                self.filenames == other.filenames)
+
+    def __str__(self):
+        return "Missing CMake package configuration files: %r" % (
+            self.filenames, )
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.filenames)
+
+
 class DhWithOrderIncorrect(object):
 
     kind = 'debhelper-argument-order'
@@ -1412,6 +1431,9 @@ build_failure_regexps = [
      r_missing_package),
     ('ERROR: dependency ‘(.*)’ is not available for package ‘(.*)’',
      r_missing_package),
+    (r'Error in library\(.*\) : there is no package called \'(.*)\'',
+     r_missing_package),
+    (r'there is no package called \'(.*)\'', r_missing_package),
     (r'  namespace ‘(.*)’ ([^ ]+) is being loaded, but >= ([^ ]+) is required',
      r_too_old),
     (r'  namespace ‘(.*)’ ([^ ]+) is already loaded, but >= ([^ ]+) '
@@ -1581,6 +1603,12 @@ build_failure_regexps = [
      file_not_found),
     (r'dh_installman: mv (.*) (.*): No such file or directory',
      file_not_found),
+    (r'failed to initialize build cache at (.*): mkdir (.*): '
+     r'permission denied', None),
+    (r'Can\'t exec "(.*)": No such file or directory at (.*) line ([0-9]+).',
+     command_missing),
+    # PHPUnit
+    (r'Cannot open file "(.*)".', file_not_found),
 ]
 
 compiled_build_failure_regexps = [
@@ -1589,6 +1617,7 @@ compiled_build_failure_regexps = [
 
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
+    r'Segmentation fault',
     # QMake
     r'Project ERROR: .*',
     # pdflatex
@@ -1630,7 +1659,8 @@ secondary_build_failure_regexps = [
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
     r'PermissionError|IndexError|TypeError|AssertionError|IOError|ImportError|'
-    r'SerialException|OSError'
+    r'SerialException|OSError|qtawesome.iconic_font.FontError|'
+    'redis.exceptions.ConnectionError|builtins.OverflowError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1681,6 +1711,8 @@ secondary_build_failure_regexps = [
     # rollup
     r'\[\!\] Error: Unexpected token',
     r'java.io.FileNotFoundException: (.*) \(No such file or directory\)',
+    # glib
+    r'\(.*:[0-9]+\): [a-zA-Z0-9]+-CRITICAL \*\*: [0-9:.]+: .*',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -1742,6 +1774,9 @@ def find_build_failure_description(lines):
         conf_file_pat = re.compile(
             r'\s*Could not find a configuration file for package "(.*)".*')
         binary_pat = re.compile(r'  Could NOT find (.*) \(missing: .*\)')
+        cmake_files_pat = re.compile(
+            '  Could not find a package configuration file provided '
+            'by "(.*)" with')
         # Urgh, multi-line regexes---
         for lineno in range(len(lines)):
             m = re.fullmatch(binary_pat, lines[lineno].rstrip('\n'))
@@ -1772,6 +1807,18 @@ def find_build_failure_description(lines):
                 return (
                     lineno + 1, lines[lineno],
                     MissingPkgConfig(package, version))
+            m = re.fullmatch(cmake_files_pat, lines[lineno].strip('\n'))
+            if (m and
+                    lines[lineno+1] == '  any of the following names:\n' and
+                    lines[lineno+2] == '\n'):
+                i = 3
+                filenames = []
+                while lines[lineno + i].strip():
+                    filenames.append(lines[lineno + i].strip())
+                    i += 1
+                return (
+                    lineno + 1, lines[lineno],
+                    CMakeFilesMissing(filenames))
 
     # And forwards for vague ("secondary") errors.
     for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
@@ -1813,9 +1860,43 @@ class AutopkgtestDepsUnsatisfiable(object):
         return "%s(args=%r)" % (type(self).__name__, self.args)
 
 
+class AutopkgtestTimedOut(object):
+
+    kind = 'timed-out'
+
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return "Timed out"
+
+    def __repr__(self):
+        return "%s()" % (type(self).__name__)
+
+    def __eq__(self, other):
+        return isinstance(self, type(other))
+
+
 class AutopkgtestTestbedFailure(object):
 
     kind = 'testbed-failure'
+
+    def __init__(self, reason):
+        self.reason = reason
+
+    def __eq__(self, other):
+        return type(self) == type(other) and self.reason == other.reason
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.reason)
+
+    def __str__(self):
+        return self.reason
+
+
+class AutopkgtestErroneousPackage(object):
+
+    kind = 'erroneous-package'
 
     def __init__(self, reason):
         self.reason = reason
@@ -1870,11 +1951,21 @@ def find_autopkgtest_failure_description(lines):
                 lines[lineno+1])
             description = 'Test %s failed: %s' % (
                 testname, lines[lineno+2][len('badpkg: '):].rstrip('\n'))
+        elif reason == 'timed out':
+            error = AutopkgtestTimedOut()
+            return lineno + 1, testname, error, reason
         elif reason.startswith('stderr: '):
-            error = AutopkgtestStderrFailure(reason[len('stderr: '):])
-            description = (
-                'Test %s failed due to unauthorized stderr output: %s' % (
-                    testname, error.stderr_line))
+            output = reason[len('stderr: '):]
+            (offset, description, error) = find_build_failure_description(
+                [output])
+            if offset is not None:
+                lineno += offset - 1
+            if error is None:
+                error = AutopkgtestStderrFailure(output)
+            if description is None:
+                description = (
+                    'Test %s failed due to unauthorized stderr output: %s' % (
+                        testname, error.stderr_line))
         else:
             error = None
             description = 'Test %s failed: %s' % (testname, reason)
@@ -1903,6 +1994,12 @@ def find_autopkgtest_failure_description(lines):
             line)
         if m:
             last = (lineno + 1, AutopkgtestTestbedFailure(m.group(2)), None)
+            continue
+        m = re.match(
+            r'autopkgtest \[([0-9:]+)\]: ERROR: erroneous package: (.*)',
+            line)
+        if m:
+            last = (lineno + 1, AutopkgtestErroneousPackage(m.group(2)), None)
             continue
 
     if last is not None:
