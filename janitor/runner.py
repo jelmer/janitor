@@ -485,16 +485,6 @@ class ActiveRun(object):
                         conn, vcs_url, branch_url, status='success',
                         revision=main_branch.last_revision())
 
-            if subpath:
-                # TODO(jelmer): cluster all packages for a single repository
-                return JanitorResult(
-                    self.pkg, log_id=self.log_id, branch_url=branch_url,
-                    code='package-in-subpath',
-                    description=(
-                        'The package is stored in a subpath (%s) rather than '
-                        'the repository root.' % (subpath, )),
-                    logfilenames=[])
-
             try:
                 hoster = get_hoster(
                     main_branch, possible_hosters=possible_hosters)
