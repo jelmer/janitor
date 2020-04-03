@@ -167,7 +167,7 @@ class MultiArchHintsWorker(SubWorker):
         else:
             if update_changelog is None:
                 update_changelog = cfg.update_changelog()
-        if control_files_in_root(local_tree):
+        if control_files_in_root(local_tree, subpath):
             raise WorkerFailure(
                 'control-files-in-root',
                 'control files live in root rather than debian/ '
@@ -300,7 +300,7 @@ class LintianBrushWorker(SubWorker):
             minimum_certainty = DEFAULT_MINIMUM_CERTAINTY
 
         with local_tree.lock_write():
-            if control_files_in_root(local_tree):
+            if control_files_in_root(local_tree, subpath):
                 raise WorkerFailure(
                     'control-files-in-root',
                     'control files live in root rather than debian/ '
@@ -367,13 +367,8 @@ class NewUpstreamWorker(SubWorker):
 
     def make_changes(self, local_tree, report_context, metadata,
                      base_metadata, subpath=None):
-        if subpath not in ('', '.', None):
-            raise WorkerFailure(
-                'package-in-subpath',
-                'Package is not stored in the root but a subpath (%s)' %
-                subpath)
         with local_tree.lock_write():
-            if control_files_in_root(local_tree):
+            if control_files_in_root(local_tree, subpath):
                 raise WorkerFailure(
                     'control-files-in-root',
                     'control files live in root rather than debian/ '
@@ -504,13 +499,19 @@ class NewUpstreamWorker(SubWorker):
 
             report_context(result.new_upstream_version)
 
-            if local_tree.has_filename('debian/patches/series'):
+            patch_series_path = 'debian/patches/series'
+            if subpath not in (None, '', '.'):
+                patch_series_path = os.path.join(
+                    subpath, patch_series_path)
+
+            if local_tree.has_filename(patch_series_path):
                 try:
                     refresh_quilt_patches(
                         local_tree,
                         old_version=result.old_upstream_version,
                         new_version=result.new_upstream_version,
-                        committer=self.committer)
+                        committer=self.committer,
+                        subpath=subpath)
                 except QuiltError as e:
                     error_description = (
                         "An error (%d) occurred refreshing quilt patches: "
@@ -607,10 +608,30 @@ def tree_set_changelog_version(tree, build_version, subpath=''):
 debian_info = distro_info.DebianDistroInfo()
 
 
-def control_files_in_root(tree):
-    return not tree.has_filename('debian') and (
-        tree.has_filename('control') or
-        tree.has_filename('control.in'))
+def control_files_in_root(tree, subpath):
+    debian_path = 'debian'
+    if subpath not in (None, '', '.'):
+        debian_path = os.path.join(subpath, 'debian')
+    if tree.has_filename(debian_path):
+        return False
+    control_path = 'control'
+    if subpath not in (None, '', '.'):
+        control_path = os.path.join(subpath, control_path)
+    if tree.has_filename(control_path):
+        return True
+    if tree.has_filename(control_path + '.in'):
+        return True
+    return False
+
+
+def control_file_present(tree, subpath):
+    for name in ['debian/control', 'debian/control.in', 'control',
+                 'control.in']:
+        if subpath not in (None, '', '.'):
+            name = os.path.join(subpath, name)
+        if tree.has_filename(name):
+            return True
+    return False
 
 
 def process_package(vcs_url, env, command, output_directory,
@@ -700,10 +721,7 @@ def process_package(vcs_url, env, command, output_directory,
         metadata['revision'] = metadata['main_branch_revision'] = (
             ws.main_branch.last_revision().decode())
 
-        if not any([ws.local_tree.has_filename(name)
-                    for name in [
-                     'debian/control', 'debian/control.in', 'control',
-                     'control.in']]):
+        if not control_file_present(ws.local_tree, subpath):
             raise WorkerFailure(
                 'missing-control-file',
                 'missing control file: debian/control')
