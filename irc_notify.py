@@ -18,10 +18,17 @@
 
 from aiohttp.client import ClientSession
 import pydle
+
+from prometheus_client import Counter
+
 from janitor.pubsub import pubsub_reader
+from janitor.prometheus import run_prometheus_server
 
 import re
 from urllib.parse import urljoin
+
+irc_messages_sent = Counter(
+    'irc_messages_sent', 'Number of messages sent to IRC')
 
 
 class JanitorNotifier(pydle.Client):
@@ -31,6 +38,10 @@ class JanitorNotifier(pydle.Client):
         super(JanitorNotifier, self).__init__(**kwargs)
         self._channel = channel
         self._runner_status = None
+
+    def message(self, *args, **kwargs):
+        irc_messages_sent.inc()
+        return super(self, JanitorNotifier).message(*args, **kwargs)
 
     async def on_connect(self):
         await self.join(self._channel)
@@ -88,6 +99,8 @@ async def main(args):
         args.channel, nickname=args.nick, realname=args.fullname,
         publisher_url=args.publisher_url)
     loop = asyncio.get_event_loop()
+    await run_prometheus_server(
+        args.prometheus_listen_address, args.prometheus_port)
     asyncio.ensure_future(
         notifier.connect(args.server, tls=True, tls_verify=False), loop=loop)
     async with ClientSession() as session:
@@ -125,6 +138,12 @@ if __name__ == '__main__':
     parser.add_argument(
         '--fullname', help='IRC fullname',
         default='Debian Janitor Notifier (https://janitor.debian.net/contact/')
+    parser.add_argument(
+        '--prometheus-listen-address', type=str,
+        default='localhost', help='Host to provide prometheus metrics on.')
+    parser.add_argument(
+        '--prometheus-port', type=int,
+        default=9918, help='Port for prometheus metrics')
     args = parser.parse_args()
 
     asyncio.run(main(args))
