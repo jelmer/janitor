@@ -41,7 +41,7 @@ class JanitorNotifier(pydle.Client):
 
     def message(self, *args, **kwargs):
         irc_messages_sent.inc()
-        return super(self, JanitorNotifier).message(*args, **kwargs)
+        return super(JanitorNotifier, self).message(*args, **kwargs)
 
     async def on_connect(self):
         await self.join(self._channel)
