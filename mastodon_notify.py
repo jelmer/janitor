@@ -17,6 +17,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.client import ClientSession
+from janitor.prometheus import run_prometheus_server
+
 from janitor.pubsub import pubsub_reader
 
 import sys
@@ -46,6 +48,8 @@ class MastodonNotifier(object):
 
 
 async def main(args, mastodon):
+    await run_prometheus_server(
+        args.prometheus_listen_address, args.prometheus_port)
     notifier = MastodonNotifier(mastodon)
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
@@ -83,6 +87,13 @@ if __name__ == '__main__':
         '--api-base-url', type=str,
         default='https://mastodon.cloud',
         help='Mastodon API Base URL.')
+    parser.add_argument(
+        '--prometheus-listen-address', type=str,
+        default='localhost', help='Host to provide prometheus metrics on.')
+    parser.add_argument(
+        '--prometheus-port', type=int,
+        default=9919, help='Port for prometheus metrics')
+
     args = parser.parse_args()
     if args.register:
         Mastodon.create_app(
