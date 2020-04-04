@@ -17,6 +17,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.client import ClientSession
+from prometheus_client import Counter
+
 from janitor.prometheus import run_prometheus_server
 
 from janitor.pubsub import pubsub_reader
@@ -26,13 +28,21 @@ import sys
 from mastodon import Mastodon
 
 
+toots_posted = Counter(
+    'toots_posted', 'Number of toots posted')
+
+
 class MastodonNotifier(object):
 
     def __init__(self, mastodon):
         self.mastodon = mastodon
 
+    def toot(self, msg):
+        toots_posted.inc()
+        self.mastodon.toot(msg)
+
     async def notify_merged(self, url, package, merged_by=None):
-        self.mastodon.toot(
+        self.toot(
             'Merge proposal %s (%s) merged%s.' %
             (url, package, ((' by %s' % merged_by) if merged_by else '')))
 
@@ -44,7 +54,7 @@ class MastodonNotifier(object):
                 tags.update(entry['fixed_lintian_tags'])
             if tags:
                 msg += ', fixing: %s.' % (', '.join(tags))
-        self.mastodon.toot(msg)
+        self.toot(msg)
 
 
 async def main(args, mastodon):
