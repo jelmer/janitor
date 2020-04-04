@@ -86,6 +86,8 @@ def _convert_branch_exception(vcs_url, e):
             code = 'unsupported-vcs-svn'
         elif str(e).startswith('Mercurial branches are not yet'):
             code = 'unsupported-vcs-hg'
+        elif str(e).startswith('Darcs branches are not yet'):
+            code = 'unsupported-vcs-darcs'
         else:
             code = 'branch-unavailable'
         return BranchOpenFailure(code, str(e))
