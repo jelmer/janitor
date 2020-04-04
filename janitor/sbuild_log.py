@@ -1660,7 +1660,7 @@ secondary_build_failure_regexps = [
     r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
     r'PermissionError|IndexError|TypeError|AssertionError|IOError|ImportError|'
     r'SerialException|OSError|qtawesome.iconic_font.FontError|'
-    'redis.exceptions.ConnectionError|builtins.OverflowError'
+    'redis.exceptions.ConnectionError|builtins.OverflowError|ArgumentError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
