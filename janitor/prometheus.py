@@ -64,3 +64,13 @@ def metrics_middleware(app, handler):
 def setup_metrics(app):
     app.middlewares.insert(0, metrics_middleware)
     app.router.add_get("/metrics", metrics, name='metrics')
+
+
+async def run_prometheus_server(listen_addr, port):
+    """Run a web server with metrics only."""
+    app = web.Application()
+    setup_metrics(app)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, listen_addr, port)
+    await site.start()
