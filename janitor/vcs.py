@@ -111,6 +111,8 @@ def _convert_branch_exception(vcs_url, e):
         else:
             if str(e).startswith('Subversion branches are not yet'):
                 code = 'unsupported-vcs-svn'
+            elif str(e).startswith('Darcs branches are not yet'):
+                code = 'unsupported-vcs-darcs'
             else:
                 code = 'unsupported-vcs'
         return BranchOpenFailure(code, str(e))
