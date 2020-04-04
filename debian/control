@@ -1,26 +1,28 @@
 Source: janitor
 Section: vcs
 Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
-Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1), silver-platter
+Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter
 
 Package: python3-janitor
 Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}
 
 Package: janitor-worker
-Depends: python3-aiohttp
+Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}
 Architecture: all
 
 Package: janitor-runner
-Depends: python3-aiohttp
+Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}
 Architecture: all
 
 Package: janitor-site
-Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, python3-chartkick
+Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, python3-chartkick, ${python3:Depends}, ${misc:Depends}
 Architecture: all
 
 Package: janitor-irc-notify
-Depends: python3-pydle
+Depends: python3-pydle, ${python3:Depends}, ${misc:Depends}
 Architecture: all
 
 Package: janitor-mastodon-notify
 Architecture: all
+Depends: ${python3:Depends}, ${misc:Depends}
