@@ -409,6 +409,8 @@ class NewUpstreamWorker(SubWorker):
                 if 'Subversion branches are not yet supported.' in str(
                         e.error):
                     error_code = 'upstream-unsupported-vcs-svn'
+                if 'Darcs branches are not yet supported' in str(e.error):
+                    error_code = 'upstream-unsupported-vcs-darcs'
                 if 'Unsupported protocol for url' in str(e.error):
                     if 'svn://' in str(e.error):
                         error_code = 'upstream-unsupported-vcs-svn'
