@@ -703,8 +703,7 @@ if __name__ == '__main__':
     app.router.add_static(
         '/_static', os.path.join(os.path.dirname(__file__), '_static'))
     import chartkick
-    app.router.add_static(
-        '/_static/ck', chartkick.js())
+    app.router.add_static('/ck', chartkick.js())
     from .api import create_app as create_api_app
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
