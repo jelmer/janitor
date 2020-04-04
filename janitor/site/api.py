@@ -47,7 +47,7 @@ async def handle_publish(request):
         return web.json_response(
             {'error': 'Invalid mode', 'mode': mode}, status=400)
     url = urllib.parse.urljoin(
-        publisher_url, '%s/%/publish' % (suite, package))
+        publisher_url, '%s/%s/publish' % (suite, package))
     if request.debsso_email:
         requestor = request.debsso_email
     else:
@@ -170,7 +170,7 @@ async def handle_schedule_control(request):
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
         offset, estimated_duration = await do_schedule_control(
-            conn, package.name, offset, refresh,
+            conn, package.name, offset=offset, refresh=refresh,
             requestor=requestor,
             main_branch_revision=run.main_branch_revision)
         (queue_position, queue_wait_time) = await state.get_queue_position(
@@ -248,10 +248,15 @@ async def handle_diff(request):
     try:
         run_id = request.match_info['run_id']
     except KeyError:
+        package = request.match_info['package']
+        suite = request.match_info['suite']
         async with request.app.db.acquire() as conn:
             run = await state.get_last_unabsorbed_run(
-                conn, request.match_info['package'],
-                request.match_info['suite'])
+                conn, package, suite)
+        if run is None:
+            return web.Response(
+                text='no unabsorbed run for %s/%s' % (package, suite),
+                status=404)
         run_id = run.id
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
@@ -284,11 +289,11 @@ async def handle_diff(request):
                 return web.Response(body=await resp.read(), status=400)
     except ContentTypeError as e:
         return web.Response(
-            'publisher returned error %d' % e.code,
+            text='publisher returned error %d' % e.code,
             status=400)
     except ClientConnectorError:
-        return web.json_response(
-            'unable to contact publisher',
+        return web.Response(
+            text='unable to contact publisher',
             status=400)
 
 
