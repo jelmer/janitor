@@ -1494,13 +1494,17 @@ async def get_publish_policy(conn, package, suite):
 
 async def iter_lintian_fixes_counts(conn):
     return await conn.fetch("""
-SELECT absorbed.tag, absorbed.cnt, unabsorbed.cnt, absorbed.cnt+unabsorbed.cnt
+SELECT
+   absorbed.tag,
+   COALESCE(absorbed.cnt, 0),
+   COALESCE(unabsorbed.cnt, 0),
+   COALESCE(absorbed.cnt, 0)+COALESCE(unabsorbed.cnt, 0)
 FROM (
-    SELECT UNNEST(fixed_lintian_tags) AS tag, count(*) AS cnt
+    SELECT UNNEST(fixed_lintian_tags) AS tag, COUNT(*) AS cnt
     FROM absorbed_lintian_fixes group by 1 order by 2 desc
     ) AS absorbed
 LEFT JOIN (
-    SELECT UNNEST(fixed_lintian_tags) AS tag, count(*) AS cnt
+    SELECT UNNEST(fixed_lintian_tags) AS tag, COUNT(*) AS cnt
     FROM last_unabsorbed_lintian_fixes group by 1 order by 2 desc
     ) AS unabsorbed
 ON absorbed.tag = unabsorbed.tag
