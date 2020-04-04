@@ -3,8 +3,21 @@
 {% from "run_util.html" import display_result_code %}
 {% block page_title %}Result Codes{% if suite %} - for {{ suite }}{% endif %}{% endblock %}
 {% block body %}
+
 <div class="section" id="result-codes">
 <h1>Result Codes</h1>
+
+Select suite to display:
+
+<form method="GET" id="suiteform">
+<select name="suite" onchange="$('#suiteform').submit()">
+<option name="_all">All</option>
+{% for s in all_suites %}
+<option name="{{ s }}"{% if s == suite %} selected{% endif %}>{{ s }}</option>
+{% endfor %}
+</select>
+</form>
+
 <table class="docutils" border="1">
 <colgroup>
 <col width="95%">

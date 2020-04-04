@@ -207,7 +207,10 @@ if __name__ == '__main__':
             generate_result_code_page)
         from .. import state
         suite = request.query.get('suite')
+        if suite == '_all':
+            suite = None
         code = request.match_info.get('code')
+        all_suites = [s.name for s in config.suite]
         async with request.app.database.acquire() as conn:
             if not code:
                 stats = await state.stats_by_result_codes(conn, suite=suite)
@@ -218,11 +221,12 @@ if __name__ == '__main__':
                 never_processed = sum(dict(
                     await state.get_never_processed(conn, suites)).values())
                 text = await generate_result_code_index(
-                    stats, never_processed, suite)
+                    stats, never_processed, suite, all_suites=all_suites)
             else:
                 runs = [run async for run in state.iter_last_runs(
                     conn, code, suite=suite)]
-                text = await generate_result_code_page(code, runs, suite)
+                text = await generate_result_code_page(
+                    code, runs, suite, all_suites=all_suites)
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
