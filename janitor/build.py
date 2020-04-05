@@ -125,6 +125,19 @@ def attempt_build(
         local_tree, suffix, build_suite, output_directory, build_command,
         build_changelog_entry='Build for debian-janitor apt repository.',
         subpath='', source_date_epoch=None):
+    """Attempt a build, with a custom distribution set.
+
+    Args:
+      local_tree: Tree to build in
+      suffix: Suffix to add to version string
+      build_suite: Name of suite (i.e. distribution) to build for
+      output_directory: Directory to write output to
+      build_command: Build command to build package
+      build_changelog_entry: Changelog entry to use
+      subpath: Sub path in tree where package lives
+      source_date_epoch: Source date epoch to set
+    Returns: Tuple with (changes_name, cl_version)
+    """
     add_dummy_changelog_entry(
         local_tree.abspath(subpath), suffix, build_suite,
         build_changelog_entry)
