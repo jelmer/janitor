@@ -457,6 +457,10 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             "-- Checking for module 'gtk+-3.0'",
             "--   Package 'gtk+-3.0', required by 'virtual:world', not found"],
             2, MissingPkgConfig('gtk+-3.0'))
+        self.run_test([
+            'configure: error: libfilezilla not found: Package dependency '
+            'requirement \'libfilezilla >= 0.17.1\' could not be satisfied.'],
+            1, MissingPkgConfig('libfilezilla', '0.17.1'))
 
     def test_dh_with_order(self):
         self.run_test([

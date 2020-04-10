@@ -654,6 +654,9 @@ class MissingJavaScriptRuntime(object):
     def __init__(self):
         pass
 
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
     def __repr__(self):
         return "%s()" % (type(self).__name__, )
 
@@ -1588,6 +1591,8 @@ build_failure_regexps = [
     (r'Project ERROR: Unknown module\(s\) in QT: (.*)', None),
     (r'Project ERROR: (.*) development package not found',
      pkg_config_missing),
+    (r'configure: error: .* not found: Package dependency requirement '
+     r'\'([^\']+)\' could not be satisfied.', pkg_config_missing),
     (r'.*:[0-9]+: (.*) does not exist.', file_not_found),
     # uglifyjs
     (r'ERROR: can\'t read file: (.*)', file_not_found),
@@ -1629,7 +1634,7 @@ build_failure_regexps = [
      command_missing),
     # PHPUnit
     (r'Cannot open file "(.*)".', file_not_found),
-    ('.*Could not find a JavaScript runtime\. See '
+    (r'.*Could not find a JavaScript runtime\. See '
      r'https://github.com/rails/execjs for a list of available runtimes\..*',
      javascript_runtime_missing),
 ]
