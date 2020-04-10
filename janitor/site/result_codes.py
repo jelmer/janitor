@@ -11,7 +11,8 @@ async def generate_result_code_page(code, entries, suite, all_suites):
         code=code, runs=entries, suite=suite, all_suites=all_suites)
 
 
-async def generate_result_code_index(by_code, never_processed, suite, all_suites):
+async def generate_result_code_index(
+        by_code, never_processed, suite, all_suites):
     template = env.get_template('result-code-index.html')
 
     data = [[code, count]
