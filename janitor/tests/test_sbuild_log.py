@@ -480,6 +480,12 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             '/bin/bash: line 3:  7392 Segmentation fault      '
             'itstool -m "${mo}" ${d}/C/index.docbook ${d}/C/legal.xml'], 1)
 
+    def test_missing_perl_plugin(self):
+        self.run_test([
+            'Required plugin bundle Dist::Zilla::PluginBundle::Git isn\'t '
+            'installed.'], 1,
+            MissingPerlModule(None, 'Dist::Zilla::PluginBundle::Git', None))
+
     def test_missing_perl_module(self):
         self.run_test([
             'Converting tags.ledger... Can\'t locate String/Interpolate.pm in '
