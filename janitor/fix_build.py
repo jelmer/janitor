@@ -539,6 +539,9 @@ def fix_missing_sprockets_file(
         update_changelog=update_changelog, subpath=subpath)
 
 
+DEFAULT_PERL_PATHS = ['/usr/share/perl5']
+
+
 def fix_missing_perl_file(
         tree, error, context, committer=None, update_changelog=True,
         subpath='.'):
@@ -551,7 +554,8 @@ def fix_missing_perl_file(
 
     if error.inc is None:
         if not os.path.isabs(error.filename):
-            return False
+            paths = [os.path.join(inc, error.filename)
+                     for inc in DEFAULT_PERL_PATHS]
         else:
             paths = [error.filename]
     else:
