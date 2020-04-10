@@ -30,6 +30,7 @@ from janitor.sbuild_log import (
     DebhelperPatternNotFound,
     DhLinkDestinationIsDirectory,
     MissingConfigure,
+    MissingJavaScriptRuntime,
     MissingJVM,
     MissingConfigStatusInput,
     MissingCHeader,
@@ -106,6 +107,14 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'Please remove debian/sddm.upstart and check if you '
             'need to add a conffile removal'], 1,
             UpstartFilePresent('debian/sddm.upstart'))
+
+    def test_missing_javascript_runtime(self):
+        self.run_test([
+            'ExecJS::RuntimeUnavailable: '
+            'Could not find a JavaScript runtime. '
+            'See https://github.com/rails/execjs for a list '
+            'of available runtimes.'], 1,
+            MissingJavaScriptRuntime())
 
     def test_missing_sprockets_file(self):
         self.run_test([

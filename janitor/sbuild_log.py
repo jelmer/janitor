@@ -647,6 +647,24 @@ def command_missing(m):
     return MissingCommand(command)
 
 
+class MissingJavaScriptRuntime(object):
+
+    kind = 'javascript-runtime-missing'
+
+    def __init__(self):
+        pass
+
+    def __repr__(self):
+        return "%s()" % (type(self).__name__, )
+
+    def __str__(self):
+        return "Missing JavaScript Runtime"
+
+
+def javascript_runtime_missing(m):
+    return MissingJavaScriptRuntime()
+
+
 class MissingPkgConfig(object):
 
     kind = 'pkg-config-missing'
@@ -1331,6 +1349,8 @@ build_failure_regexps = [
      node_module_missing),
     (r'\s*Module not found: Error: Can\'t resolve \'(.*)\' in \'(.*)\'',
      node_module_missing),
+    (r'>> Local Npm module \"(.*)" not found. Is it installed?',
+     node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
@@ -1609,6 +1629,9 @@ build_failure_regexps = [
      command_missing),
     # PHPUnit
     (r'Cannot open file "(.*)".', file_not_found),
+    ('.*Could not find a JavaScript runtime\. See '
+     r'https://github.com/rails/execjs for a list of available runtimes\..*',
+     javascript_runtime_missing),
 ]
 
 compiled_build_failure_regexps = [
@@ -1713,6 +1736,7 @@ secondary_build_failure_regexps = [
     r'java.io.FileNotFoundException: (.*) \(No such file or directory\)',
     # glib
     r'\(.*:[0-9]+\): [a-zA-Z0-9]+-CRITICAL \*\*: [0-9:.]+: .*',
+    r'tar: option requires an argument -- \'.\'',
 ]
 
 compiled_secondary_build_failure_regexps = [
