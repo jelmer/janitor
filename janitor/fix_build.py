@@ -62,6 +62,7 @@ from .sbuild_log import (
     MissingPkgConfig,
     MissingCommand,
     MissingFile,
+    MissingJavaScriptRuntime,
     MissingSprocketsFile,
     MissingGoPackage,
     MissingPerlFile,
@@ -311,6 +312,20 @@ def package_exists(package):
         if p.name == package:
             return True
     return False
+
+
+def fix_missing_javascript_runtime(
+        tree, error, context, committer=None, update_changelog=True,
+        subpath='.'):
+    package = get_package_for_paths(
+        ['/usr/bin/node', '/usr/bin/duk'],
+        regex=False)
+    if package is None:
+        return False
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog,
+        subpath=subpath)
 
 
 def fix_missing_python_distribution(
@@ -848,6 +863,7 @@ FIXERS = [
     (MissingConfigStatusInput, fix_missing_config_status_input),
     (MissingJDKFile, fix_missing_jdk_file),
     (MissingRubyFile, fix_missing_ruby_file),
+    (MissingJavaScriptRuntime, fix_missing_javascript_runtime),
 ]
 
 
