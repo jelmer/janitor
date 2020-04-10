@@ -37,7 +37,10 @@ from lintian_brush.control import (
     ensure_some_version,
     ensure_minimum_version,
     get_debhelper_compat_version,
-    update_control,
+    ControlUpdater,
+    )
+from lintian_brush.deb822 import (
+    Deb822Updater,
     )
 from lintian_brush.reformatting import (
     FormattingUnpreservable,
@@ -118,27 +121,25 @@ def add_build_dependency(tree, package, minimum_version=None,
     if not isinstance(package, str):
         raise TypeError(package)
 
-    def add_build_dep(control):
-        if minimum_version:
-            control["Build-Depends"] = ensure_minimum_version(
-                control["Build-Depends"],
-                package, minimum_version)
-        else:
-            control["Build-Depends"] = ensure_some_version(
-                control["Build-Depends"], package)
-
-    def check_binary_pkg(binary):
-        if binary["Package"] == package:
-            raise CircularDependency(package)
-
+    control_path = os.path.join(tree.abspath(subpath), 'debian/control')
     try:
-        update_control(
-            source_package_cb=add_build_dep,
-            binary_package_cb=check_binary_pkg,
-            path=os.path.join(tree.abspath(subpath), 'debian/control'))
+        with ControlUpdater(path=control_path) as updater:
+            for binary in updater.binaries:
+                if binary["Package"] == package:
+                    raise CircularDependency(package)
+            if minimum_version:
+                updater.source["Build-Depends"] = ensure_minimum_version(
+                    updater.source["Build-Depends"],
+                    package, minimum_version)
+            else:
+                updater.source["Build-Depends"] = ensure_some_version(
+                    updater.source["Build-Depends"], package)
     except FormattingUnpreservable as e:
         note('Unable to edit %s in a way that preserves formatting.',
              e.path)
+        return False
+
+    if not updater.changed:
         return False
 
     if minimum_version:
@@ -157,26 +158,26 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
     if not isinstance(package, str):
         raise TypeError(package)
 
-    def add_test_dep(control):
-        if control["Tests"] != testname:
-            return
-        if minimum_version:
-            control["Depends"] = ensure_minimum_version(
-                control["Depends"],
-                package, minimum_version)
-        else:
-            control["Depends"] = ensure_some_version(
-                control["Depends"], package)
+    tests_control_path = os.path.join(
+        tree.abspath(subpath), 'debian/tests/control')
 
     try:
-        if not update_control(
-                source_package_cb=add_test_dep,
-                path=os.path.join(
-                    tree.abspath(subpath), 'debian/tests/control')):
-            return False
+        with Deb822Updater(path=tests_control_path) as updater:
+            for control in updater.paragraphs:
+                if control["Tests"] != testname:
+                    return
+                if minimum_version:
+                    control["Depends"] = ensure_minimum_version(
+                        control["Depends"],
+                        package, minimum_version)
+                else:
+                    control["Depends"] = ensure_some_version(
+                        control["Depends"], package)
     except FormattingUnpreservable as e:
         note('Unable to edit %s in a way that preserves formatting.',
              e.path)
+        return False
+    if not updater.changed:
         return False
 
     if minimum_version:
