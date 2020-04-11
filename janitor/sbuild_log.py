@@ -1681,6 +1681,9 @@ build_failure_regexps = [
     # rst2html (and other Python?)
     (r'  InputError: \[Errno 2\] No such file or directory: \'(.*)\'',
      file_not_found),
+    # gpg
+    (r'gpg: can\'t connect to the agent: File name too long', None),
+    (r'(.*.lua):[0-9]+: assertion failed', None),
 ]
 
 compiled_build_failure_regexps = []
@@ -1775,6 +1778,7 @@ secondary_build_failure_regexps = [
     # scons
     r'ERROR: test\(s\) failed in (.*)',
     r'./configure: line [0-9]+: syntax error near unexpected token `.*\'',
+    r'scons: \*\*\* \[.*\] ValueError : unsupported pickle protocol: .*',
     # yarn
     r'ERROR: There are no scenarios; must have at least one.',
     # perl
@@ -1803,6 +1807,7 @@ secondary_build_failure_regexps = [
     # Docker
     r'Cannot connect to the Docker daemon at '
     r'unix:///var/run/docker.sock. Is the docker daemon running\?',
+    r'dh_makeshlibs: failing due to earlier errors',
 ]
 
 compiled_secondary_build_failure_regexps = [
