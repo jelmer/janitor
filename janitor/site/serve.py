@@ -236,8 +236,8 @@ if __name__ == '__main__':
             content_type='text/plain',
             text=repr(request.debsso_email))
 
-    async def handle_gpg_key(request):
-        return web.FileResponse(os.path.join(os.path.dirname(__file__), '..', '..', 'janitor.asc'))
+    async def handle_static_file(path, request):
+        return web.FileResponse(path)
 
     async def handle_pkg_list(request):
         # TODO(jelmer): The javascript plugin thingy should just redirect to
@@ -707,13 +707,32 @@ if __name__ == '__main__':
     app.router.add_get(
         '/login', handle_login,
         name='login')
-    app.router.add_static(
-        '/_static', os.path.join(os.path.dirname(__file__), '_static'))
+    for entry in os.scandir(os.path.join(os.path.dirname(__file__), '_static')):
+        app.router.add_get(
+            '/_static/%s' % entry.name,
+            handle_static_file(entry.path))
     app.router.add_get(
-        '/janitor.asc', handle_gpg_key,
+        '/janitor.asc', functools.partial(
+            handle_static_file,
+            os.path.join(os.path.dirname(__file__), '..', '..', 'janitor.asc')))
         name='gpg-key')
+    app.router.add_get(
+        '/_static/chart.js', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/chart.js/Chart.min.js'))
+    app.router.add_get(
+        '/_static/chart.css', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/chart.js/Chart.min.css'))
+    app.router.add_get(
+        '/_static/jquery.js', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/jquery/jquery.min.js'))
     import chartkick
-    app.router.add_static('/ck', chartkick.js())
+    app.router.add_get(
+        '/_static/chartkick.js', functools.partial(
+            handle_static_file,
+            os.path.join(chartkick.js(), 'chartkick.js')))
     from .api import create_app as create_api_app
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
