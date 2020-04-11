@@ -1331,6 +1331,8 @@ build_failure_regexps = [
     ('E   ImportError: cannot import name \'(.*)\' from \'(.*)\'',
      python_module_not_found),
     ('E   ImportError: cannot import name ([^\']+)', python_module_not_found),
+    (r'django.core.exceptions.ImproperlyConfigured: Error loading .* module: '
+     r'No module named (.*)', python_module_not_found),
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
@@ -1677,12 +1679,16 @@ build_failure_regexps = [
     (r'vcversioner: no VCS could be detected in \'/<<PKGBUILDDIR>>\' '
      r'and \'/<<PKGBUILDDIR>>/version.txt\' isn\'t present.', None),
     # rst2html (and other Python?)
-    (r'  InputError: \[Errno 2\] No such file or directory: \'(*)\'',
+    (r'  InputError: \[Errno 2\] No such file or directory: \'(.*)\'',
      file_not_found),
 ]
 
-compiled_build_failure_regexps = [
-    (re.compile(regexp), cb) for (regexp, cb) in build_failure_regexps]
+compiled_build_failure_regexps = []
+for (regexp, cb) in build_failure_regexps:
+    try:
+        compiled_build_failure_regexps.append((re.compile(regexp), cb))
+    except re.error as e:
+        raise Exception('Error in %s: %s' % (regexp, e))
 
 
 # Regexps that hint at an error of some sort, but not the error itself.
