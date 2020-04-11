@@ -1400,7 +1400,8 @@ build_failure_regexps = [
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_module),
-    (r'Required plugin bundle (.*) isn\'t installed.', perl_missing_plugin),
+    (r'Required plugin bundle ([^ ]+) isn\'t installed.', perl_missing_plugin),
+    (r'Required plugin ([^ ]+) isn\'t installed.', perl_missing_file),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_file),
     (r'> Could not find (.*). Please check that (.*) contains a valid JDK '

@@ -485,6 +485,9 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'Required plugin bundle Dist::Zilla::PluginBundle::Git isn\'t '
             'installed.'], 1,
             MissingPerlModule(None, 'Dist::Zilla::PluginBundle::Git', None))
+        self.run_test([
+            'Required plugin Dist::Zilla::Plugin::PPPort isn\'t installed.'],
+            1, MissingPerlModule('Dist::Zilla::Plugin::PPPort'))
 
     def test_missing_perl_module(self):
         self.run_test([
