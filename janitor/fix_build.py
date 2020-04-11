@@ -553,9 +553,12 @@ def fix_missing_perl_file(
         raise NotImplementedError
 
     if error.inc is None:
-        if not os.path.isabs(error.filename):
-            paths = [os.path.join(inc, error.filename)
+        if error.filename is None:
+            filename = error.module.replace('::', '/') + '.pm'
+            paths = [os.path.join(inc, filename)
                      for inc in DEFAULT_PERL_PATHS]
+        elif not os.path.isabs(error.filename):
+            return False
         else:
             paths = [error.filename]
     else:
