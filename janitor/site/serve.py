@@ -236,6 +236,9 @@ if __name__ == '__main__':
             content_type='text/plain',
             text=repr(request.debsso_email))
 
+    async def handle_gpg_key(request):
+        return web.FileResponse(os.path.join(os.path.dirname(__file__), '..', '..', 'janitor.asc'))
+
     async def handle_pkg_list(request):
         # TODO(jelmer): The javascript plugin thingy should just redirect to
         # the right URL, not rely on query parameters here.
@@ -706,6 +709,9 @@ if __name__ == '__main__':
         name='login')
     app.router.add_static(
         '/_static', os.path.join(os.path.dirname(__file__), '_static'))
+    app.router.add_get(
+        '/janitor.asc', handle_gpg_key,
+        name='gpg-key')
     import chartkick
     app.router.add_static('/ck', chartkick.js())
     from .api import create_app as create_api_app
