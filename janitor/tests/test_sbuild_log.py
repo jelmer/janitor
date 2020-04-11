@@ -134,6 +134,17 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/<<PKGBUILDDIR>>/lib does not exist.'], 1,
             None)
 
+    def test_libtoolize_missing_file(self):
+        self.run_test([
+            "libtoolize:   error: '/usr/share/aclocal/ltdl.m4' "
+            "does not exist."], 1, MissingFile('/usr/share/aclocal/ltdl.m4'))
+
+    def test_ruby_missing_file(self):
+        self.run_test([
+            "Error: Error: ENOENT: no such file or directory, "
+            "open '/usr/lib/nodejs/requirejs/text.js'"], 1,
+            MissingFile('/usr/lib/nodejs/requirejs/text.js'))
+
     def test_python_missing_file(self):
         self.run_test([
             "python3.7: can't open file '/usr/bin/blah.py': "
@@ -674,6 +685,12 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
         self.run_test([
             "writer.d:59: error: undefined reference to 'sam_hdr_parse_'",
             ], 1)
+
+    def test_fpic(self):
+        self.run_test([
+            "/usr/bin/ld: pcap-linux.o: relocation R_X86_64_PC32 against "
+            "symbol `stderr@@GLIBC_2.2.5' can not be used when making a "
+            "shared object; recompile with -fPIC"], 1, None)
 
     def test_rspec(self):
         self.run_test([
