@@ -142,6 +142,12 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
         self.run_test([
             "python3.7: can't open file 'setup.py': "
             "[Errno 2] No such file or directory"], 1)
+        self.run_test([
+            "E           FileNotFoundError: [Errno 2] "
+            "No such file or directory: "
+            "'/usr/share/firmware-microbit-micropython/firmware.hex'"],
+            1, MissingFile(
+                '/usr/share/firmware-microbit-micropython/firmware.hex'))
 
     def test_interpreter_missing(self):
         self.run_test([
@@ -193,6 +199,11 @@ Call Stack (most recent call first):
   CMakeLists.txt:34 (find_package)
 dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
 """.splitlines(True), 4, MissingFile('/usr/lib/x86_64-linux-gnu/libEGL.so'))
+
+    def test_meson_missing_git(self):
+        self.run_test([
+            'meson.build:13:0: ERROR: Git program not found.'], 1,
+            MissingCommand('git'))
 
     def test_cmake_missing_command(self):
         self.run_test([
@@ -487,7 +498,8 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             MissingPerlModule(None, 'Dist::Zilla::PluginBundle::Git', None))
         self.run_test([
             'Required plugin Dist::Zilla::Plugin::PPPort isn\'t installed.'],
-            1, MissingPerlModule('Dist::Zilla::Plugin::PPPort'))
+            1, MissingPerlModule(
+                filename=None, module='Dist::Zilla::Plugin::PPPort'))
 
     def test_missing_perl_module(self):
         self.run_test([
