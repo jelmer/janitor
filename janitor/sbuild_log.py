@@ -601,6 +601,8 @@ class MissingNodeModule(object):
 def node_module_missing(m):
     if m.group(1).startswith('/<<PKGBUILDDIR>>/'):
         return None
+    if m.group(1).startswith('./'):
+        return None
     return MissingNodeModule(m.group(1))
 
 
