@@ -647,6 +647,10 @@ def command_missing(m):
     return MissingCommand(command)
 
 
+def git_missing(m):
+    return MissingCommand('git')
+
+
 class MissingJavaScriptRuntime(object):
 
     kind = 'javascript-runtime-missing'
@@ -768,7 +772,7 @@ class MissingPerlModule(object):
 
     kind = 'missing-perl-module'
 
-    def __init__(self, filename, module, inc):
+    def __init__(self, filename, module, inc=None):
         self.filename = filename
         self.module = module
         self.inc = inc
@@ -1547,6 +1551,8 @@ build_failure_regexps = [
      command_missing),
     (r'.*meson.build:[0-9]+:[0-9]+: ERROR: Program\(s\) \[\'(.*)\'\] not '
      r'found or not executable', command_missing),
+    (r'.*meson.build:[0-9]+:[0-9]: ERROR: Git program not found\.',
+     git_missing),
     (r'dpkg-gensymbols: error: some symbols or patterns disappeared in '
      r'the symbols file: see diff output below',
      None),
@@ -1643,6 +1649,8 @@ build_failure_regexps = [
     (r'.*Could not find a JavaScript runtime\. See '
      r'https://github.com/rails/execjs for a list of available runtimes\..*',
      javascript_runtime_missing),
+    (r'^(?:E  +)?FileNotFoundError: \[Errno 2\] '
+     r'No such file or directory: \'(.*)\'', file_not_found),
 ]
 
 compiled_build_failure_regexps = [
@@ -1671,13 +1679,14 @@ secondary_build_failure_regexps = [
     r'.*:[0-9]+:[0-9]+: (error|ERROR): (.*)',
     r'FAIL: (.*)',
     r'FAIL (.*) \(.*\)',
-    r'FAIL\s+(.*) \[.*\]',
+    r'FAIL\s+(.*) \[.*\] ?',
     r'make\[[0-9]+\]: \*\*\* \[.*\] Error [0-9]+',
     r'E: pybuild pybuild:[0-9]+: test: plugin [^ ]+ failed with:'
     r'exit code=[0-9]+: .*',
     r'chmod: cannot access \'.*\': No such file or directory',
     r'dh_autoreconf: autoreconf .* returned exit code [0-9]+',
     r'make: \*\*\* \[.*\] Error [0-9]+',
+    r'.*:[0-9]+: \*\*\* missing separator\.  Stop\.',
     r'[^:]+: cannot stat \'.*\': No such file or directory',
     r'[0-9]+ tests: [0-9]+ ok, [0-9]+ failure(s), [0-9]+ test(s) skipped',
     r'\*\*Error:\*\* (.*)',
