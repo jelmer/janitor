@@ -647,10 +647,6 @@ def command_missing(m):
     return MissingCommand(command)
 
 
-def git_missing(m):
-    return MissingCommand('git')
-
-
 class MissingJavaScriptRuntime(object):
 
     kind = 'javascript-runtime-missing'
@@ -1534,6 +1530,9 @@ build_failure_regexps = [
     ('(.*):([0-9]+): error: undefined reference to \'(.*)\'', None),
     (r'\/usr\/bin\/ld: (.*): undefined reference to `(.*)\'', None),
     (r'\/usr\/bin\/ld: (.*): undefined reference to symbol \'(.*)\'', None),
+    (r'\/usr\/bin\/ld: (.*): relocation (.*) against symbol `(.*)\' '
+     r'can not be used when making a shared object; recompile with -fPIC',
+     None),
     ('(.*):([0-9]+): multiple definition of `(.*)\'; (.*):([0-9]+): '
      'first defined here', None),
     ('dh(.*): debhelper compat level specified both in debian/compat '
@@ -1552,7 +1551,7 @@ build_failure_regexps = [
     (r'.*meson.build:[0-9]+:[0-9]+: ERROR: Program\(s\) \[\'(.*)\'\] not '
      r'found or not executable', command_missing),
     (r'.*meson.build:[0-9]+:[0-9]: ERROR: Git program not found\.',
-     git_missing),
+     lambda m: MissingCommand('git')),
     (r'dpkg-gensymbols: error: some symbols or patterns disappeared in '
      r'the symbols file: see diff output below',
      None),
@@ -1573,6 +1572,7 @@ build_failure_regexps = [
     (r'convert convert: Image pixel limit exceeded '
      r'\(see -limit Pixels\) \(-1\).',
      None),
+    (r'convert convert: invalid primitive argument \([0-9]+\).', None),
     (r'ERROR: Sphinx requires at least Python (.*) to run.',
      None),
     (r'Can\'t find (.*) directory in (.*)', None),
@@ -1651,6 +1651,34 @@ build_failure_regexps = [
      javascript_runtime_missing),
     (r'^(?:E  +)?FileNotFoundError: \[Errno 2\] '
      r'No such file or directory: \'(.*)\'', file_not_found),
+    # ruby
+    (r'Errno::ENOENT: No such file or directory - (.*)',
+     file_not_found),
+    # JavaScript
+    (r'.*: ENOENT: no such file or directory, open \'(.*)\'',
+     file_not_found),
+    # libtoolize
+    (r'libtoolize:   error: \'(.*)\' does not exist.',
+     file_not_found),
+    # Seen in python-cogent
+    ('RuntimeError: Numpy required but not found.',
+     lambda m: MissingPythonModule('numpy')),
+    # Seen in cpl-plugin-giraf
+    (r'ImportError: Numpy version (.*) or later must be '
+     r'installed to use .*', lambda m: MissingPythonModule(
+         'numpy', minimum_version=m.group(1))),
+    # autoconf
+    (r'configure.ac:[0-9]+: error: required file \'(.*)\' not found',
+     file_not_found),
+    # sphinx
+    (r'config directory doesn\'t contain a conf.py file \((.*)\)',
+     None),
+    # vcversioner
+    (r'vcversioner: no VCS could be detected in \'/<<PKGBUILDDIR>>\' '
+     r'and \'/<<PKGBUILDDIR>>/version.txt\' isn\'t present.', None),
+    # rst2html (and other Python?)
+    (r'  InputError: \[Errno 2\] No such file or directory: \'(*)\'',
+     file_not_found),
 ]
 
 compiled_build_failure_regexps = [
@@ -1664,12 +1692,14 @@ secondary_build_failure_regexps = [
     r'Project ERROR: .*',
     # pdflatex
     r'\!  ==> Fatal error occurred, no output PDF file produced\!',
+    # latex
+    r'\! Emergency stop\.',
     # CTest
     r'Errors while running CTest',
     r'dh.*: Aborting due to earlier error',
     r'dh.*: unknown option or error during option parsing; aborting',
     r'Could not import extension .* \(exception: .*\)',
-    r'configure.ac:[0-9]+: error: required file \'(.*)\' not found',
+    r'configure.ac:[0-9]+: error: (.*)',
     r'dwz: Too few files for multifile optimization',
     r'dh_dwz: dwz -q -- .* returned exit code [0-9]+',
     r'help2man: can\'t get `-?-help\' info from .*',
@@ -1700,10 +1730,12 @@ secondary_build_failure_regexps = [
     # Random Python errors
     '^(E  +)?(SyntaxError|TypeError|ValueError|AttributeError|NameError|'
     r'django.core.exceptions..*|RuntimeError|subprocess.CalledProcessError|'
-    r'testtools.matchers._impl.MismatchError|FileNotFoundError|'
+    r'testtools.matchers._impl.MismatchError|'
     r'PermissionError|IndexError|TypeError|AssertionError|IOError|ImportError|'
     r'SerialException|OSError|qtawesome.iconic_font.FontError|'
-    'redis.exceptions.ConnectionError|builtins.OverflowError|ArgumentError'
+    'redis.exceptions.ConnectionError|builtins.OverflowError|ArgumentError|'
+    'httptools.parser.errors.HttpParserInvalidURLError|HypothesisException|'
+    'SSLError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1717,6 +1749,7 @@ secondary_build_failure_regexps = [
     # Go
     'FAIL\t(.*)\t[0-9.]+s',
     r'.*.go:[0-9]+:[0-9]+: (?!note:).*',
+    r'can\'t load package: package \.: no Go files in /<<PKGBUILDDIR>>/(.*)',
     # Ld
     r'\/usr\/bin\/ld: cannot open output file (.*): No such file or directory',
     r'configure: error: (.*)',
@@ -1741,8 +1774,6 @@ secondary_build_failure_regexps = [
     # perl
     r'Execution of (.*) aborted due to compilation errors.',
     r'ls: cannot access \'(.*)\': No such file or directory',
-    # ruby
-    r'Errno::ENOENT: No such file or directory - (.*)',
     # Mocha
     r'     AssertionError \[ERR_ASSERTION\]: Missing expected exception.',
     # lt (C++)
@@ -1757,6 +1788,15 @@ secondary_build_failure_regexps = [
     # glib
     r'\(.*:[0-9]+\): [a-zA-Z0-9]+-CRITICAL \*\*: [0-9:.]+: .*',
     r'tar: option requires an argument -- \'.\'',
+    # rsvg-convert
+    r'Could not render file (.*.svg)',
+    # pybuild tests
+    r'ERROR: file not found: (.*)',
+    # msgfmt
+    r'/usr/bin/msgfmt: found [0-9]+ fatal errors',
+    # Docker
+    r'Cannot connect to the Docker daemon at '
+    r'unix:///var/run/docker.sock. Is the docker daemon running\?',
 ]
 
 compiled_secondary_build_failure_regexps = [
