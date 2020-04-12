@@ -472,7 +472,7 @@ class NewUpstreamWorker(SubWorker):
                 raise WorkerFailure(error_code, error_description)
             except UScanError as e:
                 error_description = str(e)
-                if e.errors == 'OpenPGP signature did not verify.':
+                if e.errors == 'OpenPGP signature did not verify..':
                     error_code = 'upstream-pgp-signature-verification-failed'
                 else:
                     error_code = 'uscan-error'

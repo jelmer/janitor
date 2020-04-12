@@ -33,6 +33,22 @@ and then merged</a>.</p>
     <td><b>{{ by_tag | sum(attribute=2) }}</b></td>
 </tr>
 </table>
+
+<canvas id="tags-per-run-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#tags-per-run-chart"), {
+    type: 'bar',
+    data: {
+       labels: {{ tags_per_run.items()|list|sort|map(attribute=0)|list|tojson }},
+       datasets: [{
+         label: "Number of fixers applied",
+         backgroundColor: Chart.helpers.color(window.chartColors.blue).alpha(0.5).rgbString(),
+         data: {{ tags_per_run.items()|list|sort|map(attribute=1)|list|tojson }}
+       }],
+    }
+});
+</script>
+
 </div>
 </div>
 {% endblock %}

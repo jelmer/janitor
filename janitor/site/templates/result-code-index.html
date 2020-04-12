@@ -18,7 +18,21 @@ Select suite to display:
 </select>
 </form>
 
-{% pie_chart result_codes %}
+{% macro random_colors(n) %}[ {% for i in range(n) %}'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]{% endmacro %}
+
+<canvas id="result-code-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#result-code-chart"), {
+    type: 'pie',
+    data: {
+      labels: {{ result_codes|map(attribute=0)|list|tojson }},
+      datasets: [{
+          data: {{ result_codes|map(attribute=1)|list|tojson }},
+          backgroundColor: {{ random_colors(result_codes|length) }},
+      }],
+    },
+});
+</script>
 
 <table class="docutils" border="1">
 <colgroup>
