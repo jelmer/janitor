@@ -124,8 +124,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+    parser.add_argument(
+        '--debug', action='store_true',
+        help='Enable debugging mode. For example, avoid minified JS.')
 
     args = parser.parse_args()
+
+    if args.debug:
+        minified = ''
+    else:
+        minified = 'min.'
 
     with open(args.config, 'r') as f:
         config = read_config(f)
@@ -719,19 +727,19 @@ if __name__ == '__main__':
     app.router.add_get(
         '/_static/chart.js', functools.partial(
             handle_static_file,
-            '/usr/share/javascript/chart.js/Chart.min.js'))
+            '/usr/share/javascript/chart.js/Chart.%sjs' % minified))
     app.router.add_get(
         '/_static/chart.css', functools.partial(
             handle_static_file,
-            '/usr/share/javascript/chart.js/Chart.min.css'))
+            '/usr/share/javascript/chart.js/Chart.%scss' % minified))
     app.router.add_get(
         '/_static/jquery.js', functools.partial(
             handle_static_file,
-            '/usr/share/javascript/jquery/jquery.min.js'))
+            '/usr/share/javascript/jquery/jquery.%sjs' % minified))
     app.router.add_get(
         '/_static/moment.js', functools.partial(
             handle_static_file,
-            '/usr/share/javascript/moment/moment.min.js'))
+            '/usr/share/javascript/moment/moment.%sjs' % minified))
     from .api import create_app as create_api_app
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
