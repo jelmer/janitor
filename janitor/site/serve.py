@@ -728,6 +728,10 @@ if __name__ == '__main__':
         '/_static/jquery.js', functools.partial(
             handle_static_file,
             '/usr/share/javascript/jquery/jquery.min.js'))
+    app.router.add_get(
+        '/_static/moment.js', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/moment/moment.min.js'))
     import chartkick
     app.router.add_get(
         '/_static/chartkick.js', functools.partial(
