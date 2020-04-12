@@ -1699,6 +1699,7 @@ for (regexp, cb) in build_failure_regexps:
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
     r'Segmentation fault',
+    r'make\[[0-9]+\]: \*\*\* \[.*:[0-9]+: .*\] Segmentation fault',
     # QMake
     r'Project ERROR: .*',
     # pdflatex
