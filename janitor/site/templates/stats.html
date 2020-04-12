@@ -30,7 +30,130 @@
 </tbody>
 </table>
 
-{% column_chart by_status_chart with id='hosters' %}
+<canvas id="hoster-status-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#hoster-status-chart"), {
+    type: 'bar',
+    data: {
+       labels: {{ by_hoster.keys()|list|sort|tojson }},
+       datasets: [
+          {% for kind, color in [('closed', 'red'), ('merged', 'green'), ('open', 'grey')] %}
+           {label: '{{ kind }}', data: [
+               {% for hoster in by_hoster.keys()|list|sort %}
+                  {{ by_hoster[hoster][kind] }},
+               {% endfor %}],
+               backgroundColor: Chart.helpers.color(window.chartColors.{{ color }}).alpha(0.5).rgbString()},
+          {% endfor %}
+       ],
+    },
+    options: {
+        title: { display: true, text: 'Merge proposal status per hoster' },
+        scales: {
+           xAxes: [{ stacked: true}], yAxes: [{ stacked: true }],
+        },
+    },
+});
+</script>
+
+<h2>Review Status for Successful Runs</h2>
+
+<canvas id="review-status-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#review-status-chart"), {
+    type: 'pie',
+    data: {
+       labels: ["rejected", "approved", "unreviewed"],
+       datasets: [{
+          data: [
+            {{ review_status_stats['rejected'] }},
+            {{ review_status_stats['approved'] }},
+            {{ review_status_stats['unreviewed'] }},
+          ],
+          backgroundColor: [
+             Chart.helpers.color(window.chartColors.red).alpha(0.5).rgbString(),
+             Chart.helpers.color(window.chartColors.green).alpha(0.5).rgbString(),
+             Chart.helpers.color(window.chartColors.grey).alpha(0.5).rgbString(),
+          ],
+       }],
+    },
+    options: {
+        title: { display: true, text: 'Review Status for Successful Runs' },
+    },
+});
+</script>
+
+
+<h2>Pushes over time</h2>
+
+<canvas id="pushes-over-time-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#pushes-over-time-chart"), {
+    type: 'line',
+    data: {
+       labels: [ {% for ts in pushes_over_time %}moment('{{ts.isoformat()}}').toDate(),{% endfor %} ],
+       datasets: [{
+         label: 'Pushes',
+         borderColor: window.chartColors.green,
+         backgroundColor: Chart.helpers.color(window.chartColors.green).alpha(0.5).rgbString(),
+         data: {{ pushes_over_time.values()|list|tojson }},
+       }],
+    },
+    options: {
+       title: { text: 'Pushes over time', display: true },
+       scales: {
+         xAxes: [{ type: 'time' }],
+       },
+    },
+});
+</script>
+
+<h2>Merges over time</h2>
+
+<canvas id="merges-over-time-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#merges-over-time-chart"), {
+    type: 'line',
+    data: {
+       datasets: [
+{% for key in ['merged', 'opened'] %}{
+         {% set color = {'opened': 'blue', 'merged': 'green'}[key] %}
+         label: '{{ key }}',
+         borderColor: window.chartColors.{{ color }},
+         backgroundColor: Chart.helpers.color(window.chartColors.{{ color }}).alpha(0.5).rgbString(),
+         data: [{% for ts, count in merges_over_time[key].items() %}{ x: moment('{{ ts.isoformat() }}').toDate(), y: {{ count }}},{% endfor %}],
+       },
+{% endfor %}
+       ],
+    },
+    options: {
+       title: { text: 'Merges over time', display: true },
+       scales: {
+         xAxes: [{ type: 'time' }],
+       },
+    },
+});
+</script>
+
+<h2>Time to merge</h2>
+
+<canvas id="time-to-merge" width="800" height="450"></canvas>
+<script>
+new Chart($("#time-to-merge"), {
+    type: 'bar',
+    data: {
+        labels: {{ time_to_merge|map(attribute=0)|list|tojson }},
+        datasets: [{
+           label: "Days to merge",
+           data: {{ time_to_merge|map(attribute=1)|list|tojson }},
+           backgroundColor: Chart.helpers.color(window.chartColors.green).alpha(0.5).rgbString(),
+        }],
+    },
+    options: {
+      title: { text: "Time to Merge", display: true },
+    },
+});
+</script>
 
 </div>
 {% endblock %}
+<!-- vim: expandtab -->

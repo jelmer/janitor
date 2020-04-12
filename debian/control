@@ -16,7 +16,7 @@ Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}
 Architecture: all
 
 Package: janitor-site
-Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, python3-chartkick, ${python3:Depends}, ${misc:Depends}
+Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, ${python3:Depends}, ${misc:Depends}, libjs-jquery, libjs-chart.js
 Architecture: all
 
 Package: janitor-irc-notify
