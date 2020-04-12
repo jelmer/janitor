@@ -138,13 +138,11 @@ new Chart($("#merges-over-time-chart"), {
 
 <canvas id="time-to-merge" width="800" height="450"></canvas>
 <script>
-new Chart($("#time-to-merge"), {
-    type: 'bar',
+new Chart.Scatter($("#time-to-merge"), {
     data: {
-        labels: {{ time_to_merge|map(attribute=0)|list|tojson }},
         datasets: [{
            label: "Days to merge",
-           data: {{ time_to_merge|map(attribute=1)|list|tojson }},
+           data: [{% for x, y in time_to_merge %}{ x: {{ x }}, y: {{ y }}},{% endfor %}],
            backgroundColor: Chart.helpers.color(window.chartColors.green).alpha(0.5).rgbString(),
         }],
     },
