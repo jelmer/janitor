@@ -732,6 +732,10 @@ if __name__ == '__main__':
         '/_static/moment.js', functools.partial(
             handle_static_file,
             '/usr/share/javascript/moment/moment.min.js'))
+    app.router.add_get(
+        '/_static/typeahead.bundle.js', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/typeahead.js/typeahead.bundle.min.js'))
     import chartkick
     app.router.add_get(
         '/_static/chartkick.js', functools.partial(
