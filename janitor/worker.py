@@ -57,6 +57,7 @@ from silver_platter.debian.upstream import (
     refresh_quilt_patches,
     InconsistentSourceFormatError,
     InvalidFormatUpstreamVersion,
+    DistCommandFailed,
     NewUpstreamMissing,
     UnparseableChangelog,
     UpstreamAlreadyImported,
@@ -489,6 +490,10 @@ class NewUpstreamWorker(SubWorker):
                 error_description = 'Syntax error in upstream metadata: %s' % (
                         e.error)
                 error_code = 'upstream-metadata-syntax-error'
+                raise WorkerFailure(error_code, error_description)
+            except DistCommandFailed as e:
+                error_description = str(e)
+                error_code = 'dist-command-failed'
                 raise WorkerFailure(error_code, error_description)
             except MissingChangelogError as e:
                 error_description = str(e)
