@@ -45,6 +45,24 @@ new Chart($("#tags-per-run-chart"), {
          backgroundColor: Chart.helpers.color(window.chartColors.blue).alpha(0.5).rgbString(),
          data: {{ tags_per_run.items()|list|sort|map(attribute=1)|list|tojson }}
        }],
+    },
+    options: {
+      title: { text: "Tags fixed per run", display: true },
+    },
+});
+</script>
+
+<canvas id="lintian-brush-versions-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#lintian-brush-versions-chart"), {
+    type: 'bar',
+    data: {
+       labels: {{ lintian_brush_versions.items()|list|sort|map(attribute=0)|list|tojson }},
+       datasets: [{
+         label: "Runs per lintian-brush version",
+         backgroundColor: Chart.helpers.color(window.chartColors.blue).alpha(0.5).rgbString(),
+         data: {{ lintian_brush_versions.items()|list|sort|map(attribute=1)|list|tojson }}
+       }],
     }
 });
 </script>

@@ -162,7 +162,10 @@ async def generate_stats(db):
         tags_per_run = {c: nr for (c, nr) in await conn.fetch("""\
 select coalesce(c, 0), count(*) from (select sum(array_length(fixed_lintian_tags, 1)) c from absorbed_lintian_fixes where suite = 'lintian-fixes' group by revision) as p group by 1
 """)}
-    return await template.render_async(by_tag=by_tag, tags_per_run=tags_per_run)
+        lintian_brush_versions = {(c or 'unknown'): nr for (c, nr) in await conn.fetch("""\
+select result#>>'{versions,lintian-brush}', count(*) from run where result_code = 'success' and suite = 'lintian-fixes' group by 1 order by 1 desc
+""")}
+    return await template.render_async(by_tag=by_tag, tags_per_run=tags_per_run, lintian_brush_versions=lintian_brush_versions)
 
 
 async def render_start():
