@@ -103,6 +103,9 @@ from .trace import (
 TRUST_PACKAGE = False
 
 
+DEFAULT_DIST_COMMAND = os.path.join(os.path.dirname(__file__), '..', 'dist.py')
+
+
 class SubWorker(object):
 
     def __init__(self, command, env):
@@ -378,7 +381,8 @@ class NewUpstreamWorker(SubWorker):
                 result = merge_upstream(
                     tree=local_tree, subpath=(subpath or ''),
                     snapshot=self.args.snapshot, committer=self.committer,
-                    trust_package=TRUST_PACKAGE)
+                    trust_package=TRUST_PACKAGE,
+                    dist_command=DEFAULT_DIST_COMMAND)
             except UpstreamAlreadyImported as e:
                 report_context(e.version)
                 metadata['upstream_version'] = e.version
