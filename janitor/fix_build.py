@@ -163,9 +163,15 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
 
     try:
         with Deb822Updater(path=tests_control_path) as updater:
+            command_counter = 1
             for control in updater.paragraphs:
-                if control["Tests"] != testname:
-                    return
+                try:
+                    name = control["Tests"]
+                except KeyError:
+                    name = "command%d" % command_counter
+                    command_counter += 1
+                if name != testname:
+                    continue
                 if minimum_version:
                     control["Depends"] = ensure_minimum_version(
                         control["Depends"],
