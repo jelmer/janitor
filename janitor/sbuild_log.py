@@ -1383,6 +1383,7 @@ build_failure_regexps = [
      command_missing),
     (r'No package \'([^\']+)\' found', pkg_config_missing),
     (r'configure: error: No package \'([^\']+)\' found', pkg_config_missing),
+    (r'\./configure: [0-9]+: \.: Illegal option .*', None),
     (r'Requested \'(.*)\' but version of ([^ ]+) is ([^ ]+)',
      pkg_config_missing),
     (r'configure: error: Package requirements \((.*)\) were not met:',
@@ -1700,6 +1701,8 @@ for (regexp, cb) in build_failure_regexps:
 secondary_build_failure_regexps = [
     r'Segmentation fault',
     r'make\[[0-9]+\]: \*\*\* \[.*:[0-9]+: .*\] Segmentation fault',
+    (r'make\[[0-9]+\]: \*\*\* No rule to make target '
+     r'\'(?!maintainer-clean)(?!clean)(.*)\'\.  Stop\.'),
     # QMake
     r'Project ERROR: .*',
     # pdflatex
@@ -1722,6 +1725,7 @@ secondary_build_failure_regexps = [
     r'FAIL: (.*)',
     r'FAIL (.*) \(.*\)',
     r'FAIL\s+(.*) \[.*\] ?',
+    r'TEST FAILURE',
     r'make\[[0-9]+\]: \*\*\* \[.*\] Error [0-9]+',
     r'E: pybuild pybuild:[0-9]+: test: plugin [^ ]+ failed with:'
     r'exit code=[0-9]+: .*',
@@ -1730,7 +1734,7 @@ secondary_build_failure_regexps = [
     r'make: \*\*\* \[.*\] Error [0-9]+',
     r'.*:[0-9]+: \*\*\* missing separator\.  Stop\.',
     r'[^:]+: cannot stat \'.*\': No such file or directory',
-    r'[0-9]+ tests: [0-9]+ ok, [0-9]+ failure(s), [0-9]+ test(s) skipped',
+    r'[0-9]+ tests: [0-9]+ ok, [0-9]+ failure\(s\), [0-9]+ test\(s\) skipped',
     r'\*\*Error:\*\* (.*)',
     r'^Error: (.*)',
     r'Failed [0-9]+ tests? out of [0-9]+, [0-9.]+% okay.',
