@@ -708,14 +708,24 @@ def fix_missing_ruby_gem(
 def fix_missing_ruby_file(
         tree, error, context, committer=None, update_changelog=True,
         subpath='.'):
-    paths = [os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.filename)]
+    paths = [
+        os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.filename)]
     package = get_package_for_paths(paths)
-    if package is None:
-        warning('no package for ruby file %s', error.filename)
-        return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    if package is not None:
+        return add_dependency(
+            tree, context, package, committer=committer,
+            update_changelog=update_changelog, subpath=subpath)
+    paths = [
+        os.path.join(r'/usr/share/rubygems-integration/all/gems/([^/]+)/'
+                     'lib/%s.rb' % error.filename)]
+    package = get_package_for_paths(paths, regex=True)
+    if package is not None:
+        return add_dependency(
+            tree, context, package, committer=committer,
+            update_changelog=update_changelog, subpath=subpath)
+
+    warning('no package for ruby file %s', error.filename)
+    return False
 
 
 def fix_missing_r_package(

@@ -112,6 +112,15 @@ blah (0.1) UNRELEASED; urgency=medium
         self.assertTrue(self.resolve(MissingRubyFile('rake/testtask')))
         self.assertEqual('libc6, rake', self.get_build_deps())
 
+    def test_missing_ruby_file_from_gem(self):
+        self._apt_files = {
+            '/usr/share/rubygems-integration/all/gems/activesupport-'
+            '5.2.3/lib/active_support/core_ext/string/strip.rb':
+            'ruby-activesupport'}
+        self.assertTrue(self.resolve(
+            MissingRubyFile('active_support/core_ext/string/strip')))
+        self.assertEqual('libc6, ruby-activesupport', self.get_build_deps())
+
     def test_missing_ruby_gem(self):
         self._apt_files = {
             '/usr/share/rubygems-integration/all/specifications/'
