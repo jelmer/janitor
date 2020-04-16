@@ -695,13 +695,14 @@ def fix_missing_ruby_gem(
     paths = [os.path.join(
         '/usr/share/rubygems-integration/all/'
         'specifications/%s-.*\\.gemspec' % error.gem)]
-    package = get_package_for_paths(paths)
+    package = get_package_for_paths(paths, regex=True)
     if package is None:
         warning('no package for gem %s', error.gem)
         return False
     return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+        tree, context, package, minimum_version=error.version,
+        committer=committer, update_changelog=update_changelog,
+        subpath=subpath)
 
 
 def fix_missing_ruby_file(

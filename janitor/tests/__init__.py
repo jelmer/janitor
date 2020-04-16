@@ -20,9 +20,13 @@ from __future__ import absolute_import
 import unittest
 
 
+from breezy.tests import TestCaseWithTransport
+
+
 def test_suite():
     names = [
         'debdiff',
+        'fix_build',
         'runner',
         'sbuild_log',
         'site',

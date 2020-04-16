@@ -1036,3 +1036,24 @@ autopkgtest [06:59:01]: ERROR: testbed failure: testbed auxverb \
 failed with exit code 255
 Exiting with 16
 """.splitlines(True)))
+
+    def test_test_command_failure(self):
+        self.assertEqual(
+            (),
+            find_autopkgtest_failure_description("""\
+Removing autopkgtest-satdep (0) ...
+autopkgtest [01:30:11]: test command2: phpunit --bootstrap /usr/autoload.php
+autopkgtest [01:30:11]: test command2: [-----------------------
+PHPUnit 8.5.2 by Sebastian Bergmann and contributors.
+
+Cannot open file "/usr/share/php/Pimple/autoload.php".
+
+autopkgtest [01:30:12]: test command2: -----------------------]
+autopkgtest [01:30:12]: test command2:  \
+- - - - - - - - - - results - - - - - - - - - -
+command2             FAIL non-zero exit status 1
+autopkgtest [01:30:12]: @@@@@@@@@@@@@@@@@@@@ summary
+command1             PASS
+command2             FAIL non-zero exit status 1
+Exiting with 4
+"""))
