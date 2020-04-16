@@ -26,6 +26,6 @@ elif os.path.exists('pyproject.toml'):
 elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
     with open('dist.ini', 'rb') as f:
         for l in f:
-            if b";; class = 'Dist::Inkt" in l:
+            if b"class = 'Dist::Inkt" in l:
                 sys.exit(subprocess.call(['distinkt-dist']))
 sys.exit(2)
