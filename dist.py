@@ -23,5 +23,9 @@ if os.path.exists('package.xml'):
     sys.exit(subprocess.call(['pear', 'package']))
 elif os.path.exists('pyproject.toml'):
     sys.exit(subprocess.call(['poetry', 'build', '-f', 'sdist']))
-else:
-    sys.exit(2)
+elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
+    with open('dist.ini', 'rb') as f:
+        for l in f:
+            if b";; class = 'Dist::Inkt" in l:
+                sys.exit(subprocess.call(['distinkt-dist']))
+sys.exit(2)
