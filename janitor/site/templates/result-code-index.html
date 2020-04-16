@@ -20,7 +20,9 @@ Select suite to display:
 
 {% macro random_colors(n) %}[ {% for i in range(n) %}'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]{% endmacro %}
 
-<canvas id="result-code-chart" width="800" height="450"></canvas>
+<div style="width: 400px; height: 600px;">
+	<canvas id="result-code-chart"/>
+</div>
 <script>
 new Chart($("#result-code-chart"), {
     type: 'pie',
@@ -30,6 +32,12 @@ new Chart($("#result-code-chart"), {
           data: {{ result_codes|map(attribute=1)|list|tojson }},
           backgroundColor: {{ random_colors(result_codes|length) }},
       }],
+    },
+    options: {
+      legend: { display: false },
+      responsive: true,
+      maintainAspectRatio: false,
+      title: { text: "Result Code Frequency", display: true },
     },
 });
 </script>
