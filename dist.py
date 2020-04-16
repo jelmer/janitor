@@ -20,8 +20,8 @@ import subprocess
 import sys
 
 if os.path.exists('package.xml'):
-    subprocess.check_call(['pear', 'package'])
+    sys.exit(subprocess.call(['pear', 'package']))
 elif os.path.exists('pyproject.toml'):
-    subprocess.check_call(['poetry', 'build', '-f', 'sdist'])
+    sys.exit(subprocess.call(['poetry', 'build', '-f', 'sdist']))
 else:
     sys.exit(2)
