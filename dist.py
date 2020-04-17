@@ -26,6 +26,12 @@ elif os.path.exists('pyproject.toml'):
 elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
     with open('dist.ini', 'rb') as f:
         for l in f:
-            if b"class = 'Dist::Inkt" in l:
+            if not l.startswith(b';;'):
+                continue
+            try:
+                (key, value) = l[2:].split(b'=', 1)
+            except ValueError:
+                continue
+            if key == b'class' and value.startswith(b"'Dist::Inkt"):
                 sys.exit(subprocess.call(['distinkt-dist']))
 sys.exit(2)
