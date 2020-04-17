@@ -32,6 +32,7 @@ elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
                 (key, value) = l[2:].split(b'=', 1)
             except ValueError:
                 continue
-            if key == b'class' and value.startswith(b"'Dist::Inkt"):
+            if (key.strip() == b'class' and
+                    value.strip().startswith(b"'Dist::Inkt")):
                 sys.exit(subprocess.call(['distinkt-dist']))
 sys.exit(2)
