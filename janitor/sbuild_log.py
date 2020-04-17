@@ -1510,6 +1510,8 @@ build_failure_regexps = [
      r'(.*):([0-9]+)', php_missing_class),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
+    (r'.*\.xml:[0-9]+: Unable to find a javac compiler;',
+     lambda m: MissingJavaClass('com.sun.tools.javac.Main')),
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
      '[Errno 2] No such file or directory', file_not_found),
     (r'g\+\+: error: (.*): No such file or directory', file_not_found),
