@@ -318,10 +318,10 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir):
 
 async def update_aptly(incoming_dir, remove_files=True):
     args = [
-        "aptly", "repo", "include",
+        "/usr/bin/aptly", "repo", "include",
         "-keyring=/home/janitor/debian-janitor/janitor.gpg"]
     if not remove_files:
-        argas.append("-no-remove-files")
+        args.append("-no-remove-files")
     args.append(incoming_dir)
     proc = await asyncio.create_subprocess_exec(*args)
     await proc.wait()
@@ -346,7 +346,7 @@ async def update_mini_dinstall(config, archive_dir):
 
 async def update_archive_loop(config, archive_dir, incoming_dir):
     while True:
-        await update_aptly(config, incoming_dir)
+        await update_aptly(incoming_dir, remove_files=False)
         await update_mini_dinstall(config, archive_dir)
         await asyncio.sleep(30 * 60)
 
