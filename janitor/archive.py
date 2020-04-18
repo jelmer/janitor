@@ -27,7 +27,6 @@ import uuid
 from aiohttp import web
 from debian.deb822 import Changes
 
-from .aptly import Aptly, AptlyError
 from .debdiff import (
     run_debdiff,
     DebdiffError,
@@ -334,66 +333,10 @@ async def update_mini_dinstall(config, archive_dir):
         await proc.wait()
 
 
-async def update_archive_loop(config, archive_dir, incoming_dir, aptly_url):
+async def update_archive_loop(config, archive_dir, incoming_dir):
     while True:
-        async with ClientSession() as session:
-            aptly = Aptly(session, aptly_url)
-            await update_aptly(incoming_dir, aptly)
-            for suite in config.suite:
-                await aptly.publish_update(':.', suite.name)
         await update_mini_dinstall(config, archive_dir)
         await asyncio.sleep(30 * 60)
-
-
-async def upload_to_aptly(changes_path, aptly):
-    dirname = str(uuid.uuid4())
-    files = []
-    uploaded = []
-    with open(changes_path, 'r') as f, ExitStack() as es:
-        changes = Changes(f)
-        f.seek(0)
-        files.append(f)
-        distro = changes["Distribution"]
-        uploaded.append(os.path.basename(changes_path))
-        for file_details in changes['files']:
-            path = os.path.join(
-                os.path.dirname(changes_path), file_details['name'])
-            uploaded.append(file_details['name'])
-            f = open(path, 'rb')
-            files.append(f)
-            es.enter_context(f)
-        await aptly.upload_files(dirname, files)
-    await aptly.repos_include(distro, dirname)
-    return uploaded
-
-
-async def update_aptly(incoming_dir, aptly):
-    for filename in os.listdir(incoming_dir):
-        if filename.endswith('.changes'):
-            print('uploading %s' % filename)
-            await upload_to_aptly(os.path.join(incoming_dir, filename), aptly)
-
-
-async def sync_aptly_metadata(config, aptly_url):
-    async with ClientSession() as session:
-        aptly = Aptly(session, aptly_url)
-        existing_repos = await aptly.repos_list()
-        existing_by_name = {r['Name']: r for r in existing_repos}
-        for suite in config.suite:
-            if suite.name in existing_by_name:
-                del existing_by_name[suite.name]
-            else:
-                await aptly.repos_create(suite.name)
-            try:
-                await aptly.publish(
-                    ':.', suite.name, not_automatic=True,
-                    distribution=suite.name, architectures=['all', 'amd64'])
-            except AptlyError as e:
-                # 400 indicates it's already published
-                if e.status != 400:
-                    raise
-        for suite_name in existing_by_name:
-            await aptly.repos_delete(suite_name)
 
 
 def main(argv=None):
@@ -413,9 +356,6 @@ def main(argv=None):
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
     parser.add_argument(
-        '--aptly-url', type=str, default='http://localhost:9915/api/',
-        help='URL for aptly API.')
-    parser.add_argument(
         '--incoming', type=str,
         help='Path to incoming directory.')
 
@@ -429,8 +369,7 @@ def main(argv=None):
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive, args.incoming)),
         loop.create_task(update_archive_loop(
-            config, args.archive, args.incoming, args.aptly_url)),
-        loop.create_task(sync_aptly_metadata(config, args.aptly_url))))
+            config, args.archive, args.incoming))))
     loop.run_forever()
 
 
