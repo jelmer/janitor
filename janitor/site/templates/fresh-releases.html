@@ -16,7 +16,7 @@ from a human.</p>
 <div class="section" id="using-the-repository">
 <h2>Using the repository</h2>
 <p>To use the apt repository, run something like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb https://janitor.debian.net/ fresh-releases/ &gt; /etc/apt/sources.list.d/fresh-releases.list
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb https://janitor.debian.net/ fresh-releases main &gt; /etc/apt/sources.list.d/fresh-releases.list
 curl https://janitor.debian.net/janitor.asc | sudo apt-key add -
 apt update
 </pre></div>
