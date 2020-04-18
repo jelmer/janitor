@@ -15,7 +15,7 @@
 <div class="section" id="using-the-repository">
 <h2>Using the repository</h2>
 <p>To use the apt repository, run something like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb https://janitor.debian.net/ unchanged/ &gt; /etc/apt/sources.list.d/janitor.list
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb https://janitor.debian.net/ unchanged main &gt; /etc/apt/sources.list.d/janitor.list
 gpg --recv-keys <span class="mi">6</span>F915003D1998D6A
 gpg --export <span class="mi">6</span>F915003D1998D6A | sudo apt-key add -
 apt update
