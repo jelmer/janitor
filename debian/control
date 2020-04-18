@@ -1,28 +1,40 @@
 Source: janitor
+Priority: optional
 Section: vcs
 Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
-Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter
+Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter, python3-all, dh-python, dh-exec
+Rules-Requires-Root: no
 
 Package: python3-janitor
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}
+Depends: ${python3:Depends}, ${misc:Depends}, python3-aiohttp, python3-prometheus-client
 
 Package: janitor-worker
 Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}
 Architecture: all
+Description: Worker for the Debian janitor
+
+Package: janitor-archiver
+Depends: python3-aiohttp, aptly, ${python3:Depends}, ${misc:Depends}
+Architecture: all
+Description: Archiver for the Debian janitor
 
 Package: janitor-runner
 Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}
 Architecture: all
+Description: Runner for the Debian janitor
 
 Package: janitor-site
 Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, ${python3:Depends}, ${misc:Depends}, libjs-jquery, libjs-chart.js
 Architecture: all
+Description: Site for the Debian janitor
 
 Package: janitor-irc-notify
-Depends: python3-pydle, ${python3:Depends}, ${misc:Depends}
+Depends: python3-pydle, python3-janitor, python3-prometheus-client, ${python3:Depends}, ${misc:Depends}
 Architecture: all
+Description: IRC notifier for the Debian Janitor
 
 Package: janitor-mastodon-notify
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}
+Depends: python3-janitor, python3-mastodon, python3-prometheus-client, ${python3:Depends}, ${misc:Depends}
+Description: Mastodon notifier for the Debian Janitor

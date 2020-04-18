@@ -356,9 +356,9 @@ async def upload_changes(changes_path, incoming_url):
     async with ClientSession() as session:
         with MultipartWriter() as mpwriter, ExitStack() as es:
             f = open(changes_path, 'r')
+            es.enter_context(f)
             dsc = Changes(f)
             f.seek(0)
-            es.enter_context(f)
             mpwriter.append(f)
             for file_details in dsc['files']:
                 name = file_details['name']
