@@ -139,13 +139,14 @@ def add_build_dependency(tree, package, minimum_version=None,
              e.path)
         return False
 
-    if not updater.changed:
-        return False
-
     if minimum_version:
         desc = "%s (>= %s)" % (package, minimum_version)
     else:
         desc = package
+
+    if not updater.changed:
+        note('Giving up; dependency %s was already present.', desc)
+        return False
 
     note("Adding build dependency: %s", desc)
     return commit_debian_changes(
@@ -508,7 +509,6 @@ def fix_missing_command(
         paths = [
             os.path.join(dirname, error.command)
             for dirname in ['/usr/bin', '/bin']]
-    note('Searching for packages containing %r', paths)
     package = get_package_for_paths(paths)
     if package is None:
         note('No packages found that contain %r', paths)
