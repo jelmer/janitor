@@ -1334,7 +1334,7 @@ build_failure_regexps = [
      python_module_not_found),
     ('E   ImportError: cannot import name ([^\']+)', python_module_not_found),
     (r'django.core.exceptions.ImproperlyConfigured: Error loading .* module: '
-     r'No module named (.*)', python_module_not_found),
+     r'No module named \'(.*)\'', python_module_not_found),
     ('E   ImportError: No module named (.*)', python2_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
@@ -1506,6 +1506,10 @@ build_failure_regexps = [
      ruby_missing_gem),
     (r'[^:]+:[0-9]+:in \`to_specs\': Could not find \'(.*)\' \(([^)]+)\) '
      r'- .* \(Gem::MissingSpecVersionError\)', ruby_missing_gem),
+    (r'[^:]+:[0-9]+:in \`block in verify_gemfile_dependencies_are_found\!\': '
+     r'Could not find gem \'(.*)\' in any of the gem sources listed in '
+     r'your Gemfile\. \(Bundler::GemNotFound\)',
+     lambda m: MissingRubyGem(m.group(1))),
     (r'PHP Fatal error:  Uncaught Error: Class \'(.*)\' not found in '
      r'(.*):([0-9]+)', php_missing_class),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
