@@ -20,6 +20,7 @@ import asyncio
 from contextlib import ExitStack
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import uuid
@@ -312,6 +313,20 @@ async def update_archive_loop(config, incoming_dir):
         await asyncio.sleep(30 * 60)
 
 
+def initialize_aptly(suites):
+    # TODO(jelmer): Use the API for this part of the process?
+    for suite in suites:
+        # TODO(jelmer): care about exit codes
+        subprocess.call(
+            ['/usr/bin/aptly', '-distribution=%s' % suite.name, suite.name])
+        subprocess.call(
+            ['/usr/bin/aptly', 'publish', 'repo', '-notautomatic=yes',
+             '-butautomaticupgrade=yes', '-origin=janitor.debian.net',
+             '-label=%s' % suite.archive_description,
+             '-distribution=%s' % suite.name,
+             suite.name])
+
+
 def main(argv=None):
     import argparse
     from .config import read_config
@@ -337,12 +352,7 @@ def main(argv=None):
     with open(args.config, 'r') as f:
         config = read_config(f)
 
-    # TODO(jelmer): Run aptly repo create for every configuration suite
-    # aptly repo create -distribution=$SUITE $SUITE
-    # TODO(jelmer): Run aptly publish repo for every configuration suite
-    # aptly publish repo -notautomatic=yes -butautomaticupgrade=yes \
-    #        -origin janitor.debian.net -label=$SUITE_LABEL \
-    #        -distribution=$SUITE $SUITE
+    initialize_aptly(config.suite)
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
