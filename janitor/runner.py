@@ -662,6 +662,7 @@ class ActiveRun(object):
                 except UploadFailedError as e:
                     warning('Unable to upload changes file %s: %r',
                             result.changes_filename, e)
+                    # TODO(jelmer): Copy to failed upload directory
             if self.suite != 'unchanged':
                 async with db.acquire() as conn:
                     run = await state.get_unchanged_run(
