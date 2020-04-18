@@ -510,6 +510,7 @@ def fix_missing_command(
             for dirname in ['/usr/bin', '/bin']]
     package = get_package_for_paths(paths)
     if package is None:
+        note('No packages found that contain %r', paths)
         return False
     return add_dependency(
         tree, context, package, committer=committer,
