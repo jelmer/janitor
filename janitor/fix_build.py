@@ -508,6 +508,7 @@ def fix_missing_command(
         paths = [
             os.path.join(dirname, error.command)
             for dirname in ['/usr/bin', '/bin']]
+    note('Searching for packages containing %r', paths)
     package = get_package_for_paths(paths)
     if package is None:
         note('No packages found that contain %r', paths)
