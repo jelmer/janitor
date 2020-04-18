@@ -287,7 +287,7 @@ async def handle_old_archive_file(request):
             status=400)
 
     full_path = os.path.join(
-        request.app.archive_path,
+        request.app.old_archive_path,
         request.match_info['suite'],
         filename)
 
@@ -299,35 +299,36 @@ async def handle_old_archive_file(request):
 
 
 async def handle_archive_dist_file(request):
-    args = [request.match_info['suite']]
+    args = ['dists', request.match_info['suite']]
     if request.match_info.get('component'):
         args.append(request.match_info['component'])
         if request.match_info.get('arch'):
             args.append(request.match_info['arch'])
     args.append(request.match_info['filename'])
     full_path = os.path.join(
-        request.app.archive_path, 'dists', *args)
+        request.app.archive_path, *args)
 
     if os.path.exists(full_path):
         return web.FileResponse(full_path)
     else:
         return web.Response(
-            text='No such archive file : %s' % filename, status=404)
+            text='No such archive file : %s' % '/'.join(args), status=404)
 
 
 async def handle_archive_pool_file(request):
-    full_path = os.path.join(
-        request.app.archive_path, 'pool',
+    args = ['pool',
         request.match_info['component'],
         request.match_info['prefix'],
         request.match_info['package'],
-        request.match_info['filename'])
+        request.match_info['filename']]
+
+    full_path = os.path.join(request.app.archive_path, *args)
 
     if os.path.exists(full_path):
         return web.FileResponse(full_path)
     else:
         return web.Response(
-            text='No such archive pool file : %s' % filename, status=404)
+            text='No such archive pool file : %s' % '/'.join(arsg), status=404)
 
 
 async def run_web_server(listen_addr, port, archive_path, old_archive_path, incoming_dir):
