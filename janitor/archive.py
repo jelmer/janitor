@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, UnixConnector
 import asyncio
 from contextlib import ExitStack
 import os
@@ -313,18 +313,69 @@ async def update_archive_loop(config, incoming_dir):
         await asyncio.sleep(30 * 60)
 
 
-def initialize_aptly(suites):
-    # TODO(jelmer): Use the API for this part of the process?
+async def sync_aptly_repos(session, suites):
+    with session.get('/api/repos') as resp:
+        if ret.status != 200:
+            raise Exception('failed: %r' ret.status)
+        repos = {repo['Name']: repo for repo in await resp.json()}
     for suite in suites:
-        # TODO(jelmer): care about exit codes
-        subprocess.call(
-            ['/usr/bin/aptly', '-distribution=%s' % suite.name, suite.name])
+        intended_repo = {
+            'Name': suite.name,
+            'DefaulDistribution': suite.name,
+            'DefaultComponent': '',
+            'Comment': ''}
+        if intended_repo == repos.get(suite.name):
+            del repos[suite.name]
+            continue
+        if suite.name not in repos:
+            with session.post(
+                    '/api/repos' % suite.name, json=intended_repo) as resp:
+                if resp.status != 200:
+                    raise Exception('Unable to create repo %s: %d' % (
+                                    suite.name, resp.status))
+        else:
+            with session.put(
+                    '/api/repos/%s' % intended_repo.pop('Name'),
+                    json=intended_repo) as resp:
+                if resp.status != 200:
+                    raise Exception('Unable to edit repo %s: %d' % (
+                                    suite.name, resp.status))
+            del repos[suite.name]
+    # TODO(jelmer): Drop/return repositories not referenced?
+
+
+async def sync_aptly(socket_path, suites):
+    # Give aptly some time to start
+    await asyncio.sleep(5)
+    with aptly_session(socket_path) as session:
+        with session.get('/api/version') as resp:
+            if ret.status != 200:
+                raise Exception('failed: %r' ret.status)
+            ret = await resp.json()
+            print('aptly version %s connected' % ret['Version'])
+        await sync_aptly_repos(session, suites)
+
+    # TODO(jelmer): Use API
+    for suite in suites:
         subprocess.call(
             ['/usr/bin/aptly', 'publish', 'repo', '-notautomatic=yes',
              '-butautomaticupgrade=yes', '-origin=janitor.debian.net',
              '-label=%s' % suite.archive_description,
              '-distribution=%s' % suite.name,
              suite.name])
+
+
+async def run_aptly(sock_path):
+    args = [
+        '/usr/bin/aptly', 'api', 'serve', '-listen=unix://%s' % sock_path,
+        '-no-lock']
+    proc = await asyncio.create_subprocess_exec(*args)
+    await proc.wait()
+
+
+async def aptly_session(socket_path):
+    conn = UnixConnector(path=socket_path)
+    return ClientSession(connector=conn)
 
 
 def main(argv=None):
@@ -346,16 +397,22 @@ def main(argv=None):
     parser.add_argument(
         '--incoming', type=str,
         help='Path to incoming directory.')
+    parser.add_argument(
+        '--aptly-socket-path', type=str,
+        default='aptly.sock',
+        help='Path to aptly socket')
 
     args = parser.parse_args()
 
     with open(args.config, 'r') as f:
         config = read_config(f)
 
-    initialize_aptly(config.suite)
+    aptly_socket_path = os.path.abspath(args.aptly_socket_path)
 
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
+        loop.create_task(run_aptly(aptly_socket_path)),
+        loop.create_task(sync_aptly(aptly_socket_path, config.suite)),
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive,
             args.incoming)),
