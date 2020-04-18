@@ -895,6 +895,8 @@ FIXERS = [
 def resolve_error(tree, error, context, committer=None, subpath='.'):
     for error_cls, fixer in FIXERS:
         if isinstance(error, error_cls):
+            note('Attempting to use fixer %r to address %r',
+                 fixer, error)
             try:
                 return fixer(tree, error, context, committer, subpath)
             except GeneratedFile:
