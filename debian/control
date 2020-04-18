@@ -15,7 +15,7 @@ Architecture: all
 Description: Worker for the Debian janitor
 
 Package: janitor-archiver
-Depends: python3-aiohttp, aptly, ${python3:Depends}, ${misc:Depends}
+Depends: python3-aiohttp, python3-aionotify, aptly, ${python3:Depends}, ${misc:Depends}
 Architecture: all
 Description: Archiver for the Debian janitor
 
