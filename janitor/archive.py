@@ -279,7 +279,7 @@ async def handle_diffoscope(request):
     return web.Response(text=debdiff, content_type=content_type)
 
 
-async def handle_archive_file(request):
+async def handle_old_archive_file(request):
     filename = request.match_info['filename']
     if '/' in filename:
         return web.Response(
@@ -298,9 +298,42 @@ async def handle_archive_file(request):
             text='No such changes file : %s' % filename, status=404)
 
 
-async def run_web_server(listen_addr, port, archive_path, incoming_dir):
+async def handle_archive_dist_file(request):
+    args = [request.match_info['suite']]
+    if request.match_info.get('component'):
+        args.append(request.match_info['component'])
+        if request.match_info.get('arch'):
+            args.append(request.match_info['arch'])
+    args.append(request.match_info['filename'])
+    full_path = os.path.join(
+        request.app.archive_path, 'dists', *args)
+
+    if os.path.exists(full_path):
+        return web.FileResponse(full_path)
+    else:
+        return web.Response(
+            text='No such archive file : %s' % filename, status=404)
+
+
+async def handle_archive_pool_file(request):
+    full_path = os.path.join(
+        request.app.archive_path, 'pool',
+        request.match_info['component'],
+        request.match_info['prefix'],
+        request.match_info['package'],
+        request.match_info['filename'])
+
+    if os.path.exists(full_path):
+        return web.FileResponse(full_path)
+    else:
+        return web.Response(
+            text='No such archive pool file : %s' % filename, status=404)
+
+
+async def run_web_server(listen_addr, port, archive_path, old_archive_path, incoming_dir):
     app = web.Application()
     app.archive_path = archive_path
+    app.old_archive_path = old_archive_path
     app.incoming_dir = incoming_dir
     setup_metrics(app)
     app.router.add_post('/', handle_upload, name='upload')
@@ -309,7 +342,30 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir):
     app.router.add_get(
         '/archive'
         '/{suite:[a-z0-9-]+}'
-        '/{filename}', handle_archive_file, name='file')
+        '/{filename}', handle_old_archive_file, name='old-archive-file')
+    app.router.add_get(
+        '/dists'
+        '/{suite:[a-z0-9-]+}'
+        '/{filename:[^/]+}', handle_archive_dist_file, name='dist-file')
+    app.router.add_get(
+        '/dists'
+        '/{suite:[a-z0-9-]+}'
+        '/{component:[a-z]+}'
+        '/{filename:[^/]+}', handle_archive_dist_file,
+        name='dist-component-file')
+    app.router.add_get(
+        '/dists'
+        '/{suite:[a-z0-9-]+}'
+        '/{component:[a-z]+}'
+        '/{arch:[a-z0-9]-]+}'
+        '/{filename:[^/]+}', handle_archive_dist_file,
+        name='dist-component-arch-file')
+    app.router.add_get(
+        '/pool'
+        '/{component:[a-z]+}'
+        '/{prefix:[a-z0-9]-]+}'
+        '/{package:[a-z0-9]-}+'
+        '/{filename:[^/]+}', handle_archive_pool_file, name='pool-file')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -344,10 +400,10 @@ async def update_mini_dinstall(config, archive_dir):
         await proc.wait()
 
 
-async def update_archive_loop(config, archive_dir, incoming_dir):
+async def update_archive_loop(config, old_archive_dir, incoming_dir):
     while True:
         await update_aptly(incoming_dir, remove_files=False)
-        await update_mini_dinstall(config, archive_dir)
+        await update_mini_dinstall(config, old_archive_dir)
         await asyncio.sleep(30 * 60)
 
 
@@ -365,6 +421,9 @@ def main(argv=None):
         '--archive', type=str,
         help='Path to the apt archive.')
     parser.add_argument(
+        '--old-archive', type=str,
+        help='Path to the old apt archive.')
+    parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
     parser.add_argument(
@@ -376,12 +435,16 @@ def main(argv=None):
     with open(args.config, 'r') as f:
         config = read_config(f)
 
+    # TODO(jelmer): Run aptly repo create for every configuration suite
+    # TODO(jelmer): Run aptly publish repo for every configuration suite
+
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_web_server(
-            args.listen_address, args.port, args.archive, args.incoming)),
+            args.listen_address, args.port, args.archive, args.old_archive,
+            args.incoming)),
         loop.create_task(update_archive_loop(
-            config, args.archive, args.incoming))))
+            config, args.old_archive, args.incoming))))
     loop.run_forever()
 
 
