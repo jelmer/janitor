@@ -20,7 +20,7 @@ from __future__ import absolute_import
 import unittest
 
 
-from breezy.tests import TestCaseWithTransport
+from breezy.tests import TestCaseWithTransport  # noqa: F401
 
 
 def test_suite():

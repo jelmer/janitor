@@ -1039,7 +1039,7 @@ Exiting with 16
 
     def test_test_command_failure(self):
         self.assertEqual(
-            (),
+            (None, None, None, None),
             find_autopkgtest_failure_description("""\
 Removing autopkgtest-satdep (0) ...
 autopkgtest [01:30:11]: test command2: phpunit --bootstrap /usr/autoload.php

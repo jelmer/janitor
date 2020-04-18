@@ -27,13 +27,33 @@ async def write_stats(conn):
             'group by 1 order by timestamp')}
 
     merges_over_time = {
-        'opened': {timestamp: int(count) for (timestamp, count) in await conn.fetch("""
-select timestamp, sum(count(*)) over (order by timestamp asc rows between unbounded preceding and current row) as open from (select distinct on (merge_proposal_url) timestamp from publish where mode = 'propose' and result_code = 'success' group by merge_proposal_url, timestamp order by merge_proposal_url, timestamp) as i group by 1""")},
-        'merged': {timestamp: int(count) for (timestamp, count) in await conn.fetch("""select merged_at, sum(count(*)) over (order by merged_at asc rows between unbounded preceding and current row) as merged from merge_proposal where status = 'merged' and merged_at is not null group by 1""")}
+        'opened': {timestamp: int(count)
+                   for (timestamp, count) in await conn.fetch("""
+select
+  timestamp,
+  sum(count(*)) over (order by timestamp asc rows
+                      between unbounded preceding and current row) as open
+from
+    (select distinct on (merge_proposal_url) timestamp from
+     publish where mode = 'propose' and result_code = 'success'
+     group by merge_proposal_url, timestamp
+     order by merge_proposal_url, timestamp)
+as i group by 1""")},
+        'merged': {timestamp: int(count)
+                   for (timestamp, count) in await conn.fetch("""
+select merged_at, sum(count(*)) over (
+    order by merged_at asc rows between unbounded preceding and current row)
+as merged from merge_proposal
+where status = 'merged' and merged_at is not null group by 1""")}
         }
 
     time_to_merge = [
-            (ndays, count) for (ndays, count) in await conn.fetch("""select extract(day from merged_at - timestamp) ndays, count(*) from merge_proposal left join publish on publish.merge_proposal_url = merge_proposal.url and status = 'merged' and merged_at is not null group by 1""") if ndays is not None and ndays > 0]
+            (ndays, count) for (ndays, count) in await conn.fetch("""
+select extract(day from merged_at - timestamp) ndays, count(*)
+from merge_proposal
+left join publish on publish.merge_proposal_url = merge_proposal.url and
+status = 'merged' and merged_at is not null group by 1
+""") if ndays is not None and ndays > 0]
     time_to_merge.sort()
 
     return await template.render_async(

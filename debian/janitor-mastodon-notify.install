@@ -1,0 +1,2 @@
+#!/usr/bin/dh-exec
+mastodon_notify.py => /usr/bin/janitor-mastodon-notify

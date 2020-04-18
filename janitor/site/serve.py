@@ -715,14 +715,16 @@ if __name__ == '__main__':
     app.router.add_get(
         '/login', handle_login,
         name='login')
-    for entry in os.scandir(os.path.join(os.path.dirname(__file__), '_static')):
+    for entry in os.scandir(
+            os.path.join(os.path.dirname(__file__), '_static')):
         app.router.add_get(
             '/_static/%s' % entry.name,
             functools.partial(handle_static_file, entry.path))
     app.router.add_get(
         '/janitor.asc', functools.partial(
             handle_static_file,
-            os.path.join(os.path.dirname(__file__), '..', '..', 'janitor.asc')),
+            os.path.join(
+                os.path.dirname(__file__), '..', '..', 'janitor.asc')),
         name='gpg-key')
     app.router.add_get(
         '/_static/chart.js', functools.partial(
