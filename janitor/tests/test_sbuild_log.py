@@ -731,6 +731,12 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'Could not find \'sassc\' (>= 2.0.0) among 34 total gem(s) '
             '(Gem::MissingSpecError)'], 1,
             MissingRubyGem('sassc', '2.0.0'))
+        self.run_test([
+            '/usr/lib/ruby/2.7.0/bundler/resolver.rb:290:in '
+            '`block in verify_gemfile_dependencies_are_found!\': '
+            'Could not find gem \'rake-compiler\' in any of the gem sources '
+            'listed in your Gemfile. (Bundler::GemNotFound)'], 1,
+            MissingRubyGem('rake-compiler'))
 
     def test_missing_php_class(self):
         self.run_test([
