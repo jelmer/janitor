@@ -17,35 +17,100 @@
 
 
 import asyncio
+from aiohttp.web_urldispatcher import (
+    PrefixResource,
+    ResourceRoute,
+    URL,
+    UrlMappingMatchInfo,
+    )
 
 
-async def forward_apt_file_from_http(
-        request, session, location, suite, filename, max_age):
-    headers = {'Cache-Control': 'max-age=%d' % max_age}
-    url = '%s/%s/%s' % (location, suite, filename)
-    async with session.get(url) as client_response:
-        status = client_response.status
+class ForwardedResource(PrefixResource):
 
-        if status == 404:
-            raise web.HTTPNotFound()
+    def __init__(self, prefix, location,
+                 name=None,
+                 expect_handler=None,
+                 chunk_size=256 * 1024):
+        while prefix.startswith('/'):
+            prefix = prefix[1:]
+        super().__init__('/' + prefix, name=name)
+        self._chunk_size = chunk_size
+        self._expect_handler = expect_handler
+        self._location = location
 
-        if status != 200:
-            raise web.HTTPBadRequest()
+        self._routes = {'GET': ResourceRoute('GET', self._handle, self,
+                                             expect_handler=expect_handler),
 
-        response = web.StreamResponse(
-            status=200,
-            reason='OK',
-            headers=headers
-        )
-        await response.prepare(request)
-        S3_READ_CHUNK_SIZE = 65536
-        while True:
-            chunk = await client_response.content.read(S3_READ_CHUNK_SIZE)
-            if not chunk:
-                break
-            await response.write(chunk)
-    await response.write_eof()
-    return response
+                        'HEAD': ResourceRoute('HEAD', self._handle, self,
+                                              expect_handler=expect_handler)}
+
+    def url_for(self, path):
+        while path.startswith('/'):
+            path = path[1:]
+        path = '/' + path
+        return URL.build(path=self._prefix + path)
+
+    def get_info(self):
+        return {'location': self._location,
+                'prefix': self._prefix}
+
+    def set_options_route(self, handler):
+        if 'OPTIONS' in self._routes:
+            raise RuntimeError('OPTIONS route was set already')
+        self._routes['OPTIONS'] = ResourceRoute(
+            'OPTIONS', handler, self,
+            expect_handler=self._expect_handler)
+
+    async def resolve(self, request):
+        path = request.rel_url.raw_path
+        method = request.method
+        allowed_methods = set(self._routes)
+        if not path.startswith(self._prefix):
+            return None, set()
+
+        if method not in allowed_methods:
+            return None, allowed_methods
+
+        match_dict = {'path': URL.build(path=path[len(self._prefix)+1:],
+                                        encoded=True).path}
+        return (UrlMappingMatchInfo(match_dict, self._routes[method]),
+                allowed_methods)
+
+    def __len__(self):
+        return len(self._routes)
+
+    def __iter__(self):
+        return iter(self._routes.values())
+
+    async def _handle(self, request):
+        rel_url = request.match_info['path']
+        url = '%s/%s' % (self._location, rel_url)
+        async with request.app.http_client_session.get(url) as client_response:
+            status = client_response.status
+
+            if status == 404:
+                raise web.HTTPNotFound()
+
+            if status != 200:
+                raise web.HTTPBadRequest()
+
+            response = web.StreamResponse(
+                status=200,
+                reason='OK',
+            )
+            await response.prepare(request)
+            while True:
+                chunk = await client_response.content.read(self._chunk_size)
+                if not chunk:
+                    break
+                await response.write(chunk)
+        await response.write_eof()
+        return response
+
+    def __repr__(self):
+        name = "'" + self.name + "'" if self.name is not None else ""
+        return "<ForwardedResource {name} {prefix} -> {location!r}>".format(
+            name=name, prefix=self._prefix, location=self._location)
 
 
 @asyncio.coroutine
@@ -79,7 +144,6 @@ if __name__ == '__main__':
     import functools
     import os
     import re
-    from janitor import SUITE_REGEX
     from janitor import state
     from janitor.config import read_config
     from janitor.logs import get_log_manager
@@ -452,27 +516,6 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
-    async def handle_apt_file(request):
-        suite = request.match_info['suite']
-        file = request.match_info['file']
-
-        if (file.endswith('.deb') or
-                file.endswith('.buildinfo') or
-                file.endswith('.changes')):
-            # One week
-            max_age = 60 * 60 * 24 * 7
-        else:
-            # 1 Minute
-            max_age = 60
-
-        if config.apt_location:
-            location = config.apt_location
-        else:
-            location = request.app.archiver_url
-        return await forward_apt_file_from_http(
-            request, app.http_client_session, location, suite,
-            file, max_age)
-
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
         text = await generate_candidates(
@@ -596,11 +639,11 @@ if __name__ == '__main__':
         app.router.add_get(
             '/%s/pkg/' % suite, handle_pkg_list,
             name='%s-package-list' % suite)
-    app.router.add_get(
-        '/{suite:' + SUITE_REGEX + '}'
-        '/{file:Contents-.*|InRelease|Packages.*|Release.*|'
-        '.*.(changes|deb|buildinfo)}',
-        handle_apt_file, name='apt-file')
+    apt_location = config.apt_location or args.archiver_url
+    app.router.register_resource(
+        ForwardedResource('dists', apt_location.rstrip('/') + '/dists'))
+    app.router.register_resource(
+        ForwardedResource('pool', apt_location.rstrip('/') + '/pool'))
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package')
