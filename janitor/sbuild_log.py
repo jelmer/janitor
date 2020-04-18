@@ -685,9 +685,10 @@ class MissingPkgConfig(object):
 
     def __str__(self):
         if self.minimum_version:
-            return "%s (>= %s)" % (self.module, self.minimum_version)
+            return "Missing pkg-config file: %s (>= %s)" % (
+                self.module, self.minimum_version)
         else:
-            return self.module
+            return "Missing pkg-config file: %s" % self.module
 
     def __repr__(self):
         return "%s(%r, minimum_version=%r)" % (
