@@ -330,7 +330,7 @@ def initialize_aptly(suites):
 def main(argv=None):
     import argparse
     from .config import read_config
-    parser = argparse.ArgumentParser(prog='janitor.runner')
+    parser = argparse.ArgumentParser(prog='janitor.archive')
     parser.add_argument(
         '--listen-address', type=str,
         help='Listen address', default='localhost')
