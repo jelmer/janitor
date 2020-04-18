@@ -1630,6 +1630,9 @@ build_failure_regexps = [
     (r'LoadError: cannot load such file -- (.*)', ruby_missing_name),
     (r'  cannot load such file -- (.*)',
      ruby_missing_name),
+    # TODO(jelmer): This is a fairly generic string; perhaps combine with other
+    # checks for ruby?
+    (r'File does not exist: ([a-z/]+)$', ruby_missing_name),
     (r'.*:[0-9]+:in `do_check_dependencies\': E: '
      r'dependency resolution check requested but no working '
      r'gemspec available \(RuntimeError\)', None),
