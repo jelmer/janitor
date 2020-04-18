@@ -19,10 +19,10 @@
 import asyncio
 
 
-async def forward_apt_file_from_s3(
-        request, session, s3_location, suite, filename, max_age):
+async def forward_apt_file_from_http(
+        request, session, location, suite, filename, max_age):
     headers = {'Cache-Control': 'max-age=%d' % max_age}
-    url = '%s/%s/%s' % (s3_location, suite, filename)
+    url = '%s/%s/%s' % (location, suite, filename)
     async with session.get(url) as client_response:
         status = client_response.status
 
@@ -46,16 +46,6 @@ async def forward_apt_file_from_s3(
             await response.write(chunk)
     await response.write_eof()
     return response
-
-
-async def forward_apt_file_from_fs(suite, filename, max_age):
-    headers = {'Cache-Control': 'max-age=%d' % max_age}
-    path = os.path.join(
-            os.path.dirname(__file__), '..', '..',
-            "public_html", suite, filename)
-    if not os.path.exists(path):
-        raise web.HTTPNotFound()
-    return web.FileResponse(path, headers=headers)
 
 
 @asyncio.coroutine
@@ -475,12 +465,13 @@ if __name__ == '__main__':
             # 1 Minute
             max_age = 60
 
-        if config.apt_location.startswith('http'):
-            return await forward_apt_file_from_s3(
-                request, app.http_client_session, config.apt_location, suite,
-                file, max_age)
+        if config.apt_location:
+            location = config.apt_location
         else:
-            return await forward_apt_file_from_fs(suite, file, max_age)
+            location = request.app.archiver_url
+        return await forward_apt_file_from_http(
+            request, app.http_client_session, location, suite,
+            file, max_age)
 
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
