@@ -844,7 +844,7 @@ def fix_missing_config_status_input(
         return False
 
     def add_autogen(mf):
-        rule = mf.get_rule(b'override_dh_autoreconf')
+        rule = any(mf.iter_rules(b'override_dh_autoreconf'))
         if rule:
             return
         rule = mf.add_rule(b'override_dh_autoreconf')
