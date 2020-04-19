@@ -137,7 +137,7 @@ async def handle_debdiff(request):
 
     source = post.get('source')
     if not source:
-        raise web.Response(status=400, text='No source package specified')
+        return web.Response(status=400, text='No source package specified')
 
     old_version = post['old_version']
     new_version = post['new_version']
