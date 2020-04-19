@@ -19,7 +19,6 @@ from janitor.site import (
     env,
     get_archive_diff,
     get_vcs_type,
-    run_changes_filename,
     open_changes_file,
     DebdiffRetrievalError,
 )
@@ -157,16 +156,13 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
     def read_file(f):
         return [l.decode('utf-8', 'replace') for l in f.readlines()]
     kwargs['read_file'] = read_file
-    if run.build_version:
-        kwargs['changes_name'] = run_changes_filename(run)
-    else:
-        kwargs['changes_name'] = None
 
     async def vcs_type():
         return await get_vcs_type(client, publisher_url, run.package)
     kwargs['vcs_type'] = vcs_type
     kwargs['in_line_boundaries'] = in_line_boundaries
-    if kwargs['changes_name']:
+    if False:
+        # TODO(jelmer): Get list of binary packages from aptly
         try:
             changes_file = await open_changes_file(
                 client, archiver_url, run.suite, kwargs['changes_name'])
