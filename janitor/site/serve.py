@@ -92,7 +92,7 @@ class ForwardedResource(PrefixResource):
                 raise web.HTTPNotFound()
 
             if status != 200:
-                raise web.HTTPBadRequest()
+                raise web.HTTPBadGateway()
 
             response = web.StreamResponse(
                 status=200,
