@@ -51,7 +51,6 @@
 
 {% if changes_name %}
 <h2>Resulting package</h2>
-<p>Changes filename: <a class="reference external" href="/{{ suite }}/{{ changes_name }}">{{ changes_name }}</a></p>
 <p>Built on {{ format_timestamp(finish_time) }} (took {{ format_duration(finish_time - start_time) }})</p>
 
 {{ install_commands(binary_packages, suite) }}
