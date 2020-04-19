@@ -6,7 +6,6 @@ from janitor.site import (
     changes_get_binaries,
     env,
     open_changes_file,
-    run_changes_filename,
 )
 
 
@@ -88,8 +87,8 @@ async def generate_pkg_file(
         'queue_position': queue_position,
         'queue_wait_time': queue_wait_time,
         }
-    if run and run.build_version:
-        kwargs['changes_name'] = run_changes_filename(run)
+    if run and run.build_version and False:
+        # TODO(jelmer): Ask aptly for a list of binary packages
         try:
             changes_file = await open_changes_file(
                 client, archiver_url, run.suite, kwargs['changes_name'])

@@ -100,10 +100,6 @@ env.globals.update(highlight_diff=highlight_diff)
 env.globals.update(classify_result_code=classify_result_code)
 
 
-def run_changes_filename(run):
-    return changes_filename(run.package, run.build_version, DEFAULT_BUILD_ARCH)
-
-
 def changes_get_binaries(cf):
     changes = Changes(cf)
     return changes['Binary'].split(' ')
