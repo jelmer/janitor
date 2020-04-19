@@ -100,27 +100,6 @@ env.globals.update(highlight_diff=highlight_diff)
 env.globals.update(classify_result_code=classify_result_code)
 
 
-def changes_get_binaries(cf):
-    changes = Changes(cf)
-    return changes['Binary'].split(' ')
-
-
-async def open_changes_file(client, archiver_url, suite, changes_file):
-    url = urllib.parse.urljoin(
-        archiver_url, '/archive/%s/%s' % (suite, changes_file))
-    try:
-        async with client.get(url) as resp:
-            if resp.status == 200:
-                ret = BytesIO(await resp.read())
-            elif resp.status == 404:
-                raise FileNotFoundError(changes_file)
-            else:
-                ret = BytesIO()
-        return ret
-    except ClientConnectorError as e:
-        raise EnvironmentError(e)
-
-
 class DebdiffRetrievalError(Exception):
     """Error occurred while retrieving debdiff."""
 
