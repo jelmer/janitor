@@ -141,8 +141,9 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
     payload = {
         'old_suite': 'unchanged',
         'new_suite': run.suite,
-        'old_changes_filename': run_changes_filename(unchanged_run),
-        'new_changes_filename': run_changes_filename(run),
+        'source': unchanged_run.package,
+        'old_version': unchanged_run.build_version,
+        'new_version': run.build_version,
     }
     if filter_boring:
         payload["filter_boring"] = "yes"
