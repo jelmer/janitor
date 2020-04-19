@@ -428,10 +428,16 @@ async def publish_from_policy(
                 conn, run.package, run.suite,
                 requestor='publisher (pre-creation merge conflict)')
         elif e.code == 'missing-binary-diff':
-            note('Missing binary diff; requesting control run.')
-            await do_schedule_control(
-                conn, run.package, run.main_branch_revision,
-                requestor='publisher (missing binary diff)')
+            unchanged_run = await state.get_unchanged_run(
+                run.main_branch_revision)
+            if unchanged_run and unchanged_run.result_code == 'success':
+                note('Missing binary diff, but unchanged run exists. '
+                     'Not published yet?')
+            else:
+                note('Missing binary diff; requesting control run.')
+                await do_schedule_control(
+                    conn, run.package, run.main_branch_revision,
+                    requestor='publisher (missing binary diff)')
         code = e.code
         description = e.description
         branch_name = None

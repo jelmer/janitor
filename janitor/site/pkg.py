@@ -15,11 +15,9 @@ from janitor.sbuild_log import (
 )
 from janitor.logs import LogRetrievalError
 from janitor.site import (
-    changes_get_binaries,
     env,
     get_archive_diff,
     get_vcs_type,
-    open_changes_file,
     DebdiffRetrievalError,
 )
 

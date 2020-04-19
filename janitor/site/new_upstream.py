@@ -3,7 +3,6 @@
 from janitor import state
 
 from janitor.site import (
-    changes_get_binaries,
     env,
     open_changes_file,
 )
