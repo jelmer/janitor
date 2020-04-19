@@ -61,8 +61,10 @@ async def handle_upload(request):
 
 def find_binary_paths_from_changes(incoming_dir, source, version):
     for entry in os.scandir(incoming_dir):
+        if not entry.name.endswith('.changes'):
+            continue
         binaries = []
-        with open(entry.path, 'r') as f:
+        with open(entry.path, 'rb') as f:
             changes = Changes(f)
             if changes['Source'] != source:
                 continue
@@ -81,6 +83,8 @@ async def find_binary_paths_in_pool(
         aptly_socket_path, archive_path, suite, source, version):
     binaries = {}
     conn = UnixConnector(path=aptly_socket_path)
+    # Main is implicit
+    component = "main"
     async with ClientSession(connector=conn) as session:
         q = '$Source (%s), $Version (%s)' % (source, version)
         params = {'format': 'details', 'q': q}
@@ -93,20 +97,22 @@ async def find_binary_paths_in_pool(
                         source, version, resp.status))
             for pkg in await resp.json():
                 binaries[pkg['Package']] = pkg['Filename']
+                try:
+                    component, _ = pkg['Section'].split('/')
+                except ValueError:
+                    pass
+
     if not binaries:
         return None
     ret = []
     for name, filename in binaries.items():
-        # TODO(jelmer): Don't hardcode component here
-        bp = os.path.join(archive_path, "pool", "main")
-        for i in range(1, len(source) + 1):
-            dp = os.path.join(bp, source[:i])
-            if not os.path.isdir(dp):
-                continue
-            path = os.path.join(dp, source, filename)
-            if os.path.exists(path):
-                break
+        bp = os.path.join(archive_path, "pool", component)
+        if source.startswith('lib'):
+            dp = os.path.join(bp, source[:4])
         else:
+            dp = os.path.join(bp, source[:1])
+        path = os.path.join(dp, source, filename)
+        if not os.path.exists(path):
             raise FileNotFoundError(
                 'None of the prefixes for %s exist in %s' % (filename, bp))
         ret.append((name, path))
@@ -268,9 +274,13 @@ async def handle_diffoscope(request):
         resource.setrlimit(
             resource.RLIMIT_AS, (200 * 1024 * 1024, 200 * 1024 * 1024))
 
-    diffoscope_diff = await run_diffoscope(
-        old_binaries, new_binaries,
-        set_limits)
+    try:
+        diffoscope_diff = await run_diffoscope(
+            old_binaries, new_binaries,
+            set_limits)
+    except MemoryError:
+        raise web.HTTPServiceUnavailable(
+            text='diffoscope used too much memory')
 
     diffoscope_diff['source1'] = '%s version %s (%s)' % (
         source, old_version, old_suite)
