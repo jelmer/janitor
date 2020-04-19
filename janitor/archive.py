@@ -62,14 +62,59 @@ async def handle_upload(request):
     return web.Response(status=200, text='Uploaded files: %r.' % filenames)
 
 
-def find_changes_path(incoming_dir, archive_dir, suite, changes_filename):
-    for path in [
-            os.path.join(incoming_dir, changes_filename),
-            os.path.join(archive_dir, suite, changes_filename)]:
-        if os.path.exists(path):
-            return path
-    else:
+def find_binary_paths_from_changes(incoming_dir, source, version):
+    for entry in os.scandir(incoming_dir):
+        binaries = []
+        with open(entry.path, 'r') as f:
+            changes = Changes(f)
+            if changes['Source'] != source:
+                continue
+            if changes['Version'] != version:
+                continue
+            for f in changes['Files']:
+                if not f['name'].endswith('.deb'):
+                    continue
+                binaries.append(
+                    (f['name'].split('_')[0], os.path.join(incoming_dir, f['name'])))
+        return binaries
+
+
+async def find_binary_paths_in_pool(aptly_socket_path, archive_path, suite, source, version):
+    binaries = {}
+    conn = UnixConnector(path=socket_path)
+    async with ClientSession(connector=conn) as session:
+        q = '$Source (%s), $Version (%s)' % (source, version)
+        params = {'format': 'details', 'q': q}
+        async with session.get(
+                'http://localhost/api/repo/%s' % suite, params=params) as resp:
+            if resp.status != 200:
+                raise Exception(
+                    'unable to find binary packages for %s/%s' % (source, version))
+            for pkg in await resp.json():
+                binaries[pkg['Package']] = (pkg['Section'], pkg['Filename'])
+    if not binaries:
         return None
+    binaries.sort()
+    ret = []
+    for name, (section, filename) in binaries:
+        bp = os.path.join(archive_path, "pool", section)
+        for i in range(1, len(filename) + 1):
+            dp = os.path.join(bp, filename[:i])
+            if os.path.isdir(dp):
+                break
+        else:
+            raise FileNotFoundError(filename)
+        ret.append(name, os.path.join(dp, filename))
+    ret.sort()
+    return ret
+
+
+async def find_binary_paths(incoming_dir, archive_path, suite, source, version):
+    binaries = find_binary_paths_from_changes(incoming_dir, source, version)
+    if binaries is not None:
+        return binaries
+    return await find_binary_paths_in_pool(
+        aptly_socket_path, archive_path, suite, source, version)
 
 
 async def handle_debdiff(request):
@@ -90,63 +135,44 @@ async def handle_debdiff(request):
         return web.Response(
             status=400, text='Invalid new suite %s' % new_suite)
 
-    try:
-        old_changes_filename = post['old_changes_filename']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: old_changes_filename')
+    source = post.get('source')
+    if not source:
+        raise web.Response(status=400, text='No source package specified')
 
-    if '/' in old_changes_filename:
-        return web.Response(
-            status=400,
-            text='Invalid changes filename: %s' % old_changes_filename)
-
-    try:
-        new_changes_filename = post['new_changes_filename']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: new_changes_filename')
-
-    if '/' in new_changes_filename:
-        return web.Response(
-            status=400,
-            text='Invalid changes filename: %s' % new_changes_filename)
+    old_version = post['old_version']
+    new_version = post['new_version']
 
     archive_path = request.app.archive_path
 
-    old_changes_path = find_changes_path(
+    old_binaries = find_binary_paths(
+            request.app.aptly_socket_path,
             request.app.incoming_dir, archive_path, old_suite,
-            old_changes_filename)
+            source, old_version)
 
-    if old_changes_path is None:
+    if old_binaries is None:
         return web.Response(
-            status=404, text='Old changes file %s does not exist.' % (
-                old_changes_filename))
+            status=404, text='Old source %s/%s does not exist.' % (
+                source, old_version))
 
-    new_changes_path = find_changes_path(
+    new_binaries = find_binary_paths(
+            request.app.aptly_socket_path,
             request.app.incoming_dir, archive_path, new_suite,
-            new_changes_filename)
+            source, new_version)
 
-    if new_changes_path is None:
+    if new_binaries is None:
         return web.Response(
-            status=404, text='New changes file %s does not exist.' % (
-                new_changes_filename))
-
-    with open(old_changes_path, 'r') as f:
-        old_changes = Changes(f)
-
-    with open(new_changes_path, 'r') as f:
-        new_changes = Changes(f)
+            status=404, text='New source %s/%s does not exist.' % (
+                source, new_version))
 
     try:
-        debdiff = await run_debdiff(old_changes_path, new_changes_path)
+        debdiff = await run_debdiff(old_binaries, new_binaries)
     except DebdiffError as e:
         return web.Response(status=400, text=e.args[0])
 
     if 'filter_boring' in post:
         debdiff = filter_debdiff_boring(
-            debdiff.decode(), old_changes['Version'],
-            new_changes['Version']).encode()
+            debdiff.decode(), old_version,
+            new_version).encode()
 
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/x-diff', 'text/plain', '*/*'):
@@ -184,47 +210,29 @@ async def handle_diffoscope(request):
         return web.Response(
             status=400, text='Invalid new suite %s' % new_suite)
 
-    try:
-        old_changes_filename = post['old_changes_filename']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: old_changes_filename')
+    source = post['source']
+    old_version = post['old_version']
+    new_version = post['new_version']
 
-    if '/' in old_changes_filename:
-        return web.Response(
-            status=400,
-            text='Invalid changes filename: %s' % old_changes_filename)
-
-    try:
-        new_changes_filename = post['new_changes_filename']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: new_changes_filename')
-
-    if '/' in new_changes_filename:
-        return web.Response(
-            status=400,
-            text='Invalid changes filename: %s' % new_changes_filename)
-
-    archive_path = request.app.archive_path
-
-    old_changes_path = find_changes_path(
-            request.app.incoming_dir, archive_path, old_suite,
+    old_binaries = await find_binary_paths(
+            request.app.aptly_socket_path,
+            request.app.incoming_dir, request.app.archive_path, old_suite,
             old_changes_filename)
 
-    if old_changes_path is None:
+    if old_binaries is None:
         return web.Response(
-            status=404, text='Old changes file %s does not exist.' % (
-                old_changes_filename))
+            status=404, text='Old source %s/%s does not exist.' % (
+                source, old_version))
 
-    new_changes_path = find_changes_path(
-            request.app.incoming_dir, archive_path, new_suite,
-            new_changes_filename)
+    new_binaries = await find_binary_paths(
+            request.app.aptly_socket_path,
+            request.app.incoming_dir, request.app.archive_path, new_suite,
+            source, new_version)
 
-    if new_changes_path is None:
+    if new_binaries is None:
         return web.Response(
-            status=404, text='New changes file %s does not exist.' % (
-                new_changes_filename))
+            status=404, text='New source %s/%s does not exist.' % (
+                source, new_version))
 
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/plain', '*/*'):
@@ -245,12 +253,6 @@ async def handle_diffoscope(request):
                  'text/html, text/plain, application/json, '
                  'application/markdown')
 
-    with open(old_changes_path, 'r') as f:
-        old_changes = Changes(f)
-
-    with open(new_changes_path, 'r') as f:
-        new_changes = Changes(f)
-
     def set_limits():
         import resource
         # Limit to 200Mb
@@ -258,7 +260,7 @@ async def handle_diffoscope(request):
             resource.RLIMIT_AS, (200 * 1024 * 1024, 200 * 1024 * 1024))
 
     diffoscope_diff = await run_diffoscope(
-        old_changes_path, new_changes_path,
+        old_binaries, new_binaries,
         set_limits)
 
     filter_diffoscope_irrelevant(diffoscope_diff)
@@ -268,9 +270,8 @@ async def handle_diffoscope(request):
 
     if 'filter_boring' in post:
         filter_diffoscope_boring(
-            diffoscope_diff, old_changes['Version'],
-            new_changes['Version'], old_changes['Distribution'],
-            new_changes['Distribution'])
+            diffoscope_diff, old_version,
+            new_version, old_suite, new_suite)
         title += ' (filtered)'
 
     debdiff = await format_diffoscope(
@@ -280,10 +281,12 @@ async def handle_diffoscope(request):
     return web.Response(text=debdiff, content_type=content_type)
 
 
-async def run_web_server(listen_addr, port, archive_path, incoming_dir):
+async def run_web_server(listen_addr, port, archive_path, incoming_dir,
+                         aptly_socket_path):
     app = web.Application()
     app.archive_path = archive_path
     app.incoming_dir = incoming_dir
+    app.aptly_socket_path = aptly_socket_path
     setup_metrics(app)
     app.router.add_post('/', handle_upload, name='upload')
     app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
@@ -308,7 +311,7 @@ async def update_aptly(incoming_dir):
 async def update_archive_loop(config, incoming_dir):
     while True:
         await update_aptly(incoming_dir)
-        await asyncio.sleep(30)
+        await asyncio.sleep(30 * 60)
 
 
 async def sync_aptly_repos(session, suites):
@@ -414,7 +417,7 @@ def main(argv=None):
         loop.create_task(sync_aptly(aptly_socket_path, config.suite)),
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive,
-            args.incoming)),
+            args.incoming, args.aptly_socket_path)),
         loop.create_task(update_archive_loop(
             config, args.incoming))))
     loop.run_forever()
