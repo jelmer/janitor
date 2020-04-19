@@ -116,8 +116,10 @@ class DebdiffError(Exception):
     """Error occurred while running debdiff."""
 
 
-async def run_debdiff(old_changes, new_changes):
-    args = ['debdiff', old_changes, new_changes]
+async def run_debdiff(old_binaries, new_binaries):
+    args = (['debdiff', '--from'] +
+            [p for (n, p) in old_binaries] + ['--to'] +
+            [p for (n, p) in new_binaries])
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,

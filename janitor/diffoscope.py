@@ -144,9 +144,9 @@ async def format_diffoscope(root_difference, content_type, title):
     raise AssertionError('unknown content type %r' % content_type)
 
 
-async def run_diffoscope(old_changes, new_changes, preexec_fn=None):
+async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
     args = ['diffoscope', '--json=-', '--exclude-directory-metadata=yes']
-    args.extend([old_changes, new_changes])
+    args.extend([old_binary, new_binary])
     stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
@@ -157,3 +157,19 @@ async def run_diffoscope(old_changes, new_changes, preexec_fn=None):
     if p.returncode not in (0, 1):
         raise DiffoscopeError(stderr.decode(errors='replace'))
     return json.loads(stdout.decode('utf-8'))
+
+
+async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
+    ret = {
+        "diffoscope-json-version": 1,
+        "source1": "old version",
+        "source2": "new version",
+        "unified_diff": None,
+        "details": [],
+        }
+
+    for old_binary, new_binary in zip(old_binaries, new_binaries):
+        sub = await _run_diffoscope(old_binary, new_binary, preexec_fn=preexec_fn)
+        del sub['diffoscope-json-version']
+        ret['details'].append(sub)
+    return ret
