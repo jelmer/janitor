@@ -1250,23 +1250,6 @@ WHERE
     return (row[1].encode('utf-8'), row[2], row[3], row[0])
 
 
-async def iter_publish_history(conn, limit=None):
-    query = """
-SELECT
-    publish.package, publish.branch_name, publish.main_branch_revision,
-    publish.revision, publish.mode, publish.merge_proposal_url,
-    publish.result_code, publish.description, package.vcs_browse
-FROM
-    publish
-JOIN package ON publish.package = package.name
-ORDER BY timestamp DESC
-"""
-    if limit:
-        query += " LIMIT %d" % limit
-    for row in await conn.fetch(query):
-        yield row
-
-
 async def get_open_merge_proposal(conn, package, branch_name):
     query = """\
 SELECT

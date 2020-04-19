@@ -17,13 +17,16 @@ $(document).ready(function(){
 <p>Last {{ count }} publish actions:</p>
 <table class="docutils" border="1">
 <colgroup>
+<col width="6%">
 <col width="41%">
 <col width="6%">
 <col width="4%">
 <col width="49%">
 </colgroup>
 <thead valign="bottom">
-<tr class="row-odd"><th class="head">Package</th>
+<tr class="row-odd">
+<th class="head">Time</th>
+<th class="head">Package</th>
 <th class="head">Branch Name</th>
 <th class="head">Mode</th>
 <th class="head">Result</th>
@@ -32,6 +35,7 @@ $(document).ready(function(){
 <tbody valign="top">
 {% for package, branch_name, main_branch_revision, revision, mode, merge_proposal_url, result_code, description, vcs_browser in history %}
 <tr class="row-even"><td><a class="reference external" href="pkg/{{ package }}">{{ package }}</a></td>
+<td>{{ format_timestamp(timestamp) }}</td>
 <td>{{ branch_name }}</td>
 <td>{{ mode }}</td>
 <td>{{ result_code }}: {{ description }}
