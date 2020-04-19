@@ -24,7 +24,7 @@ Select suite to display:
 	<canvas id="result-code-chart"/>
 </div>
 <script>
-new Chart($("#result-code-chart"), {
+var result_code_chart = new Chart($("#result-code-chart"), {
     type: 'pie',
     data: {
       labels: {{ result_codes|map(attribute=0)|list|tojson }},
@@ -40,6 +40,15 @@ new Chart($("#result-code-chart"), {
       title: { text: "Result Code Frequency", display: true },
     },
 });
+
+
+document.getElementById("result-code-chart").onclick = function(e) {
+   var slice = result_code_chart.getElementAtEvent(e);
+   if (!slice.length) return;  // not a slice they clicked on
+   var code = slice[0]._model.label;
+   window.open("/cupboard/result-codes/" + code{% if suite %} + "?suite={{ suite }}"{% endif %}, "_self");
+}
+
 </script>
 
 <table class="docutils" border="1">
