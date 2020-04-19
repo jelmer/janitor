@@ -168,8 +168,11 @@ async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
         "details": [],
         }
 
-    for old_binary, new_binary in zip(old_binaries, new_binaries):
-        sub = await _run_diffoscope(old_binary, new_binary, preexec_fn=preexec_fn)
+    for (old_name, old_path), (new_name, new_path) in zip(
+            old_binaries, new_binaries):
+        sub = await _run_diffoscope(old_path, new_path, preexec_fn=preexec_fn)
+        sub['source1'] = old_name
+        sub['source2'] = new_name
         del sub['diffoscope-json-version']
         ret['details'].append(sub)
     return ret

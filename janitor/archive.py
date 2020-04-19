@@ -17,13 +17,10 @@
 
 from aiohttp import ClientSession, UnixConnector
 import asyncio
-from contextlib import ExitStack
 import os
 import re
 import subprocess
 import sys
-import tempfile
-import uuid
 
 from aiohttp import web
 from debian.deb822 import Changes
@@ -75,46 +72,58 @@ def find_binary_paths_from_changes(incoming_dir, source, version):
                 if not f['name'].endswith('.deb'):
                     continue
                 binaries.append(
-                    (f['name'].split('_')[0], os.path.join(incoming_dir, f['name'])))
+                    (f['name'].split('_')[0],
+                     os.path.join(incoming_dir, f['name'])))
         return binaries
 
 
-async def find_binary_paths_in_pool(aptly_socket_path, archive_path, suite, source, version):
+async def find_binary_paths_in_pool(
+        aptly_socket_path, archive_path, suite, source, version):
     binaries = {}
-    conn = UnixConnector(path=socket_path)
+    conn = UnixConnector(path=aptly_socket_path)
     async with ClientSession(connector=conn) as session:
         q = '$Source (%s), $Version (%s)' % (source, version)
         params = {'format': 'details', 'q': q}
         async with session.get(
-                'http://localhost/api/repo/%s' % suite, params=params) as resp:
+                'http://localhost/api/repos/%s/packages' % suite,
+                params=params) as resp:
             if resp.status != 200:
                 raise Exception(
-                    'unable to find binary packages for %s/%s' % (source, version))
+                    'unable to find binary packages for %s/%s: %r' % (
+                        source, version, resp.status))
             for pkg in await resp.json():
-                binaries[pkg['Package']] = (pkg['Section'], pkg['Filename'])
+                binaries[pkg['Package']] = pkg['Filename']
     if not binaries:
         return None
-    binaries.sort()
     ret = []
-    for name, (section, filename) in binaries:
-        bp = os.path.join(archive_path, "pool", section)
-        for i in range(1, len(filename) + 1):
-            dp = os.path.join(bp, filename[:i])
-            if os.path.isdir(dp):
+    for name, filename in binaries.items():
+        # TODO(jelmer): Don't hardcode component here
+        bp = os.path.join(archive_path, "pool", "main")
+        for i in range(1, len(source) + 1):
+            dp = os.path.join(bp, source[:i])
+            if not os.path.isdir(dp):
+                continue
+            path = os.path.join(dp, source, filename)
+            if os.path.exists(path):
                 break
         else:
-            raise FileNotFoundError(filename)
-        ret.append(name, os.path.join(dp, filename))
+            raise FileNotFoundError(
+                'None of the prefixes for %s exist in %s' % (filename, bp))
+        ret.append((name, path))
     ret.sort()
     return ret
 
 
-async def find_binary_paths(incoming_dir, archive_path, suite, source, version):
+async def find_binary_paths(
+        aptly_socket_path, incoming_dir, archive_path, suite, source, version):
     binaries = find_binary_paths_from_changes(incoming_dir, source, version)
     if binaries is not None:
         return binaries
-    return await find_binary_paths_in_pool(
-        aptly_socket_path, archive_path, suite, source, version)
+    try:
+        return await find_binary_paths_in_pool(
+            aptly_socket_path, archive_path, suite, source, version)
+    except FileNotFoundError:
+        return None
 
 
 async def handle_debdiff(request):
@@ -144,7 +153,7 @@ async def handle_debdiff(request):
 
     archive_path = request.app.archive_path
 
-    old_binaries = find_binary_paths(
+    old_binaries = await find_binary_paths(
             request.app.aptly_socket_path,
             request.app.incoming_dir, archive_path, old_suite,
             source, old_version)
@@ -154,7 +163,7 @@ async def handle_debdiff(request):
             status=404, text='Old source %s/%s does not exist.' % (
                 source, old_version))
 
-    new_binaries = find_binary_paths(
+    new_binaries = await find_binary_paths(
             request.app.aptly_socket_path,
             request.app.incoming_dir, archive_path, new_suite,
             source, new_version)
@@ -217,7 +226,7 @@ async def handle_diffoscope(request):
     old_binaries = await find_binary_paths(
             request.app.aptly_socket_path,
             request.app.incoming_dir, request.app.archive_path, old_suite,
-            old_changes_filename)
+            source, old_version)
 
     if old_binaries is None:
         return web.Response(
@@ -263,10 +272,14 @@ async def handle_diffoscope(request):
         old_binaries, new_binaries,
         set_limits)
 
+    diffoscope_diff['source1'] = '%s version %s (%s)' % (
+        source, old_version, old_suite)
+    diffoscope_diff['source2'] = '%s version %s (%s)' % (
+        source, new_version, new_suite)
+
     filter_diffoscope_irrelevant(diffoscope_diff)
 
-    title = 'diffoscope for %s applied to %s' % (
-         new_changes['Distribution'], new_changes['Source'])
+    title = 'diffoscope for %s applied to %s' % (new_suite, source)
 
     if 'filter_boring' in post:
         filter_diffoscope_boring(
