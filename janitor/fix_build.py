@@ -81,6 +81,7 @@ from .sbuild_log import (
     MissingAutomakeInput,
     MissingRPackage,
     MissingRubyFile,
+    MissingAutoconfMacro,
     SbuildFailure,
     DhAddonLoadFailure,
     AptFetchFailure,
@@ -863,6 +864,36 @@ def fix_missing_config_status_input(
     return True
 
 
+def _find_aclocal_fun(macro):
+    # TODO(jelmer): Use the API for codesearch.debian.net instead?
+    defun_prefix = b'AC_DEFUNE([%s],' % macro.encode('ascii')
+    for entry in os.scandir('/usr/share/aclocal'):
+        if not entry.is_file():
+            continue
+        with open(entry.path, 'rb') as f:
+            for line in f:
+                if line.startswith(defun_prefix):
+                    return entry.path
+    raise KeyError
+
+
+def fix_missing_autoconf_macro(
+        tree, error, context, committer=None, update_changelog=True,
+        subpath='.'):
+    try:
+        path = _find_aclocal_fun(error.macro)
+    except KeyError:
+        note('No local m4 file found defining %s', error.macro)
+        return False
+    package = get_package_for_paths([path])
+    if package is None:
+        warning('no package for macro file %s', path)
+        return False
+    return add_dependency(
+        tree, context, package, committer=committer,
+        update_changelog=update_changelog, subpath=subpath)
+
+
 FIXERS = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingPythonDistribution, fix_missing_python_distribution),
@@ -891,6 +922,7 @@ FIXERS = [
     (MissingJDKFile, fix_missing_jdk_file),
     (MissingRubyFile, fix_missing_ruby_file),
     (MissingJavaScriptRuntime, fix_missing_javascript_runtime),
+    (MissingAutoconfMacro, fix_missing_autoconf_macro),
 ]
 
 
