@@ -52,6 +52,7 @@ SBUILD_FOCUS_SECTION = {
     'install-deps': 'install package build dependencies',
     'explain-bd-uninstallable': 'install package build dependencies',
     'apt-get-update': 'update chroot',
+    'arch-check': 'check architectures',
 }
 
 
@@ -242,6 +243,11 @@ def worker_failure_from_sbuild_log(f):
     if failed_stage == 'install-deps':
         (focus_section, offset, line,
          error) = find_install_deps_failure_description(paragraphs)
+        if error:
+            description = str(error)
+    if failed_stage == 'arch-check':
+        (offset, line, error) = find_arch_check_failure_description(
+                section_lines)
         if error:
             description = str(error)
     if description is None and failed_stage is not None:
@@ -1418,6 +1424,7 @@ build_failure_regexps = [
      r'No such file or directory', None),
     (r'python[0-9.]*: can\'t open file \'(.*)\': \[Errno 2\] '
      r'No such file or directory', file_not_found),
+    (r'OSError: No such file (.*)', file_not_found),
     (r'Could not open \'(.*)\': No such file or directory at '
      r'\/usr\/share\/perl\/[0-9.]+\/ExtUtils\/MM_Unix.pm line [0-9]+.',
      perl_file_not_found),
@@ -1711,6 +1718,7 @@ for (regexp, cb) in build_failure_regexps:
 
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
+    r'.*: No space left on device',
     r'Segmentation fault',
     r'make\[[0-9]+\]: \*\*\* \[.*:[0-9]+: .*\] Segmentation fault',
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
@@ -2243,6 +2251,39 @@ def find_apt_get_failure(lines):
         if line.startswith('E: ') and ret[0] is None:
             ret = (lineno + 1, line, None)
     return ret
+
+
+class ArchitectureNotInList(object):
+
+    kind = 'arch-not-in-list'
+
+    def __init__(self, arch, arch_list):
+        self.arch = arch
+        self.arch_list = arch_list
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.arch, self.arch_list)
+
+    def __str__(self):
+        return "Architecture %s not a build arch" % (self.arch, )
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, type(self)) and
+            self.arch == other.arch and
+            self.arch_list == other.arch_list)
+
+
+def find_arch_check_failure_description(lines):
+    for offset, line in enumerate(lines):
+        m = re.match(
+            r'E: dsc: (.*) not in arch list or does not match any arch '
+            r'wildcards: (.*) -- skipping', line)
+        if m:
+            error = ArchitectureNotInList(m.group(1), m.group(2))
+            return offset, line, error
+    return len(lines) - 1, lines[-1], None
 
 
 def find_install_deps_failure_description(paragraphs):
