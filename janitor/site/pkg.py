@@ -159,19 +159,6 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
         return await get_vcs_type(client, publisher_url, run.package)
     kwargs['vcs_type'] = vcs_type
     kwargs['in_line_boundaries'] = in_line_boundaries
-    if False:
-        # TODO(jelmer): Get list of binary packages from aptly
-        try:
-            changes_file = await open_changes_file(
-                client, archiver_url, run.suite, kwargs['changes_name'])
-        except FileNotFoundError:
-            pass
-        except EnvironmentError:
-            pass  # Perhaps do some logging?
-        else:
-            kwargs['binary_packages'] = []
-            for binary in changes_get_binaries(changes_file):
-                kwargs['binary_packages'].append(binary)
 
     cached_logs = {}
 

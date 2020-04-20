@@ -326,10 +326,11 @@ async def handle_archive_diff(request):
             unchanged_run, kind=kind, filter_boring=filter_boring,
             accept=request.headers.get('ACCEPT', '*/*'))
     except FileNotFoundError:
-        raise web.json_response(
-                {'reason': 'debdiff not calculated yet (run: %s, unchanged run: %s)' % (
-                run.id, unchanged_run.id)},
-                status=404)
+        return web.json_response(
+            {'reason':
+                'debdiff not calculated yet (run: %s, unchanged run: %s)' %
+                (run.id, unchanged_run.id)},
+            status=404)
     except DebdiffRetrievalError as e:
         return web.json_response(
             {'reason': 'unable to contact archiver for debdiff: %r' % e},

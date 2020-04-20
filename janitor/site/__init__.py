@@ -16,15 +16,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import ClientConnectorError, web
-from debian.deb822 import Changes
-from io import BytesIO
 from jinja2 import Environment, PackageLoader, select_autoescape
 import urllib.parse
 
-from janitor import (
-    DEFAULT_BUILD_ARCH,
-    )
-from janitor.build import changes_filename
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import (
     CACHE_URL_BZR,
