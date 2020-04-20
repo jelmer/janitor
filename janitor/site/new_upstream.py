@@ -4,7 +4,6 @@ from janitor import state
 
 from janitor.site import (
     env,
-    open_changes_file,
 )
 
 
@@ -86,19 +85,6 @@ async def generate_pkg_file(
         'queue_position': queue_position,
         'queue_wait_time': queue_wait_time,
         }
-    if run and run.build_version and False:
-        # TODO(jelmer): Ask aptly for a list of binary packages
-        try:
-            changes_file = await open_changes_file(
-                client, archiver_url, run.suite, kwargs['changes_name'])
-        except FileNotFoundError:
-            pass
-        else:
-            kwargs['binary_packages'] = []
-            for binary in changes_get_binaries(changes_file):
-                kwargs['binary_packages'].append(binary)
-    else:
-        kwargs['changes_name'] = None
 
     template = env.get_template('new-upstream-package.html')
     return await template.render_async(**kwargs)

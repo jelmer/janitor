@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-from janitor import state
 from janitor.site import env
 
 
