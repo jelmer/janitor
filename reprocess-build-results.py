@@ -37,6 +37,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument(
     '--config', type=str, default='janitor.conf',
     help='Path to configuration.')
+parser.add_argument(
+    '--log-timeout', type=int, default=60,
+    help='Default timeout when retrieving log files.')
 args = parser.parse_args()
 
 
@@ -50,7 +53,7 @@ logfile_manager = get_log_manager(config.logs_location)
 async def reprocess_run(db, package, log_id, result_code, description):
     try:
         build_logf = await logfile_manager.get_log(
-            package, log_id, 'build.log')
+            package, log_id, 'build.log', timeout=args.log_timeout)
     except FileNotFoundError:
         return
     failure = worker_failure_from_sbuild_log(build_logf)
