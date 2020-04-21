@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+from datetime import datetime, timedelta
 import re
 from janitor import state
 from janitor.config import read_config
@@ -24,12 +25,15 @@ parser.add_argument(
 parser.add_argument(
     '--suite', type=str,
     help='Suite to process.')
+parser.add_argument(
+    '--min-age', type=int, default=None,
+    help='Only reschedule runs older than N days.')
 args = parser.parse_args()
 with open(args.config, 'r') as f:
     config = read_config(f)
 
 
-async def main(db, result_code, rejected):
+async def main(db, result_code, rejected, min_age=None):
     packages = {}
     async with db.acquire() as conn1, db.acquire() as conn2:
         for package in await state.iter_packages(conn1):
@@ -45,6 +49,8 @@ async def main(db, result_code, rejected):
                 continue
             if packages[run.package].branch_url is None:
                 continue
+            if datetime.now() < run.times[1] + timedelta(days=min_age):
+                continue
             if (args.description_re and
                     not re.match(args.description_re, run.description, re.S)):
                 continue
@@ -56,4 +62,4 @@ async def main(db, result_code, rejected):
 
 
 db = state.Database(config.database_location)
-asyncio.run(main(db, args.result_code, args.rejected))
+asyncio.run(main(db, args.result_code, args.rejected, args.min_age))
