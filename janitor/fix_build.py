@@ -457,8 +457,8 @@ def fix_missing_go_package(
         tree, error, context, committer=None, update_changelog=True,
         subpath='.'):
     package = get_package_for_paths(
-        [os.path.join('/usr/share/gocode/src', error.package)],
-        regex=False)
+        [os.path.join('/usr/share/gocode/src', error.package, '.*')],
+        regex=True)
     if package is None:
         return False
     return add_dependency(
