@@ -737,6 +737,11 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'Could not find gem \'rake-compiler\' in any of the gem sources '
             'listed in your Gemfile. (Bundler::GemNotFound)'], 1,
             MissingRubyGem('rake-compiler'))
+        self.run_test([
+            '/usr/lib/ruby/2.7.0/rubygems.rb:275:in `find_spec_for_exe\': '
+            'can\'t find gem rdoc (>= 0.a) with executable rdoc '
+            '(Gem::GemNotFoundException)'], 1,
+            MissingRubyGem('rdoc', '0.a'))
 
     def test_missing_php_class(self):
         self.run_test([
@@ -1072,11 +1077,11 @@ Exiting with 4
 
     def test_dpkg_failure(self):
         self.assertEqual(
-            (8, 'runtestsuite', None,
-'"dpkg --unpack /tmp/autopkgtest.hdIETy/4-autopkgtest-satdep.deb" ' \
-'failed with stderr "W: /var/lib/schroot/session/unstable-amd64-' \
-'sbuild-7fb1b836-14f9-4709-8584-cbbae284db97: '\
-'Failed to stat file: No such file or directory'),
+            (8, 'runtestsuite', None, """\
+"dpkg --unpack /tmp/autopkgtest.hdIETy/4-autopkgtest-satdep.deb" \
+failed with stderr "W: /var/lib/schroot/session/unstable-amd64-\
+sbuild-7fb1b836-14f9-4709-8584-cbbae284db97: \
+Failed to stat file: No such file or directory"""),
             find_autopkgtest_failure_description("""\
 autopkgtest [19:19:19]: test require: [-----------------------
 autopkgtest [19:19:20]: test require: -----------------------]
