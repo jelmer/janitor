@@ -304,18 +304,69 @@ async def handle_diffoscope(request):
     return web.Response(text=debdiff, content_type=content_type)
 
 
+async def handle_publish(request):
+    post = await request.post()
+    conn = UnixConnector(path=request.app.aptly_socket_path)
+    suites_processed = []
+    failed_suites = []
+    # First, retrierve
+    async with ClientSession(connector=conn) as session:
+        async with session.get('http://localhost/api/publish') as resp:
+            if resp.status != 200:
+                raise Exception('retrieving in progress publish failed')
+            publish = {}
+            for p in await resp.json():
+                publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
+
+        for suite in request.app.config.suite:
+            if post.get('suite') not in (suite.name, None):
+                continue
+            storage = ''
+            prefix = '.'
+            loc = "%s:%s" % (storage, prefix)
+            if (storage, prefix, suite.name) in publish:
+                async with session.put('http://localhost/api/publish/%s/%s'
+                        % (loc, suite.name)):
+                    if resp.status != 200:
+                        failed_suites.append(suite.name)
+                    else:
+                        suites_processed.append(suite.name)
+            else:
+                params = {
+                    'SourceKind': 'local',
+                    'Sources': [suite.name],
+                    'Distribution': suite.name,
+                    'Label': suite.archive_description,
+                    'Origin': 'janitor.debian.net',
+                    'NotAutomatic': 'yes',
+                    'ButAutomaticUpgrades': 'yes',
+                    }
+                async with session.post(
+                        'http://localhost/api/publish/%s' % loc,
+                        json=params) as resp:
+                    if resp.status != 200:
+                        failed_suites.append(suite.name)
+                    else:
+                        suites_processed.append(suite.name)
+    return web.json_response(
+        {'suites-processed': suites_processed,
+         'suites-failed': failed_suites})
+
+
 async def run_web_server(listen_addr, port, archive_path, incoming_dir,
-                         aptly_socket_path):
+                         aptly_socket_path, config):
     app = web.Application()
     app.archive_path = archive_path
     app.incoming_dir = incoming_dir
     app.aptly_socket_path = aptly_socket_path
+    app.config = config
     setup_metrics(app)
     app.router.add_post('/', handle_upload, name='upload')
     app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
     app.router.add_post('/diffoscope', handle_diffoscope, name='diffoscope')
     app.router.add_static('/dists', os.path.join(archive_path, 'dists'))
     app.router.add_static('/pool', os.path.join(archive_path, 'pool'))
+    app.router.add_post('/publish', handle_publish, name='publish')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -440,7 +491,7 @@ def main(argv=None):
         loop.create_task(sync_aptly(aptly_socket_path, config.suite)),
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive,
-            args.incoming, args.aptly_socket_path)),
+            args.incoming, args.aptly_socket_path, config)),
         loop.create_task(update_archive_loop(
             config, args.incoming))))
     loop.run_forever()
