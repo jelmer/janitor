@@ -214,27 +214,28 @@ def worker_failure_from_sbuild_log(f):
     context = None
     error = None
     section_lines = paragraphs.get(focus_section, [])
-    if failed_stage in ('build', 'autopkgtest'):
+    if failed_stage == 'build':
         section_lines = strip_useless_build_tail(section_lines)
         offset, description, error = find_build_failure_description(
             section_lines)
         if error:
             description = str(error)
             context = ('build', )
-        if failed_stage == 'autopkgtest':
-            (apt_offset, testname, apt_error, apt_description) = (
-                find_autopkgtest_failure_description(section_lines))
-            if apt_error and not error:
-                error = apt_error
-                if not apt_description:
-                    apt_description = str(apt_error)
-            if apt_description and not description:
-                description = apt_description
-                offset = apt_offset
-            if testname is not None:
-                context = ('autopkgtest', testname)
-            else:
-                context = ('autopkgtest', None)
+    if failed_stage == 'autopkgtest':
+        section_lines = strip_useless_build_tail(section_lines)
+        (apt_offset, testname, apt_error, apt_description) = (
+            find_autopkgtest_failure_description(section_lines))
+        if apt_error and not error:
+            error = apt_error
+            if not apt_description:
+                apt_description = str(apt_error)
+        if apt_description and not description:
+            description = apt_description
+            offset = apt_offset
+        if testname is not None:
+            context = ('autopkgtest', testname)
+        else:
+            context = ('autopkgtest', None)
     if failed_stage == 'apt-get-update':
         focus_section, offset, description, error = (
                 find_apt_get_update_failure(paragraphs))
@@ -2051,81 +2052,181 @@ class AutopkgtestStderrFailure(object):
         return "output on stderr: %s" % self.stderr_line
 
 
+def parse_autopgktest_line(line):
+    m = re.match(r'autopkgtest \[([0-9:]+)\]: (.*)', line)
+    if not m:
+        return line
+    timestamp = m.group(1)
+    message = m.group(2)
+    if message.startswith('@@@@@@@@@@@@@@@@@@@@ source '):
+        return (timestamp, ('source', ))
+    elif message.startswith('@@@@@@@@@@@@@@@@@@@@ summary'):
+        return (timestamp, ('summary', ))
+    elif message.startswith('test '):
+        (testname, test_status) = message[len('test '):].rstrip(
+                '\n').split(': ', 1)
+        if test_status == '[-----------------------':
+            return (timestamp, ('test', testname, 'begin output', ))
+        elif test_status == '-----------------------]':
+            return (timestamp, ('test', testname, 'end output', ))
+        elif test_status == (
+                ' - - - - - - - - - - results - - - - - - - - - -'):
+            return (timestamp, ('test', testname, 'results', ))
+        elif test_status == (
+                ' - - - - - - - - - - stderr - - - - - - - - - -'):
+            return (timestamp, ('test', testname, 'stderr', ))
+        elif test_status == 'preparing testbed':
+            return (timestamp, ('test', testname, 'prepare testbed'))
+        else:
+            return (timestamp, ('test', testname, test_status))
+    elif message.startswith('ERROR:'):
+        return (timestamp, ('error', message[len('ERROR: '):]))
+    else:
+        return (timestamp, (message, ))
+
+
+def parse_autopkgtest_summary(lines):
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        m = re.match('([^ ]+)(?:[ ]+)PASS', line)
+        if m:
+            yield i, m.group(1), 'PASS', None, []
+            i += 1
+            continue
+        m = re.match('([^ ]+)(?:[ ]+)(FAIL|PASS|SKIP) (.+)', line)
+        if not m:
+            i += 1
+            continue
+        testname = m.group(1)
+        result = m.group(2)
+        reason = m.group(3)
+        offset = i
+        extra = []
+        if reason == 'badpkg':
+            while (i+1 < len(lines) and (
+                    lines[i+1].startswith('badpkg:') or
+                    lines[i+1].startswith('blame:'))):
+                extra.append(lines[i+1])
+                i += 1
+        yield offset, testname, result, reason, extra
+        i += 1
+
+
 def find_autopkgtest_failure_description(lines):
     """Find the autopkgtest failure in output.
 
     Returns:
       tuple with (line offset, testname, error, description)
     """
-    OFFSET = 20
-    for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
-        line = lines[lineno].strip('\n')
-        m = re.match('([^ ]+)([ ]+)FAIL (.+)', line)
-        if not m:
-            continue
-        reason = m.group(3)
-        testname = m.group(1)
-        if (reason == 'badpkg' and
-                lineno+2 < len(lines) and
-                lines[lineno+1].startswith('blame: ') and
-                lines[lineno+2].startswith('badpkg: ')):
-            error = AutopkgtestDepsUnsatisfiable.from_blame_line(
-                lines[lineno+1])
-            description = 'Test %s failed: %s' % (
-                testname, lines[lineno+2][len('badpkg: '):].rstrip('\n'))
-        elif reason == 'timed out':
-            error = AutopkgtestTimedOut()
-            return lineno + 1, testname, error, reason
-        elif reason.startswith('stderr: '):
-            output = reason[len('stderr: '):]
-            (offset, description, error) = find_build_failure_description(
-                [output])
-            if offset is not None:
-                lineno += offset - 1
-            if error is None:
-                error = AutopkgtestStderrFailure(output)
-            if description is None:
-                description = (
-                    'Test %s failed due to unauthorized stderr output: %s' % (
-                        testname, error.stderr_line))
+    test_output = {}
+    test_output_offset = {}
+    current_field = None
+    for i, line in enumerate(lines):
+        parsed = parse_autopgktest_line(line)
+        if isinstance(parsed, tuple):
+            if parsed[1][0] == 'test':
+                if parsed[1][2] == 'end output':
+                    current_field = None
+                    continue
+                elif parsed[1][2] == 'begin output':
+                    current_field = (parsed[1][1], 'output')
+                else:
+                    current_field = (parsed[1][1], parsed[1][2])
+                if current_field in test_output:
+                    warning(
+                        'duplicate output fields for %r', current_field)
+                test_output[current_field] = []
+                test_output_offset[current_field] = i + 1
+            elif parsed[1] == ('summary', ):
+                current_field = ('summary', )
+                test_output[current_field] = []
+                test_output_offset[current_field] = i + 1
+            elif parsed[1][0] == 'error':
+                if current_field is not None:
+                    last_test = current_field[0]
+                else:
+                    last_test = None
+                msg = parsed[1][1]
+                m = re.fullmatch(r'testbed failure: (.*)', msg)
+                if m:
+                    return (i + 1, last_test,
+                            AutopkgtestTestbedFailure(m.group(1)), None)
+                m = re.fullmatch(r'erroneous package: (.*)', msg)
+                if m:
+                    return (i + 1, last_test,
+                            AutopkgtestErroneousPackage(m.group(1)), None)
+                return (i + 1, last_test, None, msg)
         else:
-            error = None
-            description = 'Test %s failed: %s' % (testname, reason)
-        return lineno + 1, testname, error, description
+            if current_field:
+                test_output[current_field].append(line)
 
-    testname = None
-    last = None
-    for line in lines:
-        m = re.match(
-            r'autopkgtest \[([0-9:]+)\]: test (.*): \[(\-+)',
-            line)
-        if m:
-            testname = m.group(2)
-            continue
-        m = re.match(
-            r'autopkgtest \[([0-9:]+)\]: test (.*): (\-+)\]',
-            line)
-        if m:
-            if testname != m.group(2):
-                warning('unexpected test finish: %r != %r',
-                        testname, m.group(2))
-            testname = None
-            continue
-        m = re.match(
-            r'autopkgtest \[([0-9:]+)\]: ERROR: testbed failure: (.*)',
-            line)
-        if m:
-            last = (lineno + 1, AutopkgtestTestbedFailure(m.group(2)), None)
-            continue
-        m = re.match(
-            r'autopkgtest \[([0-9:]+)\]: ERROR: erroneous package: (.*)',
-            line)
-        if m:
-            last = (lineno + 1, AutopkgtestErroneousPackage(m.group(2)), None)
-            continue
-
-    if last is not None:
-        return last[0], testname, last[1], last[2]
+    try:
+        summary_lines = test_output[('summary', )]
+        summary_offset = test_output_offset[('summary', )]
+    except KeyError:
+        while lines and not lines[-1].strip():
+            lines.pop(-1)
+        if not lines:
+            return (None, None, None, None)
+        else:
+            return (len(lines), lines[-1], None, None)
+    else:
+        for (lineno, testname, result, reason,
+             extra) in parse_autopkgtest_summary(summary_lines):
+            if result in ('PASS', 'SKIP'):
+                continue
+            assert result == 'FAIL'
+            if reason == 'timed out':
+                error = AutopkgtestTimedOut()
+                return (summary_offset+lineno+1, testname, error, reason)
+            elif reason.startswith('stderr: '):
+                output = reason[len('stderr: '):]
+                stderr_lines = test_output.get((testname, 'stderr'), [])
+                stderr_offset = test_output_offset.get((testname, 'stderr'))
+                if stderr_lines:
+                    (offset, description, error) = (
+                        find_build_failure_description(stderr_lines))
+                    if offset is not None:
+                        offset += stderr_offset - 1
+                else:
+                    (_, description, error) = find_build_failure_description(
+                        [output])
+                    offset = None
+                if offset is None:
+                    offset = summary_offset + lineno
+                if error is None:
+                    error = AutopkgtestStderrFailure(output)
+                if description is None:
+                    description = (
+                        'Test %s failed due to '
+                        'unauthorized stderr output: %s' % (
+                            testname, error.stderr_line))
+                return offset + 1, testname, error, description
+            elif reason == 'badpkg':
+                badpkg = None
+                blame = None
+                for line in extra:
+                    if line.startswith('badpkg: '):
+                        badpkg = line[len('badpkg: '):]
+                    if line.startswith('blame: '):
+                        blame = line
+                error = AutopkgtestDepsUnsatisfiable.from_blame_line(blame)
+                description = 'Test %s failed: %s' % (
+                    testname, badpkg.rstrip('\n'))
+                return summary_offset + lineno + 1, testname, error, description
+            else:
+                output_lines = test_output.get((testname, 'output'), [])
+                output_offset = test_output_offset.get((testname, 'output'))
+                (offset, description, error) = find_build_failure_description(
+                    output_lines)
+                if offset is None:
+                    offset = summary_offset + lineno
+                else:
+                    offset += output_offset
+                if description is None:
+                    description = 'Test %s failed: %s' % (testname, reason)
+                return offset+1, testname, error, description
 
     return None, None, None, None
 
