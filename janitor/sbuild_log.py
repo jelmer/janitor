@@ -1519,6 +1519,9 @@ build_failure_regexps = [
      r'Could not find gem \'(.*)\' in any of the gem sources listed in '
      r'your Gemfile\. \(Bundler::GemNotFound\)',
      lambda m: MissingRubyGem(m.group(1))),
+    (r'[^:]+:[0-9]+:in \`find_spec_for_exe\': can\'t find gem '
+     r'(.*) \(([^)]+)\) with executable (.*) \(Gem::GemNotFoundException\)',
+     ruby_missing_gem),
     (r'PHP Fatal error:  Uncaught Error: Class \'(.*)\' not found in '
      r'(.*):([0-9]+)', php_missing_class),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
@@ -1719,6 +1722,9 @@ for (regexp, cb) in build_failure_regexps:
 
 # Regexps that hint at an error of some sort, but not the error itself.
 secondary_build_failure_regexps = [
+    # Java
+    r'Exception in thread "(.*)" (.*): (.*);',
+    r'error: Unrecognized option: \'.*\'',
     r'.*: No space left on device',
     r'Segmentation fault',
     r'make\[[0-9]+\]: \*\*\* \[.*:[0-9]+: .*\] Segmentation fault',
@@ -1729,6 +1735,7 @@ secondary_build_failure_regexps = [
     # pdflatex
     r'\!  ==> Fatal error occurred, no output PDF file produced\!',
     # latex
+    r'\! Undefined control sequence\.',
     r'\! Emergency stop\.',
     # CTest
     r'Errors while running CTest',
@@ -2214,7 +2221,8 @@ def find_autopkgtest_failure_description(lines):
                 error = AutopkgtestDepsUnsatisfiable.from_blame_line(blame)
                 description = 'Test %s failed: %s' % (
                     testname, badpkg.rstrip('\n'))
-                return summary_offset + lineno + 1, testname, error, description
+                return (summary_offset + lineno + 1, testname, error,
+                        description)
             else:
                 output_lines = test_output.get((testname, 'output'), [])
                 output_offset = test_output_offset.get((testname, 'output'))
