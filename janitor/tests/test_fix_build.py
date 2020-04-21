@@ -21,6 +21,7 @@ from debian.deb822 import Deb822
 
 from janitor.sbuild_log import (
     MissingCommand,
+    MissingGoPackage,
     MissingPerlModule,
     MissingPkgConfig,
     MissingPythonModule,
@@ -173,3 +174,14 @@ blah (0.1) UNRELEASED; urgency=medium
             }
         self.assertTrue(self.resolve(MissingPythonModule('m2r')))
         self.assertEqual('libc6, python3-m2r', self.get_build_deps())
+
+    def test_missing_go_package(self):
+        self._apt_files = {
+            '/usr/share/gocode/src/github.com/chzyer/readline/utils_test.go':
+                'golang-github-chzyer-readline-dev',
+            }
+        self.assertTrue(self.resolve(
+            MissingGoPackage('github.com/chzyer/readline')))
+        self.assertEqual(
+            'libc6, golang-github-chzyer-readline-dev',
+            self.get_build_deps())
