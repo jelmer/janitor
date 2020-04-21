@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, ClientResponseError
+from aiohttp import ClientSession, ClientResponseError, ClientTimeout
 import gzip
 from io import BytesIO
 import os
@@ -53,7 +53,7 @@ class FileSystemLogFileManager(LogFileManager):
     async def has_log(self, pkg, run_id, name):
         return any(map(os.path.exists, self._get_paths(pkg, run_id, name)))
 
-    async def get_log(self, pkg, run_id, name):
+    async def get_log(self, pkg, run_id, name, timeout=None):
         for path in self._get_paths(pkg, run_id, name):
             if not os.path.exists(path):
                 continue
@@ -112,9 +112,10 @@ class S3LogFileManager(LogFileManager):
                 'Unexpected response code %d: %s' % (
                     resp.status, await resp.text()))
 
-    async def get_log(self, pkg, run_id, name):
+    async def get_log(self, pkg, run_id, name, timeout=10):
         url = self._get_url(pkg, run_id, name)
-        async with self.session.get(url) as resp:
+        client_timeout = ClientTimeout(timeout)
+        async with self.session.get(url, timeout=client_timeout) as resp:
             if resp.status == 404:
                 raise FileNotFoundError(name)
             if resp.status == 200:
@@ -153,11 +154,13 @@ class GCSLogFilemanager(LogFileManager):
         object_name = self._get_object_name(pkg, run_id, name)
         return await self.bucket.blob_exists(object_name, self.session)
 
-    async def get_log(self, pkg, run_id, name):
+    async def get_log(self, pkg, run_id, name, timeout=10):
         object_name = self._get_object_name(pkg, run_id, name)
         try:
-            blob = await self.bucket.get_blob(object_name, self.session)
-            return BytesIO(gzip.decompress(await blob.download()))
+            data = await self.storage.download(
+                self.bucket_name, object_name, session=self.session,
+                timeout=timeout)
+            return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:
             if e.status == 404:
                 raise FileNotFoundError(name)
