@@ -814,7 +814,11 @@ def fix_missing_maven_artifacts(
         tree, error, context, committer=None, update_changelog=True,
         subpath='.'):
     artifact = error.artifacts[0]
-    (group_id, artifact_id, kind, version) = artifact.split(':')
+    try:
+        (group_id, artifact_id, kind, version) = artifact.split(':')
+    except ValueError:
+        (group_id, artifact_id, version) = artifact.split(':')
+        kind = 'jar'
     paths = [os.path.join(
         '/usr/share/maven-repo', group_id.replace('.', '/'),
         artifact_id, version, '%s-%s.%s' % (artifact_id, version, kind))]
