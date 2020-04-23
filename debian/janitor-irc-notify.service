@@ -1,0 +1,20 @@
+[Unit]
+Description=IRC Notification for the Debian Janitor
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/janitor
+EnvironmentFile=/etc/default/janitor-irc-notify
+ExecStart=/usr/bin/janitor-irc-notify \
+	  --publisher-url=$PUBLISHER_URL \
+	  --prometheus-listen-address $INTERNAL_ADDRESS \
+	  --nick='$IRC_NICK' \
+	  --server='$IRC_SERVER' \
+	  --fullname='$IRC_FULLNAME' \
+	  --notifications-url='$NOTIFICATIONS_URL' \
+	  --channel='$IRC_CHANNEL'
+Restart=on-failure
+RestartSec=90s
+
+[Install]
+WantedBy=default.target

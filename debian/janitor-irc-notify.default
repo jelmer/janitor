@@ -1,0 +1,5 @@
+IRC_CHANNEL='#debian-janitor'
+IRC_FULLNAME='Debian Janitor Notifier'
+NOTIFICATIONS_URL='https://janitor.debian.net/contact/'
+IRC_NICK='janitor-notify'
+IRC_SERVER=irc.oftc.net

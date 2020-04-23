@@ -1,0 +1,16 @@
+[Unit]
+Description=Publish
+
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/janitor
+EnvironmentFile=/etc/default/janitor-publisher
+ExecStart=python3 -m janitor.publish --require-binary-diff --push-limit=$PUSH_LIMIT --slowstart --runner-url=$RUNNER_URL --max-mps-per-maintainer=$MAX_MPS_PER_MAINTAINER --reviewed-only --listen-address $INTERNAL_ADDRESS
+Restart=on-failure
+RestartSec=600s
+
+[Install]
+WantedBy=default.target
