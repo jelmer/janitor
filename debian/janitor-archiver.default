@@ -1,0 +1,2 @@
+INCOMING_DIRECTORY=/var/lib/janitor/incoming
+ARCHIVE_DIRECTORY=/var/lib/janitor/aptly/

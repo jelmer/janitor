@@ -1,0 +1,13 @@
+[Unit]
+Description=Mastodon Notification for the Debian Janitor
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/janitor
+EnvironmentFile=/etc/default/janitor-mastodon-notify
+ExecStart=/usr/bin/janitor-mastodon-notify --publisher-url=$PUBLISHER_URL --prometheus-listen-address=$INTERNAL_ADDRESS --prometheus-port=9919
+Restart=on-failure
+RestartSec=90s
+
+[Install]
+WantedBy=default.target

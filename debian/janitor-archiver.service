@@ -1,0 +1,14 @@
+[Unit]
+Description=Archive
+Wants=aptly.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/janitor
+EnvironmentFile=/etc/default/janitor-archiver
+ExecStart=python3 -m janitor.archive --incoming=$INCOMING_DIRECTORY --archive=$ARCHIVE_DIRECTORY --listen-address $INTERNAL_ADDRESS
+Restart=on-failure
+RestartSec=90s
+
+[Install]
+WantedBy=default.target

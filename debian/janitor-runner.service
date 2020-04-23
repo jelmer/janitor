@@ -1,0 +1,19 @@
+[Unit]
+Description=Run
+
+StartLimitIntervalSec=90
+StartLimitBurst=3
+
+[Service]
+EnvironmentFile=/etc/default/janitor
+EnvironmentFile=/etc/default/janitor-runner
+Type=simple
+ExecStart=python3 -m janitor.run --overall-timeout=$OVERALL_TIMEOUT --incoming-url=$ARCHIVER_URL --listen-address=$INTERNAL_ADDRESS --debsign-keyid=$DEBSIGN_KEYID
+Restart=on-failure
+RestartSec=5min
+MemoryAccounting=true
+MemoryHigh=8G
+MemoryMax=12G
+
+[Install]
+WantedBy=default.target
