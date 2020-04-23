@@ -80,54 +80,37 @@ def find_binary_paths_from_changes(incoming_dir, source, version):
 
 
 async def find_binary_paths_in_pool(
-        aptly_socket_path, archive_path, suite, source, version):
-    binaries = {}
-    conn = UnixConnector(path=aptly_socket_path)
-    # Main is implicit
-    component = "main"
-    async with ClientSession(connector=conn) as session:
-        q = '$Source (%s), $Version (%s)' % (source, version)
-        params = {'format': 'details', 'q': q}
-        async with session.get(
-                'http://localhost/api/repos/%s/packages' % suite,
-                params=params) as resp:
-            if resp.status != 200:
-                raise Exception(
-                    'unable to find binary packages for %s/%s: %r' % (
-                        source, version, resp.status))
-            for pkg in await resp.json():
-                binaries[pkg['Package']] = pkg['Filename']
-                try:
-                    component, _ = pkg['Section'].split('/')
-                except ValueError:
-                    pass
-
-    if not binaries:
-        return None
+        archive_path, suite, source, version):
     ret = []
-    for name, filename in binaries.items():
-        bp = os.path.join(archive_path, "pool", component)
+    pool_dir = os.path.join(archive_path, "pool")
+    for component in os.scandir(pool_dir):
         if source.startswith('lib'):
-            dp = os.path.join(bp, source[:4])
+            dp = os.path.join(component.path, source[:4])
         else:
-            dp = os.path.join(bp, source[:1])
-        path = os.path.join(dp, source, filename)
-        if not os.path.exists(path):
-            raise FileNotFoundError(
-                'None of the prefixes for %s exist in %s' % (filename, bp))
-        ret.append((name, path))
+            dp = os.path.join(component.path, source[:1])
+        for binary in os.scandir(dp):
+            (basename, ext) = os.path.splitext(binary.name)
+            if ext != '.deb':
+                continue
+            (name, binary_version, arch) = basename.split('_', 2)
+            if binary_version == version:
+                ret.append((name, binary.path))
     ret.sort()
+    if not ret:
+        raise FileNotFoundError(
+            'No binary package for source %s/%s found' % (
+                source, version))
     return ret
 
 
 async def find_binary_paths(
-        aptly_socket_path, incoming_dir, archive_path, suite, source, version):
+        incoming_dir, archive_path, suite, source, version):
     binaries = find_binary_paths_from_changes(incoming_dir, source, version)
     if binaries is not None:
         return binaries
     try:
         return await find_binary_paths_in_pool(
-            aptly_socket_path, archive_path, suite, source, version)
+            archive_path, suite, source, version)
     except FileNotFoundError:
         return None
 
@@ -160,7 +143,6 @@ async def handle_debdiff(request):
     archive_path = request.app.archive_path
 
     old_binaries = await find_binary_paths(
-            request.app.aptly_socket_path,
             request.app.incoming_dir, archive_path, old_suite,
             source, old_version)
 
@@ -170,7 +152,6 @@ async def handle_debdiff(request):
                 source, old_version))
 
     new_binaries = await find_binary_paths(
-            request.app.aptly_socket_path,
             request.app.incoming_dir, archive_path, new_suite,
             source, new_version)
 
@@ -230,7 +211,6 @@ async def handle_diffoscope(request):
     new_version = post['new_version']
 
     old_binaries = await find_binary_paths(
-            request.app.aptly_socket_path,
             request.app.incoming_dir, request.app.archive_path, old_suite,
             source, old_version)
 
@@ -240,7 +220,6 @@ async def handle_diffoscope(request):
                 source, old_version))
 
     new_binaries = await find_binary_paths(
-            request.app.aptly_socket_path,
             request.app.incoming_dir, request.app.archive_path, new_suite,
             source, new_version)
 
@@ -405,9 +384,9 @@ async def sync_aptly_repos(session, suites):
             continue
         if suite.name not in repos:
             async with session.post(
-                    'http://localhost//api/repos' % suite.name,
+                    'http://localhost/api/repos',
                     json=intended_repo) as resp:
-                if resp.status != 200:
+                if resp.status != 201:
                     raise Exception('Unable to create repo %s: %d' % (
                                     suite.name, resp.status))
         else:
