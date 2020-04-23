@@ -558,7 +558,7 @@ class MissingGoPackage(object):
         return "Missing Go package: %s" % self.package
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.package)
+        return "%s(%r)" % (type(self).__name__, self.package)
 
 
 def missing_go_package(m):
@@ -1361,6 +1361,7 @@ build_failure_regexps = [
      c_header_missing),
     ('✖ \x1b\\[31mERROR:\x1b\\[39m Cannot find module \'(.*)\'',
      node_module_missing),
+    ('\\[31mError: No test files found: "(.*)"\\[39m', None),
     (r'\s*Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'>> Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'>> Got an unexpected exception from the coffee-script compiler. '
@@ -1411,6 +1412,7 @@ build_failure_regexps = [
      cmake_pkg_config_missing),
     (r'dh: Unknown sequence --(.*) '
      r'\(options should not come before the sequence\)', dh_with_order),
+    (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
     (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
@@ -1649,6 +1651,7 @@ build_failure_regexps = [
      r'dependency resolution check requested but no working '
      r'gemspec available \(RuntimeError\)', None),
     (r'rm: cannot remove \'(.*)\': Is a directory', None),
+    (r'rm: cannot remove \'(.*)\': No such file or directory', None),
     # Invalid option from Python
     (r'error: option .* not recognized', None),
     # Invalid option from go
@@ -1682,6 +1685,7 @@ build_failure_regexps = [
     # ruby
     (r'Errno::ENOENT: No such file or directory - (.*)',
      file_not_found),
+    (r'(.*.rb):[0-9]+:in `.*\': .* \(.*\) ', None),
     # JavaScript
     (r'.*: ENOENT: no such file or directory, open \'(.*)\'',
      file_not_found),
@@ -1779,7 +1783,8 @@ secondary_build_failure_regexps = [
     r'SerialException|OSError|qtawesome.iconic_font.FontError|'
     'redis.exceptions.ConnectionError|builtins.OverflowError|ArgumentError|'
     'httptools.parser.errors.HttpParserInvalidURLError|HypothesisException|'
-    'SSLError'
+    'SSLError|KeyError|Exception|rnc2rng.parser.ParseError|'
+    'pkg_resources.UnknownExtra'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
