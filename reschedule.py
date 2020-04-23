@@ -26,14 +26,14 @@ parser.add_argument(
     '--suite', type=str,
     help='Suite to process.')
 parser.add_argument(
-    '--min-age', type=int, default=None,
+    '--min-age', type=int, default=0,
     help='Only reschedule runs older than N days.')
 args = parser.parse_args()
 with open(args.config, 'r') as f:
     config = read_config(f)
 
 
-async def main(db, result_code, rejected, min_age=None):
+async def main(db, result_code, rejected, min_age=0):
     packages = {}
     async with db.acquire() as conn1, db.acquire() as conn2:
         for package in await state.iter_packages(conn1):
