@@ -249,6 +249,43 @@ class OrphanWorker(SubWorker):
         return 'Move package to QA team.'
 
 
+class CMEWorker(SubWorker):
+
+    def __init__(self, command, env):
+        self.committer = env.get('COMMITTER')
+        subparser = argparse.ArgumentParser(
+            prog='cme-fix', parents=[common_parser])
+        from silver_platter.debian.cme import CMEChanger
+        self.changer = CMEChanger(salsa_push=False)
+        self.changer.setup_parser(subparser)
+        self.args = subparser.parse_args(command)
+
+    def make_changes(self, local_tree, report_context, metadata,
+                     base_metadata, subpath=None):
+        """Make the actual changes to a tree.
+
+        Args:
+          local_tree: Tree to make changes to
+          report_context: report context
+          metadata: JSON Dictionary that can be used for storing results
+          base_metadata: Optional JSON Dictionary with results of
+            any previous runs this one is based on
+          subpath: Path in the branch where the package resides
+        """
+        update_changelog = self.args.update_changelog
+        try:
+            cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
+        except FileNotFoundError:
+            pass
+        else:
+            if update_changelog is None:
+                update_changelog = cfg.update_changelog()
+        self.changer.make_changes(
+            local_tree, subpath=subpath, update_changelog=update_changelog,
+            committer=self.committer)
+        return 'Apply CME Fixes.'
+
+
 class LintianBrushWorker(SubWorker):
     """Janitor-specific Lintian Fixer."""
 
@@ -671,6 +708,8 @@ def process_package(vcs_url, env, command, output_directory,
         subworker_cls = OrphanWorker
     elif command[0] == 'import-upload':
         subworker_cls = UncommittedWorker
+    elif command[0] == 'cme-fix':
+        subworker_cls = CMEWorker
     else:
         raise WorkerFailure(
             'unknown-subcommand',
