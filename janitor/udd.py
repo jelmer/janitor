@@ -23,15 +23,14 @@ import asyncio
 from debian.changelog import Version
 from email.utils import parseaddr
 import asyncpg
+from google.protobuf import text_format
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
 )
 from . import state, trace
 from .config import read_config
-from silver_platter.debian.lintian import (
-    DEFAULT_ADDON_FIXERS,
-    )
+from .candidates_pb2 import CandidateList, Candidate
 from lintian_brush.vcs import (
     split_vcs_url,
     fixup_broken_git_url,
@@ -45,13 +44,6 @@ DEFAULT_VALUE_UNCOMMITTED = 60
 UNCOMMITTED_NMU_BONUS = 10
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
-DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
-DEFAULT_VALUE_LINTIAN_BRUSH = 50
-# Base these scores on the importance as set in Debian?
-LINTIAN_BRUSH_TAG_VALUES = {
-    'file-contains-trailing-whitespace': 0,
-    }
-LINTIAN_BRUSH_TAG_DEFAULT_VALUE = 5
 
 # Default to 15 seconds
 DEFAULT_ESTIMATED_DURATION = 15
@@ -65,17 +57,6 @@ MULTIARCH_HINTS_VALUE = {
     'ma-same': 20,
     'arch-all': 20,
 }
-
-
-def estimate_lintian_fixes_value(tags):
-    if not (set(tags) - set(DEFAULT_ADDON_FIXERS)):
-        value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
-    else:
-        value = DEFAULT_VALUE_LINTIAN_BRUSH
-    for tag in tags:
-        value += LINTIAN_BRUSH_TAG_VALUES.get(
-            tag, LINTIAN_BRUSH_TAG_DEFAULT_VALUE)
-    return value
 
 
 async def connect_udd_mirror():
@@ -111,71 +92,8 @@ class UDD(object):
     def __init__(self, conn):
         self._conn = conn
 
-    async def iter_lintian_fixes_candidates(self, packages, available_fixers):
-        """Iterate over all of the packages affected by a set of tags."""
-        package_rows = {}
-        package_tags = {}
-
-        args = [tuple(available_fixers)]
-        query = """
-SELECT DISTINCT ON (sources.source)
-    sources.source,
-    sources.version,
-    sources.vcs_type,
-    sources.vcs_url,
-    sources.maintainer_email,
-    sources.uploaders,
-    ARRAY(SELECT tag FROM lintian WHERE
-        sources.source = lintian.package AND
-        sources.version = lintian.package_version AND
-        lintian.package_type = 'source' AND
-        tag = any($1::text[])
-    )
-    FROM sources
-WHERE
-    sources.release = 'sid'
-    AND vcs_type != ''
-"""
-        if packages is not None:
-            query += " AND sources.source = any($2::text[])"
-            args.append(tuple(packages))
-        query += " ORDER BY sources.source, sources.version DESC"
-        for row in await self._conn.fetch(query, *args):
-            package_rows[row[0]] = row[:6]
-            package_tags[row[0]] = set(row[6])
-        args = [tuple(available_fixers)]
-        query = """\
-SELECT DISTINCT ON (sources.source)
-    sources.source,
-    sources.version,
-    sources.vcs_type,
-    sources.vcs_url,
-    sources.maintainer_email,
-    sources.uploaders,
-    ARRAY(SELECT lintian.tag FROM lintian
-        INNER JOIN packages ON packages.package = lintian.package \
-        and packages.version = lintian.package_version \
-    WHERE
-        lintian.tag = any($1::text[]) AND
-        lintian.package_type = 'binary' AND
-        sources.version = packages.version and \
-        sources.source = packages.source
-    )
-FROM
-    sources
-WHERE sources.release = 'sid' AND vcs_type != ''"""
-        if packages is not None:
-            query += " AND sources.source = ANY($2::text[])"
-            args.append(tuple(packages))
-        query += " ORDER BY sources.source, sources.version DESC"
-        for row in await self._conn.fetch(query, *args):
-            package_tags.setdefault(row[0], set()).update(row[6])
-        package_values = package_rows.values()
-        for row in package_values:
-            tags = sorted(package_tags[row[0]])
-            value = estimate_lintian_fixes_value(tags)
-            context = ' '.join(sorted(tags))
-            yield (row[0], context, value, None)
+    async def fetch(self, *args, **kwargs):
+        return await self._conn.fetch(*args, **kwargs)
 
     async def iter_unchanged_candidates(self, packages=None):
         args = []
@@ -405,13 +323,21 @@ async def update_package_metadata(
         await state.store_packages(conn, packages)
 
 
+async def iter_candidates_from_script(args):
+    p = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE)
+    (stdout, unused_stderr) = await p.communicate()
+    candidate_list = text_format.Parse(stdout, CandidateList())
+    for candidate in candidate_list.candidate:
+        yield (candidate.package, candidate.value, candidate.context,
+               candidate.success_chance)
+
+
 async def main():
     import argparse
     from janitor import state
     from janitor.package_overrides import read_package_overrides
-    from silver_platter.debian.lintian import (
-        available_lintian_fixers,
-    )
     from prometheus_client import (
         Counter,
         Gauge,
@@ -446,20 +372,12 @@ async def main():
     last_success_gauge = Gauge(
         'job_last_success_unixtime',
         'Last time a batch job successfully finished')
-    fixer_count = Counter(
-        'fixer_count', 'Number of selected fixers.')
 
     with open(args.config, 'r') as f:
         config = read_config(f)
 
     with open(args.package_overrides, 'r') as f:
         package_overrides = read_package_overrides(f)
-
-    tags = set()
-    available_fixers = list(available_lintian_fixers())
-    for fixer in available_fixers:
-        tags.update(fixer.lintian_tags)
-    fixer_count.inc(len(available_fixers))
 
     udd = await UDD.public_udd_mirror()
 
@@ -474,7 +392,9 @@ async def main():
             ('unchanged', udd.iter_unchanged_candidates(
                 args.packages or None)),
             ('lintian-fixes',
-             udd.iter_lintian_fixes_candidates(args.packages or None, tags)),
+             iter_candidates_from_script(
+                 ['./lintian-fixes-candidates.py', args.packages or None]),
+             udd.iter_lintian_fixes_candidates()),
             ('fresh-releases',
              udd.iter_fresh_releases_candidates(args.packages or None)),
             ('fresh-snapshots',
