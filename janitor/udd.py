@@ -38,7 +38,6 @@ from lintian_brush.vcs import (
     unsplit_vcs_url,
     )
 
-DEFAULT_VALUE_NEW_UPSTREAM = 30
 
 
 async def connect_udd_mirror():
@@ -76,25 +75,6 @@ class UDD(object):
 
     async def fetch(self, *args, **kwargs):
         return await self._conn.fetch(*args, **kwargs)
-
-    async def iter_fresh_releases_candidates(self, packages=None):
-        args = []
-        query = """\
-SELECT DISTINCT ON (sources.source)
-sources.source, upstream.upstream_version FROM upstream \
-INNER JOIN sources ON upstream.version = sources.version \
-AND upstream.source = sources.source where \
-status = 'newer package available' AND \
-sources.vcs_url != '' AND \
-sources.release = 'sid'
-"""
-        if packages is not None:
-            query += " AND upstream.source = any($1::text[])"
-            args.append(tuple(packages))
-        query += " ORDER BY sources.source, sources.version DESC"
-        async with self._conn.transaction():
-            async for row in self._conn.cursor(query, *args):
-                yield (row[0], row[1], DEFAULT_VALUE_NEW_UPSTREAM, None)
 
     async def iter_packages_with_metadata(self, packages=None):
         args = []
