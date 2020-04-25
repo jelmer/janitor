@@ -49,6 +49,8 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'worker-exception',
     'build-failed-stage-create-session',
     'apt-get-update-missing-release-file',
+    'build-no-space-on-device',
+    'autopkgtest-no-space-on-device',
 ]
 
 # In some cases, we want to ignore certain results when guessing
