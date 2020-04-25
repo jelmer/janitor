@@ -38,8 +38,6 @@ from lintian_brush.vcs import (
     unsplit_vcs_url,
     )
 
-DEFAULT_VALUE_UNCOMMITTED = 60
-UNCOMMITTED_NMU_BONUS = 10
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
 
@@ -79,25 +77,6 @@ class UDD(object):
 
     async def fetch(self, *args, **kwargs):
         return await self._conn.fetch(*args, **kwargs)
-
-    async def iter_missing_commits(self, packages=None):
-        args = []
-        query = """\
-SELECT sources.source, sources.version, vcswatch.url
-FROM vcswatch JOIN sources ON sources.source = vcswatch.source
-WHERE
- vcswatch.status IN ('OLD', 'UNREL') AND
- sources.release = 'sid'
-"""
-        if packages is not None:
-            query += " AND sources.source = any($1::text[])"
-            args.append(tuple(packages))
-        async with self._conn.transaction():
-            async for row in self._conn.cursor(query, *args):
-                value = DEFAULT_VALUE_UNCOMMITTED
-                if 'nmu' in str(row[1]):
-                    value += UNCOMMITTED_NMU_BONUS
-                yield (row[0], str(row[1]), value, None)
 
     async def iter_fresh_releases_candidates(self, packages=None):
         args = []
@@ -339,7 +318,8 @@ async def main():
              iter_candidates_from_script(
                 ['./orphan-candidates.py'] + args.packages)),
             ('uncommitted',
-             udd.iter_missing_commits(args.packages or None)),
+             iter_candidates_from_script(
+                ['./uncommitted-candidates.py'] + args.packages)),
             ]
 
         for suite, candidate_fn in CANDIDATE_FNS:
