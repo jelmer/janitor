@@ -305,7 +305,7 @@ async def handle_publish(request):
             loc = "%s:%s" % (storage, prefix)
             if (storage, prefix, suite.name) in publish:
                 async with session.put('http://localhost/api/publish/%s/%s'
-                        % (loc, suite.name)):
+                                       % (loc, suite.name)):
                     if resp.status != 200:
                         failed_suites.append(suite.name)
                     else:
