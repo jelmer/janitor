@@ -38,7 +38,6 @@ from lintian_brush.vcs import (
     unsplit_vcs_url,
     )
 
-DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
 
 
@@ -96,27 +95,6 @@ sources.release = 'sid'
         async with self._conn.transaction():
             async for row in self._conn.cursor(query, *args):
                 yield (row[0], row[1], DEFAULT_VALUE_NEW_UPSTREAM, None)
-
-    async def iter_fresh_snapshots_candidates(self, packages):
-        args = []
-        query = """\
-SELECT DISTINCT ON (sources.source)
-sources.source, exists (
-    select from upstream_metadata where
-    key = 'Repository' and source = sources.source)
-from sources
-where sources.vcs_url != '' and position('-' in sources.version) > 0 AND
-sources.release = 'sid'
-"""
-        if packages is not None:
-            query += " AND sources.source = any($1::text[])"
-            args.append(tuple(packages))
-        query += " ORDER BY sources.source, sources.version DESC"
-        async with self._conn.transaction():
-            async for row in self._conn.cursor(query, *args):
-                yield (
-                    row[0], None, DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS,
-                    1.0 if row[1] else 0.1)
 
     async def iter_packages_with_metadata(self, packages=None):
         args = []
@@ -310,7 +288,8 @@ async def main():
             ('fresh-releases',
              udd.iter_fresh_releases_candidates(args.packages or None)),
             ('fresh-snapshots',
-             udd.iter_fresh_snapshots_candidates(args.packages or None)),
+             iter_candidates_from_script(
+                ['./fresh-snapshots-candidates.py'] + args.packages)),
             ('multiarch-fixes',
              iter_candidates_from_script(
                 ['./multi-arch-candidates.py'] + args.packages)),
