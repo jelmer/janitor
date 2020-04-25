@@ -36,8 +36,24 @@ async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
     return await template.render_async(**kwargs)
 
 
+async def iter_lintian_tags(conn):
+    return await conn.fetch("""
+select tag, count(tag) from (
+    select
+      json_array_elements(
+        json_array_elements(
+          result->'applied')->'fixed_lintian_tags') #>> '{}' as tag
+    from
+      last_runs
+    where
+      build_distribution = 'lintian-fixes'
+   ) as bypackage group by 1 order by 2
+ desc
+""")
+
+
 async def generate_tag_list(conn):
-    tags = sorted(await state.iter_lintian_tags(conn))
+    tags = sorted(await iter_lintian_tags(conn))
     template = env.get_template('lintian-fixes-tag-list.html')
     return await template.render_async(tags=tags)
 
@@ -133,10 +149,19 @@ async def generate_developer_table_page(db, developer):
         developer=developer)
 
 
+async def iter_lintian_brush_fixer_failures(conn, fixer):
+    query = """
+select id, package, result->'failed'->$1 FROM last_runs
+where
+  suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
+"""
+    return await conn.fetch(query, fixer)
+
+
 async def generate_failing_fixer(db, fixer):
     template = env.get_template('lintian-fixes-failed.html')
     async with db.acquire() as conn:
-        failures = await state.iter_lintian_brush_fixer_failures(
+        failures = await iter_lintian_brush_fixer_failures(
             conn, fixer)
     return await template.render_async(failures=failures, fixer=fixer)
 
@@ -148,17 +173,50 @@ async def generate_failing_fixers_list(db):
     return await template.render_async(fixers=fixers)
 
 
+async def iter_lintian_fixes_regressions(conn):
+    query = """
+SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
+   INNER JOIN last_runs u ON l.main_branch_revision = u.main_branch_revision
+   WHERE
+    l.suite = 'lintian-fixes' AND
+    u.suite = 'unchanged' AND
+    l.result_code NOT IN ('success', 'nothing-to-do', 'nothing-new-to-do') AND
+    u.result_code = 'success'
+"""
+    return await conn.fetch(query)
+
+
 async def generate_regressions_list(db):
     template = env.get_template('lintian-fixes-regressions.html')
     async with db.acquire() as conn:
-        packages = await state.iter_lintian_fixes_regressions(conn)
+        packages = await iter_lintian_fixes_regressions(conn)
     return await template.render_async(packages=packages)
+
+
+async def iter_lintian_fixes_counts(conn):
+    return await conn.fetch("""
+SELECT
+   absorbed.tag,
+   COALESCE(absorbed.cnt, 0),
+   COALESCE(unabsorbed.cnt, 0),
+   COALESCE(absorbed.cnt, 0)+COALESCE(unabsorbed.cnt, 0)
+FROM (
+    SELECT UNNEST(fixed_lintian_tags) AS tag, COUNT(*) AS cnt
+    FROM absorbed_lintian_fixes group by 1 order by 2 desc
+    ) AS absorbed
+LEFT JOIN (
+    SELECT UNNEST(fixed_lintian_tags) AS tag, COUNT(*) AS cnt
+    FROM last_unabsorbed_lintian_fixes group by 1 order by 2 desc
+    ) AS unabsorbed
+ON absorbed.tag = unabsorbed.tag
+ORDER BY 4 DESC
+""")
 
 
 async def generate_stats(db):
     template = env.get_template('lintian-fixes-stats.html')
     async with db.acquire() as conn:
-        by_tag = await state.iter_lintian_fixes_counts(conn)
+        by_tag = await iter_lintian_fixes_counts(conn)
         tags_per_run = {c: nr for (c, nr) in await conn.fetch("""\
 select coalesce(c, 0), count(*) from (
     select sum(array_length(fixed_lintian_tags, 1)) c
