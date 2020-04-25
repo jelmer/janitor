@@ -44,19 +44,6 @@ UNCOMMITTED_NMU_BONUS = 10
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
 DEFAULT_VALUE_NEW_UPSTREAM = 30
 
-# Default to 15 seconds
-DEFAULT_ESTIMATED_DURATION = 15
-
-DEFAULT_VALUE_MULTIARCH_HINT = 50
-MULTIARCH_HINTS_VALUE = {
-    'ma-foreign': 20,
-    'file-conflict': 50,
-    'ma-foreign-library': 20,
-    'dep-any': 20,
-    'ma-same': 20,
-    'arch-all': 20,
-}
-
 
 async def connect_udd_mirror():
     """Connect to the public UDD mirror."""
@@ -204,24 +191,6 @@ select name, version from package_removal where 'source' = any(arch_array)
             query += " and name = ANY($1::text[])"
             args.append(packages)
         return await self._conn.fetch(query, *args)
-
-
-async def iter_multiarch_fixes(packages=None):
-    from lintian_brush.multiarch_hints import (
-        download_multiarch_hints,
-        parse_multiarch_hints,
-        multiarch_hints_by_source,
-        )
-    with download_multiarch_hints() as f:
-        hints = parse_multiarch_hints(f)
-        bysource = multiarch_hints_by_source(hints)
-    for source, entries in bysource.items():
-        if packages is not None and source not in packages:
-            continue
-        hints = [entry['link'].rsplit('#', 1)[-1] for entry in entries]
-        value = sum(map(MULTIARCH_HINTS_VALUE.__getitem__, hints)) + (
-            DEFAULT_VALUE_MULTIARCH_HINT)
-        yield source, ' '.join(sorted(hints)), value, None
 
 
 async def update_package_metadata(
@@ -377,13 +346,14 @@ async def main():
                 ['./unchanged-candidates.py'] + args.packages)),
             ('lintian-fixes',
              iter_candidates_from_script(
-                 ['./lintian-fixes-candidates.py'] + args.packages),
+                 ['./lintian-fixes-candidates.py'] + args.packages)),
             ('fresh-releases',
              udd.iter_fresh_releases_candidates(args.packages or None)),
             ('fresh-snapshots',
              udd.iter_fresh_snapshots_candidates(args.packages or None)),
             ('multiarch-fixes',
-             iter_multiarch_fixes(args.packages or None)),
+             iter_candidates_from_script(
+                ['./multi-arch-candidates.py'] + args.packages)),
             ('orphan',
              udd.iter_orphan_candidates(args.packages or None)),
             ('uncommitted',
