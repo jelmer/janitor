@@ -1,0 +1,23 @@
+syntax = "proto2";
+package janitor;
+
+message Candidate {
+    // The Debian package name
+    optional string package = 1;
+
+    // A string describing the expected changes we'll be able to make.
+    optional string context = 2;
+
+    // Estimate of the value of this candidate. Higher is better.
+    optional int32 value = 3;
+
+    // Estimated success change of this candidate, if known.
+    optional float success_chance = 4;
+
+    // TODO(jelmer): Add a branch URL field
+    // optional string vcs_url = 5;
+};
+
+message CandidateList {
+    repeated Candidate candidate = 1;
+};
