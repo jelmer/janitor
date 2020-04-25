@@ -38,7 +38,6 @@ from lintian_brush.vcs import (
     unsplit_vcs_url,
     )
 
-DEFAULT_VALUE_ORPHAN = 60
 DEFAULT_VALUE_UNCOMMITTED = 60
 UNCOMMITTED_NMU_BONUS = 10
 DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS = 20
@@ -80,24 +79,6 @@ class UDD(object):
 
     async def fetch(self, *args, **kwargs):
         return await self._conn.fetch(*args, **kwargs)
-
-    async def iter_orphan_candidates(self, packages=None):
-        args = []
-        query = """\
-SELECT DISTINCT ON (sources.source) sources.source, now() - orphaned_time, bug
-FROM sources
-JOIN orphaned_packages ON orphaned_packages.source = sources.source
-WHERE sources.vcs_url != '' AND sources.release = 'sid' AND
-orphaned_packages.type in ('O') AND
-(sources.uploaders != '' OR
- sources.maintainer != 'Debian QA Group <packages@qa.debian.org>')
-"""
-        if packages is not None:
-            query += " AND sources.source = any($1::text[])"
-            args.append(tuple(packages))
-        async with self._conn.transaction():
-            async for row in self._conn.cursor(query, *args):
-                yield (row[0], str(row[2]), DEFAULT_VALUE_ORPHAN, None)
 
     async def iter_missing_commits(self, packages=None):
         args = []
@@ -355,7 +336,8 @@ async def main():
              iter_candidates_from_script(
                 ['./multi-arch-candidates.py'] + args.packages)),
             ('orphan',
-             udd.iter_orphan_candidates(args.packages or None)),
+             iter_candidates_from_script(
+                ['./orphan-candidates.py'] + args.packages)),
             ('uncommitted',
              udd.iter_missing_commits(args.packages or None)),
             ]
