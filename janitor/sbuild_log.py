@@ -2325,19 +2325,44 @@ class UnsatisfiedDependencies(object):
         return "%s(%r)" % (type(self).__name__, self.relations)
 
 
+class UnsatisfiedConflicts(object):
+
+    kind = 'unsatisfied-conflicts'
+
+    def __init__(self, relations):
+        self.relations = relations
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+                self.relations == other.relations
+
+    def __str__(self):
+        return "Unsatisfied conflicts: %s" % PkgRelation.str(self.relations)
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.relations)
+
+
 def error_from_dose3_report(report):
     packages = [entry['package'] for entry in report]
     assert packages == ['sbuild-build-depends-main-dummy']
     if report[0]['status'] != 'broken':
         return None
     missing = []
+    conflict = []
     for reason in report[0]['reasons']:
-        if set(reason.keys()) - set(['missing', 'depchains']):
-            return None
-        relation = PkgRelation.parse_relations(
-            reason['missing']['pkg']['unsat-dependency'])
-        missing.extend(relation)
-    return UnsatisfiedDependencies(missing)
+        if 'missing' in reason:
+            relation = PkgRelation.parse_relations(
+                reason['missing']['pkg']['unsat-dependency'])
+            missing.extend(relation)
+        if 'conflict' in reason:
+            relation = PkgRelation.parse_relations(
+                reason['conflict']['pkg1']['unsat-conflict'])
+            conflict.extend(relation)
+    if missing:
+        return UnsatisfiedDependencies(missing)
+    if conflict:
+        return UnsatisfiedConflicts(conflict)
 
 
 def find_apt_get_failure(lines):
