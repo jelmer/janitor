@@ -1,6 +1,5 @@
 
 from . import env
-from .. import state
 
 
 async def write_stats(conn):
