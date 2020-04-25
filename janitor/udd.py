@@ -38,7 +38,6 @@ from lintian_brush.vcs import (
     unsplit_vcs_url,
     )
 
-DEFAULT_VALUE_UNCHANGED = 20
 DEFAULT_VALUE_ORPHAN = 60
 DEFAULT_VALUE_UNCOMMITTED = 60
 UNCOMMITTED_NMU_BONUS = 10
@@ -94,21 +93,6 @@ class UDD(object):
 
     async def fetch(self, *args, **kwargs):
         return await self._conn.fetch(*args, **kwargs)
-
-    async def iter_unchanged_candidates(self, packages=None):
-        args = []
-        query = """\
-SELECT DISTINCT ON (sources.source) \
-sources.source FROM sources WHERE \
-sources.vcs_url != '' AND \
-sources.release = 'sid'
-"""
-        if packages is not None:
-            query += " AND sources.source = any($1::text[])"
-            args.append(tuple(packages))
-        async with self._conn.transaction():
-            async for row in self._conn.cursor(query, *args):
-                yield (row[0], None, DEFAULT_VALUE_UNCHANGED, None)
 
     async def iter_orphan_candidates(self, packages=None):
         args = []
@@ -389,12 +373,11 @@ async def main():
 
     async with db.acquire() as conn:
         CANDIDATE_FNS = [
-            ('unchanged', udd.iter_unchanged_candidates(
-                args.packages or None)),
+            ('unchanged', iter_candidates_from_script(
+                ['./unchanged-candidates.py'] + args.packages)),
             ('lintian-fixes',
              iter_candidates_from_script(
-                 ['./lintian-fixes-candidates.py', args.packages or None]),
-             udd.iter_lintian_fixes_candidates()),
+                 ['./lintian-fixes-candidates.py'] + args.packages),
             ('fresh-releases',
              udd.iter_fresh_releases_candidates(args.packages or None)),
             ('fresh-snapshots',
