@@ -107,10 +107,6 @@ run_result_count = Gauge(
 never_processed_count = Gauge(
     'never_processed_count', 'Number of items never processed.',
     labelnames=('suite', ))
-lintian_brush_fixer_failed_count = Gauge(
-    'lintian_brush_fixer_failed_count',
-    'Number of failures per lintian-brush fixer.',
-    labelnames=('fixer', ))
 review_status_count = Gauge(
     'review_status_count', 'Last runs by review status.',
     labelnames=('review_status',))
@@ -712,8 +708,6 @@ async def export_stats(db):
                     suite=suite, result_code=result_code).set(count)
             for suite, count in await state.get_never_processed(conn):
                 never_processed_count.labels(suite).set(count)
-            for fixer, count in await state.iter_failed_lintian_fixers(conn):
-                lintian_brush_fixer_failed_count.labels(fixer).set(count)
             for review_status, count in await state.iter_review_status(conn):
                 review_status_count.labels(review_status).set(count)
 

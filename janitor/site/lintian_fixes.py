@@ -58,10 +58,33 @@ async def generate_tag_list(conn):
     return await template.render_async(tags=tags)
 
 
+async def iter_last_successes_by_lintian_tag(conn, tag):
+    return await conn.fetch("""
+select distinct on (package) * from (
+select
+  package,
+  command,
+  build_version,
+  result_code,
+  context,
+  start_time,
+  id,
+  (json_array_elements(
+     json_array_elements(
+       result->'applied')->'fixed_lintian_tags') #>> '{}') as tag
+from
+  run
+where
+  build_distribution  = 'lintian-fixes' and
+  result_code = 'success'
+) as package where tag = $1 order by package, start_time desc
+""", tag)
+
+
 async def generate_tag_page(db, tag):
     template = env.get_template('lintian-fixes-tag.html')
     async with db.acquire() as conn:
-        packages = list(await state.iter_last_successes_by_lintian_tag(
+        packages = list(await iter_last_successes_by_lintian_tag(
             conn, tag))
     return await template.render_async(tag=tag, packages=packages)
 
@@ -166,10 +189,20 @@ async def generate_failing_fixer(db, fixer):
     return await template.render_async(failures=failures, fixer=fixer)
 
 
+async def iter_failed_lintian_fixers(conn):
+    query = """
+select json_object_keys(result->'failed'), count(*) from last_runs
+where
+  suite = 'lintian-fixes' and
+  json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
+"""
+    return await conn.fetch(query)
+
+
 async def generate_failing_fixers_list(db):
     template = env.get_template('lintian-fixes-failed-list.html')
     async with db.acquire() as conn:
-        fixers = await state.iter_failed_lintian_fixers(conn)
+        fixers = await iter_failed_lintian_fixers(conn)
     return await template.render_async(fixers=fixers)
 
 

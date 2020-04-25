@@ -998,29 +998,6 @@ async def update_branch_status(
         last_scanned, description)
 
 
-async def iter_last_successes_by_lintian_tag(conn, tag):
-    return await conn.fetch("""
-select distinct on (package) * from (
-select
-  package,
-  command,
-  build_version,
-  result_code,
-  context,
-  start_time,
-  id,
-  (json_array_elements(
-     json_array_elements(
-       result->'applied')->'fixed_lintian_tags') #>> '{}') as tag
-from
-  run
-where
-  build_distribution  = 'lintian-fixes' and
-  result_code = 'success'
-) as package where tag = $1 order by package, start_time desc
-""", tag)
-
-
 async def get_run_result_by_revision(conn, suite, revision):
     row = await conn.fetchrow(
         "SELECT result, branch_name, review_status FROM run "
@@ -1273,16 +1250,6 @@ async def update_removals(conn, items):
 UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2
 """
     await conn.executemany(query, items)
-
-
-async def iter_failed_lintian_fixers(conn):
-    query = """
-select json_object_keys(result->'failed'), count(*) from last_runs
-where
-  suite = 'lintian-fixes' and
-  json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
-"""
-    return await conn.fetch(query)
 
 
 async def version_available(conn, package, suite, version=None):
