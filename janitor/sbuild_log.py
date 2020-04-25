@@ -1413,7 +1413,7 @@ build_failure_regexps = [
     (r'dh: Unknown sequence --(.*) '
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
-    (r'\/usr\/bin\/install: .*: No space left on device', install_no_space),
+    (r'.*: .*: No space left on device', install_no_space),
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_module),
@@ -1714,6 +1714,9 @@ build_failure_regexps = [
     # gpg
     (r'gpg: can\'t connect to the agent: File name too long', None),
     (r'(.*.lua):[0-9]+: assertion failed', None),
+    (r'\*\*\* error: gettext infrastructure mismatch: .*', None),
+    (r'\[ERROR\] Failed to execute goal (.*) on project (.*): (.*)',
+     None),
 ]
 
 compiled_build_failure_regexps = []

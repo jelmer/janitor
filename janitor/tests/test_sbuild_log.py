@@ -635,6 +635,18 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'points at wrong local POM @ line 8, column 10'], 1,
             MissingMavenArtifacts(['org.joda:joda-parent:pom:1.4.0']))
 
+    def test_maven_errors(self):
+        self.run_test([
+            '[ERROR] Failed to execute goal '
+            'org.apache.maven.plugins:maven-jar-plugin:3.1.2:jar '
+            '(default-jar) on project xslthl: Execution default-jar of goal '
+            'org.apache.maven.plugins:maven-jar-plugin:3.1.2:jar failed: '
+            'An API incompatibility was encountered while executing '
+            'org.apache.maven.plugins:maven-jar-plugin:3.1.2:jar: '
+            'java.lang.NoSuchMethodError: '
+            '\'void org.codehaus.plexus.util.DirectoryScanner.'
+            'setFilenameComparator(java.util.Comparator)\''], 1, None)
+
     def test_dh_missing_uninstalled(self):
         self.run_test([
             'dh_missing --fail-missing',
@@ -850,6 +862,13 @@ arch:all and the other not)""".splitlines(), 1)
             'automake: error: cannot open < gtk-doc.make: '
             'No such file or directory'], 1,
             MissingAutomakeInput('gtk-doc.make'))
+
+    def test_gettext_infrastructure(self):
+        self.run_test([
+            '*** error: gettext infrastructure mismatch: '
+            'using a Makefile.in.in from gettext version '
+            '0.19 but the autoconf macros are from gettext version 0.20'], 1,
+            None)
 
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
