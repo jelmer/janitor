@@ -998,22 +998,6 @@ async def update_branch_status(
         last_scanned, description)
 
 
-async def iter_lintian_tags(conn):
-    return await conn.fetch("""
-select tag, count(tag) from (
-    select
-      json_array_elements(
-        json_array_elements(
-          result->'applied')->'fixed_lintian_tags') #>> '{}' as tag
-    from
-      last_runs
-    where
-      build_distribution = 'lintian-fixes'
-   ) as bypackage group by 1 order by 2
- desc
-""")
-
-
 async def iter_last_successes_by_lintian_tag(conn, tag):
     return await conn.fetch("""
 select distinct on (package) * from (
@@ -1301,28 +1285,6 @@ where
     return await conn.fetch(query)
 
 
-async def iter_lintian_brush_fixer_failures(conn, fixer):
-    query = """
-select id, package, result->'failed'->$1 FROM last_runs
-where
-  suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
-"""
-    return await conn.fetch(query, fixer)
-
-
-async def iter_lintian_fixes_regressions(conn):
-    query = """
-SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
-   INNER JOIN last_runs u ON l.main_branch_revision = u.main_branch_revision
-   WHERE
-    l.suite = 'lintian-fixes' AND
-    u.suite = 'unchanged' AND
-    l.result_code NOT IN ('success', 'nothing-to-do', 'nothing-new-to-do') AND
-    u.result_code = 'success'
-"""
-    return await conn.fetch(query)
-
-
 async def version_available(conn, package, suite, version=None):
     query = """\
 SELECT
@@ -1475,26 +1437,6 @@ async def get_publish_policy(conn, package, suite):
         return (row[0], row[1], shlex.split(row[2]) if row[2] else None)
 
 
-async def iter_lintian_fixes_counts(conn):
-    return await conn.fetch("""
-SELECT
-   absorbed.tag,
-   COALESCE(absorbed.cnt, 0),
-   COALESCE(unabsorbed.cnt, 0),
-   COALESCE(absorbed.cnt, 0)+COALESCE(unabsorbed.cnt, 0)
-FROM (
-    SELECT UNNEST(fixed_lintian_tags) AS tag, COUNT(*) AS cnt
-    FROM absorbed_lintian_fixes group by 1 order by 2 desc
-    ) AS absorbed
-LEFT JOIN (
-    SELECT UNNEST(fixed_lintian_tags) AS tag, COUNT(*) AS cnt
-    FROM last_unabsorbed_lintian_fixes group by 1 order by 2 desc
-    ) AS unabsorbed
-ON absorbed.tag = unabsorbed.tag
-ORDER BY 4 DESC
-""")
-
-
 async def get_successful_push_count(conn):
     return await conn.fetchval(
         "select count(*) from publish where result_code = "
@@ -1505,13 +1447,3 @@ async def get_publish_attempt_count(conn, revision):
     return await conn.fetchval(
         "select count(*) from publish where revision = $1",
         revision.decode('utf-8'))
-
-
-async def get_hoster_merge_proposal_stats(conn):
-    return await conn.fetch("""
-SELECT
-    REGEXP_REPLACE(url, '^(https?://)([^/]+)/.*', '\\2'),
-    status,
-    count(*)
-FROM merge_proposal group by 1, 2
-""")

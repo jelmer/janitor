@@ -8,8 +8,12 @@ async def write_stats(conn):
 
     by_status = {}
     by_hoster = {}
-    for hoster, status, count in await state.get_hoster_merge_proposal_stats(
-            conn):
+    for hoster, status, count in await conn.fetch("""
+SELECT
+    REGEXP_REPLACE(url, '^(https?://)([^/]+)/.*', '\\2'),
+    status,
+    count(*)
+FROM merge_proposal group by 1, 2"""):
         by_hoster.setdefault(hoster, {})[status] = count
         by_status.setdefault(status, {})[hoster] = count
 
