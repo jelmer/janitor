@@ -1,0 +1,26 @@
+<p>The upstream version that was picked contains characters that
+are invalid in Debian version strings.</p>
+
+<p>For version strings that come from upstream tags, this can
+be because the upstream tags use characters that are not valid
+in Debian version strings. The janitor currently only applies
+very basic version mangling to upstream tags:
+
+<ul>
+    <li>Strip <i>release-</i> prefixes and <i>-release</i> suffixes</li>
+    <li>Strip <i>package-</i> prefixes</li>
+    <li>Strip <i>v</i> prefixes</li>
+    <li>Replace any underscores with dots if there are no other
+    dots in the version. This is done for compatibility with CVS style tags,
+    which usually did not use dots.</li>
+</li>
+
+<p>For version strings that come from uscan, no additional mangling
+is performed besides the mangling that uscan already does.
+</p>
+
+<p>In some cases, the version string matching is overly broad - and the
+lintian-brush could possibly replace the first group with @ANY_VERSION@ to
+fix the watch file.</p>
+
+</p>
