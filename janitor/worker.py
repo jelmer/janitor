@@ -520,7 +520,9 @@ class NewUpstreamWorker(SubWorker):
                     error_code = 'uscan-error'
                 raise WorkerFailure(error_code, error_description)
             except UpstreamVersionMissingInUpstreamBranch as e:
-                error_description = str(e)
+                error_description = (
+                    'Upstream version %s not in upstream branch %r' % (
+                        e.version, e.branch))
                 error_code = 'upstream-version-missing-in-upstream-branch'
                 raise WorkerFailure(error_code, error_description)
             except UpstreamMetadataSyntaxError as e:
