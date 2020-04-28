@@ -40,7 +40,6 @@ $(document).ready(function() {
 {% else %}
 <li class='queue-position.{{ package }}' style='display:none'/>
 {% endif %}
-</span>
 
 {{ result_code_explanation(result_code, run) }}
 
@@ -56,7 +55,8 @@ $(document).ready(function() {
     {% if debdiff %}<a href="/api/run/{{ run_id }}/diffoscope?filter_boring=true">diffoscope</a> (<a href="/api/run/{{ run_id }}/diffoscope">unfiltered</a>){% else %}diffoscope diff is not available{% endif %}
 </li>
 {% endif %}
-<!-- Command: {{ command }} -->
+<li style="display: none">Command: {{ command }}</li>
+<li style="display: none">Build Version: {{ run.build_version }}</li>
 </ul>
 
 {{ local_command(command, package) }}
