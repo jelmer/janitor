@@ -79,16 +79,18 @@ def find_binary_paths_from_changes(incoming_dir, source, version):
         return binaries
 
 
-async def find_binary_paths_in_pool(
-        archive_path, suite, source, version):
+def find_binary_paths_in_pool(
+        archive_path, source, version):
     ret = []
     pool_dir = os.path.join(archive_path, "pool")
     for component in os.scandir(pool_dir):
         if source.startswith('lib'):
-            dp = os.path.join(component.path, source[:4])
+            sd = os.path.join(component.path, source[:4], source)
         else:
-            dp = os.path.join(component.path, source[:1])
-        for binary in os.scandir(dp):
+            sd = os.path.join(component.path, source[:1], source)
+        if not os.path.isdir(sd):
+            continue
+        for binary in os.scandir(sd):
             (basename, ext) = os.path.splitext(binary.name)
             if ext != '.deb':
                 continue
@@ -104,13 +106,13 @@ async def find_binary_paths_in_pool(
 
 
 async def find_binary_paths(
-        incoming_dir, archive_path, suite, source, version):
+        incoming_dir, archive_path, source, version):
     binaries = find_binary_paths_from_changes(incoming_dir, source, version)
     if binaries is not None:
         return binaries
     try:
-        return await find_binary_paths_in_pool(
-            archive_path, suite, source, version)
+        return find_binary_paths_in_pool(
+            archive_path, source, version)
     except FileNotFoundError:
         return None
 
@@ -143,7 +145,7 @@ async def handle_debdiff(request):
     archive_path = request.app.archive_path
 
     old_binaries = await find_binary_paths(
-            request.app.incoming_dir, archive_path, old_suite,
+            request.app.incoming_dir, archive_path,
             source, old_version)
 
     if old_binaries is None:
@@ -152,7 +154,7 @@ async def handle_debdiff(request):
                 source, old_version))
 
     new_binaries = await find_binary_paths(
-            request.app.incoming_dir, archive_path, new_suite,
+            request.app.incoming_dir, archive_path,
             source, new_version)
 
     if new_binaries is None:
@@ -211,7 +213,7 @@ async def handle_diffoscope(request):
     new_version = post['new_version']
 
     old_binaries = await find_binary_paths(
-            request.app.incoming_dir, request.app.archive_path, old_suite,
+            request.app.incoming_dir, request.app.archive_path,
             source, old_version)
 
     if old_binaries is None:
@@ -220,7 +222,7 @@ async def handle_diffoscope(request):
                 source, old_version))
 
     new_binaries = await find_binary_paths(
-            request.app.incoming_dir, request.app.archive_path, new_suite,
+            request.app.incoming_dir, request.app.archive_path,
             source, new_version)
 
     if new_binaries is None:
