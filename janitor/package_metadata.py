@@ -22,7 +22,6 @@ from __future__ import absolute_import
 import asyncio
 from debian.changelog import Version
 from email.utils import parseaddr
-import asyncpg
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
@@ -212,7 +211,8 @@ async def main():
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(args.prometheus, job='janitor.package_metadata', registry=REGISTRY)
+        push_to_gateway(args.prometheus, job='janitor.package_metadata',
+                        registry=REGISTRY)
 
 
 if __name__ == '__main__':
