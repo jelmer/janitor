@@ -759,6 +759,7 @@ class QueueProcessor(object):
             'concurrency': self.concurrency}
 
     async def process_queue_item(self, item):
+        worker_name = 'local'  # TODO(jelmer)
         with tempfile.TemporaryDirectory() as output_directory:
             active_run = ActiveRun(
                 output_directory, pkg=item.package, suite=item.suite,
@@ -793,7 +794,8 @@ class QueueProcessor(object):
                     build_distribution=result.build_distribution,
                     branch_name=result.branch_name, revision=result.revision,
                     subworker_result=result.subworker_result, suite=item.suite,
-                    logfilenames=result.logfilenames, value=result.value)
+                    logfilenames=result.logfilenames, value=result.value,
+                    worker_name=worker_name)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[item.id]

@@ -88,42 +88,44 @@ async def store_run(
         command, description, instigated_context, context,
         main_branch_revision, result_code, build_version,
         build_distribution, branch_name, revision, subworker_result, suite,
-        logfilenames, value):
+        logfilenames, value, worker_name):
     """Store a run.
 
-    :param run_id: Run id
-    :param name: Package name
-    :param vcs_url: Upstream branch URL
-    :param start_time: Start time
-    :param finish_time: Finish time
-    :param command: Command
-    :param description: A human-readable description
-    :param instigated_context: Context that instigated this run
-    :param context: Subworker-specific context
-    :param main_branch_revision: Main branch revision
-    :param result_code: Result code (as constant string)
-    :param build_version: Version that was built
-    :param build_distribution: Build distribution
-    :param branch_name: Resulting branch name
-    :param revision: Resulting revision id
-    :param subworker_result: Subworker-specific result data (as json)
-    :param suite: Suite
-    :param logfilenames: List of log filenames
-    :param value: Value of the run (as int)
+    Args:
+      run_id: Run id
+      name: Package name
+      vcs_url: Upstream branch URL
+      start_time: Start time
+      finish_time: Finish time
+      command: Command
+      description: A human-readable description
+      instigated_context: Context that instigated this run
+      context: Subworker-specific context
+      main_branch_revision: Main branch revision
+      result_code: Result code (as constant string)
+      build_version: Version that was built
+      build_distribution: Build distribution
+      branch_name: Resulting branch name
+      revision: Resulting revision id
+      subworker_result: Subworker-specific result data (as json)
+      suite: Suite
+      logfilenames: List of log filenames
+      value: Value of the run (as int)
+      worker_name: Name of the worker
     """
     await conn.execute(
         "INSERT INTO run (id, command, description, result_code, "
         "start_time, finish_time, package, instigated_context, context, "
         "build_version, build_distribution, main_branch_revision, "
         "branch_name, revision, result, suite, branch_url, logfilenames, "
-        "value) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-        "$13, $14, $15, $16, $17, $18, $19)",
+        "value, worker) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20)",
         run_id, ' '.join(command), description, result_code,
         start_time, finish_time, name, instigated_context, context,
         str(build_version) if build_version else None, build_distribution,
         main_branch_revision, branch_name, revision,
         subworker_result if subworker_result else None, suite,
-        vcs_url, logfilenames, value)
+        vcs_url, logfilenames, value, worker_name)
 
 
 async def store_publish(conn, package, branch_name, main_branch_revision,
