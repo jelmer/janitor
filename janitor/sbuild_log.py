@@ -1717,6 +1717,7 @@ build_failure_regexps = [
     (r'\*\*\* error: gettext infrastructure mismatch: .*', None),
     (r'\[ERROR\] Failed to execute goal (.*) on project (.*): (.*)',
      None),
+    (r'\s+\^\-\-\-\-\^ SC[0-4][0-9][0-9][0-9]: .*', None),
 ]
 
 compiled_build_failure_regexps = []
