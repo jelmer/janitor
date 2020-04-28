@@ -870,6 +870,12 @@ arch:all and the other not)""".splitlines(), 1)
             '0.19 but the autoconf macros are from gettext version 0.20'], 1,
             None)
 
+    def test_shellcheck(self):
+        self.run_test([
+            ' ' * 40 +
+            '^----^ SC2086: '
+            'Double quote to prevent globbing and word splitting.'], 1, None)
+
 
 class FindAptGetFailureDescriptionTests(unittest.TestCase):
 
