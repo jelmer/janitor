@@ -69,8 +69,9 @@ DEBDIFF_INLINE_THRESHOLD = 40
 
 
 JANITOR_BLURB = """
-This merge proposal was created automatically by the Janitor bot
-(https://janitor.debian.net/%(suite)s).
+This merge proposal was created automatically by the Janitor bot.
+For more information, including instructions on how to disable
+these merge proposals, see https://janitor.debian.net/%(suite)s.
 
 You can follow up to this merge proposal as you normally would.
 """
@@ -161,6 +162,12 @@ class MergeConflict(Exception):
     def __init__(self, main_branch, local_branch):
         self.main_branch = main_branch
         self.local_branch = local_branch
+
+
+class DebdiffRetrievalError(Exception):
+
+    def __init__(self, reason):
+        self.reason = reason
 
 
 def strip_janitor_blurb(text, suite):
@@ -601,6 +608,8 @@ def get_debdiff(log_id):
     except urllib.error.HTTPError as e:
         if e.status == 404:
             return None
+        elif e.status == 400:
+            raise DebdiffRetrievalError(e.file.read())
         else:
             raise
 
