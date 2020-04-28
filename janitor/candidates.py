@@ -22,7 +22,7 @@ from google.protobuf import text_format
 
 from . import state, trace
 from .config import read_config
-from .candidates_pb2 import CandidateList, Candidate
+from .candidates_pb2 import CandidateList
 
 
 async def iter_candidates_from_script(args):
@@ -38,9 +38,7 @@ async def iter_candidates_from_script(args):
 
 async def main():
     import argparse
-    from janitor import state
     from prometheus_client import (
-        Counter,
         Gauge,
         push_to_gateway,
         REGISTRY,
@@ -65,8 +63,6 @@ async def main():
 
     with open(args.config, 'r') as f:
         config = read_config(f)
-
-    udd = await UDD.public_udd_mirror()
 
     db = state.Database(config.database_location)
 
@@ -95,7 +91,8 @@ async def main():
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(args.prometheus, job='janitor.udd', registry=REGISTRY)
+        push_to_gateway(
+            args.prometheus, job='janitor.candidates', registry=REGISTRY)
 
 
 if __name__ == '__main__':
