@@ -37,6 +37,7 @@ from lintian_brush.control import (
     ensure_some_version,
     ensure_minimum_version,
     get_debhelper_compat_version,
+    pg_buildext_updatecontrol,
     ControlUpdater,
     )
 from lintian_brush.deb822 import (
@@ -82,6 +83,7 @@ from .sbuild_log import (
     MissingRPackage,
     MissingRubyFile,
     MissingAutoconfMacro,
+    NeedPgBuildExtUpdateControl,
     SbuildFailure,
     DhAddonLoadFailure,
     AptFetchFailure,
@@ -881,6 +883,16 @@ def _find_aclocal_fun(macro):
     raise KeyError
 
 
+def run_pgbuildext_updatecontrol(
+        tree, error, context, committer=None, update_changelog=True,
+        subpath='.'):
+    note("Running 'pg_buildext updatecontrol'")
+    pg_buildext_updatecontrol(tree.abspath(subpath))
+    return commit_debian_changes(
+        tree, subpath, "Run 'pgbuildext updatecontrol'.",
+        committer=committer, update_changelog=False)
+
+
 def fix_missing_autoconf_macro(
         tree, error, context, committer=None, update_changelog=True,
         subpath='.'):
@@ -927,6 +939,7 @@ FIXERS = [
     (MissingRubyFile, fix_missing_ruby_file),
     (MissingJavaScriptRuntime, fix_missing_javascript_runtime),
     (MissingAutoconfMacro, fix_missing_autoconf_macro),
+    (NeedPgBuildExtUpdateControl, run_pgbuildext_updatecontrol),
 ]
 
 

@@ -54,6 +54,7 @@ from janitor.sbuild_log import (
     MissingAutoconfMacro,
     MissingSprocketsFile,
     MissingAutomakeInput,
+    NeedPgBuildExtUpdateControl,
     DhMissingUninstalled,
     DhUntilUnsupported,
     DhAddonLoadFailure,
@@ -215,6 +216,12 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
         self.run_test([
             'meson.build:13:0: ERROR: Git program not found.'], 1,
             MissingCommand('git'))
+
+    def test_need_pgbuildext(self):
+        self.run_test([
+            "Error: debian/control needs updating from debian/control.in. "
+            "Run 'pg_buildext updatecontrol'."], 1,
+            NeedPgBuildExtUpdateControl('debian/control', 'debian/control.in'))
 
     def test_cmake_missing_command(self):
         self.run_test([
