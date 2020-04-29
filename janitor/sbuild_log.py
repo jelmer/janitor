@@ -1324,6 +1324,32 @@ def dh_installinit_upstart_file(m):
     return UpstartFilePresent(m.group(1))
 
 
+class NeedPgBuildExtUpdateControl(object):
+
+    kind = 'need-pg-buildext-updatecontrol'
+
+    def __init__(self, generated_path, template_path):
+        self.generated_path = generated_path
+        self.template_path = template_path
+
+    def __eq__(self, other):
+        return isinstance(self, type(self)) and \
+            self.generated_path == other.generated_path and \
+            self.template_path == other.template_path
+
+    def __str__(self):
+        return "Need to run 'pg_buildext updatecontrol' to update %s" % (
+            self.generated_path)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.generated_path, self.template_path)
+
+
+def need_pg_buildext_updatecontrol(m):
+    return NeedPgBuildExtUpdateControl(m.group(1), m.group(2))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1718,6 +1744,8 @@ build_failure_regexps = [
     (r'\[ERROR\] Failed to execute goal (.*) on project (.*): (.*)',
      None),
     (r'\s+\^\-\-\-\-\^ SC[0-4][0-9][0-9][0-9]: .*', None),
+    (r'Error: (.*) needs updating from (.*)\. '
+     r'Run \'pg_buildext updatecontrol\'.', need_pg_buildext_updatecontrol),
 ]
 
 compiled_build_failure_regexps = []
