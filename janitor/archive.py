@@ -280,7 +280,8 @@ async def handle_diffoscope(request):
 
     debdiff = await format_diffoscope(
         diffoscope_diff, content_type,
-        title=title)
+        title=title, jquery_url=post.get('jquery_url'),
+        css_url=post.get('css_url'))
 
     return web.Response(text=debdiff, content_type=content_type)
 
