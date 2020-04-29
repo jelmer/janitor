@@ -15,7 +15,7 @@ Architecture: all
 Description: Worker for the Debian janitor
 
 Package: janitor-archiver
-Depends: python3-aiohttp, python3-aionotify, aptly, ${python3:Depends}, ${misc:Depends}
+Depends: python3-aiohttp, python3-aionotify, aptly, ${python3:Depends}, ${misc:Depends}, diffoscope, devscripts
 Architecture: all
 Description: Archiver for the Debian janitor
 
@@ -25,7 +25,7 @@ Architecture: all
 Description: Runner for the Debian janitor
 
 Package: janitor-site
-Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, ${python3:Depends}, ${misc:Depends}, libjs-jquery, libjs-chart.js
+Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, ${python3:Depends}, ${misc:Depends}, libjs-jquery, libjs-chart.js, diffoscope
 Architecture: all
 Description: Site for the Debian janitor
 
