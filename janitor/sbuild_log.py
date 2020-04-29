@@ -2394,6 +2394,24 @@ def error_from_dose3_report(report):
         return UnsatisfiedConflicts(conflict)
 
 
+class AptBrokenPackages(object):
+
+    kind = 'apt-broken-packages'
+
+    def __init__(self, description):
+        self.description = description
+
+    def __str__(self):
+        return "Broken apt packages: %s" % (self.description, )
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.description)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and \
+                self.description == other.description
+
+
 def find_apt_get_failure(lines):
     """Find the key failure line in apt-get-output.
 
@@ -2414,6 +2432,9 @@ def find_apt_get_failure(lines):
                 return lineno + 1, line, AptFetchFailure(
                     m.group(1), m.group(2))
             return lineno + 1, line, None
+        if line == 'E: Broken packages':
+            error = AptBrokenPackages(lines[lineno-1].strip())
+            return lineno, lines[lineno-1].strip(), error
         m = re.match(
             'E: The repository \'([^\']+)\' does not have a Release file.',
             line)
@@ -2459,8 +2480,8 @@ def find_arch_check_failure_description(lines):
 
 def find_install_deps_failure_description(paragraphs):
     error = None
-    dose3_lines = paragraphs.get(
-        'install dose3 build dependencies (aspcud-based resolver)')
+    DOSE3_SECTION = 'install dose3 build dependencies (aspcud-based resolver)'
+    dose3_lines = paragraphs.get(DOSE3_SECTION)
     if dose3_lines:
         dose3_output = find_cudf_output(dose3_lines)
         if dose3_output:
@@ -2482,8 +2503,7 @@ def find_install_deps_failure_description(paragraphs):
 def find_apt_get_update_failure(paragraphs):
     focus_section = 'update chroot'
     lines = paragraphs.get(focus_section, [])
-    offset, line, error = find_apt_get_failure(
-        lines)
+    offset, line, error = find_apt_get_failure(lines)
     return focus_section, offset, line, error
 
 
