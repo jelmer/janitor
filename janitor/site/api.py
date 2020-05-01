@@ -598,6 +598,16 @@ async def handle_publish_ready(request):
     return web.json_response(ret, status=200)
 
 
+async def handle_run_assign(request):
+    url = urllib.parse.urljoin(request.app.runner_url, 'assign')
+    async with request.app.http_client_session.post(
+            request.app.runner_url, data={'worker': request.remote}) as resp:
+        if resp.status != 201:
+            return web.json_response(await resp.json(), status=resp.status)
+        assignment = await resp.json()
+        return web.json_response(assignment, status=201)
+
+
 def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app = web.Application()
     app.http_client_session = ClientSession()
@@ -700,6 +710,9 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/{suite:' + SUITE_REGEX + '}/publish-ready',
         handle_publish_ready, name='api-publish-ready-suite')
+    app.router.add_post(
+        '/active-runs', handle_run_assign,
+        name='api-run-assign')
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)
