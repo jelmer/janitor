@@ -19,7 +19,7 @@
 
 from aiohttp import web
 from datetime import datetime, timedelta
-from http.client import parse_headers
+from http.client import parse_headers  # type: ignore
 import asyncio
 import functools
 from io import BytesIO
@@ -28,6 +28,7 @@ import json
 import shlex
 import sys
 import time
+from typing import Dict, List, Optional
 import uuid
 
 from lintian_brush.vcs import determine_browser_url
@@ -106,13 +107,14 @@ class RateLimited(Exception):
 
 class RateLimiter(object):
 
-    def set_mps_per_maintainer(self, mps_per_maintainer):
+    def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, int]
+                               ) -> None:
         raise NotImplementedError(self.set_mps_per_maintainer)
 
-    def check_allowed(self, maintainer_email):
-        raise NotImplementedError(self.allowed)
+    def check_allowed(self, maintainer_email: str) -> bool:
+        raise NotImplementedError(self.check_allowed)
 
-    def inc(self, maintainer_email):
+    def inc(self, maintainer_email: str) -> None:
         raise NotImplementedError(self.inc)
 
 
@@ -193,13 +195,14 @@ class SlowStartRateLimiter(RateLimiter):
 
 class PublishFailure(Exception):
 
-    def __init__(self, mode, code, description):
+    def __init__(self, mode: str, code: str, description: str):
         self.mode = mode
         self.code = code
         self.description = description
 
 
-def select_reviewers(maintainer_email, uploader_emails):
+def select_reviewers(maintainer_email: str,
+                     uploader_emails: List[str]) -> Optional[List[str]]:
     # TODO(jelmer): Select some reviewers
     return None
 

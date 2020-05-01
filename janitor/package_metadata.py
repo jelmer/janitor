@@ -22,6 +22,7 @@ from __future__ import absolute_import
 import asyncio
 from debian.changelog import Version
 from email.utils import parseaddr
+from typing import List, Optional, Iterator, AsyncIterator, Tuple
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
@@ -37,7 +38,7 @@ from lintian_brush.vcs import (
 from .udd import UDD
 
 
-def extract_uploader_emails(uploaders):
+def extract_uploader_emails(uploaders: str) -> List[str]:
     if not uploaders:
         return []
     ret = []
@@ -51,7 +52,11 @@ def extract_uploader_emails(uploaders):
     return ret
 
 
-async def iter_packages_with_metadata(udd, packages=None):
+async def iter_packages_with_metadata(
+        udd: UDD, packages: Optional[List[str]] = None
+        ) -> AsyncIterator[Tuple[
+            str, str, str, int, str,
+            str, str, str, str, Version, Version]]:
     args = []
     query = """
 select distinct on (sources.source) sources.source,
@@ -75,7 +80,8 @@ where sources.release = 'sid'
         yield row
 
 
-async def iter_removals(udd, packages=None):
+async def iter_removals(
+        udd: UDD, packages: Optional[List[str]] = None) -> Iterator:
     query = """\
 select name, version from package_removal where 'source' = any(arch_array)
 """
@@ -87,7 +93,8 @@ select name, version from package_removal where 'source' = any(arch_array)
 
 
 async def update_package_metadata(
-        db, udd, package_overrides, selected_packages=None):
+        db, udd: UDD, package_overrides,
+        selected_packages: Optional[List[str]] = None):
     async with db.acquire() as conn:
         existing_packages = {
             package.name: package

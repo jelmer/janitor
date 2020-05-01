@@ -16,14 +16,14 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
-from io import BytesIO
 import re
+from typing import Iterator, Tuple, List, Optional
 
 
-def iter_sections(text):
+def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
     lines = list(text.splitlines(False))
     title = None
-    paragraph = []
+    paragraph: List[str] = []
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -45,7 +45,8 @@ def iter_sections(text):
         yield title, paragraph
 
 
-def filter_boring_wdiff(line, old_version, new_version):
+def filter_boring_wdiff(
+        line: str, old_version: str, new_version: str) -> Optional[str]:
     if not line:
         return line
     field, changes = line.split(':', 1)
@@ -62,12 +63,13 @@ def filter_boring_wdiff(line, old_version, new_version):
     return line
 
 
-def filter_boring(debdiff, old_version, new_version):
-    ret = []
+def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
+    ret: List[Tuple[Optional[str], List[str]]] = []
     for title, paragraph in iter_sections(debdiff):
         if not title:
             ret.append((title, paragraph))
             continue
+        package: Optional[str]
         m = re.match(
                 r'Control files of package (.*): lines which differ '
                 r'\(wdiff format\)',
@@ -82,10 +84,11 @@ def filter_boring(debdiff, old_version, new_version):
             package = None
             wdiff = False
         if wdiff:
-            paragraph = [
+            paragraph_unfiltered = [
                 filter_boring_wdiff(line, old_version, new_version)
                 for line in paragraph]
-            paragraph = [line for line in paragraph if line is not None]
+            paragraph = [line for line in paragraph_unfiltered
+                         if line is not None]
             if any([line.strip() for line in paragraph]):
                 ret.append((title, paragraph))
             else:
@@ -116,11 +119,12 @@ class DebdiffError(Exception):
     """Error occurred while running debdiff."""
 
 
-async def run_debdiff(old_binaries, new_binaries):
+async def run_debdiff(
+        old_binaries: List[Tuple[str, str]],
+        new_binaries: List[Tuple[str, str]]) -> bytes:
     args = (['debdiff', '--from'] +
             [p for (n, p) in old_binaries] + ['--to'] +
             [p for (n, p) in new_binaries])
-    stdout = BytesIO()
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
@@ -131,12 +135,12 @@ async def run_debdiff(old_binaries, new_binaries):
     return stdout
 
 
-def debdiff_is_empty(debdiff):
+def debdiff_is_empty(debdiff: str) -> bool:
     return any(
         [title is not None for (title, paragraph) in iter_sections(debdiff)])
 
 
-def section_is_wdiff(title):
+def section_is_wdiff(title: str) -> Tuple[bool, Optional[str]]:
     m = re.match(
             r'Control files of package (.*): lines which differ '
             r'\(wdiff format\)',
@@ -148,7 +152,7 @@ def section_is_wdiff(title):
     return (False, None)
 
 
-def markdownify_debdiff(debdiff):
+def markdownify_debdiff(debdiff: str) -> str:
     def fix_wdiff_md(line):
         # GitLab markdown will render links but then not show the
         # delta highlighting. This fools it into not autolinking:
@@ -181,7 +185,7 @@ def markdownify_debdiff(debdiff):
     return "\n".join(ret)
 
 
-def htmlize_debdiff(debdiff):
+def htmlize_debdiff(debdiff: str) -> str:
     def highlight_wdiff(line):
         line = re.sub(
             r'\[-(.*?)-\]',

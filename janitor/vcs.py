@@ -17,6 +17,7 @@
 
 from io import BytesIO
 import os
+from typing import Optional, List, Tuple, Iterable
 
 import urllib.parse
 import breezy.git  # noqa: F401
@@ -34,6 +35,7 @@ from breezy.errors import (
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
+from breezy.transport import Transport
 from silver_platter.utils import (
     open_branch_containing,
     open_branch,
@@ -54,25 +56,26 @@ CACHE_URL_GIT = 'https://janitor.debian.net/git/'
 class BranchOpenFailure(Exception):
     """Failure to open a branch."""
 
-    def __init__(self, code, description):
+    def __init__(self, code: str, description: str):
         self.code = code
         self.description = description
 
 
-def get_vcs_abbreviation(repository):
+def get_vcs_abbreviation(repository: Repository) -> str:
     vcs = getattr(repository, 'vcs', None)
     if vcs:
         return vcs.abbreviation
     return 'bzr'
 
 
-def is_alioth_url(url):
+def is_alioth_url(url: str) -> bool:
     return urllib.parse.urlparse(url).netloc in (
         'svn.debian.org', 'bzr.debian.org', 'anonscm.debian.org',
         'hg.debian.org', 'git.debian.org', 'alioth.debian.org')
 
 
-def _convert_branch_exception(vcs_url, e):
+def _convert_branch_exception(
+        vcs_url: str, e: Exception) -> Exception:
     if isinstance(e, BranchUnavailable):
         if 'http code 429: Too Many Requests' in str(e):
             code = 'too-many-requests'
@@ -117,10 +120,14 @@ def _convert_branch_exception(vcs_url, e):
                 code = 'unsupported-vcs'
         return BranchOpenFailure(code, str(e))
 
-    return None
+    return e
 
 
-def open_branch_ext(vcs_url, possible_transports=None, probers=None):
+def open_branch_ext(
+        vcs_url: str,
+        possible_transports:
+        Optional[List[Transport]] = None,
+        probers=None) -> Branch:
     try:
         return open_branch(vcs_url, possible_transports, probers=probers)
     except (BranchUnavailable, BranchMissing, BranchUnsupported) as e:
@@ -128,7 +135,9 @@ def open_branch_ext(vcs_url, possible_transports=None, probers=None):
 
 
 def open_branch_containing_ext(
-        vcs_url, possible_transports=None, probers=None):
+        vcs_url: str,
+        possible_transports: Optional[List[Transport]] = None,
+        probers=None) -> Tuple[Branch, str]:
     try:
         return open_branch_containing(
             vcs_url, possible_transports, probers=probers)
@@ -139,13 +148,14 @@ def open_branch_containing_ext(
 class MirrorFailure(Exception):
     """Branch failed to mirror."""
 
-    def __init__(self, branch_name, reason):
+    def __init__(self, branch_name: str, reason: str):
         self.branch_name = branch_name
         self.reason = reason
 
 
-def mirror_branches(vcs_result_dir, pkg, branch_map,
-                    public_master_branch=None):
+def mirror_branches(vcs_result_dir: str, pkg: str,
+                    branch_map: Iterable[Tuple[str, Branch]],
+                    public_master_branch: Optional[Branch] = None) -> None:
     vcses = set(get_vcs_abbreviation(br.repository) for name, br in branch_map)
     if len(vcses) == 0:
         return
@@ -202,11 +212,15 @@ def mirror_branches(vcs_result_dir, pkg, branch_map,
             except NoSuchRevision as e:
                 raise MirrorFailure(target_branch_name, e)
     else:
-        raise AssertionError('unsupported vcs %s' % vcs.abbreviation)
+        raise AssertionError('unsupported vcs %s' % vcs)
 
 
-def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
-                 additional_colocated_branches=None):
+def copy_vcs_dir(main_branch: Branch,
+                 local_branch: Branch,
+                 vcs_result_dir: str,
+                 pkg: str,
+                 name: str,
+                 additional_colocated_branches: Optional[List[str]] = None):
     """Publish resulting changes in VCS form.
 
     This creates a repository with the following branches:
@@ -231,7 +245,9 @@ def copy_vcs_dir(main_branch, local_branch, vcs_result_dir, pkg, name,
         vcs_result_dir, pkg, branch_map, public_master_branch=main_branch)
 
 
-def get_cached_branch(vcs_type, package, branch_name):
+def get_cached_branch(vcs_type: str,
+                      package: str,
+                      branch_name: str) -> Optional[Branch]:
     if vcs_type == 'git':
         url = '%s%s,branch=%s' % (
             CACHE_URL_GIT, package, branch_name)
@@ -253,7 +269,9 @@ def get_cached_branch(vcs_type, package, branch_name):
         return None
 
 
-def get_local_vcs_branch(vcs_directory, pkg, branch_name):
+def get_local_vcs_branch(vcs_directory: str,
+                         pkg: str,
+                         branch_name: str) -> Branch:
     for vcs in SUPPORTED_VCSES:
         if os.path.exists(os.path.join(vcs_directory, vcs, pkg)):
             break
@@ -268,7 +286,9 @@ def get_local_vcs_branch(vcs_directory, pkg, branch_name):
             os.path.join(vcs_directory, 'bzr', pkg, branch_name))
 
 
-def get_local_vcs_repo(vcs_directory, package, vcs_type=None):
+def get_local_vcs_repo(vcs_directory: str,
+                       package: str,
+                       vcs_type: Optional[str] = None) -> Optional[Repository]:
     for vcs in (SUPPORTED_VCSES if not vcs_type else [vcs_type]):
         path = os.path.join(vcs_directory, vcs, package)
         if not os.path.exists(path):
@@ -279,17 +299,21 @@ def get_local_vcs_repo(vcs_directory, package, vcs_type=None):
 
 class VcsManager(object):
 
-    def get_branch(self, package, branch_name, vcs_type=None):
+    def get_branch(self, package: str, branch_name: str,
+                   vcs_type: Optional[str] = None) -> Branch:
         raise NotImplementedError(self.get_branch)
 
-    def import_branches(self, main_branch, local_branch, pkg, name,
-                        additional_colocated_branches=None):
+    def import_branches(self,
+                        main_branch: Branch, local_branch: Branch, pkg: str,
+                        name: str,
+                        additional_colocated_branches: List[str] = None):
         raise NotImplementedError(self.import_branches)
 
-    def get_repository(self, package, vcs_type=None):
+    def get_repository(self, package: str,
+                       vcs_type: Optional[str] = None) -> Repository:
         raise NotImplementedError(self.get_repository)
 
-    def get_vcs_type(self, package):
+    def get_vcs_type(self, package: str) -> Optional[str]:
         try:
             repo = self.get_repository(package)
         except NotBranchError:
@@ -299,7 +323,7 @@ class VcsManager(object):
 
 class LocalVcsManager(VcsManager):
 
-    def __init__(self, base_path):
+    def __init__(self, base_path: str):
         self.base_path = base_path
 
     def get_branch(self, package, branch_name, vcs_type=None):
@@ -320,8 +344,8 @@ class LocalVcsManager(VcsManager):
 
 class RemoteVcsManager(VcsManager):
 
-    def __init__(self, cache_url_git=CACHE_URL_BZR,
-                 cache_url_bzr=CACHE_URL_BZR):
+    def __init__(self, cache_url_git: str = CACHE_URL_BZR,
+                 cache_url_bzr: str = CACHE_URL_BZR):
         self.cache_url_git = cache_url_git
         self.cache_url_bzr = cache_url_bzr
 
@@ -336,7 +360,7 @@ class RemoteVcsManager(VcsManager):
             return None
 
 
-def get_run_diff(vcs_manager, run):
+def get_run_diff(vcs_manager: VcsManager, run) -> bytes:
     f = BytesIO()
     try:
         repo = vcs_manager.get_repository(run.package)

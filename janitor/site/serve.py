@@ -192,7 +192,6 @@ if __name__ == '__main__':
     with open(args.config, 'r') as f:
         config = read_config(f)
 
-    state.DEFAULT_URL = config.database_location
     logfile_manager = get_log_manager(config.logs_location)
 
     async def handle_simple(templatename, request):
@@ -795,10 +794,11 @@ if __name__ == '__main__':
     setup_metrics(app)
     app.router.add_get(
         '/ws/notifications',
-        functools.partial(pubsub_handler, app.topic_notifications),
+        functools.partial(pubsub_handler,
+                          app.topic_notifications),  # type: ignore
         name='ws-notifications')
     app.add_subapp(
         '/api', create_api_app(
-            app.database, args.publisher_url, args.runner_url,
+            app.database, args.publisher_url, args.runner_url,  # type: ignore
             args.archiver_url, policy_config))
     web.run_app(app, host=args.host, port=args.port)

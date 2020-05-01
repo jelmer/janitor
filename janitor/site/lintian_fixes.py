@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import asyncpg
 from .common import generate_pkg_context
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
@@ -52,13 +53,13 @@ select tag, count(tag) from (
 """)
 
 
-async def generate_tag_list(conn):
+async def generate_tag_list(conn: asyncpg.Connection):
     tags = sorted(await iter_lintian_tags(conn))
     template = env.get_template('lintian-fixes-tag-list.html')
     return await template.render_async(tags=tags)
 
 
-async def iter_last_successes_by_lintian_tag(conn, tag):
+async def iter_last_successes_by_lintian_tag(conn: asyncpg.Connection, tag):
     return await conn.fetch("""
 select distinct on (package) * from (
 select
@@ -172,7 +173,7 @@ async def generate_developer_table_page(db, developer):
         developer=developer)
 
 
-async def iter_lintian_brush_fixer_failures(conn, fixer):
+async def iter_lintian_brush_fixer_failures(conn: asyncpg.Connection, fixer):
     query = """
 select id, package, result->'failed'->$1 FROM last_runs
 where

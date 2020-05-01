@@ -23,6 +23,7 @@ import json
 import os
 import subprocess
 import sys
+from typing import Callable, Optional
 
 from breezy import osutils
 from breezy.config import GlobalStack
@@ -31,6 +32,7 @@ from breezy.errors import (
     NoRoundtrippingSupport,
     MalformedTransform,
     )
+from breezy.workingtree import WorkingTree
 
 from silver_platter.debian import (
     MissingUpstreamTarball,
@@ -117,8 +119,12 @@ class SubWorker(object):
           env: Environment dictionary
         """
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self,
+                     local_tree: WorkingTree,
+                     report_context: Callable[[str], None],
+                     metadata,
+                     base_metadata,
+                     subpath: Optional[str] = None):
         """Make the actual changes to a tree.
 
         Args:
