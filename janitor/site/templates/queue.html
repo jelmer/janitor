@@ -20,7 +20,7 @@
 <tbody valign="top" name="queue-table">
 {% for entry in processing %}
 <tr>
-    <td>{{ entry['package'] }}</td>
+    <td><a href="/cupboard/pkg/{{ entry['package'] }}">{{ entry['package'] }}</a></td>
     <td>{{ entry['suite'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_duration(entry['current_duration']) }}</td>
