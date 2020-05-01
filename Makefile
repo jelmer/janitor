@@ -7,7 +7,7 @@ janitor/%_pb2.py: janitor/%.proto
 
 check:
 	flake8
-	mypy janitor
+	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor
 	PYTHONPATH=.:silver-platter:lintian-brush:breezy python3 setup.py test
 
 janitor/site/_static/pygments.css:
