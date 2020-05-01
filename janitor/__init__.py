@@ -23,7 +23,7 @@ version_info = (0, 1, 0)
 version_string = '.'.join(map(str, version_info))
 
 
-def user_agent():
+def user_agent() -> str:
     return "Debian-Janitor/%s Bot (+https://janitor.debian.net/contact/)" % (
         version_string)
 

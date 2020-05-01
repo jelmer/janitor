@@ -18,7 +18,7 @@
 """Import candidates."""
 
 import asyncio
-from google.protobuf import text_format
+from google.protobuf import text_format  # type: ignore
 
 from . import state, trace
 from .config import read_config

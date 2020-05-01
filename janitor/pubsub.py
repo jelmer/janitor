@@ -20,6 +20,7 @@ from aiohttp import web
 from aiohttp.client_exceptions import ClientResponseError, ClientConnectorError
 import asyncio
 import json
+from typing import Optional, Set, AsyncIterator, Any
 
 from janitor.trace import note, warning
 
@@ -27,9 +28,9 @@ from janitor.trace import note, warning
 class Subscription(object):
     """A pubsub subscription."""
 
-    def __init__(self, topic):
+    def __init__(self, topic: 'Topic') -> None:
         self.topic = topic
-        self.queue = asyncio.Queue()
+        self.queue: asyncio.Queue = asyncio.Queue()
         if topic.last:
             self.queue.put_nowait(topic.last)
 
@@ -44,8 +45,8 @@ class Subscription(object):
 class Topic(object):
     """A pubsub topic."""
 
-    def __init__(self, repeat_last=False):
-        self.subscriptions = set()
+    def __init__(self, repeat_last: bool = False):
+        self.subscriptions: Set[asyncio.Queue] = set()
         self.last = None
         self.repeat_last = repeat_last
 
@@ -56,7 +57,7 @@ class Topic(object):
             queue.put_nowait(message)
 
 
-async def pubsub_handler(topic, request):
+async def pubsub_handler(topic: Topic, request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
@@ -68,7 +69,10 @@ async def pubsub_handler(topic, request):
     return ws
 
 
-async def pubsub_reader(session, url, reconnect_interval=60):
+async def pubsub_reader(
+        session: aiohttp.ClientSession,
+        url: str,
+        reconnect_interval: Optional[int] = 60) -> AsyncIterator[Any]:
     while True:
         try:
             ws = await session.ws_connect(url)

@@ -21,6 +21,7 @@ import os
 import re
 import subprocess
 import sys
+from typing import List, Tuple, Optional
 
 from aiohttp import web
 from debian.deb822 import Changes
@@ -70,12 +71,12 @@ def find_binary_paths_from_changes(incoming_dir, source, version):
                 continue
             if changes['Version'] != version:
                 continue
-            for f in changes['Files']:
-                if not f['name'].endswith('.deb'):
+            for fd in changes['Files']:
+                if not fd['name'].endswith('.deb'):
                     continue
                 binaries.append(
-                    (f['name'].split('_')[0],
-                     os.path.join(incoming_dir, f['name'])))
+                    (fd['name'].split('_')[0],
+                     os.path.join(incoming_dir, fd['name'])))
         return binaries
 
 
@@ -105,14 +106,16 @@ def find_binary_paths_in_pool(
     return ret
 
 
-async def find_binary_paths(
-        incoming_dir, archive_path, source, version):
+def find_binary_paths(
+        incoming_dir: str,
+        archive_path: str,
+        source: str,
+        version: str) -> Optional[List[Tuple[str, str]]]:
     binaries = find_binary_paths_from_changes(incoming_dir, source, version)
     if binaries is not None:
         return binaries
     try:
-        return find_binary_paths_in_pool(
-            archive_path, source, version)
+        return find_binary_paths_in_pool(archive_path, source, version)
     except FileNotFoundError:
         return None
 
@@ -144,7 +147,7 @@ async def handle_debdiff(request):
 
     archive_path = request.app.archive_path
 
-    old_binaries = await find_binary_paths(
+    old_binaries = find_binary_paths(
             request.app.incoming_dir, archive_path,
             source, old_version)
 
@@ -153,7 +156,7 @@ async def handle_debdiff(request):
             status=404, text='Old source %s/%s does not exist.' % (
                 source, old_version))
 
-    new_binaries = await find_binary_paths(
+    new_binaries = find_binary_paths(
             request.app.incoming_dir, archive_path,
             source, new_version)
 
@@ -212,7 +215,7 @@ async def handle_diffoscope(request):
     old_version = post['old_version']
     new_version = post['new_version']
 
-    old_binaries = await find_binary_paths(
+    old_binaries = find_binary_paths(
             request.app.incoming_dir, request.app.archive_path,
             source, old_version)
 
@@ -221,7 +224,7 @@ async def handle_diffoscope(request):
             status=404, text='Old source %s/%s does not exist.' % (
                 source, old_version))
 
-    new_binaries = await find_binary_paths(
+    new_binaries = find_binary_paths(
             request.app.incoming_dir, request.app.archive_path,
             source, new_version)
 

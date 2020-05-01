@@ -20,7 +20,7 @@
 import asyncpg
 
 
-async def connect_udd_mirror():
+async def connect_udd_mirror() -> asyncpg.Connection:
     """Connect to the public UDD mirror."""
     return await asyncpg.connect(
         database="udd",
@@ -33,10 +33,10 @@ async def connect_udd_mirror():
 class UDD(object):
 
     @classmethod
-    async def public_udd_mirror(cls):
+    async def public_udd_mirror(cls) -> 'UDD':
         return cls(await connect_udd_mirror())
 
-    def __init__(self, conn):
+    def __init__(self, conn) -> None:
         self._conn = conn
 
     async def fetch(self, *args, **kwargs):

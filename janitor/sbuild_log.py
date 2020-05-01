@@ -20,6 +20,7 @@ from debian.deb822 import PkgRelation
 import posixpath
 import re
 import sys
+from typing import List, Tuple, Iterator, BinaryIO, Optional
 import yaml
 
 __all__ = [
@@ -285,9 +286,11 @@ def worker_failure_from_sbuild_log(f):
         failed_stage, description, error=error, context=context)
 
 
-def parse_sbuild_log(f):
+def parse_sbuild_log(
+        f: BinaryIO
+        ) -> Iterator[Tuple[Optional[str], Tuple[int, int], List[str]]]:
     begin_offset = 1
-    lines = []
+    lines: List[str] = []
     title = None
     sep = b'+' + (b'-' * 78) + b'+'
     lineno = 0
@@ -1011,7 +1014,7 @@ class MissingRubyGem(object):
 
     kind = 'missing-ruby-gem'
 
-    def __init__(self, gem, version=None):
+    def __init__(self, gem: str, version: Optional[str] = None):
         self.gem = gem
         self.version = version
 
@@ -1200,7 +1203,7 @@ class GnomeCommonMissing(object):
 
     kind = 'gnome-common-missing'
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def __eq__(self, other):

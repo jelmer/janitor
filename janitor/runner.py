@@ -18,7 +18,7 @@
 from aiohttp import web, MultipartWriter, ClientSession, ClientConnectionError
 import asyncio
 from contextlib import ExitStack
-from datetime import datetime
+from datetime import datetime, timedelta
 import functools
 import json
 import os
@@ -26,6 +26,7 @@ import re
 import signal
 import sys
 import tempfile
+from typing import List
 import uuid
 
 from debian.deb822 import Changes
@@ -68,8 +69,8 @@ from silver_platter.utils import (
 from . import (
     state,
     )
-from .config import read_config
-from .logs import get_log_manager, ServiceUnavailable
+from .config import read_config, Config, Suite
+from .logs import get_log_manager, ServiceUnavailable, LogFileManager
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
 from .trace import note, warning
@@ -342,7 +343,7 @@ class UploadFailedError(Exception):
     """Upload failed."""
 
 
-async def upload_changes(changes_path, incoming_url):
+async def upload_changes(changes_path: str, incoming_url: str):
     """Upload changes to the archiver.
 
     Args:
@@ -359,9 +360,9 @@ async def upload_changes(changes_path, incoming_url):
             for file_details in dsc['files']:
                 name = file_details['name']
                 path = os.path.join(os.path.dirname(changes_path), name)
-                f = open(path, 'rb')
-                es.enter_context(f)
-                mpwriter.append(f)
+                g = open(path, 'rb')
+                es.enter_context(g)
+                mpwriter.append(g)
             try:
                 async with session.post(incoming_url, data=mpwriter) as resp:
                     if resp.status != 200:
@@ -370,7 +371,10 @@ async def upload_changes(changes_path, incoming_url):
                 raise UploadFailedError(e)
 
 
-async def import_logs(output_directory, logfile_manager, pkg, log_id):
+async def import_logs(output_directory: str,
+                      logfile_manager: LogFileManager,
+                      pkg: str,
+                      log_id: str) -> List[str]:
     logfilenames = []
     for entry in os.scandir(output_directory):
         if entry.is_dir():
@@ -390,7 +394,7 @@ async def import_logs(output_directory, logfile_manager, pkg, log_id):
     return logfilenames
 
 
-def get_suite_config(config, name):
+def get_suite_config(config: Config, name: str) -> Suite:
     for s in config.suite:
         if s.name == name:
             return s
@@ -399,8 +403,8 @@ def get_suite_config(config, name):
 
 class ActiveRun(object):
 
-    def __init__(self, output_directory, pkg, suite, queue_id,
-                 estimated_duration):
+    def __init__(self, output_directory: str, pkg: str, suite: str,
+                 queue_id: str, estimated_duration: timedelta):
         self.start_time = datetime.now()
         self.output_directory = output_directory
         self.log_id = str(uuid.uuid4())
@@ -409,7 +413,7 @@ class ActiveRun(object):
         self.queue_id = queue_id
         self.estimated_duration = estimated_duration
 
-    def kill(self):
+    def kill(self) -> None:
         self._task.cancel()
 
     def json(self):

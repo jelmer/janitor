@@ -18,7 +18,7 @@
 from email.utils import parseaddr
 from fnmatch import fnmatch
 import shlex
-from google.protobuf import text_format
+from google.protobuf import text_format  # type: ignore
 
 from . import policy_pb2
 
