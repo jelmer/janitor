@@ -409,6 +409,11 @@ class ActiveRun(object):
 
     item: state.QueueItem
     log_id: str
+    start_time: datetime
+
+    @property
+    def current_duration(self):
+        return datetime.now() - self.start_time
 
     def kill(self) -> None:
         """Abort this run."""
@@ -421,31 +426,27 @@ class ActiveRun(object):
 
 class ActiveLocalRun(ActiveRun):
 
-    def __init__(self, item: state.QueueItem,
-                 output_directory: str, pkg: str, suite: str,
-                 queue_id: str, estimated_duration: timedelta):
+    def __init__(self, queue_item: state.QueueItem,
+                 output_directory: str):
+        self.queue_item = queue_item
         self.start_time = datetime.now()
         self.output_directory = output_directory
         self.log_id = str(uuid.uuid4())
-        self.pkg = pkg
-        self.suite = suite
-        self.queue_id = queue_id
-        self.estimated_duration = estimated_duration
 
     def kill(self) -> None:
         self._task.cancel()
 
     def json(self):
         return {
-            'queue_id': self.queue_id,
+            'queue_id': self.queue_item.id,
             'id': self.log_id,
-            'package': self.pkg,
-            'suite': self.suite,
+            'package': self.queue_item.package,
+            'suite': self.queue_item.suite,
             'estimated_duration':
-                self.estimated_duration.total_seconds()
-                if self.estimated_duration else None,
+                self.queue_item.estimated_duration.total_seconds()
+                if self.queue_item.estimated_duration else None,
             'current_duration':
-                (datetime.now() - self.start_time).total_seconds(),
+                self.current_duration.total_seconds(),
             'start_time': self.start_time.isoformat(),
             }
 
@@ -464,23 +465,24 @@ class ActiveLocalRun(ActiveRun):
             use_cached_only=False, refresh=False, vcs_type=None,
             subpath=None, overall_timeout=None, upstream_branch_url=None,
             committer=None):
-        note('Running %r on %s', command, self.pkg)
+        note('Running %r on %s', command, self.queue_item.package)
         packages_processed_count.inc()
 
         env = {}
-        env['PACKAGE'] = self.pkg
+        env['PACKAGE'] = self.queue_item.package
         if committer:
             env['COMMITTER'] = committer
         if upstream_branch_url:
             env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
 
         try:
-            suite_config = get_suite_config(config, self.suite)
+            suite_config = get_suite_config(config, self.queue_item.suite)
         except KeyError:
             return JanitorResult(
-                self.pkg, log_id=self.log_id,
+                self.queue_item.package, log_id=self.log_id,
                 code='unknown-suite',
-                description='Suite %s not in configuration' % self.suite,
+                description='Suite %s not in configuration' %
+                            self.queue_item.suite,
                 logfilenames=[],
                 branch_url=vcs_url)
 
@@ -488,14 +490,14 @@ class ActiveLocalRun(ActiveRun):
             async with db.acquire() as conn:
                 try:
                     main_branch = await open_branch_with_fallback(
-                        conn, self.pkg, vcs_type, vcs_url,
+                        conn, self.queue_item.package, vcs_type, vcs_url,
                         possible_transports=possible_transports)
                 except BranchOpenFailure as e:
                     await state.update_branch_status(
                         conn, vcs_url, None, status=e.code,
                         description=e.description, revision=None)
                     return JanitorResult(
-                        self.pkg, log_id=self.log_id, branch_url=vcs_url,
+                        self.queue_item.package, log_id=self.log_id, branch_url=vcs_url,
                         description=e.description, code=e.code,
                         logfilenames=[])
                 else:
@@ -526,7 +528,7 @@ class ActiveLocalRun(ActiveRun):
 
             if resume_branch is None and vcs_manager:
                 resume_branch = vcs_manager.get_branch(
-                    self.pkg, suite_config.branch_name,
+                    self.queue_item.package, suite_config.branch_name,
                     get_vcs_abbreviation(main_branch))
 
             if resume_branch is not None:
@@ -534,7 +536,7 @@ class ActiveLocalRun(ActiveRun):
 
             if vcs_manager:
                 cached_branch = vcs_manager.get_branch(
-                    self.pkg, 'master', get_vcs_abbreviation(main_branch))
+                    self.queue_item.package, 'master', get_vcs_abbreviation(main_branch))
             else:
                 cached_branch = None
 
@@ -542,18 +544,18 @@ class ActiveLocalRun(ActiveRun):
                 note('Using cached branch %s', cached_branch.user_url)
         else:
             if vcs_manager:
-                main_branch = vcs_manager.get_branch(self.pkg, 'master')
+                main_branch = vcs_manager.get_branch(self.queue_item.package, 'master')
             else:
                 main_branch = None
             if main_branch is None:
                 return JanitorResult(
-                    self.pkg, log_id=self.log_id, branch_url=branch_url,
+                    self.queue_item.package, log_id=self.log_id, branch_url=branch_url,
                     code='cached-branch-missing',
-                    description='Missing cache branch for %s' % self.pkg,
+                    description='Missing cache branch for %s' % self.queue_item.package,
                     logfilenames=[])
             note('Using cached branch %s', main_branch.user_url)
             resume_branch = vcs_manager.get_branch(
-                self.pkg, suite_config.branch_name)
+                self.queue_item.package, suite_config.branch_name)
             cached_branch = None
 
         if refresh and resume_branch:
@@ -564,7 +566,8 @@ class ActiveLocalRun(ActiveRun):
             if resume_branch is not None:
                 (resume_branch_result, resume_branch_name, resume_review_status
                  ) = await state.get_run_result_by_revision(
-                    conn, self.suite, revision=resume_branch.last_revision())
+                    conn, self.queue_item.suite,
+                    revision=resume_branch.last_revision())
                 if resume_review_status == 'rejected':
                     note('Unsetting resume branch, since last run was '
                          'rejected.')
@@ -576,7 +579,7 @@ class ActiveLocalRun(ActiveRun):
                 resume_branch_name = None
 
             last_build_version = await state.get_last_build_version(
-                conn, self.pkg, self.suite)
+                conn, self.queue_item.package, self.queue_item.suite)
 
         log_path = os.path.join(self.output_directory, 'worker.log')
         try:
@@ -596,13 +599,13 @@ class ActiveLocalRun(ActiveRun):
             retcode = await self._task
         except asyncio.TimeoutError:
             return JanitorResult(
-                self.pkg, log_id=self.log_id, branch_url=branch_url,
+                self.queue_item.package, log_id=self.log_id, branch_url=branch_url,
                 code='timeout',
                 description='Run timed out after %d seconds' % overall_timeout,
                 logfilenames=[])
 
         logfilenames = await import_logs(
-            self.output_directory, logfile_manager, self.pkg, self.log_id)
+            self.output_directory, logfile_manager, self.queue_item.package, self.log_id)
 
         if retcode != 0:
             if retcode < 0:
@@ -617,7 +620,7 @@ class ActiveLocalRun(ActiveRun):
                     description = 'Worker exited with return code %d' % retcode
 
             return JanitorResult(
-                self.pkg, log_id=self.log_id, branch_url=branch_url,
+                self.queue_item.package, log_id=self.log_id, branch_url=branch_url,
                 code=code, description=description,
                 logfilenames=logfilenames)
 
@@ -631,14 +634,14 @@ class ActiveLocalRun(ActiveRun):
 
         if worker_result.code is not None:
             return JanitorResult(
-                self.pkg, log_id=self.log_id, branch_url=branch_url,
+                self.queue_item.package, log_id=self.log_id, branch_url=branch_url,
                 worker_result=worker_result, logfilenames=logfilenames,
                 branch_name=(
                     resume_branch_name
                     if worker_result.code == 'nothing-to-do' else None))
 
         result = JanitorResult(
-            self.pkg, log_id=self.log_id, branch_url=branch_url,
+            self.queue_item.package, log_id=self.log_id, branch_url=branch_url,
             code='success', worker_result=worker_result,
             logfilenames=logfilenames)
 
@@ -652,10 +655,10 @@ class ActiveLocalRun(ActiveRun):
 
         try:
             local_branch = open_branch(
-                os.path.join(self.output_directory, self.pkg))
+                os.path.join(self.output_directory, self.queue_item.package))
         except (BranchMissing, BranchUnavailable) as e:
             return JanitorResult(
-                self.pkg, self.log_id, branch_url,
+                self.queue_item.package, self.log_id, branch_url,
                 description='result branch unavailable: %s' % e,
                 code='result-branch-unavailable',
                 worker_result=worker_result,
@@ -666,7 +669,7 @@ class ActiveLocalRun(ActiveRun):
         if vcs_manager:
             vcs_manager.import_branches(
                 main_branch, local_branch,
-                self.pkg, suite_config.branch_name,
+                self.queue_item.package, suite_config.branch_name,
                 additional_colocated_branches=(
                     pick_additional_colocated_branches(main_branch)))
             result.branch_name = suite_config.branch_name
@@ -682,15 +685,16 @@ class ActiveLocalRun(ActiveRun):
                     warning('Unable to upload changes file %s: %r',
                             result.changes_filename, e)
                     # TODO(jelmer): Copy to failed upload directory
-            if self.suite != 'unchanged':
+            if self.queue_item.suite != 'unchanged':
                 async with db.acquire() as conn:
                     run = await state.get_unchanged_run(
                         conn, worker_result.main_branch_revision)
                     if run is None:
-                        note('Scheduling control run for %s.', self.pkg)
+                        note('Scheduling control run for %s.',
+                             self.queue_item.package)
                         duration = datetime.now() - self.start_time
                         await state.add_to_queue(
-                            conn, self.pkg, [
+                            conn, self.queue_item.package, [
                                 'just-build',
                                 ('--revision=%s' %
                                  worker_result.main_branch_revision
@@ -785,10 +789,7 @@ class QueueProcessor(object):
     async def process_queue_item(self, item):
         worker_name = 'local'  # TODO(jelmer)
         with tempfile.TemporaryDirectory() as output_directory:
-            active_run = ActiveLocalRun(
-                item, output_directory, pkg=item.package, suite=item.suite,
-                estimated_duration=item.estimated_duration,
-                queue_id=item.id)
+            active_run = ActiveLocalRun(item, output_directory)
             self.active_runs[active_run.log_id] = active_run
             self.topic_queue.publish(self.status_json())
             result = await active_run.process(
@@ -862,7 +863,7 @@ class QueueProcessor(object):
 
     def queue_item_assigned(self, queue_item: state.QueueItem) -> bool:
         for active_run in self.active_runs:
-            if active_run.queue_id == queue_item.id:
+            if active_run.queue_item.id == queue_item.id:
                 return True
         return False
 
