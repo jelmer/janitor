@@ -89,10 +89,10 @@ async def store_run(
         run_id: str, name: str, vcs_url: str, start_time: datetime.datetime,
         finish_time: datetime.datetime, command: List[str], description: str,
         instigated_context: Optional[str], context: Optional[str],
-        main_branch_revision: bytes, result_code: str,
+        main_branch_revision: Optional[bytes], result_code: str,
         build_version: Optional[Version],
         build_distribution: Optional[str], branch_name: str,
-        revision: bytes, subworker_result: Optional[Any], suite: str,
+        revision: Optional[bytes], subworker_result: Optional[Any], suite: str,
         logfilenames: List[str], value: Optional[int], worker_name: str):
     """Store a run.
 
@@ -128,8 +128,9 @@ async def store_run(
         run_id, ' '.join(command), description, result_code,
         start_time, finish_time, name, instigated_context, context,
         str(build_version) if build_version else None, build_distribution,
-        main_branch_revision.decode('utf-8'), branch_name,
-        revision.decode('utf-8'),
+        main_branch_revision.decode('utf-8') if main_branch_revision else None,
+        branch_name,
+        revision.decode('utf-8') if revision else None,
         subworker_result if subworker_result else None, suite,
         vcs_url, logfilenames, value, worker_name)
 
