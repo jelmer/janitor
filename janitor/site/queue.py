@@ -15,13 +15,17 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncpg
+
+from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
+
 from datetime import datetime, timedelta
 
 from janitor import state
 from janitor.site import env
 
 
-def lintian_tag_link(tag):
+def lintian_tag_link(tag: str) -> str:
     return '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' % (
         tag, tag)
 
@@ -30,7 +34,7 @@ class RunnerProcessingUnavailable(Exception):
     """Raised when unable to get processing data for runner."""
 
 
-def get_processing(answer):
+def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
     for entry in answer['processing']:
         entry = dict(entry.items())
         if entry.get('estimated_duration'):
@@ -42,9 +46,59 @@ def get_processing(answer):
         yield entry
 
 
-async def get_queue(conn, only_command=None, limit=None):
+async def iter_queue_with_last_run(
+        conn: asyncpg.Connection,
+        limit: Optional[int] = None
+        ) -> AsyncIterator[
+                Tuple[state.QueueItem, Optional[str], Optional[str]]]:
+    query = """
+SELECT
+      package.branch_url,
+      package.subpath,
+      queue.package,
+      queue.command,
+      queue.context,
+      queue.id,
+      queue.estimated_duration,
+      queue.suite,
+      queue.refresh,
+      queue.requestor,
+      package.vcs_type,
+      package.upstream_branch_url,
+      run.id,
+      run.result_code
+  FROM
+      queue
+  LEFT JOIN
+      run
+  ON
+      run.id = (
+          SELECT id FROM run WHERE
+            package = queue.package AND run.suite = queue.suite
+          ORDER BY run.start_time desc LIMIT 1)
+  LEFT JOIN
+      package
+  ON package.name = queue.package
+  ORDER BY
+  queue.priority ASC,
+  queue.id ASC
+"""
+    if limit:
+        query += " LIMIT %d" % limit
+    for row in await conn.fetch(query):
+        yield (
+            state.QueueItem.from_row(row[:-2]),
+            row[-2], row[-1])
+
+
+async def get_queue(
+        conn: asyncpg.Connection,
+        only_command: Optional[str] = None,
+        limit: Optional[int] = None) -> AsyncIterator[
+            Tuple[int, str, Optional[str], str, str,
+                  Optional[timedelta], Optional[str], Optional[str]]]:
     async for entry, log_id, result_code in (
-            state.iter_queue_with_last_run(conn, limit=limit)):
+            iter_queue_with_last_run(conn, limit=limit)):
         if only_command is not None and entry.command != only_command:
             continue
         expecting = None
@@ -76,24 +130,25 @@ async def get_queue(conn, only_command=None, limit=None):
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:
-            description = expecting
+            description = expecting or ''
         elif expecting is not None:
             description += ", " + expecting
         if entry.refresh:
             description += " (from scratch)"
         yield (
-            entry.package, entry.requestor,
+            entry.id, entry.package, entry.requestor,
             entry.suite, description, entry.estimated_duration,
             log_id, result_code)
 
 
-async def write_queue(client, conn, only_command=None, limit=None,
+async def write_queue(client, conn: asyncpg.Connection,
+                      only_command=None, limit=None,
                       queue_status=None):
     template = env.get_template('queue.html')
     if queue_status:
         processing = get_processing(queue_status)
     else:
-        processing = []
+        processing = iter([])
     return await template.render_async(
         queue=get_queue(conn, only_command, limit),
         processing=processing)
