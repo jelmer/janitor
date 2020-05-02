@@ -50,6 +50,8 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 
+from breezy.propose import get_proposal_by_url
+
 from . import (
     state,
     )
@@ -713,6 +715,7 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
         '/ws/merge-proposal', functools.partial(
             pubsub_handler, topic_merge_proposal))
     app.router.add_post('/scan', scan_request)
+    app.router.add_post('/refresh-status', refresh_proposal_status_request)
     app.router.add_post('/autopublish', autopublish_request)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -727,6 +730,26 @@ async def scan_request(request):
             await check_existing(
                 conn, request.app.rate_limiter,
                 request.app.vcs_manager, request.app.topic_merge_proposal,
+                request.app.dry_run)
+    request.loop.create_task(scan())
+    return web.Response(status=202, text="Scan started.")
+
+
+async def refresh_proposal_status_request(request):
+    url = await request.post()['url']
+    async def scan():
+        mp = get_proposal_by_url(url)
+        async with request.app.db.acquire() as conn:
+            if mp.is_merged():
+                status = 'merged'
+            elif mp.is_closed():
+                status = 'closed'
+            else:
+                status = 'open'
+            await check_existing_mp(
+                conn, mp, status,
+                vcs_manager=request.app.vcs_manager,
+                topic_merge_proposal=request.app.topic_merge_proposal,
                 request.app.dry_run)
     request.loop.create_task(scan())
     return web.Response(status=202, text="Scan started.")
@@ -774,14 +797,10 @@ def is_conflicted(mp):
         return None
 
 
-async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
-                         dry_run=False):
-    mps_per_maintainer = {
-        'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
-    possible_transports = []
-    status_count = {'open': 0, 'closed': 0, 'merged': 0, 'applied': 0}
-    requestor = 'publisher (regular refresh)'
-
+async def check_existing_mp(
+        conn, mp, status, topic_merge_proposal, vcs_manager,
+        mps_per_maintainer=None, dry_run=False,
+        possible_transports=None):
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'closed':
             # TODO(jelmer): Check if changes were applied manually and mark
@@ -802,103 +821,117 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
            {'url': mp.url, 'status': status, 'package': package_name,
             'merged_by': merged_by, 'merged_at': str(merged_at)})
 
+    try:
+        (revision, old_status, package_name,
+            maintainer_email) = await state.get_proposal_info(conn, mp.url)
+    except KeyError:
+        try:
+            revision = open_branch(
+                mp.get_source_branch_url(),
+                possible_transports=possible_transports).last_revision()
+        except (BranchMissing, BranchUnavailable):
+            revision = None
+        old_status = None
+        maintainer_email = None
+        package_name = None
+    if maintainer_email is None:
+        target_branch_url = mp.get_target_branch_url()
+        package = await state.get_package_by_branch_url(
+            conn, target_branch_url)
+        if package is None:
+            warning('No package known for %s (%s)',
+                    mp.url, target_branch_url)
+            package_name = None
+        else:
+            maintainer_email = package.maintainer_email
+            package_name = package.name
+    if old_status != status:
+        await update_proposal_status(mp, status, revision, package_name)
+    if maintainer_email is not None and mps_per_maintainer is not None:
+        mps_per_maintainer[status].setdefault(maintainer_email, 0)
+        mps_per_maintainer[status][maintainer_email] += 1
+    if status != 'open':
+        return
+    mp_run = await state.get_merge_proposal_run(conn, mp.url)
+    if mp_run is None:
+        warning('Unable to find local metadata for %s, skipping.', mp.url)
+        return
+
+    last_run = await state.get_last_unabsorbed_run(
+        conn, mp_run.package, mp_run.suite)
+    if last_run is None:
+        # A new run happened since the last, but there was nothing to
+        # do.
+        note('%s: Last run did not produce any changes, '
+             'closing proposal.', mp.url)
+        await update_proposal_status(mp, 'closed', revision, package_name)
+        mp.close()
+        return
+
+    if last_run.result_code not in ('success', 'nothing-to-do'):
+        note('%s: Last run failed (%s). Not touching merge proposal.',
+             mp.url, last_run.result_code)
+        return
+
+    if last_run != mp_run:
+        publish_id = str(uuid.uuid4())
+        note('%s needs to be updated.', mp.url)
+        try:
+            mp_url, branch_name, is_new = await publish_one(
+                last_run.suite, last_run.package, last_run.command,
+                last_run.result, last_run.branch_url, MODE_PROPOSE,
+                last_run.id, maintainer_email,
+                vcs_manager=vcs_manager, branch_name=last_run.branch_name,
+                dry_run=dry_run, require_binary_diff=False,
+                allow_create_proposal=True, reviewers=None,
+                topic_merge_proposal=topic_merge_proposal,
+                rate_limiter=rate_limiter)
+        except PublishFailure as e:
+            note('%s: Updating merge proposal failed: %s (%s)',
+                 mp.url, e.code, e.description)
+            await state.store_publish(
+                conn, last_run.package, mp_run.branch_name,
+                last_run.main_branch_revision,
+                last_run.revision, e.mode, e.code,
+                e.description, mp.url,
+                publish_id=publish_id,
+                requestor='publisher (regular refresh)')
+        else:
+            await state.store_publish(
+                conn, last_run.package, branch_name,
+                last_run.main_branch_revision,
+                last_run.revision, MODE_PROPOSE, 'success',
+                'Succesfully updated', mp_url,
+                publish_id=publish_id,
+                requestor='publisher (regular refresh)')
+
+            assert not is_new, "Intended to update proposal %r" % mp_url
+    else:
+        # It may take a while for the 'conflicted' bit on the proposal to
+        # be refreshed, so only check it if we haven't made any other
+        # changes.
+        if is_conflicted(mp):
+            note('%s is conflicted. Rescheduling.', mp.url)
+            await state.add_to_queue(
+                conn, mp_run.package, shlex.split(mp_run.command),
+                mp_run.suite, offset=-2, refresh=True,
+                requestor='publisher (merge conflict)')
+
+
+async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
+                         dry_run=False):
+    mps_per_maintainer = {
+        'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
+    possible_transports = []
+    status_count = {'open': 0, 'closed': 0, 'merged': 0, 'applied': 0}
+
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
-        try:
-            (revision, old_status, package_name,
-                maintainer_email) = await state.get_proposal_info(conn, mp.url)
-        except KeyError:
-            try:
-                revision = open_branch(
-                    mp.get_source_branch_url(),
-                    possible_transports=possible_transports).last_revision()
-            except (BranchMissing, BranchUnavailable):
-                revision = None
-            old_status = None
-            maintainer_email = None
-            package_name = None
-        if maintainer_email is None:
-            target_branch_url = mp.get_target_branch_url()
-            package = await state.get_package_by_branch_url(
-                conn, target_branch_url)
-            if package is None:
-                warning('No package known for %s (%s)',
-                        mp.url, target_branch_url)
-                package_name = None
-            else:
-                maintainer_email = package.maintainer_email
-                package_name = package.name
-        if old_status != status:
-            await update_proposal_status(mp, status, revision, package_name)
-        if maintainer_email is not None:
-            mps_per_maintainer[status].setdefault(maintainer_email, 0)
-            mps_per_maintainer[status][maintainer_email] += 1
-        if status != 'open':
-            continue
-        mp_run = await state.get_merge_proposal_run(conn, mp.url)
-        if mp_run is None:
-            warning('Unable to find local metadata for %s, skipping.', mp.url)
-            continue
-
-        last_run = await state.get_last_unabsorbed_run(
-            conn, mp_run.package, mp_run.suite)
-        if last_run is None:
-            # A new run happened since the last, but there was nothing to
-            # do.
-            note('%s: Last run did not produce any changes, '
-                 'closing proposal.', mp.url)
-            await update_proposal_status(mp, 'closed', revision, package_name)
-            mp.close()
-            continue
-
-        if last_run.result_code not in ('success', 'nothing-to-do'):
-            note('%s: Last run failed (%s). Not touching merge proposal.',
-                 mp.url, last_run.result_code)
-            continue
-
-        if last_run != mp_run:
-            publish_id = str(uuid.uuid4())
-            note('%s needs to be updated.', mp.url)
-            try:
-                mp_url, branch_name, is_new = await publish_one(
-                    last_run.suite, last_run.package, last_run.command,
-                    last_run.result, last_run.branch_url, MODE_PROPOSE,
-                    last_run.id, maintainer_email,
-                    vcs_manager=vcs_manager, branch_name=last_run.branch_name,
-                    dry_run=dry_run, require_binary_diff=False,
-                    allow_create_proposal=True, reviewers=None,
-                    topic_merge_proposal=topic_merge_proposal,
-                    rate_limiter=rate_limiter)
-            except PublishFailure as e:
-                note('%s: Updating merge proposal failed: %s (%s)',
-                     mp.url, e.code, e.description)
-                await state.store_publish(
-                    conn, last_run.package, mp_run.branch_name,
-                    last_run.main_branch_revision,
-                    last_run.revision, e.mode, e.code,
-                    e.description, mp.url,
-                    publish_id=publish_id,
-                    requestor=requestor)
-            else:
-                await state.store_publish(
-                    conn, last_run.package, branch_name,
-                    last_run.main_branch_revision,
-                    last_run.revision, MODE_PROPOSE, 'success',
-                    'Succesfully updated', mp_url,
-                    publish_id=publish_id,
-                    requestor=requestor)
-
-                assert not is_new, "Intended to update proposal %r" % mp_url
-        else:
-            # It may take a while for the 'conflicted' bit on the proposal to
-            # be refreshed, so only check it if we haven't made any other
-            # changes.
-            if is_conflicted(mp):
-                note('%s is conflicted. Rescheduling.', mp.url)
-                await state.add_to_queue(
-                    conn, mp_run.package, shlex.split(mp_run.command),
-                    mp_run.suite, offset=-2, refresh=True,
-                    requestor='publisher (merge conflict)')
+        await check_existing_mp(
+            conn, mp, status, topic_merge_proposal=topic_merge_proposal,
+            vcs_manager=vcs_manager, dry_run=dry_run,
+            possible_transports=possible_transports,
+            mps_per_maintainer=mps_per_maintainer)
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
