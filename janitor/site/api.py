@@ -613,8 +613,21 @@ async def handle_list_active_runs(request):
     async with request.app.http_client_session.get(url) as resp:
         if resp.status != 200:
             return web.json_response(await resp.json(), status=resp.status)
-        status = = await resp.json()
+        status = await resp.json()
         return web.json_response(status['processing'], status=200)
+
+
+async def handle_get_active_run(request):
+    run_id = request.match_info['run_id']
+    url = urllib.parse.urljoin(request.app.runner_url, 'status')
+    async with request.app.http_client_session.get(url) as resp:
+        if resp.status != 200:
+            return web.json_response(await resp.json(), status=resp.status)
+        processing = (await resp.json())['processing']
+        for entry in processing:
+            if entry['id'] == run_id:
+                return web.json_response(entry, status=200)
+        return web.json_response({}, status=404)
 
 
 def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
@@ -699,17 +712,6 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/runner/status', handle_runner_status,
         name='api-runner-status')
-    app.router.add_post(
-        '/runner/kill/{run_id}',
-        handle_runner_kill,
-        name='api-runner-kill')
-    app.router.add_get(
-        '/runner/log/{run_id}',
-        handle_runner_log_index,
-        name='api-runner-log-list')
-    app.router.add_get(
-        '/runner/log/{run_id}/{filename}',
-        handle_runner_log, name='api-runner-log')
     app.router.add_get(
         '/{suite:' + SUITE_REGEX + '}/report',
         handle_report, name='api-report')
@@ -721,10 +723,24 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         handle_publish_ready, name='api-publish-ready-suite')
     app.router.add_get(
         '/active-runs', handle_list_active_runs,
-        name='api-acitve-runs-list')
+        name='api-active-runs-list')
+    app.router.add_get(
+        '/active-runs/{run_id}', handle_get_active_run,
+        name='api-active-run-get')
     app.router.add_post(
         '/active-runs', handle_run_assign,
         name='api-run-assign')
+    app.router.add_post(
+        '/active-runs/{run_id}/kill',
+        handle_runner_kill,
+        name='api-run-kill')
+    app.router.add_get(
+        '/active-runs/{run_id}/log',
+        handle_runner_log_index,
+        name='api-run-log-list')
+    app.router.add_get(
+        '/active-runs/{run_id}/log/{filename}',
+        handle_runner_log, name='api-run-log')
     # TODO(jelmer): Previous runs (iter_previous_runs)
     # TODO(jelmer): Last successes (iter_last_successes)
     # TODO(jelmer): Last runs (iter_last_runs)
