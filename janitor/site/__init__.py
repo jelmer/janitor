@@ -113,6 +113,8 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
         'source': unchanged_run.package,
         'old_version': unchanged_run.build_version,
         'new_version': run.build_version,
+        'jquery_url': 'https://janitor.debian.org/_static/jquery.js',
+        'css_url': None,
     }
     if filter_boring:
         payload["filter_boring"] = "yes"
@@ -127,6 +129,7 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
             if resp.status == 200:
                 return await resp.read(), resp.content_type
             elif resp.status == 404:
+                print('Status: %r'  % await resp.read())
                 raise FileNotFoundError
             else:
                 raise DebdiffRetrievalError(

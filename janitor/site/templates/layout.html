@@ -20,6 +20,12 @@
     <script src="/_static/moment.js"></script>
     <script src="/_static/chart.js"></script>
     <script>
+var handlers = [];
+
+registerHandler = function(kind, cb) {
+  handlers.push({'kind': kind, 'callback': cb});
+};
+
 window.onload = function() {
 const url = 'wss://janitor.debian.net/ws/notifications';
 const connection = new WebSocket(url);
@@ -29,12 +35,34 @@ connection.onerror = (error) => {
 }
 
 connection.onmessage = (e) => {
+  for (handler in handlers) {
+    if (handler.kind == e.data[0]) { handler.callback(e.data[1]); }
+  }
   console.log(e.data);
 }
 }
 
 windowbeforeunload = function(){
     socket.close();
+};
+
+// Please keep this logic in sync with janitor/site/__init__.py:format_duration
+format_duration = function(n) {
+   var d = moment.duration(n, "s");
+   var ret = "";
+   if (d.weeks() > 0) {
+      return d.weeks() + "w" + (d.days() % 7) + "d";
+   }
+   if (d.days() > 0) {
+      return d.days() + "d" + (d.hours() % 24) + "h";
+   }
+   if (d.hours() > 0) {
+      return d.hours() + "h" + (d.minutes() % 60) + "m";
+   }
+   if (d.minutes() > 0) {
+      return d.minutes() + "m" + (d.seconds() % 60) + "s";
+   }
+   return d.seconds() + "s";
 };
 
 

@@ -17,7 +17,7 @@
   <th class="head">Current Duration</th>
 </tr>
 </thead>
-<tbody valign="top" name="queue-table">
+<tbody valign="top" id="queue-table">
 {% for entry in processing %}
 <tr id="active-{{ entry['id'] }}">
     <td><a href="/cupboard/pkg/{{ entry['package'] }}">{{ entry['package'] }}</a></td>
@@ -45,7 +45,7 @@
 </thead>
 <tbody valign="top">
 {% for queue_id, pkg, requestor, suite, description, estimated_duration, last_run_id, last_run_result_code in queue %}
-<tr id="queue-{{ queue_id }}">
+<tr id="queue-{{ queue_id }}"{% if queue_id in active_queue_ids %} class="active"{% endif %}>
   <td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a></td>
   <td>{{ description|safe }}</td>
   <td>{{ format_duration(estimated_duration) if estimated_duration else 'unknown' }}</td>
@@ -55,5 +55,33 @@
 {% endfor %}
 </tbody>
 </table>
+
+<script>
+registerHandler('queue', function(msg) {
+   console.log('Refreshing queue items');
+   var seen_ids = [];
+   for (i in msg['processing']) {
+      var p = msg['processing'][i];
+      var existing = 'active-' + p['id'];
+      if (!$('#' + existing).length) {
+	 tr = $('<tr id="active-' + p['id'] + '"/>');
+	 tr.append('<td><a href="/cupboard/pkg/' + p['package'] + '">' + p['package'] + '</a></td>');
+	 tr.append('<td>' + p['suite'] + '</td>');
+	 tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
+	 tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
+	 tr.show();
+	 $('#queue-table').append(tr);
+      }
+      seen_ids.push(existing);
+   }
+   $('#queue-table').children().each(function(ch, el) {
+       if (!seen_ids.includes(el.id)) {
+	 el.remove();
+       }
+   });
+});
+
+</script>
+
 </div>
 {% endblock %}
