@@ -608,6 +608,15 @@ async def handle_run_assign(request):
         return web.json_response(assignment, status=201)
 
 
+async def handle_list_active_runs(request):
+    url = urllib.parse.urljoin(request.app.runner_url, 'status')
+    async with request.app.http_client_session.get(url) as resp:
+        if resp.status != 200:
+            return web.json_response(await resp.json(), status=resp.status)
+        status = = await resp.json()
+        return web.json_response(status['processing'], status=200)
+
+
 def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app = web.Application()
     app.http_client_session = ClientSession()
@@ -710,6 +719,9 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/{suite:' + SUITE_REGEX + '}/publish-ready',
         handle_publish_ready, name='api-publish-ready-suite')
+    app.router.add_get(
+        '/active-runs', handle_list_active_runs,
+        name='api-acitve-runs-list')
     app.router.add_post(
         '/active-runs', handle_run_assign,
         name='api-run-assign')
