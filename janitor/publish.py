@@ -51,6 +51,7 @@ from silver_platter.utils import (
     )
 
 from breezy.propose import get_proposal_by_url
+import breezy.plugins.propose
 
 from . import (
     state,
@@ -736,7 +737,9 @@ async def scan_request(request):
 
 
 async def refresh_proposal_status_request(request):
-    url = await request.post()['url']
+    post = await request.post()
+    url = post['url']
+    note('Request to refresh proposal status for %s', url)
     async def scan():
         mp = get_proposal_by_url(url)
         async with request.app.db.acquire() as conn:
@@ -749,8 +752,9 @@ async def refresh_proposal_status_request(request):
             await check_existing_mp(
                 conn, mp, status,
                 vcs_manager=request.app.vcs_manager,
+                rate_limiter=request.app.rate_limiter,
                 topic_merge_proposal=request.app.topic_merge_proposal,
-                request.app.dry_run)
+                dry_run=request.app.dry_run)
     request.loop.create_task(scan())
     return web.Response(status=202, text="Scan started.")
 
@@ -799,7 +803,7 @@ def is_conflicted(mp):
 
 async def check_existing_mp(
         conn, mp, status, topic_merge_proposal, vcs_manager,
-        mps_per_maintainer=None, dry_run=False,
+        rate_limiter, mps_per_maintainer=None, dry_run=False,
         possible_transports=None):
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'closed':
@@ -930,6 +934,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
         await check_existing_mp(
             conn, mp, status, topic_merge_proposal=topic_merge_proposal,
             vcs_manager=vcs_manager, dry_run=dry_run,
+            rate_limiter=rate_limiter,
             possible_transports=possible_transports,
             mps_per_maintainer=mps_per_maintainer)
 
