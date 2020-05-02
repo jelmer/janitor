@@ -412,6 +412,11 @@ class ActiveRun(object):
     start_time: datetime
     worker_name: str
 
+    def __init__(self, queue_item: state.QueueItem):
+        self.queue_item = queue_item
+        self.start_time = datetime.now()
+        self.log_id = str(uuid.uuid4())
+
     @property
     def current_duration(self):
         return datetime.now() - self.start_time
@@ -422,25 +427,6 @@ class ActiveRun(object):
 
     def json(self) -> Any:
         """Return a JSON representation."""
-        raise NotImplementedError(self.json)
-
-
-class ActiveLocalRun(ActiveRun):
-
-    # TODO(jelmer): Use short host name instead?
-    worker_name = 'local'
-
-    def __init__(self, queue_item: state.QueueItem,
-                 output_directory: str):
-        self.queue_item = queue_item
-        self.start_time = datetime.now()
-        self.output_directory = output_directory
-        self.log_id = str(uuid.uuid4())
-
-    def kill(self) -> None:
-        self._task.cancel()
-
-    def json(self):
         return {
             'queue_id': self.queue_item.id,
             'id': self.log_id,
@@ -452,7 +438,22 @@ class ActiveLocalRun(ActiveRun):
             'current_duration':
                 self.current_duration.total_seconds(),
             'start_time': self.start_time.isoformat(),
+            'worker': self.worker_name
             }
+
+
+class ActiveLocalRun(ActiveRun):
+
+    # TODO(jelmer): Use short host name instead?
+    worker_name = 'local'
+
+    def __init__(self, queue_item: state.QueueItem,
+                 output_directory: str):
+        super(ActiveLocalRun, self).__init__(queue_item)
+        self.output_directory = output_directory
+
+    def kill(self) -> None:
+        self._task.cancel()
 
     async def process(
             self, db, config, worker_kind, vcs_url, command,
@@ -687,23 +688,6 @@ class ActiveLocalRun(ActiveRun):
                     warning('Unable to upload changes file %s: %r',
                             result.changes_filename, e)
                     # TODO(jelmer): Copy to failed upload directory
-            if self.queue_item.suite != 'unchanged':
-                async with db.acquire() as conn:
-                    run = await state.get_unchanged_run(
-                        conn, worker_result.main_branch_revision)
-                    if run is None:
-                        note('Scheduling control run for %s.',
-                             self.queue_item.package)
-                        duration = datetime.now() - self.start_time
-                        await state.add_to_queue(
-                            conn, self.queue_item.package, [
-                                'just-build',
-                                ('--revision=%s' %
-                                 worker_result.main_branch_revision
-                                 .decode('utf-8'))
-                            ],
-                            'unchanged', offset=-10,
-                            estimated_duration=duration, requestor='control')
         return result
 
 
@@ -817,9 +801,24 @@ class QueueProcessor(object):
                          result: JanitorResult) -> None:
         finish_time = datetime.now()
         item = active_run.queue_item
+        duration = finish_time = active_run.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
-            finish_time.timestamp() -
-            active_run.start_time.timestamp())
+            duration.total_seconds())
+        if active_run.changes_filename and item.suite != 'unchanged':
+            async with db.acquire() as conn:
+                run = await state.get_unchanged_run(
+                    conn, result.main_branch_revision)
+                if run is None:
+                    note('Scheduling control run for %s.', item.package)
+                    await state.add_to_queue(
+                        conn, item.package, [
+                            'just-build',
+                            ('--revision=%s' %
+                             result.main_branch_revision
+                             .decode('utf-8'))
+                        ],
+                        'unchanged', offset=-10,
+                        estimated_duration=duration, requestor='control')
         if not self.dry_run:
             async with self.database.acquire() as conn:
                 await state.store_run(
