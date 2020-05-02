@@ -839,21 +839,20 @@ class QueueProcessor(object):
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
 
-    async def next_queue_item(self) -> Optional[state.QueueItem]:
+    async def next_queue_item(self, n) -> Optional[state.QueueItem]:
+        ret = []
         async with self.database.acquire() as conn:
-            limit = len(self.active_runs) + 5
+            limit = len(self.active_runs) + n + 2
             async for item in state.iter_queue(conn, limit=limit):
                 if self.queue_item_assigned(item):
                     continue
-                return item
-            return None
+                ret.append(item)
+            return ret
 
     async def process(self):
-        todo = set()
-        for i in range(self.concurrency):
-            item = await self.next_queue_item()
-            if item is not None:
-                todo.add(self.process_queue_item(item))
+        todo = set([
+            self.process_queue_item(item)
+            for item in await self.next_queue_item(self.concurrency)])
 
         def handle_sigterm():
             self.concurrency = None
@@ -873,9 +872,9 @@ class QueueProcessor(object):
                     task.result()
                 todo = pending
                 if self.concurrency:
-                    item = await self.next_queue_item()
-                    if item:
-                        todo.add(self.process_queue_item(item))
+                    todo.update([
+                        self.process_queue_item(item)
+                        for item in await self.next_queue_item(len(done))])
         finally:
             loop.remove_signal_handler(signal.SIGTERM)
 
