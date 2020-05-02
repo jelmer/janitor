@@ -279,28 +279,6 @@ async def publish_one(
     raise PublishFailure(mode, 'publisher-invalid-response', stderr.decode())
 
 
-async def export_stats(db):
-    while True:
-        async with db.acquire() as conn:
-            ready_count = {}
-            async for (run, maintainer_email, uploader_emails, main_branch_url,
-                       publish_mode, update_changelog, command,
-                       ) in state.iter_publish_ready(conn):
-                ready_count.setdefault((run.review_status, publish_mode), 0)
-                ready_count[(run.review_status, publish_mode)] += 1
-
-            for (review_status, publish_mode), count in ready_count.items():
-                publish_ready_count.labels(
-                    review_status=review_status,
-                    publish_mode=publish_mode).set(count)
-
-            push_count = await state.get_successful_push_count(conn)
-            successful_push_count.set(push_count)
-
-        # Every 30 minutes
-        await asyncio.sleep(60 * 30)
-
-
 async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, topic_merge_proposal,
                               dry_run=False, reviewed_only=False,
@@ -1070,7 +1048,6 @@ def main(argv=None):
                     vcs_manager, db, topic_merge_proposal, topic_publish,
                     args.dry_run, args.require_binary_diff,
                     push_limit=args.push_limit)),
-            loop.create_task(export_stats(db)),
         ]
         if args.runner_url and not args.reviewed_only:
             tasks.append(loop.create_task(
