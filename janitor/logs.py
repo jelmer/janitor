@@ -27,13 +27,13 @@ class ServiceUnavailable(Exception):
 
 class LogFileManager(object):
 
-    async def has_log(self, pkg, run_id, name):
+    async def has_log(self, pkg, run_id, name, timeout=None):
         raise NotImplementedError(self.has_log)
 
-    async def get_log(self, pkg, run_id, name):
+    async def get_log(self, pkg, run_id, name, timeout=None):
         raise NotImplementedError(self.get_log)
 
-    async def import_log(self, pkg, run_id, orig_path):
+    async def import_log(self, pkg, run_id, orig_path, timeout=None):
         raise NotImplementedError(self.import_log)
 
 
@@ -63,7 +63,7 @@ class FileSystemLogFileManager(LogFileManager):
                 return open(path, 'rb')
         raise FileNotFoundError(name)
 
-    async def import_log(self, pkg, run_id, orig_path):
+    async def import_log(self, pkg, run_id, orig_path, timeout=None):
         dest_dir = os.path.join(self.log_directory, pkg, run_id)
         os.makedirs(dest_dir, exist_ok=True)
         with open(orig_path, 'rb') as inf:
@@ -126,7 +126,7 @@ class S3LogFileManager(LogFileManager):
                 'Unexpected response code %d: %s' % (
                     resp.status, await resp.text()))
 
-    async def import_log(self, pkg, run_id, orig_path):
+    async def import_log(self, pkg, run_id, orig_path, timeout=360):
         with open(orig_path, 'rb') as f:
             data = gzip.compress(f.read())
 
@@ -166,14 +166,15 @@ class GCSLogFilemanager(LogFileManager):
                 raise FileNotFoundError(name)
             raise
 
-    async def import_log(self, pkg, run_id, orig_path):
+    async def import_log(self, pkg, run_id, orig_path, timeout=360):
         object_name = self._get_object_name(
             pkg, run_id, os.path.basename(orig_path))
         with open(orig_path, 'rb') as f:
             uploaded_data = gzip.compress(f.read())
         try:
             await self.storage.upload(
-                self.bucket_name, object_name, uploaded_data)
+                self.bucket_name, object_name, uploaded_data,
+                timeout=timeout)
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable()
