@@ -308,7 +308,7 @@ class Run(object):
         return len(self.__slots__)
 
     def __tuple__(self):
-        return (self.run_id, self.times, self.command, self.description,
+        return (self.id, self.times, self.command, self.description,
                 self.package, self.build_version, self.build_distribution,
                 self.result_code, self.branch_name, self.main_branch_revision,
                 self.revision, self.context, self.result, self.suite,
