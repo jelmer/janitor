@@ -407,10 +407,11 @@ async def import_logs(output_directory: str,
 class ActiveRun(object):
     """Tracks state of an active run."""
 
-    item: state.QueueItem
+    queue_item: state.QueueItem
     log_id: str
     start_time: datetime
     worker_name: str
+    finish_time: datetime
 
     @property
     def current_duration(self):

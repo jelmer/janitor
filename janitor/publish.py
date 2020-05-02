@@ -31,8 +31,6 @@ import time
 from typing import Dict, List, Optional
 import uuid
 
-from lintian_brush.vcs import determine_browser_url
-
 from prometheus_client import (
     Counter,
     Gauge,
@@ -51,7 +49,6 @@ from silver_platter.utils import (
     )
 
 from breezy.propose import get_proposal_by_url
-import breezy.plugins.propose
 
 from . import (
     state,
@@ -63,6 +60,7 @@ from .trace import note, warning
 from .vcs import (
     LocalVcsManager,
     get_run_diff,
+    bzr_to_browse_url,
     )
 
 
@@ -461,8 +459,7 @@ async def publish_from_policy(
          'proposal_url': proposal_url or None,
          'mode': mode,
          'main_branch_url': main_branch_url,
-         'main_branch_browse_url': determine_browser_url(
-             None, main_branch_url),
+         'main_branch_browse_url': bzr_to_browse_url(main_branch_url),
          'branch_name': branch_name,
          'result_code': code,
          'result': run.result,
@@ -519,8 +516,7 @@ async def publish_and_store(
                 'package': run.package,
                 'suite': run.suite,
                 'main_branch_url': run.branch_url,
-                'main_branch_browse_url': determine_browser_url(
-                     None, run.branch_url),
+                'main_branch_browse_url': bzr_to_browse_url(run.branch_url),
                 'result': run.result,
                 })
             return
@@ -548,8 +544,7 @@ async def publish_and_store(
              'proposal_url': proposal_url or None,
              'mode': mode,
              'main_branch_url': run.branch_url,
-             'main_branch_browse_url': determine_browser_url(
-                 None, run.branch_url),
+             'main_branch_browse_url': bzr_to_browse_url(run.branch_url),
              'branch_name': branch_name,
              'result_code': 'success',
              'result': run.result,
@@ -740,6 +735,7 @@ async def refresh_proposal_status_request(request):
     post = await request.post()
     url = post['url']
     note('Request to refresh proposal status for %s', url)
+
     async def scan():
         mp = get_proposal_by_url(url)
         async with request.app.db.acquire() as conn:
