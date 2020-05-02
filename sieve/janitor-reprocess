@@ -1,0 +1,70 @@
+#!/usr/bin/python3
+
+# Copyright (C) 2019-2020 Jelmer Vernooij <jelmer@jelmer.uk>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+"""E-mail based merge proposal status refresher.
+
+This script parses e-mails on stdin and triggers a poll of the status
+of any merge request mentioned in the body.
+"""
+
+import sys
+
+
+def parse_email(f):
+    from email import policy
+    from email.parser import BytesParser
+
+    msg = BytesParser(policy=policy.default).parse(sys.stdin.buffer)
+    body = msg.get_body(preferencelist=('plain', ))
+    lines = body.get_content().splitlines()
+
+    for line in lines:
+        try:
+            (field, value) = line.split(':', 1)
+        except ValueError:
+            continue
+        if field == 'Merge Request url':
+            return value.strip()
+    return None
+
+
+async def refresh_merge_proposal(api_url, merge_proposal_url):
+    import aiohttp
+    data = {'url': merge_proposal_url}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(api_url, data=data) as resp:
+            if resp.status != 200:
+                raise Exception("error %d triggering refresh for %s" % (
+                    resp.status, api_url))
+
+
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--refresh-url', type=str,
+        help='URL to submit requests to.',
+        default='https://janitor.debian.net/api/refresh-proposal-status')
+    args = parser.parse_args()
+    merge_proposal_url = parse_email(sys.stdin.buffer)
+    if merge_proposal_url is None:
+        sys.exit(0)
+    print('Found merge proposal URL: %s' % merge_proposal_url)
+    asyncio.run(refresh_merge_proposal(args.refresh_url, merge_proposal_url))
+    sys.exit(0)
