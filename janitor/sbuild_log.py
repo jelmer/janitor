@@ -1885,6 +1885,8 @@ secondary_build_failure_regexps = [
     r'Cannot connect to the Docker daemon at '
     r'unix:///var/run/docker.sock. Is the docker daemon running\?',
     r'dh_makeshlibs: failing due to earlier errors',
+    # Ruby
+    r'([^:]+)\.rb:[0-9]+:in `([^\'])+\': (.*) \((.*)\)',
 ]
 
 compiled_secondary_build_failure_regexps = [
