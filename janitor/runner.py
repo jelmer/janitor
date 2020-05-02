@@ -773,7 +773,7 @@ class QueueProcessor(object):
                 output_directory, pkg=item.package, suite=item.suite,
                 estimated_duration=item.estimated_duration,
                 queue_id=item.id)
-            self.active_runs[item.id] = active_run
+            self.active_runs[active_run.log_id] = active_run
             self.topic_queue.publish(self.status_json())
             result = await active_run.process(
                 self.database, self.config, self.worker_kind,
@@ -806,7 +806,7 @@ class QueueProcessor(object):
                     worker_name=worker_name)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
-        del self.active_runs[item.id]
+        del self.active_runs[active_run.log_id]
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
 
@@ -838,11 +838,17 @@ class QueueProcessor(object):
                         for i in enumerate(done):
                             async for item in state.iter_queue(
                                     conn, limit=self.concurrency):
-                                if item.id in self.active_runs:
+                                if self.queue_item_assigned(item):
                                     continue
                                 todo.add(self.process_queue_item(item))
         finally:
             loop.remove_signal_handler(signal.SIGTERM)
+
+    def queue_item_assigned(self, queue_item: state.QueueItem) -> bool:
+        for active_run in self.active_runs:
+            if active_run.queue_id == queue_item.id:
+                return True
+        return False
 
 
 async def handle_status(request):
@@ -852,7 +858,7 @@ async def handle_status(request):
 
 async def handle_log_index(request):
     queue_processor = request.app.queue_processor
-    run_id = int(request.match_info['run_id'])
+    run_id = request.match_info['run_id']
     try:
         directory = queue_processor.active_runs[run_id].output_directory
     except KeyError:
@@ -865,7 +871,7 @@ async def handle_log_index(request):
 
 async def handle_kill(request):
     queue_processor = request.app.queue_processor
-    run_id = int(request.match_info['run_id'])
+    run_id = request.match_info['run_id']
     try:
         ret = queue_processor.active_runs[run_id].json()
         queue_processor.active_runs[run_id].kill()
@@ -877,7 +883,7 @@ async def handle_kill(request):
 
 async def handle_log(request):
     queue_processor = request.app.queue_processor
-    run_id = int(request.match_info['run_id'])
+    run_id = request.match_info['run_id']
     filename = request.match_info['filename']
     if '/' in filename:
         return web.Response(
