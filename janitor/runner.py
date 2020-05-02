@@ -69,7 +69,7 @@ from silver_platter.utils import (
 from . import (
     state,
     )
-from .config import read_config, Config, Suite
+from .config import read_config, get_suite_config
 from .logs import get_log_manager, ServiceUnavailable, LogFileManager
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
@@ -392,13 +392,6 @@ async def import_logs(output_directory: str,
             else:
                 logfilenames.append(entry.name)
     return logfilenames
-
-
-def get_suite_config(config: Config, name: str) -> Suite:
-    for s in config.suite:
-        if s.name == name:
-            return s
-    raise KeyError(name)
 
 
 class ActiveRun(object):
