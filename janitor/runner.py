@@ -405,8 +405,24 @@ async def import_logs(output_directory: str,
 
 
 class ActiveRun(object):
+    """Tracks state of an active run."""
 
-    def __init__(self, output_directory: str, pkg: str, suite: str,
+    item: state.QueueItem
+    log_id: str
+
+    def kill(self) -> None:
+        """Abort this run."""
+        raise NotImplementedError(self.kill)
+
+    def json(self) -> Any:
+        """Return a JSON representation."""
+        raise NotImplementedError(self.json)
+
+
+class ActiveLocalRun(ActiveRun):
+
+    def __init__(self, item: state.QueueItem,
+                 output_directory: str, pkg: str, suite: str,
                  queue_id: str, estimated_duration: timedelta):
         self.start_time = datetime.now()
         self.output_directory = output_directory
@@ -769,8 +785,8 @@ class QueueProcessor(object):
     async def process_queue_item(self, item):
         worker_name = 'local'  # TODO(jelmer)
         with tempfile.TemporaryDirectory() as output_directory:
-            active_run = ActiveRun(
-                output_directory, pkg=item.package, suite=item.suite,
+            active_run = ActiveLocalRun(
+                item, output_directory, pkg=item.package, suite=item.suite,
                 estimated_duration=item.estimated_duration,
                 queue_id=item.id)
             self.active_runs[active_run.log_id] = active_run
