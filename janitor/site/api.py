@@ -226,6 +226,24 @@ async def handle_merge_proposal_list(request):
     return web.json_response(response_obj)
 
 
+async def handle_refresh_proposal_status(request):
+    post = await request.post()
+    try:
+        mp_url = post['url']
+    except KeyError:
+        raise web.HTTPBadRequest('No URL specified')
+
+    data = {'url': mp_url}
+    publisher_url = request.app.publisher_url
+    url = urllib.parse.urljoin(publisher_url, 'refresh-status')
+    async with request.app.http_client_session.post(
+            url, data=data) as resp:
+        if resp.status == 200:
+            return web.Response(
+                text='Successfully scheduled', status=200)
+        return web.Response(text=(await resp.read()), status=resp.status)
+
+
 async def handle_queue(request):
     limit = request.query.get('limit')
     if limit is not None:
@@ -660,6 +678,9 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/{suite}/pkg/{package}/diff', handle_diff,
         name='api-package-diff')
+    app.router.add_post(
+        '/refresh-proposal-status', handle_refresh_proposal_status,
+        name='api-refresh-proposal-status')
     app.router.add_get(
         '/merge-proposals', handle_merge_proposal_list,
         name='api-merge-proposals')
