@@ -1,0 +1,21 @@
+This directory contains a basic script to process e-mails from GitLab and use
+them to trigger immediate refreshing of the status of merge proposals.
+
+Dovecot
+=======
+
+To use this script with dovecot's sieve filtering, enable the extprograms sieve plugin.
+
+To configure the plugin, set something like:
+
+    plugin {
+      sieve_plugins = sieve_extprograms
+      sieve_extensions = +vnd.dovecot.execute +editheader
+      sieve_execute_bin_dir = /usr/lib/dovecot/sieve-pipe
+      sieve_global_dir = /var/lib/dovecot/sieve/global
+    }
+
+The filter script should be placed in $sieve_execute_bin_dir.
+
+You can then include the sieve filter ("janitor.sieve") in this directory to
+trigger runs.
