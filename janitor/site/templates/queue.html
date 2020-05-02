@@ -19,7 +19,7 @@
 </thead>
 <tbody valign="top" name="queue-table">
 {% for entry in processing %}
-<tr>
+<tr id="active-{{ entry['id'] }}">
     <td><a href="/cupboard/pkg/{{ entry['package'] }}">{{ entry['package'] }}</a></td>
     <td>{{ entry['suite'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
@@ -44,8 +44,8 @@
 </tr>
 </thead>
 <tbody valign="top">
-{% for pkg, requestor, suite, description, estimated_duration, last_run_id, last_run_result_code in queue %}
-<tr>
+{% for queue_id, pkg, requestor, suite, description, estimated_duration, last_run_id, last_run_result_code in queue %}
+<tr id="queue-{{ queue_id }}">
   <td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a></td>
   <td>{{ description|safe }}</td>
   <td>{{ format_duration(estimated_duration) if estimated_duration else 'unknown' }}</td>

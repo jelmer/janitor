@@ -583,47 +583,6 @@ queue.id ASC
         yield QueueItem.from_row(row)
 
 
-async def iter_queue_with_last_run(conn: asyncpg.Connection, limit=None):
-    query = """
-SELECT
-      package.branch_url,
-      package.subpath,
-      queue.package,
-      queue.command,
-      queue.context,
-      queue.id,
-      queue.estimated_duration,
-      queue.suite,
-      queue.refresh,
-      queue.requestor,
-      package.vcs_type,
-      package.upstream_branch_url,
-      run.id,
-      run.result_code
-  FROM
-      queue
-  LEFT JOIN
-      run
-  ON
-      run.id = (
-          SELECT id FROM run WHERE
-            package = queue.package AND run.suite = queue.suite
-          ORDER BY run.start_time desc LIMIT 1)
-  LEFT JOIN
-      package
-  ON package.name = queue.package
-  ORDER BY
-  queue.priority ASC,
-  queue.id ASC
-"""
-    if limit:
-        query += " LIMIT %d" % limit
-    for row in await conn.fetch(query):
-        yield (
-            QueueItem.from_row(row[:-2]),
-            row[-2], row[-1])
-
-
 async def drop_queue_item(conn: asyncpg.Connection, queue_id):
     await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
