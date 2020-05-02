@@ -601,7 +601,7 @@ async def handle_publish_ready(request):
 async def handle_run_assign(request):
     url = urllib.parse.urljoin(request.app.runner_url, 'assign')
     async with request.app.http_client_session.post(
-            request.app.runner_url, data={'worker': request.remote}) as resp:
+            url, data={'worker': request.remote}) as resp:
         if resp.status != 201:
             return web.json_response(await resp.json(), status=resp.status)
         assignment = await resp.json()
