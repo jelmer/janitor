@@ -22,6 +22,7 @@ from typing import Optional, List, Tuple, Iterable
 import urllib.parse
 import breezy.git  # noqa: F401
 import breezy.bzr  # noqa: F401
+from breezy import urlutils
 from breezy.branch import Branch
 from breezy.diff import show_diff_trees
 from breezy.errors import (
@@ -36,6 +37,10 @@ from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
 from breezy.transport import Transport
+from lintian_brush.vcs import (
+    determine_browser_url,
+    unsplit_vcs_url,
+    )
 from silver_platter.utils import (
     open_branch_containing,
     open_branch,
@@ -381,3 +386,9 @@ def get_run_diff(vcs_manager: VcsManager, run) -> bytes:
             run.revision)
     show_diff_trees(old_tree, new_tree, to_file=f)
     return f.getvalue()
+
+
+def bzr_to_browse_url(url: str) -> str:
+    (url, params) = urlutils.split_segment_parameters(url)
+    deb_vcs_url = unsplit_vcs_url(url, params.get('branch'))
+    return determine_browser_url(None, deb_vcs_url)
