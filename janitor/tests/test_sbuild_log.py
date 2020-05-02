@@ -731,6 +731,9 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'required by gem \'selenium-webdriver\', in any of the sources.'],
             1, MissingRubyGem('childprocess', '0.5'))
         self.run_test([
+            'Could not find gem \'rexml\', which is required by gem '
+            '\'rubocop\', in any of the sources.'], 1, MissingRubyGem('rexml'))
+        self.run_test([
             '/usr/lib/ruby/2.5.0/rubygems/dependency.rb:310:in `to_specs\': '
             'Could not find \'http-parser\' (~> 1.2.0) among 59 total gem(s) '
             '(Gem::MissingSpecError)'], 1,
