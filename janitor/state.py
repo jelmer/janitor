@@ -21,7 +21,7 @@ import json
 import shlex
 import asyncpg
 from contextlib import asynccontextmanager
-from typing import Optional, Tuple, List, AsyncIterator, Any, Union
+from typing import Optional, Tuple, List, AsyncIterator, Any, Union, Callable
 from breezy import urlutils
 
 
@@ -85,11 +85,15 @@ async def popcon(conn: asyncpg.Connection):
 
 
 async def store_run(
-        conn: asyncpg.Connection, run_id, name, vcs_url, start_time,
-        finish_time, command, description, instigated_context, context,
-        main_branch_revision, result_code, build_version, build_distribution,
-        branch_name, revision, subworker_result, suite, logfilenames, value,
-        worker_name):
+        conn: asyncpg.Connection,
+        run_id: str, name: str, vcs_url: str, start_time: datetime.datetime,
+        finish_time: datetime.datetime, command: List[str], description: str,
+        instigated_context: Optional[str], context: Optional[str],
+        main_branch_revision: bytes, result_code: str,
+        build_version: Optional[Version],
+        build_distribution: Optional[str], branch_name: str,
+        revision: bytes, subworker_result: Optional[Any], suite: str,
+        logfilenames: List[str], value: Optional[int], worker_name: str):
     """Store a run.
 
     Args:
@@ -124,7 +128,8 @@ async def store_run(
         run_id, ' '.join(command), description, result_code,
         start_time, finish_time, name, instigated_context, context,
         str(build_version) if build_version else None, build_distribution,
-        main_branch_revision, branch_name, revision,
+        main_branch_revision.decode('utf-8'), branch_name,
+        revision.decode('utf-8'),
         subworker_result if subworker_result else None, suite,
         vcs_url, logfilenames, value, worker_name)
 
@@ -1015,9 +1020,13 @@ LEFT JOIN branch ON package.branch_url = branch.url
 
 
 async def update_branch_status(
-        conn: asyncpg.Connection, branch_url, canonical_branch_url,
-        last_scanned=datetime.datetime.now, status=None,
-        revision=None, description=None):
+        conn: asyncpg.Connection,
+        branch_url: str, canonical_branch_url: str,
+        last_scanned: Union[
+            datetime.datetime, Callable[[], datetime.datetime]
+            ] = datetime.datetime.now,
+        status: Optional[str] = None,
+        revision: Optional[bytes] = None, description: Optional[str] = None):
     if callable(last_scanned):
         last_scanned = last_scanned()
     await conn.execute(
@@ -1084,7 +1093,11 @@ async def store_candidates(conn: asyncpg.Connection, entries):
         entries)
 
 
-async def iter_candidates(conn: asyncpg.Connection, packages=None, suite=None):
+async def iter_candidates(
+        conn: asyncpg.Connection, packages: Optional[List[str]] = None,
+        suite: Optional[str] = None
+        ) -> List[Tuple[
+            Package, str, Optional[str], Optional[int], Optional[float]]]:
     query = """
 SELECT
   package.name,
@@ -1115,7 +1128,7 @@ WHERE NOT package.removed
     elif packages is not None:
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
-    return [([Package.from_row(row)] + list(row[10:]))
+    return [tuple([Package.from_row(row)] + list(row[10:]))  # type: ignore
             for row in await conn.fetch(query, *args)]
 
 

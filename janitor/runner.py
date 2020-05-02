@@ -196,11 +196,21 @@ class WorkerResult(object):
         """create a WorkerResult object from a JSON file."""
         with open(path, 'r') as f:
             worker_result = json.load(f)
+        return cls.from_json(worker_result)
+
+    @classmethod
+    def from_json(cls, worker_result):
+        main_branch_revision = worker_result.get('main_branch_revision')
+        if main_branch_revision is not None:
+            main_branch_revision = main_branch_revision.encode('utf-8')
+        revision = worker_result.get('revision')
+        if revision is not None:
+            revision = revision.encode('utf-8')
         return cls(
                 worker_result.get('code'), worker_result.get('description'),
                 worker_result.get('context'), worker_result.get('subworker'),
-                worker_result.get('main_branch_revision'),
-                worker_result.get('revision'), worker_result.get('value'))
+                main_branch_revision,
+                revision, worker_result.get('value'))
 
 
 async def run_subprocess(args, env, log_path=None):
@@ -667,7 +677,8 @@ class ActiveRun(object):
                             conn, self.pkg, [
                                 'just-build',
                                 ('--revision=%s' %
-                                 worker_result.main_branch_revision)
+                                 worker_result.main_branch_revision
+                                 .decode('utf-8'))
                             ],
                             'unchanged', offset=-10,
                             estimated_duration=duration, requestor='control')
