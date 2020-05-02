@@ -241,7 +241,7 @@ async def handle_refresh_proposal_status(request):
         if resp.status == 200:
             return web.Response(
                 text='Successfully scheduled', status=200)
-        return web.Response(text=(await resp.read()), status=resp.status)
+        return web.Response(text=(await resp.text()), status=resp.status)
 
 
 async def handle_queue(request):
@@ -343,7 +343,7 @@ async def handle_archive_diff(request):
             request.app.http_client_session, request.app.archiver_url, run,
             unchanged_run, kind=kind, filter_boring=filter_boring,
             accept=request.headers.get('ACCEPT', '*/*'))
-    except FileNotFoundError:
+    except FileNotFoundError as e:
         return web.json_response(
             {'reason':
                 'debdiff not calculated yet (run: %s, unchanged run: %s)' %
@@ -351,7 +351,8 @@ async def handle_archive_diff(request):
             status=404)
     except DebdiffRetrievalError as e:
         return web.json_response(
-            {'reason': 'unable to contact archiver for debdiff: %r' % e},
+            {'reason': 'unable to contact archiver for debdiff: %r' % e,
+             'inner_reason': e.args[0]},
             status=503)
 
     return web.Response(

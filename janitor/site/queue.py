@@ -147,8 +147,12 @@ async def write_queue(client, conn: asyncpg.Connection,
     template = env.get_template('queue.html')
     if queue_status:
         processing = get_processing(queue_status)
+        active_queue_ids = set(
+            [p['queue_id'] for p in queue_status['processing']])
     else:
         processing = iter([])
+        active_queue_ids = set()
     return await template.render_async(
         queue=get_queue(conn, only_command, limit),
+        active_queue_ids=active_queue_ids,
         processing=processing)
