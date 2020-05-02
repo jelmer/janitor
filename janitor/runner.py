@@ -411,7 +411,6 @@ class ActiveRun(object):
     log_id: str
     start_time: datetime
     worker_name: str
-    finish_time: datetime
 
     @property
     def current_duration(self):
@@ -455,13 +454,7 @@ class ActiveLocalRun(ActiveRun):
             'start_time': self.start_time.isoformat(),
             }
 
-    async def process(self, *args, **kwargs):
-        try:
-            return await self._process(*args, **kwargs)
-        finally:
-            self.finish_time = datetime.now()
-
-    async def _process(
+    async def process(
             self, db, config, worker_kind, vcs_url, command,
             build_command, pre_check=None, post_check=None,
             dry_run=False, incoming_url=None, logfile_manager=None,
@@ -822,15 +815,16 @@ class QueueProcessor(object):
     async def finish_run(self,
                          active_run: ActiveRun,
                          result: JanitorResult) -> None:
+        finish_time = datetime.now()
         item = active_run.queue_item
         build_duration.labels(package=item.package, suite=item.suite).observe(
-            active_run.finish_time.timestamp() -
+            finish_time.timestamp() -
             active_run.start_time.timestamp())
         if not self.dry_run:
             async with self.database.acquire() as conn:
                 await state.store_run(
                     conn, result.log_id, item.package, result.branch_url,
-                    active_run.start_time, active_run.finish_time,
+                    active_run.start_time, finish_time,
                     item.command, result.description, item.context,
                     result.context, result.main_branch_revision, result.code,
                     build_version=result.build_version,
