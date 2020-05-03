@@ -92,7 +92,7 @@ async def main(argv=None):
         #    # TODO(jelmer): Listen for 'abort' message
         #    pass
 
-    branch_url = assignment['branch_url']
+    branch_url = assignment['branch']['url']
     subpath = assignment['branch'].get('subpath', '') or ''
     if assignment['resume']:
         resume_result = assignment['resume'].get('result')

@@ -459,11 +459,14 @@ class ActiveRemoteRun(ActiveRun):
     log_files: Dict[str, BinaryIO]
     websockets: Set[web.WebSocketResponse]
 
-    def __init__(self, queue_item: state.QueueItem, worker_name: str):
+    def __init__(self, queue_item: state.QueueItem, worker_name: str,
+                 main_branch_url: str, resume_branch_name: Optional[str]):
         super(ActiveRemoteRun, self).__init__(queue_item)
         self.worker_name = worker_name
         self.log_files = {}
         self.websockets = set()
+        self.main_branch_url = main_branch_url
+        self.resume_branch_name = resume_branch_name
 
     def kill(self) -> None:
         for ws in self.websockets:
@@ -1050,7 +1053,6 @@ async def handle_assign(request):
 
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
-    active_run = ActiveRemoteRun(worker_name=worker, queue_item=item)
 
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
@@ -1090,6 +1092,11 @@ async def handle_assign(request):
             }
         else:
             resume = None
+
+    active_run = ActiveRemoteRun(
+        worker_name=worker, queue_item=item,
+        main_branch_url=main_branch.user_url,
+        resume_branch_name=resume_branch_name)
 
     cached_branch = queue_processor.vcs_manager.get_branch(
         item.package, 'master',
@@ -1145,16 +1152,59 @@ async def handle_finish(request):
         return web.json_response(
             {'reason': 'Missing result JSON'}, status=400)
 
-    result = WorkerResult.from_json(await part.json())
-    note('REsult: %r', result)
+    worker_result = WorkerResult.from_json(await part.json())
 
-    filenames = []
-    while True:
-        part = await reader.next()
-        if part is None:
-            break
-        filenames.append(part.filename)
-        await part.read(decode=False)
+    with tempfile.TemporaryDirectory() as output_directory:
+        filenames = []
+        while True:
+            part = await reader.next()
+            if part is None:
+                break
+            filenames.append(part.filename)
+            output_path = os.path.join(output_directory, part.filename)
+            with open(output_path, 'wb') as f:
+                f.write(await part.read(decode=False))
+
+        logfilenames = await import_logs(
+            output_directory, queue_processor.logfile_manager,
+            active_run.queue_item.package,
+            run_id)
+
+        if worker_result.code is not None:
+            result = JanitorResult(
+                active_run.queue_item.package, log_id=run_id,
+                branch_url=active_run.main_branch_url,
+                worker_result=worker_result,
+                logfilenames=logfilenames, branch_name=(
+                    active_run.resume_branch_name
+                    if worker_result.code == 'nothing-to-do' else None))
+        else:
+            result = JanitorResult(
+                active_run.queue_item.package, log_id=run_id,
+                branch_url=active_run.main_branch_url,
+                code='success', worker_result=worker_result,
+                logfilenames=logfilenames)
+
+            try:
+                (result.changes_filename, result.build_version,
+                 result.build_distribution) = find_changes(
+                     output_directory, result.package)
+            except NoChangesFile as e:
+                # Oh, well.
+                note('No changes file found: %s', e)
+            else:
+                changes_path = os.path.join(
+                    output_directory, result.changes_filename)
+                debsign(changes_path, queue_processor.debsign_keyid)
+                if queue_processor.incoming_url is not None:
+                    try:
+                        await upload_changes(
+                            changes_path, queue_processor.incoming_url)
+                    except UploadFailedError as e:
+                        warning('Unable to upload changes file %s: %r',
+                                result.changes_filename, e)
+                        # TODO(jelmer): Copy to failed upload directory
+
     note('Uploaded files: %r', filenames)
     return web.json_response(
         {'id': active_run.log_id, 'filenames': filenames}, status=201)
