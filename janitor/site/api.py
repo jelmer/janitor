@@ -617,11 +617,21 @@ async def handle_publish_ready(request):
 async def handle_run_assign(request):
     url = urllib.parse.urljoin(request.app.runner_url, 'assign')
     async with request.app.http_client_session.post(
-            url, data={'worker': request.remote}) as resp:
+            url, json={'worker': request.remote}) as resp:
         if resp.status != 201:
             return web.json_response(await resp.json(), status=resp.status)
         assignment = await resp.json()
         return web.json_response(assignment, status=201)
+
+
+async def handle_run_finish(request):
+    run_id = request.match_info['run_id']
+    url = urllib.parse.urljoin(request.app.runner_url, 'finish', run_id)
+    async with request.app.http_client_session.post(url) as resp:
+        if resp.status != 201:
+            return web.json_response(await resp.json(), status=resp.status)
+        result = await resp.json()
+        return web.json_response(result, status=201)
 
 
 async def handle_list_active_runs(request):
@@ -749,6 +759,10 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_post(
         '/active-runs', handle_run_assign,
         name='api-run-assign')
+    app.router.add_post(
+        '/active-runs/{run_id}/finish',
+        handle_run_finish,
+        name='api-run-finish')
     app.router.add_post(
         '/active-runs/{run_id}/kill',
         handle_runner_kill,

@@ -445,7 +445,7 @@ class ActiveRun(object):
 class ActiveRemoteRun(ActiveRun):
 
     def __init__(self, queue_item: state.QueueItem, worker_name: str):
-        super(ActiveLocalRun, self).__init__(queue_item)
+        super(ActiveRemoteRun, self).__init__(queue_item)
         self.worker_name = worker_name
 
     def kill(self) -> None:
@@ -892,7 +892,7 @@ class QueueProcessor(object):
                 if self.concurrency:
                     todo.update([
                         self.process_queue_item(item)
-                          for item in await self.next_queue_item(len(done))])
+                        for item in await self.next_queue_item(len(done))])
         finally:
             loop.remove_signal_handler(signal.SIGTERM)
 
@@ -960,13 +960,13 @@ async def handle_assign(request):
 
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
-    active_run = ActiveRemoteRun(worker_name=worker, item=item)
+    active_run = ActiveRemoteRun(worker_name=worker, queue_item=item)
 
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
     assignment = {
-        'id': active_run.id,
-        'queue_id': active_run.item.id,
+        'id': active_run.log_id,
+        'queue_id': item.id,
         'package': item.package,
         'branch_url': item.branch_url,
         'vcs_type': item.vcs_type,
@@ -979,11 +979,11 @@ async def handle_assign(request):
         'build_suffix': suite_config.build_suffix,
         'command': item.command,
         'committer': queue_processor.committer,
-        'upstream_branch_url': item.upstream_branch_url,
         'branch_name': suite_config.branch_name,
+        'upstream_branch_url': item.upstream_branch_url,
         }
 
-    queue_processor.start_run(item, active_run)
+    await queue_processor.register_run(active_run)
 
     return web.json_response(assignment, status=201)
 
@@ -1002,7 +1002,7 @@ async def handle_finish(request):
 
     # queue_processor.finish_run(active_run, result)
 
-    return web.json_response({'id': active_run.id}, status=200)
+    return web.json_response({'id': active_run.id}, status=201)
 
 
 async def run_web_server(listen_addr, port, queue_processor):
