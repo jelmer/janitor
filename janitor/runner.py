@@ -15,7 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import web, MultipartWriter, ClientSession, ClientConnectionError, WSMsgType
+from aiohttp import (
+    web, MultipartWriter, ClientSession, ClientConnectionError, WSMsgType,
+    )
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
@@ -455,7 +457,7 @@ class ActiveRun(object):
 class ActiveRemoteRun(ActiveRun):
 
     log_files: Dict[str, BinaryIO]
-    websockets: Set[web.WebSocket]
+    websockets: Set[web.WebSocketResponse]
 
     def __init__(self, queue_item: state.QueueItem, worker_name: str):
         super(ActiveRemoteRun, self).__init__(queue_item)
@@ -475,6 +477,64 @@ class ActiveRemoteRun(ActiveRun):
             return BytesIO(self.log_files[name].getvalue())
         except KeyError:
             raise FileNotFoundError
+
+
+async def open_canonical_main_branch(
+        conn, queue_item, possible_transports=None):
+    try:
+        main_branch = await open_branch_with_fallback(
+            conn, queue_item.package,
+            queue_item.vcs_type, queue_item.branch_url,
+            possible_transports=possible_transports)
+    except BranchOpenFailure as e:
+        await state.update_branch_status(
+            conn, queue_item.branch_url, None, status=e.code,
+            description=e.description, revision=None)
+        raise
+    else:
+        branch_url = main_branch.user_url
+        await state.update_branch_status(
+            conn, queue_item.branch_url, branch_url,
+            status='success', revision=main_branch.last_revision())
+        return main_branch
+
+
+async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
+    try:
+        hoster = get_hoster(
+            main_branch, possible_hosters=possible_hosters)
+    except UnsupportedHoster as e:
+        # We can't figure out what branch to resume from when there's
+        # no hoster that can tell us.
+        return None
+        warning('Unsupported hoster (%s)', e)
+    else:
+        try:
+            (resume_branch, unused_overwrite,
+             unused_existing_proposal) = find_existing_proposed(
+                    main_branch, hoster, branch_name)
+        except NoSuchProject as e:
+            warning('Project %s not found', e.project)
+            return None
+        except PermissionDenied as e:
+            warning('Unable to list existing proposals: %s', e)
+            return None
+        else:
+            return resume_branch
+
+
+async def check_resume_result(conn, suite, resume_branch):
+    if resume_branch is not None:
+        (resume_branch_result, resume_branch_name, resume_review_status
+         ) = await state.get_run_result_by_revision(
+            conn, suite, revision=resume_branch.last_revision())
+        if resume_review_status == 'rejected':
+            note('Unsetting resume branch, since last run was '
+                 'rejected.')
+            return (None, None, None)
+        return (resume_branch, resume_branch_name, resume_branch_result)
+    else:
+        return (None, None, None)
 
 
 class ActiveLocalRun(ActiveRun):
@@ -540,44 +600,19 @@ class ActiveLocalRun(ActiveRun):
         if not use_cached_only:
             async with db.acquire() as conn:
                 try:
-                    main_branch = await open_branch_with_fallback(
-                        conn, self.queue_item.package,
-                        self.queue_item.vcs_type, self.queue_item.branch_url,
+                    main_branch = await open_canonical_main_branch(
+                        conn, self.queue_item,
                         possible_transports=possible_transports)
                 except BranchOpenFailure as e:
-                    await state.update_branch_status(
-                        conn, self.queue_item.branch_url, None, status=e.code,
-                        description=e.description, revision=None)
                     return JanitorResult(
                         self.queue_item.package, log_id=self.log_id,
                         branch_url=self.queue_item.branch_url,
                         description=e.description,
                         code=e.code, logfilenames=[])
-                else:
-                    branch_url = main_branch.user_url
-                    await state.update_branch_status(
-                        conn, self.queue_item.branch_url, branch_url,
-                        status='success', revision=main_branch.last_revision())
 
-            try:
-                hoster = get_hoster(
-                    main_branch, possible_hosters=possible_hosters)
-            except UnsupportedHoster as e:
-                # We can't figure out what branch to resume from when there's
-                # no hoster that can tell us.
-                resume_branch = None
-                warning('Unsupported hoster (%s)', e)
-            else:
-                try:
-                    (resume_branch, unused_overwrite,
-                     unused_existing_proposal) = find_existing_proposed(
-                            main_branch, hoster, suite_config.branch_name)
-                except NoSuchProject as e:
-                    warning('Project %s not found', e.project)
-                    resume_branch = None
-                except PermissionDenied as e:
-                    warning('Unable to list existing proposals: %s', e)
-                    resume_branch = None
+            resume_branch = await open_resume_branch(
+                main_branch, suite_config.branch_name,
+                possible_hosters=possible_hosters)
 
             if resume_branch is None:
                 resume_branch = vcs_manager.get_branch(
@@ -599,7 +634,7 @@ class ActiveLocalRun(ActiveRun):
             if main_branch is None:
                 return JanitorResult(
                     self.queue_item.package, log_id=self.log_id,
-                    branch_url=branch_url,
+                    branch_url=self.queue_item.branch_url,
                     code='cached-branch-missing',
                     description='Missing cache branch for %s' %
                                 self.queue_item.package,
@@ -614,20 +649,9 @@ class ActiveLocalRun(ActiveRun):
             resume_branch = None
 
         async with db.acquire() as conn:
-            if resume_branch is not None:
-                (resume_branch_result, resume_branch_name, resume_review_status
-                 ) = await state.get_run_result_by_revision(
-                    conn, self.queue_item.suite,
-                    revision=resume_branch.last_revision())
-                if resume_review_status == 'rejected':
-                    note('Unsetting resume branch, since last run was '
-                         'rejected.')
-                    resume_branch_result = None
-                    resume_branch = None
-                    resume_branch_name = None
-            else:
-                resume_branch_result = None
-                resume_branch_name = None
+            (resume_branch, resume_branch_name,
+             resume_branch_result) = await check_resume_result(
+                conn, self.queue_item.suite, resume_branch)
 
             last_build_version = await state.get_last_build_version(
                 conn, self.queue_item.package, self.queue_item.suite)
@@ -652,7 +676,7 @@ class ActiveLocalRun(ActiveRun):
         except asyncio.TimeoutError:
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
-                branch_url=branch_url, code='timeout',
+                branch_url=main_branch.user_url, code='timeout',
                 description='Run timed out after %d seconds' %
                             overall_timeout,  # type: ignore
                 logfilenames=[])
@@ -675,7 +699,8 @@ class ActiveLocalRun(ActiveRun):
 
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
-                branch_url=branch_url, code=code, description=description,
+                branch_url=main_branch.user_url, code=code,
+                description=description,
                 logfilenames=logfilenames)
 
         json_result_path = os.path.join(self.output_directory, 'result.json')
@@ -689,13 +714,14 @@ class ActiveLocalRun(ActiveRun):
         if worker_result.code is not None:
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
-                branch_url=branch_url, worker_result=worker_result,
+                branch_url=main_branch.user_url, worker_result=worker_result,
                 logfilenames=logfilenames, branch_name=(
                     resume_branch_name
                     if worker_result.code == 'nothing-to-do' else None))
 
         result = JanitorResult(
-            self.queue_item.package, log_id=self.log_id, branch_url=branch_url,
+            self.queue_item.package, log_id=self.log_id,
+            branch_url=main_branch.user_url,
             code='success', worker_result=worker_result,
             logfilenames=logfilenames)
 
@@ -712,7 +738,7 @@ class ActiveLocalRun(ActiveRun):
                 os.path.join(self.output_directory, self.queue_item.package))
         except (BranchMissing, BranchUnavailable) as e:
             return JanitorResult(
-                self.queue_item.package, self.log_id, branch_url,
+                self.queue_item.package, self.log_id, main_branch.user_url,
                 description='result branch unavailable: %s' % e,
                 code='result-branch-unavailable',
                 worker_result=worker_result,
@@ -1019,30 +1045,84 @@ async def handle_assign(request):
     json = await request.json()
     worker = json['worker']
 
+    possible_transports = []
+    possible_hosters = []
+
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
     active_run = ActiveRemoteRun(worker_name=worker, queue_item=item)
 
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
+    async with request.app.database.acquire() as conn:
+        last_build_version = await state.get_last_build_version(
+            conn, item.package, item.suite)
+
+        try:
+            main_branch = await open_canonical_main_branch(
+                conn, item,
+                possible_transports=possible_transports)
+        except BranchOpenFailure:
+            resume_branch = None
+            branch_url = item.branch_url
+            vcs_type = item.vcs_type
+        else:
+            branch_url = main_branch.user_url
+            vcs_type = get_vcs_abbreviation(main_branch)
+            resume_branch = await open_resume_branch(
+                main_branch, suite_config.branch_name,
+                possible_hosters=possible_hosters)
+
+        if resume_branch is None:
+            resume_branch = queue_processor.vcs_manager.get_branch(
+                item.package, suite_config.branch_name,
+                vcs_type)
+
+        (resume_branch, resume_branch_name,
+         resume_branch_result) = await check_resume_result(
+            conn, item.suite, resume_branch)
+
+        if resume_branch is not None:
+            resume = {
+                'result': resume_branch_result,
+                'branch_url': resume_branch.user_url,
+                'branch_name': resume_branch_name,
+            }
+        else:
+            resume = None
+
+    cached_branch = queue_processor.vcs_manager.get_branch(
+        item.package, 'master',
+        vcs_type)
+
+    env = {
+        'PACKAGE': item.package,
+        }
+    if queue_processor.committer:
+        env['COMMITTER'] = queue_processor.committer
+    if item.upstream_branch_url:
+        env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url,
+
     assignment = {
         'id': active_run.log_id,
         'queue_id': item.id,
-        'package': item.package,
-        'branch_url': item.branch_url,
-        'vcs_type': item.vcs_type,
-        'subpath': item.subpath,
-        # 'resume_branch_url': FIXME,
-        # 'resume_result': FIXME,
-        # 'last_build_version': FIXME,
-        # 'cached_branch_url': FIXME,
-        'build_distribution': suite_config.build_distribution,
-        'build_command': suite_config.build_command,
-        'build_suffix': suite_config.build_suffix,
+        'branch': {
+            'url': branch_url,
+            'subpath': item.subpath,
+            'vcs_type': item.vcs_type,
+            'cached_url': cached_branch.user_url,
+        },
+        'resume': resume,
+        'last_build_version': last_build_version,
+        'build': {
+            'distribution': suite_config.build_distribution,
+            'command': suite_config.build_command,
+            'suffix': suite_config.build_suffix,
+        },
+        'env': env,
         'command': item.command,
-        'committer': queue_processor.committer,
+        'suite': item.suite,
         'branch_name': suite_config.branch_name,
-        'upstream_branch_url': item.upstream_branch_url,
         }
 
     await queue_processor.register_run(active_run)

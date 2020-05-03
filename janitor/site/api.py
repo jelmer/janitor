@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
-from aiohttp import web, ClientSession, ContentTypeError, ClientConnectorError
+from aiohttp import (
+    web, ClientSession, ContentTypeError, ClientConnectorError, WSMsgType, )
 import urllib.parse
 
 from janitor import state, SUITE_REGEX
@@ -544,6 +545,17 @@ async def handle_runner_log(request):
             status=500)
 
 
+async def handle_runner_ws(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    async for msg in ws:
+        if msg.type == WSMsgType.TEXT:
+            pass  # TODO(jelmer): Process
+
+    return ws
+
+
 async def handle_publish_id(request):
     publish_id = request.match_info['publish_id']
     async with request.app.db.acquire() as conn:
@@ -774,8 +786,7 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/active-runs/{run_id}/log/{filename}',
         handle_runner_log, name='api-run-log')
-    # TODO(jelmer): Previous runs (iter_previous_runs)
-    # TODO(jelmer): Last successes (iter_last_successes)
-    # TODO(jelmer): Last runs (iter_last_runs)
-    # TODO(jelmer): Build failures (iter_build_failures)
+    app.router.add_get(
+        '/active-runs/{run_id}/ws',
+        handle_runner_ws, name='api-run-ws')
     return app
