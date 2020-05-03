@@ -15,6 +15,7 @@
   <th class="head">Suite</th>
   <th class="head">Estimated Duration</th>
   <th class="head">Current Duration</th>
+  <th class="head">Worker</th>
 </tr>
 </thead>
 <tbody valign="top" id="queue-table">
@@ -24,6 +25,7 @@
     <td>{{ entry['suite'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_duration(entry['current_duration']) }}</td>
+    <td>{{ entry['worker'] }}</td>
     <!-- TODO(jelmer): Link to logs -->
     <!-- TODO(jelmer): Link to kill button, if user is admin -->
 </tr>
@@ -64,19 +66,20 @@ registerHandler('queue', function(msg) {
       var p = msg['processing'][i];
       var existing = 'active-' + p['id'];
       if (!$('#' + existing).length) {
-	 tr = $('<tr id="active-' + p['id'] + '"/>');
-	 tr.append('<td><a href="/cupboard/pkg/' + p['package'] + '">' + p['package'] + '</a></td>');
-	 tr.append('<td>' + p['suite'] + '</td>');
-	 tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
-	 tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
-	 tr.show();
-	 $('#queue-table').append(tr);
+         tr = $('<tr id="active-' + p['id'] + '"/>');
+         tr.append('<td><a href="/cupboard/pkg/' + p['package'] + '">' + p['package'] + '</a></td>');
+         tr.append('<td>' + p['suite'] + '</td>');
+         tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
+         tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
+         tr.append('<td>' + p['worker'] + '</td>');
+         tr.show();
+         $('#queue-table').append(tr);
       }
       seen_ids.push(existing);
    }
    $('#queue-table').children().each(function(ch, el) {
        if (!seen_ids.includes(el.id)) {
-	 el.remove();
+          el.remove();
        }
    });
 });
