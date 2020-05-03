@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import web, MultipartWriter, ClientSession, ClientConnectionError
+from aiohttp import web, MultipartWriter, ClientSession, ClientConnectionError, WSMsgType
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
@@ -27,7 +27,7 @@ import re
 import signal
 import sys
 import tempfile
-from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple
+from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
 import uuid
 
 from debian.deb822 import Changes
@@ -455,15 +455,17 @@ class ActiveRun(object):
 class ActiveRemoteRun(ActiveRun):
 
     log_files: Dict[str, BinaryIO]
+    websockets: Set[web.WebSocket]
 
     def __init__(self, queue_item: state.QueueItem, worker_name: str):
         super(ActiveRemoteRun, self).__init__(queue_item)
         self.worker_name = worker_name
         self.log_files = {}
+        self.websockets = set()
 
     def kill(self) -> None:
-        # TODO(jelmer): Send some sort of signal via websocket?
-        raise NotImplementedError(self.kill)
+        for ws in self.websockets:
+            pass  # TODO(jelmer): Send 'abort'
 
     def list_log_files(self):
         return self.log_files.keys()
@@ -962,6 +964,27 @@ async def handle_kill(request):
     return web.json_response(ret)
 
 
+async def handle_progress_ws(request):
+    queue_processor = request.app.queue_processor
+    run_id = request.match_info['run_id']
+    try:
+        active_run = queue_processor.active_runs[run_id]
+    except KeyError:
+        return web.Response(
+            text='No such current run: %s' % run_id, status=404)
+
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    active_run.websockets.append(ws)
+
+    async for msg in ws:
+        if msg.type == WSMsgType.TEXT:
+            pass  # TODO(jelmer): Process
+
+    return ws
+
+
 async def handle_log(request):
     queue_processor = request.app.queue_processor
     run_id = request.match_info['run_id']
@@ -1035,12 +1058,25 @@ async def handle_finish(request):
         return web.json_response(
             {'reason': 'No such current run: %s' % run_id}, status=404)
 
-    # TODO(jelmer): Unwrap the contents of request:
-    # result = WorkerResult.from_json(FIXME)
+    reader = await request.multipart()
+    part = await reader.next()
+    if not part:
+        return web.json_response(
+            {'reason': 'Missing result JSON'}, status=400)
 
-    # queue_processor.finish_run(active_run, result)
+    result = WorkerResult.from_json(await part.json())
+    note('REsult: %r', result)
 
-    return web.json_response({'id': active_run.log_id}, status=201)
+    filenames = []
+    while True:
+        part = await reader.next()
+        if part is None:
+            break
+        filenames.append(part.filename)
+        await part.read(decode=False)
+    note('Uploaded files: %r', filenames)
+    return web.json_response(
+        {'id': active_run.log_id, 'filenames': filenames}, status=201)
 
 
 async def run_web_server(listen_addr, port, queue_processor):
@@ -1051,8 +1087,7 @@ async def run_web_server(listen_addr, port, queue_processor):
     app.router.add_get('/log/{run_id}', handle_log_index)
     app.router.add_get('/log/{run_id}/{filename}', handle_log)
     app.router.add_post('/kill/{run_id}', handle_kill)
-    app.router.add_get('/ws/result', functools.partial(
-        pubsub_handler, queue_processor.topic_result))
+    app.router.add_get('/progress-ws/{run_id}', handle_progress_ws)
     app.router.add_get('/ws/queue', functools.partial(
         pubsub_handler, queue_processor.topic_queue))
     app.router.add_get('/ws/result', functools.partial(
