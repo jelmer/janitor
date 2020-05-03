@@ -813,6 +813,7 @@ def process_package(vcs_url, env, command, output_directory,
         finally:
             metadata['revision'] = (
                 ws.local_tree.branch.last_revision().decode())
+        # TODO(jelmer): Set metadata['value']
 
         if command[0] != 'just-build':
             if not ws.changes_since_main():
@@ -973,7 +974,6 @@ def main(argv=None):
         metadata['description'] = str(e)
         raise
     else:
-        # TODO(jelmer): Set metadata['value']
         metadata['code'] = None
         metadata['description'] = result.description
         note('%s', result.description)
