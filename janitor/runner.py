@@ -21,12 +21,13 @@ from contextlib import ExitStack
 from datetime import datetime
 import functools
 import json
+from io import BytesIO
 import os
 import re
 import signal
 import sys
 import tempfile
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple
 import uuid
 
 from debian.deb822 import Changes
@@ -36,6 +37,8 @@ from breezy.errors import PermissionDenied
 from breezy.plugins.debian.util import (
     debsign,
     )
+from breezy.propose import Hoster
+from breezy.transport import Transport
 
 from prometheus_client import (
     Counter,
@@ -69,7 +72,7 @@ from silver_platter.utils import (
 from . import (
     state,
     )
-from .config import read_config, get_suite_config
+from .config import read_config, get_suite_config, Config
 from .logs import get_log_manager, ServiceUnavailable, LogFileManager
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
@@ -79,6 +82,7 @@ from .vcs import (
     open_branch_ext,
     BranchOpenFailure,
     LocalVcsManager,
+    VcsManager,
     )
 
 apt_package_count = Gauge(
@@ -425,6 +429,12 @@ class ActiveRun(object):
         """Abort this run."""
         raise NotImplementedError(self.kill)
 
+    def list_log_files(self) -> Iterable[str]:
+        raise NotImplementedError(self.list_log_files)
+
+    def get_log_file(self, name) -> Iterable[bytes]:
+        raise NotImplementedError(self.get_log_file)
+
     def json(self) -> Any:
         """Return a JSON representation."""
         return {
@@ -444,13 +454,25 @@ class ActiveRun(object):
 
 class ActiveRemoteRun(ActiveRun):
 
+    log_files: Dict[str, BinaryIO]
+
     def __init__(self, queue_item: state.QueueItem, worker_name: str):
         super(ActiveRemoteRun, self).__init__(queue_item)
         self.worker_name = worker_name
+        self.log_files = {}
 
     def kill(self) -> None:
         # TODO(jelmer): Send some sort of signal via websocket?
         raise NotImplementedError(self.kill)
+
+    def list_log_files(self):
+        return self.log_files.keys()
+
+    def get_log_file(self, name):
+        try:
+            return BytesIO(self.log_files[name].getvalue())
+        except KeyError:
+            raise FileNotFoundError
 
 
 class ActiveLocalRun(ActiveRun):
@@ -466,16 +488,27 @@ class ActiveLocalRun(ActiveRun):
     def kill(self) -> None:
         self._task.cancel()
 
+    def list_log_files(self):
+        return [
+            n for n in os.listdir(self.output_directory)
+            if os.path.isfile(os.path.join(self.output_directory, n))
+            and n.endswith('.log')]
+
+    def get_log_file(self, name):
+        full_path = os.path.join(self.output_directory, name)
+        return open(full_path, 'rb')
+
     async def process(
-            self, db: Database, config: Config,
+            self, db: state.Database, config: Config,
+            vcs_manager: VcsManager,
+            logfile_manager: LogFileManager,
             worker_kind: str,
-            build_command: str, pre_check=None,
+            build_command: str,
+            pre_check=None,
             post_check=None,
             dry_run: bool = False,
             incoming_url: Optional[str] = None,
-            logfile_manager: Optional[LogFileManager] = None,
             debsign_keyid: Optional[str] = None,
-            vcs_manager: Optional[VcsManager] = None,
             possible_transports: Optional[List[Transport]] = None,
             possible_hosters: Optional[List[Hoster]] = None,
             use_cached_only: bool = False,
@@ -488,7 +521,7 @@ class ActiveLocalRun(ActiveRun):
         env['PACKAGE'] = self.queue_item.package
         if committer:
             env['COMMITTER'] = committer
-        if upstream_branch_url:
+        if self.queue_item.upstream_branch_url:
             env['UPSTREAM_BRANCH_URL'] = self.queue_item.upstream_branch_url
 
         try:
@@ -544,7 +577,7 @@ class ActiveLocalRun(ActiveRun):
                     warning('Unable to list existing proposals: %s', e)
                     resume_branch = None
 
-            if resume_branch is None and vcs_manager:
+            if resume_branch is None:
                 resume_branch = vcs_manager.get_branch(
                     self.queue_item.package, suite_config.branch_name,
                     get_vcs_abbreviation(main_branch))
@@ -552,21 +585,15 @@ class ActiveLocalRun(ActiveRun):
             if resume_branch is not None:
                 note('Resuming from %s', resume_branch.user_url)
 
-            if vcs_manager:
-                cached_branch = vcs_manager.get_branch(
-                    self.queue_item.package, 'master',
-                    get_vcs_abbreviation(main_branch))
-            else:
-                cached_branch = None
+            cached_branch = vcs_manager.get_branch(
+                self.queue_item.package, 'master',
+                get_vcs_abbreviation(main_branch))
 
             if cached_branch is not None:
                 note('Using cached branch %s', cached_branch.user_url)
         else:
-            if vcs_manager:
-                main_branch = vcs_manager.get_branch(
-                    self.queue_item.package, 'master')
-            else:
-                main_branch = None
+            main_branch = vcs_manager.get_branch(
+                self.queue_item.package, 'master')
             if main_branch is None:
                 return JanitorResult(
                     self.queue_item.package, log_id=self.log_id,
@@ -624,7 +651,8 @@ class ActiveLocalRun(ActiveRun):
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
                 branch_url=branch_url, code='timeout',
-                description='Run timed out after %d seconds' % overall_timeout,
+                description='Run timed out after %d seconds' %
+                            overall_timeout,  # type: ignore
                 logfilenames=[])
 
         logfilenames = await import_logs(
@@ -690,13 +718,12 @@ class ActiveLocalRun(ActiveRun):
 
         enable_tag_pushing(local_branch)
 
-        if vcs_manager:
-            vcs_manager.import_branches(
-                main_branch, local_branch,
-                self.queue_item.package, suite_config.branch_name,
-                additional_colocated_branches=(
-                    pick_additional_colocated_branches(main_branch)))
-            result.branch_name = suite_config.branch_name
+        vcs_manager.import_branches(
+            main_branch, local_branch,
+            self.queue_item.package, suite_config.branch_name,
+            additional_colocated_branches=(
+                pick_additional_colocated_branches(main_branch)))
+        result.branch_name = suite_config.branch_name
 
         if result.changes_filename:
             changes_path = os.path.join(
@@ -712,7 +739,7 @@ class ActiveLocalRun(ActiveRun):
         return result
 
 
-async def export_queue_length(db: Database) -> None:
+async def export_queue_length(db: state.Database) -> None:
     while True:
         async with db.acquire() as conn:
             queue_length.set(await state.queue_length(conn))
@@ -722,14 +749,14 @@ async def export_queue_length(db: Database) -> None:
         await asyncio.sleep(60)
 
 
-async def export_stats(db: Database) -> None:
+async def export_stats(db: state.Database) -> None:
     while True:
         async with db.acquire() as conn:
             for suite, count in await state.get_published_by_suite(conn):
                 apt_package_count.labels(suite=suite).set(count)
 
-            by_suite = {}
-            by_suite_result = {}
+            by_suite: Dict[str, int] = {}
+            by_suite_result: Dict[Tuple[str, str], int] = {}
             async for package_name, suite, run_duration, result_code in (
                     state.iter_by_suite_result_code(conn)):
                 by_suite.setdefault(suite, 0)
@@ -798,11 +825,13 @@ class QueueProcessor(object):
             active_run = ActiveLocalRun(item, output_directory)
             await self.register_run(active_run)
             result = await active_run.process(
-                self.database, self.config, self.worker_kind,
+                self.database, config=self.config,
+                vcs_manager=self.vcs_manager,
+                worker_kind=self.worker_kind,
                 pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
                 dry_run=self.dry_run, incoming_url=self.incoming_url,
-                debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
+                debsign_keyid=self.debsign_keyid,
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only,
                 overall_timeout=self.overall_timeout,
@@ -856,8 +885,8 @@ class QueueProcessor(object):
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
 
-    async def next_queue_item(self, n) -> Optional[state.QueueItem]:
-        ret = []
+    async def next_queue_item(self, n) -> List[state.QueueItem]:
+        ret: List[state.QueueItem] = []
         async with self.database.acquire() as conn:
             limit = len(self.active_runs) + n + 2
             async for item in state.iter_queue(conn, limit=limit):
@@ -888,7 +917,7 @@ class QueueProcessor(object):
                     todo, return_when='FIRST_COMPLETED')
                 for task in done:
                     task.result()
-                todo = pending
+                todo = pending  # type: ignore
                 if self.concurrency:
                     todo.update([
                         self.process_queue_item(item)
@@ -913,13 +942,12 @@ async def handle_log_index(request):
     queue_processor = request.app.queue_processor
     run_id = request.match_info['run_id']
     try:
-        directory = queue_processor.active_runs[run_id].output_directory
+        active_run = queue_processor.active_runs[run_id]
     except KeyError:
         return web.Response(
             text='No such current run: %s' % run_id, status=404)
-    return web.json_response([
-        n for n in os.listdir(directory)
-        if os.path.isfile(os.path.join(directory, n))])
+    log_filenames = active_run.list_log_files()
+    return web.json_response(log_filenames)
 
 
 async def handle_kill(request):
@@ -940,18 +968,28 @@ async def handle_log(request):
     filename = request.match_info['filename']
     if '/' in filename:
         return web.Response(
-            text='Invalid filename %s' % request.match_info['filename'],
+            text='Invalid filename %s' % filename,
             status=400)
     try:
-        directory = queue_processor.active_runs[run_id].output_directory
+        active_run = queue_processor.active_runs[run_id]
     except KeyError:
         return web.Response(
             text='No such current run: %s' % run_id, status=404)
-    full_path = os.path.join(directory, filename)
-    if os.path.exists(full_path):
-        return web.FileResponse(full_path)
-    else:
-        return web.Response(text='No such logfile: %s' % filename, status=404)
+    try:
+        f = active_run.get_log_file(filename)
+    except FileNotFoundError:
+        return web.Response(text='No such log file: %s' % filename, status=404)
+
+    try:
+        response = web.StreamResponse(
+            status=200, reason='OK', headers={'Content-Type', 'text/plain'})
+        await response.prepare(request)
+        for chunk in f:
+            await response.write(chunk)
+        await response.write_eof()
+    finally:
+        f.close()
+    return response
 
 
 async def handle_assign(request):
@@ -1002,7 +1040,7 @@ async def handle_finish(request):
 
     # queue_processor.finish_run(active_run, result)
 
-    return web.json_response({'id': active_run.id}, status=201)
+    return web.json_response({'id': active_run.log_id}, status=201)
 
 
 async def run_web_server(listen_addr, port, queue_processor):
@@ -1013,6 +1051,8 @@ async def run_web_server(listen_addr, port, queue_processor):
     app.router.add_get('/log/{run_id}', handle_log_index)
     app.router.add_get('/log/{run_id}/{filename}', handle_log)
     app.router.add_post('/kill/{run_id}', handle_kill)
+    app.router.add_get('/ws/result', functools.partial(
+        pubsub_handler, queue_processor.topic_result))
     app.router.add_get('/ws/queue', functools.partial(
         pubsub_handler, queue_processor.topic_queue))
     app.router.add_get('/ws/result', functools.partial(

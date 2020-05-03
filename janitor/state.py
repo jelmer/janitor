@@ -590,7 +590,7 @@ async def drop_queue_item(conn: asyncpg.Connection, queue_id):
 
 async def add_to_queue(conn: asyncpg.Connection,
                        package: str,
-                       command: str,
+                       command: List[str],
                        suite: str,
                        offset: int = 0,
                        context: Optional[str] = None,
@@ -981,7 +981,7 @@ LEFT JOIN branch ON package.branch_url = branch.url
 
 async def update_branch_status(
         conn: asyncpg.Connection,
-        branch_url: str, canonical_branch_url: str,
+        branch_url: str, canonical_branch_url: Optional[str],
         last_scanned: Union[
             datetime.datetime, Callable[[], datetime.datetime]
             ] = datetime.datetime.now,
