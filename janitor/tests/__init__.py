@@ -30,6 +30,7 @@ def test_suite():
         'runner',
         'sbuild_log',
         'site',
+        'vcs',
         'worker',
         ]
     module_names = [__name__ + '.test_' + name for name in names]

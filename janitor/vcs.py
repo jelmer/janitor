@@ -390,5 +390,8 @@ def get_run_diff(vcs_manager: VcsManager, run) -> bytes:
 
 def bzr_to_browse_url(url: str) -> str:
     (url, params) = urlutils.split_segment_parameters(url)
-    deb_vcs_url = unsplit_vcs_url(url, params.get('branch'))
+    branch = params.get('branch')
+    if branch:
+        branch = urllib.parse.unquote(branch)
+    deb_vcs_url = unsplit_vcs_url(url, branch)
     return determine_browser_url(None, deb_vcs_url)
