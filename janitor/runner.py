@@ -467,22 +467,29 @@ class ActiveLocalRun(ActiveRun):
         self._task.cancel()
 
     async def process(
-            self, db, config, worker_kind, vcs_url, command,
-            build_command, pre_check=None, post_check=None,
-            dry_run=False, incoming_url=None, logfile_manager=None,
-            debsign_keyid=None, vcs_manager=None,
-            possible_transports=None, possible_hosters=None,
-            use_cached_only=False, refresh=False, vcs_type=None,
-            subpath=None, overall_timeout=None, upstream_branch_url=None,
-            committer=None):
-        note('Running %r on %s', command, self.queue_item.package)
+            self, db: Database, config: Config,
+            worker_kind: str,
+            build_command: str, pre_check=None,
+            post_check=None,
+            dry_run: bool = False,
+            incoming_url: Optional[str] = None,
+            logfile_manager: Optional[LogFileManager] = None,
+            debsign_keyid: Optional[str] = None,
+            vcs_manager: Optional[VcsManager] = None,
+            possible_transports: Optional[List[Transport]] = None,
+            possible_hosters: Optional[List[Hoster]] = None,
+            use_cached_only: bool = False,
+            overall_timeout: Optional[int] = None,
+            committer: Optional[str] = None) -> JanitorResult:
+        note('Running %r on %s', self.queue_item.command,
+             self.queue_item.package)
 
         env = {}
         env['PACKAGE'] = self.queue_item.package
         if committer:
             env['COMMITTER'] = committer
         if upstream_branch_url:
-            env['UPSTREAM_BRANCH_URL'] = upstream_branch_url
+            env['UPSTREAM_BRANCH_URL'] = self.queue_item.upstream_branch_url
 
         try:
             suite_config = get_suite_config(config, self.queue_item.suite)
@@ -493,27 +500,29 @@ class ActiveLocalRun(ActiveRun):
                 description='Suite %s not in configuration' %
                             self.queue_item.suite,
                 logfilenames=[],
-                branch_url=vcs_url)
+                branch_url=self.queue_item.branch_url)
 
         if not use_cached_only:
             async with db.acquire() as conn:
                 try:
                     main_branch = await open_branch_with_fallback(
-                        conn, self.queue_item.package, vcs_type, vcs_url,
+                        conn, self.queue_item.package,
+                        self.queue_item.vcs_type, self.queue_item.branch_url,
                         possible_transports=possible_transports)
                 except BranchOpenFailure as e:
                     await state.update_branch_status(
-                        conn, vcs_url, None, status=e.code,
+                        conn, self.queue_item.branch_url, None, status=e.code,
                         description=e.description, revision=None)
                     return JanitorResult(
                         self.queue_item.package, log_id=self.log_id,
-                        branch_url=vcs_url, description=e.description,
+                        branch_url=self.queue_item.branch_url,
+                        description=e.description,
                         code=e.code, logfilenames=[])
                 else:
                     branch_url = main_branch.user_url
                     await state.update_branch_status(
-                        conn, vcs_url, branch_url, status='success',
-                        revision=main_branch.last_revision())
+                        conn, self.queue_item.branch_url, branch_url,
+                        status='success', revision=main_branch.last_revision())
 
             try:
                 hoster = get_hoster(
@@ -571,7 +580,7 @@ class ActiveLocalRun(ActiveRun):
                 self.queue_item.package, suite_config.branch_name)
             cached_branch = None
 
-        if refresh and resume_branch:
+        if self.queue_item.refresh and resume_branch:
             note('Since refresh was requested, ignoring resume branch.')
             resume_branch = None
 
@@ -598,14 +607,15 @@ class ActiveLocalRun(ActiveRun):
         try:
             self._task = asyncio.wait_for(
                 invoke_subprocess_worker(
-                    worker_kind, main_branch, env, command,
+                    worker_kind, main_branch, env, self.queue_item.command,
                     self.output_directory, resume_branch=resume_branch,
                     cached_branch=cached_branch, pre_check=pre_check,
                     post_check=post_check,
                     build_command=suite_config.build_command,
                     log_path=log_path,
                     resume_branch_result=resume_branch_result,
-                    last_build_version=last_build_version, subpath=subpath,
+                    last_build_version=last_build_version,
+                    subpath=self.queue_item.subpath,
                     build_distribution=suite_config.build_distribution,
                     build_suffix=suite_config.build_suffix),
                 timeout=overall_timeout)
@@ -702,7 +712,7 @@ class ActiveLocalRun(ActiveRun):
         return result
 
 
-async def export_queue_length(db):
+async def export_queue_length(db: Database) -> None:
     while True:
         async with db.acquire() as conn:
             queue_length.set(await state.queue_length(conn))
@@ -712,7 +722,7 @@ async def export_queue_length(db):
         await asyncio.sleep(60)
 
 
-async def export_stats(db):
+async def export_stats(db: Database) -> None:
     while True:
         async with db.acquire() as conn:
             for suite, count in await state.get_published_by_suite(conn):
@@ -776,29 +786,26 @@ class QueueProcessor(object):
         self.committer = committer
         self.active_runs = {}
 
-    def status_json(self):
+    def status_json(self) -> Any:
         return {
             'processing':
                 [active_run.json()
                  for active_run in self.active_runs.values()],
             'concurrency': self.concurrency}
 
-    async def process_queue_item(self, item):
+    async def process_queue_item(self, item: state.QueueItem) -> None:
         with tempfile.TemporaryDirectory() as output_directory:
             active_run = ActiveLocalRun(item, output_directory)
             await self.register_run(active_run)
             result = await active_run.process(
                 self.database, self.config, self.worker_kind,
-                item.branch_url, item.command,
                 pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
                 dry_run=self.dry_run, incoming_url=self.incoming_url,
                 debsign_keyid=self.debsign_keyid, vcs_manager=self.vcs_manager,
                 logfile_manager=self.logfile_manager,
-                use_cached_only=self.use_cached_only, refresh=item.refresh,
-                vcs_type=item.vcs_type, subpath=item.subpath,
+                use_cached_only=self.use_cached_only,
                 overall_timeout=self.overall_timeout,
-                upstream_branch_url=item.upstream_branch_url,
                 committer=self.committer)
             await self.finish_run(active_run, result)
 
@@ -812,10 +819,10 @@ class QueueProcessor(object):
                          result: JanitorResult) -> None:
         finish_time = datetime.now()
         item = active_run.queue_item
-        duration = finish_time = active_run.start_time
+        duration = finish_time - active_run.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds())
-        if active_run.changes_filename and item.suite != 'unchanged':
+        if result.changes_filename and item.suite != 'unchanged':
             async with self.database.acquire() as conn:
                 run = await state.get_unchanged_run(
                     conn, result.main_branch_revision)
@@ -856,10 +863,11 @@ class QueueProcessor(object):
             async for item in state.iter_queue(conn, limit=limit):
                 if self.queue_item_assigned(item):
                     continue
-                ret.append(item)
+                if len(ret) < n:
+                    ret.append(item)
             return ret
 
-    async def process(self):
+    async def process(self) -> None:
         todo = set([
             self.process_queue_item(item)
             for item in await self.next_queue_item(self.concurrency)])
@@ -884,13 +892,13 @@ class QueueProcessor(object):
                 if self.concurrency:
                     todo.update([
                         self.process_queue_item(item)
-                        for item in await self.next_queue_item(len(done))])
+                          for item in await self.next_queue_item(len(done))])
         finally:
             loop.remove_signal_handler(signal.SIGTERM)
 
     def queue_item_assigned(self, queue_item: state.QueueItem) -> bool:
         """Check if a queue item has been assigned already."""
-        for active_run in self.active_runs:
+        for active_run in self.active_runs.values():
             if active_run.queue_item.id == queue_item.id:
                 return True
         return False

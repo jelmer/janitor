@@ -49,6 +49,7 @@ from silver_platter.utils import (
     )
 
 from breezy.propose import get_proposal_by_url
+import breezy.plugins.propose
 
 from . import (
     state,
@@ -733,7 +734,10 @@ async def scan_request(request):
 
 async def refresh_proposal_status_request(request):
     post = await request.post()
-    url = post['url']
+    try:
+        url = post['url']
+    except KeyError:
+        raise web.HTTPBadRequest(body="missing url parameter")
     note('Request to refresh proposal status for %s', url)
 
     async def scan():
@@ -752,7 +756,7 @@ async def refresh_proposal_status_request(request):
                 topic_merge_proposal=request.app.topic_merge_proposal,
                 dry_run=request.app.dry_run)
     request.loop.create_task(scan())
-    return web.Response(status=202, text="Scan started.")
+    return web.Response(status=202, text="Refresh of proposal started.")
 
 
 async def autopublish_request(request):
