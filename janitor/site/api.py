@@ -234,8 +234,7 @@ async def handle_refresh_proposal_status(request):
         raise web.HTTPBadRequest('No URL specified')
 
     data = {'url': mp_url}
-    publisher_url = request.app.publisher_url
-    url = urllib.parse.urljoin(publisher_url, 'refresh-status')
+    url = urllib.parse.urljoin(request.app.publisher_url, 'refresh-status')
     async with request.app.http_client_session.post(url, data=data) as resp:
         if resp.status in (200, 202):
             return web.Response(text='Success', status=resp.status)
