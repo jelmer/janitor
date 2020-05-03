@@ -994,8 +994,8 @@ async def handle_finish(request):
     try:
         active_run = queue_processor.active_runs[run_id]
     except KeyError:
-        return web.Response(
-            text='No such current run: %s' % run_id, status=404)
+        return web.json_response(
+            {'reason': 'No such current run: %s' % run_id}, status=404)
 
     # TODO(jelmer): Unwrap the contents of request:
     # result = WorkerResult.from_json(FIXME)
