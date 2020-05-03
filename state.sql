@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS run (
    review_status review_status not null default 'unreviewed',
    value integer,
    -- Name of the worker that executed this run.
-   worker text null,
+   worker text not null,
    foreign key (package) references package(name),
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
