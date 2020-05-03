@@ -627,7 +627,7 @@ async def handle_run_assign(request):
 async def handle_run_finish(request):
     run_id = request.match_info['run_id']
     url = urllib.parse.urljoin(request.app.runner_url, 'finish/%s' % run_id)
-    async with request.app.http_client_session.post(url) as resp:
+    async with request.app.http_client_session.post(url, data=request) as resp:
         if resp.status != 201:
             return web.json_response(await resp.json(), status=resp.status)
         result = await resp.json()
