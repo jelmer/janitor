@@ -236,11 +236,9 @@ async def handle_refresh_proposal_status(request):
     data = {'url': mp_url}
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, 'refresh-status')
-    async with request.app.http_client_session.post(
-            url, data=data) as resp:
-        if resp.status == 200:
-            return web.Response(
-                text='Successfully scheduled', status=200)
+    async with request.app.http_client_session.post(url, data=data) as resp:
+        if resp.status in (200, 202):
+            return web.Response(text='Success', status=resp.status)
         return web.Response(text=(await resp.text()), status=resp.status)
 
 
