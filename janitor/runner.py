@@ -1037,6 +1037,7 @@ async def handle_assign(request):
         # 'last_build_version': FIXME,
         # 'cached_branch_url': FIXME,
         'build_distribution': suite_config.build_distribution,
+        'build_command': suite_config.build_command,
         'build_suffix': suite_config.build_suffix,
         'command': item.command,
         'committer': queue_processor.committer,
