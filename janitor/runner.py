@@ -442,6 +442,17 @@ class ActiveRun(object):
             }
 
 
+class ActiveRemoteRun(ActiveRun):
+
+    def __init__(self, queue_item: state.QueueItem, worker_name: str):
+        super(ActiveLocalRun, self).__init__(queue_item)
+        self.worker_name = worker_name
+
+    def kill(self) -> None:
+        # TODO(jelmer): Send some sort of signal via websocket?
+        raise NotImplementedError(self.kill)
+
+
 class ActiveLocalRun(ActiveRun):
 
     # TODO(jelmer): Use short host name instead?
@@ -805,7 +816,7 @@ class QueueProcessor(object):
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds())
         if active_run.changes_filename and item.suite != 'unchanged':
-            async with db.acquire() as conn:
+            async with self.database.acquire() as conn:
                 run = await state.get_unchanged_run(
                     conn, result.main_branch_revision)
                 if run is None:
@@ -935,6 +946,57 @@ async def handle_log(request):
         return web.Response(text='No such logfile: %s' % filename, status=404)
 
 
+async def handle_assign(request):
+    json = await request.json()
+    worker = json['worker']
+
+    queue_processor = request.app.queue_processor
+    [item] = await queue_processor.next_queue_item(1)
+    active_run = ActiveRemoteRun(worker_name=worker, item=item)
+
+    suite_config = get_suite_config(queue_processor.config, item.suite)
+
+    assignment = {
+        'id': active_run.id,
+        'queue_id': active_run.item.id,
+        'package': item.package,
+        'branch_url': item.branch_url,
+        'vcs_type': item.vcs_type,
+        'subpath': item.subpath,
+        # 'resume_branch_url': FIXME,
+        # 'resume_result': FIXME,
+        # 'last_build_version': FIXME,
+        # 'cached_branch_url': FIXME,
+        'build_distribution': suite_config.build_distribution,
+        'build_suffix': suite_config.build_suffix,
+        'command': item.command,
+        'committer': queue_processor.committer,
+        'upstream_branch_url': item.upstream_branch_url,
+        'branch_name': suite_config.branch_name,
+        }
+
+    queue_processor.start_run(item, active_run)
+
+    return web.json_response(assignment, status=201)
+
+
+async def handle_finish(request):
+    queue_processor = request.app.queue_processor
+    run_id = request.match_info['run_id']
+    try:
+        active_run = queue_processor.active_runs[run_id]
+    except KeyError:
+        return web.Response(
+            text='No such current run: %s' % run_id, status=404)
+
+    # TODO(jelmer): Unwrap the contents of request:
+    # result = WorkerResult.from_json(FIXME)
+
+    # queue_processor.finish_run(active_run, result)
+
+    return web.json_response({'id': active_run.id}, status=200)
+
+
 async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
     app.queue_processor = queue_processor
@@ -947,6 +1009,8 @@ async def run_web_server(listen_addr, port, queue_processor):
         pubsub_handler, queue_processor.topic_queue))
     app.router.add_get('/ws/result', functools.partial(
         pubsub_handler, queue_processor.topic_result))
+    app.router.add_post('/assign', handle_assign)
+    app.router.add_post('/finish/{run_id}', handle_finish)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
