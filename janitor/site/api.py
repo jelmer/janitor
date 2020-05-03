@@ -340,7 +340,7 @@ async def handle_archive_diff(request):
             request.app.http_client_session, request.app.archiver_url, run,
             unchanged_run, kind=kind, filter_boring=filter_boring,
             accept=request.headers.get('ACCEPT', '*/*'))
-    except FileNotFoundError as e:
+    except FileNotFoundError:
         return web.json_response(
             {'reason':
                 'debdiff not calculated yet (run: %s, unchanged run: %s)' %

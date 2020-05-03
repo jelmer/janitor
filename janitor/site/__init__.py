@@ -129,7 +129,6 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
             if resp.status == 200:
                 return await resp.read(), resp.content_type
             elif resp.status == 404:
-                print('Status: %r'  % await resp.read())
                 raise FileNotFoundError
             else:
                 raise DebdiffRetrievalError(
