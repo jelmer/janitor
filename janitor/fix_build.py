@@ -132,11 +132,11 @@ def add_build_dependency(tree, package, minimum_version=None,
                     raise CircularDependency(package)
             if minimum_version:
                 updater.source["Build-Depends"] = ensure_minimum_version(
-                    updater.source["Build-Depends"],
+                    updater.source.get("Build-Depends", ""),
                     package, minimum_version)
             else:
                 updater.source["Build-Depends"] = ensure_some_version(
-                    updater.source["Build-Depends"], package)
+                    updater.source.get("Build-Depends", ""), package)
     except FormattingUnpreservable as e:
         note('Unable to edit %s in a way that preserves formatting.',
              e.path)
