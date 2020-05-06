@@ -27,6 +27,7 @@ from janitor.sbuild_log import (
     MissingPythonModule,
     MissingRubyFile,
     MissingRubyGem,
+    MissingValaPackage,
     )
 from janitor import fix_build
 from janitor.fix_build import (
@@ -93,7 +94,7 @@ blah (0.1) UNRELEASED; urgency=medium
         rev = self.tree.branch.repository.get_revision(
             self.tree.branch.last_revision())
         self.assertEqual(
-            'Add missing build dependency on brz.\n',
+            'Add missing build dependency on brz.',
             rev.message)
         self.assertFalse(self.resolve(MissingCommand('brz')))
         self.assertEqual('libc6, brz', self.get_build_deps())
@@ -185,3 +186,10 @@ blah (0.1) UNRELEASED; urgency=medium
         self.assertEqual(
             'libc6, golang-github-chzyer-readline-dev',
             self.get_build_deps())
+
+    def test_missing_vala_package(self):
+        self._apt_files = {
+            '/usr/share/vala-0.48/vapi/posix.vapi': 'valac-0.48-vapi',
+            }
+        self.assertTrue(self.resolve(MissingValaPackage('posix')))
+        self.assertEqual('libc6, valac-0.48-vapi', self.get_build_deps())
