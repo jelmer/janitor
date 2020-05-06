@@ -29,11 +29,13 @@ def parse_email(f):
     from email import policy
     from email.parser import BytesParser
 
-    msg = BytesParser(policy=policy.default).parse(sys.stdin.buffer)
+    msg = BytesParser(policy=policy.default).parse(f)
     body = msg.get_body(preferencelist=('plain', ))
     lines = body.get_content().splitlines()
 
-    for line in lines:
+    for i, line in enumerate(lines):
+        if line == 'Reply to this email directly or view it on GitHub:':
+            return lines[i+1].split('#')[0]
         try:
             (field, value) = line.split(':', 1)
         except ValueError:
@@ -61,8 +63,12 @@ if __name__ == '__main__':
         '--refresh-url', type=str,
         help='URL to submit requests to.',
         default='https://janitor.debian.net/api/refresh-proposal-status')
+    parser.add_argument(
+        '--input', type=argparse.FileType('rb'),
+        default='/dev/stdin',
+        help='Path to read mail from.')
     args = parser.parse_args()
-    merge_proposal_url = parse_email(sys.stdin.buffer)
+    merge_proposal_url = parse_email(args.input)
     if merge_proposal_url is None:
         sys.exit(0)
     print('Found merge proposal URL: %s' % merge_proposal_url)
