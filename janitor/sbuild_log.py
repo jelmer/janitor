@@ -1353,6 +1353,28 @@ def need_pg_buildext_updatecontrol(m):
     return NeedPgBuildExtUpdateControl(m.group(1), m.group(2))
 
 
+class MissingValaPackage(object):
+
+    kind = 'missing-vala-package'
+
+    def __init__(self, package):
+        self.package = package
+
+    def __str__(self):
+        return "Missing Vala package: %s" % self.package
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.package)
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.package == other.package)
+
+
+def vala_package_missing(m):
+    return MissingValaPackage(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1638,6 +1660,8 @@ build_failure_regexps = [
     (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
     (r'.*\.vala:[0-9]+\.[0-9]+-[0-9]+.[0-9]+: error: (.*)',
      None),
+    (r'error: Package `(.*)\' not found in specified Vala API directories '
+     r'or GObject-Introspection GIR directories', vala_package_missing),
     (r'.*.scala:[0-9]+: error: (.*)', None),
     (r'(.*\.ts)\([0-9]+,[0-9]+\): error TS[0-9]+: (.*)', None),
     (r'(.*.nim)\([0-9]+, [0-9]+\) Error: .*', None),

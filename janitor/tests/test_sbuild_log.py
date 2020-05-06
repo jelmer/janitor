@@ -47,6 +47,7 @@ from janitor.sbuild_log import (
     MissingPerlModule,
     MissingPhpClass,
     MissingRubyGem,
+    MissingValaPackage,
     MissingXmlEntity,
     MissingLibrary,
     MissingJavaClass,
@@ -454,6 +455,10 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'The name `COLLECTION_CREATE_NONE\' does not exist in '
             'the context of `Secret.CollectionCreateFlags\''], 1,
             None)
+        self.run_test([
+            'error: Package `glib-2.0\' not found in specified Vala '
+            'API directories or GObject-Introspection GIR directories'],
+            1, MissingValaPackage('glib-2.0'))
 
     def test_pkg_config_missing(self):
         self.run_test([
