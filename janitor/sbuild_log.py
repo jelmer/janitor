@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from debian.deb822 import PkgRelation
+import os
 import posixpath
 import re
 import sys
@@ -122,6 +123,39 @@ class PatchApplicationFailed(object):
         return "Patch application failed: %s" % self.patchname
 
 
+class SourceFormatUnbuildable(object):
+
+    kind = 'source-format-unbuildable'
+
+    def __init__(self, source_format):
+        self.source_format = source_format
+
+    def __str__(self):
+        return "Source format %s unbuildable" % self.source_format
+
+
+class SourceFormatUnsupported(object):
+
+    kind = 'unsupported-source-format'
+
+    def __init__(self, source_format):
+        self.source_format = source_format
+
+    def __str__(self):
+        return "Source format %r unsupported" % self.source_format
+
+
+class PatchFileMissing(object):
+
+    kind = 'patch-file-missing'
+
+    def __init__(self, path):
+        self.path = path
+
+    def __str__(self):
+        return "Patch file %s missing" % self.path
+
+
 class UnknownMercurialExtraFields(object):
 
     kind = 'unknown-mercurial-extra-fields'
@@ -189,6 +223,17 @@ def parse_brz_error(line):
         error = UpstreamPGPSignatureVerificationFailed()
         return (error, str(error))
     return (None, line)
+
+
+class MissingRevision(object):
+
+    kind = 'missing-revision'
+
+    def __init__(self, revision):
+        self.revision = revision
+
+    def __str__(self):
+        return "Missing revision: %r" % self.revision
 
 
 def worker_failure_from_sbuild_log(f):
@@ -274,6 +319,48 @@ def worker_failure_from_sbuild_log(f):
                     patchname = m.group(1)
                     error = PatchApplicationFailed(patchname)
                     description = 'Patch %s failed to apply' % patchname
+                    break
+                m = re.match(
+                    'dpkg-source: error: '
+                    'can\'t build with source format \'(.*)\': '
+                    '(.*)', line)
+                if m:
+                    error = SourceFormatUnbuildable(m.group(1))
+                    description = m.group(2)
+                    break
+                m = re.match(
+                    'dpkg-source: error: cannot read (.*): '
+                    'No such file or directory',
+                    line)
+                if m:
+                    error = PatchFileMissing(m.group(1).split('/', 1)[1])
+                    description = 'Patch file %s in series but missing' % (
+                        error.path)
+                    break
+                m = re.match(
+                    'dpkg-source: error: '
+                    'source package format \'(.*)\' is not supported: '
+                    '(.*)', line)
+                if m:
+                    (_, description, error) = find_build_failure_description(
+                        [m.group(2)])
+                    if error is None:
+                        error = SourceFormatUnsupported(m.group(1))
+                    if description is None:
+                        description = m.group(2)
+                    break
+                m = re.match('dpkg-source: error: (.*)', line)
+                if m:
+                    error = None
+                    description = m.group(1)
+                    break
+                m = re.match(
+                    'breezy.errors.NoSuchRevision: '
+                    '(.*) has no revision b\'(.*)\'', line)
+                if m:
+                    error = MissingRevision(m.group(2).encode())
+                    description = "Revision %r is not present" % (
+                        error.revision)
                     break
             else:
                 for line in reversed(paragraphs[None][-4:]):
@@ -470,11 +557,6 @@ def file_not_found(m):
     if (m.group(1).startswith('/') and
             not m.group(1).startswith('/<<PKGBUILDDIR>>')):
         return MissingFile(m.group(1))
-    return None
-
-
-def directory_not_found(m):
-    # TODO(jelmer): Should we report this separately?
     return None
 
 
@@ -1375,6 +1457,31 @@ def vala_package_missing(m):
     return MissingValaPackage(m.group(1))
 
 
+MAVEN_ERROR_PREFIX = '(?:\\[ERROR\\]|\\[\x1b\\[1;31mERROR\x1b\\[m\\]) '
+
+
+
+class DirectoryNonExistant(object):
+
+    kind = 'local-directory-not-existing'
+
+    def __init__(self, path):
+        self.path = path
+
+    def __str__(self):
+        return "Directory does not exist: %s" % self.path
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.path)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.path == other.path
+
+
+def directory_not_found(m):
+    return DirectoryNonExistant(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1484,36 +1591,39 @@ build_failure_regexps = [
      perl_file_not_found),
     (r'Can\'t open perl script "(.*)": No such file or directory',
      perl_file_not_found),
-    (r'\[ERROR] Failed to execute goal on project .*: Could not resolve '
-     r'dependencies for project .*: The following artifacts could not be '
-     r'resolved: (.*): Cannot access central '
-     r'\(https://repo\.maven\.apache\.org/maven2\) in offline mode and '
-     r'the artifact .* has not been downloaded from it before..*',
-     maven_missing_artifact),
-    (r'\[ERROR\] Unresolveable build extension: Plugin (.*) or one of its '
-     r'dependencies could not be resolved: Cannot access central '
-     r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
-     r'artifact .* has not been downloaded from it before. @',
-     maven_missing_artifact),
+    # Maven
+    (MAVEN_ERROR_PREFIX + r'Failed to execute goal on project .*: '
+     r'Could not resolve dependencies for project .*: '
+     r'The following artifacts could not be resolved: (.*): '
+     r'Cannot access central \(https://repo\.maven\.apache\.org/maven2\) '
+     r'in offline mode and the artifact .* has not been downloaded from '
+     r'it before..*', maven_missing_artifact),
+    (MAVEN_ERROR_PREFIX + r'Unresolveable build extension: '
+     r'Plugin (.*) or one of its dependencies could not be resolved: '
+     r'Cannot access central \(https://repo.maven.apache.org/maven2\) '
+     r'in offline mode and the artifact .* has not been downloaded '
+     'from it before. @', maven_missing_artifact),
     (r'\[FATAL\] Non-resolvable parent POM for .*: Cannot access central '
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      'artifact (.*) has not been downloaded from it before. .*',
      maven_missing_artifact),
-    (r'\[ERROR\] Plugin (.*) or one of its dependencies could not be '
-     r'resolved: Cannot access central '
+    (MAVEN_ERROR_PREFIX + r'Plugin (.*) or one of its dependencies could '
+     r'not be resolved: Cannot access central '
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      r'artifact .* has not been downloaded from it before. -> \[Help 1\]',
      maven_missing_artifact),
-    (r'\[ERROR\] Failed to execute goal on project .*: Could not resolve '
-     r'dependencies for project .*: Cannot access '
+    (MAVEN_ERROR_PREFIX + r'Failed to execute goal on project .*: '
+     r'Could not resolve dependencies for project .*: Cannot access '
      r'.* \([^\)]+\) in offline mode and the artifact '
      r'(.*) has not been downloaded from it before. -> \[Help 1\]',
      maven_missing_artifact),
-    (r'\[ERROR\] Failed to execute goal on project .*: Could not resolve '
-     r'dependencies for project .*: Cannot access central '
+    (MAVEN_ERROR_PREFIX + r'Failed to execute goal on project .*: '
+     r'Could not resolve dependencies for project .*: Cannot access central '
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      r'artifact (.*) has not been downloaded from it before..*',
      maven_missing_artifact),
+    (MAVEN_ERROR_PREFIX +
+     'Failed to execute goal (.*) on project (.*): (.*)', None),
     (r'dh_missing: (.*) exists in debian/.* but is not installed to anywhere',
      dh_missing_uninstalled),
     (r'dh_link: link destination (.*) is a directory',
@@ -1656,7 +1766,8 @@ build_failure_regexps = [
     (r'ERROR: Sphinx requires at least Python (.*) to run.',
      None),
     (r'Can\'t find (.*) directory in (.*)', None),
-    (r'/bin/sh: [0-9]: cannot create .*: Directory nonexistent', None),
+    (r'/bin/sh: [0-9]: cannot create (.*): Directory nonexistent',
+     lambda m: DirectoryNonExistant(os.path.dirname(m.group(1)))),
     (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
     (r'.*\.vala:[0-9]+\.[0-9]+-[0-9]+.[0-9]+: error: (.*)',
      None),
@@ -1770,11 +1881,14 @@ build_failure_regexps = [
     (r'gpg: can\'t connect to the agent: File name too long', None),
     (r'(.*.lua):[0-9]+: assertion failed', None),
     (r'\*\*\* error: gettext infrastructure mismatch: .*', None),
-    (r'\[ERROR\] Failed to execute goal (.*) on project (.*): (.*)',
-     None),
     (r'\s+\^\-\-\-\-\^ SC[0-4][0-9][0-9][0-9]: .*', None),
     (r'Error: (.*) needs updating from (.*)\. '
      r'Run \'pg_buildext updatecontrol\'.', need_pg_buildext_updatecontrol),
+    (r'Patch (.*) does not apply \(enforce with -f\)', None),
+    (r'convert convert: Unable to read font \((.*)\) '
+     r'\[No such file or directory\].', file_not_found),
+    # Pytest
+    (r'INTERNALERROR> PluginValidationError: (.*)', None),
 ]
 
 compiled_build_failure_regexps = []
@@ -1802,8 +1916,10 @@ secondary_build_failure_regexps = [
     # latex
     r'\! Undefined control sequence\.',
     r'\! Emergency stop\.',
+    r'\!pdfTeX error: pdflatex: fwrite\(\) failed',
     # CTest
     r'Errors while running CTest',
+    r'dh_auto_install: error: .*',
     r'dh.*: Aborting due to earlier error',
     r'dh.*: unknown option or error during option parsing; aborting',
     r'Could not import extension .* \(exception: .*\)',
@@ -1845,7 +1961,8 @@ secondary_build_failure_regexps = [
     'redis.exceptions.ConnectionError|builtins.OverflowError|ArgumentError|'
     'httptools.parser.errors.HttpParserInvalidURLError|HypothesisException|'
     'SSLError|KeyError|Exception|rnc2rng.parser.ParseError|'
-    'pkg_resources.UnknownExtra'
+    'pkg_resources.UnknownExtra|'
+    'datalad.support.exceptions.IncompleteResultsError'
     r'): .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
@@ -1874,6 +1991,7 @@ secondary_build_failure_regexps = [
     r'ln: failed to create symbolic link \'(.*)\': No such file or directory',
     r'ln: failed to create symbolic link \'(.*)\': Permission denied',
     r'mkdir: cannot create directory ‘(.*)’: No such file or directory',
+    r'mkdir: missing operand',
     r'Fatal error: .*',
     r'ERROR: Test "(.*)" failed. Exiting.',
     # scons
@@ -1911,6 +2029,8 @@ secondary_build_failure_regexps = [
     r'dh_makeshlibs: failing due to earlier errors',
     # Ruby
     r'([^:]+)\.rb:[0-9]+:in `([^\'])+\': (.*) \((.*)\)',
+    r'.*: \*\*\* ERROR: '
+    r'There where errors/warnings in server logs after running test cases.',
 ]
 
 compiled_secondary_build_failure_regexps = [
