@@ -1460,7 +1460,6 @@ def vala_package_missing(m):
 MAVEN_ERROR_PREFIX = '(?:\\[ERROR\\]|\\[\x1b\\[1;31mERROR\x1b\\[m\\]) '
 
 
-
 class DirectoryNonExistant(object):
 
     kind = 'local-directory-not-existing'

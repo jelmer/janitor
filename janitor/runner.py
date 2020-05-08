@@ -1198,9 +1198,11 @@ async def handle_finish(request):
                 code='success', worker_result=worker_result,
                 logfilenames=logfilenames)
 
-    note('Uploaded files: %r', filenames)
+    await queue_processor.finish_run(active_run, result)
     return web.json_response(
-        {'id': active_run.log_id, 'filenames': filenames}, status=201)
+        {'id': active_run.log_id,
+         'filenames': filenames,
+         'result': result.json()}, status=201)
 
 
 async def run_web_server(listen_addr, port, queue_processor):
