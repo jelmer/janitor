@@ -462,6 +462,8 @@ class NewUpstreamWorker(SubWorker):
                 if 'Unsupported protocol for url' in str(e.error):
                     if 'svn://' in str(e.error):
                         error_code = 'upstream-unsupported-vcs-svn'
+                    elif 'cvs+server://' in str(e.error):
+                        error_code = 'upstream-unsupported-vcs-cvs'
                     else:
                         error_code = 'upstream-unsupported-vcs'
                 raise WorkerFailure(error_code, error_description)
