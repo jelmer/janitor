@@ -15,8 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, UnixConnector
+from aiohttp import ClientSession, UnixConnector, MultipartWriter
 import asyncio
+from contextlib import ExitStack
 import os
 import re
 import subprocess
@@ -40,7 +41,7 @@ from .diffoscope import (
     format_diffoscope,
     )
 from .prometheus import setup_metrics
-from .trace import note
+from .trace import note, warning
 
 suite_check = re.compile('^[a-z0-9-]+$')
 
@@ -57,9 +58,9 @@ async def handle_upload(request):
         filenames.append(part.filename)
         with open(path, 'wb') as f:
             f.write(await part.read(decode=False))
-        if part.filename.endswith('.changes'):
+        if part.name.endswith('.changes'):
             result['changes_filename'] = part.filename
-            with open(os.path.join(path, name), 'r') as f:
+            with open(os.path.join(path, part.name), 'r') as f:
                 changes = Changes(f)
                 result['build_distribution'] = changes["Distribution"]
                 result['build_version'] = changes["Version"]
@@ -301,7 +302,7 @@ async def handle_publish(request):
     conn = UnixConnector(path=request.app.aptly_socket_path)
     suites_processed = []
     failed_suites = []
-    # First, retrierve
+    # First, retrieve
     async with ClientSession(connector=conn) as session:
         async with session.get('http://localhost/api/publish') as resp:
             if resp.status != 200:
@@ -365,18 +366,49 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     await site.start()
 
 
-async def update_aptly(incoming_dir):
-    args = [
-        "/usr/bin/aptly", "repo", "include",
-        "-accept-unsigned"]
-    args.append(incoming_dir)
-    proc = await asyncio.create_subprocess_exec(*args)
-    await proc.wait()
+async def update_aptly(aptly_socket_path, incoming_dir):
+    import uuid
+    dirname = str(uuid.uuid4())
+    filenames = []
+    todo = []
+    with MultipartWriter('mixed') as mpwriter, ExitStack() as es:
+        for entry in os.scandir(incoming_dir):
+            filenames.append(entry.name)
+            if entry.name.endswith('.changes'):
+                with open(entry.path, 'r') as f:
+                    changes = Changes(f)
+                    todo.append((entry.name, changes['Distribution']))
+            f = open(entry.path, 'rb')
+            es.enter_context(f)
+            mpwriter.append(f)
+        conn = UnixConnector(path=aptly_socket_path)
+        async with ClientSession(connector=conn) as session:
+            async with session.post(
+                    'http://localhost/api/files/%s' % dirname,
+                    data=mpwriter) as resp:
+                if resp.status != 200:
+                    raise Exception('Unable to upload files: %d' % resp.status)
+            for changes, suite in todo:
+                async with session.post(
+                        'http://localhost/api/repos/%s/include/%s/%s' % (
+                            suite, dirname, changes),
+                        data={'acceptUnsigned': 1}) as resp:
+                    if resp.status != 200:
+                        warning('Unable to include files %s in %s: %d ',
+                                changes, suite, resp.status)
+                        continue
+                    result = await resp.json()
+                    for failed in result['FailedFiles']:
+                        if failed in filenames:
+                            filenames.remove(failed)
+
+        for name in filenames:
+            os.remove(os.path.join(incoming_dir, name))
 
 
-async def update_archive_loop(config, incoming_dir):
+async def update_archive_loop(config, aptly_socket_path, incoming_dir):
     while True:
-        await update_aptly(incoming_dir)
+        await update_aptly(aptly_socket_path, incoming_dir)
         await asyncio.sleep(30 * 60)
 
 
@@ -485,7 +517,7 @@ def main(argv=None):
             args.listen_address, args.port, args.archive,
             args.incoming, args.aptly_socket_path, config)),
         loop.create_task(update_archive_loop(
-            config, args.incoming))))
+            config, aptly_socket_path, args.incoming))))
     loop.run_forever()
 
 

@@ -642,7 +642,7 @@ async def handle_run_finish(request):
     reader = await request.multipart()
     result = None
     with aiohttp.MultipartWriter('mixed') as archiver_writer, \
-         aiohttp.MultipartWriter('mixed') as runner_writer:
+            aiohttp.MultipartWriter('mixed') as runner_writer:
         while True:
             part = await reader.next()
             if part is None:
