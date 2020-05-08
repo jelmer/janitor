@@ -44,9 +44,9 @@ async def upload_results(
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
         async with session.post(finish_url, data=mpwriter) as resp:
-            if resp.status != 201:
-                raise ValueError('Unable to submit result: %r' %
-                                 await resp.read())
+            if resp.status not in (201, 200):
+                raise ValueError('Unable to submit result: %r: %d' %
+                                 (await resp.read(), resp.status))
             return await resp.json()
 
 
