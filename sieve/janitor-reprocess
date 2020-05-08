@@ -36,6 +36,9 @@ def parse_email(f):
     for i, line in enumerate(lines):
         if line == 'Reply to this email directly or view it on GitHub:':
             return lines[i+1].split('#')[0]
+        if (line == 'For more details, see:' and
+                lines[i+1].startswith('https://code.launchpad.net/')):
+            return lines[i+1]
         try:
             (field, value) = line.split(':', 1)
         except ValueError:
