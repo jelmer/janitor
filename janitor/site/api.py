@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import aiohttp
 from aiohttp import (
     web, ClientSession, ContentTypeError, ClientConnectorError, WSMsgType, )
 import urllib.parse
@@ -638,12 +639,43 @@ async def handle_run_assign(request):
 
 async def handle_run_finish(request):
     run_id = request.match_info['run_id']
-    url = urllib.parse.urljoin(request.app.runner_url, 'finish/%s' % run_id)
-    async with request.app.http_client_session.post(url, data=request) as resp:
-        if resp.status != 201:
-            return web.json_response(await resp.json(), status=resp.status)
-        result = await resp.json()
-        return web.json_response(result, status=201)
+    reader = await request.multipart()
+    result = None
+    with aiohttp.MultipartWriter('mixed') as archiver_writer, \
+         aiohttp.MultipartWriter('mixed') as runner_writer:
+        while True:
+            part = await reader.next()
+            if part is None:
+                break
+            if part.headers[aiohttp.hdrs.CONTENT_TYPE] == 'application/json':
+                result = await part.json()
+            elif part.filename.endswith('.log'):
+                runner_writer.append(part)
+            else:
+                archiver_writer.append(part)
+
+        archiver_url = urllib.parse.urljoin(
+            request.app.archiver_url + 'upload/%s' % run_id)
+        async with request.app.http_client_session.post(
+                archiver_url, data=archiver_writer) as resp:
+            if resp.status != 201:
+                return web.json_response(await resp.json(), status=resp.status)
+            archiver_result = await resp.json()
+
+        for key in ['changes_filename', 'build_version', 'build_distribution']:
+            result[key] = archiver_result.get(key)
+
+        runner_writer.append_json(result)
+
+        runner_url = urllib.parse.urljoin(
+            request.app.runner_url, 'finish/%s' % run_id)
+        async with request.app.http_client_session.post(
+                runner_url, data=runner_writer) as resp:
+            if resp.status != 201:
+                return web.json_response(await resp.json(), status=resp.status)
+            result = await resp.json()
+
+    return web.json_response(result, status=201)
 
 
 async def handle_list_active_runs(request):

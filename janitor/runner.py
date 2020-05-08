@@ -31,6 +31,7 @@ import sys
 import tempfile
 from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
 import uuid
+import urllib.parse
 
 from debian.deb822 import Changes
 
@@ -126,17 +127,19 @@ class NoChangesFile(Exception):
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, branch_url, description=None,
-                 code=None, build_distribution=None, build_version=None,
-                 changes_filename=None, worker_result=None,
+                 code=None, worker_result=None,
                  logfilenames=None, branch_name=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
         self.branch_url = branch_url
         self.code = code
-        self.build_distribution = build_distribution
-        self.build_version = build_version
-        self.changes_filename = changes_filename
+        self.build_distribution = (
+            worker_result.build_distribution if worker_result else None)
+        self.build_version = (
+            worker_result.build_version if worker_result else None)
+        self.changes_filename = (
+            worker_result.changes_filename if worker_result else None)
         self.branch_name = branch_name
         self.logfilenames = logfilenames
         if worker_result:
@@ -188,7 +191,9 @@ class WorkerResult(object):
     """The result from a worker."""
 
     def __init__(self, code, description, context=None, subworker=None,
-                 main_branch_revision=None, revision=None, value=None):
+                 main_branch_revision=None, revision=None, value=None,
+                 changes_filename=None, build_distribution=None,
+                 build_version=None):
         self.code = code
         self.description = description
         self.context = context
@@ -196,6 +201,9 @@ class WorkerResult(object):
         self.main_branch_revision = main_branch_revision
         self.revision = revision
         self.value = value
+        self.changes_filename = changes_filename
+        self.build_distribution = build_distribution
+        self.build_version = build_version
 
     @classmethod
     def from_file(cls, path):
@@ -216,7 +224,10 @@ class WorkerResult(object):
                 worker_result.get('code'), worker_result.get('description'),
                 worker_result.get('context'), worker_result.get('subworker'),
                 main_branch_revision,
-                revision, worker_result.get('value'))
+                revision, worker_result.get('value'),
+                worker_result.get('changes_filename'),
+                worker_result.get('build_distribution'),
+                worker_result.get('build_version'))
 
 
 async def run_subprocess(args, env, log_path=None):
@@ -761,8 +772,10 @@ class ActiveLocalRun(ActiveRun):
                 self.output_directory, result.changes_filename)
             debsign(changes_path, debsign_keyid)
             if incoming_url is not None:
+                run_incoming_url = urllib.parse.urljoin(
+                    incoming_url, self.log_id)
                 try:
-                    await upload_changes(changes_path, incoming_url)
+                    await upload_changes(changes_path, run_incoming_url)
                 except UploadFailedError as e:
                     warning('Unable to upload changes file %s: %r',
                             result.changes_filename, e)
@@ -1185,26 +1198,6 @@ async def handle_finish(request):
                 code='success', worker_result=worker_result,
                 logfilenames=logfilenames)
 
-            try:
-                (result.changes_filename, result.build_version,
-                 result.build_distribution) = find_changes(
-                     output_directory, result.package)
-            except NoChangesFile as e:
-                # Oh, well.
-                note('No changes file found: %s', e)
-            else:
-                changes_path = os.path.join(
-                    output_directory, result.changes_filename)
-                debsign(changes_path, queue_processor.debsign_keyid)
-                if queue_processor.incoming_url is not None:
-                    try:
-                        await upload_changes(
-                            changes_path, queue_processor.incoming_url)
-                    except UploadFailedError as e:
-                        warning('Unable to upload changes file %s: %r',
-                                result.changes_filename, e)
-                        # TODO(jelmer): Copy to failed upload directory
-
     note('Uploaded files: %r', filenames)
     return web.json_response(
         {'id': active_run.log_id, 'filenames': filenames}, status=201)
@@ -1260,7 +1253,7 @@ def main(argv=None):
         '--incoming-url', type=str,
         help='URL to upload built Debian packages to.')
     parser.add_argument(
-        '--debsign-keyid', type=str,
+        '--debsign-keyid', type=str, default=None,
         help='GPG key to sign Debian package with.')
     parser.add_argument(
         '--worker', type=str,
