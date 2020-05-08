@@ -301,6 +301,7 @@ def worker_failure_from_sbuild_log(f):
         description = 'build failed stage %s' % failed_stage
     if description is None:
         description = 'build failed'
+        context = ('build', )
         if list(paragraphs.keys()) == [None]:
             for line in reversed(paragraphs[None]):
                 m = re.match(
