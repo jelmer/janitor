@@ -114,6 +114,8 @@ def _convert_branch_exception(
             else:
                 if 'svn://' in str(e):
                     code = 'unsupported-vcs-svn'
+                elif 'cvs+pserver://' in str(e):
+                    code = 'unsupported-vcs-cvs'
                 else:
                     code = 'unsupported-vcs-protocol'
         else:
