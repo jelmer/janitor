@@ -38,3 +38,9 @@ Package: janitor-mastodon-notify
 Architecture: all
 Depends: python3-janitor, python3-mastodon, python3-prometheus-client, ${python3:Depends}, ${misc:Depends}
 Description: Mastodon notifier for the Debian Janitor
+
+Package: janitor-dovecot-filter
+Architecture: all
+Depends: dovecot, dovecot-sieve
+Description: Mail filter for the Debian Janitor
+
