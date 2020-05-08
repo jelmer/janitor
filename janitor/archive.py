@@ -361,7 +361,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
 async def update_aptly(incoming_dir):
     args = [
         "/usr/bin/aptly", "repo", "include",
-        "-keyring=/home/janitor/debian-janitor/janitor.gpg"]
+        "-accept-unsigned"]
     args.append(incoming_dir)
     proc = await asyncio.create_subprocess_exec(*args)
     await proc.wait()
