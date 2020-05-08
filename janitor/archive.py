@@ -48,6 +48,7 @@ suite_check = re.compile('^[a-z0-9-]+$')
 async def handle_upload(request):
     reader = await request.multipart()
     filenames = []
+    result = {}
     while True:
         part = await reader.next()
         if part is None:
@@ -56,8 +57,15 @@ async def handle_upload(request):
         filenames.append(part.filename)
         with open(path, 'wb') as f:
             f.write(await part.read(decode=False))
+        if part.filename.endswith('.changes'):
+            result['changes_filename'] = part.filename
+            with open(os.path.join(path, name), 'r') as f:
+                changes = Changes(f)
+                result['build_distribution'] = changes["Distribution"]
+                result['build_version'] = changes["Version"]
     note('Uploaded files: %r', filenames)
-    return web.Response(status=200, text='Uploaded files: %r.' % filenames)
+    result['filenames'] = filenames
+    return web.json_response(result, status=200)
 
 
 def find_binary_paths_from_changes(incoming_dir, source, version):
@@ -80,8 +88,7 @@ def find_binary_paths_from_changes(incoming_dir, source, version):
         return binaries
 
 
-def find_binary_paths_in_pool(
-        archive_path, source, version):
+def find_binary_paths_in_pool(archive_path, source, version):
     ret = []
     pool_dir = os.path.join(archive_path, "pool")
     for component in os.scandir(pool_dir):
@@ -346,7 +353,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     app.aptly_socket_path = aptly_socket_path
     app.config = config
     setup_metrics(app)
-    app.router.add_post('/', handle_upload, name='upload')
+    app.router.add_post('/upload/{directory}', handle_upload, name='upload')
     app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
     app.router.add_post('/diffoscope', handle_diffoscope, name='diffoscope')
     app.router.add_static('/dists', os.path.join(archive_path, 'dists'))
