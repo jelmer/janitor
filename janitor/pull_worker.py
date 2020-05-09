@@ -17,7 +17,7 @@
 
 import argparse
 import asyncio
-from aiohttp import ClientSession, MultipartWriter
+from aiohttp import ClientSession, MultipartWriter, BasicAuth
 from contextlib import ExitStack
 from datetime import datetime
 import os
@@ -53,7 +53,6 @@ async def upload_results(
 
 
 async def main(argv=None):
-    import socket
     parser = argparse.ArgumentParser(
         prog='janitor-pull-worker',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
