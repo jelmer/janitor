@@ -299,59 +299,56 @@ async def handle_diffoscope(request):
 
 async def handle_publish(request):
     post = await request.post()
-    conn = UnixConnector(path=request.app.aptly_socket_path)
     suites_processed = []
     failed_suites = []
-    # First, retrieve
-    async with ClientSession(connector=conn) as session:
-        async with session.get('http://localhost/api/publish') as resp:
-            if resp.status != 200:
-                raise Exception('retrieving in progress publish failed')
-            publish = {}
-            for p in await resp.json():
-                publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
+    async with session.get('http://localhost/api/publish') as resp:
+        if resp.status != 200:
+            raise Exception('retrieving in progress publish failed')
+        publish = {}
+        for p in await resp.json():
+            publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
 
-        for suite in request.app.config.suite:
-            if post.get('suite') not in (suite.name, None):
-                continue
-            storage = ''
-            prefix = '.'
-            loc = "%s:%s" % (storage, prefix)
-            if (storage, prefix, suite.name) in publish:
-                async with session.put('http://localhost/api/publish/%s/%s'
-                                       % (loc, suite.name)):
-                    if resp.status != 200:
-                        failed_suites.append(suite.name)
-                    else:
-                        suites_processed.append(suite.name)
-            else:
-                params = {
-                    'SourceKind': 'local',
-                    'Sources': [suite.name],
-                    'Distribution': suite.name,
-                    'Label': suite.archive_description,
-                    'Origin': 'janitor.debian.net',
-                    'NotAutomatic': 'yes',
-                    'ButAutomaticUpgrades': 'yes',
-                    }
-                async with session.post(
-                        'http://localhost/api/publish/%s' % loc,
-                        json=params) as resp:
-                    if resp.status != 200:
-                        failed_suites.append(suite.name)
-                    else:
-                        suites_processed.append(suite.name)
+    for suite in request.app.config.suite:
+        if post.get('suite') not in (suite.name, None):
+            continue
+        storage = post.get('storage', '')
+        prefix = post.get('prefix', '.')
+        loc = "%s:%s" % (storage, prefix)
+        if (storage, prefix, suite.name) in publish:
+            async with session.put('http://localhost/api/publish/%s/%s'
+                                   % (loc, suite.name)):
+                if resp.status != 200:
+                    failed_suites.append(suite.name)
+                else:
+                    suites_processed.append(suite.name)
+        else:
+            params = {
+                'SourceKind': 'local',
+                'Sources': [suite.name],
+                'Distribution': suite.name,
+                'Label': suite.archive_description,
+                'Origin': 'janitor.debian.net',
+                'NotAutomatic': 'yes',
+                'ButAutomaticUpgrades': 'yes',
+                }
+            async with session.post(
+                    'http://localhost/api/publish/%s' % loc,
+                    json=params) as resp:
+                if resp.status != 200:
+                    failed_suites.append(suite.name)
+                else:
+                    suites_processed.append(suite.name)
     return web.json_response(
         {'suites-processed': suites_processed,
          'suites-failed': failed_suites})
 
 
 async def run_web_server(listen_addr, port, archive_path, incoming_dir,
-                         aptly_socket_path, config):
+                         aptly_session, config):
     app = web.Application()
     app.archive_path = archive_path
     app.incoming_dir = incoming_dir
-    app.aptly_socket_path = aptly_socket_path
+    app.aptly_session = aptly_session
     app.config = config
     setup_metrics(app)
     app.router.add_post('/upload/{directory}', handle_upload, name='upload')
@@ -366,12 +363,12 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     await site.start()
 
 
-async def update_aptly(aptly_socket_path, incoming_dir):
+async def update_aptly(aptly_session, incoming_dir):
     import uuid
     dirname = str(uuid.uuid4())
     filenames = []
     todo = []
-    with MultipartWriter('mixed') as mpwriter, ExitStack() as es:
+    with MultipartWriter('form-data') as mpwriter, ExitStack() as es:
         for entry in os.scandir(incoming_dir):
             filenames.append(entry.name)
             if entry.name.endswith('.changes'):
@@ -381,34 +378,34 @@ async def update_aptly(aptly_socket_path, incoming_dir):
             f = open(entry.path, 'rb')
             es.enter_context(f)
             mpwriter.append(f)
-        conn = UnixConnector(path=aptly_socket_path)
-        async with ClientSession(connector=conn) as session:
-            async with session.post(
-                    'http://localhost/api/files/%s' % dirname,
-                    data=mpwriter) as resp:
+        async with aptly_session.post(
+                'http://localhost/api/files/%s' % dirname,
+                data=mpwriter) as resp:
+            if resp.status != 200:
+                raise Exception('Unable to upload files: %d' % resp.status)
+        for changes, suite in todo:
+            async with aptly_session.post(
+                    'http://localhost/api/repos/%s/include/%s/%s' % (
+                        suite, dirname, changes),
+                    data={'acceptUnsigned': 1}) as resp:
                 if resp.status != 200:
-                    raise Exception('Unable to upload files: %d' % resp.status)
-            for changes, suite in todo:
-                async with session.post(
-                        'http://localhost/api/repos/%s/include/%s/%s' % (
-                            suite, dirname, changes),
-                        data={'acceptUnsigned': 1}) as resp:
-                    if resp.status != 200:
-                        warning('Unable to include files %s in %s: %d ',
-                                changes, suite, resp.status)
-                        continue
-                    result = await resp.json()
-                    for failed in result['FailedFiles']:
-                        if failed in filenames:
-                            filenames.remove(failed)
+                    warning('Unable to include files %s in %s: %d ',
+                            changes, suite, resp.status)
+                    continue
+                result = await resp.json()
+                for failed in result['FailedFiles']:
+                    if failed in filenames:
+                        filenames.remove(failed)
 
         for name in filenames:
             os.remove(os.path.join(incoming_dir, name))
 
 
-async def update_archive_loop(config, aptly_socket_path, incoming_dir):
+async def update_archive_loop(config, aptly_session, incoming_dir):
+    # Give aptly some time to start
+    await asyncio.sleep(15)
     while True:
-        await update_aptly(aptly_socket_path, incoming_dir)
+        await update_aptly(aptly_session, incoming_dir)
         await asyncio.sleep(30 * 60)
 
 
@@ -442,35 +439,28 @@ async def sync_aptly_repos(session, suites):
                     raise Exception('Unable to edit repo %s: %d' % (
                                     suite.name, resp.status))
             del repos[suite.name]
-    # TODO(jelmer): Drop/return repositories not referenced?
+    for suite in repos:
+        async with session.delete(
+                'http://localhost/api/repos/%s' % suite) as resp:
+            if resp.status != 200:
+                raise Exception('Error removing repo %s: %d' % (
+                    suite, resp.status))
 
 
-async def sync_aptly(socket_path, suites):
+async def sync_aptly(aptly_session, suites):
     # Give aptly some time to start
     await asyncio.sleep(15)
-    conn = UnixConnector(path=socket_path)
-    async with ClientSession(connector=conn) as session:
-        async with session.get('http://localhost/api/version') as resp:
-            if resp.status != 200:
-                raise Exception('failed: %r' % resp.status)
-            ret = await resp.json()
-            print('aptly version %s connected' % ret['Version'])
-        await sync_aptly_repos(session, suites)
-
-    # TODO(jelmer): Use API
-    for suite in suites:
-        subprocess.call(
-            ['/usr/bin/aptly', 'publish', 'repo', '-notautomatic=yes',
-             '-butautomaticupgrades=yes', '-origin=janitor.debian.net',
-             '-label=%s' % suite.archive_description,
-             '-distribution=%s' % suite.name,
-             suite.name])
+    async with aptly_session.get('http://localhost/api/version') as resp:
+        if resp.status != 200:
+            raise Exception('failed: %r' % resp.status)
+        ret = await resp.json()
+        print('aptly version %s connected' % ret['Version'])
+    await sync_aptly_repos(aptly_session, suites)
 
 
 async def run_aptly(sock_path):
     args = [
-        '/usr/bin/aptly', 'api', 'serve', '-listen=unix://%s' % sock_path,
-        '-no-lock']
+        '/usr/bin/aptly', 'api', 'serve', '-listen=unix://%s' % sock_path]
     proc = await asyncio.create_subprocess_exec(*args)
     ret = await proc.wait()
     raise Exception('aptly finished with exit code %r' % ret)
@@ -510,14 +500,16 @@ def main(argv=None):
         os.remove(aptly_socket_path)
 
     loop = asyncio.get_event_loop()
+    aptly_session = ClientSession(connector=UnixConnector(path=aptly_socket_path))
+
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_aptly(aptly_socket_path)),
-        loop.create_task(sync_aptly(aptly_socket_path, config.suite)),
+        loop.create_task(sync_aptly(aptly_session, config.suite)),
         loop.create_task(run_web_server(
             args.listen_address, args.port, args.archive,
-            args.incoming, args.aptly_socket_path, config)),
+            args.incoming, aptly_session, config)),
         loop.create_task(update_archive_loop(
-            config, aptly_socket_path, args.incoming))))
+            config, aptly_session, args.incoming))))
     loop.run_forever()
 
 
