@@ -26,12 +26,21 @@
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_duration(entry['current_duration']) }}</td>
     <td>{{ entry['worker'] }}</td>
+    {% if is_admin %}
+    <td><button id="kill-{{ entry['id'] }}" onclick="kill('{{ entry['id'] }}')">Kill</button></td>
+    {% endif %}
     <!-- TODO(jelmer): Link to logs -->
     <!-- TODO(jelmer): Link to kill button, if user is admin -->
 </tr>
 {% endfor %}
 </table>
 </div>
+
+<script>
+kill = function(run_id) {
+    $.post("/api/active-runs/" + run_id + "/kill");
+}
+</script>
 
 <div name="queue">
 <h2>Coming up</h2>
@@ -72,6 +81,9 @@ registerHandler('queue', function(msg) {
          tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
          tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
          tr.append('<td>' + p['worker'] + '</td>');
+{% if is_admin %}
+         tr.append('<td><button id="kill-' + p['id'] + '" onclick="kill(\'' + p['id'] + '\')"">Kill</button></td>');
+{% endif %}
          tr.show();
          $('#queue-table').append(tr);
       }

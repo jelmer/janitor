@@ -242,7 +242,8 @@ if __name__ == '__main__':
         async with request.app.database.acquire() as conn:
             return web.Response(
                 content_type='text/html',
-                text=await write_history(conn, limit=limit),
+                text=await write_history(
+                    conn, limit=limit, is_admin=is_admin(request)),
                 headers={'Cache-Control': 'max-age=10'})
 
     async def handle_queue(request):
@@ -252,6 +253,7 @@ if __name__ == '__main__':
             return web.Response(
                 content_type='text/html', text=await write_queue(
                     request.app.http_client_session, conn,
+                    is_admin=is_admin(request),
                     queue_status=app.runner_status, limit=limit),
                 headers={'Cache-Control': 'max-age=10'})
 
@@ -788,7 +790,7 @@ if __name__ == '__main__':
     app.on_startup.append(start_pubsub_forwarder)
     app.database = state.Database(config.database_location)
     app.config = config
-    from janitor.site import env
+    from janitor.site import env, is_admin
     app.jinja_env = env
     setup_debsso(app)
     setup_metrics(app)
