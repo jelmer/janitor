@@ -130,6 +130,11 @@ CREATE TABLE IF NOT EXISTS publish_policy (
    unique(package, suite)
 );
 CREATE INDEX ON candidate (suite);
+CREATE TABLE worker (
+   name text not null unique,
+   password text not null
+);
+
 CREATE OR REPLACE VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
   *

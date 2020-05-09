@@ -2,7 +2,13 @@
 
 import aiohttp
 from aiohttp import (
-    web, ClientSession, ContentTypeError, ClientConnectorError, WSMsgType, )
+    web,
+    ClientSession,
+    ContentTypeError,
+    ClientConnectorError,
+    WSMsgType,
+    BasicAuth,
+    )
 import urllib.parse
 
 from janitor import state, SUITE_REGEX
@@ -627,10 +633,21 @@ async def handle_publish_ready(request):
     return web.json_response(ret, status=200)
 
 
+async def check_worker_creds(request):
+    auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
+    if not auth_header:
+        raise web.HTTPUnauthorized('worker login required')
+    auth = BasicAuth.decode(auth_header=auth_header)
+    if not await state.check_worker_credentials(auth.login, auth.password):
+        raise web.HTTPUnauthorized('worker login required')
+    return auth.login
+
+
 async def handle_run_assign(request):
+    worker_name = await check_worker_creds(request)
     url = urllib.parse.urljoin(request.app.runner_url, 'assign')
     async with request.app.http_client_session.post(
-            url, json={'worker': request.remote}) as resp:
+            url, json={'worker': worker_name}) as resp:
         if resp.status != 201:
             return web.json_response({
                  'internal-status': resp.status,
@@ -641,6 +658,7 @@ async def handle_run_assign(request):
 
 
 async def handle_run_finish(request):
+    worker_name  = await check_worker_creds(request)
     run_id = request.match_info['run_id']
     reader = await request.multipart()
     result = None
@@ -670,6 +688,8 @@ async def handle_run_finish(request):
 
         for key in ['changes_filename', 'build_version', 'build_distribution']:
             result[key] = archiver_result.get(key)
+
+        result['worker_name'] = worker_name
 
         part = runner_writer.append_json(result)
         part.set_content_disposition('attachment', filename='result.json')
