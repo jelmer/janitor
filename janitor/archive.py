@@ -20,7 +20,6 @@ import asyncio
 from contextlib import ExitStack
 import os
 import re
-import subprocess
 import sys
 from typing import List, Tuple, Optional
 
@@ -301,7 +300,8 @@ async def handle_publish(request):
     post = await request.post()
     suites_processed = []
     failed_suites = []
-    async with session.get('http://localhost/api/publish') as resp:
+    async with request.app.aptly_session.get(
+            'http://localhost/api/publish') as resp:
         if resp.status != 200:
             raise Exception('retrieving in progress publish failed')
         publish = {}
@@ -315,8 +315,8 @@ async def handle_publish(request):
         prefix = post.get('prefix', '.')
         loc = "%s:%s" % (storage, prefix)
         if (storage, prefix, suite.name) in publish:
-            async with session.put('http://localhost/api/publish/%s/%s'
-                                   % (loc, suite.name)):
+            async with request.app.aptly_session.put(
+                    'http://localhost/api/publish/%s/%s' % (loc, suite.name)):
                 if resp.status != 200:
                     failed_suites.append(suite.name)
                 else:
@@ -331,7 +331,7 @@ async def handle_publish(request):
                 'NotAutomatic': 'yes',
                 'ButAutomaticUpgrades': 'yes',
                 }
-            async with session.post(
+            async with request.app.aptly_session.post(
                     'http://localhost/api/publish/%s' % loc,
                     json=params) as resp:
                 if resp.status != 200:
@@ -500,7 +500,8 @@ def main(argv=None):
         os.remove(aptly_socket_path)
 
     loop = asyncio.get_event_loop()
-    aptly_session = ClientSession(connector=UnixConnector(path=aptly_socket_path))
+    aptly_session = ClientSession(
+        connector=UnixConnector(path=aptly_socket_path))
 
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_aptly(aptly_socket_path)),
