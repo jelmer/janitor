@@ -12,12 +12,14 @@
 <col width="20%">
 <col width="10%">
 <col width="4%">
+<col width="4%">
 <col width="20%">
 <col width="40%">
 </colgroup>
 <thead valign="bottom">
 <tr class="row-odd"><th class="head">Package</th>
 <th class="head">Suite</th>
+<th class="head">Worker</th>
 <th class="head">Duration</th>
 <th class="head">Result</th>
 <th class="head">Summary</th>
@@ -27,6 +29,7 @@
 {% for run in history %}
 <tr class="row-even"><td><a class="reference external" href="pkg/{{ run.package }}">{{ run.package }}</a></td>
 <td><a href="/{{ run.suite}}">{{ run.suite }}</a></td>
+<td>{{ run.worker_name }}</td>
 <td>{{ format_duration(run.duration) }}</td>
 <td><a class="reference external" href="pkg/{{ run.package }}/{{ run.id }}">{{ display_result_code(run.result_code)|safe }}</a></td>
 <td>{% if run.result_code != 'success' %}{{ run.description }}{% endif %}</td>
