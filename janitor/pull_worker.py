@@ -21,10 +21,12 @@ from aiohttp import ClientSession, MultipartWriter
 from contextlib import ExitStack
 from datetime import datetime
 import os
+import socket
 import sys
 from tempfile import TemporaryDirectory
 from typing import Any
 from urllib.parse import urljoin
+import yarl
 
 from janitor.trace import note
 from janitor.worker import WorkerFailure, process_package
@@ -70,16 +72,19 @@ async def main(argv=None):
         help='Command to run to check package before pushing.',
         type=str, default=None)
     parser.add_argument(
-        '--worker-name',
+        '--node-name',
         type=str,
-        help='Worker name',
+        help='Node name',
         default=socket.gethostname())
 
     args = parser.parse_args(argv)
 
-    async with ClientSession() as session:
+    auth = BasicAuth.from_url(yarl.URL(args.base_url))
+
+    async with ClientSession(auth=auth) as session:
         assign_url = urljoin(args.base_url, 'active-runs')
-        async with session.post(assign_url, json={}) as resp:
+        async with session.post(
+                assign_url, json={'node': args.node_name}) as resp:
             if resp.status != 201:
                 raise ValueError('Unable to get assignment: %r' %
                                  await resp.read())
@@ -147,7 +152,7 @@ async def main(argv=None):
             finish_time = datetime.now()
             note('Elapsed time: %s', finish_time - start_time)
 
-            async with ClientSession() as session:
+            async with ClientSession(auth=auth) as session:
                 result = await upload_results(
                     session, args.base_url, assignment['id'], metadata,
                     output_directory)
