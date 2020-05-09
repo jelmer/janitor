@@ -70,17 +70,17 @@ async def upload_results(
 
 @contextmanager
 def copy_output(output_log):
-    old_stdout = sys.stdout
-    old_stderr = sys.stderr
+    old_stdout = os.dup(sys.stdout.fileno())
+    old_stderr = os.dup(sys.stderr.fileno())
     p = subprocess.Popen(['tee', output_log], stdin=subprocess.PIPE)
     os.dup2(p.stdin.fileno(), sys.stdout.fileno())
     os.dup2(p.stdin.fileno(), sys.stderr.fileno())
     yield
-    sys.stdout = old_stdout
-    sys.stderr = old_stderr
-    p.stdout.close()
-    p.std.close()
-    p.wait()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.dup2(old_stdout, sys.stdout.fileno())
+    os.dup2(old_stderr, sys.stderr.fileno())
+    p.stdin.close()
 
 
 async def main(argv=None):
