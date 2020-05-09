@@ -35,10 +35,11 @@ connection.onerror = (error) => {
 }
 
 connection.onmessage = (e) => {
-  for (handler in handlers) {
-    if (handler.kind == e.data[0]) { handler.callback(e.data[1]); }
-  }
-  console.log(e.data);
+  data = JSON.parse(e.data);
+  handlers.forEach(function(handler) {
+    if (handler.kind == data[0]) { handler.callback(data[1]); }
+  });
+  console.log(data);
 }
 }
 

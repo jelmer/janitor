@@ -670,6 +670,8 @@ async def handle_run_finish(request):
             part = await reader.next()
             if part is None:
                 break
+            from janitor.trace import note
+            note('Headers %r, %r', part.headers, part.filename)
             if part.headers[aiohttp.hdrs.CONTENT_TYPE] == 'application/json':
                 result = await part.json()
             elif part.filename.endswith('.log'):
@@ -682,9 +684,13 @@ async def handle_run_finish(request):
         async with request.app.http_client_session.post(
                 archiver_url, data=archiver_writer) as resp:
             if resp.status not in (201, 200):
+                try:
+                    internal_error = await resp.json()
+                except ContentTypeError:
+                    internal_error = await resp.text()
                 return web.json_response({
                     'internal-status': resp.status,
-                    'internal-result': await resp.json()},
+                    'internal-result': internal_error},
                     status=400)
             archiver_result = await resp.json()
 
@@ -705,13 +711,17 @@ async def handle_run_finish(request):
                 return web.json_response(
                     {'reason': json['reason']}, status=404)
             if resp.status not in (201, 200):
+                try:
+                    internal_error = await resp.json()
+                except ContentTypeError:
+                    internal_error = await resp.text()
                 return web.json_response({
                     'internal-status': resp.status,
-                    'internal-result': await resp.json(),
+                    'internal-result': internal_error,
                     }, status=400)
             result = await resp.json()
 
-    result['api_url'] = request.app.router['api-run'].url_for(run_id=run_id)
+    result['api_url'] = str(request.app.router['api-run'].url_for(run_id=run_id))
     return web.json_response(result, status=201)
 
 

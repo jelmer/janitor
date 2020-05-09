@@ -38,6 +38,7 @@
 
 <script>
 kill = function(run_id) {
+    console.log("Killing job " + run_id);
     $.post("/api/active-runs/" + run_id + "/kill");
 }
 </script>
@@ -93,7 +94,7 @@ registerHandler('queue', function(msg) {
        if (!seen_ids.includes(el.id)) {
           el.remove();
        }
-   });
+   })
 });
 
 </script>
