@@ -252,17 +252,22 @@ def copy_vcs_dir(main_branch: Branch,
         vcs_result_dir, pkg, branch_map, public_master_branch=main_branch)
 
 
-def get_cached_branch(vcs_type: str,
-                      package: str,
-                      branch_name: str) -> Optional[Branch]:
+def get_cached_branch_url(
+        vcs_type: str, package: str, branch_name: str) -> str:
     if vcs_type == 'git':
-        url = '%s%s,branch=%s' % (
+        return '%s%s,branch=%s' % (
             CACHE_URL_GIT, package, branch_name)
     elif vcs_type == 'bzr':
-        url = '%s%s/%s' % (
+        return '%s%s/%s' % (
             CACHE_URL_BZR, package, branch_name)
     else:
         raise AssertionError('unknown vcs type %r' % vcs_type)
+
+
+def get_cached_branch(vcs_type: str,
+                      package: str,
+                      branch_name: str) -> Optional[Branch]:
+    url = get_cached_branch_url(vcs_type, package, branch_name)
     try:
         return Branch.open(url)
     except NotBranchError:
@@ -276,6 +281,17 @@ def get_cached_branch(vcs_type: str,
         return None
 
 
+def get_local_vcs_branch_url(
+        vcs_directory: str, vcs: str, pkg: str, branch_name: str) -> str:
+    if vcs == 'git':
+        return 'file:%s,branch=%s' % (
+            os.path.join(vcs_directory, 'git', pkg), branch_name)
+    elif vcs == 'bzr':
+        return os.path.join(vcs_directory, 'bzr', pkg, branch_name)
+    else:
+        return None
+
+
 def get_local_vcs_branch(vcs_directory: str,
                          pkg: str,
                          branch_name: str) -> Branch:
@@ -284,13 +300,10 @@ def get_local_vcs_branch(vcs_directory: str,
             break
     else:
         return None
-    if vcs == 'git':
-        return open_branch(
-            'file:%s,branch=%s' % (
-                os.path.join(vcs_directory, 'git', pkg), branch_name))
-    elif vcs == 'bzr':
-        return open_branch(
-            os.path.join(vcs_directory, 'bzr', pkg, branch_name))
+    url = get_local_vcs_branch_url(vcs_directory, vcs, pkg, branch_name)
+    if url is None:
+        return None
+    return open_branch(url)
 
 
 def get_local_vcs_repo(vcs_directory: str,
@@ -309,6 +322,10 @@ class VcsManager(object):
     def get_branch(self, package: str, branch_name: str,
                    vcs_type: Optional[str] = None) -> Branch:
         raise NotImplementedError(self.get_branch)
+
+    def get_branch_url(self, package: str, branch_name: str,
+                       vcs_type: str) -> str:
+        raise NotImplementedError(self.get_branch_url)
 
     def import_branches(self,
                         main_branch: Branch, local_branch: Branch, pkg: str,
@@ -335,9 +352,14 @@ class LocalVcsManager(VcsManager):
 
     def get_branch(self, package, branch_name, vcs_type=None):
         try:
-            return get_local_vcs_branch(self.base_path, package, branch_name)
+            return get_local_vcs_branch(
+                self.base_path, package, branch_name, vcs_type)
         except (BranchUnavailable, BranchMissing):
             return None
+
+    def get_branch_url(self, package, branch_name, vcs_type):
+        return get_local_vcs_branch_url(
+            self.base_path, package, branch_name, vcs_type)
 
     def import_branches(self, main_branch, local_branch, pkg, name,
                         additional_colocated_branches=None):
@@ -365,6 +387,9 @@ class RemoteVcsManager(VcsManager):
                 return branch
         else:
             return None
+
+    def get_branch_url(self, package, branch_name, vcs_type):
+        return get_cached_branch_url(package, branch_name, vcs_type)
 
 
 def get_run_diff(vcs_manager: VcsManager, run) -> bytes:

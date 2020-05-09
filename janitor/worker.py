@@ -747,9 +747,14 @@ def process_package(vcs_url, env, command, output_directory,
             cached_branch = open_branch(
                 cached_branch_url,
                 possible_transports=possible_transports)
-        except (BranchMissing, BranchUnavailable) as e:
-            warning('Cached branch URL unavailable: %s', e)
+        except BranchMissing as e:
+            note('Cached branch URL %s missing: %s', cached_branch_url, e)
             cached_branch = None
+        except BranchUnavailable as e:
+            warning('Cached branch URL unavailable: %s', cached_branch_url, e)
+            cached_branch = None
+        else:
+            note('Using cached branch %s', cached_branch.user_url)
     else:
         cached_branch = None
 

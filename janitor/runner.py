@@ -251,7 +251,7 @@ async def run_subprocess(args, env, log_path=None):
 
 async def invoke_subprocess_worker(
         worker_kind, main_branch, env, command, output_directory,
-        resume_branch=None, cached_branch=None,
+        resume_branch=None, cached_branch_url=None,
         pre_check=None, post_check=None,
         build_command=None, log_path=None,
         resume_branch_result=None,
@@ -273,8 +273,8 @@ async def invoke_subprocess_worker(
         args.append('--host=%s' % worker_kind.split(':')[1])
     if resume_branch:
         args.append('--resume-branch-url=%s' % resume_branch.user_url)
-    if cached_branch:
-        args.append('--cached-branch-url=%s' % cached_branch.user_url)
+    if cached_branch_url:
+        args.append('--cached-branch-url=%s' % cached_branch_url)
     if pre_check:
         args.append('--pre-check=%s' % pre_check)
     if post_check:
@@ -636,12 +636,9 @@ class ActiveLocalRun(ActiveRun):
             if resume_branch is not None:
                 note('Resuming from %s', resume_branch.user_url)
 
-            cached_branch = vcs_manager.get_branch(
+            cached_branch_url = vcs_manager.get_branch_url(
                 self.queue_item.package, 'master',
                 get_vcs_abbreviation(main_branch))
-
-            if cached_branch is not None:
-                note('Using cached branch %s', cached_branch.user_url)
         else:
             main_branch = vcs_manager.get_branch(
                 self.queue_item.package, 'master')
@@ -656,7 +653,7 @@ class ActiveLocalRun(ActiveRun):
             note('Using cached branch %s', main_branch.user_url)
             resume_branch = vcs_manager.get_branch(
                 self.queue_item.package, suite_config.branch_name)
-            cached_branch = None
+            cached_branch_url = None
 
         if self.queue_item.refresh and resume_branch:
             note('Since refresh was requested, ignoring resume branch.')
@@ -676,7 +673,7 @@ class ActiveLocalRun(ActiveRun):
                 invoke_subprocess_worker(
                     worker_kind, main_branch, env, self.queue_item.command,
                     self.output_directory, resume_branch=resume_branch,
-                    cached_branch=cached_branch, pre_check=pre_check,
+                    cached_branch_url=cached_branch_url, pre_check=pre_check,
                     post_check=post_check,
                     build_command=suite_config.build_command,
                     log_path=log_path,
@@ -1111,9 +1108,8 @@ async def handle_assign(request):
         main_branch_url=main_branch.user_url,
         resume_branch_name=resume_branch_name)
 
-    cached_branch = queue_processor.vcs_manager.get_branch(
-        item.package, 'master',
-        vcs_type)
+    cached_branch_url = queue_processor.vcs_manager.get_branch_url(
+        item.package, 'master', vcs_type)
 
     env = {
         'PACKAGE': item.package,
@@ -1123,6 +1119,9 @@ async def handle_assign(request):
     if item.upstream_branch_url:
         env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url,
 
+    result_branch_url = queue_processor.vcs_manager.get_branch_url(
+        item.package, suite_config.branch_name, vcs_type)
+
     assignment = {
         'id': active_run.log_id,
         'queue_id': item.id,
@@ -1130,7 +1129,7 @@ async def handle_assign(request):
             'url': branch_url,
             'subpath': item.subpath,
             'vcs_type': item.vcs_type,
-            'cached_url': cached_branch.user_url if cached_branch else None,
+            'cached_url': cached_branch_url,
         },
         'resume': resume,
         'last_build_version': last_build_version,
@@ -1142,7 +1141,9 @@ async def handle_assign(request):
         'env': env,
         'command': item.command,
         'suite': item.suite,
-        'branch_name': suite_config.branch_name,
+        'result_branch': {
+            'url': result_branch_url,
+         },
         }
 
     await queue_processor.register_run(active_run)
