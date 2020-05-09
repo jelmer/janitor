@@ -1069,7 +1069,7 @@ async def handle_assign(request):
 
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
-    async with request.app.database.acquire() as conn:
+    async with queue_processor.database.acquire() as conn:
         last_build_version = await state.get_last_build_version(
             conn, item.package, item.suite)
 
@@ -1130,7 +1130,7 @@ async def handle_assign(request):
             'url': branch_url,
             'subpath': item.subpath,
             'vcs_type': item.vcs_type,
-            'cached_url': cached_branch.user_url,
+            'cached_url': cached_branch.user_url if cached_branch else None,
         },
         'resume': resume,
         'last_build_version': last_build_version,
