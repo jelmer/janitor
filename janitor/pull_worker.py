@@ -130,7 +130,6 @@ async def main(argv=None):
         #    # TODO(jelmer): Listen for 'abort' message
         #    pass
 
-
     if 'WORKSPACE' in os.environ:
         desc_path = os.path.join(os.environ['WORKSPACE'], 'description.txt')
         with open(desc_path, 'w') as f:
@@ -163,14 +162,14 @@ async def main(argv=None):
         try:
             with copy_output(os.path.join(output_directory, 'worker.log')):
                 result = process_package(
-                    branch_url, env,
+                    branch_url, subpath, env,
                     command, output_directory, metadata,
                     build_command=args.build_command,
                     pre_check_command=args.pre_check,
                     post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
                     cached_branch_url=cached_branch_url,
-                    subpath=subpath, build_distribution=build_distribution,
+                    build_distribution=build_distribution,
                     build_suffix=build_suffix,
                     last_build_version=last_build_version,
                     resume_subworker_result=resume_result)

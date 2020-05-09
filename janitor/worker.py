@@ -23,7 +23,7 @@ import json
 import os
 import subprocess
 import sys
-from typing import Callable, Optional
+from typing import Callable, Dict, List, Optional, Any, Type
 
 from breezy import osutils
 from breezy.config import GlobalStack
@@ -32,6 +32,8 @@ from breezy.errors import (
     NoRoundtrippingSupport,
     MalformedTransform,
     )
+from breezy.tree import Tree
+from breezy.transport import Transport
 from breezy.workingtree import WorkingTree
 
 from silver_platter.debian import (
@@ -47,6 +49,7 @@ from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
     DEFAULT_MINIMUM_CERTAINTY,
 )
+from silver_platter.proposal import Hoster
 from lintian_brush.config import Config as LintianBrushConfig
 from lintian_brush.reformatting import GeneratedFile, FormattingUnpreservable
 from lintian_brush import (
@@ -120,12 +123,9 @@ class SubWorker(object):
           env: Environment dictionary
         """
 
-    def make_changes(self,
-                     local_tree: WorkingTree,
+    def make_changes(self, local_tree: WorkingTree, subpath: str,
                      report_context: Callable[[str], None],
-                     metadata,
-                     base_metadata,
-                     subpath: Optional[str] = None):
+                     metadata, base_metadata):
         """Make the actual changes to a tree.
 
         Args:
@@ -158,8 +158,8 @@ class MultiArchHintsWorker(SubWorker):
         self.changer.setup_parser(subparser)
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
         """Make the actual changes to a tree.
 
         Args:
@@ -218,8 +218,8 @@ class OrphanWorker(SubWorker):
         self.changer.setup_parser(subparser)
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
         """Make the actual changes to a tree.
 
         Args:
@@ -267,8 +267,8 @@ class CMEWorker(SubWorker):
         self.changer.setup_parser(subparser)
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
         """Make the actual changes to a tree.
 
         Args:
@@ -322,8 +322,8 @@ class LintianBrushWorker(SubWorker):
             help=argparse.SUPPRESS)
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
         fixers = get_fixers(
             available_lintian_fixers(), tags=self.args.tags,
             exclude=self.args.exclude)
@@ -413,8 +413,8 @@ class NewUpstreamWorker(SubWorker):
             action='store_true')
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
         with local_tree.lock_write():
             if control_files_in_root(local_tree, subpath):
                 raise WorkerFailure(
@@ -609,8 +609,8 @@ class JustBuildWorker(SubWorker):
             help='Specific revision to build.')
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
         if self.args.revision:
             local_tree.update(revision=self.args.revision.encode('utf-8'))
         return None
@@ -627,8 +627,8 @@ class UncommittedWorker(SubWorker):
         self.changer.setup_parser(subparser)
         self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, report_context, metadata,
-                     base_metadata, subpath=None):
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
         result = self.changer.make_changes(
             local_tree, subpath=subpath, committer=self.committer,
             update_changelog=False)
@@ -683,29 +683,44 @@ def control_files_in_root(tree, subpath):
     return False
 
 
-def control_file_present(tree, subpath):
+def control_file_present(tree: Tree, subpath: str) -> bool:
+    """Check whether there are any control files present in a tree.
+
+    Args:
+      tree: Tree to check
+      subpath: subpath to check
+    Returns:
+      whether control file is present
+    """
     for name in ['debian/control', 'debian/control.in', 'control',
                  'control.in']:
-        if subpath not in (None, '', '.'):
+        if subpath not in ('', '.'):
             name = os.path.join(subpath, name)
         if tree.has_filename(name):
             return True
     return False
 
 
-def process_package(vcs_url, env, command, output_directory,
-                    metadata, build_command=None, pre_check_command=None,
-                    post_check_command=None, possible_transports=None,
-                    possible_hosters=None, resume_branch_url=None,
-                    cached_branch_url=None, tgz_repo=False,
-                    last_build_version=None, build_distribution=None,
-                    build_suffix=None, resume_subworker_result=None,
-                    subpath=None):
+def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
+                    command: List[str], output_directory: str,
+                    metadata: Any, build_command: Optional[str] = None,
+                    pre_check_command: Optional[str] = None,
+                    post_check_command: Optional[str] = None,
+                    possible_transports: Optional[List[Transport]] = None,
+                    possible_hosters: Optional[List[Hoster]] = None,
+                    resume_branch_url: Optional[str] = None,
+                    cached_branch_url: Optional[str] = None,
+                    tgz_repo: bool = False,
+                    last_build_version: Optional[Version] = None,
+                    build_distribution: Optional[str] = None,
+                    build_suffix: Optional[str] = None,
+                    resume_subworker_result=None):
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg
     metadata['command'] = command
 
+    subworker_cls: Type[SubWorker]
     # TODO(jelmer): sort out this mess:
     if command[0] == 'lintian-brush':
         subworker_cls = LintianBrushWorker
@@ -809,8 +824,8 @@ def process_package(vcs_url, env, command, output_directory,
 
         try:
             description = subworker.make_changes(
-                ws.local_tree, provide_context, metadata['subworker'],
-                resume_subworker_result, subpath=subpath)
+                ws.local_tree, subpath, provide_context, metadata['subworker'],
+                resume_subworker_result)
         except WorkerFailure as e:
             if (e.code == 'nothing-to-do' and
                     resume_subworker_result is not None):
@@ -961,13 +976,13 @@ def main(argv=None):
     metadata['start_time'] = start_time.isoformat()
     try:
         result = process_package(
-            args.branch_url, os.environ,
+            args.branch_url, args.subpath, os.environ,
             args.command, output_directory, metadata,
             build_command=args.build_command, pre_check_command=args.pre_check,
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,
             cached_branch_url=args.cached_branch_url,
-            subpath=args.subpath, build_distribution=args.build_distribution,
+            build_distribution=args.build_distribution,
             build_suffix=args.build_suffix,
             tgz_repo=args.tgz_repo,
             last_build_version=args.last_build_version,
