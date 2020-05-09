@@ -18,10 +18,11 @@
 import argparse
 import asyncio
 from aiohttp import ClientSession, MultipartWriter, BasicAuth
-from contextlib import ExitStack
+from contextlib import contextmanager, ExitStack
 from datetime import datetime
 import os
 import socket
+import subprocess
 import sys
 from tempfile import TemporaryDirectory
 from typing import Any
@@ -32,12 +33,19 @@ from janitor.trace import note
 from janitor.worker import WorkerFailure, process_package
 
 
+class ResultUploadFailure(Exception):
+
+    def __init__(self, reason):
+        self.reason = reason
+
+
 async def upload_results(
         session: ClientSession,
         base_url: str, run_id: str, metadata: Any,
         output_directory: str) -> Any:
     with MultipartWriter('mixed') as mpwriter, ExitStack() as es:
-        mpwriter.append_json(metadata)
+        part = mpwriter.append_json(metadata)
+        part.set_content_disposition('attachment', filename='result.json')
         for entry in os.scandir(output_directory):
             if entry.is_file():
                 f = open(entry.path, 'rb')
@@ -46,10 +54,29 @@ async def upload_results(
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
         async with session.post(finish_url, data=mpwriter) as resp:
+            if resp.status == 404:
+                json = await resp.json()
+                raise ResultUploadFailure(json['reason'])
             if resp.status not in (201, 200):
-                raise ValueError('Unable to submit result: %r: %d' %
-                                 (await resp.read(), resp.status))
+                raise ResultUploadFailure(
+                    'Unable to submit result: %r: %d' % (
+                        await resp.read(), resp.status))
             return await resp.json()
+
+
+@contextmanager
+def copy_output(output_log):
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+    p = subprocess.Popen(['tee', output_log], stdin=subprocess.PIPE)
+    os.dup2(p.stdin.fileno(), sys.stdout.fileno())
+    os.dup2(p.stdin.fileno(), sys.stderr.fileno())
+    yield
+    sys.stdout = old_stdout
+    sys.stderr = old_stderr
+    p.stdout.close()
+    p.std.close()
+    p.wait()
 
 
 async def main(argv=None):
@@ -119,18 +146,19 @@ async def main(argv=None):
         start_time = datetime.now()
         metadata['start_time'] = start_time.isoformat()
         try:
-            result = process_package(
-                branch_url, env,
-                command, output_directory, metadata,
-                build_command=build_command,
-                pre_check_command=args.pre_check,
-                post_check_command=args.post_check,
-                resume_branch_url=resume_branch_url,
-                cached_branch_url=cached_branch_url,
-                subpath=subpath, build_distribution=build_distribution,
-                build_suffix=build_suffix,
-                last_build_version=last_build_version,
-                resume_subworker_result=resume_result)
+            with copy_output(os.path.join(output_directory, 'worker.log')):
+                result = process_package(
+                    branch_url, env,
+                    command, output_directory, metadata,
+                    build_command=build_command,
+                    pre_check_command=args.pre_check,
+                    post_check_command=args.post_check,
+                    resume_branch_url=resume_branch_url,
+                    cached_branch_url=cached_branch_url,
+                    subpath=subpath, build_distribution=build_distribution,
+                    build_suffix=build_suffix,
+                    last_build_version=last_build_version,
+                    resume_subworker_result=resume_result)
         except WorkerFailure as e:
             metadata['code'] = e.code
             metadata['description'] = e.description
@@ -152,9 +180,13 @@ async def main(argv=None):
             note('Elapsed time: %s', finish_time - start_time)
 
             async with ClientSession(auth=auth) as session:
-                result = await upload_results(
-                    session, args.base_url, assignment['id'], metadata,
-                    output_directory)
+                try:
+                    result = await upload_results(
+                        session, args.base_url, assignment['id'], metadata,
+                        output_directory)
+                except ResultUploadFailure as e:
+                    sys.stderr.write(str(e))
+                    sys.exit(1)
                 print(result)
 
 
