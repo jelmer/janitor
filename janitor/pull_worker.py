@@ -30,7 +30,11 @@ from urllib.parse import urljoin
 import yarl
 
 from janitor.trace import note
-from janitor.worker import WorkerFailure, process_package
+from janitor.worker import (
+    WorkerFailure,
+    process_package,
+    DEFAULT_BUILD_COMMAND,
+    )
 
 
 class ResultUploadFailure(Exception):
@@ -102,6 +106,10 @@ async def main(argv=None):
         type=str,
         help='Node name',
         default=socket.gethostname())
+    parser.add_argument(
+        '--build-command',
+        help='Build package to verify it.', type=str,
+        default=DEFAULT_BUILD_COMMAND)
 
     args = parser.parse_args(argv)
 
