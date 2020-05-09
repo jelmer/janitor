@@ -552,10 +552,10 @@ async def check_resume_result(conn, suite, resume_branch):
         return (None, None, None)
 
 
-def suite_build_env(suite_config, archive_url):
+def suite_build_env(suite_config, apt_location):
     env = {
         'EXTRA_REPOSITORIES': ':'.join([
-            'deb %s %s/ main' % (archive_url, suite)
+            'deb %s %s/ main' % (apt_location, suite)
             for suite in suite_config.extra_build_suite])}
 
     env.update([(env.key, env.value) for env in suite_config.sbuild_env])
@@ -591,7 +591,7 @@ class ActiveLocalRun(ActiveRun):
             logfile_manager: LogFileManager,
             worker_kind: str,
             build_command: Optional[str],
-            archive_url: str,
+            apt_location: str,
             pre_check=None,
             post_check=None,
             dry_run: bool = False,
@@ -623,7 +623,7 @@ class ActiveLocalRun(ActiveRun):
                 logfilenames=[],
                 branch_url=self.queue_item.branch_url)
 
-        env.update(suite_build_env(suite_config, archive_url))
+        env.update(suite_build_env(suite_config, apt_location))
 
         if not use_cached_only:
             async with db.acquire() as conn:
@@ -839,7 +839,7 @@ class QueueProcessor(object):
             post_check=None, dry_run=False, incoming_url=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
             concurrency=1, use_cached_only=False, overall_timeout=None,
-            committer=None, archive_url=None):
+            committer=None, apt_location=None):
         """Create a queue processor.
 
         Args:
@@ -867,7 +867,7 @@ class QueueProcessor(object):
         self.overall_timeout = overall_timeout
         self.committer = committer
         self.active_runs = {}
-        self.archive_url = archive_url
+        self.apt_location = apt_location
 
     def status_json(self) -> Any:
         return {
@@ -883,7 +883,7 @@ class QueueProcessor(object):
             result = await active_run.process(
                 self.database, config=self.config,
                 vcs_manager=self.vcs_manager,
-                archive_url=self.archive_url,
+                apt_location=self.apt_location,
                 worker_kind=self.worker_kind,
                 pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
@@ -967,6 +967,8 @@ class QueueProcessor(object):
         try:
             while True:
                 if not todo:
+                    if self.concurrency is None:
+                        break
                     note('Nothing to do. Sleeping for 60s.')
                     await asyncio.sleep(60)
                     continue
@@ -1153,7 +1155,7 @@ async def handle_assign(request):
             'distribution': suite_config.build_distribution,
             'suffix': suite_config.build_suffix,
             'environment':
-                suite_build_env(suite_config, queue_processor.archive_url),
+                suite_build_env(suite_config, queue_processor.apt_location),
         },
         'env': env,
         'command': item.command,
@@ -1319,7 +1321,7 @@ def main(argv=None):
         args.use_cached_only,
         overall_timeout=args.overall_timeout,
         committer=config.committer,
-        archive_url=config.archive_url)
+        apt_location=config.apt_location)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(queue_processor.process()),

@@ -124,7 +124,7 @@ async def main(argv=None):
         #    pass
 
     branch_url = assignment['branch']['url']
-    result_branch_url = assignment['result']['branch_url']  # noqa: F841
+    result_branch_url = assignment['result_branch']['url']  # noqa: F841
     subpath = assignment['branch'].get('subpath', '') or ''
     if assignment['resume']:
         resume_result = assignment['resume'].get('result')
