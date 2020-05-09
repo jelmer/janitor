@@ -636,10 +636,12 @@ async def handle_publish_ready(request):
 async def check_worker_creds(request):
     auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
     if not auth_header:
-        raise web.HTTPUnauthorized('worker login required')
+        raise web.HTTPUnauthorized(body='worker login required')
     auth = BasicAuth.decode(auth_header=auth_header)
-    if not await state.check_worker_credentials(auth.login, auth.password):
-        raise web.HTTPUnauthorized('worker login required')
+    async with request.app.db.acquire() as conn:
+        if not await state.check_worker_credentials(
+                conn, auth.login, auth.password):
+            raise web.HTTPUnauthorized(body='worker login required')
     return auth.login
 
 
@@ -658,7 +660,7 @@ async def handle_run_assign(request):
 
 
 async def handle_run_finish(request):
-    worker_name  = await check_worker_creds(request)
+    worker_name = await check_worker_creds(request)
     run_id = request.match_info['run_id']
     reader = await request.multipart()
     result = None

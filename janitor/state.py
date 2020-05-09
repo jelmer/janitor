@@ -1459,6 +1459,6 @@ async def get_publish_attempt_count(conn: asyncpg.Connection, revision):
 async def check_worker_credentials(
         conn: asyncpg.Connection, login: str, password: str) -> bool:
     row = await conn.fetchrow(
-        "select from worker where name = $1 "
-        "AND password = crypt($2, password)")
+        "select 1 from worker where name = $1 "
+        "AND password = crypt($2, password)", login, password)
     return bool(row)
