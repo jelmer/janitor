@@ -117,7 +117,7 @@ async def main(argv=None):
     async with ClientSession(auth=auth) as session:
         assign_url = urljoin(args.base_url, 'active-runs')
         async with session.post(
-                assign_url, json={'node': args.node_name}) as resp:
+                assign_url, json={'node': node_name}) as resp:
             if resp.status != 201:
                 raise ValueError('Unable to get assignment: %r' %
                                  await resp.read())
