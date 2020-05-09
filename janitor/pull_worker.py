@@ -124,6 +124,7 @@ async def main(argv=None):
         #    pass
 
     branch_url = assignment['branch']['url']
+    result_branch_url = assignment['result']['branch_url']
     subpath = assignment['branch'].get('subpath', '') or ''
     if assignment['resume']:
         resume_result = assignment['resume'].get('result')
@@ -132,7 +133,7 @@ async def main(argv=None):
         resume_result = None
         resume_branch_url = None
     last_build_version = assignment.get('last_build_version')
-    cached_branch_url = assignment['branch'].get('cached_branch_url')
+    cached_branch_url = assignment['branch'].get('cached_url')
     build_distribution = assignment['build']['distribution']
     build_suffix = assignment['build']['suffix']
     command = assignment['command']
@@ -174,6 +175,8 @@ async def main(argv=None):
             note('%s', result.description)
             if result.changes_filename is not None:
                 note('Built %s.', result.changes_filename)
+
+            # TODO(jelmer): Push to target_branch_url
             return 0
         finally:
             finish_time = datetime.now()
