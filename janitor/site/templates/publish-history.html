@@ -5,6 +5,8 @@
 {% block body %}
  <div class="section" id="publish-history">
 <h1>Publish History</h1>
+
+{% if is_admin %}
 <button id="scan">Refresh Merge Proposal Status</button>
 <button id="autopublish">Automatically Publish</button>
 
@@ -14,6 +16,7 @@ $(document).ready(function(){
 	$("#autopublish").click(function(){ $.post("/api/publish/autopublish"); });
 });
 </script>
+{% endif %}
 <p>Last {{ count }} publish actions:</p>
 <table class="docutils" border="1">
 <colgroup>

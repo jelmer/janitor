@@ -143,6 +143,7 @@ async def get_queue(
 
 async def write_queue(client, conn: asyncpg.Connection,
                       only_command=None, limit=None,
+                      is_admin=False,
                       queue_status=None):
     template = env.get_template('queue.html')
     if queue_status:
@@ -153,6 +154,7 @@ async def write_queue(client, conn: asyncpg.Connection,
         processing = iter([])
         active_queue_ids = set()
     return await template.render_async(
+        is_admin=is_admin,
         queue=get_queue(conn, only_command, limit),
         active_queue_ids=active_queue_ids,
         processing=processing)
