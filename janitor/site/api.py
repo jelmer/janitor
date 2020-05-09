@@ -632,7 +632,10 @@ async def handle_run_assign(request):
     async with request.app.http_client_session.post(
             url, json={'worker': request.remote}) as resp:
         if resp.status != 201:
-            return web.json_response(await resp.json(), status=resp.status)
+            return web.json_response({
+                 'internal-status': resp.status,
+                 'internal-result': await resp.json()},
+                status=400)
         assignment = await resp.json()
         return web.json_response(assignment, status=201)
 
@@ -655,11 +658,14 @@ async def handle_run_finish(request):
                 archiver_writer.append(part)
 
         archiver_url = urllib.parse.urljoin(
-            request.app.archiver_url + 'upload/%s' % run_id)
+            request.app.archiver_url, 'upload/%s' % run_id)
         async with request.app.http_client_session.post(
                 archiver_url, data=archiver_writer) as resp:
-            if resp.status != 201:
-                return web.json_response(await resp.json(), status=resp.status)
+            if resp.status not in (201, 200):
+                return web.json_response({
+                    'internal-status': resp.status,
+                    'internal-result': await resp.json()},
+                    status=400)
             archiver_result = await resp.json()
 
         for key in ['changes_filename', 'build_version', 'build_distribution']:
@@ -671,8 +677,11 @@ async def handle_run_finish(request):
             request.app.runner_url, 'finish/%s' % run_id)
         async with request.app.http_client_session.post(
                 runner_url, data=runner_writer) as resp:
-            if resp.status != 201:
-                return web.json_response(await resp.json(), status=resp.status)
+            if resp.status not in (201, 200):
+                return web.json_response({
+                    'internal-status': resp.status,
+                    'internal-result': await resp.json(),
+                    }, status=400)
             result = await resp.json()
 
     return web.json_response(result, status=201)
