@@ -3,31 +3,43 @@ syntax = "proto2";
 package janitor;
 
 message Config {
+  // Location at which to store VCS repositories.
   optional string vcs_location = 1;
 
+  // Location to store logs. Can either be a filesystem path or a http
+  // location, for use with GCS or S3.
   optional string logs_location = 2;
 
   optional string apt_location = 3;
 
+  // postgresql URL for database connection
   optional string database_location = 4;
 
+  // Default committer to use when committing changes.
   optional string committer = 5;
 
   repeated Suite suite = 6;
 }
 
 message Suite {
+  // Name of the suite. E.g. "lintian-fixes"
   optional string name = 1;
 
+  // Human-readable description of the suite. Used in e.g. apt Release file.
   optional string archive_description = 2;
 
+  // Distribution to target when building
   optional string build_distribution = 3;
 
+  // Suffix to add to version in changelog on build.
   optional string build_suffix = 4;
 
+  // VCS branch name to use
   optional string branch_name = 5;
 
+  // Extra suites to pull in packages from when building
   repeated string extra_build_suite = 6;
 
+  // Build command to run.
   optional string build_command = 7;
 }
