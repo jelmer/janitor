@@ -721,7 +721,8 @@ async def handle_run_finish(request):
                     }, status=400)
             result = await resp.json()
 
-    result['api_url'] = str(request.app.router['api-run'].url_for(run_id=run_id))
+    result['api_url'] = str(
+        request.app.router['api-run'].url_for(run_id=run_id))
     return web.json_response(result, status=201)
 
 
