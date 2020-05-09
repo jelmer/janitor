@@ -21,6 +21,11 @@ message Config {
   repeated Suite suite = 6;
 }
 
+message Env {
+  optional string key = 1;
+  optional string value = 2;
+};
+
 message Suite {
   // Name of the suite. E.g. "lintian-fixes"
   optional string name = 1;
@@ -40,6 +45,6 @@ message Suite {
   // Extra suites to pull in packages from when building
   repeated string extra_build_suite = 6;
 
-  // Build command to run.
-  optional string build_command = 7;
+  // Sbuild environment override
+  repeated Env sbuild_env = 8;
 }

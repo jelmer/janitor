@@ -124,7 +124,7 @@ async def main(argv=None):
         #    pass
 
     branch_url = assignment['branch']['url']
-    result_branch_url = assignment['result']['branch_url']
+    result_branch_url = assignment['result']['branch_url']  # noqa: F841
     subpath = assignment['branch'].get('subpath', '') or ''
     if assignment['resume']:
         resume_result = assignment['resume'].get('result')
@@ -137,10 +137,11 @@ async def main(argv=None):
     build_distribution = assignment['build']['distribution']
     build_suffix = assignment['build']['suffix']
     command = assignment['command']
-    build_command = assignment['build']['command']
+    build_environment = assignment['build'].get('environment', {})
 
     env = dict(os.environ.items())
     env.update(assignment['env'])
+    env.update(build_environment)
 
     with TemporaryDirectory() as output_directory:
         metadata = {}
@@ -151,7 +152,7 @@ async def main(argv=None):
                 result = process_package(
                     branch_url, env,
                     command, output_directory, metadata,
-                    build_command=build_command,
+                    build_command=args.build_command,
                     pre_check_command=args.pre_check,
                     post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
@@ -181,6 +182,9 @@ async def main(argv=None):
         finally:
             finish_time = datetime.now()
             note('Elapsed time: %s', finish_time - start_time)
+
+            # TODO(jelmer): Push to cached_branch_url
+            # TODO(jelmer): Push to result_branch_url
 
             async with ClientSession(auth=auth) as session:
                 try:
