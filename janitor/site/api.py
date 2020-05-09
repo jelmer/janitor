@@ -671,12 +671,17 @@ async def handle_run_finish(request):
         for key in ['changes_filename', 'build_version', 'build_distribution']:
             result[key] = archiver_result.get(key)
 
-        runner_writer.append_json(result)
+        part = runner_writer.append_json(result)
+        part.set_content_disposition('attachment', filename='result.json')
 
         runner_url = urllib.parse.urljoin(
             request.app.runner_url, 'finish/%s' % run_id)
         async with request.app.http_client_session.post(
                 runner_url, data=runner_writer) as resp:
+            if resp.status == 404:
+                json = await resp.json()
+                return web.json_response(
+                    {'reason': json['reason']}, status=404)
             if resp.status not in (201, 200):
                 return web.json_response({
                     'internal-status': resp.status,
