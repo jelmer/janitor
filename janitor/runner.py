@@ -253,7 +253,8 @@ async def invoke_subprocess_worker(
         worker_kind, main_branch, env, command, output_directory,
         resume_branch=None, cached_branch_url=None,
         pre_check=None, post_check=None,
-        build_command=None, log_path=None,
+        build_command: Optional[str] = None,
+        log_path=None,
         resume_branch_result=None,
         last_build_version=None, subpath=None,
         build_distribution=None, build_suffix=None):
@@ -551,6 +552,16 @@ async def check_resume_result(conn, suite, resume_branch):
         return (None, None, None)
 
 
+def suite_build_env(suite_config, archive_url):
+    env = {
+        'EXTRA_REPOSITORIES': ':'.join([
+            'deb %s %s/ main' % (archive_url, suite)
+            for suite in suite_config.extra_build_suite])}
+
+    env.update([(env.key, env.value) for env in suite_config.sbuild_env])
+    return env
+
+
 class ActiveLocalRun(ActiveRun):
 
     # TODO(jelmer): Use short host name instead?
@@ -579,7 +590,8 @@ class ActiveLocalRun(ActiveRun):
             vcs_manager: VcsManager,
             logfile_manager: LogFileManager,
             worker_kind: str,
-            build_command: str,
+            build_command: Optional[str],
+            archive_url: str,
             pre_check=None,
             post_check=None,
             dry_run: bool = False,
@@ -610,6 +622,8 @@ class ActiveLocalRun(ActiveRun):
                             self.queue_item.suite,
                 logfilenames=[],
                 branch_url=self.queue_item.branch_url)
+
+        env.update(suite_build_env(suite_config, archive_url))
 
         if not use_cached_only:
             async with db.acquire() as conn:
@@ -675,7 +689,7 @@ class ActiveLocalRun(ActiveRun):
                     self.output_directory, resume_branch=resume_branch,
                     cached_branch_url=cached_branch_url, pre_check=pre_check,
                     post_check=post_check,
-                    build_command=suite_config.build_command,
+                    build_command=build_command,
                     log_path=log_path,
                     resume_branch_result=resume_branch_result,
                     last_build_version=last_build_version,
@@ -825,7 +839,7 @@ class QueueProcessor(object):
             post_check=None, dry_run=False, incoming_url=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
             concurrency=1, use_cached_only=False, overall_timeout=None,
-            committer=None):
+            committer=None, archive_url=None):
         """Create a queue processor.
 
         Args:
@@ -853,6 +867,7 @@ class QueueProcessor(object):
         self.overall_timeout = overall_timeout
         self.committer = committer
         self.active_runs = {}
+        self.archive_url = archive_url
 
     def status_json(self) -> Any:
         return {
@@ -868,6 +883,7 @@ class QueueProcessor(object):
             result = await active_run.process(
                 self.database, config=self.config,
                 vcs_manager=self.vcs_manager,
+                archive_url=self.archive_url,
                 worker_kind=self.worker_kind,
                 pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
@@ -1135,8 +1151,9 @@ async def handle_assign(request):
         'last_build_version': last_build_version,
         'build': {
             'distribution': suite_config.build_distribution,
-            'command': suite_config.build_command,
             'suffix': suite_config.build_suffix,
+            'environment':
+                suite_build_env(suite_config, queue_processor.archive_url),
         },
         'env': env,
         'command': item.command,
@@ -1301,7 +1318,8 @@ def main(argv=None):
         args.concurrency,
         args.use_cached_only,
         overall_timeout=args.overall_timeout,
-        committer=config.committer)
+        committer=config.committer,
+        archive_url=config.archive_url)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(queue_processor.process()),

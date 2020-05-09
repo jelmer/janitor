@@ -12,7 +12,6 @@ suite {
   build_distribution: "lintian-fixes"
   branch_name: "lintian-fixes"
   build_suffix: "jan+lint"
-  build_command: "sbuild"
 }
 
 suite {
@@ -21,7 +20,6 @@ suite {
   build_distribution: "unchanged"
   branch_name: "master"
   build_suffix: "jan+unchanged"
-  build_command: "sbuild"
 }
 
 suite {
@@ -30,7 +28,6 @@ suite {
   build_distribution: "fresh-releases"
   branch_name: "new-upstream"
   build_suffix: "jan+nur"
-  build_command: "sbuild"
 }
 
 suite {
@@ -39,7 +36,6 @@ suite {
   build_distribution: "fresh-snapshots"
   branch_name: "new-upstream-snapshot"
   build_suffix: "jan+nus"
-  build_command: "sbuild"
 }
 
 suite {
@@ -48,7 +44,6 @@ suite {
   build_distribution: "multiarch-fixes"
   branch_name: "multiarch-fixes"
   build_suffix: "jan+maf"
-  build_command: "sbuild"
 }
 
 suite {
@@ -57,5 +52,4 @@ suite {
   build_distribution: "uncommitted"
   branch_name: "uncommitted"
   build_suffix: "jan+unc"
-  build_command: "sbuild"
 }

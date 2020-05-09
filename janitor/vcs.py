@@ -282,7 +282,8 @@ def get_cached_branch(vcs_type: str,
 
 
 def get_local_vcs_branch_url(
-        vcs_directory: str, vcs: str, pkg: str, branch_name: str) -> str:
+        vcs_directory: str, vcs: str, pkg: str,
+        branch_name: str) -> Optional[str]:
     if vcs == 'git':
         return 'file:%s,branch=%s' % (
             os.path.join(vcs_directory, 'git', pkg), branch_name)
@@ -324,7 +325,7 @@ class VcsManager(object):
         raise NotImplementedError(self.get_branch)
 
     def get_branch_url(self, package: str, branch_name: str,
-                       vcs_type: str) -> str:
+                       vcs_type: str) -> Optional[str]:
         raise NotImplementedError(self.get_branch_url)
 
     def import_branches(self,
