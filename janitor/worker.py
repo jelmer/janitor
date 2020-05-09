@@ -107,6 +107,7 @@ TRUST_PACKAGE = False
 
 
 DEFAULT_DIST_COMMAND = os.path.join(os.path.dirname(__file__), '..', 'dist.py')
+DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 
 class SubWorker(object):
@@ -928,7 +929,7 @@ def main(argv=None):
     parser.add_argument(
         '--build-command',
         help='Build package to verify it.', type=str,
-        default='sbuild -A -s -v -d$DISTRIBUTION')
+        default=DEFAULT_BUILD_COMMAND)
     parser.add_argument(
         '--tgz-repo',
         help='Whether to create a tgz of the VCS repo.',
