@@ -102,11 +102,6 @@ async def main(argv=None):
         help='Command to run to check package before pushing.',
         type=str, default=None)
     parser.add_argument(
-        '--node-name',
-        type=str,
-        help='Node name',
-        default=socket.gethostname())
-    parser.add_argument(
         '--build-command',
         help='Build package to verify it.', type=str,
         default=DEFAULT_BUILD_COMMAND)
@@ -114,6 +109,10 @@ async def main(argv=None):
     args = parser.parse_args(argv)
 
     auth = BasicAuth.from_url(yarl.URL(args.base_url))
+
+    node_name = os.environ.get('NODE_NAME')
+    if not node_name:
+        node_name = socket.gethostname()
 
     async with ClientSession(auth=auth) as session:
         assign_url = urljoin(args.base_url, 'active-runs')
@@ -130,6 +129,12 @@ async def main(argv=None):
         #    # TODO(jelmer): Forward logs to websocket
         #    # TODO(jelmer): Listen for 'abort' message
         #    pass
+
+
+    if 'WORKSPACE' in os.environ:
+        desc_path = os.path.join(os.environ['WORKSPACE'], 'description.txt')
+        with open(desc_path, 'w') as f:
+            f.write(assignment['description'])
 
     branch_url = assignment['branch']['url']
     result_branch_url = assignment['result_branch']['url']  # noqa: F841

@@ -683,7 +683,7 @@ class ActiveLocalRun(ActiveRun):
 
         log_path = os.path.join(self.output_directory, 'worker.log')
         try:
-            self._task = asyncio.wait_for(
+            self._task = asyncio.create_task(asyncio.wait_for(
                 invoke_subprocess_worker(
                     worker_kind, main_branch, env, self.queue_item.command,
                     self.output_directory, resume_branch=resume_branch,
@@ -696,8 +696,14 @@ class ActiveLocalRun(ActiveRun):
                     subpath=self.queue_item.subpath,
                     build_distribution=suite_config.build_distribution,
                     build_suffix=suite_config.build_suffix),
-                timeout=overall_timeout)
+                timeout=overall_timeout), name=self.log_id)
             retcode = await self._task
+        except asyncio.CancelledError:
+            return JanitorResult(
+                self.queue_item.package, log_id=self.log_id,
+                branch_url=main_branch.user_url, code='cancelled',
+                description='Job cancelled',
+                logfilenames=[])
         except asyncio.TimeoutError:
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
@@ -784,7 +790,7 @@ class ActiveLocalRun(ActiveRun):
             debsign(changes_path, debsign_keyid)
             if incoming_url is not None:
                 run_incoming_url = urllib.parse.urljoin(
-                    incoming_url, self.log_id)
+                    incoming_url, 'upload/%s' % self.log_id)
                 try:
                     await upload_changes(changes_path, run_incoming_url)
                 except UploadFailedError as e:
@@ -1142,6 +1148,7 @@ async def handle_assign(request):
 
     assignment = {
         'id': active_run.log_id,
+        'description': '%s on %s' % (item.suite, item.package),
         'queue_id': item.id,
         'branch': {
             'url': branch_url,
