@@ -354,7 +354,7 @@ class LocalVcsManager(VcsManager):
     def get_branch(self, package, branch_name, vcs_type=None):
         try:
             return get_local_vcs_branch(
-                self.base_path, package, branch_name, vcs_type)
+                self.base_path, package, branch_name)
         except (BranchUnavailable, BranchMissing):
             return None
 
