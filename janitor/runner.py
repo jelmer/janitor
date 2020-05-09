@@ -1160,12 +1160,7 @@ async def handle_finish(request):
             {'reason': 'No such current run: %s' % run_id}, status=404)
 
     reader = await request.multipart()
-    part = await reader.next()
-    if not part:
-        return web.json_response(
-            {'reason': 'Missing result JSON'}, status=400)
-
-    worker_result = WorkerResult.from_json(await part.json())
+    worker_result = None
 
     with tempfile.TemporaryDirectory() as output_directory:
         filenames = []
@@ -1173,15 +1168,21 @@ async def handle_finish(request):
             part = await reader.next()
             if part is None:
                 break
-            filenames.append(part.filename)
-            output_path = os.path.join(output_directory, part.filename)
-            with open(output_path, 'wb') as f:
-                f.write(await part.read(decode=False))
+            if part.filename == 'result.json':
+                worker_result = WorkerResult.from_json(await part.json())
+            else:
+                filenames.append(part.filename)
+                output_path = os.path.join(output_directory, part.filename)
+                with open(output_path, 'wb') as f:
+                    f.write(await part.read(decode=False))
+
+        if worker_result is None:
+            return web.json_response(
+                {'reason': 'Missing result JSON'}, status=400)
 
         logfilenames = await import_logs(
             output_directory, queue_processor.logfile_manager,
-            active_run.queue_item.package,
-            run_id)
+            active_run.queue_item.package, run_id)
 
         if worker_result.code is not None:
             result = JanitorResult(
