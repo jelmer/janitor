@@ -368,16 +368,17 @@ async def update_aptly(aptly_session, incoming_dir):
     dirname = str(uuid.uuid4())
     filenames = []
     todo = []
-    with MultipartWriter('form-data') as mpwriter, ExitStack() as es:
-        for entry in os.scandir(incoming_dir):
-            filenames.append(entry.name)
-            if entry.name.endswith('.changes'):
-                with open(entry.path, 'r') as f:
-                    changes = Changes(f)
-                    todo.append((entry.name, changes['Distribution']))
-            f = open(entry.path, 'rb')
-            es.enter_context(f)
-            mpwriter.append(f)
+    with ExitStack() as es:
+        with MultipartWriter('form-data') as mpwriter:
+            for entry in os.scandir(incoming_dir):
+                filenames.append(entry.name)
+                if entry.name.endswith('.changes'):
+                    with open(entry.path, 'r') as f:
+                        changes = Changes(f)
+                        todo.append((entry.name, changes['Distribution']))
+                f = open(entry.path, 'rb')
+                es.enter_context(f)
+                mpwriter.append(f)
         async with aptly_session.post(
                 'http://localhost/api/files/%s' % dirname,
                 data=mpwriter) as resp:

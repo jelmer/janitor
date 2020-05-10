@@ -50,15 +50,16 @@ async def upload_results(
         session: ClientSession,
         base_url: str, run_id: str, metadata: Any,
         output_directory: str) -> Any:
-    with MultipartWriter('mixed') as mpwriter, ExitStack() as es:
-        part = mpwriter.append_json(metadata)
-        part.set_content_disposition('attachment', filename='result.json')
-        for entry in os.scandir(output_directory):
-            if entry.is_file():
-                f = open(entry.path, 'rb')
-                es.enter_context(f)
-                part = mpwriter.append(f)
-                part.set_content_disposition('attachment', filename=entry.name)
+    with ExitStack() as es:
+        with MultipartWriter('mixed') as mpwriter:
+            part = mpwriter.append_json(metadata)
+            part.set_content_disposition('attachment', filename='result.json')
+            for entry in os.scandir(output_directory):
+                if entry.is_file():
+                    f = open(entry.path, 'rb')
+                    es.enter_context(f)
+                    part = mpwriter.append(f)
+                    part.set_content_disposition('attachment', filename=entry.name)
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
         async with session.post(finish_url, data=mpwriter) as resp:

@@ -686,47 +686,47 @@ async def handle_run_finish(request):
                 else:
                     archiver_writer.append_payload(bp)
 
-        archiver_url = urllib.parse.urljoin(
-            request.app.archiver_url, 'upload/%s' % run_id)
-        async with request.app.http_client_session.post(
-                archiver_url, data=archiver_writer) as resp:
-            if resp.status not in (201, 200):
-                try:
-                    internal_error = await resp.json()
-                except ContentTypeError:
-                    internal_error = await resp.text()
-                return web.json_response({
-                    'internal-status': resp.status,
-                    'internal-result': internal_error},
-                    status=400)
-            archiver_result = await resp.json()
+    archiver_url = urllib.parse.urljoin(
+        request.app.archiver_url, 'upload/%s' % run_id)
+    async with request.app.http_client_session.post(
+            archiver_url, data=archiver_writer) as resp:
+        if resp.status not in (201, 200):
+            try:
+                internal_error = await resp.json()
+            except ContentTypeError:
+                internal_error = await resp.text()
+            return web.json_response({
+                'internal-status': resp.status,
+                'internal-result': internal_error},
+                status=400)
+        archiver_result = await resp.json()
 
-        for key in ['changes_filename', 'build_version', 'build_distribution']:
-            result[key] = archiver_result.get(key)
+    for key in ['changes_filename', 'build_version', 'build_distribution']:
+        result[key] = archiver_result.get(key)
 
-        result['worker_name'] = worker_name
+    result['worker_name'] = worker_name
 
-        part = runner_writer.append_json(result)
-        part.set_content_disposition('attachment', filename='result.json')
+    part = runner_writer.append_json(result)
+    part.set_content_disposition('attachment', filename='result.json')
 
-        runner_url = urllib.parse.urljoin(
-            request.app.runner_url, 'finish/%s' % run_id)
-        async with request.app.http_client_session.post(
-                runner_url, data=runner_writer) as resp:
-            if resp.status == 404:
-                json = await resp.json()
-                return web.json_response(
-                    {'reason': json['reason']}, status=404)
-            if resp.status not in (201, 200):
-                try:
-                    internal_error = await resp.json()
-                except ContentTypeError:
-                    internal_error = await resp.text()
-                return web.json_response({
-                    'internal-status': resp.status,
-                    'internal-result': internal_error,
-                    }, status=400)
-            result = await resp.json()
+    runner_url = urllib.parse.urljoin(
+        request.app.runner_url, 'finish/%s' % run_id)
+    async with request.app.http_client_session.post(
+            runner_url, data=runner_writer) as resp:
+        if resp.status == 404:
+            json = await resp.json()
+            return web.json_response(
+                {'reason': json['reason']}, status=404)
+        if resp.status not in (201, 200):
+            try:
+                internal_error = await resp.json()
+            except ContentTypeError:
+                internal_error = await resp.text()
+            return web.json_response({
+                'internal-status': resp.status,
+                'internal-result': internal_error,
+                }, status=400)
+        result = await resp.json()
 
     result['api_url'] = str(
         request.app.router['api-run'].url_for(run_id=run_id))
