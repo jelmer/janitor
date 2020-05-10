@@ -29,6 +29,9 @@ from typing import Any
 from urllib.parse import urljoin
 import yarl
 
+from silver_platter.debian import open_packaging_branch
+from silver_platter.proposal import enable_tag_pushing
+
 from janitor.trace import note
 from janitor.worker import (
     WorkerFailure,
@@ -136,7 +139,8 @@ async def main(argv=None):
             f.write(assignment['description'])
 
     branch_url = assignment['branch']['url']
-    result_branch_url = assignment['result_branch']['url']  # noqa: F841
+    vcs_type = assignment['branch']['vcs_type']
+    result_branch_url = assignment['result_branch']['url']
     subpath = assignment['branch'].get('subpath', '') or ''
     if assignment['resume']:
         resume_result = assignment['resume'].get('result')
@@ -161,18 +165,19 @@ async def main(argv=None):
         metadata['start_time'] = start_time.isoformat()
         try:
             with copy_output(os.path.join(output_directory, 'worker.log')):
-                result = process_package(
-                    branch_url, subpath, env,
-                    command, output_directory, metadata,
-                    build_command=args.build_command,
-                    pre_check_command=args.pre_check,
-                    post_check_command=args.post_check,
-                    resume_branch_url=resume_branch_url,
-                    cached_branch_url=cached_branch_url,
-                    build_distribution=build_distribution,
-                    build_suffix=build_suffix,
-                    last_build_version=last_build_version,
-                    resume_subworker_result=resume_result)
+                with process_package(
+                        branch_url, subpath, env,
+                        command, output_directory, metadata,
+                        build_command=args.build_command,
+                        pre_check_command=args.pre_check,
+                        post_check_command=args.post_check,
+                        resume_branch_url=resume_branch_url,
+                        cached_branch_url=cached_branch_url,
+                        build_distribution=build_distribution,
+                        build_suffix=build_suffix,
+                        last_build_version=last_build_version,
+                        resume_subworker_result=resume_result) as ws, result:
+                    ws.defer_destroy()
         except WorkerFailure as e:
             metadata['code'] = e.code
             metadata['description'] = e.description
@@ -188,15 +193,16 @@ async def main(argv=None):
             note('%s', result.description)
             if result.changes_filename is not None:
                 note('Built %s.', result.changes_filename)
-
-            # TODO(jelmer): Push to target_branch_url
+            enable_tag_pushing(ws.local_tree.branch)
+            ws.local_tree.branch.push(open_packaging_branch(
+                result_branch_url, vcs_type=vcs_type), overwrite=True)
+            ws.local_tree.branch.push(open_packaging_branch(
+                cached_branch_url, vcs_type=vcs_type),
+                overwrite=True, stop_revision=ws.main_branch.last_revision())
             return 0
         finally:
             finish_time = datetime.now()
             note('Elapsed time: %s', finish_time - start_time)
-
-            # TODO(jelmer): Push to cached_branch_url
-            # TODO(jelmer): Push to result_branch_url
 
             async with ClientSession(auth=auth) as session:
                 try:

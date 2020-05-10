@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import argparse
+from contextlib import contextmanager
 from datetime import datetime
 from debian.changelog import Changelog, Version
 import distro_info
@@ -704,6 +705,7 @@ def control_file_present(tree: Tree, subpath: str) -> bool:
     return False
 
 
+@contextmanager
 def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     command: List[str], output_directory: str,
                     metadata: Any, build_command: Optional[str] = None,
@@ -713,7 +715,6 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     possible_hosters: Optional[List[Hoster]] = None,
                     resume_branch_url: Optional[str] = None,
                     cached_branch_url: Optional[str] = None,
-                    tgz_repo: bool = False,
                     last_build_version: Optional[Version] = None,
                     build_distribution: Optional[str] = None,
                     build_suffix: Optional[str] = None,
@@ -898,13 +899,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         else:
             changes_name = None
 
-        if tgz_repo:
-            subprocess.check_call(
-                ['tar', 'czf', pkg + '.tgz', pkg],
-                cwd=output_directory)
-        else:
-            ws.defer_destroy()
-        return WorkerResult(description, changes_filename=changes_name)
+        yield ws, WorkerResult(description, changes_filename=changes_name)
 
 
 def main(argv=None):
@@ -976,7 +971,7 @@ def main(argv=None):
     start_time = datetime.now()
     metadata['start_time'] = start_time.isoformat()
     try:
-        result = process_package(
+        with process_package(
             args.branch_url, args.subpath, os.environ,
             args.command, output_directory, metadata,
             build_command=args.build_command, pre_check_command=args.pre_check,
@@ -985,9 +980,14 @@ def main(argv=None):
             cached_branch_url=args.cached_branch_url,
             build_distribution=args.build_distribution,
             build_suffix=args.build_suffix,
-            tgz_repo=args.tgz_repo,
             last_build_version=args.last_build_version,
-            resume_subworker_result=resume_subworker_result)
+            resume_subworker_result=resume_subworker_result) as ws, result:
+        if args.tgz_repo:
+            subprocess.check_call(
+                ['tar', 'czf', env['PACKAGE'] + '.tgz', env['PACKAGE']],
+                cwd=output_directory)
+        else:
+            ws.defer_destroy()
     except WorkerFailure as e:
         metadata['code'] = e.code
         metadata['description'] = e.description
