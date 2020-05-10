@@ -186,7 +186,7 @@ async def main(argv=None):
             metadata['code'] = e.code
             metadata['description'] = e.description
             note('Worker failed: %s', e.description)
-            return 0
+            return 1
         except BaseException as e:
             metadata['code'] = 'worker-exception'
             metadata['description'] = str(e)
