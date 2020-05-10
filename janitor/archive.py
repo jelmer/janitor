@@ -56,7 +56,7 @@ async def handle_upload(request):
         path = os.path.join(request.app.incoming_dir, part.filename)
         filenames.append(part.filename)
         with open(path, 'wb') as f:
-            f.write(await part.read(decode=False))
+            f.write(await part.read())
         if path.endswith('.changes'):
             result['changes_filename'] = os.path.basename(path)
             with open(path, 'r') as f:
