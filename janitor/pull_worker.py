@@ -194,11 +194,14 @@ async def main(argv=None):
             metadata['description'] = result.description
             note('%s', result.description)
             enable_tag_pushing(ws.local_tree.branch)
-            ws.local_tree.branch.push(open_packaging_branch(
-                result_branch_url, vcs_type=vcs_type), overwrite=True)
-            ws.local_tree.branch.push(open_packaging_branch(
-                cached_branch_url, vcs_type=vcs_type),
-                overwrite=True, stop_revision=ws.main_branch.last_revision())
+            result_branch = open_packaging_branch(
+                result_branch_url, vcs_type=vcs_type.lower())
+            ws.local_tree.branch.push(result_branch, overwrite=True)
+            cached_branch = open_packaging_branch(
+                cached_branch_url, vcs_type=vcs_type.lower())
+            ws.local_tree.branch.push(
+                cached_branch, overwrite=True,
+                stop_revision=ws.main_branch.last_revision())
             return 0
         finally:
             finish_time = datetime.now()
