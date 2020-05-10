@@ -605,6 +605,13 @@ class ActiveLocalRun(ActiveRun):
         note('Running %r on %s', self.queue_item.command,
              self.queue_item.package)
 
+        if self.queue_item.branch_url is None:
+            return JanitorResult(
+                self.queue_item.package, log_id=self.log_id,
+                branch_url=self.queue_item.branch_url,
+                description='No VCS URL known for package.',
+                code='not-in-vcs', logfilenames=[])
+
         env = {}
         env['PACKAGE'] = self.queue_item.package
         if committer:
@@ -1091,6 +1098,9 @@ async def handle_assign(request):
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
     async with queue_processor.database.acquire() as conn:
+        if item.branch_url is None:
+            await state.drop_queue_item(conn, item.id)
+            return web.json_response({'queue_id': item.queue_id}, status=503)
         last_build_version = await state.get_last_build_version(
             conn, item.package, item.suite)
 
@@ -1129,7 +1139,7 @@ async def handle_assign(request):
 
     active_run = ActiveRemoteRun(
         worker_name=worker, queue_item=item,
-        main_branch_url=main_branch.user_url,
+        main_branch_url=branch_url,
         resume_branch_name=resume_branch_name)
 
     cached_branch_url = queue_processor.vcs_manager.get_branch_url(

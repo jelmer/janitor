@@ -57,9 +57,9 @@ async def handle_upload(request):
         filenames.append(part.filename)
         with open(path, 'wb') as f:
             f.write(await part.read(decode=False))
-        if part.name.endswith('.changes'):
-            result['changes_filename'] = part.filename
-            with open(os.path.join(path, part.name), 'r') as f:
+        if path.endswith('.changes'):
+            result['changes_filename'] = os.path.basename(path)
+            with open(path, 'r') as f:
                 changes = Changes(f)
                 result['build_distribution'] = changes["Distribution"]
                 result['build_version'] = changes["Version"]
