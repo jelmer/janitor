@@ -652,9 +652,13 @@ async def handle_run_assign(request):
     async with request.app.http_client_session.post(
             url, json={'worker': worker_name}) as resp:
         if resp.status != 201:
+            try:
+                internal_error = await resp.json()
+            except ContentTypeError:
+                internal_error = await resp.text()
             return web.json_response({
                  'internal-status': resp.status,
-                 'internal-result': await resp.json()},
+                 'internal-result': internal_error},
                 status=400)
         assignment = await resp.json()
         return web.json_response(assignment, status=201)
@@ -673,13 +677,11 @@ async def handle_run_finish(request):
                 break
             from janitor.trace import note
             note('Headers %r, %r', part.headers, part.filename)
-            if part.headers[aiohttp.hdrs.CONTENT_TYPE] == 'application/json':
+            if part.filename == 'result.json':
                 result = await part.json()
             else:
                 bp = BytesPayload(
-                    await part.read(),
-                    headers=part.headers, content_type=part.content_type,
-                    filename=part.filename, encoding=part.encoding)
+                    await part.read(decode=False), headers=part.headers)
                 if part.filename.endswith('.log'):
                     runner_writer.append_payload(bp)
                 else:
