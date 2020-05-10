@@ -972,22 +972,25 @@ def main(argv=None):
     metadata['start_time'] = start_time.isoformat()
     try:
         with process_package(
-            args.branch_url, args.subpath, os.environ,
-            args.command, output_directory, metadata,
-            build_command=args.build_command, pre_check_command=args.pre_check,
-            post_check_command=args.post_check,
-            resume_branch_url=args.resume_branch_url,
-            cached_branch_url=args.cached_branch_url,
-            build_distribution=args.build_distribution,
-            build_suffix=args.build_suffix,
-            last_build_version=args.last_build_version,
-            resume_subworker_result=resume_subworker_result) as ws, result:
-        if args.tgz_repo:
-            subprocess.check_call(
-                ['tar', 'czf', env['PACKAGE'] + '.tgz', env['PACKAGE']],
-                cwd=output_directory)
-        else:
-            ws.defer_destroy()
+                args.branch_url, args.subpath, os.environ,
+                args.command, output_directory, metadata,
+                build_command=args.build_command,
+                pre_check_command=args.pre_check,
+                post_check_command=args.post_check,
+                resume_branch_url=args.resume_branch_url,
+                cached_branch_url=args.cached_branch_url,
+                build_distribution=args.build_distribution,
+                build_suffix=args.build_suffix,
+                last_build_version=args.last_build_version,
+                resume_subworker_result=resume_subworker_result
+                ) as (ws, result):
+            if args.tgz_repo:
+                subprocess.check_call(
+                    ['tar', 'czf', os.environ['PACKAGE'] + '.tgz',
+                     os.environ['PACKAGE']],
+                    cwd=output_directory)
+            else:
+                ws.defer_destroy()
     except WorkerFailure as e:
         metadata['code'] = e.code
         metadata['description'] = e.description
