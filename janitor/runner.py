@@ -379,18 +379,19 @@ async def upload_changes(changes_path: str, incoming_url: str):
       incoming_url: Incoming URL
     """
     async with ClientSession() as session:
-        with MultipartWriter() as mpwriter, ExitStack() as es:
-            f = open(changes_path, 'r')
-            es.enter_context(f)
-            dsc = Changes(f)
-            f.seek(0)
-            mpwriter.append(f)
-            for file_details in dsc['files']:
-                name = file_details['name']
-                path = os.path.join(os.path.dirname(changes_path), name)
-                g = open(path, 'rb')
-                es.enter_context(g)
-                mpwriter.append(g)
+        with ExitStack() as es:
+            with MultipartWriter() as mpwriter:
+                f = open(changes_path, 'r')
+                es.enter_context(f)
+                dsc = Changes(f)
+                f.seek(0)
+                mpwriter.append(f)
+                for file_details in dsc['files']:
+                    name = file_details['name']
+                    path = os.path.join(os.path.dirname(changes_path), name)
+                    g = open(path, 'rb')
+                    es.enter_context(g)
+                    mpwriter.append(g)
             try:
                 async with session.post(incoming_url, data=mpwriter) as resp:
                     if resp.status != 200:
