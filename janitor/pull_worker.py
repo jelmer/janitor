@@ -176,7 +176,8 @@ async def main(argv=None):
                         build_distribution=build_distribution,
                         build_suffix=build_suffix,
                         last_build_version=last_build_version,
-                        resume_subworker_result=resume_result) as ws, result:
+                        resume_subworker_result=resume_result
+                        ) as (ws, result):
                     ws.defer_destroy()
         except WorkerFailure as e:
             metadata['code'] = e.code
