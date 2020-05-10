@@ -20,6 +20,7 @@ import asyncio
 from aiohttp import ClientSession, MultipartWriter, BasicAuth
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
+from io import BytesIO
 import os
 import socket
 import subprocess
@@ -58,7 +59,7 @@ async def upload_results(
                 if entry.is_file():
                     f = open(entry.path, 'rb')
                     es.enter_context(f)
-                    part = mpwriter.append(f)
+                    part = mpwriter.append(BytesIO(f.read()))
                     part.set_content_disposition('attachment', filename=entry.name)
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
