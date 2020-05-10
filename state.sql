@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS run (
    revision text,
    result jsonb,
    suite suite_name not null,
-   branch_url text not null,
+   branch_url text,
    logfilenames text[] not null,
    review_status review_status not null default 'unreviewed',
    value integer,
