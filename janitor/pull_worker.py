@@ -57,7 +57,8 @@ async def upload_results(
             if entry.is_file():
                 f = open(entry.path, 'rb')
                 es.enter_context(f)
-                mpwriter.append(f)
+                part = mpwriter.append(f)
+                part.set_content_disposition('attachment', filename=entry.name)
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
         async with session.post(finish_url, data=mpwriter) as resp:
