@@ -39,7 +39,7 @@ from janitor.worker import (
 
 class ResultUploadFailure(Exception):
 
-    def __init__(self, reason):
+    def __init__(self, reason: str) -> None:
         self.reason = reason
 
 
@@ -69,18 +69,18 @@ async def upload_results(
 
 
 @contextmanager
-def copy_output(output_log):
+def copy_output(output_log: str):
     old_stdout = os.dup(sys.stdout.fileno())
     old_stderr = os.dup(sys.stderr.fileno())
     p = subprocess.Popen(['tee', output_log], stdin=subprocess.PIPE)
-    os.dup2(p.stdin.fileno(), sys.stdout.fileno())
-    os.dup2(p.stdin.fileno(), sys.stderr.fileno())
+    os.dup2(p.stdin.fileno(), sys.stdout.fileno())  # type: ignore
+    os.dup2(p.stdin.fileno(), sys.stderr.fileno())  # type: ignore
     yield
     sys.stdout.flush()
     sys.stderr.flush()
     os.dup2(old_stdout, sys.stdout.fileno())
     os.dup2(old_stderr, sys.stderr.fileno())
-    p.stdin.close()
+    p.stdin.close()  # type: ignore
 
 
 async def main(argv=None):
