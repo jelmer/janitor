@@ -115,7 +115,7 @@ DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 class SubWorker(object):
 
-    def __init__(self, command, env):
+    def __init__(self, command: List[str], env: Dict[str, str]) -> None:
         """Initialize a subworker.
 
         Args:
@@ -125,7 +125,7 @@ class SubWorker(object):
 
     def make_changes(self, local_tree: WorkingTree, subpath: str,
                      report_context: Callable[[str], None],
-                     metadata, base_metadata):
+                     metadata, base_metadata) -> str:
         """Make the actual changes to a tree.
 
         Args:
@@ -640,7 +640,9 @@ class UncommittedWorker(SubWorker):
 
 class WorkerResult(object):
 
-    def __init__(self, description, changes_filename=None):
+    def __init__(
+            self, description: str,
+            changes_filename: Optional[str] = None) -> None:
         self.description = description
         self.changes_filename = changes_filename
 
@@ -648,16 +650,17 @@ class WorkerResult(object):
 class WorkerFailure(Exception):
     """Worker processing failed."""
 
-    def __init__(self, code, description):
+    def __init__(self, code: str, description: str) -> None:
         self.code = code
         self.description = description
 
 
-def tree_set_changelog_version(tree, build_version, subpath=''):
+def tree_set_changelog_version(
+        tree: WorkingTree, build_version: Version, subpath: str) -> None:
     cl_path = osutils.pathjoin(subpath, 'debian/changelog')
     with tree.get_file(cl_path) as f:
         cl = Changelog(f)
-    if Version(str(cl.version) + '~') > Version(build_version):
+    if Version(str(cl.version) + '~') > build_version:
         return
     cl.set_version(build_version)
     with open(tree.abspath(cl_path), 'w') as f:
@@ -667,7 +670,7 @@ def tree_set_changelog_version(tree, build_version, subpath=''):
 debian_info = distro_info.DebianDistroInfo()
 
 
-def control_files_in_root(tree, subpath):
+def control_files_in_root(tree: Tree, subpath: str) -> bool:
     debian_path = 'debian'
     if subpath not in (None, '', '.'):
         debian_path = os.path.join(subpath, 'debian')
@@ -714,7 +717,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     last_build_version: Optional[Version] = None,
                     build_distribution: Optional[str] = None,
                     build_suffix: Optional[str] = None,
-                    resume_subworker_result=None):
+                    resume_subworker_result: Any = None) -> WorkerResult:
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg
@@ -856,7 +859,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                 # This allows us to upload incremented versions for subsequent
                 # runs.
                 tree_set_changelog_version(
-                    ws.local_tree, last_build_version, subpath=subpath)
+                    ws.local_tree, last_build_version, subpath)
 
             source_date_epoch = ws.local_tree.branch.repository.get_revision(
                 ws.main_branch.last_revision()).timestamp
@@ -901,9 +904,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                 cwd=output_directory)
         else:
             ws.defer_destroy()
-        return WorkerResult(
-            description,
-            changes_filename=changes_name)
+        return WorkerResult(description, changes_filename=changes_name)
 
 
 def main(argv=None):
