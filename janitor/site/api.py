@@ -680,8 +680,7 @@ async def handle_run_finish(request):
             if part.filename == 'result.json':
                 result = await part.json()
             else:
-                bp = BytesPayload(
-                    await part.read(decode=False), headers=part.headers)
+                bp = BytesPayload(await part.read(), headers=part.headers)
                 if part.filename.endswith('.log'):
                     runner_writer.append_payload(bp)
                 else:

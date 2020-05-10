@@ -1206,7 +1206,7 @@ async def handle_finish(request):
                 filenames.append(part.filename)
                 output_path = os.path.join(output_directory, part.filename)
                 with open(output_path, 'wb') as f:
-                    f.write(await part.read(decode=False))
+                    f.write(await part.read())
 
         if worker_result is None:
             return web.json_response(
