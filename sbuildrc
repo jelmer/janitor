@@ -6,7 +6,6 @@ $piuparts_opts = ['--schroot', 'unstable-%a-sbuild'];
 $piuparts_root_args = '';
 $distribution = 'unstable';
 $run_autopkgtest = 1;
-$autopkgtest = "autopkgtest-wrapper";
 $autopkgtest_require_success = 1;
 $autopkgtest_root_args = '';
 $autopkgtest_opts = [ '--no-auto-control', '--', 'schroot', 'unstable-%a-sbuild' ];
