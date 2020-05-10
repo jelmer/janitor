@@ -9,6 +9,7 @@ from aiohttp import (
     WSMsgType,
     BasicAuth,
     )
+from aiohttp.payload import BytesPayload
 import urllib.parse
 
 from janitor import state, SUITE_REGEX
@@ -674,10 +675,15 @@ async def handle_run_finish(request):
             note('Headers %r, %r', part.headers, part.filename)
             if part.headers[aiohttp.hdrs.CONTENT_TYPE] == 'application/json':
                 result = await part.json()
-            elif part.filename.endswith('.log'):
-                runner_writer.append(part)
             else:
-                archiver_writer.append(part)
+                bp = BytesPayload(
+                    await part.read(),
+                    headers=part.headers, content_type=part.content_type,
+                    filename=part.filename, encoding=part.encoding)
+                if part.filename.endswith('.log'):
+                    runner_writer.append_payload(bp)
+                else:
+                    archiver_writer.append_payload(bp)
 
         archiver_url = urllib.parse.urljoin(
             request.app.archiver_url, 'upload/%s' % run_id)
