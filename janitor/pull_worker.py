@@ -192,8 +192,6 @@ async def main(argv=None):
             metadata['code'] = None
             metadata['description'] = result.description
             note('%s', result.description)
-            if result.changes_filename is not None:
-                note('Built %s.', result.changes_filename)
             enable_tag_pushing(ws.local_tree.branch)
             ws.local_tree.branch.push(open_packaging_branch(
                 result_branch_url, vcs_type=vcs_type), overwrite=True)
