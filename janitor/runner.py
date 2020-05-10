@@ -471,14 +471,13 @@ class ActiveRemoteRun(ActiveRun):
     log_files: Dict[str, BinaryIO]
     websockets: Set[web.WebSocketResponse]
 
-    def __init__(self, queue_item: state.QueueItem, worker_name: str,
-                 main_branch_url: str, resume_branch_name: Optional[str]):
+    def __init__(self, queue_item: state.QueueItem, worker_name: str):
         super(ActiveRemoteRun, self).__init__(queue_item)
         self.worker_name = worker_name
         self.log_files = {}
         self.websockets = set()
-        self.main_branch_url = main_branch_url
-        self.resume_branch_name = resume_branch_name
+        self.main_branch_url = self.queue_item.branch_url
+        self.resume_branch_name = None
 
     def kill(self) -> None:
         for ws in self.websockets:
@@ -892,7 +891,7 @@ class QueueProcessor(object):
     async def process_queue_item(self, item: state.QueueItem) -> None:
         with tempfile.TemporaryDirectory() as output_directory:
             active_run = ActiveLocalRun(item, output_directory)
-            await self.register_run(active_run)
+            self.register_run(active_run)
             result = await active_run.process(
                 self.database, config=self.config,
                 vcs_manager=self.vcs_manager,
@@ -908,7 +907,7 @@ class QueueProcessor(object):
                 committer=self.committer)
             await self.finish_run(active_run, result)
 
-    async def register_run(self, active_run: ActiveRun) -> None:
+    def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
         packages_processed_count.inc()
@@ -1095,6 +1094,10 @@ async def handle_assign(request):
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
 
+    active_run = ActiveRemoteRun(worker_name=worker, queue_item=item)
+
+    queue_processor.register_run(active_run)
+
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
     async with queue_processor.database.acquire() as conn:
@@ -1110,10 +1113,9 @@ async def handle_assign(request):
                 possible_transports=possible_transports)
         except BranchOpenFailure:
             resume_branch = None
-            branch_url = item.branch_url
             vcs_type = item.vcs_type
         else:
-            branch_url = main_branch.user_url
+            active_run.main_branch_url = main_branch.user_url
             vcs_type = get_vcs_abbreviation(main_branch)
             resume_branch = await open_resume_branch(
                 main_branch, suite_config.branch_name,
@@ -1124,7 +1126,7 @@ async def handle_assign(request):
                 item.package, suite_config.branch_name,
                 vcs_type)
 
-        (resume_branch, resume_branch_name,
+        (resume_branch, active_run.resume_branch_name,
          resume_branch_result) = await check_resume_result(
             conn, item.suite, resume_branch)
 
@@ -1136,11 +1138,6 @@ async def handle_assign(request):
             }
         else:
             resume = None
-
-    active_run = ActiveRemoteRun(
-        worker_name=worker, queue_item=item,
-        main_branch_url=branch_url,
-        resume_branch_name=resume_branch_name)
 
     cached_branch_url = queue_processor.vcs_manager.get_branch_url(
         item.package, 'master', vcs_type)
@@ -1161,7 +1158,7 @@ async def handle_assign(request):
         'description': '%s on %s' % (item.suite, item.package),
         'queue_id': item.id,
         'branch': {
-            'url': branch_url,
+            'url': active_run.main_branch_url,
             'subpath': item.subpath,
             'vcs_type': item.vcs_type,
             'cached_url': cached_branch_url,
@@ -1181,8 +1178,6 @@ async def handle_assign(request):
             'url': result_branch_url,
          },
         }
-
-    await queue_processor.register_run(active_run)
 
     return web.json_response(assignment, status=201)
 
