@@ -290,7 +290,7 @@ def get_local_vcs_branch_url(
     elif vcs == 'bzr':
         return os.path.join(vcs_directory, 'bzr', pkg, branch_name)
     else:
-        return None
+        raise AssertionError('unknown vcs type %r' % vcs)
 
 
 def get_local_vcs_branch(vcs_directory: str,
@@ -360,7 +360,7 @@ class LocalVcsManager(VcsManager):
 
     def get_branch_url(self, package, branch_name, vcs_type):
         return get_local_vcs_branch_url(
-            self.base_path, package, branch_name, vcs_type)
+            self.base_path, vcs_type, package, branch_name)
 
     def import_branches(self, main_branch, local_branch, pkg, name,
                         additional_colocated_branches=None):

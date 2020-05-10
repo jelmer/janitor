@@ -1135,7 +1135,7 @@ async def handle_assign(request):
             resume = {
                 'result': resume_branch_result,
                 'branch_url': resume_branch.user_url,
-                'branch_name': resume_branch_name,
+                'branch_name': active_run.resume_branch_name,
             }
         else:
             resume = None
@@ -1152,7 +1152,7 @@ async def handle_assign(request):
         env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url,
 
     result_branch_url = queue_processor.vcs_manager.get_branch_url(
-        item.package, suite_config.branch_name, vcs_type)
+        item.package, suite_config.branch_name, vcs_type.lower())
 
     assignment = {
         'id': active_run.log_id,

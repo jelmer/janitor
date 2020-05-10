@@ -30,6 +30,8 @@ from typing import Any
 from urllib.parse import urljoin
 import yarl
 
+from breezy.controldir import ControlDir
+
 from silver_platter.debian import open_packaging_branch
 from silver_platter.proposal import enable_tag_pushing
 
@@ -87,6 +89,13 @@ def copy_output(output_log: str):
     os.dup2(old_stdout, sys.stdout.fileno())
     os.dup2(old_stderr, sys.stderr.fileno())
     p.stdin.close()  # type: ignore
+
+
+def open_or_create_branch(url, vcs_type):
+    try:
+        return open_packaging_branch(url, vcs_type)
+    except BranchMissing:
+        return ControlDir.create_branch_convenience(url, format=vcs)
 
 
 async def main(argv=None):
@@ -196,10 +205,10 @@ async def main(argv=None):
             metadata['description'] = result.description
             note('%s', result.description)
             enable_tag_pushing(ws.local_tree.branch)
-            result_branch = open_packaging_branch(
+            result_branch = open_or_create_branch(
                 result_branch_url, vcs_type=vcs_type.lower())
             ws.local_tree.branch.push(result_branch, overwrite=True)
-            cached_branch = open_packaging_branch(
+            cached_branch = open_or_create_branch(
                 cached_branch_url, vcs_type=vcs_type.lower())
             ws.local_tree.branch.push(
                 cached_branch, overwrite=True,
