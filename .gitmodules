@@ -10,3 +10,6 @@
 [submodule "breezy"]
 	path = breezy
 	url = https://github.com/breezy-team/breezy
+[submodule "dulwich"]
+	path = dulwich
+	url = https://github.com/dulwich/dulwich
