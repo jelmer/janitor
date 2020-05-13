@@ -21,6 +21,7 @@ from aiohttp import ClientSession, MultipartWriter, BasicAuth
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
 from io import BytesIO
+import json
 import os
 import socket
 import subprocess
@@ -98,6 +99,16 @@ def open_or_create_branch(url, vcs_type):
         return ControlDir.create_branch_convenience(url, format=vcs)
 
 
+async def get_assignment(session, base_url, node_name):
+    assign_url = urljoin(args.base_url, 'active-runs')
+    async with session.post(
+            assign_url, json={'node': node_name}) as resp:
+        if resp.status != 201:
+            raise ValueError('Unable to get assignment: %r' %
+                             await resp.read())
+        return await resp.json()
+
+
 async def main(argv=None):
     parser = argparse.ArgumentParser(
         prog='janitor-pull-worker',
@@ -120,23 +131,25 @@ async def main(argv=None):
         '--build-command',
         help='Build package to verify it.', type=str,
         default=DEFAULT_BUILD_COMMAND)
+    parser.add_argument(
+        '--credentials',
+        help='Path to credentials file (JSON).', type=str,
+        default=None)
 
     args = parser.parse_args(argv)
 
     auth = BasicAuth.from_url(yarl.URL(args.base_url))
+    if args.credentials:
+        with open(args.credentials) as f:
+            creds = json.load(f)
+        auth = BasicAuth(login=creds['login'], password=creds['password'])
 
     node_name = os.environ.get('NODE_NAME')
     if not node_name:
         node_name = socket.gethostname()
 
     async with ClientSession(auth=auth) as session:
-        assign_url = urljoin(args.base_url, 'active-runs')
-        async with session.post(
-                assign_url, json={'node': node_name}) as resp:
-            if resp.status != 201:
-                raise ValueError('Unable to get assignment: %r' %
-                                 await resp.read())
-            assignment = await resp.json()
+        assignment = await get_assignment(session, args.base_url, node_name)
 
         # ws_url = urljoin(
         #  args.base_url, 'active-runs/%s/ws' % assignment['id'])
