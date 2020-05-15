@@ -101,8 +101,11 @@ def open_or_create_branch(url, vcs_type):
 
 async def get_assignment(session, base_url, node_name):
     assign_url = urljoin(args.base_url, 'active-runs')
+    build_arch = subprocess.check_output(
+        ['dpkg-architecture', '-qDEB_BUILD_ARCH'])
     async with session.post(
-            assign_url, json={'node': node_name}) as resp:
+            assign_url, json={'node': node_name, 'archs': [build_arch]}
+            ) as resp:
         if resp.status != 201:
             raise ValueError('Unable to get assignment: %r' %
                              await resp.read())
