@@ -652,14 +652,14 @@ class ActiveLocalRun(ActiveRun):
             if resume_branch is None:
                 resume_branch = vcs_manager.get_branch(
                     self.queue_item.package, suite_config.branch_name,
-                    get_vcs_abbreviation(main_branch))
+                    get_vcs_abbreviation(main_branch.repository))
 
             if resume_branch is not None:
                 note('Resuming from %s', resume_branch.user_url)
 
             cached_branch_url = vcs_manager.get_branch_url(
                 self.queue_item.package, 'master',
-                get_vcs_abbreviation(main_branch))
+                get_vcs_abbreviation(main_branch.repository))
         else:
             main_branch = vcs_manager.get_branch(
                 self.queue_item.package, 'master')
@@ -1117,7 +1117,7 @@ async def handle_assign(request):
             vcs_type = item.vcs_type
         else:
             active_run.main_branch_url = main_branch.user_url
-            vcs_type = get_vcs_abbreviation(main_branch)
+            vcs_type = get_vcs_abbreviation(main_branch.repository)
             resume_branch = await open_resume_branch(
                 main_branch, suite_config.branch_name,
                 possible_hosters=possible_hosters)
