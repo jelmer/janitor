@@ -1,15 +1,15 @@
 [submodule "lintian-brush"]
 	path = lintian-brush
-	url = https://salsa.debian.org/jelmer/lintian-brush
+	url = https://salsa.debian.org/jelmer/lintian-brush.git
 [submodule "silver-platter"]
 	path = silver-platter
 	url = https://jelmer.uk/code/silver-platter
 [submodule "breezy-debian"]
 	path = breezy-debian
-	url = git://github.com/breezy-team/breezy-debian
+	url = https://github.com/breezy-team/breezy-debian.git
 [submodule "breezy"]
 	path = breezy
-	url = https://github.com/breezy-team/breezy
+	url = https://github.com/breezy-team/breezy.git
 [submodule "dulwich"]
 	path = dulwich
-	url = https://github.com/dulwich/dulwich
+	url = https://github.com/dulwich/dulwich.git
