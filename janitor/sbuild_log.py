@@ -202,6 +202,17 @@ def find_preamble_failure_description(lines):
         if m:
             err = MissingControlFile(m.group(1))
             return lineno + 1, line, err
+        m = re.match(
+            'dpkg-source: error: .*: No space left on device', line)
+        if m:
+            err = NoSpaceOnDevice()
+            return lineno + 1, line, err
+        m = re.match(
+            'tar: .*: Cannot write: No space left on device', line)
+        if m:
+            err = NoSpaceOnDevice()
+            return lineno + 1, line, err
+
     return None, None, None
 
 
@@ -1691,6 +1702,9 @@ build_failure_regexps = [
      r'(.*):([0-9]+)', php_missing_class),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
+    (r'Caused by: java.lang.IllegalArgumentException: Cannot find JAR \'(.*)\' '
+     r'required by module \'(.*)\' using classpath or '
+     r'distribution directory \'(.*)\'', None),
     (r'.*\.xml:[0-9]+: Unable to find a javac compiler;',
      lambda m: MissingJavaClass('com.sun.tools.javac.Main')),
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '
