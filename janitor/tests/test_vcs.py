@@ -15,8 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.vcs import bzr_to_browse_url
+from ..vcs import bzr_to_browse_url, LocalVcsManager, get_run_diff
+from . import TestCaseWithTransport
 
+from breezy import controldir
+
+import os
 import unittest
 
 
@@ -37,3 +41,38 @@ class BzrToBrowseUrlTests(unittest.TestCase):
             'https://github.com/jelmer/dulwich/tree/debian/master',
             bzr_to_browse_url(
                 'https://github.com/jelmer/dulwich,branch=debian%2Fmaster'))
+
+
+class GetRunDiffsTests(TestCaseWithTransport):
+
+    def test_diff(self):
+        vcs_manager = LocalVcsManager('.')
+        os.mkdir('bzr')
+        self.make_repository('bzr/pkg', shared=True)
+        branch = controldir.ControlDir.create_branch_convenience(
+            'bzr/pkg/trunk', force_new_repo=False)
+        tree = branch.controldir.open_workingtree()
+        self.build_tree_contents([('bzr/pkg/trunk/a', """\
+File a
+""")])
+        tree.add('a')
+        old_revid = tree.commit('base')
+
+        self.build_tree_contents([('bzr/pkg/trunk/a', """\
+File a
+File b
+""")])
+        new_revid = tree.commit('actual')
+
+        class Run(object):
+
+            package = 'pkg'
+            main_branch_revision = old_revid
+            revision = new_revid
+
+        lines = get_run_diff(vcs_manager, Run()).splitlines()
+        self.assertEqual(b"=== modified file 'a'", lines[0])
+        self.assertEqual(b"@@ -1,1 +1,2 @@", lines[3])
+        self.assertEqual(b" File a", lines[4])
+        self.assertEqual(b"+File b", lines[5])
+        self.assertEqual(b"", lines[6])
