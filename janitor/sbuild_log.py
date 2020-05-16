@@ -1840,6 +1840,7 @@ build_failure_regexps = [
      directory_not_found),
     (r'/bin/sh: [0-9]+: cannot open (.*): No such file',
      file_not_found),
+    (r'.*: line [0-9]+: (.*): No such file or directory', file_not_found),
     (r'error: No member named \$memberName', None),
     (r'/usr/bin/install: missing destination file operand after .*', None),
     # Ruby
@@ -1901,8 +1902,12 @@ build_failure_regexps = [
     (r'Patch (.*) does not apply \(enforce with -f\)', None),
     (r'convert convert: Unable to read font \((.*)\) '
      r'\[No such file or directory\].', file_not_found),
+    (r'java.io.FileNotFoundException: (.*) \(No such file or directory\)',
+     file_not_found),
     # Pytest
     (r'INTERNALERROR> PluginValidationError: (.*)', None),
+    (r'[0-9]+ out of [0-9]+ hunks FAILED -- saving rejects to file (.*\.rej)',
+     None),
 ]
 
 compiled_build_failure_regexps = []
@@ -2027,7 +2032,6 @@ secondary_build_failure_regexps = [
     r'.*\.s:[0-9]+: Error: .*',
     # rollup
     r'\[\!\] Error: Unexpected token',
-    r'java.io.FileNotFoundException: (.*) \(No such file or directory\)',
     # glib
     r'\(.*:[0-9]+\): [a-zA-Z0-9]+-CRITICAL \*\*: [0-9:.]+: .*',
     r'tar: option requires an argument -- \'.\'',
