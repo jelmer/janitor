@@ -1592,7 +1592,7 @@ build_failure_regexps = [
      perl_missing_file),
     (r'> Could not find (.*). Please check that (.*) contains a valid JDK '
      r'installation.', jdk_file_missing),
-    (r'install: cannot create regular file \'(.*)\': '
+    (r'(?:/usr/bin/)?install: cannot create regular file \'(.*)\': '
      r'No such file or directory', None),
     (r'python[0-9.]*: can\'t open file \'(.*)\': \[Errno 2\] '
      r'No such file or directory', file_not_found),
@@ -1908,6 +1908,10 @@ build_failure_regexps = [
     (r'INTERNALERROR> PluginValidationError: (.*)', None),
     (r'[0-9]+ out of [0-9]+ hunks FAILED -- saving rejects to file (.*\.rej)',
      None),
+    (r'pkg_resources.UnknownExtra: (.*) has no such extra feature \'(.*)\'',
+     None),
+    (r'dh_auto_configure: invalid or non-existing path '
+     r'to the source directory: .*', None),
 ]
 
 compiled_build_failure_regexps = []
