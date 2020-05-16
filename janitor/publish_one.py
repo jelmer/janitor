@@ -74,6 +74,10 @@ For more information, including instructions on how to disable
 these merge proposals, see https://janitor.debian.net/%(suite)s.
 
 You can follow up to this merge proposal as you normally would.
+
+The bot will automatically update the merge proposal to resolve merge conflicts
+or close the merge proposal when all changes are applied through other means
+(e.g. cherry-picks). Updates may take several hours to propagate.
 """
 
 JANITOR_BLURB_MD = """
@@ -81,13 +85,10 @@ This merge proposal was created automatically by the \
 [Janitor bot](https://janitor.debian.net/%(suite)s).
 
 You can follow up to this merge proposal as you normally would.
-"""
 
-OLD_JANITOR_BLURB = """
-This merge proposal was created automatically by the Janitor bot
-(https://janitor.debian.net/).
-
-You can follow up to this merge proposal as you normally would.
+The bot will automatically update the merge proposal to resolve merge conflicts
+or close the merge proposal when all changes are applied through other means
+(e.g. cherry-picks). Updates may take several hours to propagate.
 """
 
 LOG_BLURB = """
@@ -171,14 +172,14 @@ class DebdiffRetrievalError(Exception):
 
 
 def strip_janitor_blurb(text, suite):
-    for blurb in [JANITOR_BLURB, OLD_JANITOR_BLURB, JANITOR_BLURB_MD]:
+    for blurb in [JANITOR_BLURB, JANITOR_BLURB_MD]:
         try:
             i = text.index(blurb % {'suite': suite})
         except ValueError:
             pass
         else:
             return text[:i].strip()
-    return text
+    raise ValueError
 
 
 def add_janitor_blurb(format, text, pkg, log_id, suite):
