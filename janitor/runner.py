@@ -85,6 +85,7 @@ from .vcs import (
     open_branch_ext,
     BranchOpenFailure,
     LocalVcsManager,
+    RemoteVcsManager,
     VcsManager,
     )
 
@@ -851,8 +852,8 @@ class QueueProcessor(object):
             self, database, config, worker_kind, build_command, pre_check=None,
             post_check=None, dry_run=False, incoming_url=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
-            concurrency=1, use_cached_only=False, overall_timeout=None,
-            committer=None, apt_location=None):
+            public_vcs_manager=None, concurrency=1, use_cached_only=False,
+            overall_timeout=None, committer=None, apt_location=None):
         """Create a queue processor.
 
         Args:
@@ -873,6 +874,7 @@ class QueueProcessor(object):
         self.logfile_manager = logfile_manager
         self.debsign_keyid = debsign_keyid
         self.vcs_manager = vcs_manager
+        self.public_vcs_manager = public_vcs_manager
         self.concurrency = concurrency
         self.use_cached_only = use_cached_only
         self.topic_queue = Topic(repeat_last=True)
@@ -1132,15 +1134,18 @@ async def handle_assign(request):
             conn, item.suite, resume_branch)
 
         if resume_branch is not None:
+            resume_branch_url = (
+                queue_processor.public_vcs_manager.get_branch_url(
+                    item.package, suite_config.branch_name, vcs_type)
             resume = {
                 'result': resume_branch_result,
-                'branch_url': resume_branch.user_url,
+                'branch_url': resume_branch_url,
                 'branch_name': active_run.resume_branch_name,
             }
         else:
             resume = None
 
-    cached_branch_url = queue_processor.vcs_manager.get_branch_url(
+    cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
         item.package, 'master', vcs_type)
 
     env = {
@@ -1151,7 +1156,7 @@ async def handle_assign(request):
     if item.upstream_branch_url:
         env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url,
 
-    result_branch_url = queue_processor.vcs_manager.get_branch_url(
+    result_branch_url = queue_processor.public_vcs_manager.get_branch_url(
         item.package, suite_config.branch_name, vcs_type.lower())
 
     assignment = {
@@ -1317,7 +1322,11 @@ def main(argv=None):
         config = read_config(f)
 
     state.DEFAULT_URL = config.database_location
-    vcs_manager = LocalVcsManager(config.vcs_location)
+    public_vcs_manager = RemoteVcsManager()
+    if config.vcs_location:
+        vcs_manager = LocalVcsManager(config.vcs_location)
+    else:
+        vcs_manager = public_vcs_manager
     logfile_manager = get_log_manager(config.logs_location)
     db = state.Database(config.database_location)
     queue_processor = QueueProcessor(
@@ -1330,6 +1339,7 @@ def main(argv=None):
         logfile_manager,
         args.debsign_keyid,
         vcs_manager,
+        public_vcs_manager,
         args.concurrency,
         args.use_cached_only,
         overall_timeout=args.overall_timeout,
