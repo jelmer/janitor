@@ -100,9 +100,9 @@ def open_or_create_branch(url, vcs_type):
 
 
 async def get_assignment(session, base_url, node_name):
-    assign_url = urljoin(args.base_url, 'active-runs')
+    assign_url = urljoin(base_url, 'active-runs')
     build_arch = subprocess.check_output(
-        ['dpkg-architecture', '-qDEB_BUILD_ARCH'])
+        ['dpkg-architecture', '-qDEB_BUILD_ARCH']).decode()
     async with session.post(
             assign_url, json={'node': node_name, 'archs': [build_arch]}
             ) as resp:
@@ -138,6 +138,10 @@ async def main(argv=None):
         '--credentials',
         help='Path to credentials file (JSON).', type=str,
         default=None)
+    parser.add_argument(
+        '--debug',
+        help='Print out API communication', action='store_true',
+        default=False)
 
     args = parser.parse_args(argv)
 
@@ -153,6 +157,8 @@ async def main(argv=None):
 
     async with ClientSession(auth=auth) as session:
         assignment = await get_assignment(session, args.base_url, node_name)
+        if args.debug:
+            print(assignment)
 
         # ws_url = urljoin(
         #  args.base_url, 'active-runs/%s/ws' % assignment['id'])
@@ -210,7 +216,7 @@ async def main(argv=None):
         except WorkerFailure as e:
             metadata['code'] = e.code
             metadata['description'] = e.description
-            note('Worker failed: %s', e.description)
+            note('Worker failed (%s): %s', e.code, e.description)
             return 1
         except BaseException as e:
             metadata['code'] = 'worker-exception'
@@ -242,7 +248,8 @@ async def main(argv=None):
                 except ResultUploadFailure as e:
                     sys.stderr.write(str(e))
                     sys.exit(1)
-                print(result)
+                if args.debug:
+                    print(result)
 
 
 if __name__ == '__main__':
