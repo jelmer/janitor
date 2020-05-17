@@ -994,7 +994,7 @@ def main(argv=None):
     except WorkerFailure as e:
         metadata['code'] = e.code
         metadata['description'] = e.description
-        note('Worker failed: %s', e.description)
+        note('Worker failed (%s): %s', e.code, e.description)
         return 0
     except BaseException as e:
         metadata['code'] = 'worker-exception'
