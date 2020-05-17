@@ -390,7 +390,7 @@ class RemoteVcsManager(VcsManager):
             return None
 
     def get_branch_url(self, package, branch_name, vcs_type):
-        return get_cached_branch_url(package, branch_name, vcs_type)
+        return get_cached_branch_url(vcs_type, package, branch_name)
 
 
 def get_run_diff(vcs_manager: VcsManager, run) -> bytes:
