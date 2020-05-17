@@ -50,6 +50,16 @@ class ResultUploadFailure(Exception):
         self.reason = reason
 
 
+async def abort_run(
+        session: ClientSession,
+        base_url: str, run_id: str) -> None:
+    run_url = urljoin(base_url, 'active-runs/%s' % run_id)
+    async with session.delete(finish_url) as resp:
+        if resp.status not in (201, 200):
+            raise Exception('Unable to abort run: %r: %d' % (
+                await resp.read(), resp.status))
+
+
 async def upload_results(
         session: ClientSession,
         base_url: str, run_id: str, metadata: Any,
