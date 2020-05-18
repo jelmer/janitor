@@ -27,14 +27,17 @@ import socket
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from typing import Any
+from typing import Any, Possible, List
 from urllib.parse import urljoin
 import yarl
 
+from breezy.branch import Branch
 from breezy.controldir import ControlDir
+from breezy.transport import Transport
 
 from silver_platter.debian import open_packaging_branch
 from silver_platter.proposal import enable_tag_pushing
+from silver_platter.utils import BranchMissing
 
 from janitor.trace import note
 from janitor.worker import (
@@ -102,14 +105,20 @@ def copy_output(output_log: str):
     p.stdin.close()  # type: ignore
 
 
-def open_or_create_branch(url, vcs_type):
+def open_or_create_branch(
+        url: str, vcs_type: str,
+        possible_transports: Possible[List[Transport]] = None) -> Branch:
     try:
-        return open_packaging_branch(url, vcs_type)
+        branch, subpath = open_packaging_branch(
+            url, vcs_type=vcs_type, possible_transports=possible_transports)
     except BranchMissing:
-        return ControlDir.create_branch_convenience(url, format=vcs)
+        return ControlDir.create_branch_convenience(url, format=vcs_type)
+    else:
+        return branch
 
 
-async def get_assignment(session, base_url, node_name):
+async def get_assignment(
+        session: ClientSession, base_url: str, node_name: str) -> Any:
     assign_url = urljoin(base_url, 'active-runs')
     build_arch = subprocess.check_output(
         ['dpkg-architecture', '-qDEB_BUILD_ARCH']).decode()
@@ -199,6 +208,8 @@ async def main(argv=None):
     command = assignment['command']
     build_environment = assignment['build'].get('environment', {})
 
+    possible_transports = []
+
     env = dict(os.environ.items())
     env.update(assignment['env'])
     env.update(build_environment)
@@ -220,7 +231,8 @@ async def main(argv=None):
                         build_distribution=build_distribution,
                         build_suffix=build_suffix,
                         last_build_version=last_build_version,
-                        resume_subworker_result=resume_result
+                        resume_subworker_result=resume_result,
+                        possible_transports=possible_transports
                         ) as (ws, result):
                     ws.defer_destroy()
         except WorkerFailure as e:
@@ -238,10 +250,12 @@ async def main(argv=None):
             note('%s', result.description)
             enable_tag_pushing(ws.local_tree.branch)
             result_branch = open_or_create_branch(
-                result_branch_url, vcs_type=vcs_type.lower())
+                result_branch_url, vcs_type=vcs_type.lower(),
+                possible_transports=possible_transports)
             ws.local_tree.branch.push(result_branch, overwrite=True)
             cached_branch = open_or_create_branch(
-                cached_branch_url, vcs_type=vcs_type.lower())
+                cached_branch_url, vcs_type=vcs_type.lower(),
+                possible_transports=possible_transports)
             ws.local_tree.branch.push(
                 cached_branch, overwrite=True,
                 stop_revision=ws.main_branch.last_revision())
