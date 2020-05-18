@@ -650,10 +650,10 @@ if __name__ == '__main__':
         ForwardedResource('pool', apt_location.rstrip('/') + '/pool'))
     app.router.register_resource(
         ForwardedResource(
-            'bzr', request.app.publisher_url.rstrip('/') + '/bzr'))
+            'bzr', args.publisher_url.rstrip('/') + '/bzr'))
     app.router.register_resource(
         ForwardedResource(
-            'git', request.app.publisher_url.rstrip('/') + '/git'))
+            'git', args.publisher_url.rstrip('/') + '/git'))
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package')

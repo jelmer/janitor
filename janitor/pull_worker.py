@@ -27,7 +27,7 @@ import socket
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from typing import Any, Possible, List
+from typing import Any, Optional, List
 from urllib.parse import urljoin
 import yarl
 
@@ -107,7 +107,7 @@ def copy_output(output_log: str):
 
 def open_or_create_branch(
         url: str, vcs_type: str,
-        possible_transports: Possible[List[Transport]] = None) -> Branch:
+        possible_transports: Optional[List[Transport]] = None) -> Branch:
     try:
         branch, subpath = open_packaging_branch(
             url, vcs_type=vcs_type, possible_transports=possible_transports)

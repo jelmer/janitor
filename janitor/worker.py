@@ -771,7 +771,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             note('Cached branch URL %s missing: %s', cached_branch_url, e)
             cached_branch = None
         except BranchUnavailable as e:
-            warning('Cached branch URL unavailable: %s', cached_branch_url, e)
+            warning('Cached branch URL %s unavailable: %s',
+                    cached_branch_url, e)
             cached_branch = None
         else:
             note('Using cached branch %s', cached_branch.user_url)
