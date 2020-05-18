@@ -41,6 +41,9 @@ class ForwardedResource(PrefixResource):
         self._routes = {'GET': ResourceRoute('GET', self._handle, self,
                                              expect_handler=expect_handler),
 
+                        'POST': ResourceRoute('POST', self._handle, self,
+                                              expect_handler=expect_handler),
+
                         'HEAD': ResourceRoute('HEAD', self._handle, self,
                                               expect_handler=expect_handler)}
 
@@ -645,6 +648,12 @@ if __name__ == '__main__':
         ForwardedResource('dists', apt_location.rstrip('/') + '/dists'))
     app.router.register_resource(
         ForwardedResource('pool', apt_location.rstrip('/') + '/pool'))
+    app.router.register_resource(
+        ForwardedResource(
+            'bzr', request.app.publisher_url.rstrip('/') + '/bzr'))
+    app.router.register_resource(
+        ForwardedResource(
+            'git', request.app.publisher_url.rstrip('/') + '/git'))
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package')
