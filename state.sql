@@ -132,7 +132,8 @@ CREATE TABLE IF NOT EXISTS publish_policy (
 CREATE INDEX ON candidate (suite);
 CREATE TABLE worker (
    name text not null unique,
-   password text not null
+   password text not null,
+   link text,
 );
 
 CREATE OR REPLACE VIEW last_runs AS
