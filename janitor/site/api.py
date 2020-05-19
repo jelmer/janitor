@@ -675,8 +675,6 @@ async def handle_run_finish(request):
             part = await reader.next()
             if part is None:
                 break
-            from janitor.trace import note
-            note('Headers %r, %r', part.headers, part.filename)
             if part.filename == 'result.json':
                 result = await part.json()
             else:
