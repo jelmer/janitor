@@ -31,6 +31,8 @@ import time
 from typing import Dict, List, Optional
 import uuid
 
+from dulwich.web import HTTPGitApplication
+
 from prometheus_client import (
     Counter,
     Gauge,
@@ -593,6 +595,9 @@ async def publish_request(request):
         status=202)
 
 
+GIT_URL_RES = [k[1] for k in HTTPGitApplication.services]
+
+
 async def git_backend(request):
     package = request.match_info['package']
     subpath = request.match_info['subpath']
@@ -601,6 +606,11 @@ async def git_backend(request):
     repo = request.app.vcs_manager.get_repository(package, 'git')
     if repo is None:
         raise web.HTTPNotFound()
+    for regex in GIT_URL_RES:
+        if regex.match('/'+subpath):
+            break
+    else:
+        raise web.HTTPNotFound(text='invalid subpath %r' % subpath)
     local_path = repo.user_transport.local_abspath('.')
     full_path = local_path + '/' + subpath
     env = {
@@ -612,6 +622,7 @@ async def git_backend(request):
         'QUERY_STRING': request.query_string,
         # REMOTE_USER is not set
         }
+
 
     for key, value in request.headers.items():
         env['HTTP_' + key.replace('-', '_').upper()] = value
@@ -643,9 +654,9 @@ async def git_backend(request):
     status = headers.get('Status')
     if status:
         del headers['Status']
-        (status_code, status_reason) = status.split(b' ', 1)
-        status_code = status_code.decode()
-        status_reason = status_reason.decode()
+        (status_code, status_reason) = status.split(' ', 1)
+        status_code = int(status_code)
+        status_reason = status_reason
     else:
         status_code = 200
         status_reason = 'OK'
