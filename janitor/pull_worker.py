@@ -32,6 +32,7 @@ from urllib.parse import urljoin
 import yarl
 
 from breezy.branch import Branch
+from breezy.config import credential_store_registry, PlainTextCredentialStore
 from breezy.controldir import ControlDir
 from breezy.transport import Transport
 
@@ -56,8 +57,8 @@ class ResultUploadFailure(Exception):
 async def abort_run(
         session: ClientSession,
         base_url: str, run_id: str) -> None:
-    run_url = urljoin(base_url, 'active-runs/%s' % run_id)
-    async with session.delete(finish_url) as resp:
+    run_url = urljoin(base_url, 'active-runs/%s/abort' % run_id)
+    async with session.post(finish_url) as resp:
         if resp.status not in (201, 200):
             raise Exception('Unable to abort run: %r: %d' % (
                 await resp.read(), resp.status))
@@ -164,11 +165,35 @@ async def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    auth = BasicAuth.from_url(yarl.URL(args.base_url))
+    base_url = yarl.URL(args.base_url)
+
+    auth = BasicAuth.from_url(base_url)
     if args.credentials:
         with open(args.credentials) as f:
             creds = json.load(f)
         auth = BasicAuth(login=creds['login'], password=creds['password'])
+
+
+    class WorkerCredentialStore(PlainTextCredentialStore):
+
+        def get_credentials(self, protocol, host, port=None, user=None, path=None,
+                            realm=None):
+            if host == base_url.host:
+                return {
+                    'user': creds['login'],
+                    'password': creds['password'],
+                    'protocol': protocol,
+                    'port': port,
+                    'host': host,
+                    'realm': realm,
+                    'verify_certificates': True,
+                    }
+            return None
+
+
+    credential_store_registry.register(
+        'janitor-worker', WorkerCredentialStore, fallback=True)
+
 
     node_name = os.environ.get('NODE_NAME')
     if not node_name:
@@ -193,7 +218,7 @@ async def main(argv=None):
 
     branch_url = assignment['branch']['url']
     vcs_type = assignment['branch']['vcs_type']
-    result_branch_url = assignment['result_branch']['url']
+    result_branch_url = assignment['result_branch']['url'].rstrip('/')
     subpath = assignment['branch'].get('subpath', '') or ''
     if assignment['resume']:
         resume_result = assignment['resume'].get('result')
@@ -234,7 +259,20 @@ async def main(argv=None):
                         resume_subworker_result=resume_result,
                         possible_transports=possible_transports
                         ) as (ws, result):
-                    ws.defer_destroy()
+                    enable_tag_pushing(ws.local_tree.branch)
+                    note('Pushing result branch to %s', result_branch_url)
+                    result_branch = open_or_create_branch(
+                        result_branch_url, vcs_type=vcs_type.lower(),
+                        possible_transports=possible_transports)
+                    ws.local_tree.branch.push(result_branch, overwrite=True)
+                    note('Pushing packaging branch cache to %s',
+                         cached_branch_url)
+                    cached_branch = open_or_create_branch(
+                        cached_branch_url, vcs_type=vcs_type.lower(),
+                        possible_transports=possible_transports)
+                    ws.local_tree.branch.push(
+                        cached_branch, overwrite=True,
+                        stop_revision=ws.main_branch.last_revision())
         except WorkerFailure as e:
             metadata['code'] = e.code
             metadata['description'] = e.description
@@ -248,17 +286,7 @@ async def main(argv=None):
             metadata['code'] = None
             metadata['description'] = result.description
             note('%s', result.description)
-            enable_tag_pushing(ws.local_tree.branch)
-            result_branch = open_or_create_branch(
-                result_branch_url, vcs_type=vcs_type.lower(),
-                possible_transports=possible_transports)
-            ws.local_tree.branch.push(result_branch, overwrite=True)
-            cached_branch = open_or_create_branch(
-                cached_branch_url, vcs_type=vcs_type.lower(),
-                possible_transports=possible_transports)
-            ws.local_tree.branch.push(
-                cached_branch, overwrite=True,
-                stop_revision=ws.main_branch.last_revision())
+
             return 0
         finally:
             finish_time = datetime.now()

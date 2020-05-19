@@ -23,6 +23,7 @@ from aiohttp.web_urldispatcher import (
     URL,
     UrlMappingMatchInfo,
     )
+from . import is_worker
 
 
 class ForwardedResource(PrefixResource):
@@ -38,14 +39,10 @@ class ForwardedResource(PrefixResource):
         self._expect_handler = expect_handler
         self._location = location
 
-        self._routes = {'GET': ResourceRoute('GET', self._handle, self,
-                                             expect_handler=expect_handler),
-
-                        'POST': ResourceRoute('POST', self._handle, self,
-                                              expect_handler=expect_handler),
-
-                        'HEAD': ResourceRoute('HEAD', self._handle, self,
-                                              expect_handler=expect_handler)}
+        self._routes = {
+            method: ResourceRoute(
+                method, self._handle, self, expect_handler=expect_handler)
+            for method in ['GET', 'POST', 'HEAD']}
 
     def url_for(self, path):
         while path.startswith('/'):
@@ -97,6 +94,8 @@ class ForwardedResource(PrefixResource):
         service = request.query.get('service')
         if service:
             params['service'] = service
+        if await is_worker(request.app.database, request):
+            params['allow_writes'] = '1'
         async with request.app.http_client_session.request(
                 request.method, url, params=params, headers=headers, data=request.content) as client_response:
             status = client_response.status
@@ -104,8 +103,11 @@ class ForwardedResource(PrefixResource):
             if status == 404:
                 raise web.HTTPNotFound()
 
+            if status == 401:
+                raise web.HTTPUnauthorized(headers={
+                    'WWW-Authenticate': 'Basic Realm="Debian Janitor"'})
+
             if status != 200:
-                return web.Response(status=status, text='blah')
                 raise web.HTTPBadGateway(
                     text='Upstream server returned %d' % status)
 
