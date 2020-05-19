@@ -31,6 +31,9 @@ import time
 from typing import Dict, List, Optional
 import uuid
 
+from breezy.bzr.smart import medium
+from breezy.transport import get_transport_from_url
+
 from dulwich.web import HTTPGitApplication
 
 from prometheus_client import (
@@ -602,7 +605,10 @@ async def git_backend(request):
     package = request.match_info['package']
     subpath = request.match_info['subpath']
 
-    args = ['/usr/lib/git-core/git-http-backend']
+    args = ['/usr/bin/git']
+    if request.query.get('allow_writes'):
+        args.extend(['-c', 'http.uploadpack=1'])
+    args.append('http-backend')
     repo = request.app.vcs_manager.get_repository(package, 'git')
     if repo is None:
         raise web.HTTPNotFound()
@@ -676,17 +682,35 @@ async def git_backend(request):
 async def bzr_backend(request):
     vcs_manager = request.app.vcs_manager
     package = request.match_info['package']
-    subpath = request.match_info['subpath']
+    branch = request.match_info['branch']
     repo = vcs_manager.get_repository(package, 'bzr')
     if repo is None:
         raise web.HTTPNotFound()
-    local_path = repo.user_transport.local_abspath('.')
-    full_path = os.path.join(local_path, subpath)
-    if not os.path.exists(full_path):
-        raise web.HTTPNotFound()
-    if not os.path.isfile(full_path):
-        return web.Response(body=b'This is a directory.')
-    return web.FileResponse(full_path)
+    if request.query.get('allow_writes'):
+        backing_transport = repo.user_transport
+    else:
+        backing_transport = get_transport_from_url('readonly+' + repo.user_url)
+    transport = backing_transport.clone(branch)
+    out_buffer = BytesIO()
+    request_data_bytes = await request.read()
+
+    protocol_factory, unused_bytes = medium._get_protocol_factory_for_bytes(
+        request_data_bytes)
+    smart_protocol_request = protocol_factory(
+        transport, out_buffer.write, '.', backing_transport)
+    smart_protocol_request.accept_bytes(unused_bytes)
+    if smart_protocol_request.next_read_size() != 0:
+        # The request appears to be incomplete, or perhaps it's just a
+        # newer version we don't understand.  Regardless, all we can do
+        # is return an error response in the format of our version of the
+        # protocol.
+        response_data = b'error\x01incomplete request\n'
+    else:
+        response_data = out_buffer.getvalue()
+    # TODO(jelmer): Use StreamResponse
+    return web.Response(
+        status=200, body=response_data,
+        content_type='application/octet-stream')
 
 
 async def get_vcs_type(request):
@@ -713,8 +737,8 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/diff/{run_id}", diff_request)
     app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
-    app.router.add_route(
-        "*", "/bzr/{package}/{subpath:.*}", bzr_backend)
+    app.router.add_post(
+        "/bzr/{package}/{branch}/.bzr/smart", bzr_backend)
     app.router.add_get(
         '/vcs-type/{package}', get_vcs_type)
     app.router.add_get(
