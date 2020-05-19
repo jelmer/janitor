@@ -1120,13 +1120,16 @@ async def handle_assign(request):
         else:
             active_run.main_branch_url = main_branch.user_url
             vcs_type = get_vcs_abbreviation(main_branch.repository)
-            resume_branch = await open_resume_branch(
-                main_branch, suite_config.branch_name,
-                possible_hosters=possible_hosters)
+            if not item.refresh:
+                resume_branch = await open_resume_branch(
+                    main_branch, suite_config.branch_name,
+                    possible_hosters=possible_hosters)
+            else:
+                resume_branch = None
 
         assert vcs_type in ('bzr', 'git')
 
-        if resume_branch is None:
+        if resume_branch is None and not item.refresh:
             resume_branch = queue_processor.vcs_manager.get_branch(
                 item.package, suite_config.branch_name, vcs_type)
 
