@@ -62,9 +62,13 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
       suite: Debian suite
       message: Changelog message
     """
-    subprocess.check_call(
+    p = subprocess.Popen(
         ["dch", "-l" + suffix, "--no-auto-nmu", "--distribution", suite,
-            "--force-distribution", message], cwd=directory)
+            "--force-distribution", message], cwd=directory,
+        stderr=subprocess.PIPE)
+    (stdout, stderr) = p.communicate(b'\n')
+    if p.returncode != 0:
+        raise Exception('dch failed: %s' % stderr)
 
 
 def get_latest_changelog_version(local_tree, subpath=''):
