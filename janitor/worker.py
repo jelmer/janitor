@@ -26,6 +26,7 @@ import subprocess
 import sys
 from typing import Callable, Dict, List, Optional, Any, Type
 
+import breezy
 from breezy import osutils
 from breezy.config import GlobalStack
 from breezy.errors import (
@@ -37,6 +38,7 @@ from breezy.tree import Tree
 from breezy.transport import Transport
 from breezy.workingtree import WorkingTree
 
+import silver_platter
 from silver_platter.debian import (
     MissingUpstreamTarball,
     Workspace,
@@ -374,6 +376,8 @@ class LintianBrushWorker(SubWorker):
 
         metadata['versions'] = {
             'lintian-brush': lintian_brush_version_string,
+            'silver-platter': silver_platter.version_string,
+            'breezy': breezy.version_string,
             }
         metadata['applied'] = []
         if base_metadata:
