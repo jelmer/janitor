@@ -88,19 +88,34 @@ class ForwardedResource(PrefixResource):
     async def _handle(self, request):
         rel_url = request.match_info['path']
         url = '%s/%s' % (self._location, rel_url)
-        async with request.app.http_client_session.get(url) as client_response:
+        headers = {}
+        for hdr in ['Accept', 'Pragma', 'Accept-Encoding', 'Content-Type']:
+            value = request.headers.get(hdr)
+            if value:
+                headers[hdr] = value
+        params = {}
+        service = request.query.get('service')
+        if service:
+            params['service'] = service
+        async with request.app.http_client_session.request(
+                request.method, url, params=params, headers=headers, data=request.content) as client_response:
             status = client_response.status
 
             if status == 404:
                 raise web.HTTPNotFound()
 
             if status != 200:
-                raise web.HTTPBadGateway()
+                return web.Response(status=status, text='blah')
+                raise web.HTTPBadGateway(
+                    text='Upstream server returned %d' % status)
 
             response = web.StreamResponse(
                 status=200,
                 reason='OK',
             )
+
+            response.content_type = client_response.content_type
+
             await response.prepare(request)
             while True:
                 chunk = await client_response.content.read(self._chunk_size)
