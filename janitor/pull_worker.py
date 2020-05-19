@@ -197,7 +197,7 @@ async def main(argv=None):
     subpath = assignment['branch'].get('subpath', '') or ''
     if assignment['resume']:
         resume_result = assignment['resume'].get('result')
-        resume_branch_url = assignment['resume'].get('branch_url')
+        resume_branch_url = assignment['resume']['branch_url'].rstrip('/')
     else:
         resume_result = None
         resume_branch_url = None
