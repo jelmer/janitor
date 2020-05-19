@@ -15,10 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientConnectorError, web
+import aiohttp
+from aiohttp import ClientConnectorError, web, BasicAuth
 from jinja2 import Environment, PackageLoader, select_autoescape
 import urllib.parse
 
+from janitor import state
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import (
     CACHE_URL_BZR,
@@ -144,3 +146,25 @@ def is_admin(request):
 def check_admin(request):
     if not is_admin(request):
         return web.Response(text='Unauthorized', status=401)
+
+
+async def is_worker(db, request):
+    auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
+    if not auth_header:
+        return None
+    auth = BasicAuth.decode(auth_header=auth_header)
+    async with db.acquire() as conn:
+        if await state.check_worker_credentials(
+                conn, auth.login, auth.password):
+            return auth.login
+    return None
+
+
+async def check_worker_creds(db, request):
+    auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
+    if not auth_header:
+        raise web.HTTPUnauthorized(body='worker login required')
+    login = await is_worker(db, request)
+    if not login:
+        raise web.HTTPUnauthorized(body='worker login required')
+    return login

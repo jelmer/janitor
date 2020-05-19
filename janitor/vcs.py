@@ -307,6 +307,12 @@ def get_local_vcs_branch(vcs_directory: str,
     return open_branch(url)
 
 
+def get_local_vcs_repo_url(vcs_directory: str,
+                           package: str,
+                           vcs_type: str) -> str:
+    return os.path.join(vcs_directory, vcs_type, package)
+
+
 def get_local_vcs_repo(vcs_directory: str,
                        package: str,
                        vcs_type: Optional[str] = None) -> Optional[Repository]:
@@ -337,6 +343,9 @@ class VcsManager(object):
     def get_repository(self, package: str,
                        vcs_type: Optional[str] = None) -> Repository:
         raise NotImplementedError(self.get_repository)
+
+    def get_repository_url(self, package: str, vcs_type: str) -> str:
+        raise NotImplementedError(self.get_repository_url)
 
     def get_vcs_type(self, package: str) -> Optional[str]:
         try:
@@ -370,6 +379,9 @@ class LocalVcsManager(VcsManager):
 
     def get_repository(self, package, vcs_type=None):
         return get_local_vcs_repo(self.base_path, package, vcs_type)
+
+    def get_repository_url(self, package, vcs_type):
+        return get_local_vcs_repo_url(self.base_path, package, vcs_type)
 
 
 class RemoteVcsManager(VcsManager):

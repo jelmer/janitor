@@ -31,6 +31,7 @@ import time
 from typing import Dict, List, Optional
 import uuid
 
+from breezy.controldir import ControlDir
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
 
@@ -605,13 +606,19 @@ async def git_backend(request):
     package = request.match_info['package']
     subpath = request.match_info['subpath']
 
+    repo = request.app.vcs_manager.get_repository(package, 'git')
+
     args = ['/usr/bin/git']
     if request.query.get('allow_writes'):
-        args.extend(['-c', 'http.uploadpack=1'])
+        args.extend(['-c', 'http.receivepack=1'])
+        if repo is None:
+            controldir = ControlDir.create(
+                request.app.vcs_manager.get_repository_url(package, 'git'))
+            repo = controldir.open_repository()
+    else:
+        if repo is None:
+            raise web.HTTPNotFound()
     args.append('http-backend')
-    repo = request.app.vcs_manager.get_repository(package, 'git')
-    if repo is None:
-        raise web.HTTPNotFound()
     for regex in GIT_URL_RES:
         if regex.match('/'+subpath):
             break
@@ -650,7 +657,9 @@ async def git_backend(request):
 
     (stdout, stderr) = await p.communicate(stdin)
     if stderr:
-        warning('Git %s error: %s', subpath, stderr.decode())
+        if stderr.decode().strip() == 'Service not enabled: \'receive-pack\'':
+            raise web.HTTPUnauthorized(text=stderr.decode())
+        warning('Git %s error: %r', subpath, stderr.decode())
         return web.Response(
             status=400, reason='Bad Request', body=stderr)
 
@@ -682,13 +691,17 @@ async def git_backend(request):
 async def bzr_backend(request):
     vcs_manager = request.app.vcs_manager
     package = request.match_info['package']
-    branch = request.match_info['branch']
+    branch = request.match_info.get('branch')
     repo = vcs_manager.get_repository(package, 'bzr')
-    if repo is None:
-        raise web.HTTPNotFound()
     if request.query.get('allow_writes'):
+        if repo is None:
+            controldir = ControlDir.create(
+                vcs_manager.get_repository_url(package, 'bzr'))
+            repo = controldir.create_repository(shared=True)
         backing_transport = repo.user_transport
     else:
+        if repo is None:
+            raise web.HTTPNotFound()
         backing_transport = get_transport_from_url('readonly+' + repo.user_url)
     transport = backing_transport.clone(branch)
     out_buffer = BytesIO()
@@ -737,6 +750,8 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/diff/{run_id}", diff_request)
     app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
+    app.router.add_post(
+        "/bzr/{package}/.bzr/smart", bzr_backend)
     app.router.add_post(
         "/bzr/{package}/{branch}/.bzr/smart", bzr_backend)
     app.router.add_get(
