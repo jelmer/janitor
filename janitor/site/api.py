@@ -593,7 +593,7 @@ async def handle_report(request):
         async for (run, maintainer_email, uploader_emails, branch_url,
                    publish_mode, changelog_mode, command
                    ) in state.iter_publish_ready(
-                       conn, suite=suite):
+                       conn, suites=[suite]):
             data = {
                 'timestamp': run.times[0].isoformat(),
             }
@@ -613,7 +613,7 @@ async def handle_report(request):
 
 
 async def handle_publish_ready(request):
-    suite = request.match_info.get('suite')
+    suites = request.match_info.getall('suite', None)
     review_status = request.query.get('review-status')
     limit = request.query.get('limit', 200)
     if limit:
@@ -626,7 +626,8 @@ async def handle_publish_ready(request):
         async for (run, maintainer_email, uploader_emails, branch_url,
                    publish_policy, changelog_mode, command
                    ) in state.iter_publish_ready(
-                       conn, suite=suite, review_status=review_status):
+                       conn, suites=suites,
+                       review_status=review_status):
             if publish_policy in (
                     'propose', 'attempt-push', 'push-derived', 'push'):
                 for_publishing.add(run.id)

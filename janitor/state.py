@@ -894,7 +894,7 @@ WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
 
 async def iter_publish_ready(
         conn: asyncpg.Connection,
-        suite: Optional[str] = None,
+        suites: Optional[List[str]] = None,
         review_status: Optional[Union[str, List[str]]] = None,
         limit: Optional[int] = None
         ) -> AsyncIterator[Tuple[Run, str, List[str], str, str, bool, str]]:
@@ -934,9 +934,9 @@ LEFT JOIN publish_policy ON
     publish_policy.package = run.package AND publish_policy.suite = run.suite
 WHERE result_code = 'success' AND result IS NOT NULL
 """
-    if suite is not None:
-        query += " AND run.suite = $1 "
-        args.append(suite)
+    if suites is not None:
+        query += " AND run.suite = ANY($1::text[]) "
+        args.append(suites)
     if review_status is not None:
         if not isinstance(review_status, list):
             review_status = [review_status]
