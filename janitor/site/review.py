@@ -12,10 +12,14 @@ from janitor.site import (
 
 
 async def generate_rejected(conn, suite=None):
+    if suite is None:
+        suites = None
+    else:
+        suites = [suite]
     entries = [
         entry async for entry in
         state.iter_publish_ready(
-            conn, review_status=['rejected'], suite=suite)]
+            conn, review_status=['rejected'], suites=suites)]
 
     def entry_key(entry):
         return entry[0].times[1]
@@ -26,11 +30,11 @@ async def generate_rejected(conn, suite=None):
 
 
 async def generate_review(conn, client, archiver_url, publisher_url,
-                          suite=None):
+                          suites=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
                        conn, review_status=['unreviewed'], limit=40,
-                       suite=suite)]
+                       suites=suites)]
     if not entries:
         template = env.get_template('review-done.html')
         return await template.render_async()

@@ -584,17 +584,17 @@ if __name__ == '__main__':
             text = await generate_review(
                 conn, request.app.http_client_session,
                 request.app.archiver_url, request.app.publisher_url,
-                suite=run.suite)
+                suites=[run.suite])
         return web.Response(content_type='text/html', text=text)
 
     async def handle_review(request):
         from .review import generate_review
-        suite = request.query.get('suite', 'lintian-fixes')
+        suites = request.query.getall('suite', ['lintian-fixes', 'multiarch-fixes'])
         async with request.app.database.acquire() as conn:
             text = await generate_review(
                 conn, request.app.http_client_session,
                 request.app.archiver_url, request.app.publisher_url,
-                suite=suite)
+                suites=suites)
         return web.Response(content_type='text/html', text=text)
 
     async def start_pubsub_forwarder(app):
