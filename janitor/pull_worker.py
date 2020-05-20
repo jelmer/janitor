@@ -31,8 +31,10 @@ from typing import Any, Optional, List
 from urllib.parse import urljoin
 import yarl
 
+from breezy import urlutils
 from breezy.branch import Branch
 from breezy.config import credential_store_registry, PlainTextCredentialStore
+from breezy.errors import NotBranchError
 from breezy.controldir import ControlDir
 from breezy.transport import Transport
 
@@ -115,7 +117,10 @@ def open_or_create_branch(
     except BranchMissing:
         url, params = urlutils.split_segment_parameters(url)
         branch_name = params.get('branch')
-        controldir = ControlDir.create(url, format=vcs_type)
+        try:
+            controldir = ControlDir.open(url)
+        except NotBranchError:
+            controldir = ControlDir.create(url, format=vcs_type)
         return controldir.create_branch(name=branch_name)
     else:
         return branch
