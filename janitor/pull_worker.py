@@ -113,7 +113,10 @@ def open_or_create_branch(
         branch, subpath = open_packaging_branch(
             url, vcs_type=vcs_type, possible_transports=possible_transports)
     except BranchMissing:
-        return ControlDir.create_branch_convenience(url, format=vcs_type)
+        url, params = urlutils.split_segment_parameters(url)
+        branch_name = params.get('branch')
+        controldir = ControlDir.create(url, format=vcs_type)
+        return controldir.create_branch(name=branch_name)
     else:
         return branch
 
