@@ -25,11 +25,11 @@ elif os.path.exists('pyproject.toml'):
     sys.exit(subprocess.call(['poetry', 'build', '-f', 'sdist']))
 elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
     with open('dist.ini', 'rb') as f:
-        for l in f:
-            if not l.startswith(b';;'):
+        for line in f:
+            if not line.startswith(b';;'):
                 continue
             try:
-                (key, value) = l[2:].split(b'=', 1)
+                (key, value) = line[2:].split(b'=', 1)
             except ValueError:
                 continue
             if (key.strip() == b'class' and

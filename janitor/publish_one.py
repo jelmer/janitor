@@ -418,9 +418,9 @@ class LintianBrushPublisher(Publisher):
         return create_mp_description(
             description_format, [
                 applied_entry_as_line(
-                    description_format, l.get('fixed_lintian_tags', []),
-                    l['summary'])
-                for l in self.applied])
+                    description_format, line.get('fixed_lintian_tags', []),
+                    line['summary'])
+                for line in self.applied])
 
     def get_proposal_commit_message(self, existing_commit_message):
         applied = []

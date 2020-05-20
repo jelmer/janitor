@@ -7,7 +7,6 @@ from aiohttp import (
     ContentTypeError,
     ClientConnectorError,
     WSMsgType,
-    BasicAuth,
     )
 from aiohttp.payload import BytesPayload
 import urllib.parse

@@ -1702,9 +1702,9 @@ build_failure_regexps = [
      r'(.*):([0-9]+)', php_missing_class),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
-    (r'Caused by: java.lang.IllegalArgumentException: Cannot find JAR \'(.*)\' '
-     r'required by module \'(.*)\' using classpath or '
-     r'distribution directory \'(.*)\'', None),
+    (r'Caused by: java.lang.IllegalArgumentException: '
+     r'Cannot find JAR \'(.*)\' required by module \'(.*)\' '
+     r'using classpath or distribution directory \'(.*)\'', None),
     (r'.*\.xml:[0-9]+: Unable to find a javac compiler;',
      lambda m: MissingJavaClass('com.sun.tools.javac.Main')),
     (r'python3.[0-9]+: can\'t open file \'(.*)\': '

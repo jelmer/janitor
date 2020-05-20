@@ -27,18 +27,20 @@ class IterSectionsTests(unittest.TestCase):
 
     def test_simple(self):
         self.maxDiff = None
-        self.assertEqual([  # noqa
-  (None,
+        self.assertEqual([
+  (None,  # noqa
    ['[The following lists of changes regard files as different if they have',
     'different names, permissions or owners.]']),
-  ('Files in second .changes but not in first',
+  ('Files in second .changes but not in first',  # noqa
    ['-rw-r--r--  root/root   /usr/lib/debug/.build-id/e4/3520e0f1e.debug']),
-  ('Files in first .changes but not in second',
+  ('Files in first .changes but not in second',  # noqa
    ['-rw-r--r--  root/root   /usr/lib/debug/.build-id/28/0303571bd.debug']),
-  ('Control files of package xserver-blah: lines which differ (wdiff format)',
+  (  # noqa
+   'Control files of package xserver-blah: lines which differ (wdiff format)',
    ['Installed-Size: [-174-] {+170+}',
     'Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}']),
-  ('Control files of package xserver-dbgsym: lines which differ'
+  (  # noqa
+   'Control files of package xserver-dbgsym: lines which differ'
    ' (wdiff format)',
    ['Build-Ids: [-280303571bd7f8-] {+e43520e0f1eb+}',
     'Depends: xserver-blah (= [-1:1.7.9-2~jan+unchanged1)-] '

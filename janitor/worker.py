@@ -24,7 +24,7 @@ import json
 import os
 import subprocess
 import sys
-from typing import Callable, Dict, List, Optional, Any, Type
+from typing import Callable, Dict, List, Optional, Any, Type, Iterator, Tuple
 
 import breezy
 from breezy import osutils
@@ -722,7 +722,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     last_build_version: Optional[Version] = None,
                     build_distribution: Optional[str] = None,
                     build_suffix: Optional[str] = None,
-                    resume_subworker_result: Any = None) -> WorkerResult:
+                    resume_subworker_result: Any = None
+                    ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     pkg = env['PACKAGE']
 
     metadata['package'] = pkg

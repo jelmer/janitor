@@ -38,9 +38,7 @@ from breezy.errors import NotBranchError
 from breezy.controldir import ControlDir
 from breezy.transport import Transport
 
-from silver_platter.debian import open_packaging_branch
 from silver_platter.proposal import enable_tag_pushing
-from silver_platter.utils import BranchMissing
 
 from janitor.trace import note
 from janitor.worker import (
@@ -59,7 +57,7 @@ class ResultUploadFailure(Exception):
 async def abort_run(
         session: ClientSession,
         base_url: str, run_id: str) -> None:
-    run_url = urljoin(base_url, 'active-runs/%s/abort' % run_id)
+    finish_url = urljoin(base_url, 'active-runs/%s/abort' % run_id)
     async with session.post(finish_url) as resp:
         if resp.status not in (201, 200):
             raise Exception('Unable to abort run: %r: %d' % (
@@ -79,7 +77,8 @@ async def upload_results(
                     f = open(entry.path, 'rb')
                     es.enter_context(f)
                     part = mpwriter.append(BytesIO(f.read()))
-                    part.set_content_disposition('attachment', filename=entry.name)
+                    part.set_content_disposition(
+                        'attachment', filename=entry.name)
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
         async with session.post(finish_url, data=mpwriter) as resp:
@@ -108,22 +107,24 @@ def copy_output(output_log: str):
     p.stdin.close()  # type: ignore
 
 
-def open_or_create_branch(
+def push_branch(
+        source_branch: Branch,
         url: str, vcs_type: str,
-        possible_transports: Optional[List[Transport]] = None) -> Branch:
+        overwrite=False, stop_revision=None,
+        possible_transports: Optional[List[Transport]] = None) -> None:
+    url, params = urlutils.split_segment_parameters(url)
+    branch_name = params.get('branch')
     try:
-        branch, subpath = open_packaging_branch(
-            url, vcs_type=vcs_type, possible_transports=possible_transports)
-    except BranchMissing:
-        url, params = urlutils.split_segment_parameters(url)
-        branch_name = params.get('branch')
-        try:
-            controldir = ControlDir.open(url)
-        except NotBranchError:
-            controldir = ControlDir.create(url, format=vcs_type)
-        return controldir.create_branch(name=branch_name)
-    else:
-        return branch
+        target = ControlDir.open(
+            url, possible_transports=possible_transports)
+    except NotBranchError:
+        target = ControlDir.create(
+            url, format=vcs_type,
+            possible_transports=possible_transports)
+
+    target.push_branch(
+        source_branch, revision_id=stop_revision,
+        overwrite=overwrite, name=branch_name)
 
 
 async def get_assignment(
@@ -181,11 +182,11 @@ async def main(argv=None):
             creds = json.load(f)
         auth = BasicAuth(login=creds['login'], password=creds['password'])
 
-
     class WorkerCredentialStore(PlainTextCredentialStore):
 
-        def get_credentials(self, protocol, host, port=None, user=None, path=None,
-                            realm=None):
+        def get_credentials(
+                self, protocol, host, port=None, user=None, path=None,
+                realm=None):
             if host == base_url.host:
                 return {
                     'user': creds['login'],
@@ -198,10 +199,8 @@ async def main(argv=None):
                     }
             return None
 
-
     credential_store_registry.register(
         'janitor-worker', WorkerCredentialStore, fallback=True)
-
 
     node_name = os.environ.get('NODE_NAME')
     if not node_name:
@@ -269,18 +268,19 @@ async def main(argv=None):
                         ) as (ws, result):
                     enable_tag_pushing(ws.local_tree.branch)
                     note('Pushing result branch to %s', result_branch_url)
-                    result_branch = open_or_create_branch(
-                        result_branch_url, vcs_type=vcs_type.lower(),
+                    push_branch(
+                        ws.local_tree.branch,
+                        result_branch_url, overwrite=True,
+                        vcs_type=vcs_type.lower(),
                         possible_transports=possible_transports)
-                    ws.local_tree.branch.push(result_branch, overwrite=True)
                     note('Pushing packaging branch cache to %s',
                          cached_branch_url)
-                    cached_branch = open_or_create_branch(
+                    push_branch(
+                        ws.local_tree.branch,
                         cached_branch_url, vcs_type=vcs_type.lower(),
-                        possible_transports=possible_transports)
-                    ws.local_tree.branch.push(
-                        cached_branch, overwrite=True,
-                        stop_revision=ws.main_branch.last_revision())
+                        possible_transports=possible_transports,
+                        stop_revision=ws.main_branch.last_revision(),
+                        overwrite=True)
         except WorkerFailure as e:
             metadata['code'] = e.code
             metadata['description'] = e.description
