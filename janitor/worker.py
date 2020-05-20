@@ -926,7 +926,7 @@ def main(argv=None):
               'the last run on the resumed branch.'))
     parser.add_argument(
         '--last-build-version', type=str,
-        help='Version of the last built Debian package in this suite.')
+        help='Version of the last built Debian package.')
     parser.add_argument(
         '--cached-branch-url', type=str,
         help='URL of cached branch to start from.')
