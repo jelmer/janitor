@@ -152,7 +152,7 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
     kwargs['suite'] = run.suite
 
     def read_file(f):
-        return [l.decode('utf-8', 'replace') for l in f.readlines()]
+        return [line.decode('utf-8', 'replace') for line in f.readlines()]
     kwargs['read_file'] = read_file
 
     async def vcs_type():

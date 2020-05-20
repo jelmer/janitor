@@ -23,7 +23,6 @@ from http.client import parse_headers  # type: ignore
 import asyncio
 import functools
 from io import BytesIO
-import os
 import json
 import shlex
 import sys
@@ -635,7 +634,6 @@ async def git_backend(request):
         'QUERY_STRING': request.query_string,
         # REMOTE_USER is not set
         }
-
 
     for key, value in request.headers.items():
         env['HTTP_' + key.replace('-', '_').upper()] = value

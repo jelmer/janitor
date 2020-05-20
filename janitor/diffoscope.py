@@ -37,7 +37,7 @@ def filter_boring_udiff(udiff, old_version, new_version, display_version):
     old_version = old_version.encode('utf-8')
     new_version = new_version.encode('utf-8')
     display_version = display_version.encode('utf-8')
-    lines = iter([l.encode('utf-8') for l in udiff.splitlines(True)])
+    lines = iter([line.encode('utf-8') for line in udiff.splitlines(True)])
     hunks = []
     oldlines = []
     newlines = []

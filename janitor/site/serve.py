@@ -97,7 +97,8 @@ class ForwardedResource(PrefixResource):
         if await is_worker(request.app.database, request):
             params['allow_writes'] = '1'
         async with request.app.http_client_session.request(
-                request.method, url, params=params, headers=headers, data=request.content) as client_response:
+                request.method, url, params=params, headers=headers,
+                data=request.content) as client_response:
             status = client_response.status
 
             if status == 404:
@@ -589,7 +590,8 @@ if __name__ == '__main__':
 
     async def handle_review(request):
         from .review import generate_review
-        suites = request.query.getall('suite', ['lintian-fixes', 'multiarch-fixes'])
+        suites = request.query.getall(
+            'suite', ['lintian-fixes', 'multiarch-fixes'])
         async with request.app.database.acquire() as conn:
             text = await generate_review(
                 conn, request.app.http_client_session,
