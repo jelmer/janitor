@@ -21,6 +21,7 @@ from aiohttp import (
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
+from email.utils import parseaddr
 import functools
 import json
 from io import BytesIO
@@ -1156,6 +1157,11 @@ async def handle_assign(request):
         'PACKAGE': item.package,
         }
     if queue_processor.committer:
+        (user, email) = parseaddr(queue_processor.committer)
+        if user:
+            env['DEBFULLNAME'] = user
+        if email:
+            env['DEBEMAIL'] = email
         env['COMMITTER'] = queue_processor.committer
     if item.upstream_branch_url:
         env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url,
