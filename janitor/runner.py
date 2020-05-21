@@ -177,6 +177,19 @@ class JanitorResult(object):
         }
 
 
+def committer_env(committer):
+    env = {}
+    if not committer:
+        return env
+    (user, email) = parseaddr(committer)
+    if user:
+        env['DEBFULLNAME'] = user
+    if email:
+        env['DEBEMAIL'] = email
+    env['COMMITTER'] = queue_processor.committer
+    return env
+
+
 def find_changes(path, package):
     for name in os.listdir(path):
         if name.startswith('%s_' % package) and name.endswith('.changes'):
@@ -617,7 +630,7 @@ class ActiveLocalRun(ActiveRun):
         env = {}
         env['PACKAGE'] = self.queue_item.package
         if committer:
-            env['COMMITTER'] = committer
+            env.update(committer_env(committer))
         if self.queue_item.upstream_branch_url:
             env['UPSTREAM_BRANCH_URL'] = self.queue_item.upstream_branch_url
 
@@ -1157,14 +1170,9 @@ async def handle_assign(request):
         'PACKAGE': item.package,
         }
     if queue_processor.committer:
-        (user, email) = parseaddr(queue_processor.committer)
-        if user:
-            env['DEBFULLNAME'] = user
-        if email:
-            env['DEBEMAIL'] = email
-        env['COMMITTER'] = queue_processor.committer
+        env.update(committer_env(queue_processor.committer))
     if item.upstream_branch_url:
-        env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url,
+        env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url
 
     result_branch_url = queue_processor.public_vcs_manager.get_branch_url(
         item.package, suite_config.branch_name, vcs_type.lower())
