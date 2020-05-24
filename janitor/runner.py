@@ -1141,7 +1141,7 @@ async def handle_assign(request):
             else:
                 resume_branch = None
 
-        assert vcs_type in ('bzr', 'git')
+        assert vcs_type in ('bzr', 'git'), 'vcs type is %r' % vcs_type
 
         if resume_branch is None and not item.refresh:
             resume_branch = queue_processor.vcs_manager.get_branch(
