@@ -657,9 +657,11 @@ async def git_backend(request):
     if stderr:
         if stderr.decode().strip() == 'Service not enabled: \'receive-pack\'':
             raise web.HTTPUnauthorized(text=stderr.decode())
-        warning('Git %s error: %r', subpath, stderr.decode())
-        return web.Response(
-            status=400, reason='Bad Request', body=stderr)
+        if not stdout:
+            return web.Response(
+                status=400, reason='Bad Request', body=stderr)
+        for line in stderr.splitlines():
+            warning('Git warning: %s', line.decode())
 
     b = BytesIO(stdout)
 
