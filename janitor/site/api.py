@@ -353,7 +353,12 @@ async def handle_archive_diff(request):
         return web.json_response(
             {'reason':
                 'debdiff not calculated yet (run: %s, unchanged run: %s)' %
-                (run.id, unchanged_run.id)},
+                (run.id, unchanged_run.id),
+             'run_id': [unchanged_run.id, run.id],
+             'build_version': [str(unchanged_run.build_version),
+                               str(run.build_version)],
+             'suite': [unchanged_run.suite, run.suite],
+             },
             status=404)
     except DebdiffRetrievalError as e:
         return web.json_response(
@@ -501,7 +506,7 @@ async def forward_to_runner(client, runner_url, path):
     except ClientConnectorError:
         return web.json_response({
             'reason': 'unable to contact runner'},
-            status=500)
+            status=502)
 
 
 async def handle_runner_status(request):
@@ -531,7 +536,7 @@ async def handle_runner_kill(request):
     except ClientConnectorError:
         return web.json_response({
             'reason': 'unable to contact runner'},
-            status=500)
+            status=502)
 
 
 async def handle_runner_log(request):
@@ -550,7 +555,7 @@ async def handle_runner_log(request):
     except ClientConnectorError:
         return web.Response(
             text='unable to contact runner',
-            status=500)
+            status=502)
 
 
 async def handle_runner_ws(request):
@@ -612,7 +617,7 @@ async def handle_report(request):
 
 
 async def handle_publish_ready(request):
-    suites = request.match_info.getall('suite', None)
+    suite = request.match_info.get('suite')
     review_status = request.query.get('review-status')
     limit = request.query.get('limit', 200)
     if limit:
@@ -625,7 +630,7 @@ async def handle_publish_ready(request):
         async for (run, maintainer_email, uploader_emails, branch_url,
                    publish_policy, changelog_mode, command
                    ) in state.iter_publish_ready(
-                       conn, suites=suites,
+                       conn, suites=([suite] if suite else None),
                        review_status=review_status):
             if publish_policy in (
                     'propose', 'attempt-push', 'push-derived', 'push'):
@@ -675,18 +680,23 @@ async def handle_run_finish(request):
 
     archiver_url = urllib.parse.urljoin(
         request.app.archiver_url, 'upload/%s' % run_id)
-    async with request.app.http_client_session.post(
-            archiver_url, data=archiver_writer) as resp:
-        if resp.status not in (201, 200):
-            try:
-                internal_error = await resp.json()
-            except ContentTypeError:
-                internal_error = await resp.text()
-            return web.json_response({
-                'internal-status': resp.status,
-                'internal-result': internal_error},
-                status=400)
-        archiver_result = await resp.json()
+    try:
+        async with request.app.http_client_session.post(
+                archiver_url, data=archiver_writer) as resp:
+            if resp.status not in (201, 200):
+                try:
+                    internal_error = await resp.json()
+                except ContentTypeError:
+                    internal_error = await resp.text()
+                return web.json_response({
+                    'internal-status': resp.status,
+                    'internal-result': internal_error},
+                    status=400)
+            archiver_result = await resp.json()
+    except ClientConnectorError:
+        return web.Response(
+            text='unable to contact archiver',
+            status=502)
 
     for key in ['changes_filename', 'build_version', 'build_distribution']:
         result[key] = archiver_result.get(key)
@@ -698,22 +708,27 @@ async def handle_run_finish(request):
 
     runner_url = urllib.parse.urljoin(
         request.app.runner_url, 'finish/%s' % run_id)
-    async with request.app.http_client_session.post(
-            runner_url, data=runner_writer) as resp:
-        if resp.status == 404:
-            json = await resp.json()
-            return web.json_response(
-                {'reason': json['reason']}, status=404)
-        if resp.status not in (201, 200):
-            try:
-                internal_error = await resp.json()
-            except ContentTypeError:
-                internal_error = await resp.text()
-            return web.json_response({
-                'internal-status': resp.status,
-                'internal-result': internal_error,
-                }, status=400)
-        result = await resp.json()
+    try:
+        async with request.app.http_client_session.post(
+                runner_url, data=runner_writer) as resp:
+            if resp.status == 404:
+                json = await resp.json()
+                return web.json_response(
+                    {'reason': json['reason']}, status=404)
+            if resp.status not in (201, 200):
+                try:
+                    internal_error = await resp.json()
+                except ContentTypeError:
+                    internal_error = await resp.text()
+                return web.json_response({
+                    'internal-status': resp.status,
+                    'internal-result': internal_error,
+                    }, status=400)
+            result = await resp.json()
+    except ClientConnectorError:
+        return web.Response(
+            text='unable to contact runner',
+            status=502)
 
     result['api_url'] = str(
         request.app.router['api-run'].url_for(run_id=run_id))

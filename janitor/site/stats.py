@@ -11,6 +11,7 @@ async def write_maintainer_stats(conn):
 select maintainer_email, status, count(*) from merge_proposal
 left join package on package.name = merge_proposal.package
 group by maintainer_email, status
+order by maintainer_email asc
 """):
         by_maintainer.setdefault(maintainer_email, {})[status] = count
     return await template.render_async(by_maintainer=by_maintainer)
