@@ -691,7 +691,9 @@ group by 1
 """)
 
 
-async def iter_previous_runs(conn: asyncpg.Connection, package, suite):
+async def iter_previous_runs(
+        conn: asyncpg.Connection,
+        package: str, suite: str) -> AsyncIterator[Run]:
     for row in await conn.fetch("""
 SELECT
   id,
@@ -723,7 +725,9 @@ ORDER BY start_time DESC
         yield Run.from_row(row)
 
 
-async def get_last_unabsorbed_run(conn: asyncpg.Connection, package, suite):
+async def get_last_unabsorbed_run(
+        conn: asyncpg.Connection,
+        package: str, suite: str) -> Optional[Run]:
     args = []
     query = """
 SELECT
@@ -1208,7 +1212,8 @@ ORDER BY package, suite, start_time DESC
             yield record
 
 
-async def get_merge_proposal_run(conn: asyncpg.Connection, mp_url):
+async def get_merge_proposal_run(
+        conn: asyncpg.Connection, mp_url: str) -> Optional[Run]:
     query = """
 SELECT
     run.id, run.command, run.start_time, run.finish_time, run.description,
@@ -1218,7 +1223,8 @@ SELECT
     run.logfilenames, run.review_status, run.worker
 FROM run inner join merge_proposal on merge_proposal.revision = run.revision
 WHERE merge_proposal.url = $1
-ORDER BY run.finish_time DESC
+ORDER BY run.finish_time ASC
+LIMIT 1
 """
     row = await conn.fetchrow(query, mp_url)
     if row:
