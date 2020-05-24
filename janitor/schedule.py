@@ -51,6 +51,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'apt-get-update-missing-release-file',
     'build-no-space-on-device',
     'autopkgtest-no-space-on-device',
+    'worker-killed',
 ]
 
 # In some cases, we want to ignore certain results when guessing
