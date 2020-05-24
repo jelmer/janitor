@@ -923,8 +923,17 @@ async def check_existing_mp(
         return
 
     if last_run.result_code not in ('success', 'nothing-to-do'):
-        note('%s: Last run failed (%s). Not touching merge proposal.',
-             mp.url, last_run.result_code)
+        from .schedule import TRANSIENT_ERROR_RESULT_CODES
+        if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
+            note('%s: Last run failed with transient error (%s). '
+                 'Rescheduling.', mp.url, last_run.result_code)
+            await state.add_to_queue(
+                conn, last_run.package, shlex.split(last_run.command),
+                last_run.suite, offset=0, refresh=False,
+                requestor='publisher (transient error)')
+        else:
+            note('%s: Last run failed (%s). Not touching merge proposal.',
+                 mp.url, last_run.result_code)
         return
 
     if last_run != mp_run:
