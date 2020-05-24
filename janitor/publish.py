@@ -940,6 +940,10 @@ async def check_existing_mp(
         publish_id = str(uuid.uuid4())
         note('%s (%s) needs to be updated (%s => %s).',
              mp.url, mp.package, mp_run.id, last_run.id)
+        if last_run.revision == mp_run.revision:
+            warning('%s (%s): old run (%s) has same revision as new run (%s)'
+                    ': %r', mp.url, mp.package, mp_run.id, last_run.id,
+                    mp_run.revision)
         try:
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite, last_run.package, last_run.command,
