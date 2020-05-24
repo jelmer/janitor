@@ -30,8 +30,10 @@ from debian.deb822 import (
 
 from breezy.commit import PointlessCommit
 from lintian_brush import (
-    add_changelog_entry,
     reset_tree,
+    )
+from lintian_brush.changelog import (
+    add_changelog_entry,
     )
 from lintian_brush.control import (
     ensure_some_version,
@@ -208,7 +210,7 @@ def commit_debian_changes(tree, subpath, summary, committer=None,
     with tree.lock_write():
         try:
             if update_changelog:
-                add_changelog_entry(tree, subpath, summary)
+                add_changelog_entry(tree, subpath, [summary])
                 debcommit(tree, committer=committer)
             else:
                 tree.commit(message=summary, committer=committer)
