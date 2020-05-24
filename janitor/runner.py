@@ -28,6 +28,7 @@ from io import BytesIO
 import os
 import re
 import signal
+import socket
 import sys
 import tempfile
 from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
@@ -579,12 +580,10 @@ def suite_build_env(suite_config, apt_location):
 
 class ActiveLocalRun(ActiveRun):
 
-    # TODO(jelmer): Use short host name instead?
-    worker_name = 'local'
-
     def __init__(self, queue_item: state.QueueItem,
                  output_directory: str):
         super(ActiveLocalRun, self).__init__(queue_item)
+        self.worker_name = socket.gethostname()
         self.output_directory = output_directory
 
     def kill(self) -> None:
