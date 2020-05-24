@@ -285,6 +285,13 @@ if __name__ == '__main__':
                 content_type='text/html', text=await write_stats(
                     conn), headers={'Cache-Control': 'max-age=60'})
 
+    async def handle_cupboard_maintainer_stats(request):
+        from .stats import write_maintainer_stats
+        async with request.app.database.acquire() as conn:
+            return web.Response(
+                content_type='text/html', text=await write_maintainer_stats(
+                    conn), headers={'Cache-Control': 'max-age=60'})
+
     async def handle_result_codes(request):
         from .result_codes import (
             generate_result_code_index,
@@ -733,6 +740,9 @@ if __name__ == '__main__':
                        name='result-code')
     app.router.add_get(
         '/cupboard/stats', handle_cupboard_stats, name='cupboard-stats')
+    app.router.add_get(
+        '/cupboard/maintainer-stats', handle_cupboard_maintainer_stats,
+        name='cupboard-maintainer-stats')
     app.router.add_get(
         '/cupboard/maintainer', handle_maintainer_list, name='maintainer-list')
     app.router.add_get(
