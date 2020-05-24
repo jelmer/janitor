@@ -187,7 +187,7 @@ def committer_env(committer):
         env['DEBFULLNAME'] = user
     if email:
         env['DEBEMAIL'] = email
-    env['COMMITTER'] = queue_processor.committer
+    env['COMMITTER'] = committer
     return env
 
 
