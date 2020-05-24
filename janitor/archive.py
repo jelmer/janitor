@@ -375,7 +375,14 @@ async def update_aptly(aptly_session, incoming_dir):
                 if entry.name.endswith('.changes'):
                     with open(entry.path, 'r') as f:
                         changes = Changes(f)
-                        todo.append((entry.name, changes['Distribution']))
+                        try:
+                            distribution = changes['Distribution']
+                        except KeyError:
+                            warning(
+                                'Changes file %s does not have Distribution '
+                                'key', entry.path)
+                        else:
+                            todo.append((entry.name, distribution))
                 f = open(entry.path, 'rb')
                 es.enter_context(f)
                 mpwriter.append(f)
