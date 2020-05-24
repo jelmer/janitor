@@ -25,6 +25,7 @@ from typing import List, Tuple, Optional
 
 from aiohttp import web
 from debian.deb822 import Changes
+from debian.changelog import Version
 
 from .debdiff import (
     run_debdiff,
@@ -88,7 +89,11 @@ def find_binary_paths_from_changes(incoming_dir, source, version):
         return binaries
 
 
-def find_binary_paths_in_pool(archive_path, source, version):
+def find_binary_paths_in_pool(
+        archive_path: str, source: str,
+        version: Version) -> List[Tuple[str, str]]:
+    version = Version(str(version))
+    version.epoch = None
     ret = []
     pool_dir = os.path.join(archive_path, "pool")
     for component in os.scandir(pool_dir):
