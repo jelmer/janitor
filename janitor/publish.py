@@ -929,7 +929,8 @@ async def check_existing_mp(
 
     if last_run != mp_run:
         publish_id = str(uuid.uuid4())
-        note('%s needs to be updated.', mp.url)
+        note('%s (%s) needs to be updated (%s => %s).',
+             mp.url, mp.package, mp_run.id, last_run.id)
         try:
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite, last_run.package, last_run.command,
