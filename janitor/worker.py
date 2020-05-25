@@ -116,6 +116,13 @@ DEFAULT_DIST_COMMAND = os.path.join(os.path.dirname(__file__), '..', 'dist.py')
 DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 
+class SubWorkerResult(object):
+
+    def __init__(self, description, value):
+        self.description = description
+        self.value = value
+
+
 class SubWorker(object):
 
     def __init__(self, command: List[str], env: Dict[str, str]) -> None:
@@ -128,7 +135,7 @@ class SubWorker(object):
 
     def make_changes(self, local_tree: WorkingTree, subpath: str,
                      report_context: Callable[[str], None],
-                     metadata, base_metadata) -> str:
+                     metadata, base_metadata) -> SubWorkerResult:
         """Make the actual changes to a tree.
 
         Args:
@@ -207,7 +214,7 @@ class MultiArchHintsWorker(SubWorker):
                 entry['certainty'] = certainty
                 metadata['applied-hints'].append(entry)
                 note('%s: %s' % (binary['Package'], description))
-            return "Applied multi-arch hints."
+            return SubWorkerResult("Applied multi-arch hints.", None)
 
 
 class OrphanWorker(SubWorker):
@@ -256,7 +263,7 @@ class OrphanWorker(SubWorker):
         metadata['old_vcs_url'] = result.old_vcs_url
         metadata['new_vcs_url'] = result.new_vcs_url
         metadata['pushed'] = result.pushed
-        return 'Move package to QA team.'
+        return SubWorkerResult('Move package to QA team.', None)
 
 
 class CMEWorker(SubWorker):
@@ -293,7 +300,7 @@ class CMEWorker(SubWorker):
         self.changer.make_changes(
             local_tree, subpath=subpath, update_changelog=update_changelog,
             committer=self.committer)
-        return 'Apply CME Fixes.'
+        return SubWorkerResult('Apply CME Fixes.', None)
 
 
 class LintianBrushWorker(SubWorker):
@@ -403,7 +410,7 @@ class LintianBrushWorker(SubWorker):
             tags = set()
             for entry in metadata['applied']:
                 tags.update(entry['fixed_lintian_tags'])
-        return 'Applied fixes for %r' % tags
+        return SubWorkerResult('Applied fixes for %r' % tags, None)
 
 
 class NewUpstreamWorker(SubWorker):
@@ -600,8 +607,9 @@ class NewUpstreamWorker(SubWorker):
                     result.upstream_branch.user_url)
                 metadata['upstream_branch_browse'] = (
                     result.upstream_branch_browse)
-            return "Merged new upstream version %s" % (
-                result.new_upstream_version)
+            return SubWorkerResult(
+                "Merged new upstream version %s" % (
+                    result.new_upstream_version), None)
 
 
 class JustBuildWorker(SubWorker):
@@ -618,7 +626,7 @@ class JustBuildWorker(SubWorker):
                      base_metadata):
         if self.args.revision:
             local_tree.update(revision=self.args.revision.encode('utf-8'))
-        return None
+        return SubWorkerResult(None, None)
 
 
 class UncommittedWorker(SubWorker):
@@ -640,15 +648,18 @@ class UncommittedWorker(SubWorker):
         metadata['tags'] = [
             (tag_name, str(version))
             for (tag_name, version) in result]
-        return 'Import archive changes missing from the VCS.'
+        return SubWorkerResult(
+            'Import archive changes missing from the VCS.', None)
 
 
 class WorkerResult(object):
 
     def __init__(
             self, description: str,
+            value: Optional[int],
             changes_filename: Optional[str] = None) -> None:
         self.description = description
+        self.value = value
         self.changes_filename = changes_filename
 
 
@@ -833,7 +844,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             resume_subworker_result = None
 
         try:
-            description = subworker.make_changes(
+            subworker_result = subworker.make_changes(
                 ws.local_tree, subpath, provide_context, metadata['subworker'],
                 resume_subworker_result)
         except WorkerFailure as e:
@@ -846,7 +857,6 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         finally:
             metadata['revision'] = (
                 ws.local_tree.branch.last_revision().decode())
-        # TODO(jelmer): Set metadata['value']
 
         if command[0] != 'just-build':
             if not ws.changes_since_main():
@@ -905,7 +915,9 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         else:
             changes_name = None
 
-        yield ws, WorkerResult(description, changes_filename=changes_name)
+        yield ws, WorkerResult(
+            subworker_result.description, subworker_result.value,
+            changes_filename=changes_name)
 
 
 def main(argv=None):
@@ -1008,6 +1020,7 @@ def main(argv=None):
         raise
     else:
         metadata['code'] = None
+        metadata['value'] = result.value
         metadata['description'] = result.description
         note('%s', result.description)
         if result.changes_filename is not None:
