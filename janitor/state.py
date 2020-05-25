@@ -1183,22 +1183,18 @@ async def iter_packages_by_maintainer(conn: asyncpg.Connection, maintainer):
 
 
 async def get_never_processed(conn: asyncpg.Connection, suites=None):
-    if suites is not None:
-        args = [suites]
-        query = """\
-SELECT suite, COUNT(suite) FROM package p CROSS JOIN UNNEST ($1::text[]) suite
-WHERE NOT EXISTS
-(SELECT FROM run WHERE run.package = p.name AND run.suite = suite)
-GROUP BY suite
-    """
-    else:
-        args = []
-        query = """\
-SELECT suites.name, COUNT(suites.name) FROM package p CROSS JOIN suites
-WHERE NOT EXISTS
-(SELECT FROM run WHERE run.package = p.name AND run.suite = suites.name)
-GROUP BY suites.name
-    """
+    query = """\
+select suite, count(*) from candidate c
+where not exists (
+    SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+"""
+    args = []
+    if suites:
+        query += " AND suite = ANY($1::text[])"
+        args.append(suites)
+
+    query += " group by suite"
+
     return await conn.fetch(query, *args)
 
 
