@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
 {% from "lintian-fixes-util.html" import lintian_brush_summary %}
+{% from "multiarch-fixes-util.html" import multiarch_hints_summary %}
 {% block page_title %}Changes ready to publish{% if suite %} - {{ suite }}{% endif %}{% endblock %}
 {% block body %}
  <div class="section" id="history">
@@ -12,6 +13,8 @@
 {% elif run.command.startswith('new-upstream ') %}
 {% if '--snapshot' in run.command %}: Merge new upstream snapshot <b>{{ run.result['upstream_version'] }}</b>
 {% else %}: Merge new upstream release <b>{{ run.result['upstream_version'] }}</b> {% endif %}
+{% elif run.command.startswith('apply-multiarch-hints') %}
+Apply multi-arch hints: {{ multiarch_hints_summary(run.result['applied-hints']) }}
 {% else %}: Unknown command {{ run.command }}
 {% endif %}
 </li>
