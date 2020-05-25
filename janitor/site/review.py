@@ -19,7 +19,8 @@ async def generate_rejected(conn, suite=None):
     entries = [
         entry async for entry in
         state.iter_publish_ready(
-            conn, review_status=['rejected'], suites=suites)]
+            conn, review_status=['rejected'], suites=suites,
+            publishable_only=False)]
 
     def entry_key(entry):
         return entry[0].times[1]
@@ -34,7 +35,7 @@ async def generate_review(conn, client, archiver_url, publisher_url,
     entries = [entry async for entry in
                state.iter_publish_ready(
                        conn, review_status=['unreviewed'], limit=40,
-                       suites=suites)]
+                       suites=suites, publishable_only=True)]
     if not entries:
         template = env.get_template('review-done.html')
         return await template.render_async()

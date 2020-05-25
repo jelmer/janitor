@@ -900,7 +900,8 @@ async def iter_publish_ready(
         conn: asyncpg.Connection,
         suites: Optional[List[str]] = None,
         review_status: Optional[Union[str, List[str]]] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        publishable_only: bool = False
         ) -> AsyncIterator[Tuple[Run, str, List[str], str, str, bool, str]]:
     args: List[Any] = []
     query = """
@@ -948,11 +949,15 @@ WHERE result_code = 'success' AND result IS NOT NULL
         query += " AND review_status = ANY($%d::review_status[]) " % (
             len(args),)
 
+    if publishable_only:
+        query += """ AND publish_policy.mode in (
+        'propose', 'attempt-push', 'push-derived', 'push') """
+
     query += """
 ORDER BY
   publish_policy.mode in (
         'propose', 'attempt-push', 'push-derived', 'push') DESC,
-  value DESC,
+  value DESC NULLS LAST,
   run.finish_time DESC
 """
     if limit is not None:
