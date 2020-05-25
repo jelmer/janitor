@@ -455,7 +455,7 @@ class MultiArchHintsPublisher(Publisher):
         return "multiarch-hints"
 
     def get_proposal_description(self, format, existing_description):
-        text = 'Apply multi-arch hints.\n\n'
+        text = 'Apply hints suggested by the multi-arch hinter.\n\n'
         for entry in self.applied:
             kind = entry['link'].split('#')[-1]
             if format == 'markdown':
