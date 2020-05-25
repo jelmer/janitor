@@ -197,7 +197,9 @@ class MultiArchHintsWorker(SubWorker):
                 '(LarstIQ mode)')
 
         try:
-            result = self.changer.make_changes(local_tree, subpath, None, None)
+            with local_tree.lock_write():
+                result = self.changer.make_changes(
+                    local_tree, subpath, None, None)
         except NoChanges:
             raise WorkerFailure('nothing-to-do', 'no hints to apply')
         except FormattingUnpreservable:
