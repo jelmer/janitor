@@ -181,6 +181,7 @@ class MultiArchHintsWorker(SubWorker):
             any previous runs this one is based on
           subpath: Path in the branch where the package resides
         """
+        from silver_platter.debian.multiarch import calculate_value
         update_changelog = self.args.update_changelog
         try:
             cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
@@ -207,15 +208,18 @@ class MultiArchHintsWorker(SubWorker):
             raise WorkerFailure(
                 'generated-file',
                 'unable to edit generated file: %r' % e)
-        else:
-            metadata['applied-hints'] = []
-            for (binary, hint, description, certainty) in result.changes:
-                entry = dict(hint.items())
-                entry['action'] = description
-                entry['certainty'] = certainty
-                metadata['applied-hints'].append(entry)
-                note('%s: %s' % (binary['Package'], description))
-            return SubWorkerResult("Applied multi-arch hints.", None)
+
+        hint_names = []
+        metadata['applied-hints'] = []
+        for (binary, hint, description, certainty) in result.changes:
+            entry = dict(hint.items())
+            hint_names.append(entry['link'].split('#')[-1])
+            entry['action'] = description
+            entry['certainty'] = certainty
+            metadata['applied-hints'].append(entry)
+            note('%s: %s' % (binary['Package'], description))
+        value = calculate_value(hint_names)
+        return SubWorkerResult("Applied multi-arch hints.", value)
 
 
 class OrphanWorker(SubWorker):

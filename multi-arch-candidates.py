@@ -3,18 +3,10 @@
 from janitor.candidates_pb2 import Candidate, CandidateList
 
 
-DEFAULT_VALUE_MULTIARCH_HINT = 50
-MULTIARCH_HINTS_VALUE = {
-    'ma-foreign': 20,
-    'file-conflict': 50,
-    'ma-foreign-library': 20,
-    'dep-any': 20,
-    'ma-same': 20,
-    'arch-all': 20,
-}
-
-
 async def iter_multiarch_candidates(packages=None):
+    from silver_platter.debian.multiarch import (
+        calculate_value,
+        )
     from lintian_brush.multiarch_hints import (
         download_multiarch_hints,
         parse_multiarch_hints,
@@ -27,8 +19,7 @@ async def iter_multiarch_candidates(packages=None):
         if packages is not None and source not in packages:
             continue
         hints = [entry['link'].rsplit('#', 1)[-1] for entry in entries]
-        value = sum(map(MULTIARCH_HINTS_VALUE.__getitem__, hints)) + (
-            DEFAULT_VALUE_MULTIARCH_HINT)
+        value = calculate_value(hints)
         candidate = Candidate()
         candidate.package = source
         candidate.context = ' '.join(sorted(hints))
