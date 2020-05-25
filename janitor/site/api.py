@@ -677,7 +677,7 @@ async def handle_run_finish(request):
                     warning('No filename for part with headers %r',
                             part.headers)
                     return web.json_response(
-                        {'reason': 'missing filename for part'}, status=400,
+                        {'reason': 'missing filename for part'}, status=400)
                 bp = BytesPayload(await part.read(), headers=part.headers)
                 if part.filename.endswith('.log'):
                     runner_writer.append_payload(bp)
