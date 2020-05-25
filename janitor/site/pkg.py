@@ -244,5 +244,5 @@ async def generate_ready_list(db, suite, review_status=None):
         runs = [
             row async for row in state.iter_publish_ready(
                 conn, suites=[suite], review_status=review_status,
-                publishable_only=False)]
+                publishable_only=True)]
     return await template.render_async(runs=runs, suite=suite)
