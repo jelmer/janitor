@@ -620,6 +620,7 @@ async def handle_report(request):
 async def handle_publish_ready(request):
     suite = request.match_info.get('suite')
     review_status = request.query.get('review-status')
+    publishable_only = (request.query.get('publishable_only', 'true') == 'true')
     limit = request.query.get('limit', 200)
     if limit:
         limit = int(limit)
@@ -631,7 +632,8 @@ async def handle_publish_ready(request):
                    publish_policy, changelog_mode, command
                    ) in state.iter_publish_ready(
                        conn, suites=([suite] if suite else None),
-                       review_status=review_status, publishable_only=False):
+                       review_status=review_status,
+                       publishable_only=publishable_only):
             ret.append((run.package, run.id))
     return web.json_response(ret, status=200)
 

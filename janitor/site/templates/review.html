@@ -35,8 +35,11 @@ todo.forEach(function(entry) { queued.add(entry[1]); });
 $(function() {
   loadRun('{{ package_name }}', '{{ run_id }}');
   $('.review-button').attr('type', 'button');
+});
+
+function refreshData() {
   $.ajax({
-     url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?review-status=unreviewed',
+     url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?review-status=unreviewed&publishable_only=true',
      dataType: 'json',
      success: function(data) {
          data.forEach(function(entry) {
@@ -47,13 +50,16 @@ $(function() {
          });
      }
   });
-});
+}
 
 function submitReview(elem, status) {
     elem.blur();
     var run_id = $('#run-id').val();
     console.log("Submitting review " + status + " for run " + run_id);
     $.post('/api/run/' + run_id, {'review-status': status});
+    if (todo.length == 0) {
+      refreshData();
+    }
     if (todo.length > 0) {
       var newJob = todo[0];
       todo.shift();
