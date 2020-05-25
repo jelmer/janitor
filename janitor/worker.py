@@ -118,7 +118,7 @@ DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 class SubWorkerResult(object):
 
-    def __init__(self, description, value):
+    def __init__(self, description: Optional[str], value: Optional[int]):
         self.description = description
         self.value = value
 
