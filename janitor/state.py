@@ -937,6 +937,7 @@ LEFT JOIN package ON package.name = run.package
 LEFT JOIN publish_policy ON
     publish_policy.package = run.package AND publish_policy.suite = run.suite
 WHERE result_code = 'success' AND result IS NOT NULL
+ORDER BY value DESC
 """
     if suites is not None:
         query += " AND run.suite = ANY($1::text[]) "
