@@ -8,6 +8,15 @@ cd {{ package }}
 </pre>
 </div>
 </div>
+{% elif command.startswith('apply-multiarch-hints') %}
+<p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>
+debcheckout {{ package }}
+cd {{ package }}
+{{ command }}
+</pre>
+</div>
+</div>
 {% else %}
 <p>Try this locally (using <a href="https://packages.debian.org/silver-platter">silver-platter</a>):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>

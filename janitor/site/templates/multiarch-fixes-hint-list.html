@@ -6,7 +6,7 @@
 <h1>Runs by hint applied</h1>
 
 <ul>
-{% for hint, count in hint %}
+{% for hint, count in hints %}
 	<li><a href="{{ hint }}">{{ hint }}</a> ({{ count}})</li>
 {% endfor %}
 </ul>

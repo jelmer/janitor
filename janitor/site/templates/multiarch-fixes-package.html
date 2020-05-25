@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include "multiarch-fixes-sidebar.html" %}{% endblock %}
 {% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, result_code_explanation, display_result_code, display_branch_url with context %}
+{% from "multiarch-fixes-util.html" import multiarch_hints_summary %}
 {% block page_title %}Multiarch Fixes - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
@@ -74,6 +75,14 @@ Nothing to do for {{ package }}.
 {{ merge_command(package, branch_name, vcs) }}
 
 </div>
+
+<div class="section" id="summary">
+<h3>Summary</h3>
+
+{{ multiarch_hints_summary(result['applied-hints']) }}
+
+</div>
+
 
 <h3>Diff</h3>
 

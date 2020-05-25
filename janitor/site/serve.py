@@ -569,6 +569,14 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_multiarch_fixes_candidates(request):
+        from .multiarch_hints import generate_candidates
+        text = await generate_candidates(
+            request.app.database)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_lintian_fixes_stats(request):
         from .lintian_fixes import generate_stats
         text = await generate_stats(request.app.database)
@@ -675,6 +683,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/multiarch-fixes/by-hint/{hint}', handle_multiarch_fixes_hint_page,
         name='multiarch-fixes-hint')
+    app.router.add_get(
+        '/multiarch-fixes/candidates', handle_multiarch_fixes_candidates,
+        name='multiarch-fixes-candidates')
     for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
                   'multiarch-fixes']:
         app.router.add_get(

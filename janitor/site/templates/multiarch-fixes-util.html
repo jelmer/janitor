@@ -1,0 +1,11 @@
+{% macro multiarch_hint_kind(kind) %}<a href="https://wiki.debian.org/MultiArch/Hints#{{ kind }}">{{ kind }}</a>{% endmacro %}
+
+{% macro multiarch_hints_summary(result) %}
+<ul>
+    {% for hint in result %}
+    {% set kind = hint['link'].split('#')[-1] %}
+      <li>{{ multiarch_hint_kind(kind) }}: {{ hint['description'] }}</li>
+    {% endfor %}
+</ul>
+{% endmacro %}
+

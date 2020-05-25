@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "multiarch-fixes-sidebar.html" %}{% endblock %}
+{% from "multiarch-fixes-util.html" import multiarch_hint_kind %}
+{% block page_title %}Lintian Fixes - Candidates{% endblock %}
+{% block body %}
+<div class="section" id="candidates">
+<h1>Multi-Arch Fixes - Candidates</h1>
+
+<ul>
+{% for package, hints, value in candidates %}
+<li><a href="/multiarch-fixes/pkg/{{ package }}">{{ package }}</a> - {% for kind, count in hints %}{{ multiarch_hint_kind(kind) }}({{ count }}){% if not loop.last %} {% endif %}{% endfor %}
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}
