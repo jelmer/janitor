@@ -508,10 +508,26 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_multiarch_fixes_hint_list(request):
+        from .multiarch_hints import generate_hint_list
+        async with request.app.database.acquire() as conn:
+            text = await generate_hint_list(conn)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_lintian_fixes_tag_page(request):
         from .lintian_fixes import generate_tag_page
         text = await generate_tag_page(
             request.app.database, request.match_info['tag'])
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
+    async def handle_multiarch_fixes_hint_page(request):
+        from .multiarch_hints import generate_hint_page
+        text = await generate_hint_page(
+            request.app.database, request.match_info['hint'])
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
@@ -653,6 +669,12 @@ if __name__ == '__main__':
     app.router.add_get(
         '/multiarch-fixes/', handle_multiarch_fixes,
         name='multiarch-fixes-start')
+    app.router.add_get(
+        '/multiarch-fixes/by-hint/', handle_multiarch_fixes_hint_list,
+        name='multiarch-fixes-hint-list')
+    app.router.add_get(
+        '/multiarch-fixes/by-hint/{hint}', handle_multiarch_fixes_hint_page,
+        name='multiarch-fixes-hint')
     for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
                   'multiarch-fixes']:
         app.router.add_get(
