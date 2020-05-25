@@ -2,6 +2,7 @@
 
 from aiohttp import ClientConnectorError
 from io import BytesIO
+from typing import Optional
 import urllib.parse
 
 from janitor import state
@@ -238,11 +239,13 @@ async def generate_maintainer_list(packages):
     return await template.render_async(by_maintainer=by_maintainer)
 
 
-async def generate_ready_list(db, suite, review_status=None):
+async def generate_ready_list(
+        db, suite: Optional[str], review_status: Optional[str] = None):
     template = env.get_template('ready-list.html')
     async with db.acquire() as conn:
         runs = [
             row async for row in state.iter_publish_ready(
-                conn, suites=[suite], review_status=review_status,
+                conn, suites=([suite] if suite else None),
+                review_status=review_status,
                 publishable_only=True)]
     return await template.render_async(runs=runs, suite=suite)
