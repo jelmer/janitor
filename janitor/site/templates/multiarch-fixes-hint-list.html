@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "multiarch-fixes-sidebar.html" %}{% endblock %}
+{% block page_title %}Multi-Arch Fixes - by hint{% endblock %}
+{% block body %}
+<div class="section" id="hint-list">
+<h1>Runs by hint applied</h1>
+
+<ul>
+{% for hint, count in hint %}
+	<li><a href="{{ hint }}">{{ hint }}</a> ({{ count}})</li>
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}

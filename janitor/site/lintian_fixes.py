@@ -59,7 +59,8 @@ async def generate_tag_list(conn: asyncpg.Connection):
     return await template.render_async(tags=tags)
 
 
-async def iter_last_successes_by_lintian_tag(conn: asyncpg.Connection, tag):
+async def iter_last_successes_by_lintian_tag(
+        conn: asyncpg.Connection, tag: str):
     return await conn.fetch("""
 select distinct on (package) * from (
 select
