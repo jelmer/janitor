@@ -12,6 +12,7 @@ from aiohttp.payload import BytesPayload
 import urllib.parse
 
 from janitor import state, SUITE_REGEX
+from janitor.trace import warning
 from . import (
     check_admin,
     check_worker_creds,
@@ -672,6 +673,11 @@ async def handle_run_finish(request):
             if part.filename == 'result.json':
                 result = await part.json()
             else:
+                if part.filename is None:
+                    warning('No filename for part with headers %r',
+                            part.headers)
+                    return web.json_response(
+                        {'reason': 'missing filename for part'}, status=400,
                 bp = BytesPayload(await part.read(), headers=part.headers)
                 if part.filename.endswith('.log'):
                     runner_writer.append_payload(bp)
