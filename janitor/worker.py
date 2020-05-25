@@ -51,6 +51,7 @@ from silver_platter.debian.lintian import (
     has_nontrivial_changes,
     DEFAULT_ADDON_FIXERS,
     DEFAULT_MINIMUM_CERTAINTY,
+    calculate_value as lintian_brush_calculate_value,
 )
 from silver_platter.proposal import Hoster
 from lintian_brush.config import Config as LintianBrushConfig
@@ -406,11 +407,12 @@ class LintianBrushWorker(SubWorker):
 
         if not overall_result.success:
             raise WorkerFailure('nothing-to-do', 'no fixers to apply')
-        else:
-            tags = set()
-            for entry in metadata['applied']:
-                tags.update(entry['fixed_lintian_tags'])
-        return SubWorkerResult('Applied fixes for %r' % tags, None)
+
+        tags = set()
+        for entry in metadata['applied']:
+            tags.update(entry['fixed_lintian_tags'])
+        value = lintian_brush_calculate_value(tags)
+        return SubWorkerResult('Applied fixes for %r' % tags, value)
 
 
 class NewUpstreamWorker(SubWorker):

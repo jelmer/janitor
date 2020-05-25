@@ -21,16 +21,8 @@ from janitor.udd import UDD
 
 from silver_platter.debian.lintian import (
     DEFAULT_ADDON_FIXERS,
+    calculate_value,
     )
-
-
-DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY = 10
-DEFAULT_VALUE_LINTIAN_BRUSH = 50
-# Base these scores on the importance as set in Debian?
-LINTIAN_BRUSH_TAG_VALUES = {
-    'file-contains-trailing-whitespace': 0,
-    }
-LINTIAN_BRUSH_TAG_DEFAULT_VALUE = 5
 
 
 async def iter_lintian_fixes_candidates(udd, packages, available_fixers):
@@ -94,24 +86,13 @@ WHERE sources.release = 'sid' AND vcs_type != ''"""
         package_tags.setdefault(row[0], set()).update(row[6])
     for row in package_rows.values():
         tags = sorted(package_tags[row[0]])
-        value = estimate_lintian_fixes_value(tags)
+        value = calculate_value(tags)
         context = ' '.join(sorted(tags))
         candidate = Candidate()
         candidate.package = row[0]
         candidate.context = context
         candidate.value = value
         yield candidate
-
-
-def estimate_lintian_fixes_value(tags):
-    if not (set(tags) - set(DEFAULT_ADDON_FIXERS)):
-        value = DEFAULT_VALUE_LINTIAN_BRUSH_ADDON_ONLY
-    else:
-        value = DEFAULT_VALUE_LINTIAN_BRUSH
-    for tag in tags:
-        value += LINTIAN_BRUSH_TAG_VALUES.get(
-            tag, LINTIAN_BRUSH_TAG_DEFAULT_VALUE)
-    return value
 
 
 async def main():
