@@ -621,7 +621,7 @@ if __name__ == '__main__':
 
     async def handle_review(request):
         from .review import generate_review
-        suites = request.query.getall('suite')
+        suites = request.query.getall('suite', None)
         async with request.app.database.acquire() as conn:
             text = await generate_review(
                 conn, request.app.http_client_session,
