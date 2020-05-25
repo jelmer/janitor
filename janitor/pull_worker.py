@@ -292,6 +292,7 @@ async def main(argv=None):
             raise
         else:
             metadata['code'] = None
+            metadata['value'] = result.value
             metadata['description'] = result.description
             note('%s', result.description)
 
