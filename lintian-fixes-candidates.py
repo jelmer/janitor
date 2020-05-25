@@ -20,7 +20,6 @@ from janitor.candidates_pb2 import Candidate, CandidateList
 from janitor.udd import UDD
 
 from silver_platter.debian.lintian import (
-    DEFAULT_ADDON_FIXERS,
     calculate_value,
     )
 

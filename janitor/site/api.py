@@ -598,7 +598,7 @@ async def handle_report(request):
         async for (run, maintainer_email, uploader_emails, branch_url,
                    publish_mode, changelog_mode, command
                    ) in state.iter_publish_ready(
-                       conn, suites=[suite]):
+                       conn, suites=[suite], publishable_only=False):
             data = {
                 'timestamp': run.times[0].isoformat(),
             }
@@ -625,19 +625,14 @@ async def handle_publish_ready(request):
         limit = int(limit)
     else:
         limit = None
-    for_publishing = set()
     ret = []
     async with request.app.db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, branch_url,
                    publish_policy, changelog_mode, command
                    ) in state.iter_publish_ready(
                        conn, suites=([suite] if suite else None),
-                       review_status=review_status):
-            if publish_policy in (
-                    'propose', 'attempt-push', 'push-derived', 'push'):
-                for_publishing.add(run.id)
+                       review_status=review_status, publishable_only=False):
             ret.append((run.package, run.id))
-    ret.sort(key=lambda x: (x[1] not in for_publishing, x[0]))
     return web.json_response(ret, status=200)
 
 

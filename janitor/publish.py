@@ -303,7 +303,8 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
         async for (run, maintainer_email, uploader_emails, main_branch_url,
                    publish_mode, update_changelog,
                    command) in state.iter_publish_ready(
-                       conn1, review_status=review_status):
+                       conn1, review_status=review_status,
+                       publishable_only=True):
             # TODO(jelmer): next try in SQL query
             attempt_count = await state.get_publish_attempt_count(
                 conn, run.revision)
