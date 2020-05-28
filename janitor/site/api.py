@@ -620,7 +620,8 @@ async def handle_report(request):
 async def handle_publish_ready(request):
     suite = request.match_info.get('suite')
     review_status = request.query.get('review-status')
-    publishable_only = (request.query.get('publishable_only', 'true') == 'true')
+    publishable_only = (
+        request.query.get('publishable_only', 'true') == 'true')
     limit = request.query.get('limit', 200)
     if limit:
         limit = int(limit)

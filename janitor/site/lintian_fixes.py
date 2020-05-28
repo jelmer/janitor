@@ -264,7 +264,19 @@ select result#>>'{versions,lintian-brush}', count(*) from run
 where result_code = 'success' and suite = 'lintian-fixes'
 group by 1 order by 1 desc
 """)}
+        total_candidates = await conn.fetchval(
+            """select count(*) from perpetual_candidates WHERE suite = $1""",
+            SUITE)
+
+        burndown = await conn.fetch("""
+select start_time, c from (select row_number() over() as rn,
+start_time,
+$1 - row_number() over (order by start_time asc) as c
+from first_run_time WHERE suite = $2) as r where mod(rn, 200) = 0
+""", total_candidates, SUITE)
+
     return await template.render_async(
+        burndown=burndown,
         by_tag=by_tag,
         tags_per_run=tags_per_run,
         lintian_brush_versions=lintian_brush_versions)

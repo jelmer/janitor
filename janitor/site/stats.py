@@ -71,10 +71,21 @@ select extract(day from merged_at - timestamp) ndays, count(*)
 from merge_proposal
 left join publish on publish.merge_proposal_url = merge_proposal.url and
 status = 'merged' and merged_at is not null group by 1
+order by 1
 """) if ndays is not None and ndays > 0]
-    time_to_merge.sort()
+
+    total_candidates = await conn.fetchval(
+        """select count(*) from perpetual_candidates""")
+
+    burndown = await conn.fetch("""
+select start_time, c from (select row_number() over() as rn,
+start_time,
+$1 - row_number() over (order by start_time asc) as c
+from first_run_time) as r where mod(rn, 200) = 0
+""", total_candidates)
 
     return await template.render_async(
+        burndown=burndown,
         by_hoster=by_hoster,
         by_status_chart=by_status,
         review_status_stats=review_status_stats,
