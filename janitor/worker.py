@@ -655,9 +655,13 @@ class UncommittedWorker(SubWorker):
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
-        result = self.changer.make_changes(
-            local_tree, subpath=subpath, committer=self.committer,
-            update_changelog=False)
+        from silver_platter.debian.uncommitted import NoMissingVersions
+        try:
+            result = self.changer.make_changes(
+                local_tree, subpath=subpath, committer=self.committer,
+                update_changelog=False)
+        except NoMissingVersions as e:
+            raise WorkerFailure('nothing-to-do', str(e))
         metadata['tags'] = [
             (tag_name, str(version))
             for (tag_name, version) in result]
