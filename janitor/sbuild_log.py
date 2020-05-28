@@ -58,7 +58,12 @@ SBUILD_FOCUS_SECTION = {
 }
 
 
-class DpkgSourceLocalChanges(object):
+class Problem(object):
+
+    kind: str
+
+
+class DpkgSourceLocalChanges(Problem):
 
     kind = 'unexpected-local-upstream-changes'
 
@@ -66,7 +71,7 @@ class DpkgSourceLocalChanges(object):
         return "Tree has local changes."
 
 
-class DpkgSourceUnrepresentableChanges(object):
+class DpkgSourceUnrepresentableChanges(Problem):
 
     kind = 'unrepresentable-local-changes'
 
@@ -74,7 +79,7 @@ class DpkgSourceUnrepresentableChanges(object):
         return "Tree has unrepresentable local changes."
 
 
-class DpkgUnwantedBinaryFiles(object):
+class DpkgUnwantedBinaryFiles(Problem):
 
     kind = 'unwanted-binary-files'
 
@@ -82,7 +87,7 @@ class DpkgUnwantedBinaryFiles(object):
         return "Tree has unwanted binary files."
 
 
-class MissingControlFile(object):
+class MissingControlFile(Problem):
 
     kind = 'missing-control-file'
 
@@ -99,7 +104,7 @@ class MissingControlFile(object):
         return "Tree is missing control file %s" % self.path
 
 
-class UnableToFindUpstreamTarball(object):
+class UnableToFindUpstreamTarball(Problem):
 
     kind = 'unable-to-find-upstream-tarball'
 
@@ -112,7 +117,7 @@ class UnableToFindUpstreamTarball(object):
                 "%s, version %s." % (self.package, self.version))
 
 
-class PatchApplicationFailed(object):
+class PatchApplicationFailed(Problem):
 
     kind = 'patch-application-failed'
 
@@ -123,7 +128,7 @@ class PatchApplicationFailed(object):
         return "Patch application failed: %s" % self.patchname
 
 
-class SourceFormatUnbuildable(object):
+class SourceFormatUnbuildable(Problem):
 
     kind = 'source-format-unbuildable'
 
@@ -134,7 +139,7 @@ class SourceFormatUnbuildable(object):
         return "Source format %s unbuildable" % self.source_format
 
 
-class SourceFormatUnsupported(object):
+class SourceFormatUnsupported(Problem):
 
     kind = 'unsupported-source-format'
 
@@ -145,7 +150,7 @@ class SourceFormatUnsupported(object):
         return "Source format %r unsupported" % self.source_format
 
 
-class PatchFileMissing(object):
+class PatchFileMissing(Problem):
 
     kind = 'patch-file-missing'
 
@@ -156,7 +161,7 @@ class PatchFileMissing(object):
         return "Patch file %s missing" % self.path
 
 
-class UnknownMercurialExtraFields(object):
+class UnknownMercurialExtraFields(Problem):
 
     kind = 'unknown-mercurial-extra-fields'
 
@@ -167,7 +172,7 @@ class UnknownMercurialExtraFields(object):
         return "Unknown Mercurial extra fields: %s" % self.field
 
 
-class UpstreamPGPSignatureVerificationFailed(object):
+class UpstreamPGPSignatureVerificationFailed(Problem):
 
     kind = 'upstream-pgp-signature-verification-failed'
 
@@ -236,7 +241,7 @@ def parse_brz_error(line):
     return (None, line)
 
 
-class MissingRevision(object):
+class MissingRevision(Problem):
 
     kind = 'missing-revision'
 
@@ -432,7 +437,7 @@ def find_failed_stage(lines):
         return value.strip()
 
 
-class MissingPythonModule(object):
+class MissingPythonModule(Problem):
 
     kind = 'missing-python-module'
 
@@ -464,7 +469,7 @@ class MissingPythonModule(object):
             self.minimum_version)
 
 
-class MissingPythonDistribution(object):
+class MissingPythonDistribution(Problem):
 
     kind = 'missing-python-distribution'
 
@@ -547,7 +552,7 @@ def pkg_resources_distribution_not_found(m):
     return None
 
 
-class MissingFile(object):
+class MissingFile(Problem):
 
     kind = 'missing-file'
 
@@ -580,7 +585,7 @@ def webpack_file_missing(m):
     return None
 
 
-class MissingJDKFile(object):
+class MissingJDKFile(Problem):
 
     kind = 'missing-jdk-file'
 
@@ -614,7 +619,7 @@ def interpreter_missing(m):
     return MissingCommand(m.group(1))
 
 
-class MissingSprocketsFile(object):
+class MissingSprocketsFile(Problem):
 
     kind = 'missing-sprockets-file'
 
@@ -640,7 +645,7 @@ def sprockets_file_not_found(m):
     return MissingSprocketsFile(m.group(1), m.group(2))
 
 
-class MissingGoPackage(object):
+class MissingGoPackage(Problem):
 
     kind = 'missing-go-package'
 
@@ -662,7 +667,7 @@ def missing_go_package(m):
     return MissingGoPackage(m.group(1))
 
 
-class MissingCHeader(object):
+class MissingCHeader(Problem):
 
     kind = 'missing-c-header'
 
@@ -684,7 +689,7 @@ def c_header_missing(m):
     return MissingCHeader(m.group(1))
 
 
-class MissingNodeModule(object):
+class MissingNodeModule(Problem):
 
     kind = 'missing-node-module'
 
@@ -710,7 +715,7 @@ def node_module_missing(m):
     return MissingNodeModule(m.group(1))
 
 
-class MissingCommand(object):
+class MissingCommand(Problem):
 
     kind = 'command-missing'
 
@@ -728,7 +733,7 @@ class MissingCommand(object):
         return "%s(%r)" % (type(self).__name__, self.command)
 
 
-class MissingConfigure(object):
+class MissingConfigure(Problem):
 
     kind = 'missing-configure'
 
@@ -753,7 +758,7 @@ def command_missing(m):
     return MissingCommand(command)
 
 
-class MissingJavaScriptRuntime(object):
+class MissingJavaScriptRuntime(Problem):
 
     kind = 'javascript-runtime-missing'
 
@@ -774,7 +779,7 @@ def javascript_runtime_missing(m):
     return MissingJavaScriptRuntime()
 
 
-class MissingPkgConfig(object):
+class MissingPkgConfig(Problem):
 
     kind = 'pkg-config-missing'
 
@@ -822,7 +827,7 @@ def cmake_pkg_config_missing(m):
     return MissingPkgConfig(m.group(1))
 
 
-class CMakeFilesMissing(object):
+class CMakeFilesMissing(Problem):
 
     kind = 'cmake-files-missing'
 
@@ -841,7 +846,7 @@ class CMakeFilesMissing(object):
         return "%s(%r)" % (type(self).__name__, self.filenames)
 
 
-class DhWithOrderIncorrect(object):
+class DhWithOrderIncorrect(Problem):
 
     kind = 'debhelper-argument-order'
 
@@ -856,7 +861,7 @@ def dh_with_order(m):
     return DhWithOrderIncorrect()
 
 
-class NoSpaceOnDevice(object):
+class NoSpaceOnDevice(Problem):
 
     kind = 'no-space-on-device'
 
@@ -871,7 +876,7 @@ def install_no_space(m):
     return NoSpaceOnDevice()
 
 
-class MissingPerlModule(object):
+class MissingPerlModule(Problem):
 
     kind = 'missing-perl-module'
 
@@ -904,7 +909,7 @@ def perl_missing_plugin(m):
     return MissingPerlModule(None, m.group(1), None)
 
 
-class MissingPerlFile(object):
+class MissingPerlFile(Problem):
 
     kind = 'missing-perl-file'
 
@@ -933,7 +938,7 @@ def perl_file_not_found(m):
     return MissingPerlFile(m.group(1))
 
 
-class MissingMavenArtifacts(object):
+class MissingMavenArtifacts(Problem):
 
     kind = 'missing-maven-artifacts'
 
@@ -951,7 +956,7 @@ class MissingMavenArtifacts(object):
         return "%s(%r)" % (type(self).__name__, self.artifacts)
 
 
-class DhUntilUnsupported(object):
+class DhUntilUnsupported(Problem):
 
     kind = 'dh-until-unsupported'
 
@@ -969,7 +974,7 @@ def dh_until_unsupported(m):
     return DhUntilUnsupported()
 
 
-class DhAddonLoadFailure(object):
+class DhAddonLoadFailure(Problem):
 
     kind = 'dh-addon-load-failure'
 
@@ -993,7 +998,7 @@ def dh_addon_load_failure(m):
     return DhAddonLoadFailure(m.group(1), m.group(2))
 
 
-class DhMissingUninstalled(object):
+class DhMissingUninstalled(Problem):
 
     kind = 'dh-missing-uninstalled'
 
@@ -1015,7 +1020,7 @@ def dh_missing_uninstalled(m):
     return DhMissingUninstalled(m.group(1))
 
 
-class DhLinkDestinationIsDirectory(object):
+class DhLinkDestinationIsDirectory(Problem):
 
     kind = 'dh-link-destination-is-directory'
 
@@ -1041,7 +1046,7 @@ def maven_missing_artifact(m):
     return MissingMavenArtifacts([a.strip() for a in artifacts])
 
 
-class MissingXmlEntity(object):
+class MissingXmlEntity(Problem):
 
     kind = 'missing-xml-entity'
 
@@ -1062,7 +1067,7 @@ def xsltproc_network_entity(m):
     return MissingXmlEntity(m.group(1))
 
 
-class CcacheError(object):
+class CcacheError(Problem):
 
     kind = 'ccache-error'
 
@@ -1083,7 +1088,7 @@ def ccache_error(m):
     return CcacheError(m.group(1))
 
 
-class MissingLibrary(object):
+class MissingLibrary(Problem):
 
     kind = 'missing-library'
 
@@ -1104,7 +1109,7 @@ def ld_missing_lib(m):
     return MissingLibrary(m.group(1))
 
 
-class MissingRubyGem(object):
+class MissingRubyGem(Problem):
 
     kind = 'missing-ruby-gem'
 
@@ -1139,7 +1144,7 @@ def ruby_missing_gem(m):
     return MissingRubyGem(m.group(1), minimum_version)
 
 
-class MissingRubyFile(object):
+class MissingRubyFile(Problem):
 
     kind = 'missing-ruby-file'
 
@@ -1161,7 +1166,7 @@ def ruby_missing_name(m):
     return MissingRubyFile(m.group(1))
 
 
-class MissingPhpClass(object):
+class MissingPhpClass(Problem):
 
     kind = 'missing-php-class'
 
@@ -1183,7 +1188,7 @@ def php_missing_class(m):
     return MissingPhpClass(m.group(1))
 
 
-class MissingJavaClass(object):
+class MissingJavaClass(Problem):
 
     kind = 'missing-java-class'
 
@@ -1205,7 +1210,7 @@ def java_missing_class(m):
     return MissingJavaClass(m.group(1))
 
 
-class MissingRPackage(object):
+class MissingRPackage(Problem):
 
     kind = 'missing-r-package'
 
@@ -1242,7 +1247,7 @@ def r_too_old(m):
     return MissingRPackage(package, new_version)
 
 
-class FailedGoTest(object):
+class FailedGoTest(Problem):
 
     kind = 'failed-go-test'
 
@@ -1264,7 +1269,7 @@ def go_test_failed(m):
     return FailedGoTest(m.group(1))
 
 
-class DebhelperPatternNotFound(object):
+class DebhelperPatternNotFound(Problem):
 
     kind = 'debhelper-pattern-not-found'
 
@@ -1293,7 +1298,7 @@ def dh_pattern_no_matches(m):
         m.group(2), m.group(1), [d.strip() for d in m.group(3).split(',')])
 
 
-class GnomeCommonMissing(object):
+class GnomeCommonMissing(Problem):
 
     kind = 'gnome-common-missing'
 
@@ -1314,7 +1319,7 @@ def gnome_common_missing(m):
     return GnomeCommonMissing()
 
 
-class MissingAutomakeInput(object):
+class MissingAutomakeInput(Problem):
 
     kind = 'missing-automake-input'
 
@@ -1335,7 +1340,7 @@ def automake_input_missing(m):
     return MissingAutomakeInput(m.group(1))
 
 
-class MissingAutoconfMacro(object):
+class MissingAutoconfMacro(Problem):
 
     kind = 'missing-autoconf-macro'
 
@@ -1358,7 +1363,7 @@ def autoconf_undefined_macro(m):
     return MissingAutoconfMacro(m.group(2))
 
 
-class MissingConfigStatusInput(object):
+class MissingConfigStatusInput(Problem):
 
     kind = 'missing-config.status-input'
 
@@ -1379,7 +1384,7 @@ def config_status_input_missing(m):
     return MissingConfigStatusInput(m.group(1))
 
 
-class MissingJVM(object):
+class MissingJVM(Problem):
 
     kind = 'missing-jvm'
 
@@ -1400,7 +1405,7 @@ def jvm_missing(m):
     return MissingJVM()
 
 
-class UpstartFilePresent(object):
+class UpstartFilePresent(Problem):
 
     kind = 'upstart-file-present'
 
@@ -1421,7 +1426,7 @@ def dh_installinit_upstart_file(m):
     return UpstartFilePresent(m.group(1))
 
 
-class NeedPgBuildExtUpdateControl(object):
+class NeedPgBuildExtUpdateControl(Problem):
 
     kind = 'need-pg-buildext-updatecontrol'
 
@@ -1447,7 +1452,7 @@ def need_pg_buildext_updatecontrol(m):
     return NeedPgBuildExtUpdateControl(m.group(1), m.group(2))
 
 
-class MissingValaPackage(object):
+class MissingValaPackage(Problem):
 
     kind = 'missing-vala-package'
 
@@ -1472,7 +1477,7 @@ def vala_package_missing(m):
 MAVEN_ERROR_PREFIX = '(?:\\[ERROR\\]|\\[\x1b\\[1;31mERROR\x1b\\[m\\]) '
 
 
-class DirectoryNonExistant(object):
+class DirectoryNonExistant(Problem):
 
     kind = 'local-directory-not-existing'
 
@@ -1493,7 +1498,7 @@ def directory_not_found(m):
     return DirectoryNonExistant(m.group(1))
 
 
-class ImageMagickDelegateMissing(object):
+class ImageMagickDelegateMissing(Problem):
 
     kind = 'imagemagick-delegate-missing'
 
