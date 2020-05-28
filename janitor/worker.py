@@ -668,7 +668,7 @@ class UncommittedWorker(SubWorker):
 class WorkerResult(object):
 
     def __init__(
-            self, description: str,
+            self, description: Optional[str],
             value: Optional[int],
             changes_filename: Optional[str] = None) -> None:
         self.description = description

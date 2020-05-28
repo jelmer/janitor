@@ -2083,6 +2083,7 @@ secondary_build_failure_regexps = [
     r'([^:]+)\.rb:[0-9]+:in `([^\'])+\': (.*) \((.*)\)',
     r'.*: \*\*\* ERROR: '
     r'There where errors/warnings in server logs after running test cases.',
+    r'Errno::EEXIST: File exists @ dir_s_mkdir - .*',
 ]
 
 compiled_secondary_build_failure_regexps = [

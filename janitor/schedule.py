@@ -23,6 +23,9 @@ __all__ = [
 ]
 
 from datetime import datetime, timedelta
+from typing import Optional, List
+
+import asyncpg
 from debian.deb822 import PkgRelation
 
 from . import (
@@ -77,7 +80,7 @@ PUBLISH_MODE_VALUE = {
     }
 
 
-def full_command(update_changelog, command):
+def full_command(update_changelog: str, command: List[str]) -> List[str]:
     entry_command = command
     if update_changelog == "update":
         entry_command.append("--update-changelog")
@@ -115,7 +118,9 @@ async def schedule_from_candidates(iter_candidates_with_policy):
                success_chance)
 
 
-async def estimate_success_probability(conn, package, suite, context=None):
+async def estimate_success_probability(
+        conn: asyncpg.Connection, package: str, suite: str,
+        context: Optional[str] = None) -> float:
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
     success = 0
@@ -154,7 +159,8 @@ async def estimate_success_probability(conn, package, suite, context=None):
         same_context_multiplier)
 
 
-async def estimate_duration(conn, package, suite):
+async def estimate_duration(
+        conn: asyncpg.Connection, package: str, suite: str) -> timedelta:
     estimated_duration = await state.estimate_duration(
         conn, package=package, suite=suite)
     if estimated_duration is not None:
@@ -171,7 +177,10 @@ async def estimate_duration(conn, package, suite):
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
-async def add_to_queue(conn, todo, dry_run=False, default_offset=0):
+async def add_to_queue(
+        conn: asyncpg.Connection, todo,
+        dry_run: bool = False,
+        default_offset: int = 0) -> None:
     popcon = {k: (v or 0) for (k, v) in await state.popcon(conn)}
     removed = set(p.name for p in await state.iter_packages(conn)
                   if p.removed)
@@ -230,7 +239,8 @@ async def dep_available(
     return False
 
 
-async def deps_satisfied(conn, suite, dependencies):
+async def deps_satisfied(
+        conn: asyncpg.Connection, suite: str, dependencies) -> bool:
     for dep in dependencies:
         for subdep in dep:
             if await dep_available(conn, suite=suite, **subdep):
