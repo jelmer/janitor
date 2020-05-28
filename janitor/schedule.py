@@ -41,8 +41,10 @@ DEFAULT_SCHEDULE_OFFSET = -1
 
 
 TRANSIENT_ERROR_RESULT_CODES = [
+    'cancelled',
     'install-deps-file-fetch-failure',
     'apt-get-update-file-fetch-failure',
+    'build-failed-stage-apt-get-update',
     'build-failed-stage-apt-get-dist-upgrade',
     'build-failed-stage-explain-bd-uninstallable',
     '502-bad-gateway',
