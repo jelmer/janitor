@@ -1493,6 +1493,28 @@ def directory_not_found(m):
     return DirectoryNonExistant(m.group(1))
 
 
+class ImageMagickDelegateMissing(object):
+
+    kind = 'imagemagick-delegate-missing'
+
+    def __init__(self, delegate):
+        self.delegate = delegate
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                other.delegate == self.delegate)
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.delegate)
+
+    def __str__(self):
+        return "Imagemagick missing delegate: %s" % self.delegate
+
+
+def imagemagick_delegate_missing(m):
+    return ImageMagickDelegateMissing(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1781,7 +1803,7 @@ build_failure_regexps = [
     (r'ERROR: Sphinx requires at least Python (.*) to run.',
      None),
     (r'convert convert: No encode delegate for this image format \((.*)\) '
-     r'\[No such file or directory\].', None),
+     r'\[No such file or directory\].', imagemagick_delegate_missing),
     (r'Can\'t find (.*) directory in (.*)', None),
     (r'/bin/sh: [0-9]: cannot create (.*): Directory nonexistent',
      lambda m: DirectoryNonExistant(os.path.dirname(m.group(1)))),
