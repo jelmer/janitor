@@ -19,9 +19,14 @@ import os
 import subprocess
 import sys
 
+from janitor.trace import note
+
+
 if os.path.exists('package.xml'):
+    note('Found package.xml, assuming pear package.')
     sys.exit(subprocess.call(['pear', 'package']))
 elif os.path.exists('pyproject.toml'):
+    note('Found pyproject.toml, assuming poetry project.')
     sys.exit(subprocess.call(['poetry', 'build', '-f', 'sdist']))
 elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
     with open('dist.ini', 'rb') as f:
@@ -34,7 +39,10 @@ elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
                 continue
             if (key.strip() == b'class' and
                     value.strip().startswith(b"'Dist::Inkt")):
+                note(
+                    'Found Dist::Inkt section in dist.ini, assuming distinkt.')
                 sys.exit(subprocess.call(['distinkt-dist']))
     # Default to invoking Dist::Zilla
+    note('Found dist.ini, assuming dist-zilla.')
     sys.exit(subprocess.call(['dzil', 'build', '--in', '..']))
 sys.exit(2)
