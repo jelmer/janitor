@@ -998,7 +998,7 @@ def build_incrementally(
                     and len(fixed_errors) > max_iterations:
                 warning('Last fix did not address the issue. Giving up.')
                 raise
-            reset_tree(local_tree, subpath)
+            reset_tree(local_tree, subpath=subpath)
             try:
                 if not resolve_error(
                         local_tree, e.error, e.context, committer=committer,
