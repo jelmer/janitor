@@ -10,7 +10,8 @@ Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, python3-aiohttp, python3-prometheus-client, python3-breezy, brz-debian
 
 Package: janitor-worker
-Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, postgresql-server-dev-all, lintian-brush, brz-debian
+Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, lintian-brush, brz-debian, python3-dulwich
+Recommends: libdist-zilla-perl, postgresql-server-dev-all
 Architecture: all
 Description: Worker for the Debian janitor
 
