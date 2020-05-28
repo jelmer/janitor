@@ -1005,7 +1005,7 @@ class DhMissingUninstalled(object):
                 self.missing_file == other.missing_file
 
     def __str__(self):
-        return "File build by Debian not installed: %r" % self.missing_file
+        return "File built by Debian not installed: %r" % self.missing_file
 
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.missing_file)
@@ -1773,12 +1773,15 @@ build_failure_regexps = [
      r'could not load (.*), and no fallback was found', None),
     (r'E: The Debian version .* cannot be used as an ELPA version.',
      None),
+    # ImageMagick
     (r'convert convert: Image pixel limit exceeded '
      r'\(see -limit Pixels\) \(-1\).',
      None),
     (r'convert convert: invalid primitive argument \([0-9]+\).', None),
     (r'ERROR: Sphinx requires at least Python (.*) to run.',
      None),
+    (r'convert convert: No encode delegate for this image format \((.*)\) '
+     r'\[No such file or directory\].', None),
     (r'Can\'t find (.*) directory in (.*)', None),
     (r'/bin/sh: [0-9]: cannot create (.*): Directory nonexistent',
      lambda m: DirectoryNonExistant(os.path.dirname(m.group(1)))),
