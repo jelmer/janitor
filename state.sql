@@ -179,3 +179,10 @@ CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
 
 CREATE OR REPLACE VIEW last_unabsorbed_lintian_fixes AS
   select last_unabsorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from last_unabsorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]) WHERE result_code = 'success';
+
+CREATE OR REPLACE VIEW perpetual_candidates AS
+  select suite, package from candidate union select suite, package from run;
+
+CREATE OR REPLACE VIEW first_run_time AS
+ SELECT DISTINCT ON (run.package, run.suite) run.package, run.suite, run.start_time
+ FROM run ORDER BY run.package, run.suite;
