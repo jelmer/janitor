@@ -634,6 +634,11 @@ class JustBuildWorker(SubWorker):
                      base_metadata):
         if self.args.revision:
             local_tree.update(revision=self.args.revision.encode('utf-8'))
+        if control_files_in_root(local_tree, subpath):
+            raise WorkerFailure(
+                'control-files-in-root',
+                'control files live in root rather than debian/ '
+                '(LarstIQ mode)')
         return SubWorkerResult(None, None)
 
 
