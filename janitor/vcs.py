@@ -121,6 +121,8 @@ def _convert_branch_exception(
         else:
             if str(e).startswith('Subversion branches are not yet'):
                 code = 'unsupported-vcs-svn'
+            elif str(e).startswith('Mercurial branches are not yet'):
+                code = 'unsupported-vcs-hg'
             elif str(e).startswith('Darcs branches are not yet'):
                 code = 'unsupported-vcs-darcs'
             else:
