@@ -35,4 +35,6 @@ elif os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
             if (key.strip() == b'class' and
                     value.strip().startswith(b"'Dist::Inkt")):
                 sys.exit(subprocess.call(['distinkt-dist']))
+    # Default to invoking Dist::Zilla
+    sys.exit(subprocess.call(['dzil', 'build', '--in', '..']))
 sys.exit(2)
