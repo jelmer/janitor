@@ -33,7 +33,7 @@ blah (0.39) UNRELEASED; urgency=medium
 """)])
         tree.add(['debian', 'debian/changelog'])
         tree.commit('add changelog')
-        tree_set_changelog_version(tree, '0.39~jan+lint1')
+        tree_set_changelog_version(tree, '0.39~jan+lint1', '')
         self.assertFileEqual("""\
 blah (0.39~jan+lint1) UNRELEASED; urgency=medium
 
@@ -53,7 +53,7 @@ blah (0.40) UNRELEASED; urgency=medium
 """)])
         tree.add(['debian', 'debian/changelog'])
         tree.commit('add changelog')
-        tree_set_changelog_version(tree, '0.39~jan+lint1')
+        tree_set_changelog_version(tree, '0.39~jan+lint1', '')
         self.assertFileEqual("""\
 blah (0.40) UNRELEASED; urgency=medium
 
