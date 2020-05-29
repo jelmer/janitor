@@ -625,13 +625,13 @@ def _git_open_repo(vcs_manager, package, allow_writes=False):
 
 
 def _git_check_service(service, allow_writes=False):
-    if service == 'git-receive-pack':
+    if service == 'git-upload-pack':
         return
 
-    if service == 'git-upload-pack' and allow_writes:
+    if service == 'git-receive-pack' and allow_writes:
         return
 
-    raise web.Forbidden('Unsupported service %s' % service)
+    raise web.HTTPForbidden('Unsupported service %s' % service)
 
 
 async def dulwich_refs(request):
@@ -650,11 +650,11 @@ async def dulwich_refs(request):
           'Cache-Control': 'no-cache, max-age=0, must-revalidate',
           }
 
-    handler_cls = DULWICH_SERVICE_HANDLERS[service]
+    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode('ascii')]
 
     out = BytesIO()
     proto = ReceivableProtocol(BytesIO().read, out.write)
-    handler = handler_cls(DictBackend({'.': repo}), ['.'], proto,
+    handler = handler_cls(DictBackend({'.': repo._git}), ['.'], proto,
                           http_req=True, advertise_refs=True)
     handler.proto.write_pkt_line(
         b'# service=' + service.encode('ascii') + b'\n')
@@ -683,20 +683,20 @@ async def dulwich_service(request):
           'Pragma': 'no-cache',
           'Cache-Control': 'no-cache, max-age=0, must-revalidate',
           }
-    handler_cls = DULWICH_SERVICE_HANDLERS[service]
+    handler_cls = DULWICH_SERVICE_HANDLERS[service.encode('ascii')]
 
     inf = BytesIO(await request.read())
     outf = BytesIO()
 
     proto = ReceivableProtocol(inf.read, outf.write)
     handler = handler_cls(
-        DictBackend({'.': repo}), ['.'], proto, http_req=True)
+        DictBackend({'.': repo._git}), ['.'], proto, http_req=True)
     handler.handle()
 
     return web.Response(
         status=200,
         content_type='application/x-%s-result' % service,
-        headers=headers, body=outf.getvalue(()))
+        headers=headers, body=outf.getvalue())
 
 
 GIT_URL_RES = [k[1] for k in HTTPGitApplication.services]
@@ -708,16 +708,7 @@ async def git_backend(request):
 
     allow_writes = bool(request.query.get('allow_writes'))
 
-    repo = request.app.vcs_manager.get_repository(package, 'git')
-
-    if allow_writes:
-        if repo is None:
-            controldir = ControlDir.create(
-                request.app.vcs_manager.get_repository_url(package, 'git'))
-            repo = controldir.open_repository()
-    else:
-        if repo is None:
-            raise web.HTTPNotFound()
+    repo = _git_open_repo(request.app.vcs_manager, package, allow_writes)
 
     args = ['/usr/bin/git']
     if allow_writes:
