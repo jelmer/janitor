@@ -112,9 +112,16 @@ class ForwardedResource(PrefixResource):
                 raise web.HTTPBadGateway(
                     text='Upstream server returned %d' % status)
 
+            headers = {}
+            for hdr in ['Expires', 'Pragma', 'Cache-Control']:
+                value = client_response.headers.get(hdr)
+                if value:
+                    headers[hdr] = value
+
             response = web.StreamResponse(
                 status=200,
                 reason='OK',
+                headers=headers,
             )
 
             response.content_type = client_response.content_type
