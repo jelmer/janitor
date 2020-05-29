@@ -6,9 +6,9 @@ janitor/%_pb2.py: janitor/%.proto
 	protoc --python_out=. --mypy_out=. $<
 
 check:
-	flake8
 	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor
 	PYTHONPATH=.:silver-platter:lintian-brush:breezy python3 setup.py test
+	flake8
 
 janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
