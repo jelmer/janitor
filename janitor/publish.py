@@ -24,6 +24,7 @@ import asyncio
 import functools
 from io import BytesIO
 import json
+import os
 import shlex
 import sys
 import time
@@ -34,6 +35,12 @@ from breezy.controldir import ControlDir
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
 
+
+from dulwich.protocol import ReceivableProtocol
+from dulwich.server import (
+    DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
+    DictBackend,
+    )
 from dulwich.web import HTTPGitApplication
 
 from prometheus_client import (
@@ -114,8 +121,9 @@ class RateLimited(Exception):
 
 class RateLimiter(object):
 
-    def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, int]
-                               ) -> None:
+    def set_mps_per_maintainer(
+            self, mps_per_maintainer: Dict[str, Dict[str, int]]
+            ) -> None:
         raise NotImplementedError(self.set_mps_per_maintainer)
 
     def check_allowed(self, maintainer_email: str) -> bool:
@@ -127,14 +135,17 @@ class RateLimiter(object):
 
 class MaintainerRateLimiter(RateLimiter):
 
-    def __init__(self, max_mps_per_maintainer=None):
+    _open_mps_per_maintainer: Optional[Dict[str, int]]
+
+    def __init__(self, max_mps_per_maintainer: Optional[int] = None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
         self._open_mps_per_maintainer = None
 
-    def set_mps_per_maintainer(self, mps_per_maintainer):
+    def set_mps_per_maintainer(
+            self, mps_per_maintainer: Dict[str, Dict[str, int]]):
         self._open_mps_per_maintainer = mps_per_maintainer['open']
 
-    def check_allowed(self, maintainer_email):
+    def check_allowed(self, maintainer_email: str):
         if not self._max_mps_per_maintainer:
             return
         if self._open_mps_per_maintainer is None:
@@ -146,7 +157,7 @@ class MaintainerRateLimiter(RateLimiter):
                 'Maintainer %s already has %d merge proposal open (max: %d)'
                 % (maintainer_email, current, self._max_mps_per_maintainer))
 
-    def inc(self, maintainer_email):
+    def inc(self, maintainer_email: str):
         if self._open_mps_per_maintainer is None:
             return
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
@@ -599,6 +610,95 @@ async def publish_request(request):
         status=202)
 
 
+def _git_open_repo(vcs_manager, package, allow_writes=False):
+    repo = vcs_manager.get_repository(package, 'git')
+
+    if repo is None:
+        if allow_writes:
+            controldir = ControlDir.create(
+                vcs_manager.get_repository_url(package, 'git'))
+            return controldir.open_repository()
+        else:
+            raise web.HTTPNotFound()
+    else:
+        return repo
+
+
+def _git_check_service(service, allow_writes=False):
+    if service == 'git-receive-pack':
+        return
+
+    if service == 'git-upload-pack' and allow_writes:
+        return
+
+    raise web.Forbidden('Unsupported service %s' % service)
+
+
+async def dulwich_refs(request):
+    package = request.match_info['package']
+
+    allow_writes = request.query.get('allow_writes')
+
+    repo = _git_open_repo(request.app.vcs_manager, package, allow_writes)
+
+    service = request.query.get('service')
+    _git_check_service(service)
+
+    headers = {
+          'Expires': 'Fri, 01 Jan 1980 00:00:00 GMT',
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache, max-age=0, must-revalidate',
+          }
+
+    handler_cls = DULWICH_SERVICE_HANDLERS[service]
+
+    out = BytesIO()
+    proto = ReceivableProtocol(BytesIO().read, out.write)
+    handler = handler_cls(DictBackend({'.': repo}), ['.'], proto,
+                          http_req=True, advertise_refs=True)
+    handler.proto.write_pkt_line(
+        b'# service=' + service.encode('ascii') + b'\n')
+    handler.proto.write_pkt_line(None)
+    handler.handle()
+
+    return web.Response(
+        status=200,
+        headers=headers,
+        content_type='application/x-%s-advertisement' % service,
+        body=out.getvalue())
+
+
+async def dulwich_service(request):
+    package = request.match_info['package']
+    service = request.match_info['service']
+
+    allow_writes = bool(request.query.get('allow_writes'))
+
+    repo = _git_open_repo(request.app.vcs_manager, package, allow_writes)
+
+    _git_check_service(service)
+
+    headers = {
+          'Expires': 'Fri, 01 Jan 1980 00:00:00 GMT',
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache, max-age=0, must-revalidate',
+          }
+    handler_cls = DULWICH_SERVICE_HANDLERS[service]
+
+    inf = BytesIO(await request.read())
+    outf = BytesIO()
+
+    proto = ReceivableProtocol(inf.read, outf.write)
+    handler = handler_cls(
+        DictBackend({'.': repo}), ['.'], proto, http_req=True)
+    handler.handle()
+
+    return web.Response(
+        status=200,
+        content_type='application/x-%s-result' % service,
+        headers=headers, body=outf.getvalue(()))
+
+
 GIT_URL_RES = [k[1] for k in HTTPGitApplication.services]
 
 
@@ -606,11 +706,11 @@ async def git_backend(request):
     package = request.match_info['package']
     subpath = request.match_info['subpath']
 
+    allow_writes = bool(request.query.get('allow_writes'))
+
     repo = request.app.vcs_manager.get_repository(package, 'git')
 
-    args = ['/usr/bin/git']
-    if request.query.get('allow_writes'):
-        args.extend(['-c', 'http.receivepack=1'])
+    if allow_writes:
         if repo is None:
             controldir = ControlDir.create(
                 request.app.vcs_manager.get_repository_url(package, 'git'))
@@ -618,6 +718,10 @@ async def git_backend(request):
     else:
         if repo is None:
             raise web.HTTPNotFound()
+
+    args = ['/usr/bin/git']
+    if allow_writes:
+        args.extend(['-c', 'http.receivepack=1'])
     args.append('http-backend')
     for regex in GIT_URL_RES:
         if regex.match('/'+subpath):
@@ -750,7 +854,14 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     setup_metrics(app)
     app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/diff/{run_id}", diff_request)
-    app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
+    if not os.environ.get('USE_DULWICH'):
+        app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
+    else:
+        app.router.add_post(
+            "/git/{package}/{service:git-service-pack|git-upload-pack}",
+            dulwich_service)
+        app.router.add_get(
+            "/git/{package}/info/refs", dulwich_refs)
     app.router.add_post(
         "/bzr/{package}/.bzr/smart", bzr_backend)
     app.router.add_post(
