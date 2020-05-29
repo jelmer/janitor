@@ -71,7 +71,7 @@ async def upload_results(
     with ExitStack() as es:
         with MultipartWriter('mixed') as mpwriter:
             part = mpwriter.append(BytesIO(
-                json.dumps(metadata).encode('ut-8')))
+                json.dumps(metadata).encode('utf-8')))
             part.set_content_disposition('attachment', filename='result.json')
             for entry in os.scandir(output_directory):
                 if entry.is_file():
