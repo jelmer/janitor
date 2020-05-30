@@ -21,6 +21,7 @@ from aiohttp import (
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
+from debian.changelog import Version
 from email.utils import parseaddr
 import functools
 import json
@@ -266,14 +267,20 @@ async def run_subprocess(args, env, log_path=None):
 
 
 async def invoke_subprocess_worker(
-        worker_kind, main_branch, env, command, output_directory,
-        resume_branch=None, cached_branch_url=None,
-        pre_check=None, post_check=None,
+        worker_kind: str, main_branch_url: str,
+        env: Dict[str, str],
+        command: List[str], output_directory: str,
+        resume_branch_url: Optional[str] = None,
+        cached_branch_url: Optional[str] = None,
+        pre_check: Optional[str] = None,
+        post_check: Optional[str] = None,
         build_command: Optional[str] = None,
-        log_path=None,
-        resume_branch_result=None,
-        last_build_version=None, subpath=None,
-        build_distribution=None, build_suffix=None):
+        log_path: Optional[str] = None,
+        resume_branch_result: Optional[Any] = None,
+        last_build_version: Optional[Version] = None,
+        subpath: Optional[str] = None,
+        build_distribution: Optional[str] = None,
+        build_suffix: Optional[str] = None) -> int:
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
@@ -284,12 +291,12 @@ async def invoke_subprocess_worker(
         'ssh': 'janitor.ssh_worker',
         }[worker_kind.split(':')[0]]
     args = [sys.executable, '-m', worker_module,
-            '--branch-url=%s' % main_branch.user_url.rstrip('/'),
+            '--branch-url=%s' % main_branch_url,
             '--output-directory=%s' % output_directory]
     if ':' in worker_kind:
         args.append('--host=%s' % worker_kind.split(':')[1])
-    if resume_branch:
-        args.append('--resume-branch-url=%s' % resume_branch.user_url)
+    if resume_branch_url:
+        args.append('--resume-branch-url=%s' % resume_branch_url)
     if cached_branch_url:
         args.append('--cached-branch-url=%s' % cached_branch_url)
     if pre_check:
@@ -706,8 +713,9 @@ class ActiveLocalRun(ActiveRun):
         try:
             self._task = asyncio.create_task(asyncio.wait_for(
                 invoke_subprocess_worker(
-                    worker_kind, main_branch, env, self.queue_item.command,
-                    self.output_directory, resume_branch=resume_branch,
+                    worker_kind, main_branch.user_url.rstrip('/'), env,
+                    self.queue_item.command, self.output_directory,
+                    resume_branch_url=resume_branch.user_url,
                     cached_branch_url=cached_branch_url, pre_check=pre_check,
                     post_check=post_check,
                     build_command=build_command,
