@@ -85,7 +85,7 @@ def in_line_boundaries(i, boundaries):
 
 
 async def generate_run_file(db, client, archiver_url, logfile_manager, run,
-                            publisher_url):
+                            publisher_url, is_admin):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -115,6 +115,7 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
     kwargs['vcswatch_version'] = package.vcswatch_version
+    kwargs['is_admin'] = is_admin
 
     async def show_diff():
         if not run.revision or run.revision == run.main_branch_revision:
