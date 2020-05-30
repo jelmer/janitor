@@ -119,9 +119,21 @@ DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 class SubWorkerResult(object):
 
-    def __init__(self, description: Optional[str], value: Optional[int]):
+    def __init__(
+            self, description: Optional[str], value: Optional[int],
+            auxiliary_branches: Optional[List[str]] = None,
+            tags: Optional[List[str]] = None):
         self.description = description
         self.value = value
+        self.auxiliary_branches = auxiliary_branches
+        self.tags = tags
+
+    @classmethod
+    def from_changer(cls, changer, result, description):
+        return cls(
+            tags=changer.tags(result),
+            description=description,
+            value=changer.value(result))
 
 
 class SubWorker(object):
@@ -146,6 +158,8 @@ class SubWorker(object):
           base_metadata: Optional JSON Dictionary with results of
             any previous runs this one is based on
           subpath: Path in the branch where the package resides
+        Returns:
+          SubWorkerResult
         """
         raise NotImplementedError(self.make_changes)
 
@@ -181,7 +195,6 @@ class MultiArchHintsWorker(SubWorker):
             any previous runs this one is based on
           subpath: Path in the branch where the package resides
         """
-        from silver_platter.debian.multiarch import calculate_value
         update_changelog = self.args.update_changelog
         try:
             cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
@@ -220,8 +233,9 @@ class MultiArchHintsWorker(SubWorker):
             entry['certainty'] = certainty
             metadata['applied-hints'].append(entry)
             note('%s: %s' % (binary['Package'], description))
-        value = calculate_value(hint_names)
-        return SubWorkerResult("Applied multi-arch hints.", value)
+        return SubWorkerResult.from_changer(
+            description="Applied multi-arch hints.",
+            changer=self.changer, result=result)
 
 
 class OrphanWorker(SubWorker):
@@ -270,7 +284,9 @@ class OrphanWorker(SubWorker):
         metadata['old_vcs_url'] = result.old_vcs_url
         metadata['new_vcs_url'] = result.new_vcs_url
         metadata['pushed'] = result.pushed
-        return SubWorkerResult('Move package to QA team.', None)
+        return SubWorkerResult.from_changer(
+            description='Move package to QA team.',
+            changer=self.changer, result=result)
 
 
 class CMEWorker(SubWorker):
@@ -304,10 +320,12 @@ class CMEWorker(SubWorker):
         else:
             if update_changelog is None:
                 update_changelog = cfg.update_changelog()
-        self.changer.make_changes(
+        result = self.changer.make_changes(
             local_tree, subpath=subpath, update_changelog=update_changelog,
             committer=self.committer)
-        return SubWorkerResult('Apply CME Fixes.', None)
+        return SubWorkerResult.from_changer(
+            description='Apply CME Fixes.', changer=self.changer,
+            result=result)
 
 
 class LintianBrushWorker(SubWorker):
@@ -418,7 +436,9 @@ class LintianBrushWorker(SubWorker):
         for entry in metadata['applied']:
             tags.update(entry['fixed_lintian_tags'])
         value = lintian_brush_calculate_value(tags)
-        return SubWorkerResult('Applied fixes for %r' % tags, value)
+        return SubWorkerResult(
+            description='Applied fixes for %r' % tags,
+            value=value, tags=[])
 
 
 class NewUpstreamWorker(SubWorker):
@@ -615,9 +635,11 @@ class NewUpstreamWorker(SubWorker):
                     result.upstream_branch.user_url)
                 metadata['upstream_branch_browse'] = (
                     result.upstream_branch_browse)
-            return SubWorkerResult(
-                "Merged new upstream version %s" % (
-                    result.new_upstream_version), None)
+        return SubWorkerResult(
+            description="Merged new upstream version %s" % (
+                result.new_upstream_version),
+            value=None,
+            tags=['upstream/%s' % result.new_upstream_version])
 
 
 class JustBuildWorker(SubWorker):
@@ -665,8 +687,9 @@ class UncommittedWorker(SubWorker):
         metadata['tags'] = [
             (tag_name, str(version))
             for (tag_name, version) in result]
-        return SubWorkerResult(
-            'Import archive changes missing from the VCS.', None)
+        return SubWorkerResult.from_changer(
+            description='Import archive changes missing from the VCS.',
+            changer=self.changer, result=result)
 
 
 class WorkerResult(object):
