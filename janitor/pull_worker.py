@@ -69,7 +69,7 @@ async def upload_results(
         base_url: str, run_id: str, metadata: Any,
         output_directory: str) -> Any:
     with ExitStack() as es:
-        with MultipartWriter('mixed') as mpwriter:
+        with MultipartWriter('form-data') as mpwriter:
             part = mpwriter.append(BytesIO(
                 json.dumps(metadata).encode('utf-8')))
             part.set_content_disposition('attachment', filename='result.json')
