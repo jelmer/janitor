@@ -432,7 +432,8 @@ if __name__ == '__main__':
             request.app.database,
             request.app.http_client_session,
             request.app.archiver_url,
-            logfile_manager, run, request.app.publisher_url)
+            logfile_manager, run, request.app.publisher_url,
+            is_admin=is_admin(request))
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=3600'})
