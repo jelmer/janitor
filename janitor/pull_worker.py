@@ -190,25 +190,25 @@ async def main(argv=None):
             creds = json.load(f)
         auth = BasicAuth(login=creds['login'], password=creds['password'])
 
-    class WorkerCredentialStore(PlainTextCredentialStore):
+        class WorkerCredentialStore(PlainTextCredentialStore):
 
-        def get_credentials(
-                self, protocol, host, port=None, user=None, path=None,
-                realm=None):
-            if host == base_url.host:
-                return {
-                    'user': creds['login'],
-                    'password': creds['password'],
-                    'protocol': protocol,
-                    'port': port,
-                    'host': host,
-                    'realm': realm,
-                    'verify_certificates': True,
-                    }
-            return None
+            def get_credentials(
+                    self, protocol, host, port=None, user=None, path=None,
+                    realm=None):
+                if host == base_url.host:
+                    return {
+                        'user': creds['login'],
+                        'password': creds['password'],
+                        'protocol': protocol,
+                        'port': port,
+                        'host': host,
+                        'realm': realm,
+                        'verify_certificates': True,
+                        }
+                return None
 
-    credential_store_registry.register(
-        'janitor-worker', WorkerCredentialStore, fallback=True)
+        credential_store_registry.register(
+            'janitor-worker', WorkerCredentialStore, fallback=True)
 
     node_name = os.environ.get('NODE_NAME')
     if not node_name:
