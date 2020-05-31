@@ -60,9 +60,7 @@ function submitReview(elem, status) {
     if (todo.length == 0) {
       refreshData();
     }
-    if (todo.length > 0) {
-      var newJob = todo[0];
-      todo.shift();
+    if ((newJob = todo.shift()) !== undefined) {
       loadRun(newJob[0], newJob[1]);
     } else {
       $('#diff').replaceWith('All done!');
