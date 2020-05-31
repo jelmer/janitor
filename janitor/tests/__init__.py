@@ -27,6 +27,7 @@ def test_suite():
     names = [
         'debdiff',
         'fix_build',
+        'pull_worker',
         'runner',
         'sbuild_log',
         'site',
