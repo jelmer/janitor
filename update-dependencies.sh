@@ -1,5 +1,5 @@
 #!/bin/bash
-DEPS="lintian-brush silver-platter breezy"
+DEPS="lintian-brush silver-platter breezy dulwich breezy-debian"
 for NAME in $DEPS
 do
     pushd $NAME
