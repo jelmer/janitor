@@ -1470,3 +1470,8 @@ async def check_worker_credentials(
         "select 1 from worker where name = $1 "
         "AND password = crypt($2, password)", login, password)
     return bool(row)
+
+
+async def package_exists(conn, package):
+    return bool(await conn.fetchrow(
+        "SELECT 1 FROM package WHERE name = $1", package))
