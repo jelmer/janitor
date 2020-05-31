@@ -1148,6 +1148,8 @@ async def handle_assign(request):
             else:
                 resume_branch = None
 
+        if vcs_type is not None:
+            vcs_type = vcs_type.lower()
         assert vcs_type in ('bzr', 'git'), 'vcs type is %r' % vcs_type
 
         if resume_branch is None and not item.refresh:
