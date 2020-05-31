@@ -31,7 +31,7 @@ import time
 from typing import Dict, List, Optional
 import uuid
 
-from breezy.controldir import ControlDir
+from breezy.controldir import ControlDir, format_registry
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
 
@@ -610,28 +610,33 @@ async def publish_request(request):
         status=202)
 
 
-def _git_open_repo(vcs_manager, package, allow_writes=False):
+async def _git_open_repo(vcs_manager, db, package):
     repo = vcs_manager.get_repository(package, 'git')
 
     if repo is None:
-        if allow_writes:
-            controldir = ControlDir.create(
-                vcs_manager.get_repository_url(package, 'git'))
-            return controldir.open_repository()
-        else:
-            raise web.HTTPNotFound()
+        async with db.acquire() as conn:
+            if not await state.package_exists(conn, package):
+                raise web.HTTPNotFound()
+        controldir = ControlDir.create(
+            vcs_manager.get_repository_url(package, 'git'),
+            format=format_registry.get('git')())
+        note('Created missing git repository for %s at %s',
+             package, controldir.user_url)
+        return controldir.open_repository()
     else:
         return repo
 
 
-def _git_check_service(service, allow_writes=False):
+def _git_check_service(service: str, allow_writes: bool = False):
     if service == 'git-upload-pack':
         return
 
-    if service == 'git-receive-pack' and allow_writes:
+    if service == 'git-receive-pack':
+        if not allow_writes:
+            raise web.HTTPUnauthorized(text='git-receive-pack requires login')
         return
 
-    raise web.HTTPForbidden('Unsupported service %s' % service)
+    raise web.HTTPForbidden(text='Unsupported service %s' % service)
 
 
 async def dulwich_refs(request):
@@ -639,10 +644,11 @@ async def dulwich_refs(request):
 
     allow_writes = request.query.get('allow_writes')
 
-    repo = _git_open_repo(request.app.vcs_manager, package, allow_writes)
+    repo = await _git_open_repo(
+        request.app.vcs_manager, request.app.db, package)
 
     service = request.query.get('service')
-    _git_check_service(service)
+    _git_check_service(service, allow_writes)
 
     headers = {
           'Expires': 'Fri, 01 Jan 1980 00:00:00 GMT',
@@ -674,9 +680,10 @@ async def dulwich_service(request):
 
     allow_writes = bool(request.query.get('allow_writes'))
 
-    repo = _git_open_repo(request.app.vcs_manager, package, allow_writes)
+    repo = await _git_open_repo(
+        request.app.vcs_manager, request.app.db, package)
 
-    _git_check_service(service)
+    _git_check_service(service, allow_writes)
 
     headers = {
           'Expires': 'Fri, 01 Jan 1980 00:00:00 GMT',
@@ -684,6 +691,13 @@ async def dulwich_service(request):
           'Cache-Control': 'no-cache, max-age=0, must-revalidate',
           }
     handler_cls = DULWICH_SERVICE_HANDLERS[service.encode('ascii')]
+
+    response = web.StreamResponse(
+        status=200,
+        headers=headers)
+    response.content_type = 'application/x-%s-result' % service
+
+    await response.prepare(request)
 
     inf = BytesIO(await request.read())
     outf = BytesIO()
@@ -693,10 +707,10 @@ async def dulwich_service(request):
         DictBackend({'.': repo._git}), ['.'], proto, http_req=True)
     handler.handle()
 
-    return web.Response(
-        status=200,
-        content_type='application/x-%s-result' % service,
-        headers=headers, body=outf.getvalue())
+    await response.write(outf.getvalue())
+
+    await response.write_eof()
+    return response
 
 
 GIT_URL_RES = [k[1] for k in HTTPGitApplication.services]
@@ -708,7 +722,8 @@ async def git_backend(request):
 
     allow_writes = bool(request.query.get('allow_writes'))
 
-    repo = _git_open_repo(request.app.vcs_manager, package, allow_writes)
+    repo = await _git_open_repo(
+        request.app.vcs_manager, request.app.db, package)
 
     args = ['/usr/bin/git']
     if allow_writes:
@@ -849,7 +864,7 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
         app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
     else:
         app.router.add_post(
-            "/git/{package}/{service:git-service-pack|git-upload-pack}",
+            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
             dulwich_service)
         app.router.add_get(
             "/git/{package}/info/refs", dulwich_refs)
