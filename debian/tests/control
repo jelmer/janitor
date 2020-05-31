@@ -1,5 +1,5 @@
 Tests: testsuite
-Depends: @
+Depends: @, python3-asynctest
 
 Tests: flake8
 Depends: python3-flake8

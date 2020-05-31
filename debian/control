@@ -2,7 +2,7 @@ Source: janitor
 Priority: optional
 Section: vcs
 Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
-Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter, python3-all, dh-python, dh-exec
+Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter, python3-all, dh-python, dh-exec, mypy, mypy-protobuf, silver-platter, python3-asynctest
 Rules-Requires-Root: no
 
 Package: python3-janitor
@@ -10,7 +10,7 @@ Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, python3-aiohttp, python3-prometheus-client, python3-breezy, brz-debian
 
 Package: janitor-worker
-Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, lintian-brush, brz-debian, python3-dulwich
+Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, lintian-brush, brz-debian, python3-dulwich, silver-platter
 Recommends: libdist-zilla-perl, postgresql-server-dev-all
 Architecture: all
 Description: Worker for the Debian janitor
@@ -21,7 +21,7 @@ Architecture: all
 Description: Archiver for the Debian janitor
 
 Package: janitor-runner
-Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}
+Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, silver-platter
 Architecture: all
 Description: Runner for the Debian janitor
 
@@ -45,3 +45,5 @@ Architecture: all
 Depends: dovecot, dovecot-sieve
 Description: Mail filter for the Debian Janitor
 
+Package: janitor-agent
+Architecture: all
