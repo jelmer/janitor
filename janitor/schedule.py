@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 import asyncpg
 from debian.deb822 import PkgRelation
@@ -313,8 +313,11 @@ async def do_schedule_control(
         command=['just-build --revision=%s' % main_branch_revision])
 
 
-async def do_schedule(conn, package, suite, offset=None,
-                      refresh=False, requestor=None, command=None):
+async def do_schedule(
+            conn: asyncpg.Connection, package: str, suite: str,
+            offset: Optional[int] = None, refresh: bool = False,
+            requestor: Optional[str] = None,
+            command=None) -> Tuple[int, timedelta]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
