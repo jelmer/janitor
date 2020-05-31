@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS run (
    branch_url text,
    logfilenames text[] not null,
    review_status review_status not null default 'unreviewed',
+   review_comment text,
    value integer,
    -- Name of the worker that executed this run.
    worker text not null,
