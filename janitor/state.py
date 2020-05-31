@@ -1332,9 +1332,11 @@ WHERE name = $1 AND %(version_match2)s
 
 
 async def set_run_review_status(
-        conn: asyncpg.Connection, run_id: str, review_status: str) -> None:
-    await conn.execute('UPDATE run SET review_status = $1 WHERE id = $2',
-                       review_status, run_id)
+        conn: asyncpg.Connection, run_id: str,
+        review_status: str, review_comment: Optional[str] = None) -> None:
+    await conn.execute(
+        'UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3',
+        review_status, review_comment, run_id)
 
 
 async def iter_vcs_regressions(conn: asyncpg.Connection):

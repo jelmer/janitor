@@ -53,10 +53,14 @@ function refreshData() {
 }
 
 function submitReview(elem, status) {
+    var comment = undefined;
+    if (status == 'rejected') {
+        comment = window.prompt('Please specify a comment for the rejection');
+    }
     elem.blur();
     var run_id = $('#run-id').val();
     console.log("Submitting review " + status + " for run " + run_id);
-    $.post('/api/run/' + run_id, {'review-status': status});
+    $.post('/api/run/' + run_id, {'review-status': status, 'review-comment': comment});
     if (todo.length == 0) {
       refreshData();
     }

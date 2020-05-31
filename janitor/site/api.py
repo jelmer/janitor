@@ -379,6 +379,7 @@ async def handle_run_post(request):
     run_id = request.match_info['run_id']
     post = await request.post()
     review_status = post.get('review-status')
+    review_comment = post.get('review-comment')
     if review_status:
         async with request.app.db.acquire() as conn:
             review_status = review_status.lower()
@@ -388,9 +389,10 @@ async def handle_run_post(request):
                     conn, run.package, run.suite, refresh=True,
                     requestor='reviewer')
                 review_status = 'rejected'
-            await state.set_run_review_status(conn, run_id, review_status)
+            await state.set_run_review_status(
+                conn, run_id, review_status, review_comment)
     return web.json_response(
-            {'review-status': review_status})
+        {'review-status': review_status, 'review-comment': review_comment})
 
 
 async def handle_run(request):
