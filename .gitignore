@@ -1,4 +1,5 @@
 *.swp
+build/
 __pycache__
 .plugins
 .pybuild

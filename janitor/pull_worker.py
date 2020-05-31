@@ -64,22 +64,27 @@ async def abort_run(
                 await resp.read(), resp.status))
 
 
-async def upload_results(
-        session: ClientSession,
-        base_url: str, run_id: str, metadata: Any,
-        output_directory: str) -> Any:
+@contextmanager
+def bundle_results(metadata: Any, directory: str):
     with ExitStack() as es:
         with MultipartWriter('form-data') as mpwriter:
-            part = mpwriter.append(BytesIO(
-                json.dumps(metadata).encode('utf-8')))
+            part = mpwriter.append_json(metadata)
             part.set_content_disposition('attachment', filename='result.json')
-            for entry in os.scandir(output_directory):
+            for entry in os.scandir(directory):
                 if entry.is_file():
                     f = open(entry.path, 'rb')
                     es.enter_context(f)
                     part = mpwriter.append(BytesIO(f.read()))
                     part.set_content_disposition(
                         'attachment', filename=entry.name)
+        yield mpwriter
+
+
+async def upload_results(
+        session: ClientSession,
+        base_url: str, run_id: str, metadata: Any,
+        output_directory: str) -> Any:
+    with bundle_results(metadata, output_directory) as mpwriter:
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
         async with session.post(finish_url, data=mpwriter) as resp:
