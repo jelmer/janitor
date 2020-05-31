@@ -2,8 +2,14 @@ PB2_PY_OUTPUT = janitor/policy_pb2.py janitor/config_pb2.py janitor/package_over
 
 all: janitor/site/_static/pygments.css $(PB2_PY_OUTPUT)
 
+PROTOC_ARGS = --python_out=.
+
+ifneq ($(MYPY_PROTO),0)
+PROTOC_ARGS += --mypy_out=.
+endif
+
 janitor/%_pb2.py: janitor/%.proto
-	protoc --python_out=. --mypy_out=. $<
+	protoc $(PROTOC_ARGS) $<
 
 check:
 	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor

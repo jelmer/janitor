@@ -2,12 +2,12 @@ Source: janitor
 Priority: optional
 Section: vcs
 Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
-Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter, python3-all, dh-python, dh-exec, mypy, mypy-protobuf, silver-platter, python3-asynctest
+Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter, python3-all, dh-python, dh-exec, mypy <typing>, mypy-protobuf <typing>, silver-platter, python3-asynctest, protobuf-compiler, python3-protobuf, python3-jinja2
 Rules-Requires-Root: no
 
 Package: python3-janitor
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, python3-aiohttp, python3-prometheus-client, python3-breezy, brz-debian
+Depends: ${python3:Depends}, ${misc:Depends}, python3-aiohttp, python3-prometheus-client, python3-breezy, brz-debian, python3-protobuf
 
 Package: janitor-worker
 Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, lintian-brush, brz-debian, python3-dulwich, silver-platter
@@ -16,12 +16,12 @@ Architecture: all
 Description: Worker for the Debian janitor
 
 Package: janitor-archiver
-Depends: python3-aiohttp, python3-aionotify, aptly, ${python3:Depends}, ${misc:Depends}, diffoscope, devscripts
+Depends: python3-aiohttp, python3-aionotify, aptly, ${python3:Depends}, ${misc:Depends}, diffoscope, devscripts, python3-asyncpg
 Architecture: all
 Description: Archiver for the Debian janitor
 
 Package: janitor-runner
-Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, silver-platter
+Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, silver-platter, python3-asyncpg,
 Architecture: all
 Description: Runner for the Debian janitor
 
@@ -42,7 +42,7 @@ Description: Mastodon notifier for the Debian Janitor
 
 Package: janitor-dovecot-filter
 Architecture: all
-Depends: dovecot, dovecot-sieve
+Depends: dovecot, dovecot-sieve, ${misc:Depends}, ${python3:Depends}, python3-aiohttp
 Description: Mail filter for the Debian Janitor
 
 Package: janitor-agent
