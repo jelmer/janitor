@@ -20,6 +20,7 @@ import asyncio
 from aiohttp import ClientSession, MultipartWriter, BasicAuth
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
+import functools
 from io import BytesIO
 import json
 import os
@@ -133,6 +134,51 @@ def push_branch(
     target.push_branch(
         source_branch, revision_id=stop_revision,
         overwrite=overwrite, name=branch_name)
+
+
+def run_worker(branch_url, subpath, vcs_type, env,
+               command, output_directory, metadata,
+               build_command=None,
+               pre_check_command=None,
+               post_check_command=None,
+               resume_branch_url=None,
+               cached_branch_url=None,
+               build_distribution=None,
+               build_suffix=None,
+               last_build_version=None,
+               resume_subworker_result=None,
+               result_branch_url=None,
+               possible_transports=None):
+    with copy_output(os.path.join(output_directory, 'worker.log')):
+        with process_package(
+               branch_url, subpath, env,
+               command, output_directory, metadata,
+               build_command=build_command,
+               pre_check_command=pre_check_command,
+               post_check_command=post_check_command,
+               resume_branch_url=resume_branch_url,
+               cached_branch_url=cached_branch_url,
+               build_distribution=build_distribution,
+               build_suffix=build_suffix,
+               last_build_version=last_build_version,
+               resume_subworker_result=resume_subworker_result,
+               possible_transports=possible_transports) as (ws, result):
+            enable_tag_pushing(ws.local_tree.branch)
+            note('Pushing result branch to %s', result_branch_url)
+            push_branch(
+                ws.local_tree.branch,
+                result_branch_url, overwrite=True,
+                vcs_type=vcs_type.lower(),
+                possible_transports=possible_transports)
+            note('Pushing packaging branch cache to %s',
+                 cached_branch_url)
+            push_branch(
+                ws.local_tree.branch,
+                cached_branch_url, vcs_type=vcs_type.lower(),
+                possible_transports=possible_transports,
+                stop_revision=ws.main_branch.last_revision(),
+                overwrite=True)
+            return result
 
 
 async def get_assignment(
@@ -259,36 +305,21 @@ async def main(argv=None):
         start_time = datetime.now()
         metadata['start_time'] = start_time.isoformat()
         try:
-            with copy_output(os.path.join(output_directory, 'worker.log')):
-                with process_package(
-                        branch_url, subpath, env,
-                        command, output_directory, metadata,
-                        build_command=args.build_command,
-                        pre_check_command=args.pre_check,
-                        post_check_command=args.post_check,
-                        resume_branch_url=resume_branch_url,
-                        cached_branch_url=cached_branch_url,
-                        build_distribution=build_distribution,
-                        build_suffix=build_suffix,
-                        last_build_version=last_build_version,
-                        resume_subworker_result=resume_result,
-                        possible_transports=possible_transports
-                        ) as (ws, result):
-                    enable_tag_pushing(ws.local_tree.branch)
-                    note('Pushing result branch to %s', result_branch_url)
-                    push_branch(
-                        ws.local_tree.branch,
-                        result_branch_url, overwrite=True,
-                        vcs_type=vcs_type.lower(),
-                        possible_transports=possible_transports)
-                    note('Pushing packaging branch cache to %s',
-                         cached_branch_url)
-                    push_branch(
-                        ws.local_tree.branch,
-                        cached_branch_url, vcs_type=vcs_type.lower(),
-                        possible_transports=possible_transports,
-                        stop_revision=ws.main_branch.last_revision(),
-                        overwrite=True)
+            loop = asyncio.get_running_loop()
+            result = await loop.run_in_executor(None, functools.partial(
+                run_worker, branch_url, subpath, vcs_type, env,
+                command, output_directory, metadata,
+                build_command=args.build_command,
+                pre_check_command=args.pre_check,
+                post_check_command=args.post_check,
+                resume_branch_url=resume_branch_url,
+                cached_branch_url=cached_branch_url,
+                build_distribution=build_distribution,
+                build_suffix=build_suffix,
+                last_build_version=last_build_version,
+                resume_subworker_result=resume_result,
+                result_branch_url=result_branch_url,
+                possible_transports=possible_transports))
         except WorkerFailure as e:
             metadata['code'] = e.code
             metadata['description'] = e.description
