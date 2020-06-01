@@ -11,10 +11,12 @@ endif
 janitor/%_pb2.py: janitor/%.proto
 	protoc $(PROTOC_ARGS) $<
 
-check:
-	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor
+check: typing
 	PYTHONPATH=.:silver-platter:lintian-brush:breezy python3 setup.py test
 	flake8
+
+typing:
+	PYTHONPATH=.:silver-platter:lintian-brush:breezy mypy janitor
 
 janitor/site/_static/pygments.css:
 	pygmentize -S default -f html > $@
