@@ -71,7 +71,7 @@ def bundle_results(metadata: Any, directory: str):
         with MultipartWriter('form-data') as mpwriter:
             part = mpwriter.append_json(metadata, headers=[
                 ('Content-Disposition', 'attachment; filename="result.json"; '
-                    'filename*=utf-8\'\'result.json')])
+                    'filename*=utf-8\'\'result.json')])  # type: ignore
             for entry in os.scandir(directory):
                 if entry.is_file():
                     f = open(entry.path, 'rb')
@@ -79,7 +79,7 @@ def bundle_results(metadata: Any, directory: str):
                     part = mpwriter.append(BytesIO(f.read()), headers=[
                         ('Content-Disposition', 'attachment; filename="%s"; '
                             'filename*=utf-8\'\'%s' %
-                            (entry.name, entry.name))])
+                            (entry.name, entry.name))])  # type: ignore
         yield mpwriter
 
 

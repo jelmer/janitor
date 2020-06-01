@@ -17,6 +17,8 @@
 
 """Publishing VCS changes."""
 
+from typing import Optional, List, Any
+
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -28,6 +30,7 @@ from silver_platter.utils import (
     )
 from silver_platter.proposal import (
     EmptyMergeProposal,
+    MergeProposal,
     get_hoster,
     merge_conflicts,
     publish_changes as publish_changes_from_workspace,
@@ -35,6 +38,7 @@ from silver_platter.proposal import (
     push_changes,
     push_derived_changes,
     find_existing_proposed,
+    Hoster,
     NoSuchProject,
     PermissionDenied,
     UnsupportedHoster,
@@ -43,6 +47,7 @@ from silver_platter.debian import (
     pick_additional_colocated_branches,
     )
 
+from breezy.branch import Branch
 from breezy.errors import DivergedBranches
 from breezy.propose import (
     MergeProposalExists,
@@ -270,7 +275,8 @@ class BranchWorkspace(object):
             reviewers=reviewers, tags=tags,
             allow_collaboration=allow_collaboration)
 
-    def push(self, hoster=None, dry_run=False, tags=None):
+    def push(self, hoster: Optional[Hoster] = None, dry_run: bool = False,
+             tags: Optional[List[str]] = None) -> None:
         if hoster is None:
             hoster = get_hoster(self.main_branch)
 
@@ -293,8 +299,9 @@ class BranchWorkspace(object):
             additional_colocated_branches=additional_colocated_branches,
             dry_run=dry_run, tags=tags)
 
-    def push_derived(self, name, hoster=None, overwrite_existing=False,
-                     tags=None):
+    def push_derived(self, name: str, hoster: Optional[Hoster] = None,
+                     overwrite_existing: bool = False,
+                     tags: Optional[List[str]] = None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return push_derived_changes(
@@ -303,9 +310,13 @@ class BranchWorkspace(object):
 
 
 def publish(
-        suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
-        resume_branch=None, dry_run=False, log_id=None, existing_proposal=None,
-        allow_create_proposal=False, reviewers=None, debdiff=None):
+        suite: str, pkg: str, subrunner: Publisher,
+        mode: str, hoster: Hoster, main_branch: Branch, local_branch: Branch,
+        resume_branch: Optional[Branch] = None, dry_run: bool = False,
+        log_id: Optional[str] = None,
+        existing_proposal: Optional[MergeProposal] = None,
+        allow_create_proposal: bool = False,
+        reviewers: Optional[List[str]] = None, debdiff: bytes = None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
@@ -377,26 +388,27 @@ def publish(
 
 class Publisher(object):
 
-    def __init__(self, args):
+    def __init__(self, args: List[str]):
         self.args = args
 
-    def branch_name(self):
+    def branch_name(self) -> str:
         raise NotImplementedError(self.branch_name)
 
     def get_proposal_description(
-            self, description_format, existing_description):
+            self, description_format: str,
+            existing_description: Optional[str]) -> str:
         raise NotImplementedError(self.get_proposal_description)
 
-    def read_worker_result(self, result):
+    def read_worker_result(self, result: Any) -> None:
         raise NotImplementedError(self.read_worker_result)
 
-    def allow_create_proposal(self):
+    def allow_create_proposal(self) -> bool:
         raise NotImplementedError(self.allow_create_proposal)
 
-    def push_colocated(self):
+    def push_colocated(self) -> bool:
         raise NotImplementedError(self.push_colocated)
 
-    def tags(self):
+    def tags(self) -> List[str]:
         """Tags to push.
 
         Returns: list of tags to push

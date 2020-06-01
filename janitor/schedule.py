@@ -317,7 +317,7 @@ async def do_schedule(
             conn: asyncpg.Connection, package: str, suite: str,
             offset: Optional[int] = None, refresh: bool = False,
             requestor: Optional[str] = None,
-            command=None) -> Tuple[int, timedelta]:
+            command=None) -> Tuple[Optional[int], Optional[timedelta]]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
