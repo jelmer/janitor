@@ -362,6 +362,7 @@ ORDER BY finish_time DESC
 async def iter_runs(conn: asyncpg.Connection,
                     package: Optional[str] = None,
                     run_id: Optional[str] = None,
+                    worker: Optional[str] = None,
                     limit: Optional[int] = None):
     """Iterate over runs.
 
@@ -379,16 +380,19 @@ SELECT
 FROM
     run
 """
+    conditions = []
     args = []
     if package is not None:
-        query += " WHERE package = $1 "
         args.append(package)
+        conditions.append("package = $%d" % len(args))
     if run_id is not None:
-        if args:
-            query += " AND id = $2 "
-        else:
-            query += " WHERE id = $1 "
         args.append(run_id)
+        conditions.append("id = $%d" % len(args))
+    if worker is not None:
+        args.append(worker)
+        conditions.append("worker = $%d" % len(args))
+    if crnditions:
+        query += " WHERE " + " AND ".join(conditions)
     query += "ORDER BY start_time DESC"
     if limit:
         query += " LIMIT %d" % limit
