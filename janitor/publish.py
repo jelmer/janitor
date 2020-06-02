@@ -61,9 +61,9 @@ from silver_platter.utils import (
     )
 
 from breezy.propose import get_proposal_by_url
-import breezy.plugins.gitlab # noqa: F401
-import breezy.plugins.launchpad # noqa: F401
-import breezy.plugins.github # noqa: F401
+import breezy.plugins.gitlab  # noqa: F401
+import breezy.plugins.launchpad  # noqa: F401
+import breezy.plugins.github  # noqa: F401
 
 from . import (
     state,
