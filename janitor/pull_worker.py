@@ -300,6 +300,15 @@ async def main(argv=None):
     env.update(assignment['env'])
     env.update(build_environment)
 
+    metadata = {}
+    if 'JENKINS_URL' in os.environ:
+        metadata['jenkins'] = {
+            'build_url': os.environ.get('BUILD_URL'),
+            'executor_number': os.environ.get('EXECUTOR_NUMBER'),
+            'build_id': os.environ.get('BUILD_ID'),
+            'build_number': os.environ.get('BUILD_NUMBER'),
+            }
+
     with TemporaryDirectory() as output_directory:
         metadata = {}
         start_time = datetime.now()
