@@ -10,7 +10,9 @@ import breezy.git  # noqa: F401
 from breezy.propose import (
     hosters,
     )
-import breezy.plugins.propose  # noqa: F401
+import breezy.plugins.gitlab  # noqa: F401
+import breezy.plugins.github  # noqa: F401
+import breezy.plugins.launchpad  # noqa: F401
 
 
 def projects_to_remove(instance):
