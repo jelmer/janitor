@@ -310,7 +310,7 @@ class BranchWorkspace(object):
 
 
 def publish(
-        suite: str, pkg: str, subrunner: Publisher,
+        suite: str, pkg: str, subrunner: 'Publisher',
         mode: str, hoster: Hoster, main_branch: Branch, local_branch: Branch,
         resume_branch: Optional[Branch] = None, dry_run: bool = False,
         log_id: Optional[str] = None,
