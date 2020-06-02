@@ -715,7 +715,8 @@ class ActiveLocalRun(ActiveRun):
                 invoke_subprocess_worker(
                     worker_kind, main_branch.user_url.rstrip('/'), env,
                     self.queue_item.command, self.output_directory,
-                    resume_branch_url=resume_branch.user_url,
+                    resume_branch_url=(
+                        resume_branch.user_url if resume_branch else None),
                     cached_branch_url=cached_branch_url, pre_check=pre_check,
                     post_check=post_check,
                     build_command=build_command,
@@ -1150,7 +1151,6 @@ async def handle_assign(request):
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
-        assert vcs_type in ('bzr', 'git'), 'vcs type is %r' % vcs_type
 
         if resume_branch is None and not item.refresh:
             resume_branch = queue_processor.vcs_manager.get_branch(
