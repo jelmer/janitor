@@ -257,21 +257,24 @@ if __name__ == '__main__':
 
     async def handle_history(request):
         limit = int(request.query.get('limit', '100'))
+        worker = request.query.get('worker', None)
         from .history import write_history
         async with request.app.database.acquire() as conn:
             return web.Response(
                 content_type='text/html',
-                text=await write_history(conn, limit=limit),
+                text=await write_history(conn, worker=worker, limit=limit),
                 headers={'Cache-Control': 'max-age=60'})
 
     async def handle_publish_history(request):
         limit = int(request.query.get('limit', '100'))
+        worker = request.query.get('worker', None)
         from .publish import write_history
         async with request.app.database.acquire() as conn:
             return web.Response(
                 content_type='text/html',
                 text=await write_history(
-                    conn, limit=limit, is_admin=is_admin(request)),
+                    conn, worker=worker, limit=limit,
+                    is_admin=is_admin(request)),
                 headers={'Cache-Control': 'max-age=10'})
 
     async def handle_queue(request):
