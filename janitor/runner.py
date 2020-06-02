@@ -22,12 +22,14 @@ import asyncio
 from contextlib import ExitStack
 from datetime import datetime
 from debian.changelog import Version
+import deb822
 from email.utils import parseaddr
 import functools
 import json
 from io import BytesIO
 import os
 import re
+import shutil
 import signal
 import socket
 import sys
@@ -575,6 +577,29 @@ async def check_resume_result(conn, suite, resume_branch):
         return (None, None, None)
 
 
+def dget(changes_location, target_dir):
+    """Copy all files referenced by a .changes file.
+
+    Args:
+      changes_location: Source file location
+      target_dir: Target directory
+    Return:
+      path to target source file
+    """
+    with open(changes_location) as f:
+        changes_contents = f.read()
+    changes = deb822.Changes(changes_contents)
+    srcdir = os.path.dirname(changes_location)
+    for file_details in changes['files']:
+        name = file_details['name']
+        shutil.copy(
+            os.path.join(srcdir, name),
+            os.path.join(target_dir, name))
+    shutil.copy(
+        changes_location,
+        os.path.join(target_dir, os.path.basename(changes_location)))
+
+
 def suite_build_env(suite_config, apt_location):
     env = {
         'EXTRA_REPOSITORIES': ':'.join([
@@ -622,7 +647,8 @@ class ActiveLocalRun(ActiveRun):
             possible_hosters: Optional[List[Hoster]] = None,
             use_cached_only: bool = False,
             overall_timeout: Optional[int] = None,
-            committer: Optional[str] = None) -> JanitorResult:
+            committer: Optional[str] = None,
+            backup_incoming_directory: Optional[str] = None) -> JanitorResult:
         note('Running %r on %s', self.queue_item.command,
              self.queue_item.package)
 
@@ -826,7 +852,15 @@ class ActiveLocalRun(ActiveRun):
                 except UploadFailedError as e:
                     warning('Unable to upload changes file %s: %r',
                             result.changes_filename, e)
-                    # TODO(jelmer): Copy to failed upload directory
+                    if backup_incoming_directory:
+                        backup_dir = os.path.join(
+                            backup_incoming_directory, self.log_id)
+                        os.mkdir(backup_dir)
+                        note('Uploading results to backup incoming '
+                             'directory %s.', backup_dir)
+                        dget(changes_path, backup_dir)
+                    else:
+                        warning('No backup directory set. Discarding results.')
         return result
 
 
@@ -875,7 +909,8 @@ class QueueProcessor(object):
             post_check=None, dry_run=False, incoming_url=None,
             logfile_manager=None, debsign_keyid=None, vcs_manager=None,
             public_vcs_manager=None, concurrency=1, use_cached_only=False,
-            overall_timeout=None, committer=None, apt_location=None):
+            overall_timeout=None, committer=None, apt_location=None,
+            backup_incoming_directory=None):
         """Create a queue processor.
 
         Args:
@@ -905,6 +940,7 @@ class QueueProcessor(object):
         self.committer = committer
         self.active_runs = {}
         self.apt_location = apt_location
+        self.backup_incoming_directory = backup_incoming_directory
 
     def status_json(self) -> Any:
         return {
@@ -929,7 +965,8 @@ class QueueProcessor(object):
                 logfile_manager=self.logfile_manager,
                 use_cached_only=self.use_cached_only,
                 overall_timeout=self.overall_timeout,
-                committer=self.committer)
+                committer=self.committer,
+                backup_incoming_directory=self.backup_incoming_directory)
             await self.finish_run(active_run, result)
 
     def register_run(self, active_run: ActiveRun) -> None:
@@ -1340,6 +1377,10 @@ def main(argv=None):
     parser.add_argument(
         '--overall-timeout', type=int, default=None,
         help='Overall timeout per run (in seconds).')
+    parser.add_argument(
+        '--backup-incoming-directory', type=str,
+        default=None,
+        help='Backup directory to write files to if archiver is down')
 
     args = parser.parse_args()
 
@@ -1371,7 +1412,8 @@ def main(argv=None):
         args.use_cached_only,
         overall_timeout=args.overall_timeout,
         committer=config.committer,
-        apt_location=config.apt_location)
+        apt_location=config.apt_location,
+        backup_incoming_directory=args.backup_incoming_directory)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(queue_processor.process()),

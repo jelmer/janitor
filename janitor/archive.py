@@ -401,11 +401,11 @@ async def update_aptly(aptly_session, incoming_dir):
                     'http://localhost/api/repos/%s/include/%s/%s' % (
                         suite, dirname, changes),
                     data={'acceptUnsigned': 1}) as resp:
-                if resp.status != 200:
-                    warning('Unable to include files %s in %s: %d ',
-                            changes, suite, resp.status)
-                    continue
                 result = await resp.json()
+                if resp.status != 200:
+                    warning('Unable to include files %s in %s: %d: %s',
+                            changes, suite, resp.status, await resp.text())
+                    continue
                 for failed in result['FailedFiles']:
                     if failed in filenames:
                         filenames.remove(failed)

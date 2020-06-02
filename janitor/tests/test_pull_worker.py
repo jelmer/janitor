@@ -27,6 +27,7 @@ import asynctest
 
 from janitor.pull_worker import bundle_results
 
+
 class AsyncBytesIO:
 
     def __init__(self):
@@ -61,7 +62,8 @@ class BundleResultsTests(asynctest.TestCase):
     async def test_simple(self):
         with open('a', 'w') as f:
             f.write('some data\n')
-        with bundle_results({'result_code': 'success'}, self.test_dir) as writer:
+        with bundle_results(
+                {'result_code': 'success'}, self.test_dir) as writer:
             self.assertEqual(['Content-Type'], list(writer.headers.keys()))
             b = AsyncBytesIO()
             await writer.write(b)
