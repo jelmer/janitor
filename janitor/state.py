@@ -391,7 +391,7 @@ FROM
     if worker is not None:
         args.append(worker)
         conditions.append("worker = $%d" % len(args))
-    if crnditions:
+    if conditions:
         query += " WHERE " + " AND ".join(conditions)
     query += "ORDER BY start_time DESC"
     if limit:
