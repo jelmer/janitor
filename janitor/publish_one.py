@@ -357,10 +357,10 @@ def publish(
     with BranchWorkspace(
             main_branch, local_branch, resume_branch=resume_branch,
             push_colocated=subrunner.push_colocated()) as ws:
-        if not hoster.supports_merge_proposal_labels:
-            labels = None
-        else:
+        if hoster and hoster.supports_merge_proposal_labels:
             labels = [suite]
+        else:
+            labels = None
         try:
             return publish_changes_from_workspace(
                 ws, mode, subrunner.branch_name(),
@@ -374,6 +374,10 @@ def publish(
                 labels=labels, reviewers=reviewers,
                 tags=subrunner.tags(),
                 allow_collaboration=True)
+        except UnsupportedHoster:
+            raise PublishFailure(
+                description='Hoster unsupported: %s.' % main_branch.user_url,
+                code='hoster-unsupported')
         except NoSuchProject as e:
             raise PublishFailure(
                 description='project %s was not found' % e.project,
