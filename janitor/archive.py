@@ -18,6 +18,7 @@
 from aiohttp import ClientSession, UnixConnector, MultipartWriter
 import asyncio
 from contextlib import ExitStack
+import json
 import os
 import re
 import sys
@@ -25,7 +26,8 @@ from typing import List, Tuple, Optional
 
 from aiohttp import web
 from debian.deb822 import Changes
-from debian.changelog import Version
+from debian.changelog import Changelog, Version
+from debian.copyright import parse_multiline
 
 from .debdiff import (
     run_debdiff,
@@ -47,6 +49,9 @@ suite_check = re.compile('^[a-z0-9-]+$')
 
 
 async def handle_upload(request):
+    directory = request.match_info['directory']
+    container = os.path.join(request.app.incoming_dir, directory)
+    os.mkdir(container)
     reader = await request.multipart()
     filenames = []
     result = {}
@@ -54,7 +59,7 @@ async def handle_upload(request):
         part = await reader.next()
         if part is None:
             break
-        path = os.path.join(request.app.incoming_dir, part.filename)
+        path = os.path.join(container, part.filename)
         filenames.append(part.filename)
         with open(path, 'wb') as f:
             f.write(await part.read())
@@ -62,8 +67,10 @@ async def handle_upload(request):
             result['changes_filename'] = os.path.basename(path)
             with open(path, 'r') as f:
                 changes = Changes(f)
-                result['build_distribution'] = changes["Distribution"]
-                result['build_version'] = changes["Version"]
+                result['source'] = changes['Source']
+                result['version'] = changes['Version']
+                result['distribution'] = changes['Distribution']
+                result['changes'] = changes['Changes']
     note('Uploaded files: %r', filenames)
     result['filenames'] = filenames
     return web.json_response(result, status=200)
@@ -368,50 +375,39 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     await site.start()
 
 
-async def update_aptly(aptly_session, incoming_dir):
-    import uuid
-    dirname = str(uuid.uuid4())
-    filenames = []
-    todo = []
-    with ExitStack() as es:
-        with MultipartWriter('form-data') as mpwriter:
-            for entry in os.scandir(incoming_dir):
-                filenames.append(entry.name)
-                if entry.name.endswith('.changes'):
-                    with open(entry.path, 'r') as f:
-                        changes = Changes(f)
-                        try:
-                            distribution = changes['Distribution']
-                        except KeyError:
-                            warning(
-                                'Changes file %s does not have Distribution '
-                                'key', entry.path)
-                        else:
-                            todo.append((entry.name, distribution))
-                f = open(entry.path, 'rb')
-                es.enter_context(f)
-                mpwriter.append(f)
-        async with aptly_session.post(
-                'http://localhost/api/files/%s' % dirname,
-                data=mpwriter) as resp:
-            if resp.status != 200:
-                raise Exception('Unable to upload files: %d' % resp.status)
-        for changes, suite in todo:
-            async with aptly_session.post(
-                    'http://localhost/api/repos/%s/include/%s/%s' % (
-                        suite, dirname, changes),
-                    data={'acceptUnsigned': 1}) as resp:
-                result = await resp.json()
-                if resp.status != 200:
-                    warning('Unable to include files %s in %s: %d: %s',
-                            changes, suite, resp.status, await resp.text())
-                    continue
-                for failed in result['FailedFiles']:
-                    if failed in filenames:
-                        filenames.remove(failed)
+async def upload_directory(aptly_session, directory):
+    suite = None
+    changes_filename = None
+    for entry in os.scandir(directory):
+        if not entry.name.endswith('.changes'):
+            continue
+        with open(entry.path, 'r') as f:
+            changes = Changes(f)
+            changes_filename = entry.name
+            cl = Changelog(parse_multiline(changes['Changes']))
+            suite = cl.distributions
+    if suite is None:
+        warning('No valid changes file found, skipping %s',
+                directory)
+        return 
+    async with aptly_session.post(
+            'http://localhost/api/repos/%s/include/%s/%s' % (
+                suite, os.path.basename(directory), changes_filename),
+            data={'acceptUnsigned': 1}) as resp:
+        if resp.status != 200:
+            warning('Unable to include files %s in %s: %d ',
+                    directory, suite, resp.status)
+            return
+        result = await resp.json()
+        note('Result from aptly include: %r', result)
 
-        for name in filenames:
-            os.remove(os.path.join(incoming_dir, name))
+
+async def update_aptly(aptly_session, incoming_dir):
+    for entry in os.scandir(incoming_dir):
+        if not entry.is_dir():
+            # Weird
+            continue
+        await upload_directory(aptly_session, entry.path)
 
 
 async def update_archive_loop(config, aptly_session, incoming_dir):
@@ -471,9 +467,9 @@ async def sync_aptly(aptly_session, suites):
     await sync_aptly_repos(aptly_session, suites)
 
 
-async def run_aptly(sock_path):
+async def run_aptly(sock_path, config_path):
     args = [
-        '/usr/bin/aptly', 'api', 'serve', '-listen=unix://%s' % sock_path]
+        '/usr/bin/aptly', 'api', 'serve', '-listen=unix://%s' % sock_path, '-config=%s' % config_path]
     proc = await asyncio.create_subprocess_exec(*args)
     ret = await proc.wait()
     raise Exception('aptly finished with exit code %r' % ret)
@@ -490,14 +486,11 @@ def main(argv=None):
         '--port', type=int,
         help='Listen port', default=9914)
     parser.add_argument(
-        '--archive', type=str,
-        help='Path to the apt archive.')
-    parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
     parser.add_argument(
-        '--incoming', type=str,
-        help='Path to incoming directory.')
+        '--aptly-config-path', type=str, default='~/.aptly.conf',
+        help='Path to aptly configuration')
     parser.add_argument(
         '--aptly-socket-path', type=str,
         default='aptly.sock',
@@ -508,6 +501,15 @@ def main(argv=None):
     with open(args.config, 'r') as f:
         config = read_config(f)
 
+    aptly_config_path = os.path.expanduser(args.aptly_config_path)
+    with open(aptly_config_path, 'r') as f:
+       aptly_config = json.load(f) 
+
+    aptly_root_dir = aptly_config['rootDir']
+
+    incoming_dir = os.path.join(aptly_root_dir, 'upload')
+    archive_dir = os.path.join(aptly_root_dir, 'public')
+
     aptly_socket_path = os.path.abspath(args.aptly_socket_path)
     if os.path.exists(aptly_socket_path):
         os.remove(aptly_socket_path)
@@ -517,13 +519,13 @@ def main(argv=None):
         connector=UnixConnector(path=aptly_socket_path))
 
     loop.run_until_complete(asyncio.gather(
-        loop.create_task(run_aptly(aptly_socket_path)),
+        loop.create_task(run_aptly(aptly_socket_path, aptly_config_path)),
         loop.create_task(sync_aptly(aptly_session, config.suite)),
         loop.create_task(run_web_server(
-            args.listen_address, args.port, args.archive,
-            args.incoming, aptly_session, config)),
+            args.listen_address, args.port, archive_dir,
+            incoming_dir, aptly_session, config)),
         loop.create_task(update_archive_loop(
-            config, aptly_session, args.incoming))))
+            config, aptly_session, incoming_dir))))
     loop.run_forever()
 
 
