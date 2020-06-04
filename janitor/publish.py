@@ -19,6 +19,7 @@
 
 from aiohttp import web
 from datetime import datetime, timedelta
+from dulwich.repo import Repo as DulwichRepo
 from http.client import parse_headers  # type: ignore
 import asyncio
 import functools
@@ -648,6 +649,7 @@ async def dulwich_refs(request):
 
     repo = await _git_open_repo(
         request.app.vcs_manager, request.app.db, package)
+    r = DulwichRepo(repo._transport.local_abspath('.'))
 
     service = request.query.get('service')
     _git_check_service(service, allow_writes)
@@ -660,20 +662,27 @@ async def dulwich_refs(request):
 
     handler_cls = DULWICH_SERVICE_HANDLERS[service.encode('ascii')]
 
+    response = web.StreamResponse(
+        status=200,
+        headers=headers)
+    response.content_type = 'application/x-%s-advertisement' % service
+
+    await response.prepare(request)
+
     out = BytesIO()
     proto = ReceivableProtocol(BytesIO().read, out.write)
-    handler = handler_cls(DictBackend({'.': repo._git}), ['.'], proto,
+    handler = handler_cls(DictBackend({'.': r}), ['.'], proto,
                           http_req=True, advertise_refs=True)
     handler.proto.write_pkt_line(
         b'# service=' + service.encode('ascii') + b'\n')
     handler.proto.write_pkt_line(None)
     handler.handle()
 
-    return web.Response(
-        status=200,
-        headers=headers,
-        content_type='application/x-%s-advertisement' % service,
-        body=out.getvalue())
+    await response.write(out.getvalue())
+
+    await response.write_eof()
+
+    return response
 
 
 async def dulwich_service(request):
@@ -684,6 +693,7 @@ async def dulwich_service(request):
 
     repo = await _git_open_repo(
         request.app.vcs_manager, request.app.db, package)
+    r = DulwichRepo(repo._transport.local_abspath('.'))
 
     _git_check_service(service, allow_writes)
 
@@ -706,7 +716,7 @@ async def dulwich_service(request):
 
     proto = ReceivableProtocol(inf.read, outf.write)
     handler = handler_cls(
-        DictBackend({'.': repo._git}), ['.'], proto, http_req=True)
+        DictBackend({'.': r}), ['.'], proto, http_req=True)
     handler.handle()
 
     await response.write(outf.getvalue())
