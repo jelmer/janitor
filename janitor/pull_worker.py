@@ -296,9 +296,8 @@ async def main(argv=None):
 
     possible_transports = []
 
-    env = dict(os.environ.items())
-    env.update(assignment['env'])
-    env.update(build_environment)
+    os.environ.update(assignment['env'])
+    os.environ.update(build_environment)
 
     metadata = {}
     if 'JENKINS_URL' in os.environ:
@@ -316,7 +315,7 @@ async def main(argv=None):
         try:
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(None, functools.partial(
-                run_worker, branch_url, subpath, vcs_type, env,
+                run_worker, branch_url, subpath, vcs_type, os.environ,
                 command, output_directory, metadata,
                 build_command=args.build_command,
                 pre_check_command=args.pre_check,
