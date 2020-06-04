@@ -267,13 +267,12 @@ if __name__ == '__main__':
 
     async def handle_publish_history(request):
         limit = int(request.query.get('limit', '100'))
-        worker = request.query.get('worker', None)
         from .publish import write_history
         async with request.app.database.acquire() as conn:
             return web.Response(
                 content_type='text/html',
                 text=await write_history(
-                    conn, worker=worker, limit=limit,
+                    conn, limit=limit,
                     is_admin=is_admin(request)),
                 headers={'Cache-Control': 'max-age=10'})
 
