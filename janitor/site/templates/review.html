@@ -37,7 +37,19 @@ $(function() {
   $('.review-button').attr('type', 'button');
 });
 
-function refreshData() {
+funtion loadNewJob() {
+  if ((newJob = todo.shift()) !== undefined) {
+    loadRun(newJob[0], newJob[1]);
+  } else {
+    $('#diff').replaceWith('All done!');
+    $('#debdiff').replaceWith('');
+    $('#options').remove();
+    $('#full-run-link').remove();
+  }
+}
+
+function refreshData(cb) {
+  console.log("Updating backlog of todo items");
   $.ajax({
      url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?review-status=unreviewed&publishable_only=true',
      dataType: 'json',
@@ -48,6 +60,7 @@ function refreshData() {
                  queued.add(entry[1]);
              }
          });
+         cb();
      }
   });
 }
@@ -62,15 +75,9 @@ function submitReview(elem, status) {
     console.log("Submitting review " + status + " for run " + run_id);
     $.post('/api/run/' + run_id, {'review-status': status, 'review-comment': comment});
     if (todo.length == 0) {
-      refreshData();
-    }
-    if ((newJob = todo.shift()) !== undefined) {
-      loadRun(newJob[0], newJob[1]);
+      refreshData(loadNewJob);
     } else {
-      $('#diff').replaceWith('All done!');
-      $('#debdiff').replaceWith('');
-      $('#options').remove();
-      $('#full-run-link').remove();
+      loadNewJob();
     }
 }
 </script>
