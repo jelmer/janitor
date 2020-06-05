@@ -123,6 +123,8 @@ def push_branch(
         possible_transports: Optional[List[Transport]] = None) -> None:
     url, params = urlutils.split_segment_parameters(url)
     branch_name = params.get('branch')
+    if branch_name is not None:
+        branch_name = urlutils.unquote(branch_name)
     try:
         target = ControlDir.open(
             url, possible_transports=possible_transports)
