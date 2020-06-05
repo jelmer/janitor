@@ -21,8 +21,6 @@ from aiohttp import (
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
-from debian.changelog import Version
-import deb822
 from email.utils import parseaddr
 import functools
 import json
@@ -38,6 +36,7 @@ from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
 import uuid
 import urllib.parse
 
+from debian.changelog import Version
 from debian.deb822 import Changes
 
 from breezy import debug, urlutils
@@ -588,7 +587,7 @@ def dget(changes_location, target_dir):
     """
     with open(changes_location) as f:
         changes_contents = f.read()
-    changes = deb822.Changes(changes_contents)
+    changes = Changes(changes_contents)
     srcdir = os.path.dirname(changes_location)
     for file_details in changes['files']:
         name = file_details['name']
