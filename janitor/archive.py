@@ -15,9 +15,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, UnixConnector, MultipartWriter
+from aiohttp import ClientSession, UnixConnector
 import asyncio
-from contextlib import ExitStack
 import json
 import os
 import re
@@ -389,7 +388,7 @@ async def upload_directory(aptly_session, directory):
     if suite is None:
         warning('No valid changes file found, skipping %s',
                 directory)
-        return 
+        return
     async with aptly_session.post(
             'http://localhost/api/repos/%s/include/%s/%s' % (
                 suite, os.path.basename(directory), changes_filename),
@@ -469,7 +468,9 @@ async def sync_aptly(aptly_session, suites):
 
 async def run_aptly(sock_path, config_path):
     args = [
-        '/usr/bin/aptly', 'api', 'serve', '-listen=unix://%s' % sock_path, '-config=%s' % config_path]
+        '/usr/bin/aptly', 'api', 'serve',
+        '-listen=unix://%s' % sock_path,
+        '-config=%s' % config_path]
     proc = await asyncio.create_subprocess_exec(*args)
     ret = await proc.wait()
     raise Exception('aptly finished with exit code %r' % ret)
@@ -503,7 +504,7 @@ def main(argv=None):
 
     aptly_config_path = os.path.expanduser(args.aptly_config_path)
     with open(aptly_config_path, 'r') as f:
-       aptly_config = json.load(f) 
+       aptly_config = json.load(f)
 
     aptly_root_dir = aptly_config['rootDir']
 
