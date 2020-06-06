@@ -32,9 +32,14 @@ FROM merge_proposal group by 1, 2"""):
         by_status.setdefault(status, {})[hoster] = count
 
     review_status_stats = {
-        status: count for (status, count) in await conn.fetch(
-            'select review_status, count(*) from '
-            'last_unabsorbed_runs where result_code = \'success\' group by 1')}
+        status: count for (status, count) in await conn.fetch("""\
+select review_status, count(*) from last_unabsorbed_runs
+LEFT JOIN publish_policy
+ON publish_policy.package = last_absorbed_runs.package
+AND publish_policy.suite = run.suite
+where result_code = \'success\' AND
+publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
+group by 1""")}
 
     pushes_over_time = {
         timestamp: int(count) for (timestamp, count) in await conn.fetch(
