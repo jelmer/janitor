@@ -504,7 +504,7 @@ def main(argv=None):
 
     aptly_config_path = os.path.expanduser(args.aptly_config_path)
     with open(aptly_config_path, 'r') as f:
-       aptly_config = json.load(f)
+        aptly_config = json.load(f)
 
     aptly_root_dir = aptly_config['rootDir']
 

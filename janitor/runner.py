@@ -23,6 +23,7 @@ from contextlib import ExitStack
 from datetime import datetime
 from email.utils import parseaddr
 import functools
+import itertools
 import json
 from io import BytesIO
 import os
@@ -325,6 +326,23 @@ async def invoke_subprocess_worker(
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
+def possible_salsa_urls_from_package_name(package_name, maintainer_email=None):
+    yield guess_repository_url(package_name, maintainer_email)
+    yield 'https://salsa.debian.org/debian/%s.git' % package_name
+
+
+def possible_urls_from_alioth_url(vcs_type, vcs_url):
+    # These are the same transformations applied by vcswatc. The goal is mostly
+    # to get a URL that properly redirects.
+    https_alioth_url = re.sub(
+        r'(https?|git)://(anonscm|git).debian.org/(git/)?',
+        r'https://anonscm.debian.org/git/',
+        vcs_url)
+
+    yield https_alioth_url,
+    yield salsa_url_from_alioth_url(vcs_type, vcs_url)
+
+
 async def open_guessed_salsa_branch(
         conn, pkg, vcs_type, vcs_url, possible_transports=None):
     package = await state.get_package(conn, pkg)
@@ -333,19 +351,10 @@ async def open_guessed_salsa_branch(
 
     tried = set(vcs_url)
 
-    # These are the same transformations applied by vcswatc. The goal is mostly
-    # to get a URL that properly redirects.
-    https_alioth_url = re.sub(
-        r'(https?|git)://(anonscm|git).debian.org/(git/)?',
-        r'https://anonscm.debian.org/git/',
-        vcs_url)
-
-    for salsa_url in [
-            https_alioth_url,
-            salsa_url_from_alioth_url(vcs_type, vcs_url),
-            guess_repository_url(package.name, package.maintainer_email),
-            'https://salsa.debian.org/debian/%s.git' % package.name,
-            ]:
+    for salsa_url in itertools.chain(
+            possible_urls_from_alioth_url(vcs_type, vcs_url),
+            possible_salsa_urls_from_package_name(
+                package.name, package.maintainer_email)):
         if not salsa_url or salsa_url in tried:
             continue
 
@@ -652,6 +661,7 @@ class ActiveLocalRun(ActiveRun):
              self.queue_item.package)
 
         if self.queue_item.branch_url is None:
+            # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
                 branch_url=self.queue_item.branch_url,
@@ -814,7 +824,7 @@ class ActiveLocalRun(ActiveRun):
         try:
             (result.changes_filename, result.build_version,
              result.build_distribution) = find_changes(
-                 self.output_directory, result.package)
+                 self.output_directory, self.queue_item.package)
         except NoChangesFile as e:
             # Oh, well.
             note('No changes file found: %s', e)
