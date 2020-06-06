@@ -777,7 +777,6 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     pkg = env['PACKAGE']
 
-    metadata['package'] = pkg
     metadata['command'] = command
 
     subworker_cls: Type[SubWorker]
@@ -801,10 +800,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             'unknown-subcommand',
             'unknown subcommand %s' % command[0])
     subworker = subworker_cls(command[1:], env)
-    assert pkg is not None
 
-    note('Processing: %s', pkg)
-
+    note('Opening branch at %s', vcs_url)
     try:
         main_branch = open_branch(
             vcs_url, possible_transports=possible_transports)
