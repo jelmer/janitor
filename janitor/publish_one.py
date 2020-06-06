@@ -354,6 +354,8 @@ def publish(
         if merge_conflicts(main_branch, local_branch):
             raise MergeConflict(main_branch, local_branch)
 
+    labels: Optional[List[str]]
+
     with BranchWorkspace(
             main_branch, local_branch, resume_branch=resume_branch,
             push_colocated=subrunner.push_colocated()) as ws:
