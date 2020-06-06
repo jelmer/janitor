@@ -20,12 +20,10 @@
 from aiohttp import web
 from datetime import datetime, timedelta
 from dulwich.repo import Repo as DulwichRepo
-from http.client import parse_headers  # type: ignore
 import asyncio
 import functools
 from io import BytesIO
 import json
-import os
 import shlex
 import sys
 import time
@@ -42,7 +40,6 @@ from dulwich.server import (
     DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
     DictBackend,
     )
-from dulwich.web import HTTPGitApplication
 
 from prometheus_client import (
     Counter,
@@ -622,7 +619,7 @@ async def _git_open_repo(vcs_manager, db, package):
                 raise web.HTTPNotFound()
         controldir = ControlDir.create(
             vcs_manager.get_repository_url(package, 'git'),
-            format=format_registry.get('git')())
+            format=format_registry.get('git-bare')())
         note('Created missing git repository for %s at %s',
              package, controldir.user_url)
         return controldir.open_repository()
@@ -725,92 +722,6 @@ async def dulwich_service(request):
     return response
 
 
-GIT_URL_RES = [k[1] for k in HTTPGitApplication.services]
-
-
-async def git_backend(request):
-    package = request.match_info['package']
-    subpath = request.match_info['subpath']
-
-    allow_writes = bool(request.query.get('allow_writes'))
-
-    repo = await _git_open_repo(
-        request.app.vcs_manager, request.app.db, package)
-
-    args = ['/usr/bin/git']
-    if allow_writes:
-        args.extend(['-c', 'http.receivepack=1'])
-    args.append('http-backend')
-    for regex in GIT_URL_RES:
-        if regex.match('/'+subpath):
-            break
-    else:
-        raise web.HTTPNotFound(text='invalid subpath %r' % subpath)
-    local_path = repo.user_transport.local_abspath('.')
-    full_path = local_path + '/' + subpath
-    env = {
-        'GIT_HTTP_EXPORT_ALL': 'true',
-        'REQUEST_METHOD': request.method,
-        'REMOTE_ADDR': request.remote,
-        'CONTENT_TYPE': request.content_type,
-        'PATH_TRANSLATED': full_path,
-        'QUERY_STRING': request.query_string,
-        # REMOTE_USER is not set
-        }
-
-    for key, value in request.headers.items():
-        env['HTTP_' + key.replace('-', '_').upper()] = value
-
-    for name in ['HTTP_CONTENT_ENCODING', 'HTTP_CONTENT_LENGTH']:
-        try:
-            del env[name]
-        except KeyError:
-            pass
-
-    p = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        env=env, stdin=asyncio.subprocess.PIPE)
-
-    stdin = await request.read()
-
-    # TODO(jelmer): Stream output, rather than reading everything into a buffer
-    # and then sending it on.
-
-    (stdout, stderr) = await p.communicate(stdin)
-    if stderr:
-        if stderr.decode().strip() == 'Service not enabled: \'receive-pack\'':
-            raise web.HTTPUnauthorized(text=stderr.decode())
-        if not stdout:
-            return web.Response(
-                status=400, reason='Bad Request', body=stderr)
-        for line in stderr.splitlines():
-            warning('Git warning: %s', line.decode())
-
-    b = BytesIO(stdout)
-
-    headers = parse_headers(b)
-    status = headers.get('Status')
-    if status:
-        del headers['Status']
-        (status_code, status_reason) = status.split(' ', 1)
-        status_code = int(status_code)
-        status_reason = status_reason
-    else:
-        status_code = 200
-        status_reason = 'OK'
-
-    response = web.StreamResponse(
-        headers=headers.items(), status=status_code,
-        reason=status_reason)
-    await response.prepare(request)
-
-    await response.write(b.read())
-
-    await response.write_eof()
-
-    return response
-
-
 async def bzr_backend(request):
     vcs_manager = request.app.vcs_manager
     package = request.match_info['package']
@@ -872,14 +783,11 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     setup_metrics(app)
     app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/diff/{run_id}", diff_request)
-    if not os.environ.get('USE_DULWICH'):
-        app.router.add_route("*", "/git/{package}/{subpath:.*}", git_backend)
-    else:
-        app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
-            dulwich_service)
-        app.router.add_get(
-            "/git/{package}/info/refs", dulwich_refs)
+    app.router.add_post(
+        "/git/{package}/{service:git-receive-pack|git-upload-pack}",
+        dulwich_service)
+    app.router.add_get(
+        "/git/{package}/info/refs", dulwich_refs)
     app.router.add_post(
         "/bzr/{package}/.bzr/smart", bzr_backend)
     app.router.add_post(
