@@ -96,6 +96,9 @@ class ForwardedResource(PrefixResource):
             params['service'] = service
         if await is_worker(request.app.database, request):
             params['allow_writes'] = '1'
+        from janitor.trace import note
+        note('Forwarding: method: %s, url: %s, params: %r, headers: %r',
+             request.method, url, params, headers)
         async with request.app.http_client_session.request(
                 request.method, url, params=params, headers=headers,
                 data=request.content) as client_response:
@@ -773,8 +776,6 @@ if __name__ == '__main__':
                        name='result-code-list')
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes,
                        name='result-code')
-    from .stats import stats_app
-    app.router.add_subapp('/cupboard/stats', stats_app(app.database))
     app.router.add_get(
         '/cupboard/maintainer-stats', handle_cupboard_maintainer_stats,
         name='cupboard-maintainer-stats')
@@ -862,6 +863,8 @@ if __name__ == '__main__':
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
     app.database = state.Database(config.database_location)
+    from .stats import stats_app
+    app.add_subapp('/cupboard/stats', stats_app(app.database))
     app.config = config
     from janitor.site import env, is_admin
     app.jinja_env = env

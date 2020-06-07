@@ -61,6 +61,7 @@ new Chart($("#hoster-status-chart"), {
 
 <canvas id="burndown" width="800" height="450"></canvas>
 <script>
+$.getJSON("/cupboard/stats/+chart/burndown", function (json) {
 new Chart($("#burndown"), {
     type: 'line',
     data: {
@@ -68,9 +69,7 @@ new Chart($("#burndown"), {
         label: 'Packages remaining',
         backgroundColor: window.chartColors.red,
         borderColor: window.chartColors.red,
-        data: [{% for ts, y in burndown %}
-          { t: moment('{{ts.isoformat()}}').toDate(), y: {{ y }}},{% endfor %}
-	],
+	data: $.map(json, function(entry) { return { t: moment(entry[0]).toDate(), y: entry[1] } } ),
       }],
     },
     options: {
@@ -100,6 +99,7 @@ new Chart($("#burndown"), {
         }],
       }
     },
+});
 });
 </script>
 
@@ -141,7 +141,7 @@ $.getJSON("/cupboard/stats/+chart/pushes-over-time", function (json) {
 new Chart($("#pushes-over-time-chart"), {
     type: 'line',
     data: {
-       labels: json['labels'].forEach(function(ts) { return moment(ts).toDate(); }),
+       labels: json['labels'].map(function(ts) { return moment(ts).toDate(); }),
        datasets: [{
          label: 'Pushes',
          borderColor: window.chartColors.green,
@@ -163,6 +163,7 @@ new Chart($("#pushes-over-time-chart"), {
 
 <canvas id="merges-over-time-chart" width="800" height="450"></canvas>
 <script>
+$.getJSON("/cupboard/stats/+chart/merges-over-time", function (json) {
 new Chart($("#merges-over-time-chart"), {
     type: 'line',
     data: {
@@ -172,7 +173,7 @@ new Chart($("#merges-over-time-chart"), {
          label: '{{ key }}',
          borderColor: window.chartColors.{{ color }},
          backgroundColor: Chart.helpers.color(window.chartColors.{{ color }}).alpha(0.5).rgbString(),
-         data: [{% for ts, count in merges_over_time[key].items() %}{ x: moment('{{ ts.isoformat() }}').toDate(), y: {{ count }}},{% endfor %}],
+	 data: $.map(json['{{ key }}'], function(count, ts) { return { x: moment(ts).toDate(), y: count }; }),
        },
 {% endfor %}
        ],
@@ -184,23 +185,26 @@ new Chart($("#merges-over-time-chart"), {
        },
     },
 });
+});
 </script>
 
 <h2>Time to merge</h2>
 
 <canvas id="time-to-merge" width="800" height="450"></canvas>
 <script>
+$.getJSON("/cupboard/stats/+chart/time-to-merge", function (json) {
 new Chart.Scatter($("#time-to-merge"), {
     data: {
         datasets: [{
            label: "Days to merge",
-           data: [{% for x, y in time_to_merge %}{ x: {{ x }}, y: {{ y }}},{% endfor %}],
+           data: $.map(json, function(y, x) { return { x: x, y: y}; }),
            backgroundColor: Chart.helpers.color(window.chartColors.green).alpha(0.5).rgbString(),
         }],
     },
     options: {
       title: { text: "Time to Merge", display: true },
     },
+});
 });
 </script>
 
