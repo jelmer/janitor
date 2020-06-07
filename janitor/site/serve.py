@@ -287,20 +287,6 @@ if __name__ == '__main__':
                     queue_status=app.runner_status, limit=limit),
                 headers={'Cache-Control': 'max-age=10'})
 
-    async def handle_cupboard_stats(request):
-        from .stats import write_stats
-        async with request.app.database.acquire() as conn:
-            return web.Response(
-                content_type='text/html', text=await write_stats(
-                    conn), headers={'Cache-Control': 'max-age=60'})
-
-    async def handle_cupboard_stats_graph_review_status(request):
-        from .stats import graph_review_status
-        async with request.app.database.acquire() as conn:
-            return web.json_response(
-                await graph_review_status(conn),
-                headers={'Cache-Control': 'max-age=60'})
-
     async def handle_cupboard_maintainer_stats(request):
         from .stats import write_maintainer_stats
         async with request.app.database.acquire() as conn:
@@ -787,10 +773,8 @@ if __name__ == '__main__':
                        name='result-code-list')
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes,
                        name='result-code')
-    app.router.add_get(
-        '/cupboard/stats', handle_cupboard_stats, name='cupboard-stats')
-    app.router.add_get(
-        '/cupboard/stats/+chart/review-status', handle_cupboard_stats_graph_review_status)
+    from .stats import stats_app
+    app.router.add_subapp('/cupboard/stats', stats_app(app.database))
     app.router.add_get(
         '/cupboard/maintainer-stats', handle_cupboard_maintainer_stats,
         name='cupboard-maintainer-stats')
