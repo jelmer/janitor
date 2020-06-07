@@ -129,11 +129,11 @@ class SubWorkerResult(object):
         self.tags = tags
 
     @classmethod
-    def from_changer(cls, changer, result, description):
+    def from_changer_result(cls, changer, result):
         return cls(
-            tags=changer.tags(result),
-            description=description,
-            value=changer.value(result))
+            tags=changer.tags(result.mutator),
+            description=result.description,
+            value=changer.value(result.mutator))
 
 
 class SubWorker(object):
@@ -211,7 +211,7 @@ class MultiArchHintsWorker(SubWorker):
 
         try:
             with local_tree.lock_write():
-                result = self.changer.make_changes(
+                result = self.changer.make_changes()
                     local_tree, subpath, None, None)
         except NoChanges:
             raise WorkerFailure('nothing-to-do', 'no hints to apply')
@@ -226,15 +226,14 @@ class MultiArchHintsWorker(SubWorker):
 
         hint_names = []
         metadata['applied-hints'] = []
-        for (binary, hint, description, certainty) in result.changes:
+        for (binary, hint, description, certainty) in result.mutator.changes:
             entry = dict(hint.items())
             hint_names.append(entry['link'].split('#')[-1])
             entry['action'] = description
             entry['certainty'] = certainty
             metadata['applied-hints'].append(entry)
             note('%s: %s' % (binary['Package'], description))
-        return SubWorkerResult.from_changer(
-            description="Applied multi-arch hints.",
+        return SubWorkerResult.from_changer_result(
             changer=self.changer, result=result)
 
 
@@ -281,11 +280,10 @@ class OrphanWorker(SubWorker):
             raise WorkerFailure(
                 'generated-file',
                 'unable to edit generated file: %r' % e)
-        metadata['old_vcs_url'] = result.old_vcs_url
-        metadata['new_vcs_url'] = result.new_vcs_url
-        metadata['pushed'] = result.pushed
-        return SubWorkerResult.from_changer(
-            description='Move package to QA team.',
+        metadata['old_vcs_url'] = result.mutator.old_vcs_url
+        metadata['new_vcs_url'] = result.mutator.new_vcs_url
+        metadata['pushed'] = result.mutator.pushed
+        return SubWorkerResult.from_changer_result(
             changer=self.changer, result=result)
 
 
@@ -323,9 +321,8 @@ class CMEWorker(SubWorker):
         result = self.changer.make_changes(
             local_tree, subpath=subpath, update_changelog=update_changelog,
             committer=self.committer)
-        return SubWorkerResult.from_changer(
-            description='Apply CME Fixes.', changer=self.changer,
-            result=result)
+        return SubWorkerResult.from_changer_result(
+            changer=self.changer, result=result)
 
 
 class LintianBrushWorker(SubWorker):
@@ -687,8 +684,7 @@ class UncommittedWorker(SubWorker):
         metadata['tags'] = [
             (tag_name, str(version))
             for (tag_name, version) in result]
-        return SubWorkerResult.from_changer(
-            description='Import archive changes missing from the VCS.',
+        return SubWorkerResult.from_changer_result(
             changer=self.changer, result=result)
 
 
