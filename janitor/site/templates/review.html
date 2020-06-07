@@ -37,7 +37,7 @@ $(function() {
   $('.review-button').attr('type', 'button');
 });
 
-funtion loadNewJob() {
+function loadNewJob() {
   if ((newJob = todo.shift()) !== undefined) {
     loadRun(newJob[0], newJob[1]);
   } else {
