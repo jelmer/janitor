@@ -1,5 +1,7 @@
+#!/usr/bin/python3
 
 from . import env
+from aiohttp import web
 
 
 async def write_maintainer_stats(conn):
@@ -17,16 +19,27 @@ order by maintainer_email asc
     return await template.render_async(by_maintainer=by_maintainer)
 
 
-async def graph_review_status(conn):
+async def graph_pushes_over_time(conn):
+    labels = []
+    counts = []
+    for (timestamp, count) in await conn.fetch(
+            'SELECT timestamp, '
+            'sum(count(*)) over (order by timestamp asc rows '
+            'between unbounded preceding and current row) FROM publish '
+            'WHERE mode = \'push\' and result_code = \'success\' '
+            'group by 1 order by timestamp'):
+        labels.append(timestamp.isoformat())
+        counts.append(count)
     return {
-        status: count for (status, count) in await conn.fetch("""\
-select review_status, count(*) from last_unabsorbed_runs
-LEFT JOIN publish_policy
-ON publish_policy.package = last_unabsorbed_runs.package
-AND publish_policy.suite = last_unabsorbed_runs.suite
-where result_code = \'success\' AND
-publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
-group by 1""")}
+        'labels': labels,
+        'push_count': counts}
+
+
+async def handle_graph_pushes_over_time(request):
+    async with request.app.database.acquire() as conn:
+        return web.json_response(
+            await graph_pushes_over_time(conn),
+            headers={'Cache-Control': 'max-age=60'})
 
 
 async def write_stats(conn):
@@ -42,14 +55,6 @@ SELECT
 FROM merge_proposal group by 1, 2"""):
         by_hoster.setdefault(hoster, {})[status] = count
         by_status.setdefault(status, {})[hoster] = count
-
-    pushes_over_time = {
-        timestamp: int(count) for (timestamp, count) in await conn.fetch(
-            'SELECT timestamp, '
-            'sum(count(*)) over (order by timestamp asc rows '
-            'between unbounded preceding and current row) FROM publish '
-            'WHERE mode = \'push\' and result_code = \'success\' '
-            'group by 1 order by timestamp')}
 
     merges_over_time = {
         'opened': {timestamp: int(count)
@@ -95,6 +100,45 @@ from first_run_time) as r where mod(rn, 200) = 0
         burndown=burndown,
         by_hoster=by_hoster,
         by_status_chart=by_status,
-        pushes_over_time=pushes_over_time,
         merges_over_time=merges_over_time,
         time_to_merge=time_to_merge)
+
+
+async def handle_cupboard_stats(request):
+    async with request.app.database.acquire() as conn:
+        return web.Response(
+            content_type='text/html', text=await write_stats(
+                conn), headers={'Cache-Control': 'max-age=60'})
+
+
+async def graph_review_status(conn):
+    return {
+        status: count for (status, count) in await conn.fetch("""\
+select review_status, count(*) from last_unabsorbed_runs
+LEFT JOIN publish_policy
+ON publish_policy.package = last_unabsorbed_runs.package
+AND publish_policy.suite = last_unabsorbed_runs.suite
+where result_code = \'success\' AND
+publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
+group by 1""")}
+
+
+async def handle_cupboard_stats_graph_review_status(request):
+    async with request.app.database.acquire() as conn:
+        return web.json_response(
+            await graph_review_status(conn),
+            headers={'Cache-Control': 'max-age=60'})
+
+
+def stats_app(database):
+    app = web.Application()
+    app.database = database
+    app.router.add_get(
+        '/', handle_stats, name='index')
+    app.router.add_get(
+        '/+chart/review-status', handle_graph_review_status,
+        'graph-review-status')
+    app.router.add_get(
+        '/+chart/pushes-over-time', handle_graph_pushes_over_time,
+        'graph-pushes-over-time')
+    return app

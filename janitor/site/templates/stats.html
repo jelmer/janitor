@@ -137,15 +137,16 @@ new Chart($("#review-status-chart"), {
 
 <canvas id="pushes-over-time-chart" width="800" height="450"></canvas>
 <script>
+$.getJSON("/cupboard/stats/+chart/pushes-over-time", function (json) {
 new Chart($("#pushes-over-time-chart"), {
     type: 'line',
     data: {
-       labels: [ {% for ts in pushes_over_time %}moment('{{ts.isoformat()}}').toDate(),{% endfor %} ],
+       labels: json['labels'].forEach(function(ts) { return moment(ts).toDate(); }),
        datasets: [{
          label: 'Pushes',
          borderColor: window.chartColors.green,
          backgroundColor: Chart.helpers.color(window.chartColors.green).alpha(0.5).rgbString(),
-         data: {{ pushes_over_time.values()|list|tojson }},
+         data: json['push_count'],
        }],
     },
     options: {
@@ -154,6 +155,7 @@ new Chart($("#pushes-over-time-chart"), {
          xAxes: [{ type: 'time' }],
        },
     },
+});
 });
 </script>
 
