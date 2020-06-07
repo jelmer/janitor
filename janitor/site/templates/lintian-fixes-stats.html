@@ -38,6 +38,7 @@ and then merged</a>.</p>
 
 <canvas id="burndown" width="800" height="450"></canvas>
 <script>
+$.getJSON("/cupboard/stats/+chart/burndown?suite=lintian-fixes", function (json) {
 new Chart($("#burndown"), {
     type: 'line',
     data: {
@@ -45,9 +46,7 @@ new Chart($("#burndown"), {
         label: 'Packages remaining',
         backgroundColor: window.chartColors.red,
         borderColor: window.chartColors.red,
-        data: [{% for ts, y in burndown %}
-          { t: moment('{{ts.isoformat()}}').toDate(), y: {{ y }}},{% endfor %}
-	],
+	data: $.map(json, function(entry) { return { t: moment(entry[0]).toDate(), y: entry[1] } } ),
       }],
     },
     options: {
@@ -77,6 +76,7 @@ new Chart($("#burndown"), {
         }],
       }
     },
+});
 });
 </script>
 
