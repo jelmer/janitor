@@ -17,6 +17,18 @@ order by maintainer_email asc
     return await template.render_async(by_maintainer=by_maintainer)
 
 
+async def graph_review_status(conn):
+    return {
+        status: count for (status, count) in await conn.fetch("""\
+select review_status, count(*) from last_unabsorbed_runs
+LEFT JOIN publish_policy
+ON publish_policy.package = last_unabsorbed_runs.package
+AND publish_policy.suite = last_unabsorbed_runs.suite
+where result_code = \'success\' AND
+publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
+group by 1""")}
+
+
 async def write_stats(conn):
     template = env.get_template('stats.html')
 
@@ -30,16 +42,6 @@ SELECT
 FROM merge_proposal group by 1, 2"""):
         by_hoster.setdefault(hoster, {})[status] = count
         by_status.setdefault(status, {})[hoster] = count
-
-    review_status_stats = {
-        status: count for (status, count) in await conn.fetch("""\
-select review_status, count(*) from last_unabsorbed_runs
-LEFT JOIN publish_policy
-ON publish_policy.package = last_unabsorbed_runs.package
-AND publish_policy.suite = last_unabsorbed_runs.suite
-where result_code = \'success\' AND
-publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
-group by 1""")}
 
     pushes_over_time = {
         timestamp: int(count) for (timestamp, count) in await conn.fetch(
@@ -93,7 +95,6 @@ from first_run_time) as r where mod(rn, 200) = 0
         burndown=burndown,
         by_hoster=by_hoster,
         by_status_chart=by_status,
-        review_status_stats=review_status_stats,
         pushes_over_time=pushes_over_time,
         merges_over_time=merges_over_time,
         time_to_merge=time_to_merge)

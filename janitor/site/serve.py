@@ -294,6 +294,13 @@ if __name__ == '__main__':
                 content_type='text/html', text=await write_stats(
                     conn), headers={'Cache-Control': 'max-age=60'})
 
+    async def handle_cupboard_stats_graph_review_status(request):
+        from .stats import graph_review_status
+        async with request.app.database.acquire() as conn:
+            return web.json_response(
+                await graph_review_status(conn),
+                headers={'Cache-Control': 'max-age=60'})
+
     async def handle_cupboard_maintainer_stats(request):
         from .stats import write_maintainer_stats
         async with request.app.database.acquire() as conn:
@@ -782,6 +789,8 @@ if __name__ == '__main__':
                        name='result-code')
     app.router.add_get(
         '/cupboard/stats', handle_cupboard_stats, name='cupboard-stats')
+    app.router.add_get(
+        '/cupboard/stats/+chart/review-status', handle_cupboard_stats_graph_review_status)
     app.router.add_get(
         '/cupboard/maintainer-stats', handle_cupboard_maintainer_stats,
         name='cupboard-maintainer-stats')

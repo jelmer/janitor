@@ -107,15 +107,16 @@ new Chart($("#burndown"), {
 
 <canvas id="review-status-chart" width="800" height="450"></canvas>
 <script>
+$.getJSON("/cupboard/stats/+chart/review-status", function (json) {
 new Chart($("#review-status-chart"), {
     type: 'pie',
     data: {
        labels: ["rejected", "approved", "unreviewed"],
        datasets: [{
           data: [
-            {{ review_status_stats['rejected'] }},
-            {{ review_status_stats['approved'] }},
-            {{ review_status_stats['unreviewed'] }},
+            json['rejected'],
+            json['approved'],
+            json['unreviewed'],
           ],
           backgroundColor: [
              Chart.helpers.color(window.chartColors.red).alpha(0.5).rgbString(),
@@ -127,6 +128,7 @@ new Chart($("#review-status-chart"), {
     options: {
         title: { display: true, text: 'Review Status for Successful Runs' },
     },
+});
 });
 </script>
 
