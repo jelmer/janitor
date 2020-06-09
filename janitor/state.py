@@ -305,7 +305,7 @@ class Run(object):
                    context=row[12], result=row[13], suite=row[14],
                    instigated_context=row[15], branch_url=row[16],
                    logfilenames=row[17], review_status=row[18],
-                   worker_name=row[19])
+                   review_comment=row[19], worker_name=row[20])
 
     def __len__(self) -> int:
         return len(self.__slots__)
@@ -343,7 +343,7 @@ SELECT
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
-    worker
+    review_comment, worker
 FROM
     last_runs
 WHERE
@@ -376,7 +376,8 @@ SELECT
     id, command, start_time, finish_time, description, package,
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames, review_status, worker
+    instigated_context, branch_url, logfilenames, review_status, review_comment,
+    worker
 FROM
     run
 """
@@ -461,6 +462,7 @@ SELECT
     run.branch_url,
     run.logfilenames,
     run.review_status,
+    run.review_comment,
     run.worker,
     merge_proposal.url, merge_proposal.status
 FROM
@@ -482,7 +484,7 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
         query += " WHERE run.suite = $1"
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     for row in await conn.fetch(query, *args):
-        yield Run.from_row(row[:20]), row[20], row[21]
+        yield Run.from_row(row[:21]), row[21], row[22]
 
 
 class QueueItem(object):
@@ -719,6 +721,7 @@ SELECT
   branch_url,
   logfilenames,
   review_status,
+  review_comment,
   worker
 FROM
   run
@@ -754,6 +757,7 @@ SELECT
   branch_url,
   logfilenames,
   review_status,
+  review_comment,
   worker
 FROM
   last_unabsorbed_runs
@@ -790,6 +794,7 @@ SELECT DISTINCT ON (package)
   branch_url,
   logfilenames,
   review_status,
+  review_comment,
   worker
 FROM
   last_unabsorbed_runs
@@ -841,6 +846,7 @@ SELECT
   branch_url,
   logfilenames,
   review_status,
+  review_comment,
   worker
 FROM last_runs
 """
@@ -929,6 +935,7 @@ SELECT
   run.branch_url,
   run.logfilenames,
   run.review_status,
+  run.review_comment,
   run.worker,
   package.maintainer_email,
   package.uploader_emails,
@@ -968,7 +975,7 @@ ORDER BY
         query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
         yield tuple(
-            [Run.from_row(record[:20])] + list(record[20:-1]) +
+            [Run.from_row(record[:21])] + list(record[21:-1]) +
             [shlex.split(record[-1]) if record[-1] else None])  # type: ignore
 
 
@@ -1226,7 +1233,7 @@ SELECT
     run.package, run.build_version, run.build_distribution, run.result_code,
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
-    run.logfilenames, run.review_status, run.worker
+    run.logfilenames, run.review_status, run.review_comment, run.worker
 FROM run inner join merge_proposal on merge_proposal.revision = run.revision
 WHERE merge_proposal.url = $1
 ORDER BY run.finish_time ASC
