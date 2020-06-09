@@ -258,14 +258,14 @@ class Run(object):
             'build_distribution', 'result_code', 'branch_name',
             'main_branch_revision', 'revision', 'context', 'result',
             'suite', 'instigated_context', 'branch_url', 'logfilenames',
-            'review_status', 'worker_name']
+            'review_status', 'review_comment', 'worker_name']
 
     def __init__(self, run_id, times, command, description, package,
                  build_version,
                  build_distribution, result_code, branch_name,
                  main_branch_revision, revision, context, result,
                  suite, instigated_context, branch_url, logfilenames,
-                 review_status, worker_name):
+                 review_status, review_comment, worker_name):
         self.id = run_id
         self.times = times
         self.command = command
@@ -284,6 +284,7 @@ class Run(object):
         self.branch_url = branch_url
         self.logfilenames = logfilenames
         self.review_status = review_status
+        self.review_comment = review_comment
         self.worker_name = worker_name
 
     @property
@@ -316,7 +317,8 @@ class Run(object):
                 self.result_code, self.branch_name, self.main_branch_revision,
                 self.revision, self.context, self.result, self.suite,
                 self.instigated_context, self.branch_url,
-                self.logfilenames, self.review_status, self.worker_name)
+                self.logfilenames, self.review_status,
+                self.review_comment, self.worker_name)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Run):
