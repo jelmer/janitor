@@ -7,7 +7,7 @@
 
 <ul>
 {% for (run, maintainer_email, uploader_emails, branch_url, publish_mode, changelog_mode, command) in entries %}
-   <li><a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a></li>
+	<li><a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a> (<i>{{ run.review_comment }}</i>)</li>
 {% endfor %}
 </ul>
 
