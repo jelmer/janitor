@@ -102,7 +102,6 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['branch_url'] = run.branch_url
-    kwargs['review_status'] = run.review_status
     async with db.acquire() as conn:
         if run.main_branch_revision:
             kwargs['unchanged_run'] = await state.get_unchanged_run(

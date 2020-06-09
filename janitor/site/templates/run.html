@@ -23,9 +23,9 @@
 <li>Description: {{ description }}</li>
 {% if result_code == 'success' %}
 <li>Review Status: <select id="review-status" name='review-status'>
-  <option value="unreviewed"{% if review_status == 'unreviewed' %} selected="true"{% endif %}>Unreviewed</option>
-  <option value="approved"{% if review_status == 'approved' %} selected="true"{% endif %}>Approved</option>
-  <option value="rejected"{% if review_status == 'rejected' %} selected="true"{% endif %}>Rejected</option>
+  <option value="unreviewed"{% if run.review_status == 'unreviewed' %} selected="true"{% endif %}>Unreviewed</option>
+  <option value="approved"{% if run.review_status == 'approved' %} selected="true"{% endif %}>Approved</option>
+  <option value="rejected"{% if run.review_status == 'rejected' %} selected="true"{% endif %}>Rejected</option>
 </select>
 <script type="text/javascript">
 $(document).ready(function() {
@@ -34,6 +34,7 @@ $(document).ready(function() {
   });
 });
 </script>
+(<i>{{ run.review_comment }}</i>)
 </li>
 {% endif %}
 {% if queue_position %}
