@@ -862,9 +862,10 @@ if __name__ == '__main__':
     app.policy = policy_config
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
-    app.database = state.Database(config.database_location)
+    database = state.Database(config.database_location)
+    app.database = database
     from .stats import stats_app
-    app.add_subapp('/cupboard/stats', stats_app(app.database))
+    app.add_subapp('/cupboard/stats', stats_app(database))
     app.config = config
     from janitor.site import env, is_admin
     app.jinja_env = env
