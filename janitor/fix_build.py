@@ -38,9 +38,11 @@ from lintian_brush.changelog import (
 from lintian_brush.control import (
     ensure_some_version,
     ensure_minimum_version,
-    get_debhelper_compat_version,
     pg_buildext_updatecontrol,
     ControlUpdater,
+    )
+from lintian_brush.debhelper import (
+    get_debhelper_compat_level,
     )
 from lintian_brush.deb822 import (
     Deb822Updater,
@@ -790,7 +792,7 @@ def enable_dh_autoreconf(tree, context, committer, update_changelog=True,
                          subpath=''):
     # Debhelper >= 10 depends on dh-autoreconf and enables autoreconf by
     # default.
-    debhelper_compat_version = get_debhelper_compat_version(tree.abspath('.'))
+    debhelper_compat_version = get_debhelper_compat_level(tree.abspath('.'))
     if debhelper_compat_version is not None and debhelper_compat_version < 10:
         def add_with_autoreconf(line, target):
             if target != b'%':
