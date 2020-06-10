@@ -334,7 +334,10 @@ async def main(argv=None):
             metadata['code'] = e.code
             metadata['description'] = e.description
             note('Worker failed (%s): %s', e.code, e.description)
-            return 1
+            # This is a failure for the worker, but returning 0 will cause
+            # jenkins to mark the job having failed, which is not really true.
+            # We're happy if we get to successfully POST to /finish
+            return 0
         except BaseException as e:
             metadata['code'] = 'worker-exception'
             metadata['description'] = str(e)
