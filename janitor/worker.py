@@ -129,11 +129,12 @@ class SubWorkerResult(object):
         self.tags = tags
 
     @classmethod
-    def from_changer_result(cls, changer, result):
+    def from_changer_result(cls, result):
         return cls(
-            tags=changer.tags(result.mutator),
+            tags=result.tags,
+            auxiliary_branches=result.auxiliary_branches,
             description=result.description,
-            value=changer.value(result.mutator))
+            value=result.value)
 
 
 class SubWorker(object):
@@ -176,6 +177,7 @@ common_parser.add_argument(
 class MultiArchHintsWorker(SubWorker):
 
     def __init__(self, command, env):
+        self.committer = env.get('COMMITTER')
         subparser = argparse.ArgumentParser(
             prog='multiarch-fix', parents=[common_parser])
         from silver_platter.debian.multiarch import MultiArchHintsChanger
@@ -212,7 +214,8 @@ class MultiArchHintsWorker(SubWorker):
         try:
             with local_tree.lock_write():
                 result = self.changer.make_changes(
-                    local_tree, subpath, None, None)
+                    local_tree, subpath, update_changelog=update_changelog,
+                    committer=self.committer)
         except NoChanges:
             raise WorkerFailure('nothing-to-do', 'no hints to apply')
         except FormattingUnpreservable:
@@ -233,8 +236,7 @@ class MultiArchHintsWorker(SubWorker):
             entry['certainty'] = certainty
             metadata['applied-hints'].append(entry)
             note('%s: %s' % (binary['Package'], description))
-        return SubWorkerResult.from_changer_result(
-            changer=self.changer, result=result)
+        return SubWorkerResult.from_changer_result(result=result)
 
 
 class OrphanWorker(SubWorker):
@@ -283,8 +285,7 @@ class OrphanWorker(SubWorker):
         metadata['old_vcs_url'] = result.mutator.old_vcs_url
         metadata['new_vcs_url'] = result.mutator.new_vcs_url
         metadata['pushed'] = result.mutator.pushed
-        return SubWorkerResult.from_changer_result(
-            changer=self.changer, result=result)
+        return SubWorkerResult.from_changer_result(result=result)
 
 
 class CMEWorker(SubWorker):
@@ -321,8 +322,7 @@ class CMEWorker(SubWorker):
         result = self.changer.make_changes(
             local_tree, subpath=subpath, update_changelog=update_changelog,
             committer=self.committer)
-        return SubWorkerResult.from_changer_result(
-            changer=self.changer, result=result)
+        return SubWorkerResult.from_changer_result(result=result)
 
 
 class LintianBrushWorker(SubWorker):
@@ -684,8 +684,7 @@ class UncommittedWorker(SubWorker):
         metadata['tags'] = [
             (tag_name, str(version))
             for (tag_name, version) in result]
-        return SubWorkerResult.from_changer_result(
-            changer=self.changer, result=result)
+        return SubWorkerResult.from_changer_result(result=result)
 
 
 class WorkerResult(object):
