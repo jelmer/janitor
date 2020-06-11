@@ -683,7 +683,7 @@ class UncommittedWorker(SubWorker):
             raise WorkerFailure('nothing-to-do', str(e))
         metadata['tags'] = [
             (tag_name, str(version))
-            for (tag_name, version) in result]
+            for (tag_name, version) in result.mutator]
         return SubWorkerResult.from_changer_result(result=result)
 
 
