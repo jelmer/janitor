@@ -13,6 +13,8 @@ janitor/%_pb2.py: janitor/%.proto
 
 check: typing
 	PYTHONPATH=.:silver-platter:lintian-brush:breezy python3 setup.py test
+
+style:
 	flake8
 
 typing:
