@@ -26,6 +26,7 @@ function loadRun(package, run_id) {
     );
     $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
     $('#run-id').attr('value', run_id);
+    $('#package-name').attr('value', package);
 }
 
 var todo = {{ todo|tojson }};
@@ -72,7 +73,8 @@ function submitReview(elem, status) {
     }
     elem.blur();
     var run_id = $('#run-id').val();
-    console.log("Submitting review " + status + " for run " + run_id);
+    var package = $('#package-name').val();
+    console.log("Submitting review " + status + " for run " + package + "/" + run_id);
     $.post('/api/run/' + run_id, {'review-status': status, 'review-comment': comment});
     if (todo.length == 0) {
       refreshData(loadNewJob);
@@ -85,6 +87,7 @@ function submitReview(elem, status) {
 
 <form action="/cupboard/review" method="POST" id="options">
 <input type="hidden" name="run_id" id='run-id' value="{{ run_id }}"/>
+<input type="hidden" name="package-name" id='package-name' value="{{ package_name }}"/>
 <input class='review-button' type="submit" name="review_status" value="Approved" accesskey="a" onclick="submitReview(this, 'approved')">
 <input class='review-button' type="submit" name="review_status" value="Rejected" accesskey="r" onclick="submitReview(this, 'rejected')">
 <input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview(this ,'reschedule')">
