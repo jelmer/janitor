@@ -674,13 +674,23 @@ class UncommittedWorker(SubWorker):
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
-        from silver_platter.debian.uncommitted import NoMissingVersions
+        from silver_platter.debian.uncommitted import (
+            NoMissingVersions,
+            TreeUpstreamVersionMissing,
+            TreeVersionNotInArchiveChangelog,
+            )
         try:
             result = self.changer.make_changes(
                 local_tree, subpath=subpath, committer=self.committer,
                 update_changelog=False)
         except NoMissingVersions as e:
             raise WorkerFailure('nothing-to-do', str(e))
+        except TreeUpstreamVersionMissing as e:
+            raise WorkerFailure('tree-upstream-version-missing', str(e))
+        except TreeVersionNotInArchiveChangelog as e:
+            raise WorkerFailure(
+                'tree-version-not-in-archive-changelog', str(e))
+
         metadata['tags'] = [
             (tag_name, str(version))
             for (tag_name, version) in result.mutator]
