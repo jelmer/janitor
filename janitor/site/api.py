@@ -644,19 +644,24 @@ async def handle_publish_ready(request):
 async def handle_run_assign(request):
     worker_name = await check_worker_creds(request.app.db, request)
     url = urllib.parse.urljoin(request.app.runner_url, 'assign')
-    async with request.app.http_client_session.post(
-            url, json={'worker': worker_name}) as resp:
-        if resp.status != 201:
-            try:
-                internal_error = await resp.json()
-            except ContentTypeError:
-                internal_error = await resp.text()
-            return web.json_response({
-                 'internal-status': resp.status,
-                 'internal-result': internal_error},
-                status=400)
-        assignment = await resp.json()
-        return web.json_response(assignment, status=201)
+    try:
+        async with request.app.http_client_session.post(
+                url, json={'worker': worker_name}) as resp:
+            if resp.status != 201:
+                try:
+                    internal_error = await resp.json()
+                except ContentTypeError:
+                    internal_error = await resp.text()
+                return web.json_response({
+                     'internal-status': resp.status,
+                     'internal-result': internal_error},
+                    status=400)
+            assignment = await resp.json()
+            return web.json_response(assignment, status=201)
+    except ClientConnectorError:
+        return web.json_response(
+            {'reason': 'unable to contact runner'},
+            status=502)
 
 
 async def handle_run_finish(request):
@@ -670,19 +675,22 @@ async def handle_run_finish(request):
             part = await reader.next()
             if part is None:
                 break
+            if part.filename is None:
+                warning('No filename for part with headers %r',
+                        part.headers)
+                return web.json_response(
+                    {'reason': 'missing filename for part',
+                     'content_type': part.headers.get(aiohttp.hdrs.CONTENT_TYPE)
+                     }, status=400)
             if part.filename == 'result.json':
                 result = await part.json()
+            if part.filename.endswith('.log'):
+                newpart = runner_writer.append(await part.read(), headers=part.headers)
             else:
-                if part.filename is None:
-                    warning('No filename for part with headers %r',
-                            part.headers)
-                    return web.json_response(
-                        {'reason': 'missing filename for part'}, status=400)
-                bp = BytesPayload(await part.read(), headers=part.headers)
-                if part.filename.endswith('.log'):
-                    runner_writer.append_payload(bp)
-                else:
-                    archiver_writer.append_payload(bp)
+                newpart = archiver_writer.append(await part.read(), headers=part.headers)
+
+    if result is None:
+        return web.json_response({'reason': 'missing result.json'}, status=400)
 
     archiver_url = urllib.parse.urljoin(
         request.app.archiver_url, 'upload/%s' % run_id)
@@ -696,6 +704,7 @@ async def handle_run_finish(request):
                     internal_error = await resp.text()
                 return web.json_response({
                     'internal-status': resp.status,
+                    'internal-reporter': 'archiver',
                     'internal-result': internal_error},
                     status=400)
             archiver_result = await resp.json()
@@ -709,8 +718,9 @@ async def handle_run_finish(request):
 
     result['worker_name'] = worker_name
 
-    part = runner_writer.append_json(result)
-    part.set_content_disposition('attachment', filename='result.json')
+    part = runner_writer.append_json(result, headers=[
+        ('Content-Disposition', 'attachment; filename="result.json"; '
+            'filename*=utf-8\'\'result.json')])
 
     runner_url = urllib.parse.urljoin(
         request.app.runner_url, 'finish/%s' % run_id)
@@ -728,6 +738,7 @@ async def handle_run_finish(request):
                     internal_error = await resp.text()
                 return web.json_response({
                     'internal-status': resp.status,
+                    'internal-reporter': 'runner',
                     'internal-result': internal_error,
                     }, status=400)
             result = await resp.json()
