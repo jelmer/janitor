@@ -1,0 +1,15 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "orphan-sidebar.html" %}{% endblock %}
+{% block page_title %}Orphaned Packages - Candidates{% endblock %}
+{% block body %}
+<div class="section" id="candidates">
+<h1>Orphaned packages - Candidates</h1>
+
+<ul>
+{% for package, bug, value in candidates %}
+<li><a href="/orphan/pkg/{{ package }}">{{ package }}</a> - <a href="https://bugs.debian.org/{{ bug }}">orphan bug {{ bug }}</a>
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}
