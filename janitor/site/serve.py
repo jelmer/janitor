@@ -249,6 +249,13 @@ if __name__ == '__main__':
             content_type='text/html', text=await render_start(),
             headers={'Cache-Control': 'max-age=3600'})
 
+    async def handle_orphan_candidates(request):
+        from .orphan import generate_candidates
+        text = await generate_candidates(request.app.database)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_merge_proposals(suite, request):
         from .merge_proposals import write_merge_proposals
         return web.Response(
@@ -494,6 +501,24 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    async def handle_orphan_pkg(request):
+        from .orphan import generate_pkg_file
+        # TODO(jelmer): Handle Accept: text/diff
+        pkg = request.match_info['pkg']
+        run_id = request.match_info.get('run_id')
+        try:
+            text = await generate_pkg_file(
+                request.app.database,
+                request.app.policy,
+                request.app.http_client_session,
+                request.app.archiver_url,
+                request.app.publisher_url, pkg, run_id)
+        except KeyError:
+            raise web.HTTPNotFound()
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+
     async def handle_multiarch_fixes_pkg(request):
         from .multiarch_hints import generate_pkg_file
         # TODO(jelmer): Handle Accept: text/diff
@@ -700,6 +725,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/orphan/', handle_orphan_start,
         name='orphan-start')
+    app.router.add_get(
+        '/orphan/candidates', handle_orphan_candidates,
+        name='orphanfixes-candidates')
     for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
                   'multiarch-fixes', 'orphan']:
         app.router.add_get(
@@ -727,6 +755,9 @@ if __name__ == '__main__':
     app.router.register_resource(
         ForwardedResource(
             'git', args.publisher_url.rstrip('/') + '/git'))
+    app.router.add_get(
+        '/orphan/pkg/{pkg}/', handle_orphan_pkg,
+        name='orphan-package')
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package')

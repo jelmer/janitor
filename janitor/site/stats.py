@@ -136,8 +136,12 @@ async def handle_graph_time_to_merge(request):
 
 
 async def graph_burndown(conn, suite=None):
-    total_candidates = await conn.fetchval(
-        """select count(*) from perpetual_candidates""")
+    query = "select count(*) from perpetual_candidates"
+    args = []
+    if suite is not None:
+        query += " WHERE suite = $1"
+        args.append(suite)
+    total_candidates = await conn.fetchval(query, *args)
 
     args = [total_candidates]
     if suite is not None:
