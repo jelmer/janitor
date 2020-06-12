@@ -243,6 +243,12 @@ if __name__ == '__main__':
             content_type='text/html', text=await render_start(),
             headers={'Cache-Control': 'max-age=3600'})
 
+    async def handle_orphan_start(request):
+        from .orphan import render_start
+        return web.Response(
+            content_type='text/html', text=await render_start(),
+            headers={'Cache-Control': 'max-age=3600'})
+
     async def handle_merge_proposals(suite, request):
         from .merge_proposals import write_merge_proposals
         return web.Response(
@@ -691,8 +697,11 @@ if __name__ == '__main__':
     app.router.add_get(
         '/multiarch-fixes/candidates', handle_multiarch_fixes_candidates,
         name='multiarch-fixes-candidates')
+    app.router.add_get(
+        '/orphan/', handle_orphan_start,
+        name='orphan-start')
     for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
-                  'multiarch-fixes']:
+                  'multiarch-fixes', 'orphan']:
         app.router.add_get(
             '/%s/merge-proposals' % suite,
             functools.partial(handle_merge_proposals, suite),
