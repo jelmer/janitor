@@ -629,6 +629,8 @@ def get_debdiff(log_id):
             return None
         elif e.status == 400:
             raise DebdiffRetrievalError(e.file.read())
+        elif e.status == 503:
+            raise DebdiffRetrievalError(e.file.read())
         else:
             raise
 
