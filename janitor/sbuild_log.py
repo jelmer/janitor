@@ -2202,7 +2202,7 @@ def find_build_failure_description(lines):
     return None, None, None
 
 
-class AutopkgtestDepsUnsatisfiable(object):
+class AutopkgtestDepsUnsatisfiable(Problem):
 
     kind = 'badpkg'
 
@@ -2232,7 +2232,7 @@ class AutopkgtestDepsUnsatisfiable(object):
         return "%s(args=%r)" % (type(self).__name__, self.args)
 
 
-class AutopkgtestTimedOut(object):
+class AutopkgtestTimedOut(Problem):
 
     kind = 'timed-out'
 
@@ -2249,7 +2249,7 @@ class AutopkgtestTimedOut(object):
         return isinstance(self, type(other))
 
 
-class AutopkgtestTestbedFailure(object):
+class AutopkgtestTestbedFailure(Problem):
 
     kind = 'testbed-failure'
 
@@ -2266,7 +2266,7 @@ class AutopkgtestTestbedFailure(object):
         return self.reason
 
 
-class AutopkgtestErroneousPackage(object):
+class AutopkgtestErroneousPackage(Problem):
 
     kind = 'erroneous-package'
 
@@ -2283,7 +2283,7 @@ class AutopkgtestErroneousPackage(object):
         return self.reason
 
 
-class AutopkgtestStderrFailure(object):
+class AutopkgtestStderrFailure(Problem):
 
     kind = 'stderr-output'
 
@@ -2301,7 +2301,7 @@ class AutopkgtestStderrFailure(object):
         return "output on stderr: %s" % self.stderr_line
 
 
-def parse_autopgktest_line(line):
+def parse_autopgktest_line(line: str):
     m = re.match(r'autopkgtest \[([0-9:]+)\]: (.*)', line)
     if not m:
         return line
@@ -2453,6 +2453,14 @@ def find_autopkgtest_failure_description(lines):
                             testname, error.stderr_line))
                 return offset + 1, testname, error, description
             elif reason == 'badpkg':
+                output_lines = test_output.get((testname, 'prepare testbed'), [])
+                output_offset = test_output_offset.get((testname, 'prepare testbed'))
+                if output_lines and output_offset:
+                    offset, line, error = find_apt_get_failure(output_lines)
+                    import pdb; pdb.set_trace()
+                    if error:
+                        return (offset + output_offset + 1, testname, error,
+                                None)
                 badpkg = None
                 blame = None
                 for line in extra:
@@ -2460,9 +2468,10 @@ def find_autopkgtest_failure_description(lines):
                         badpkg = line[len('badpkg: '):]
                     if line.startswith('blame: '):
                         blame = line
-                error = AutopkgtestDepsUnsatisfiable.from_blame_line(blame)
                 description = 'Test %s failed: %s' % (
                     testname, badpkg.rstrip('\n'))
+
+                error = AutopkgtestDepsUnsatisfiable.from_blame_line(blame)
                 return (summary_offset + lineno + 1, testname, error,
                         description)
             else:
@@ -2481,7 +2490,7 @@ def find_autopkgtest_failure_description(lines):
     return None, None, None, None
 
 
-class AptUpdateError(object):
+class AptUpdateError(Problem):
     """Apt update error."""
 
     kind = 'apt-update-error'
@@ -2525,6 +2534,23 @@ class AptMissingReleaseFile(AptUpdateError):
 
     def __str__(self):
         return 'Missing release file: %s' % self.url
+
+
+class AptPackageUnknown(Problem):
+
+    kind = 'apt-package-unknown'
+
+    def __init__(self, package):
+        self.package = package
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.package == other.package
+
+    def __str__(self):
+        return "Unknown package: %s" % self.package
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.package)
 
 
 def find_cudf_output(lines):
@@ -2647,6 +2673,9 @@ def find_apt_get_failure(lines):
             return lineno + 1, line, AptMissingReleaseFile(m.group(1))
         if line.startswith('E: ') and ret[0] is None:
             ret = (lineno + 1, line, None)
+        m = re.match('E: Unable to locate package (.*)', line)
+        if m:
+            return lineno + 1, line, AptPackageUnknown(m.group(1))
     return ret
 
 
@@ -2717,6 +2746,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser('janitor.sbuild_log')
     parser.add_argument('path', type=str)
     args = parser.parse_args()
+
+    with open(args.path, 'rb') as f:
+        worker_failure_from_sbuild_log(f)
 
     # TODO(jelmer): Return more data from worker_failure_from_sbuild_log and
     # then use that here.
