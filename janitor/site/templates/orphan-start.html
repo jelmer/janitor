@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "orphan-sidebar.html" %}{% endblock %}
+{% block page_title %}Orphan Fixes{% endblock %}
+{% block body %}
+
+<div class="section" id="orphan">
+<h1>Moving Orphaned packages to the QA team</h1>
+
+<p>The Debian Janitor moves packages that have been orphaned to the QA team.</p>
+
+<p>For a current list of open requests, see <a
+href="merge-proposals">merge-proposals</a>. For a list of generated changes
+that ready to be proposed or pushed, see <a href="ready">ready</a>. For a list
+of packages that are candidates for fixes, see <a
+href="candidates">candidates</a>.</p>
+
+<p>At the moment, the Janitor's merge proposal are still triggered by a <a href="/about">human</a>
+(after manual review). </p>
+
+</div>
+
+{% endblock %}
