@@ -422,6 +422,8 @@ async def publish_from_policy(
             possible_transports=possible_transports,
             reviewers=reviewers, rate_limiter=rate_limiter)
     except PublishFailure as e:
+        code = e.code
+        description = e.description
         if e.code == 'merge-conflict':
             note('Merge proposal would cause conflict; restarting.')
             await do_schedule(
@@ -431,15 +433,19 @@ async def publish_from_policy(
             unchanged_run = await state.get_unchanged_run(
                 conn, run.main_branch_revision)
             if unchanged_run and unchanged_run.result_code == 'success':
-                note('Missing binary diff, but unchanged run exists. '
-                     'Not published yet?')
+                description = (
+                    'Missing binary diff, but unchanged run exists. '
+                    'Not published yet?')
+            elif unchanged_run:
+                description = (
+                    'Missing binary diff; last control run failed (%s).' %
+                    unchanged_run.result_code)
             else:
-                note('Missing binary diff; requesting control run.')
+                description = (
+                    'Missing binary diff; requesting control run.')
                 await do_schedule_control(
                     conn, run.package, run.main_branch_revision,
                     requestor='publisher (missing binary diff)')
-        code = e.code
-        description = e.description
         branch_name = None
         proposal_url = None
         note('Failed(%s): %s', code, description)
