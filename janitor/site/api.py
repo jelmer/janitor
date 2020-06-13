@@ -842,9 +842,6 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         '/publish/autopublish', handle_publish_autopublish,
         name='api-publish-autopublish')
     app.router.add_get('/run/{run_id}', handle_run, name='api-run')
-    app.router.add_get(
-        '/run/{run_id}/progress',
-        handle_run_progress, name='api-run-progress')
     app.router.add_post(
         '/run/{run_id}/schedule-control',
         handle_schedule_control,
@@ -918,4 +915,7 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/active-runs/{run_id}/log/{filename}',
         handle_runner_log, name='api-run-log')
+    app.router.add_get(
+        '/active-runs/{run_id}/progress',
+        handle_run_progress, name='api-run-progress')
     return app
