@@ -712,7 +712,12 @@ def publish_one(
     if allow_create_proposal is None:
         allow_create_proposal = subrunner.allow_create_proposal()
 
-    debdiff = get_debdiff(log_id)
+    try:
+        debdiff = get_debdiff(log_id)
+    except DebdiffRetrievalError as e:
+        raise PublishFailure(
+            description='Unable to contact archiver for debdiff',
+            code='archiver-unreachable')
 
     if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
             debdiff is None and require_binary_diff):
