@@ -500,6 +500,7 @@ class ActiveRun(object):
                 self.current_duration.total_seconds(),
             'start_time': self.start_time.isoformat(),
             'worker': self.worker_name,
+            'logfilenames': list(self.list_log_files()),
             }
         ret.update(self._extra_json())
         return ret
