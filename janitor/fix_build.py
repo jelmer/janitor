@@ -20,6 +20,7 @@ __all__ = [
 ]
 
 import os
+import re
 import subprocess
 import sys
 

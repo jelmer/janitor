@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-import asyncpg
 from . import state
 from .common import generate_pkg_context
 from janitor.site import (

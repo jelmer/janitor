@@ -378,8 +378,8 @@ SELECT
     id, command, start_time, finish_time, description, package,
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames, review_status, review_comment,
-    worker
+    instigated_context, branch_url, logfilenames, review_status,
+    review_comment, worker
 FROM
     run
 """
@@ -774,7 +774,8 @@ LIMIT 1
     return Run.from_row(row)
 
 
-async def iter_last_unabsorbed_runs(conn: asyncpg.Connection, suite=None, packages=None):
+async def iter_last_unabsorbed_runs(
+        conn: asyncpg.Connection, suite=None, packages=None):
     query = """
 SELECT DISTINCT ON (package)
   id,

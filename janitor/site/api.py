@@ -8,7 +8,6 @@ from aiohttp import (
     ClientConnectorError,
     WSMsgType,
     )
-from aiohttp.payload import BytesPayload
 import urllib.parse
 
 from janitor import state, SUITE_REGEX
@@ -561,17 +560,6 @@ async def handle_runner_log(request):
             status=502)
 
 
-async def handle_runner_ws(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    async for msg in ws:
-        if msg.type == WSMsgType.TEXT:
-            pass  # TODO(jelmer): Process
-
-    return ws
-
-
 async def handle_publish_id(request):
     publish_id = request.match_info['publish_id']
     async with request.app.db.acquire() as conn:
@@ -641,6 +629,37 @@ async def handle_publish_ready(request):
     return web.json_response(ret, status=200)
 
 
+async def handle_run_progress(request):
+    worker_name = await check_worker_creds(request.app.db, request)
+
+    run_id = request.match_info['run_id'].encode()
+
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+
+    progress_url = urllib.parse.urljoin(request.app.runner_url, 'ws/progress')
+
+    run_ws = await request.app.http_client_session.ws_connect(progress_url)
+
+    async for msg in ws:
+        if msg.type == WSMsgType.BINARY:
+            if msg.data == b'keepalive':
+                await run_ws.send_bytes(b'keepalive\0' + run_id)
+            elif msg.data.startswith(b'log\0'):
+                (kind, name, payload) = msg.data.split(b'\0', 2)
+                await run_ws.send_bytes(
+                    b'\0'.join([b'log', run_id, name, payload]))
+            else:
+                warning('Unknown websocket message from worker %s: %r',
+                        worker_name, msg.data)
+        else:
+            warning('Ignoring ws message type %r', msg.type)
+
+    await run_ws.close()
+
+    return ws
+
+
 async def handle_run_assign(request):
     worker_name = await check_worker_creds(request.app.db, request)
     url = urllib.parse.urljoin(request.app.runner_url, 'assign')
@@ -680,14 +699,17 @@ async def handle_run_finish(request):
                         part.headers)
                 return web.json_response(
                     {'reason': 'missing filename for part',
-                     'content_type': part.headers.get(aiohttp.hdrs.CONTENT_TYPE)
+                     'content_type':
+                        part.headers.get(aiohttp.hdrs.CONTENT_TYPE)
                      }, status=400)
             if part.filename == 'result.json':
                 result = await part.json()
             if part.filename.endswith('.log'):
-                newpart = runner_writer.append(await part.read(), headers=part.headers)
+                newpart = runner_writer.append(
+                    await part.read(), headers=part.headers)
             else:
-                newpart = archiver_writer.append(await part.read(), headers=part.headers)
+                newpart = archiver_writer.append(
+                    await part.read(), headers=part.headers)
 
     if result is None:
         return web.json_response({'reason': 'missing result.json'}, status=400)
@@ -819,6 +841,9 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
         '/publish/autopublish', handle_publish_autopublish,
         name='api-publish-autopublish')
     app.router.add_get('/run/{run_id}', handle_run, name='api-run')
+    app.router.add_get(
+        '/run/{run_id}/progress',
+        handle_run_progress, name='api-run-progress')
     app.router.add_post(
         '/run/{run_id}/schedule-control',
         handle_schedule_control,
@@ -892,7 +917,4 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/active-runs/{run_id}/log/{filename}',
         handle_runner_log, name='api-run-log')
-    app.router.add_get(
-        '/active-runs/{run_id}/ws',
-        handle_runner_ws, name='api-run-ws')
     return app

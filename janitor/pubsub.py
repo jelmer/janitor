@@ -89,6 +89,8 @@ async def pubsub_reader(
                 elif msg.type == aiohttp.WSMsgType.error:
                     warning('Error on websocket: %s', ws.exception())
                     break
+                else:
+                    warning('Ignoring ws message type %r', msg.type)
         if reconnect_interval is None:
             return
         note(
