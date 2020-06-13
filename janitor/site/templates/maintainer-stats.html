@@ -3,6 +3,17 @@
 {% from "run_util.html" import display_result_code %}
 {% block page_title %}Maintainer Statistics{% endblock %}
 {% block body %}
+<style type="text/css">
+tr.optout {
+   background-color: lightcoral;
+}
+tr.inactive {
+   background-color: lightgrey;
+}
+tr.optin {
+   background-color: lightgreen;
+}
+</style>
 <div class="section" id="stats">
 <h1>Maintainer Statistics</h1>
 
@@ -19,8 +30,8 @@
 </thead>
 <tbody valign="top" name="queue-table">
 {% for maintainer_email, data in by_maintainer.items() %}
-<tr>
-    <td>{{ maintainer_email }}</td>
+<tr{% if data.get('open', 0) == 0 and data.get('closed', 0) > data.get('merged', 0) + data.get('applied', 0) %} class="optout"{% elif data.get('merged', 0) == 0 and data.get('applied', 0) == 0 and data.get('closed', 0) == 0 %} class="inactive"{% elif data.get('merged', 0) + data.get('applied', 0) > 0 %} class="optin"{% endif %}>
+    <td><a href="/cupboard/maintainer/{{ maintainer_email }}">{{ maintainer_email }}</a></td>
     <td>{{ data.get('open', 0) }}</td>
     <td>{{ data.get('merged', 0) + data.get('applied', 0) }}</td>
     <td>{{ data.get('closed', 0) }}</td>

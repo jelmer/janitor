@@ -1,0 +1,44 @@
+{% extends "layout.html" %}
+{% from "run_util.html" import display_result_code %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% block page_title %}Maintainer Overview{% endblock %}
+{% block body %}
+<div class="section" id="maintainer-overview">
+<h1>Maintainer Overview - {{ maintainer }}</h1>
+
+<h2>Merge Proposals</h2>
+<h3>Open Merge Proposals</h3>
+<ul>
+{% for package, url, status in proposals %}
+{% if status == 'open' %}
+<li><a href="{{ url }}">{{ package }}</a></li>
+{% endif %}
+{% endfor %}
+</ul>
+
+<h3>Resolved Merge Proposals</h3>
+<ul>
+{% for package, url, status in proposals %}
+{% if status != 'open' %}
+<li><a href="{{ url }}">{{ package }}</a> ({{ status }})</li>
+{% endif %}
+{% endfor %}
+</ul>
+
+<h2>Candidates</h2>
+
+<ul>
+{% for package, suite, context, value, chance in candidates %}
+<li><a href="/{{ suite }}/pkg/{{ package.name }}">{{ package.name }} ({{ suite }})</a></li>
+{% endfor %}
+</ul>
+
+<h2>Historical Runs</h2>
+
+<ul>
+{% for run in runs %}
+<li><a class="reference external" href="/cupboard/pkg/{{ run.package }}/{{ run.id }}/">{{ format_timestamp(run.times[1]) }} {{ run.package}}: {{ run.command }}</a>: {{ display_result_code(run.result_code) }}</li>
+{% endfor %}
+</ul>
+
+{% endblock %}
