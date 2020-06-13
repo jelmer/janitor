@@ -151,6 +151,8 @@ def run_worker(branch_url, subpath, vcs_type, env,
                resume_subworker_result=None,
                result_branch_url=None,
                possible_transports=None):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     with copy_output(os.path.join(output_directory, 'worker.log')):
         with process_package(
                branch_url, subpath, env,
@@ -203,6 +205,36 @@ async def send_keepalives(ws):
     while True:
         await asyncio.sleep(60)
         await ws.send_bytes(b'keepalive')
+
+
+async def forward_logs(ws, directory):
+    import aionotify
+    offsets = {}
+    watcher = aionotify.Watcher()
+    watcher.watch(path=directory, flags=aionotify.Flags.CREATE)
+    await watcher.setup(asyncio.get_event_loop())
+    try:
+        while True:
+            event = await watcher.get_event()
+            if (event.flags & aionotify.Flags.CREATE and
+                    event.name.endswith('.log')):
+                watcher.watch(
+                    os.path.join(directory, event.name),
+                    flags=aionotify.Flags.MODIFY)
+            elif (event.alias.endswith('.log') and
+                    event.flags & aionotify.Flags.MODIFY):
+                offset.setdefault(event.alias, 0)
+                with open(event.alias, 'rb') as f:
+                    f.seek(offsets[event.alias])
+                    data = f.read()
+                offsets[event.alias] += len(data)
+                await ws.send_bytes(
+                    b'\0'.join([
+                        b'log',
+                        os.path.basename(event.alias).encode('utf-8'),
+                        data]))
+    finally:
+        watcher.close()
 
 
 async def main(argv=None):
@@ -326,11 +358,19 @@ async def main(argv=None):
             metadata['jenkins'] = jenkins_metadata
 
         with TemporaryDirectory() as output_directory:
+            loop = asyncio.get_running_loop()
+            try:
+                import aionotify
+            except ImportError:
+                pass
+            else:
+                log_forwarder = asyncio.create_task(
+                    forward_logs(ws, output_directory))
+
             metadata = {}
             start_time = datetime.now()
             metadata['start_time'] = start_time.isoformat()
             try:
-                loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(None, functools.partial(
                     run_worker, branch_url, subpath, vcs_type, os.environ,
                     command, output_directory, metadata,
@@ -377,6 +417,7 @@ async def main(argv=None):
                     sys.exit(1)
 
                 watchdog_petter.cancel()
+                log_forwarder.cancel()
                 if args.debug:
                     print(result)
 
