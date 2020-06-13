@@ -222,17 +222,91 @@ def commit_debian_changes(tree, subpath, summary, committer=None,
             return True
 
 
+class AptFileSearcher(object):
+
+    def find_files(self, path, regex=False):
+        raise NotImplementedError(self.find_files)
+
+
+class CliAptFileSearcher(AptFileSearcher):
+
+    def search_files(self, path, regex=False):
+        args = ['/usr/bin/apt-file', 'search', '-l']
+        if regex:
+            args.append('-x')
+        else:
+            args.append('-F')
+        args.append(path)
+        try:
+            return subprocess.check_output(args).decode().splitlines()
+        except subprocess.CalledProcessError:
+            return []
+
+    @classmethod
+    def available(cls) -> bool:
+        # TODO(jelmer): Also check whether database has been built?
+        return os.path.exists('/usr/bin/apt-file')
+
+
+class ContentsAptFileSearcher(AptFileSearcher):
+
+    def __init__(self):
+        self._db = {}
+
+    def __setitem__(self, path, package):
+        self._db[path] = package
+
+    def search_files(self, path, regex=False):
+        for p, pkg in sorted(self._db.items()):
+            if regex:
+                if re.match(path, p):
+                    yield pkg
+            else:
+                if path == p:
+                    yield pkg
+
+    def load_file(self, f):
+        for line in f:
+            (path, rest) = line.rsplit(maxsplit=1)
+            package = rest.split(b'/')[-1]
+            decoded_path = '/' + path.decode('utf-8', 'surrogateescape')
+            self[decoded_path] = package.decode('utf-8')
+
+    def load_url(self, url):
+        from urllib.request import urlopen, Request
+        request = Request(url, headers={'User-Agent': 'Debian Janitor'})
+        response = urlopen(request)
+        if response.headers.get_content_type() == 'application/x-gzip':
+            import gzip
+            f = gzip.GzipFile(fileobj=response)
+        elif response.headers.get_content_type() == 'text/plain':
+            f = response
+        else:
+            raise Exception(
+                'Unknown content type %r' %
+                response.headers.get_content_type())
+        self.load_file(f)
+
+
+CONTENTS_URL = (
+    'http://deb.debian.org/debian/dists/unstable/main/Contents-amd64.gz')
+
+
+_apt_file_searcher = None
+
+
 def search_apt_file(path, regex=False):
-    args = ['/usr/bin/apt-file', 'search', '-l']
-    if regex:
-        args.append('-x')
-    else:
-        args.append('-F')
-    args.append(path)
-    try:
-        return subprocess.check_output(args).decode().splitlines()
-    except subprocess.CalledProcessError:
-        return []
+    global _apt_file_searcher
+    if _apt_file_searcher is None:
+        # TODO(jelmer): Also check that apt-file uses unstable?
+        if CliAptFileSearcher.available():
+            _apt_file_searcher = CliAptFileSearcher()
+        else:
+            # TODO(jelmer): don't hardcode this URL
+            # TODO(jelmer): cache file
+            _apt_file_searcher = ContentsAptFileSearcher()
+            _apt_file_searcher.load_url(CONTENTS_URL)
+    return _apt_file_searcher.search_files(path, regex=regex)
 
 
 def get_package_for_paths(paths, regex=False):
