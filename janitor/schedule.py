@@ -57,6 +57,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'build-no-space-on-device',
     'autopkgtest-no-space-on-device',
     'worker-killed',
+    'too-many-requests',
 ]
 
 # In some cases, we want to ignore certain results when guessing
