@@ -502,7 +502,7 @@ class ActiveRun(object):
             'worker': self.worker_name,
             }
         ret.update(self._extra_json())
-        return json
+        return ret
 
 
 class ActiveRemoteRun(ActiveRun):
