@@ -483,9 +483,12 @@ class ActiveRun(object):
     def get_log_file(self, name) -> Iterable[bytes]:
         raise NotImplementedError(self.get_log_file)
 
+    def _extra_json(self):
+        return {}
+
     def json(self) -> Any:
         """Return a JSON representation."""
-        return {
+        ret = {
             'queue_id': self.queue_item.id,
             'id': self.log_id,
             'package': self.queue_item.package,
@@ -496,26 +499,75 @@ class ActiveRun(object):
             'current_duration':
                 self.current_duration.total_seconds(),
             'start_time': self.start_time.isoformat(),
-            'worker': self.worker_name
+            'worker': self.worker_name,
             }
+        ret.update(self._extra_json())
+        return json
 
 
 class ActiveRemoteRun(ActiveRun):
 
+    KEEPALIVE_INTERVAL = 60 * 10
+
     log_files: Dict[str, BinaryIO]
     websockets: Set[web.WebSocketResponse]
 
-    def __init__(self, queue_item: state.QueueItem, worker_name: str):
+    def __init__(self, queue_item: state.QueueItem, worker_name: str,
+                 jenkins_metadata: Optional[Dict[str, str]] = None):
         super(ActiveRemoteRun, self).__init__(queue_item)
         self.worker_name = worker_name
         self.log_files = {}
-        self.websockets = set()
         self.main_branch_url = self.queue_item.branch_url
         self.resume_branch_name = None
+        self.reset_keepalive()
+        self._watch_dog = None
+        self._jenkins_metadata = jenkins_metadata
+
+    def _extra_json(self):
+        return {'jenkins': self._jenkins_metadata}
+
+    def start_watchdog(self):
+        if self._watch_dog is not None:
+            raise Exception('Watchdog already started')
+        self._watch_dog = asyncio.create_task(self.watchdog())
+
+    def stop_watchdog(self):
+        if self._watch_dog is None:
+            return
+        try:
+            self._watch_dog.cancel()
+        except asyncio.CancelledError:
+            pass
+        self._watch_dog = None
+
+    def reset_keepalive(self):
+        self.last_keepalive = datetime.now()
+
+    def append_log(self, name, data):
+        try:
+            f = self.log_files[name]
+        except KeyError:
+            f = self.log_files[name] = BytesIO()
+        f.write(data)
+
+    async def watchdog(self):
+        while True:
+            await asyncio.sleep(self.KEEPALIVE_INTERVAL)
+            duration = datetime.now() - self.last_keepalive
+            if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL*2)):
+                warning(
+                    'No keepalives received from %s for %s in %ds, aborting.',
+                    self.worker_name, self.run_id, duration)
+                result = JanitorResult(
+                    self.queue_item.package, log_id=self.log_id,
+                    branch_url=self.queue_item.branch_url,
+                    description=('No keepalives received in %ds.' % duration),
+                    code='worker-timeout', logfilenames=[])
+                await self.queue_processor.finish_run(self, result)
+                return
 
     def kill(self) -> None:
-        for ws in self.websockets:
-            pass  # TODO(jelmer): Send 'abort'
+        raise NotImplementedError(self.kill)
 
     def list_log_files(self):
         return self.log_files.keys()
@@ -1106,21 +1158,30 @@ async def handle_kill(request):
 
 async def handle_progress_ws(request):
     queue_processor = request.app.queue_processor
-    run_id = request.match_info['run_id']
-    try:
-        active_run = queue_processor.active_runs[run_id]
-    except KeyError:
-        return web.Response(
-            text='No such current run: %s' % run_id, status=404)
-
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    active_run.websockets.append(ws)
+    # Messages on the progress bus:
+    # b'log\0<run-id>\0<logfilename>\0<logbytes>'
+    # b'keepalive\0<run-id>'
 
     async for msg in ws:
-        if msg.type == WSMsgType.TEXT:
-            pass  # TODO(jelmer): Process
+        if msg.type == WSMsgType.BINARY:
+            (kind, run_id_bytes, payload) = msg.data.split(b'\0', 1)
+            run_id = run_id_bytes
+            try:
+                active_run = queue_processor.active_runs[run_id]
+            except KeyError:
+                warning('No such current run: %s' % run_id)
+                continue
+            if kind == b'log':
+                (logname, data) = payload.split(b'\0', 1)
+                active_run.append_log(logname.decode('utf-8'), data)
+                active_run.reset_keepalive()
+            elif kind == b'keepalive':
+                active_run.reset_keepalive()
+            else:
+                warning('Unknown progress message %r', kind)
 
     return ws
 
@@ -1165,7 +1226,9 @@ async def handle_assign(request):
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
 
-    active_run = ActiveRemoteRun(worker_name=worker, queue_item=item)
+    active_run = ActiveRemoteRun(
+        worker_name=worker, queue_item=item,
+        jenkins_metadata=json.get('jenkins'))
 
     queue_processor.register_run(active_run)
 
@@ -1258,6 +1321,7 @@ async def handle_assign(request):
          },
         }
 
+    active_run.start_watchdog()
     return web.json_response(assignment, status=201)
 
 
@@ -1329,7 +1393,7 @@ async def run_web_server(listen_addr, port, queue_processor):
     app.router.add_get('/log/{run_id}', handle_log_index)
     app.router.add_get('/log/{run_id}/{filename}', handle_log)
     app.router.add_post('/kill/{run_id}', handle_kill)
-    app.router.add_get('/progress-ws/{run_id}', handle_progress_ws)
+    app.router.add_get('/ws/progress', handle_progress_ws)
     app.router.add_get('/ws/queue', functools.partial(
         pubsub_handler, queue_processor.topic_queue))
     app.router.add_get('/ws/result', functools.partial(

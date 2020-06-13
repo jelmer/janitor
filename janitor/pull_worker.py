@@ -28,7 +28,7 @@ import socket
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
-from typing import Any, Optional, List
+from typing import Any, Optional, List, Dict
 from urllib.parse import urljoin
 import yarl
 
@@ -184,17 +184,25 @@ def run_worker(branch_url, subpath, vcs_type, env,
 
 
 async def get_assignment(
-        session: ClientSession, base_url: str, node_name: str) -> Any:
+        session: ClientSession, base_url: str, node_name: str,
+        jenkins_metadata: Optional[Dict[str, str]]) -> Any:
     assign_url = urljoin(base_url, 'active-runs')
     build_arch = subprocess.check_output(
         ['dpkg-architecture', '-qDEB_BUILD_ARCH']).decode()
-    async with session.post(
-            assign_url, json={'node': node_name, 'archs': [build_arch]}
-            ) as resp:
+    json: Any = {'node': node_name, 'archs': [build_arch]}
+    if jenkins_metadata:
+        json['jenkins'] = jenkins_metadata
+    async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
             raise ValueError('Unable to get assignment: %r' %
                              await resp.read())
         return await resp.json()
+
+
+async def send_keepalives(ws):
+    while True:
+        await asyncio.sleep(60)
+        await ws.send_bytes(b'keepalive')
 
 
 async def main(argv=None):
@@ -258,102 +266,108 @@ async def main(argv=None):
         credential_store_registry.register(
             'janitor-worker', WorkerCredentialStore, fallback=True)
 
-    node_name = os.environ.get('NODE_NAME')
-    if not node_name:
-        node_name = socket.gethostname()
-
-    async with ClientSession(auth=auth) as session:
-        assignment = await get_assignment(session, args.base_url, node_name)
-        if args.debug:
-            print(assignment)
-
-        # ws_url = urljoin(
-        #  args.base_url, 'active-runs/%s/ws' % assignment['id'])
-        # async with session.ws_connect(ws_url) as ws:
-        #    # TODO(jelmer): Forward logs to websocket
-        #    # TODO(jelmer): Listen for 'abort' message
-        #    pass
-
-    if 'WORKSPACE' in os.environ:
-        desc_path = os.path.join(os.environ['WORKSPACE'], 'description.txt')
-        with open(desc_path, 'w') as f:
-            f.write(assignment['description'])
-
-    branch_url = assignment['branch']['url']
-    vcs_type = assignment['branch']['vcs_type']
-    result_branch_url = assignment['result_branch']['url'].rstrip('/')
-    subpath = assignment['branch'].get('subpath', '') or ''
-    if assignment['resume']:
-        resume_result = assignment['resume'].get('result')
-        resume_branch_url = assignment['resume']['branch_url'].rstrip('/')
-    else:
-        resume_result = None
-        resume_branch_url = None
-    last_build_version = assignment.get('last_build_version')
-    cached_branch_url = assignment['branch'].get('cached_url')
-    build_distribution = assignment['build']['distribution']
-    build_suffix = assignment['build']['suffix']
-    command = assignment['command']
-    build_environment = assignment['build'].get('environment', {})
-
-    possible_transports = []
-
-    os.environ.update(assignment['env'])
-    os.environ.update(build_environment)
-
-    metadata = {}
     if 'JENKINS_URL' in os.environ:
-        metadata['jenkins'] = {
+        jenkins_metadata = {
             'build_url': os.environ.get('BUILD_URL'),
             'executor_number': os.environ.get('EXECUTOR_NUMBER'),
             'build_id': os.environ.get('BUILD_ID'),
             'build_number': os.environ.get('BUILD_NUMBER'),
             }
+    else:
+        jenkins_metadata = None
 
-    with TemporaryDirectory() as output_directory:
-        metadata = {}
-        start_time = datetime.now()
-        metadata['start_time'] = start_time.isoformat()
-        try:
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(None, functools.partial(
-                run_worker, branch_url, subpath, vcs_type, os.environ,
-                command, output_directory, metadata,
-                build_command=args.build_command,
-                pre_check_command=args.pre_check,
-                post_check_command=args.post_check,
-                resume_branch_url=resume_branch_url,
-                cached_branch_url=cached_branch_url,
-                build_distribution=build_distribution,
-                build_suffix=build_suffix,
-                last_build_version=last_build_version,
-                resume_subworker_result=resume_result,
-                result_branch_url=result_branch_url,
-                possible_transports=possible_transports))
-        except WorkerFailure as e:
-            metadata['code'] = e.code
-            metadata['description'] = e.description
-            note('Worker failed (%s): %s', e.code, e.description)
-            # This is a failure for the worker, but returning 0 will cause
-            # jenkins to mark the job having failed, which is not really true.
-            # We're happy if we get to successfully POST to /finish
-            return 0
-        except BaseException as e:
-            metadata['code'] = 'worker-exception'
-            metadata['description'] = str(e)
-            raise
+    node_name = os.environ.get('NODE_NAME')
+    if not node_name:
+        node_name = socket.gethostname()
+
+    async with ClientSession(auth=auth) as session:
+        assignment = await get_assignment(
+            session, args.base_url, node_name,
+            jenkins_metadata=jenkins_metadata)
+        if args.debug:
+            print(assignment)
+
+        ws_url = urljoin(
+            args.base_url, 'active-runs/%s/progress' % assignment['id'])
+        ws = await session.ws_connect(ws_url)
+
+        watchdog_petter = asyncio.create_task(send_keepalives(ws))
+
+        if 'WORKSPACE' in os.environ:
+            desc_path = os.path.join(
+                os.environ['WORKSPACE'], 'description.txt')
+            with open(desc_path, 'w') as f:
+                f.write(assignment['description'])
+
+        branch_url = assignment['branch']['url']
+        vcs_type = assignment['branch']['vcs_type']
+        result_branch_url = assignment['result_branch']['url'].rstrip('/')
+        subpath = assignment['branch'].get('subpath', '') or ''
+        if assignment['resume']:
+            resume_result = assignment['resume'].get('result')
+            resume_branch_url = assignment['resume']['branch_url'].rstrip('/')
         else:
-            metadata['code'] = None
-            metadata['value'] = result.value
-            metadata['description'] = result.description
-            note('%s', result.description)
+            resume_result = None
+            resume_branch_url = None
+        last_build_version = assignment.get('last_build_version')
+        cached_branch_url = assignment['branch'].get('cached_url')
+        build_distribution = assignment['build']['distribution']
+        build_suffix = assignment['build']['suffix']
+        command = assignment['command']
+        build_environment = assignment['build'].get('environment', {})
 
-            return 0
-        finally:
-            finish_time = datetime.now()
-            note('Elapsed time: %s', finish_time - start_time)
+        possible_transports = []
 
-            async with ClientSession(auth=auth) as session:
+        os.environ.update(assignment['env'])
+        os.environ.update(build_environment)
+
+        metadata = {}
+        if jenkins_metadata:
+            metadata['jenkins'] = jenkins_metadata
+
+        with TemporaryDirectory() as output_directory:
+            metadata = {}
+            start_time = datetime.now()
+            metadata['start_time'] = start_time.isoformat()
+            try:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(None, functools.partial(
+                    run_worker, branch_url, subpath, vcs_type, os.environ,
+                    command, output_directory, metadata,
+                    build_command=args.build_command,
+                    pre_check_command=args.pre_check,
+                    post_check_command=args.post_check,
+                    resume_branch_url=resume_branch_url,
+                    cached_branch_url=cached_branch_url,
+                    build_distribution=build_distribution,
+                    build_suffix=build_suffix,
+                    last_build_version=last_build_version,
+                    resume_subworker_result=resume_result,
+                    result_branch_url=result_branch_url,
+                    possible_transports=possible_transports))
+            except WorkerFailure as e:
+                metadata['code'] = e.code
+                metadata['description'] = e.description
+                note('Worker failed (%s): %s', e.code, e.description)
+                # This is a failure for the worker, but returning 0 will cause
+                # jenkins to mark the job having failed, which is not really
+                # true.  We're happy if we get to successfully POST to /finish
+                return 0
+            except BaseException as e:
+                metadata['code'] = 'worker-exception'
+                metadata['description'] = str(e)
+                raise
+            else:
+                metadata['code'] = None
+                metadata['value'] = result.value
+                metadata['description'] = result.description
+                note('%s', result.description)
+
+                return 0
+            finally:
+                finish_time = datetime.now()
+                note('Elapsed time: %s', finish_time - start_time)
+
                 try:
                     result = await upload_results(
                         session, args.base_url, assignment['id'], metadata,
@@ -361,6 +375,8 @@ async def main(argv=None):
                 except ResultUploadFailure as e:
                     sys.stderr.write(str(e))
                     sys.exit(1)
+
+                watchdog_petter.cancel()
                 if args.debug:
                     print(result)
 

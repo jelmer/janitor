@@ -523,6 +523,8 @@ These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
 
 class OrphanPublisher(Publisher):
 
+    # TODO(jelmer): Check that the wnpp bug is still open.
+
     def branch_name(self):
         return "orphan"
 
@@ -714,7 +716,7 @@ def publish_one(
 
     try:
         debdiff = get_debdiff(log_id)
-    except DebdiffRetrievalError as e:
+    except DebdiffRetrievalError:
         raise PublishFailure(
             description='Unable to contact archiver for debdiff',
             code='archiver-unreachable')

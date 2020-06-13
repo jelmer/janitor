@@ -2453,11 +2453,12 @@ def find_autopkgtest_failure_description(lines):
                             testname, error.stderr_line))
                 return offset + 1, testname, error, description
             elif reason == 'badpkg':
-                output_lines = test_output.get((testname, 'prepare testbed'), [])
-                output_offset = test_output_offset.get((testname, 'prepare testbed'))
+                output_lines = test_output.get(
+                    (testname, 'prepare testbed'), [])
+                output_offset = test_output_offset.get(
+                    (testname, 'prepare testbed'))
                 if output_lines and output_offset:
                     offset, line, error = find_apt_get_failure(output_lines)
-                    import pdb; pdb.set_trace()
                     if error:
                         return (offset + output_offset + 1, testname, error,
                                 None)
