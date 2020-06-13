@@ -2,6 +2,7 @@
 
 from . import env
 from aiohttp import web
+from .. import state
 
 
 async def write_maintainer_stats(conn):
@@ -17,6 +18,29 @@ order by maintainer_email asc
 """):
         by_maintainer.setdefault(maintainer_email, {})[status] = count
     return await template.render_async(by_maintainer=by_maintainer)
+
+
+async def write_maintainer_overview(conn, maintainer):
+    template = env.get_template('maintainer-overview.html')
+    packages = [p for p, removed in
+                await state.iter_packages_by_maintainer(
+                    conn, maintainer)
+                if not removed]
+    proposals = []
+    for package, url, status in await state.iter_proposals(conn, packages):
+        proposals.append((package, url, status))
+    candidates = []
+    for row in await state.iter_candidates(conn, packages=packages):
+        candidates.append(row)
+    runs = []
+    async for run in state.iter_last_unabsorbed_runs(
+            conn, packages=packages):
+        runs.append(run)
+
+    return await template.render_async(
+        packages=packages, runs=runs,
+        candidates=candidates, maintainer=maintainer,
+        proposals=proposals)
 
 
 async def graph_pushes_over_time(conn):
