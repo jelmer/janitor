@@ -645,11 +645,11 @@ async def handle_run_progress(request):
     async for msg in ws:
         if msg.type == WSMsgType.BINARY:
             if msg.data == b'keepalive':
-                await run_ws.send_bytes(b'keepalive\0' + run_id)
+                await run_ws.send_bytes(run_id + b'\0keepalive')
             elif msg.data.startswith(b'log\0'):
                 (kind, name, payload) = msg.data.split(b'\0', 2)
                 await run_ws.send_bytes(
-                    b'\0'.join([b'log', run_id, name, payload]))
+                    b'\0'.join([run_id, b'log', name, payload]))
             else:
                 warning('Unknown websocket message from worker %s: %r',
                         worker_name, msg.data)

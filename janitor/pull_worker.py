@@ -218,21 +218,23 @@ async def forward_logs(ws, directory):
             event = await watcher.get_event()
             if (event.flags & aionotify.Flags.CREATE and
                     event.name.endswith('.log')):
-                watcher.watch(
-                    os.path.join(directory, event.name),
-                    flags=aionotify.Flags.MODIFY)
+                path = os.path.join(directory, event.name)
+                watcher.watch(path, flags=aionotify.Flags.MODIFY)
+                offsets[path] = 0
             elif (event.alias.endswith('.log') and
                     event.flags & aionotify.Flags.MODIFY):
-                offset.setdefault(event.alias, 0)
-                with open(event.alias, 'rb') as f:
-                    f.seek(offsets[event.alias])
-                    data = f.read()
-                offsets[event.alias] += len(data)
-                await ws.send_bytes(
-                    b'\0'.join([
-                        b'log',
-                        os.path.basename(event.alias).encode('utf-8'),
-                        data]))
+                path = event.alias
+            else:
+                continue
+            with open(path, 'rb') as f:
+                f.seek(offsets[path])
+                data = f.read()
+            offsets[path] += len(data)
+            await ws.send_bytes(
+                b'\0'.join([
+                    b'log',
+                    os.path.basename(path).encode('utf-8'),
+                    data]))
     finally:
         watcher.close()
 

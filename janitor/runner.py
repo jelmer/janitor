@@ -571,7 +571,7 @@ class ActiveRemoteRun(ActiveRun):
         raise NotImplementedError(self.kill)
 
     def list_log_files(self):
-        return self.log_files.keys()
+        return list(self.log_files.keys())
 
     def get_log_file(self, name):
         try:
@@ -1168,21 +1168,21 @@ async def handle_progress_ws(request):
 
     async for msg in ws:
         if msg.type == WSMsgType.BINARY:
-            (kind, run_id_bytes, payload) = msg.data.split(b'\0', 1)
-            run_id = run_id_bytes
+            (run_id_bytes, rest) = msg.data.split(b'\0', 1)
+            run_id = run_id_bytes.decode('utf-8')
             try:
                 active_run = queue_processor.active_runs[run_id]
             except KeyError:
                 warning('No such current run: %s' % run_id)
                 continue
-            if kind == b'log':
-                (logname, data) = payload.split(b'\0', 1)
+            if rest.startswith(b'log\0'):
+                (unused_kind, logname, data) = rest.split(b'\0', 2)
                 active_run.append_log(logname.decode('utf-8'), data)
                 active_run.reset_keepalive()
-            elif kind == b'keepalive':
+            elif rest == b'keepalive':
                 active_run.reset_keepalive()
             else:
-                warning('Unknown progress message %r', kind)
+                warning('Unknown progress message %r for %s', rest, run_id)
 
     return ws
 
@@ -1207,7 +1207,7 @@ async def handle_log(request):
 
     try:
         response = web.StreamResponse(
-            status=200, reason='OK', headers={'Content-Type', 'text/plain'})
+            status=200, reason='OK', headers=[('Content-Type', 'text/plain')])
         await response.prepare(request)
         for chunk in f:
             await response.write(chunk)

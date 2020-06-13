@@ -64,7 +64,10 @@ async def pubsub_handler(topic: Topic, request) -> web.WebSocketResponse:
     with Subscription(topic) as queue:
         while True:
             msg = await queue.get()
-            await ws.send_str(json.dumps(msg))
+            try:
+                await ws.send_str(json.dumps(msg))
+            except TypeError:
+                raise TypeError('not jsonable: %r' % msg)
 
     return ws
 
