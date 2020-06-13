@@ -549,7 +549,11 @@ class ActiveRemoteRun(ActiveRun):
             f = self.log_files[name]
         except KeyError:
             f = self.log_files[name] = BytesIO()
+            ret = True
+        else:
+            ret = False
         f.write(data)
+        return ret
 
     async def watchdog(self):
         while True:
@@ -1177,7 +1181,10 @@ async def handle_progress_ws(request):
                 continue
             if rest.startswith(b'log\0'):
                 (unused_kind, logname, data) = rest.split(b'\0', 2)
-                active_run.append_log(logname.decode('utf-8'), data)
+                if active_run.append_log(logname.decode('utf-8'), data):
+                    # Make sure everybody is aware of the new log file.
+                    queue_processor.topic_queue.publish(
+                        queue_processor.status_json())
                 active_run.reset_keepalive()
             elif rest == b'keepalive':
                 active_run.reset_keepalive()
