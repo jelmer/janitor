@@ -9,6 +9,7 @@ from aiohttp import (
     ServerDisconnectedError,
     WSMsgType,
     )
+from aiohttp.web_middlewares import normalize_path_middleware
 import urllib.parse
 
 from janitor import state, SUITE_REGEX
@@ -550,7 +551,8 @@ async def handle_runner_log(request):
     try:
         async with request.app.http_client_session.get(url) as resp:
             body = await resp.read()
-            return web.Response(body=body, status=resp.status)
+            return web.Response(
+                body=body, status=resp.status, content_type='text/plain')
     except ContentTypeError as e:
         return web.Response(
             text='runner returned error %s' % e,
@@ -798,7 +800,8 @@ async def handle_get_active_run(request):
 
 
 def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
-    app = web.Application()
+    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+    app = web.Application(middlewares=[trailing_slash_redirect])
     app.http_client_session = ClientSession()
     app.db = db
     app.policy_config = policy_config
