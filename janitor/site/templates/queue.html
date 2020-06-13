@@ -16,6 +16,7 @@
   <th class="head">Estimated Duration</th>
   <th class="head">Current Duration</th>
   <th class="head">Worker</th>
+  <th class="head">Logs</th>
 </tr>
 </thead>
 <tbody valign="top" id="queue-table">
@@ -26,6 +27,7 @@
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
     <td>{{ format_duration(entry['current_duration']) }}</td>
     <td>{{ entry['worker'] }}</td>
+    <td>{% for name in entry['logfilenames'] %}<a href="/api/active-runs/{{ entry['id'] }}/log/{{ name }}">{{ name }}</a>{% if not loop.last %} {% endif %}{%endfor %}</td>
     {% if is_admin %}
     <td><button id="kill-{{ entry['id'] }}" onclick="kill('{{ entry['id'] }}')">Kill</button></td>
     {% endif %}
@@ -81,6 +83,9 @@ registerHandler('queue', function(msg) {
          tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
          tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
          tr.append('<td>' + p['worker'] + '</td>');
+	 tr.append('<td>' + $.map(p['logfilenames'], function(n, i) { 
+		 return '<a href="/api/active-runs/' + p['id'] + '/log/' + n + '">' + n + '</a>';
+	 }).join(' ') + '</td>');
 {% if is_admin %}
          tr.append('<td><button id="kill-' + p['id'] + '" onclick="kill(\'' + p['id'] + '\')"">Kill</button></td>');
 {% endif %}
