@@ -26,6 +26,7 @@ tr.optin {
   <th class="head">Open</th>
   <th class="head">Merged and applied</th>
   <th class="head">Closed</th>
+  <th class="head">Ready</th>
 </tr>
 </thead>
 <tbody valign="top" name="queue-table">
@@ -35,6 +36,7 @@ tr.optin {
     <td>{{ data.get('open', 0) }}</td>
     <td>{{ data.get('merged', 0) + data.get('applied', 0) }}</td>
     <td>{{ data.get('closed', 0) }}</td>
+    <td>{{ data.get('ready', 0) }}</td>
 </tr>
 {% endfor %}
 

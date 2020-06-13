@@ -17,6 +17,17 @@ group by maintainer_email, status
 order by maintainer_email asc
 """):
         by_maintainer.setdefault(maintainer_email, {})[status] = count
+
+
+    for maintainer_email, count in await conn.fetch("""
+select maintainer_email, count(*) from last_unabsorbed_runs
+left join package on package.name = last_unabsorbed_runs.package
+group by maintainer_email
+order by maintainer_email asc
+"""):
+        by_maintainer.setdefault(maintainer_email, {})['ready'] = (
+            count - by_maintainer.get(maintainer_email, {}).get('open', 0))
+
     return await template.render_async(by_maintainer=by_maintainer)
 
 
