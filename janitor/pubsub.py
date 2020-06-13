@@ -72,7 +72,7 @@ async def pubsub_handler(topic: Topic, request) -> web.WebSocketResponse:
 async def pubsub_reader(
         session: aiohttp.ClientSession,
         url: str,
-        reconnect_interval: Optional[int] = 60) -> AsyncIterator[Any]:
+        reconnect_interval: Optional[int] = 10) -> AsyncIterator[Any]:
     while True:
         try:
             ws = await session.ws_connect(url)
