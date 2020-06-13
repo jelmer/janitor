@@ -6,6 +6,7 @@ from aiohttp import (
     ClientSession,
     ContentTypeError,
     ClientConnectorError,
+    ServerDisconnectedError,
     WSMsgType,
     )
 import urllib.parse
@@ -677,7 +678,7 @@ async def handle_run_assign(request):
                     status=400)
             assignment = await resp.json()
             return web.json_response(assignment, status=201)
-    except ClientConnectorError:
+    except (ClientConnectorError, ServerDisconnectedError):
         return web.json_response(
             {'reason': 'unable to contact runner'},
             status=502)

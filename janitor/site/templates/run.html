@@ -22,22 +22,20 @@
 </li>
 <li>Description: {{ description }}</li>
 {% if result_code == 'success' %}
-<li>Review Status: <select id="review-status" name='review-status'>
+<li>Review Status: <select id="review-status" name='review-status' onchange="submit_review(this.value)">
   <option value="unreviewed"{% if run.review_status == 'unreviewed' %} selected="true"{% endif %}>Unreviewed</option>
   <option value="approved"{% if run.review_status == 'approved' %} selected="true"{% endif %}>Approved</option>
   <option value="rejected"{% if run.review_status == 'rejected' %} selected="true"{% endif %}>Rejected</option>
 </select>
-<script type="text/javascript">
-$(document).ready(function() {
-  $('#review-status').on('change', function() {
-    var comment = undefined;
-    if (status == 'rejected') {
-        comment = window.prompt('Please specify a comment for the rejection');
-    }
-    console.log("Submitting review " + status + " for run {{ run_id }} ");
-    $.post('/api/run/{{ run_id }}', {'review-status': status, 'review-comment': comment});
-  });
-});
+<script>
+function submit_review(status) {
+  var comment = undefined;
+  if (status == 'rejected') {
+      comment = window.prompt('Please specify a comment for the rejection');
+  }
+  console.log("Submitting review " + status + " for run {{ run_id }} ");
+  $.post('/api/run/{{ run_id }}', {'review-status': status, 'review-comment': comment});
+}
 </script>
 (<i>{{ run.review_comment }}</i>)
 </li>
