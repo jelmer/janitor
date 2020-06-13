@@ -943,7 +943,8 @@ async def check_existing_mp(
         else:
             maintainer_email = package.maintainer_email
             package_name = package.name
-    if old_status != status:
+    if old_status != status and not (
+            old_status == 'applied' and status == 'closed'):
         await update_proposal_status(mp, status, revision, package_name)
     if maintainer_email is not None and mps_per_maintainer is not None:
         mps_per_maintainer[status].setdefault(maintainer_email, 0)
@@ -962,7 +963,11 @@ async def check_existing_mp(
         # do.
         note('%s: Last run did not produce any changes, '
              'closing proposal.', mp.url)
-        await update_proposal_status(mp, 'closed', revision, package_name)
+        await update_proposal_status(mp, 'applied', revision, package_name)
+        mp.post_comment("""
+This merge proposal will be closed, since all remaining changes have been
+applied independently.
+""")
         mp.close()
         return
 
