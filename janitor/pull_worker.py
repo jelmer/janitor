@@ -364,7 +364,7 @@ async def main(argv=None):
             try:
                 import aionotify
             except ImportError:
-                pass
+                log_forwarder = None
             else:
                 log_forwarder = asyncio.create_task(
                     forward_logs(ws, output_directory))
@@ -419,7 +419,8 @@ async def main(argv=None):
                     sys.exit(1)
 
                 watchdog_petter.cancel()
-                log_forwarder.cancel()
+                if log_forwarder is not None:
+                    log_forwarder.cancel()
                 if args.debug:
                     print(result)
 
