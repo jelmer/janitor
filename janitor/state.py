@@ -774,7 +774,7 @@ LIMIT 1
     return Run.from_row(row)
 
 
-async def iter_last_unabsorbed_runs(conn: asyncpg.Connection, suite, packages):
+async def iter_last_unabsorbed_runs(conn: asyncpg.Connection, suite=None, packages=None):
     query = """
 SELECT DISTINCT ON (package)
   id,
@@ -800,10 +800,23 @@ SELECT DISTINCT ON (package)
   worker
 FROM
   last_unabsorbed_runs
-WHERE suite = $1 AND package = ANY($2::text[])
+"""
+    args = []
+    if suite is not None or packages is not None:
+        query += " WHERE "
+    if suite is not None:
+        query += "suite = $1"
+        args.append(suite)
+    if packages is not None:
+        if suite is not None:
+            query += "  AND "
+        args.append(packages)
+        query += "package = ANY($%d::text[])" % len(args)
+
+    query += """
 ORDER BY package, command, start_time DESC
 """
-    for row in await conn.fetch(query, suite, packages):
+    for row in await conn.fetch(query, *args):
         yield Run.from_row(row)
 
 
