@@ -708,11 +708,9 @@ async def handle_run_finish(request):
             if part.filename == 'result.json':
                 result = await part.json()
             if part.filename.endswith('.log'):
-                newpart = runner_writer.append(
-                    await part.read(), headers=part.headers)
+                runner_writer.append(await part.read(), headers=part.headers)
             else:
-                newpart = archiver_writer.append(
-                    await part.read(), headers=part.headers)
+                archiver_writer.append(await part.read(), headers=part.headers)
 
     if result is None:
         return web.json_response({'reason': 'missing result.json'}, status=400)
