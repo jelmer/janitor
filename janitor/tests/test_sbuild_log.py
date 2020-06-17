@@ -314,6 +314,11 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
                  '"tests.plugins.mock_libudev": No module named mock'], 1,
                 MissingPythonModule('mock'))
 
+    def test_sed(self):
+        self.run_test(
+            ['sed: can\'t read /etc/locale.gen: No such file or directory'], 1,
+            MissingFile('/etc/locale.gen'))
+
     def test_python2_import(self):
         self.run_test(
                 ['ImportError: No module named pytz'], 1,
