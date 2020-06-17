@@ -362,7 +362,7 @@ async def main(argv=None):
         with TemporaryDirectory() as output_directory:
             loop = asyncio.get_running_loop()
             try:
-                import aionotify
+                import aionotify  # noqa: F401
             except ImportError:
                 log_forwarder = None
             else:
