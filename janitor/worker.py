@@ -18,7 +18,7 @@
 import argparse
 from contextlib import contextmanager
 from datetime import datetime
-from debian.changelog import Changelog, Version
+from debian.changelog import Changelog, Version, ChangelogCreateError
 import distro_info
 import json
 import os
@@ -386,17 +386,22 @@ class LintianBrushWorker(SubWorker):
                     'control files live in root rather than debian/ '
                     '(LarstIQ mode)')
 
-            overall_result = run_lintian_fixers(
-                    local_tree, fixers,
-                    committer=self.committer,
-                    update_changelog=self.args.update_changelog,
-                    compat_release=compat_release,
-                    minimum_certainty=minimum_certainty,
-                    allow_reformatting=allow_reformatting,
-                    trust_package=TRUST_PACKAGE,
-                    net_access=True, subpath=(subpath or '.'),
-                    opinionated=False,
-                    diligence=10)
+            try:
+                overall_result = run_lintian_fixers(
+                        local_tree, fixers,
+                        committer=self.committer,
+                        update_changelog=self.args.update_changelog,
+                        compat_release=compat_release,
+                        minimum_certainty=minimum_certainty,
+                        allow_reformatting=allow_reformatting,
+                        trust_package=TRUST_PACKAGE,
+                        net_access=True, subpath=(subpath or '.'),
+                        opinionated=False,
+                        diligence=10)
+            except ChangelogCreateError as e:
+                raise WorkerFailure(
+                    'changelog-create-error',
+                    'Error creating changelog entry: %s' % e)
 
         if overall_result.failed_fixers:
             for fixer_name, failure in overall_result.failed_fixers.items():
