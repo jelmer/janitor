@@ -223,13 +223,13 @@ def commit_debian_changes(tree, subpath, summary, committer=None,
             return True
 
 
-class AptFileSearcher(object):
+class FileSearcher(object):
 
-    def find_files(self, path, regex=False):
-        raise NotImplementedError(self.find_files)
+    def search_files(self, path, regex=False):
+        raise NotImplementedError(self.search_files)
 
 
-class CliAptFileSearcher(AptFileSearcher):
+class CliAptFileSearcher(FileSearcher):
 
     def search_files(self, path, regex=False):
         args = ['/usr/bin/apt-file', 'search', '-l']
@@ -239,9 +239,9 @@ class CliAptFileSearcher(AptFileSearcher):
             args.append('-F')
         args.append(path)
         try:
-            return subprocess.check_output(args).decode().splitlines()
+            return iter(subprocess.check_output(args).decode().splitlines())
         except subprocess.CalledProcessError:
-            return []
+            return iter([])
 
     @classmethod
     def available(cls) -> bool:
@@ -249,7 +249,7 @@ class CliAptFileSearcher(AptFileSearcher):
         return os.path.exists('/usr/bin/apt-file')
 
 
-class ContentsAptFileSearcher(AptFileSearcher):
+class ContentsAptFileSearcher(FileSearcher):
 
     def __init__(self):
         self._db = {}
@@ -293,6 +293,26 @@ CONTENTS_URL = (
     'http://deb.debian.org/debian/dists/unstable/main/Contents-amd64.gz')
 
 
+class GeneratedFileSearcher(FileSearcher):
+
+    def __init__(self, db):
+        self._db = db
+
+    def search_files(self, path, regex=False):
+        for p, pkg in sorted(self._db.items()):
+            if regex:
+                if re.match(path, p):
+                    yield pkg
+            else:
+                if path == p:
+                    yield pkg
+
+
+# TODO(jelmer): read from a file
+GENERATED_FILE_SEARCHER = GeneratedFileSearcher({
+    '/etc/locale.gen': 'locales'})
+
+
 _apt_file_searcher = None
 
 
@@ -307,7 +327,8 @@ def search_apt_file(path, regex=False):
             # TODO(jelmer): cache file
             _apt_file_searcher = ContentsAptFileSearcher()
             _apt_file_searcher.load_url(CONTENTS_URL)
-    return _apt_file_searcher.search_files(path, regex=regex)
+    yield from _apt_file_searcher.search_files(path, regex=regex)
+    yield from GENERATED_FILE_SEARCHER.search_files(path, regex=regex)
 
 
 def get_package_for_paths(paths, regex=False):
