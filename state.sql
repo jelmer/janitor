@@ -137,6 +137,7 @@ CREATE TABLE worker (
    link text,
 );
 
+-- The last run per package/suite
 CREATE OR REPLACE VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
   *
@@ -145,6 +146,9 @@ CREATE OR REPLACE VIEW last_runs AS
   WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
   ORDER BY package, suite, start_time DESC;
 
+-- The last effective run per package/suite; i.e. the last run that
+-- wasn't an attempt to incrementally improve things that yielded no new
+-- changes.
 CREATE OR REPLACE VIEW last_effective_runs AS
   SELECT DISTINCT ON (package, suite)
   *
@@ -155,13 +159,20 @@ CREATE OR REPLACE VIEW last_effective_runs AS
     result_code != 'nothing-new-to-do'
   ORDER BY package, suite, start_time DESC;
 
+CREATE OR REPLACE VIEW absorbed_revisions AS
+   SELECT revision FROM publish WHERE revision IS NOT NULL AND ((mode = 'push' and result_code = 'success') OR (mode = 'propose' AND result_code = 'empty-merge-proposal'))
+ UNION
+   SELECT revision FROM merge_proposal WHERE revision IS NOT NULL AND status in ('merged', 'applied');
+
+-- The last "unabsorbed" change. An unabsorbed change is the last change that
+-- was not yet merged or pushed.
 CREATE OR REPLACE VIEW last_unabsorbed_runs AS
   SELECT * FROM last_effective_runs WHERE
+     -- Either the last run is unabsorbed because it failed:
      result_code NOT in ('nothing-to-do', 'success') OR (
      revision is not null AND
      revision != main_branch_revision AND
-     revision NOT IN (SELECT revision FROM publish WHERE (mode = 'push' and result_code = 'success') OR (mode = 'propose' AND result_code = 'empty-merge-proposal')) AND
-     revision NOT IN (SELECT revision FROM merge_proposal WHERE status in ('merged', 'applied')));
+     revision NOT IN (SELECT revision FROM absorbed_revisions));
 
 CREATE OR REPLACE VIEW merged_runs AS
   SELECT run.*, merge_proposal.url, merge_proposal.merged_by
@@ -172,7 +183,7 @@ CREATE OR REPLACE VIEW merged_runs AS
 create or replace view suites as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW absorbed_runs AS
-  SELECT * FROM run WHERE result_code = 'success' and revision in (select revision from publish where mode = 'push' and result_code = 'success') or revision in (select revision from merge_proposal where status in ('merged', 'applied'));
+  SELECT * FROM run WHERE result_code = 'success' and revision in (SELECT revision FROM absorbed_revisions);
 
 CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
   select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
