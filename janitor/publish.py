@@ -776,11 +776,13 @@ async def get_vcs_type(request):
 
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
                          topic_merge_proposal, topic_publish, dry_run=False,
-                         require_binary_diff=False, push_limit=None):
+                         require_binary_diff=False, push_limit=None,
+                         modify_mp_limit=None):
     app = web.Application()
     app.vcs_manager = vcs_manager
     app.db = db
     app.rate_limiter = rate_limiter
+    app.modify_mp_limit = mpdify_mp_limit
     app.topic_publish = topic_publish
     app.topic_merge_proposal = topic_merge_proposal
     app.dry_run = dry_run
@@ -821,7 +823,8 @@ async def scan_request(request):
             await check_existing(
                 conn, request.app.rate_limiter,
                 request.app.vcs_manager, request.app.topic_merge_proposal,
-                request.app.dry_run)
+                dry_run=request.app.dry_run,
+                modify_limit=request.app.modify_mp_limit)
     request.loop.create_task(scan())
     return web.Response(status=202, text="Scan started.")
 
@@ -872,11 +875,13 @@ async def autopublish_request(request):
 async def process_queue_loop(
         db, rate_limiter, dry_run, vcs_manager, interval,
         topic_merge_proposal, topic_publish, auto_publish=True,
-        reviewed_only=False, push_limit=None, require_binary_diff=False):
+        reviewed_only=False, push_limit=None, modify_mp_limit=None,
+        require_binary_diff=False):
     while True:
         async with db.acquire() as conn:
             await check_existing(
-                conn, rate_limiter, vcs_manager, topic_merge_proposal, dry_run)
+                conn, rate_limiter, vcs_manager, topic_merge_proposal,
+                dry_run=dry_run, modify_limit=modify_mp_limit)
         await asyncio.sleep(interval)
         if auto_publish:
             await publish_pending_new(
@@ -898,7 +903,7 @@ def is_conflicted(mp):
 async def check_existing_mp(
         conn, mp, status, topic_merge_proposal, vcs_manager,
         rate_limiter, mps_per_maintainer=None, dry_run=False,
-        possible_transports=None):
+        possible_transports=None) -> bool:
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'closed':
             # TODO(jelmer): Check if changes were applied manually and mark
@@ -950,11 +955,11 @@ async def check_existing_mp(
         mps_per_maintainer[status].setdefault(maintainer_email, 0)
         mps_per_maintainer[status][maintainer_email] += 1
     if status != 'open':
-        return
+        return False
     mp_run = await state.get_merge_proposal_run(conn, mp.url)
     if mp_run is None:
         warning('Unable to find local metadata for %s, skipping.', mp.url)
-        return
+        return False
 
     last_run = await state.get_last_unabsorbed_run(
         conn, mp_run.package, mp_run.suite)
@@ -969,7 +974,7 @@ This merge proposal will be closed, since all remaining changes have been
 applied independently.
 """)
         mp.close()
-        return
+        return True
 
     if last_run.result_code not in ('success', 'nothing-to-do'):
         from .schedule import TRANSIENT_ERROR_RESULT_CODES
@@ -983,7 +988,7 @@ applied independently.
         else:
             note('%s: Last run failed (%s). Not touching merge proposal.',
                  mp.url, last_run.result_code)
-        return
+        return False
 
     if last_run != mp_run:
         publish_id = str(uuid.uuid4())
@@ -1023,6 +1028,7 @@ applied independently.
                 requestor='publisher (regular refresh)')
 
             assert not is_new, "Intended to update proposal %r" % mp_url
+        return True
     else:
         # It may take a while for the 'conflicted' bit on the proposal to
         # be refreshed, so only check it if we haven't made any other
@@ -1033,23 +1039,32 @@ applied independently.
                 conn, mp_run.package, shlex.split(mp_run.command),
                 mp_run.suite, offset=-2, refresh=True,
                 requestor='publisher (merge conflict)')
+        return False
 
 
 async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
-                         dry_run=False):
+                         dry_run=False, modify_limit=None):
     mps_per_maintainer = {
         'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
     possible_transports = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0, 'applied': 0}
 
+    modified_mps = 0
+
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
-        await check_existing_mp(
+        if modify_limit and modified_mps > modify_limit:
+            warning('Already modified %d merge proposals, '
+                    'waiting with the rest.', modified_mps)
+            return
+        modified = await check_existing_mp(
             conn, mp, status, topic_merge_proposal=topic_merge_proposal,
             vcs_manager=vcs_manager, dry_run=dry_run,
             rate_limiter=rate_limiter,
             possible_transports=possible_transports,
             mps_per_maintainer=mps_per_maintainer)
+        if modified:
+            modified_mps += 1
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
@@ -1145,6 +1160,9 @@ def main(argv=None):
     parser.add_argument(
         '--require-binary-diff', action='store_true', default=False,
         help='Require a binary diff when publishing merge requests.')
+    parser.add_argument(
+        '--modify-mp-limit', type=int, default=10,
+        help='Maximum number of merge proposals to update per cycle.')
 
     args = parser.parse_args()
 
@@ -1192,12 +1210,14 @@ def main(argv=None):
                 auto_publish=not args.no_auto_publish,
                 reviewed_only=args.reviewed_only,
                 push_limit=args.push_limit,
+                modify_mp_limit=args.modify_mp_limit,
                 require_binary_diff=args.require_binary_diff)),
             loop.create_task(
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
                     vcs_manager, db, topic_merge_proposal, topic_publish,
                     args.dry_run, args.require_binary_diff,
+                    modify_mp_limit=args.modify_mp_limit,
                     push_limit=args.push_limit)),
         ]
         if args.runner_url and not args.reviewed_only:
