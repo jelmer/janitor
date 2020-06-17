@@ -21,7 +21,7 @@ import os
 import posixpath
 import re
 import sys
-from typing import List, Tuple, Iterator, BinaryIO, Optional
+from typing import List, Tuple, Iterator, BinaryIO, Optional, Dict, Union
 import yaml
 
 __all__ = [
@@ -35,7 +35,11 @@ from .trace import warning
 class SbuildFailure(Exception):
     """Sbuild failed to run."""
 
-    def __init__(self, stage, description, error=None, context=None):
+    def __init__(self, stage: str,
+                 description: str,
+                 error: Optional['Problem'] = None,
+                 context: Optional[
+                     Union[Tuple[str], Tuple[str, Optional[str]]]] = None):
         self.stage = stage
         self.description = description
         self.error = error
@@ -252,7 +256,7 @@ class MissingRevision(Problem):
         return "Missing revision: %r" % self.revision
 
 
-def worker_failure_from_sbuild_log(f):
+def worker_failure_from_sbuild_log(f) -> SbuildFailure:
     paragraphs = {}
     for title, offsets, lines in parse_sbuild_log(f):
         if title is not None:
@@ -273,7 +277,7 @@ def worker_failure_from_sbuild_log(f):
         # command.
         failed_stage = 'autopkgtest'
     description = None
-    context = None
+    context: Optional[Union[Tuple[str], Tuple[str, Optional[str]]]] = None
     error = None
     section_lines = paragraphs.get(focus_section, [])
     if failed_stage == 'build':
@@ -294,10 +298,7 @@ def worker_failure_from_sbuild_log(f):
         if apt_description and not description:
             description = apt_description
             offset = apt_offset
-        if testname is not None:
-            context = ('autopkgtest', testname)
-        else:
-            context = ('autopkgtest', None)
+        context = ('autopkgtest', testname)
     if failed_stage == 'apt-get-update':
         focus_section, offset, description, error = (
                 find_apt_get_update_failure(paragraphs))
@@ -2114,7 +2115,9 @@ def strip_useless_build_tail(lines, look_back=None):
     return lines
 
 
-def find_build_failure_description(lines):
+def find_build_failure_description(
+        lines: List[str]
+        ) -> Tuple[Optional[int], Optional[str], Optional['Problem']]:
     """Find the key failure line in build output.
 
     Returns:
@@ -2163,7 +2166,11 @@ def find_build_failure_description(lines):
                 if lines[lineno+2].startswith(
                         '  but this file does not exist.'):
                     m = re.fullmatch(r'\s*"(.*)"', lines[lineno].rstrip('\n'))
-                    return lineno + 1, lines[lineno], MissingFile(m.group(1))
+                    if m:
+                        filename = m.group(1)
+                    else:
+                        filename = lines[lineno].rstrip('\n')
+                    return lineno + 1, lines[lineno], MissingFile(filename)
                 continue
             m = re.fullmatch(conf_file_pat, lines[lineno].rstrip('\n'))
             if m:
@@ -2301,7 +2308,8 @@ class AutopkgtestStderrFailure(Problem):
         return "output on stderr: %s" % self.stderr_line
 
 
-def parse_autopgktest_line(line: str):
+def parse_autopgktest_line(line: str) -> Union[
+        str, Tuple[str, Union[Tuple[str, ...]]]]:
     m = re.match(r'autopkgtest \[([0-9:]+)\]: (.*)', line)
     if not m:
         return line
@@ -2362,41 +2370,46 @@ def parse_autopkgtest_summary(lines):
         i += 1
 
 
-def find_autopkgtest_failure_description(lines):
+def find_autopkgtest_failure_description(
+        lines: List[str]) -> Tuple[
+                Optional[int], Optional[str], Optional['Problem'],
+                Optional[str]]:
     """Find the autopkgtest failure in output.
 
     Returns:
       tuple with (line offset, testname, error, description)
     """
-    test_output = {}
-    test_output_offset = {}
-    current_field = None
+    test_output: Dict[Tuple[str, ...], List[str]] = {}
+    test_output_offset: Dict[Tuple[str, ...], int] = {}
+    current_field: Optional[Tuple[str, ...]] = None
     for i, line in enumerate(lines):
         parsed = parse_autopgktest_line(line)
         if isinstance(parsed, tuple):
-            if parsed[1][0] == 'test':
-                if parsed[1][2] == 'end output':
+            (timestamp, content) = parsed
+            if content[0] == 'test':
+                if content[2] == 'end output':
                     current_field = None
                     continue
-                elif parsed[1][2] == 'begin output':
-                    current_field = (parsed[1][1], 'output')
+                elif content[2] == 'begin output':
+                    current_field = (content[1], 'output')
                 else:
-                    current_field = (parsed[1][1], parsed[1][2])
+                    current_field = (content[1], content[2])
                 if current_field in test_output:
                     warning(
                         'duplicate output fields for %r', current_field)
                 test_output[current_field] = []
                 test_output_offset[current_field] = i + 1
-            elif parsed[1] == ('summary', ):
+            elif content == ('summary', ):
                 current_field = ('summary', )
                 test_output[current_field] = []
                 test_output_offset[current_field] = i + 1
-            elif parsed[1][0] == 'error':
+            elif content[0] == 'error':
+                last_test: Optional[str]
                 if current_field is not None:
                     last_test = current_field[0]
                 else:
                     last_test = None
-                msg = parsed[1][1]
+                msg = content[1]
                 m = re.fullmatch(r'testbed failure: (.*)', msg)
                 if m:
                     return (i + 1, last_test,
@@ -2426,6 +2439,7 @@ def find_autopkgtest_failure_description(lines):
             if result in ('PASS', 'SKIP'):
                 continue
             assert result == 'FAIL'
+            error: Optional['Problem']
             if reason == 'timed out':
                 error = AutopkgtestTimedOut()
                 return (summary_offset+lineno+1, testname, error, reason)
@@ -2436,7 +2450,7 @@ def find_autopkgtest_failure_description(lines):
                 if stderr_lines:
                     (offset, description, error) = (
                         find_build_failure_description(stderr_lines))
-                    if offset is not None:
+                    if offset is not None and stderr_offset is not None:
                         offset += stderr_offset - 1
                 else:
                     (_, description, error) = find_build_failure_description(
@@ -2446,11 +2460,11 @@ def find_autopkgtest_failure_description(lines):
                     offset = summary_offset + lineno
                 if error is None:
                     error = AutopkgtestStderrFailure(output)
-                if description is None:
-                    description = (
-                        'Test %s failed due to '
-                        'unauthorized stderr output: %s' % (
-                            testname, error.stderr_line))
+                    if description is None:
+                        description = (
+                            'Test %s failed due to '
+                            'unauthorized stderr output: %s' % (
+                                testname, error.stderr_line))
                 return offset + 1, testname, error, description
             elif reason == 'badpkg':
                 output_lines = test_output.get(
@@ -2459,7 +2473,7 @@ def find_autopkgtest_failure_description(lines):
                     (testname, 'prepare testbed'))
                 if output_lines and output_offset:
                     offset, line, error = find_apt_get_failure(output_lines)
-                    if error:
+                    if error and offset:
                         return (offset + output_offset + 1, testname, error,
                                 None)
                 badpkg = None
@@ -2469,8 +2483,11 @@ def find_autopkgtest_failure_description(lines):
                         badpkg = line[len('badpkg: '):]
                     if line.startswith('blame: '):
                         blame = line
-                description = 'Test %s failed: %s' % (
-                    testname, badpkg.rstrip('\n'))
+                if badpkg is not None:
+                    description = 'Test %s failed: %s' % (
+                        testname, badpkg.rstrip('\n'))
+                else:
+                    description = 'Test %s failed' % testname
 
                 error = AutopkgtestDepsUnsatisfiable.from_blame_line(blame)
                 return (summary_offset + lineno + 1, testname, error,
@@ -2478,15 +2495,15 @@ def find_autopkgtest_failure_description(lines):
             else:
                 output_lines = test_output.get((testname, 'output'), [])
                 output_offset = test_output_offset.get((testname, 'output'))
-                (offset, description, error) = find_build_failure_description(
-                    output_lines)
-                if offset is None:
+                (error_offset, description, error) = (
+                    find_build_failure_description(output_lines))
+                if error_offset is None or output_offset is None:
                     offset = summary_offset + lineno
                 else:
-                    offset += output_offset
+                    offset = error_offset + output_offset
                 if description is None:
                     description = 'Test %s failed: %s' % (testname, reason)
-                return offset+1, testname, error, description
+                return offset+1, testname, error, description  # type: ignore
 
     return None, None, None, None
 
@@ -2749,7 +2766,7 @@ def main(argv=None):
     args = parser.parse_args()
 
     with open(args.path, 'rb') as f:
-        worker_failure_from_sbuild_log(f)
+        print(worker_failure_from_sbuild_log(f))
 
     # TODO(jelmer): Return more data from worker_failure_from_sbuild_log and
     # then use that here.
