@@ -13,3 +13,6 @@
 [submodule "dulwich"]
 	path = dulwich
 	url = https://github.com/dulwich/dulwich.git
+[submodule "python-debian"]
+	path = python-debian
+	url = https://salsa.debian.org/janitor-team/python-debian.git
