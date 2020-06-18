@@ -961,22 +961,27 @@ async def check_existing_mp(
         warning('Unable to find local metadata for %s, skipping.', mp.url)
         return False
 
-    last_run = await state.get_last_unabsorbed_run(
+    last_run = await state.get_last_effective_run(
         conn, mp_run.package, mp_run.suite)
     if last_run is None:
+        warning('%s: Unable to find any relevant runs.', mp.url)
+        return False
+
+    if last_run.result_code == 'nothing-to-do':
         # A new run happened since the last, but there was nothing to
         # do.
         note('%s: Last run did not produce any changes, '
              'closing proposal.', mp.url)
-        await update_proposal_status(mp, 'applied', revision, package_name)
-        mp.post_comment("""
+        if not dry_run:
+            await update_proposal_status(mp, 'applied', revision, package_name)
+            mp.post_comment("""
 This merge proposal will be closed, since all remaining changes have been
 applied independently.
 """)
-        mp.close()
+            mp.close()
         return True
 
-    if last_run.result_code not in ('success', 'nothing-to-do'):
+    if last_run.result_code != 'success':
         from .schedule import TRANSIENT_ERROR_RESULT_CODES
         if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
             note('%s: Last run failed with transient error (%s). '
@@ -1011,21 +1016,23 @@ applied independently.
         except PublishFailure as e:
             note('%s: Updating merge proposal failed: %s (%s)',
                  mp.url, e.code, e.description)
-            await state.store_publish(
-                conn, last_run.package, mp_run.branch_name,
-                last_run.main_branch_revision,
-                last_run.revision, e.mode, e.code,
-                e.description, mp.url,
-                publish_id=publish_id,
-                requestor='publisher (regular refresh)')
+            if not dry_run:
+                await state.store_publish(
+                    conn, last_run.package, mp_run.branch_name,
+                    last_run.main_branch_revision,
+                    last_run.revision, e.mode, e.code,
+                    e.description, mp.url,
+                    publish_id=publish_id,
+                    requestor='publisher (regular refresh)')
         else:
-            await state.store_publish(
-                conn, last_run.package, branch_name,
-                last_run.main_branch_revision,
-                last_run.revision, MODE_PROPOSE, 'success',
-                'Succesfully updated', mp_url,
-                publish_id=publish_id,
-                requestor='publisher (regular refresh)')
+            if not dry_run:
+                await state.store_publish(
+                    conn, last_run.package, branch_name,
+                    last_run.main_branch_revision,
+                    last_run.revision, MODE_PROPOSE, 'success',
+                    'Succesfully updated', mp_url,
+                    publish_id=publish_id,
+                    requestor='publisher (regular refresh)')
 
             assert not is_new, "Intended to update proposal %r" % mp_url
         return True
@@ -1035,10 +1042,11 @@ applied independently.
         # changes.
         if is_conflicted(mp):
             note('%s is conflicted. Rescheduling.', mp.url)
-            await state.add_to_queue(
-                conn, mp_run.package, shlex.split(mp_run.command),
-                mp_run.suite, offset=-2, refresh=True,
-                requestor='publisher (merge conflict)')
+            if not dry_run:
+                await state.add_to_queue(
+                    conn, mp_run.package, shlex.split(mp_run.command),
+                    mp_run.suite, offset=-2, refresh=True,
+                    requestor='publisher (merge conflict)')
         return False
 
 
