@@ -936,13 +936,16 @@ async def check_existing_mp(
         target_branch_url = mp.get_target_branch_url()
         package = await state.get_package_by_branch_url(
             conn, target_branch_url)
-        if package is None:
-            warning('No package known for %s (%s)',
-                    mp.url, target_branch_url)
-            package_name = None
-        else:
+        if package is not None:
             maintainer_email = package.maintainer_email
             package_name = package.name
+        else:
+            package_name, maintainer_email = (
+                    await state.guess_package_from_revision(
+                        conn, revision))
+            if package_name is None:
+                warning('No package known for %s (%s)',
+                        mp.url, target_branch_url)
     if old_status != status and not (
             old_status == 'applied' and status == 'closed'):
         await update_proposal_status(mp, status, revision, package_name)
