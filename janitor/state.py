@@ -1544,3 +1544,15 @@ async def check_worker_credentials(
 async def package_exists(conn, package):
     return bool(await conn.fetchrow(
         "SELECT 1 FROM package WHERE name = $1", package))
+
+
+async def guess_package_from_revision(conn, revision):
+    query = """\
+select distinct package, maintainer_email from merge_proposal
+left join package on package.name = merge_proposal.package
+where revision = $1 and merge_proposal.package is not null
+"""
+    rows = await conn.fetch(query, revision.decode('utf-8'))
+    if len(rows) == 1:
+        return rows[0][0]
+    return None
