@@ -631,7 +631,7 @@ async def add_to_queue(conn: asyncpg.Connection,
 
 
 async def set_proposal_info(
-        conn: asyncpg.Connection, url: str, status: str, revision: bytes,
+        conn: asyncpg.Connection, url: str, status: str, revision: Optional[bytes],
         package: Optional[str], merged_by: Optional[str],
         merged_at: Optional[str]) -> None:
     await conn.execute("""
@@ -645,7 +645,7 @@ DO UPDATE SET
   package = EXCLUDED.package,
   merged_by = EXCLUDED.merged_by,
   merged_at = EXCLUDED.merged_at
-""", url, status, revision.decode('utf-8'), package, merged_by, merged_at)
+""", url, status, (revision.decode('utf-8') if revision is not None else None), package, merged_by, merged_at)
 
 
 async def queue_length(conn: asyncpg.Connection, minimum_priority=None):
@@ -1301,7 +1301,7 @@ LIMIT 1
     return None
 
 
-async def get_proposal_info(conn: asyncpg.Connection, url):
+async def get_proposal_info(conn: asyncpg.Connection, url) -> Tuple[Optional[bytes], str, str, str]:
     row = await conn.fetchrow("""\
 SELECT
     package.maintainer_email,
@@ -1316,7 +1316,7 @@ WHERE
 """, url)
     if not row:
         raise KeyError
-    return (row[1].encode('utf-8'), row[2], row[3], row[0])
+    return (row[1].encode('utf-8') if row[1] else None, row[2], row[3], row[0])
 
 
 async def get_open_merge_proposal(
