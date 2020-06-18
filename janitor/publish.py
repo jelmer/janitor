@@ -586,7 +586,7 @@ async def publish_request(request):
                  'description':
                     'Nothing to do'})
 
-        run = await state.get_last_unabsorbed_run(conn, package.name, suite)
+        run = await state.get_last_effective_run(conn, package.name, suite)
         if run is None:
             return web.json_response({}, status=400)
         note('Handling request to publish %s/%s', package.name, suite)
