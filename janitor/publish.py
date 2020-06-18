@@ -782,7 +782,7 @@ async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
     app.vcs_manager = vcs_manager
     app.db = db
     app.rate_limiter = rate_limiter
-    app.modify_mp_limit = mpdify_mp_limit
+    app.modify_mp_limit = modify_mp_limit
     app.topic_publish = topic_publish
     app.topic_merge_proposal = topic_merge_proposal
     app.dry_run = dry_run
@@ -928,12 +928,17 @@ async def check_existing_mp(
         (revision, old_status, package_name,
             maintainer_email) = await state.get_proposal_info(conn, mp.url)
     except KeyError:
-        try:
-            revision = open_branch(
-                mp.get_source_branch_url(),
-                possible_transports=possible_transports).last_revision()
-        except (BranchMissing, BranchUnavailable):
+        source_branch_url = mp.get_source_branch_url()
+        if source_branch_url is None:
+            warning('No source branch for %r', mp)
             revision = None
+        else:
+            try:
+                revision = open_branch(
+                    source_branch_url,
+                    possible_transports=possible_transports).last_revision()
+            except (BranchMissing, BranchUnavailable):
+                revision = None
         old_status = None
         maintainer_email = None
         package_name = None
