@@ -774,6 +774,46 @@ LIMIT 1
     return Run.from_row(row)
 
 
+async def get_last_effective_run(
+        conn: asyncpg.Connection,
+        package: str, suite: str) -> Optional[Run]:
+    args = []
+    query = """
+SELECT
+  id,
+  command,
+  start_time,
+  finish_time,
+  description,
+  package,
+  build_version,
+  build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context,
+  branch_url,
+  logfilenames,
+  review_status,
+  review_comment,
+  worker
+FROM
+  last_effective_runs
+WHERE package = $1 AND suite = $2
+ORDER BY package, command DESC, start_time DESC
+LIMIT 1
+"""
+    args = [package, suite]
+    row = await conn.fetchrow(query, *args)
+    if row is None:
+        return None
+    return Run.from_row(row)
+
+
 async def iter_last_unabsorbed_runs(
         conn: asyncpg.Connection, suite=None, packages=None):
     query = """
