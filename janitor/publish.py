@@ -222,7 +222,7 @@ class PublishFailure(Exception):
 async def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, maintainer_email, vcs_manager, branch_name,
-        topic_merge_proposal, rate_limiter, dry_run=False,
+        topic_merge_proposal, rate_limiter, dry_run,
         require_binary_diff=False, possible_hosters=None,
         possible_transports=None, allow_create_proposal=None):
     """Publish a single run in some form.
@@ -292,7 +292,7 @@ async def publish_one(
 
 async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, topic_merge_proposal,
-                              dry_run=False, reviewed_only=False,
+                              dry_run, reviewed_only=False,
                               push_limit=None, require_binary_diff=False):
     start = time.time()
     possible_hosters = []
@@ -349,7 +349,7 @@ async def publish_from_policy(
         conn, rate_limiter, vcs_manager, run, maintainer_email,
         uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
         mode, update_changelog, command, possible_hosters=None,
-        possible_transports=None, dry_run=False, require_binary_diff=False,
+        dry_run, possible_transports=None, require_binary_diff=False,
         force=False, requestor=None):
     from .schedule import (
         full_command,
@@ -503,7 +503,7 @@ async def diff_request(request):
 async def publish_and_store(
         db, topic_publish, topic_merge_proposal, publish_id, run, mode,
         maintainer_email, uploader_emails, vcs_manager, rate_limiter,
-        dry_run=False, allow_create_proposal=True, require_binary_diff=False,
+        dry_run, allow_create_proposal=True, require_binary_diff=False,
         requestor=None):
     async with db.acquire() as conn:
         try:
@@ -765,7 +765,7 @@ async def get_vcs_type(request):
 
 
 async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
-                         topic_merge_proposal, topic_publish, dry_run=False,
+                         topic_merge_proposal, topic_publish, dry_run,
                          require_binary_diff=False, push_limit=None,
                          modify_mp_limit=None):
     app = web.Application()
@@ -892,7 +892,7 @@ def is_conflicted(mp):
 
 async def check_existing_mp(
         conn, mp, status, topic_merge_proposal, vcs_manager,
-        rate_limiter, mps_per_maintainer=None, dry_run=False,
+        rate_limiter, dry_run, mps_per_maintainer=None, 
         possible_transports=None) -> bool:
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'closed':
@@ -1046,7 +1046,7 @@ applied independently.
 
 
 async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
-                         dry_run=False, modify_limit=None):
+                         dry_run, modify_limit=None):
     mps_per_maintainer = {
         'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
     possible_transports = []
@@ -1078,7 +1078,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
 
 
 async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
-                           topic_publish, topic_merge_proposal, dry_run=False,
+                           topic_publish, topic_merge_proposal, dry_run,
                            require_binary_diff=False):
     async def process_run(conn, run, package):
         mode, update_changelog, command = (
