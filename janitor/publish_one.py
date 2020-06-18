@@ -259,7 +259,7 @@ class BranchWorkspace(object):
 
     def propose(self, name, description, hoster=None, existing_proposal=None,
                 overwrite_existing=None, labels=None, dry_run=False,
-                commit_message=None, reviewers=None, tags=None,
+                commit_message=None, tags=None,
                 allow_collaboration=False):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
@@ -272,7 +272,7 @@ class BranchWorkspace(object):
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
             additional_colocated_branches=self.additional_colocated_branches,
-            reviewers=reviewers, tags=tags,
+            tags=tags,
             allow_collaboration=allow_collaboration)
 
     def push(self, hoster: Optional[Hoster] = None, dry_run: bool = False,
@@ -316,7 +316,7 @@ def publish(
         log_id: Optional[str] = None,
         existing_proposal: Optional[MergeProposal] = None,
         allow_create_proposal: bool = False,
-        reviewers: Optional[List[str]] = None, debdiff: bytes = None):
+        debdiff: bytes = None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
@@ -373,8 +373,7 @@ def publish(
                 allow_create_proposal=allow_create_proposal,
                 overwrite_existing=True,
                 existing_proposal=existing_proposal,
-                labels=labels, reviewers=reviewers,
-                tags=subrunner.tags(),
+                labels=labels, tags=subrunner.tags(),
                 allow_collaboration=True)
         except UnsupportedHoster:
             raise PublishFailure(
@@ -640,7 +639,7 @@ def get_debdiff(log_id):
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, local_branch_url,
-        dry_run=False, reviewers=None, require_binary_diff=False,
+        dry_run=False, require_binary_diff=False,
         possible_hosters=None,
         possible_transports=None, allow_create_proposal=None):
 
@@ -730,8 +729,7 @@ def publish_one(
     try:
         publish_result = publish(
             suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
-            resume_branch, reviewers=reviewers,
-            dry_run=dry_run, log_id=log_id,
+            resume_branch, dry_run=dry_run, log_id=log_id,
             existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
             debdiff=debdiff)
@@ -760,11 +758,14 @@ if __name__ == '__main__':
 
     try:
         publish_result, branch_name = publish_one(
-            request['suite'], request['package'],
-            request['command'], request['subworker_result'],
-            request['main_branch_url'], request['mode'], request['log_id'],
-            request['local_branch_url'], request['dry-run'],
-            request['reviewers'], request['require-binary-diff'],
+            suite=request['suite'], package=request['package'],
+            command=request['command'],
+            subworker_result=request['subworker_result'],
+            main_branch_url=request['main_branch_url'], mode=request['mode'],
+            log_id=request['log_id'],
+            local_branch_url=request['local_branch_url'],
+            dry_run=request['dry-run'],
+            require_binary_diff=request['require-binary-diff'],
             possible_hosters=None, possible_transports=None,
             allow_create_proposal=request['allow_create_proposal'])
     except PublishFailure as e:

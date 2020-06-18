@@ -219,18 +219,12 @@ class PublishFailure(Exception):
         self.description = description
 
 
-def select_reviewers(maintainer_email: str,
-                     uploader_emails: List[str]) -> Optional[List[str]]:
-    # TODO(jelmer): Select some reviewers
-    return None
-
-
 async def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, maintainer_email, vcs_manager, branch_name,
         topic_merge_proposal, rate_limiter, dry_run=False,
         require_binary_diff=False, possible_hosters=None,
-        possible_transports=None, allow_create_proposal=None, reviewers=None):
+        possible_transports=None, allow_create_proposal=None):
     """Publish a single run in some form.
 
     Args:
@@ -256,7 +250,6 @@ async def publish_one(
         'local_branch_url': local_branch.user_url,
         'mode': mode,
         'log_id': log_id,
-        'reviewers': reviewers,
         'require-binary-diff': require_binary_diff,
         'allow_create_proposal': allow_create_proposal}
 
@@ -409,7 +402,6 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
-    reviewers = select_reviewers(maintainer_email, uploader_emails)
     note('Publishing %s / %r (mode: %s)', run.package, run.command, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
@@ -420,7 +412,7 @@ async def publish_from_policy(
             dry_run=dry_run, require_binary_diff=require_binary_diff,
             possible_hosters=possible_hosters,
             possible_transports=possible_transports,
-            reviewers=reviewers, rate_limiter=rate_limiter)
+            rate_limiter=rate_limiter)
     except PublishFailure as e:
         code = e.code
         description = e.description
@@ -513,7 +505,6 @@ async def publish_and_store(
         maintainer_email, uploader_emails, vcs_manager, rate_limiter,
         dry_run=False, allow_create_proposal=True, require_binary_diff=False,
         requestor=None):
-    reviewers = select_reviewers(maintainer_email, uploader_emails)
     async with db.acquire() as conn:
         try:
             proposal_url, branch_name, is_new = await publish_one(
@@ -522,7 +513,6 @@ async def publish_and_store(
                 run.branch_name, dry_run=dry_run,
                 require_binary_diff=require_binary_diff,
                 possible_hosters=None, possible_transports=None,
-                reviewers=reviewers,
                 allow_create_proposal=allow_create_proposal,
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter)
@@ -1015,7 +1005,7 @@ applied independently.
                 last_run.id, maintainer_email,
                 vcs_manager=vcs_manager, branch_name=last_run.branch_name,
                 dry_run=dry_run, require_binary_diff=False,
-                allow_create_proposal=True, reviewers=None,
+                allow_create_proposal=True,
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter)
         except PublishFailure as e:
