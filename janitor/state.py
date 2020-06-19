@@ -1531,11 +1531,11 @@ async def package_exists(conn, package):
 
 async def guess_package_from_revision(conn, revision):
     query = """\
-select distinct package, maintainer_email from merge_proposal
-left join package on package.name = merge_proposal.package
-where revision = $1 and merge_proposal.package is not null
+select distinct package, maintainer_email from run
+left join package on package.name = run.package
+where revision = $1 and run.package is not null
 """
     rows = await conn.fetch(query, revision.decode('utf-8'))
     if len(rows) == 1:
-        return rows[0][0]
-    return None
+        return rows[0][0], rows[0][1]
+    return None, None
