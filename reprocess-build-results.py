@@ -40,6 +40,9 @@ parser.add_argument(
 parser.add_argument(
     '--log-timeout', type=int, default=60,
     help='Default timeout when retrieving log files.')
+parser.add_argument(
+    '-r', '--run-id', type=str, action='append',
+    help='Run id to process')
 args = parser.parse_args()
 
 
@@ -76,14 +79,50 @@ async def reprocess_run(db, package, log_id, result_code, description):
 
 async def process_all_build_failures(db):
     todo = []
-    async with db.acquire() as conn:
+    async with db.acquire() as conn, conn.transaction():
+        query = """
+SELECT
+  package,
+  id,
+  result_code,
+  description
+FROM run
+WHERE
+  (result_code = 'build-failed' OR
+   result_code LIKE 'build-failed-stage-%' OR
+   result_code LIKE 'autopkgtest-%' OR
+   result_code LIKE 'build-%')
+   """
         async for package, log_id, result_code, description in (
-                state.iter_build_failures(conn)):
+                conn.cursor(query)):
             todo.append(
                 reprocess_run(db, package, log_id, result_code, description))
     for i in range(0, len(todo), 100):
         await asyncio.wait(set(todo[i:i+100]))
 
 
+async def process_builds(db, run_ids):
+    todo = []
+    async with db.acquire() as conn:
+        query = """
+SELECT
+  package,
+  id,
+  result_code,
+  description
+FROM run
+WHERE
+  id = ANY($1::text[])
+"""
+        for package, log_id, result_code, description in (
+                await conn.fetch(query, run_ids)):
+            todo.append(
+                reprocess_run(db, package, log_id, result_code, description))
+    await asyncio.wait(todo)
+
+
 db = state.Database(config.database_location)
-loop.run_until_complete(process_all_build_failures(db))
+if args.run_id:
+    loop.run_until_complete(process_builds(db, args.run_id))
+else:
+    loop.run_until_complete(process_all_build_failures(db))
