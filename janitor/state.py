@@ -925,23 +925,6 @@ FROM last_runs
             yield Run.from_row(row)
 
 
-async def iter_build_failures(conn: asyncpg.Connection):
-    async with conn.transaction():
-        async for row in conn.cursor("""
-SELECT
-  package,
-  id,
-  result_code,
-  description
-FROM run
-WHERE
-  (result_code = 'build-failed' OR
-   result_code LIKE 'build-failed-stage-%' OR
-   result_code LIKE 'build-%')
-   """):
-            yield row
-
-
 async def update_run_result(
         conn: asyncpg.Connection, log_id: str, code: str, description: str
         ) -> None:
