@@ -348,9 +348,9 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
 async def publish_from_policy(
         conn, rate_limiter, vcs_manager, run, maintainer_email,
         uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
-        mode, update_changelog, command, possible_hosters=None,
-        dry_run, possible_transports=None, require_binary_diff=False,
-        force=False, requestor=None):
+        mode, update_changelog, command, dry_run, possible_hosters=None,
+        possible_transports=None, require_binary_diff=False, force=False,
+        requestor=None):
     from .schedule import (
         full_command,
         estimate_duration,
@@ -907,12 +907,13 @@ async def check_existing_mp(
         else:
             merged_by = None
             merged_at = None
-        await state.set_proposal_info(
-            conn, mp.url, status, revision, package_name, merged_by,
-            merged_at)
-        topic_merge_proposal.publish(
-           {'url': mp.url, 'status': status, 'package': package_name,
-            'merged_by': merged_by, 'merged_at': str(merged_at)})
+        if not dry_run:
+            await state.set_proposal_info(
+                conn, mp.url, status, revision, package_name, merged_by,
+                merged_at)
+            topic_merge_proposal.publish(
+               {'url': mp.url, 'status': status, 'package': package_name,
+                'merged_by': merged_by, 'merged_at': str(merged_at)})
 
     try:
         (revision, old_status, package_name,
@@ -940,12 +941,16 @@ async def check_existing_mp(
             maintainer_email = package.maintainer_email
             package_name = package.name
         else:
-            package_name, maintainer_email = (
-                    await state.guess_package_from_revision(
-                        conn, revision))
+            if revision is not None:
+                package_name, maintainer_email = (
+                        await state.guess_package_from_revision(
+                            conn, revision))
             if package_name is None:
                 warning('No package known for %s (%s)',
                         mp.url, target_branch_url)
+            else:
+                note('Guessed package name for %s based on revision.',
+                     mp.url)
     if old_status != status and not (
             old_status == 'applied' and status == 'closed'):
         await update_proposal_status(mp, status, revision, package_name)

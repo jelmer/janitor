@@ -259,7 +259,7 @@ class BranchWorkspace(object):
 
     def propose(self, name, description, hoster=None, existing_proposal=None,
                 overwrite_existing=None, labels=None, dry_run=False,
-                commit_message=None, tags=None,
+                commit_message=None, reviewers=None, tags=None,
                 allow_collaboration=False):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
@@ -272,7 +272,7 @@ class BranchWorkspace(object):
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
             additional_colocated_branches=self.additional_colocated_branches,
-            tags=tags,
+            reviewers=reviewers, tags=tags,
             allow_collaboration=allow_collaboration)
 
     def push(self, hoster: Optional[Hoster] = None, dry_run: bool = False,
@@ -758,7 +758,7 @@ if __name__ == '__main__':
 
     try:
         publish_result, branch_name = publish_one(
-            suite=request['suite'], package=request['package'],
+            suite=request['suite'], pkg=request['package'],
             command=request['command'],
             subworker_result=request['subworker_result'],
             main_branch_url=request['main_branch_url'], mode=request['mode'],
