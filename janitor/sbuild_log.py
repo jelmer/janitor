@@ -2412,8 +2412,18 @@ def find_autopkgtest_failure_description(
                 msg = content[1]
                 m = re.fullmatch(r'testbed failure: (.*)', msg)
                 if m:
+                    testbed_failure_reason = m.group(1)
+                    if testbed_failure_reason == 'testbed auxverb failed with exit code 255':
+                        field = (current_field[0], 'output')
+                        (offset, description, error) = (
+                            find_build_failure_description(test_output[field]))
+                        if error is not None:
+                            return (
+                                test_output_offset[field] + offset, last_test, error,
+                                description)
+
                     return (i + 1, last_test,
-                            AutopkgtestTestbedFailure(m.group(1)), None)
+                            AutopkgtestTestbedFailure(testbed_failure_reason), None)
                 m = re.fullmatch(r'erroneous package: (.*)', msg)
                 if m:
                     return (i + 1, last_test,
