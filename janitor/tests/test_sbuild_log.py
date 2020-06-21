@@ -29,6 +29,7 @@ from janitor.sbuild_log import (
     CcacheError,
     DebhelperPatternNotFound,
     DhLinkDestinationIsDirectory,
+    InconsistentSourceFormat,
     MissingConfigure,
     MissingJavaScriptRuntime,
     MissingJVM,
@@ -63,6 +64,7 @@ from janitor.sbuild_log import (
     DhWithOrderIncorrect,
     FailedGoTest,
     UpstartFilePresent,
+    parse_brz_error,
     )
 import unittest
 
@@ -1189,3 +1191,15 @@ autopkgtest [14:58:01]: @@@@@@@@@@@@@@@@@@@@ summary
 unit-tests-3         FAIL non-zero exit status 1
 Exiting with 4
 """.splitlines(True)))
+
+
+class ParseBrzErrorTests(unittest.TestCase):
+
+    def test_inconsistent_source_format(self):
+        self.assertEqual(
+            (InconsistentSourceFormat(),
+                'Inconsistency between source format and version: version '
+                'is not native, format is native.'),
+            parse_brz_error(
+                'Inconsistency between source format and version: version '
+                'is not native, format is native.'))

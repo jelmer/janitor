@@ -187,6 +187,20 @@ class UpstreamPGPSignatureVerificationFailed(Problem):
         return "Unable to verify the PGP signature on the upstream source"
 
 
+class InconsistentSourceFormat(Problem):
+
+    kind = 'inconsistent-source-format'
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return "Inconsistent source format between version and source format"
+
+
 def find_preamble_failure_description(lines):
     OFFSET = 20
     for i in range(1, OFFSET):
@@ -242,6 +256,12 @@ def parse_brz_error(line):
     if line == 'UScan failed to run: OpenPGP signature did not verify..':
         error = UpstreamPGPSignatureVerificationFailed()
         return (error, str(error))
+    m = re.match(
+        r'Inconsistency between source format and version: '
+        r'version is( not)? native, format is( not)? native\.', line)
+    if m:
+        error = InconsistentSourceFormat()
+        return (error, line)
     return (None, line)
 
 
@@ -2379,6 +2399,7 @@ def find_autopkgtest_failure_description(
     Returns:
       tuple with (line offset, testname, error, description)
     """
+    error: Optional['Problem']
     test_output: Dict[Tuple[str, ...], List[str]] = {}
     test_output_offset: Dict[Tuple[str, ...], int] = {}
     current_field: Optional[Tuple[str, ...]] = None
@@ -2413,11 +2434,14 @@ def find_autopkgtest_failure_description(
                 m = re.fullmatch(r'testbed failure: (.*)', msg)
                 if m:
                     testbed_failure_reason = m.group(1)
-                    if testbed_failure_reason == 'testbed auxverb failed with exit code 255':
+                    if (current_field is not None and
+                            testbed_failure_reason ==
+                                'testbed auxverb failed with exit code 255'):
                         field = (current_field[0], 'output')
                         (offset, description, error) = (
                             find_build_failure_description(test_output[field]))
                         if error is not None:
+                            assert offset is not None
                             return (
                                 test_output_offset[field] + offset, last_test, error,
                                 description)
@@ -2449,7 +2473,6 @@ def find_autopkgtest_failure_description(
             if result in ('PASS', 'SKIP'):
                 continue
             assert result == 'FAIL'
-            error: Optional['Problem']
             if reason == 'timed out':
                 error = AutopkgtestTimedOut()
                 return (summary_offset+lineno+1, testname, error, reason)
