@@ -672,7 +672,7 @@ async def dulwich_refs(request):
     out = BytesIO()
     proto = ReceivableProtocol(BytesIO().read, out.write)
     handler = handler_cls(DictBackend({'.': r}), ['.'], proto,
-                          http_req=True, advertise_refs=True)
+                          stateless_rpc=True, advertise_refs=True)
     handler.proto.write_pkt_line(
         b'# service=' + service.encode('ascii') + b'\n')
     handler.proto.write_pkt_line(None)
@@ -716,7 +716,7 @@ async def dulwich_service(request):
 
     proto = ReceivableProtocol(inf.read, outf.write)
     handler = handler_cls(
-        DictBackend({'.': r}), ['.'], proto, http_req=True)
+        DictBackend({'.': r}), ['.'], proto, stateless_rpc=True)
     handler.handle()
 
     await response.write(outf.getvalue())
