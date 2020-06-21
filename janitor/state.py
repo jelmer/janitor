@@ -951,7 +951,8 @@ async def iter_publish_ready(
         review_status: Optional[Union[str, List[str]]] = None,
         limit: Optional[int] = None,
         publishable_only: bool = False
-        ) -> AsyncIterator[Tuple[Run, str, List[str], str, str, bool, str]]:
+        ) -> AsyncIterator[
+            Tuple[Run, str, List[str], str, str, str, List[str]]]:
     args: List[Any] = []
     query = """
 SELECT
