@@ -51,6 +51,7 @@ from prometheus_client import (
 
 from silver_platter.proposal import (
     iter_all_mps,
+    Hoster,
     )
 from silver_platter.utils import (
     open_branch,
@@ -59,6 +60,7 @@ from silver_platter.utils import (
     )
 
 from breezy.propose import get_proposal_by_url
+from breezy.transport import Transport
 import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.launchpad  # noqa: F401
 import breezy.plugins.github  # noqa: F401
@@ -220,11 +222,12 @@ class PublishFailure(Exception):
 
 
 async def publish_one(
-        suite, pkg, command, subworker_result, main_branch_url,
-        mode, log_id, maintainer_email, vcs_manager, branch_name,
-        topic_merge_proposal, rate_limiter, dry_run,
-        require_binary_diff=False, possible_hosters=None,
-        possible_transports=None, allow_create_proposal=None):
+        suite: str, pkg: str, command, subworker_result, main_branch_url: str,
+        mode: str, log_id: str, maintainer_email, vcs_manager,
+        branch_name: str, topic_merge_proposal, rate_limiter,
+        dry_run: bool, require_binary_diff: bool=False, possible_hosters=None,
+        possible_transports: Optional[List[Transport]] = None,
+        allow_create_proposal: Optional[bool] = None):
     """Publish a single run in some form.
 
     Args:
@@ -292,11 +295,12 @@ async def publish_one(
 
 async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, topic_merge_proposal,
-                              dry_run, reviewed_only=False,
-                              push_limit=None, require_binary_diff=False):
+                              dry_run: bool, reviewed_only: bool = False,
+                              push_limit: Optional[int] = None,
+                              require_binary_diff: bool = False):
     start = time.time()
-    possible_hosters = []
-    possible_transports = []
+    possible_hosters: List[Hoster] = []
+    possible_transports: List[Transport] = []
 
     if reviewed_only:
         review_status = ['approved']
@@ -346,11 +350,14 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
 
 
 async def publish_from_policy(
-        conn, rate_limiter, vcs_manager, run, maintainer_email,
-        uploader_emails, main_branch_url, topic_publish, topic_merge_proposal,
-        mode, update_changelog, command, dry_run, possible_hosters=None,
-        possible_transports=None, require_binary_diff=False, force=False,
-        requestor=None):
+        conn, rate_limiter, vcs_manager, run: state.Run, maintainer_email: str,
+        uploader_emails: List[str], main_branch_url: str,
+        topic_publish, topic_merge_proposal,
+        mode: str, update_changelog: str, command: List[str],
+        dry_run: bool, possible_hosters: Optional[List[Hoster]] = None,
+        possible_transports: Optional[List[Transport]] = None,
+        require_binary_diff: bool = False, force: bool = False,
+        requestor: Optional[str] = None):
     from .schedule import (
         full_command,
         estimate_duration,
@@ -892,8 +899,8 @@ def is_conflicted(mp):
 
 async def check_existing_mp(
         conn, mp, status, topic_merge_proposal, vcs_manager,
-        rate_limiter, dry_run, mps_per_maintainer=None, 
-        possible_transports=None) -> bool:
+        rate_limiter, dry_run: bool, mps_per_maintainer=None,
+        possible_transports: Optional[List[Transport]] = None) -> bool:
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'closed':
             # TODO(jelmer): Check if changes were applied manually and mark
@@ -915,6 +922,9 @@ async def check_existing_mp(
                {'url': mp.url, 'status': status, 'package': package_name,
                 'merged_by': merged_by, 'merged_at': str(merged_at)})
 
+    old_status: Optional[str]
+    maintainer_email: Optional[str]
+    package_name: Optional[str]
     try:
         (revision, old_status, package_name,
             maintainer_email) = await state.get_proposal_info(conn, mp.url)
@@ -1054,10 +1064,10 @@ applied independently.
 
 
 async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
-                         dry_run, modify_limit=None):
-    mps_per_maintainer = {
+                         dry_run: bool, modify_limit=None):
+    mps_per_maintainer: Dict[str, Dict[str, int]] = {
         'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
-    possible_transports = []
+    possible_transports: List[Transport] = []
     status_count = {'open': 0, 'closed': 0, 'merged': 0, 'applied': 0}
 
     modified_mps = 0
@@ -1086,8 +1096,8 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
 
 
 async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
-                           topic_publish, topic_merge_proposal, dry_run,
-                           require_binary_diff=False):
+                           topic_publish, topic_merge_proposal, dry_run: bool,
+                           require_binary_diff: bool = False):
     async def process_run(conn, run, package):
         mode, update_changelog, command = (
             await state.get_publish_policy(
@@ -1114,8 +1124,8 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                 if run.suite != 'unchanged':
                     await process_run(conn, run, package)
                 else:
-                    for run in await state.iter_last_runs(
-                            main_branch_revision=run.revision):
+                    async for run in state.iter_last_runs(
+                            conn, main_branch_revision=run.revision):
                         if run.package != package.name:
                             continue
                         if run.suite != 'unchanged':
