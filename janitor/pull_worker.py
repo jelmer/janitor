@@ -34,7 +34,11 @@ import yarl
 
 from breezy import urlutils
 from breezy.branch import Branch
-from breezy.config import credential_store_registry, PlainTextCredentialStore
+from breezy.config import (
+    credential_store_registry,
+    GlobalStack,
+    PlainTextCredentialStore,
+    )
 from breezy.errors import NotBranchError
 from breezy.controldir import ControlDir
 from breezy.transport import Transport
@@ -271,6 +275,9 @@ async def main(argv=None):
         default=False)
 
     args = parser.parse_args(argv)
+
+    global_config = GlobalStack()
+    global_config.set('branch.fetch_tags', True)
 
     base_url = yarl.URL(args.base_url)
 
