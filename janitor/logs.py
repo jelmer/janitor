@@ -154,7 +154,7 @@ class GCSLogFilemanager(LogFileManager):
         object_name = self._get_object_name(pkg, run_id, name)
         return await self.bucket.blob_exists(object_name, self.session)
 
-    async def get_log(self, pkg, run_id, name, timeout=10):
+    async def get_log(self, pkg, run_id, name, timeout=30):
         object_name = self._get_object_name(pkg, run_id, name)
         try:
             data = await self.storage.download(
