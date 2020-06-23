@@ -851,6 +851,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             raise WorkerFailure('worker-resume-branch-unavailable', str(e))
         except BranchMissing as e:
             raise WorkerFailure('worker-resume-branch-missing', str(e))
+        else:
+            note('Resuming from branch %s', resume_branch.user_url)
     else:
         resume_branch = None
 
