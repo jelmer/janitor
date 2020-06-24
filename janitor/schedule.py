@@ -145,7 +145,7 @@ async def estimate_success_probability(
             same_context = True
         if run.result_code == 'install-deps-unsatisfied-dependencies':
             START = 'Unsatisfied dependencies: '
-            if run.description.startswith(START):
+            if run.description and run.description.startswith(START):
                 unsatisfied_dependencies = PkgRelation.parse_relations(
                     run.description[len(START):])
                 if await deps_satisfied(conn, suite, unsatisfied_dependencies):
