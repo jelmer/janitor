@@ -926,9 +926,15 @@ async def check_existing_mp(
     maintainer_email: Optional[str]
     package_name: Optional[str]
     try:
-        (revision, old_status, package_name,
+        (old_revision, old_status, package_name,
             maintainer_email) = await state.get_proposal_info(conn, mp.url)
     except KeyError:
+        old_revision = None
+        old_status = None
+        maintainer_email = None
+        package_name = None
+    revision = mp.get_source_revision()
+    if revision is None:
         source_branch_url = mp.get_source_branch_url()
         if source_branch_url is None:
             warning('No source branch for %r', mp)
@@ -940,9 +946,8 @@ async def check_existing_mp(
                     possible_transports=possible_transports).last_revision()
             except (BranchMissing, BranchUnavailable):
                 revision = None
-        old_status = None
-        maintainer_email = None
-        package_name = None
+    if revision is None:
+        revision = old_revision
     if maintainer_email is None:
         target_branch_url = mp.get_target_branch_url()
         package = await state.get_package_by_branch_url(
@@ -961,8 +966,9 @@ async def check_existing_mp(
             else:
                 note('Guessed package name for %s based on revision.',
                      mp.url)
-    if old_status != status and not (
-            old_status == 'applied' and status == 'closed'):
+    if old_status == 'applied' and status == 'closed':
+        status = old_status
+    if old_status != status:
         await update_proposal_status(mp, status, revision, package_name)
     if maintainer_email is not None and mps_per_maintainer is not None:
         mps_per_maintainer[status].setdefault(maintainer_email, 0)
