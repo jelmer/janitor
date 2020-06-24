@@ -27,7 +27,7 @@ import json
 import shlex
 import sys
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 import uuid
 
 from breezy.controldir import ControlDir, format_registry
@@ -73,6 +73,7 @@ from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .trace import note, warning
 from .vcs import (
+    VcsManager,
     LocalVcsManager,
     get_run_diff,
     bzr_to_browse_url,
@@ -128,7 +129,7 @@ class RateLimiter(object):
             ) -> None:
         raise NotImplementedError(self.set_mps_per_maintainer)
 
-    def check_allowed(self, maintainer_email: str) -> bool:
+    def check_allowed(self, maintainer_email: str) -> None:
         raise NotImplementedError(self.check_allowed)
 
     def inc(self, maintainer_email: str) -> None:
@@ -182,10 +183,10 @@ class SlowStartRateLimiter(RateLimiter):
 
     def __init__(self, max_mps_per_maintainer=None):
         self._max_mps_per_maintainer = max_mps_per_maintainer
-        self._open_mps_per_maintainer = None
-        self._merged_mps_per_maintainer = None
+        self._open_mps_per_maintainer: Optional[Dict[str, int]] = None
+        self._merged_mps_per_maintainer: Optional[Dict[str, int]] = None
 
-    def check_allowed(self, email):
+    def check_allowed(self, email: str) -> None:
         if (self._open_mps_per_maintainer is None or
                 self._merged_mps_per_maintainer is None):
             # Be conservative
@@ -202,13 +203,13 @@ class SlowStartRateLimiter(RateLimiter):
                 'Maintainer %s has %d merge proposals open (current cap: %d)'
                 % (email, current, limit))
 
-    def inc(self, maintainer_email):
+    def inc(self, maintainer_email: str):
         if self._open_mps_per_maintainer is None:
             return
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
 
-    def set_mps_per_maintainer(self, mps_per_maintainer):
+    def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, Dict[str, int]]):
         self._open_mps_per_maintainer = mps_per_maintainer['open']
         self._merged_mps_per_maintainer = mps_per_maintainer['merged']
 
@@ -223,8 +224,8 @@ class PublishFailure(Exception):
 
 async def publish_one(
         suite: str, pkg: str, command, subworker_result, main_branch_url: str,
-        mode: str, log_id: str, maintainer_email, vcs_manager,
-        branch_name: str, topic_merge_proposal, rate_limiter,
+        mode: str, log_id: str, maintainer_email: str, vcs_manager: VcsManager,
+        branch_name: str, topic_merge_proposal, rate_limiter: RateLimiter,
         dry_run: bool, require_binary_diff: bool=False, possible_hosters=None,
         possible_transports: Optional[List[Transport]] = None,
         allow_create_proposal: Optional[bool] = None):
@@ -384,6 +385,12 @@ async def publish_from_policy(
     publish_id = str(uuid.uuid4())
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
         return
+    if run.branch_name is None:
+        warning('no branch name set for %s', run.id)
+        return
+    if run.revision is None:
+        warning('no revision set for %s', run.id)
+        return
     if not force and await state.already_published(
             conn, run.package, run.branch_name, run.revision, mode):
         return
@@ -469,13 +476,14 @@ async def publish_from_policy(
         # main branch URL
         pass
 
+    publish_delay: Optional[timedelta]
     if code == 'success':
         publish_delay = datetime.now() - run.times[1]
         publish_latency.observe(publish_delay.total_seconds())
     else:
         publish_delay = None
 
-    topic_entry = {
+    topic_entry: Dict[str, Any] = {
          'id': publish_id,
          'package': run.package,
          'suite': run.suite,
@@ -771,10 +779,12 @@ async def get_vcs_type(request):
     return web.Response(body=vcs_type.encode('utf-8'))
 
 
-async def run_web_server(listen_addr, port, rate_limiter, vcs_manager, db,
-                         topic_merge_proposal, topic_publish, dry_run,
-                         require_binary_diff=False, push_limit=None,
-                         modify_mp_limit=None):
+async def run_web_server(listen_addr: str, port: int, rate_limiter: RateLimiter,
+                         vcs_manager: VcsManager, db: state.Database,
+                         topic_merge_proposal: Topic, topic_publish: Topic,
+                         dry_run: bool, require_binary_diff: bool = False,
+                         push_limit: Optional[int] = None,
+                         modify_mp_limit: Optional[int] = None):
     app = web.Application()
     app.vcs_manager = vcs_manager
     app.db = db
@@ -1013,6 +1023,9 @@ applied independently.
             note('%s: Last run failed (%s). Not touching merge proposal.',
                  mp.url, last_run.result_code)
         return False
+
+    assert last_run.branch_name
+    assert maintainer_email
 
     if last_run != mp_run:
         publish_id = str(uuid.uuid4())

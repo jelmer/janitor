@@ -163,6 +163,21 @@ async def store_publish(conn: asyncpg.Connection,
 
 class Package(object):
 
+    name: str
+    maintainer_email: str
+    uploader_emails: List[str]
+    branch_url: str
+    subpath: Optional[str]
+    unstable_version: Optional[Version]
+    vcs_type: Optional[str]
+    vcs_url: Optional[str]
+    vcs_browse: Optional[str]
+    popcon_inst: Optional[int]
+    removed: bool
+    vcswatch_status: str
+    vcswatch_version: str
+    upstream_branch_url: Optional[str]
+
     def __init__(self, name, maintainer_email, uploader_emails, branch_url,
                  vcs_type, vcs_url, vcs_browse, removed, vcswatch_status,
                  vcswatch_version):
@@ -225,7 +240,8 @@ async def get_package(conn: asyncpg.Connection, name):
         return None
 
 
-async def get_package_by_branch_url(conn: asyncpg.Connection, branch_url):
+async def get_package_by_branch_url(
+        conn: asyncpg.Connection, branch_url: str) -> Optional[Package]:
     query = """
 SELECT
   name,
@@ -251,6 +267,27 @@ WHERE
 
 
 class Run(object):
+
+    id: str
+    times: Tuple[datetime.datetime, datetime.datetime]
+    command: str
+    description: Optional[str]
+    package: str
+    build_version: Optional[Version]
+    build_distribution: Optional[str]
+    result_code: str
+    branch_name: Optional[str]
+    main_branch_revision: Optional[bytes]
+    revision: Optional[bytes]
+    context: Optional[str]
+    result: Optional[Any]
+    suite: str
+    instigated_context: Optional[str]
+    branch_url: str
+    logfilenames: Optional[List[str]]
+    review_status: str
+    review_comment: Optional[str]
+    worker_name: Optional[str]
 
     __slots__ = [
             'id', 'times', 'command', 'description', 'package',
@@ -1530,7 +1567,9 @@ async def package_exists(conn, package):
         "SELECT 1 FROM package WHERE name = $1", package))
 
 
-async def guess_package_from_revision(conn, revision):
+async def guess_package_from_revision(
+        conn: asyncpg.Connection, revision: bytes
+        ) -> Tuple[Optional[str], Optional[str]]:
     query = """\
 select distinct package, maintainer_email from run
 left join package on package.name = run.package
