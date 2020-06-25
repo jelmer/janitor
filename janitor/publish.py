@@ -1024,8 +1024,14 @@ applied independently.
                  mp.url, last_run.result_code)
         return False
 
-    assert last_run.branch_name
-    assert maintainer_email
+    if last_run.branch_name is None:
+        note('%s: Last run (%s) does not have branch name set.', mp.url,
+             last_run.id)
+        return False
+
+    if maintainer_email is None:
+        note('%s: No maintainer email known.', mp.url)
+        return False
 
     if last_run != mp_run:
         publish_id = str(uuid.uuid4())
