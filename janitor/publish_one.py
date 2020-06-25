@@ -49,6 +49,7 @@ from silver_platter.debian import (
 
 from breezy.branch import Branch
 from breezy.errors import DivergedBranches
+from breezy.plugins.gitlab.hoster import ForkingDisabled
 from breezy.propose import (
     MergeProposalExists,
     )
@@ -383,6 +384,10 @@ def publish(
             raise PublishFailure(
                 description='project %s was not found' % e.project,
                 code='project-not-found')
+        except ForkingDisabled as e:
+            raise PublishFailure(
+                description='Forking disabled: %s' % main_branch.user_url,
+                code='forking-disabled')
         except PermissionDenied as e:
             raise PublishFailure(
                 description=str(e), code='permission-denied')
