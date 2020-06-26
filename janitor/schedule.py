@@ -58,6 +58,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'autopkgtest-no-space-on-device',
     'worker-killed',
     'too-many-requests',
+    'autopkgtest-testbed-chroot-disappeared',
 ]
 
 # In some cases, we want to ignore certain results when guessing
