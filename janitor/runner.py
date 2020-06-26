@@ -561,8 +561,8 @@ class ActiveRemoteRun(ActiveRun):
             duration = datetime.now() - self.last_keepalive
             if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL*2)):
                 warning(
-                    'No keepalives received from %s for %s in %ds, aborting.',
-                    self.worker_name, self.run_id, duration)
+                    'No keepalives received from %s for %s in %r, aborting.',
+                    self.worker_name, self.log_id, duration)
                 result = JanitorResult(
                     self.queue_item.package, log_id=self.log_id,
                     branch_url=self.queue_item.branch_url,
