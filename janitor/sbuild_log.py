@@ -2293,6 +2293,23 @@ class AutopkgtestTestbedFailure(Problem):
         return self.reason
 
 
+class AutopkgtestDepChrootDisappeared(Problem):
+
+    kind = 'testbed-chroot-disappeared'
+
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return "chroot disappeared"
+
+    def __repr__(self):
+        return "%s()" % (type(self).__name__)
+
+    def __eq__(self, other):
+        return isinstance(self, type(other))
+
+
 class AutopkgtestErroneousPackage(Problem):
 
     kind = 'erroneous-package'
@@ -2431,6 +2448,20 @@ def find_autopkgtest_failure_description(
                 else:
                     last_test = None
                 msg = content[1]
+                m = re.fullmatch(
+                    r'"apt-get --simulate --quiet -o '
+                    'APT::Get::Show-User-Simulation-Note=False --auto-remove '
+                    'purge autopkgtest-satdep" failed with stderr '
+                    '"(.*)', msg)
+                if m:
+                    stderr = m.group(1)
+                    m = re.fullmatch(
+                        'W: (.*): '
+                        'Failed to stat file: No such file or directory',
+                        stderr)
+                    if m:
+                        error = AutopkgtestDepChrootDisappeared()
+                        return (i + 1, last_test, error, stderr)
                 m = re.fullmatch(r'testbed failure: (.*)', msg)
                 if m:
                     testbed_failure_reason = m.group(1)
