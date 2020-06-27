@@ -1231,6 +1231,16 @@ async def handle_assign(request):
     possible_transports = []
     possible_hosters = []
 
+    async def abort(active_run, code, description):
+        result = JanitorResult(
+            active_run.queue_item.package,
+            log_id=active_run.log_id,
+            branch_url=active_run.main_branch_url,
+            code=code, description=description)
+        async with queue_processor.database.acquire() as conn:
+            await queue_processor.finish_run(active_run, result)
+            await state.drop_queue_item(conn, active_run.queue_item.id)
+
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
 
@@ -1243,9 +1253,6 @@ async def handle_assign(request):
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
     async with queue_processor.database.acquire() as conn:
-        if item.branch_url is None:
-            await state.drop_queue_item(conn, item.id)
-            return web.json_response({'queue_id': item.queue_id}, status=503)
         last_build_version = await state.get_last_build_version(
             conn, item.package, item.suite)
 
@@ -1289,8 +1296,11 @@ async def handle_assign(request):
         else:
             resume = None
 
-    cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-        item.package, 'master', vcs_type)
+    try:
+        cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
+            item.package, 'master', vcs_type)
+    except UnsupportedVcs:
+        cached_branch_url = None
 
     env = {
         'PACKAGE': item.package,
@@ -1300,8 +1310,12 @@ async def handle_assign(request):
     if item.upstream_branch_url:
         env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url
 
-    result_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-        item.package, suite_config.branch_name, vcs_type.lower())
+    try:
+        result_branch_url = queue_processor.public_vcs_manager.get_branch_url(
+            item.package, suite_config.branch_name, vcs_type.lower())
+    except UnsupportedVcs:
+        # We can't store the resulting branch?
+        result_branch_url = None
 
     assignment = {
         'id': active_run.log_id,

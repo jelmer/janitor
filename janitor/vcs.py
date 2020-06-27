@@ -254,6 +254,10 @@ def copy_vcs_dir(main_branch: Branch,
         vcs_result_dir, pkg, branch_map, public_master_branch=main_branch)
 
 
+class UnsupportedVcs(Exception):
+    """Specified vcs type is not supported."""
+
+
 def get_cached_branch_url(
         vcs_type: str, package: str, branch_name: str) -> str:
     if vcs_type == 'git':
@@ -263,13 +267,16 @@ def get_cached_branch_url(
         return '%s%s/%s' % (
             CACHE_URL_BZR, package, branch_name)
     else:
-        raise AssertionError('unknown vcs type %r' % vcs_type)
+        raise UnsupportedVcs(vcs_type)
 
 
 def get_cached_branch(vcs_type: str,
                       package: str,
                       branch_name: str) -> Optional[Branch]:
-    url = get_cached_branch_url(vcs_type, package, branch_name)
+    try:
+        url = get_cached_branch_url(vcs_type, package, branch_name)
+    except UnsupportedVcs:
+        return None
     try:
         return Branch.open(url)
     except NotBranchError:
