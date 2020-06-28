@@ -32,6 +32,8 @@ from breezy.config import GlobalStack
 from breezy.errors import (
     InvalidNormalization,
     NoRoundtrippingSupport,
+    )
+from breezy.transform import (
     MalformedTransform,
     )
 from breezy.tree import Tree
