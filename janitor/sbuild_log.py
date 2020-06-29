@@ -2459,13 +2459,9 @@ def find_autopkgtest_failure_description(
                 else:
                     last_test = None
                 msg = content[1]
-                m = re.fullmatch(
-                    r'"apt-get --simulate --quiet -o '
-                    'APT::Get::Show-User-Simulation-Note=False --auto-remove '
-                    'purge autopkgtest-satdep" failed with stderr '
-                    '"(.*)', msg)
+                m = re.fullmatch('"(.*)" failed with stderr "(.*)("?)', msg)
                 if m:
-                    stderr = m.group(1)
+                    stderr = m.group(2)
                     m = re.fullmatch(
                         'W: (.*): '
                         'Failed to stat file: No such file or directory',
@@ -2488,6 +2484,9 @@ def find_autopkgtest_failure_description(
                                 test_output_offset[field] + offset, last_test, error,
                                 description)
 
+                    if (testbed_failure_reason ==
+                            'cannot send to testbed: [Errno 32] Broken pipe'):
+                        pass # TODO(jelmer)
                     return (i + 1, last_test,
                             AutopkgtestTestbedFailure(testbed_failure_reason), None)
                 m = re.fullmatch(r'erroneous package: (.*)', msg)
