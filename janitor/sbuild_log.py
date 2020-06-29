@@ -2420,7 +2420,10 @@ def find_autopkgtest_failure_description(
     test_output: Dict[Tuple[str, ...], List[str]] = {}
     test_output_offset: Dict[Tuple[str, ...], int] = {}
     current_field: Optional[Tuple[str, ...]] = None
-    for i, line in enumerate(lines):
+    i = -1
+    while i < len(lines) - 1:
+        i += 1
+        line = lines[i]
         parsed = parse_autopgktest_line(line)
         if isinstance(parsed, tuple):
             (timestamp, content) = parsed
@@ -2442,6 +2445,14 @@ def find_autopkgtest_failure_description(
                 test_output[current_field] = []
                 test_output_offset[current_field] = i + 1
             elif content[0] == 'error':
+                if content[1].startswith('"') and content[1].count('"') == 1:
+                    sublines = [content[1]]
+                    while i < len(lines):
+                        i += 1
+                        sublines += lines[i]
+                        if lines[i].count('"') == 1:
+                            break
+                    content = (content[0], ''.join(sublines))
                 last_test: Optional[str]
                 if current_field is not None:
                     last_test = current_field[0]
@@ -2483,6 +2494,12 @@ def find_autopkgtest_failure_description(
                 if m:
                     return (i + 1, last_test,
                             AutopkgtestErroneousPackage(m.group(1)), None)
+                if current_field is not None:
+                    offset, line, error = find_apt_get_failure(
+                        test_output[current_field])
+                    if error is not None:
+                        return (test_output_offset[current_field] + offset,
+                                last_test, error, line)
                 return (i + 1, last_test, None, msg)
         else:
             if current_field:
