@@ -1,10 +1,12 @@
 #!/usr/bin/python3
 
 import asyncpg
+from typing import List, Dict
 from .common import generate_pkg_context
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
     )
+from lintian_brush import load_renamed_tags
 
 from . import env
 from .. import state
@@ -12,6 +14,7 @@ from .. import state
 
 SUITE = 'lintian-fixes'
 
+renamed_tags = load_renamed_tags()
 
 async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
                             package, run_id=None):
@@ -54,13 +57,22 @@ select tag, count(tag) from (
 
 
 async def generate_tag_list(conn: asyncpg.Connection):
-    tags = sorted(await iter_lintian_tags(conn))
+    tags = []
+    oldnames = {}  # type: Dict[str, List[str]]
+    for tag in await iter_lintian_tags(conn):
+        try:
+            newname = renamed_tags[tag]
+        except KeyError:
+            tags.append(tag)
+        else:
+            oldnames.setdefault(newname, []).append(tag)
     template = env.get_template('lintian-fixes-tag-list.html')
-    return await template.render_async(tags=tags)
+    tags.sort()
+    return await template.render_async(tags=tags, oldnames=oldnames)
 
 
 async def iter_last_successes_by_lintian_tag(
-        conn: asyncpg.Connection, tag: str):
+        conn: asyncpg.Connection, tags: List[str]):
     return await conn.fetch("""
 select distinct on (package) * from (
 select
@@ -79,16 +91,21 @@ from
 where
   build_distribution  = 'lintian-fixes' and
   result_code = 'success'
-) as package where tag = $1 order by package, start_time desc
-""", tag)
+) as package where tag = ANY($1::text[]) order by package, start_time desc
+""", tags)
 
 
 async def generate_tag_page(db, tag):
     template = env.get_template('lintian-fixes-tag.html')
+    oldnames = []
+    for oldname, newname in renamed_tags.items():
+        if newname == tag:
+            oldnames.append(oldname)
     async with db.acquire() as conn:
         packages = list(await iter_last_successes_by_lintian_tag(
-            conn, tag))
-    return await template.render_async(tag=tag, packages=packages)
+            conn, [tag] + oldnames))
+    return await template.render_async(
+        tag=tag, oldnames=oldnames, packages=packages)
 
 
 async def generate_candidates(db):
@@ -229,7 +246,8 @@ async def generate_regressions_list(db):
 
 
 async def iter_lintian_fixes_counts(conn):
-    return await conn.fetch("""
+    per_tag = {}
+    for (tag, absorbed, unabsorbed, total) in await conn.fetch("""
 SELECT
    absorbed.tag,
    COALESCE(absorbed.cnt, 0),
@@ -244,8 +262,17 @@ LEFT JOIN (
     FROM last_unabsorbed_lintian_fixes group by 1 order by 2 desc
     ) AS unabsorbed
 ON absorbed.tag = unabsorbed.tag
-ORDER BY 4 DESC
-""")
+"""):
+        canonical_name = renamed_tags.get(tag, tag)
+        per_tag.setdefault(canonical_name, (0, 0, 0))
+        per_tag[canonical_name] = (
+            per_tag[canonical_name][0] + absorbed,
+            per_tag[canonical_name][1] + unabsorbed,
+            per_tag[canonical_name][2] + total)
+    return sorted([
+        (tag, absorbed, unabsorbed, total) for
+        (tag, (absorbed, unabsorbed, total)) in per_tag.items()],
+        key=lambda k, v: v[2])
 
 
 async def generate_stats(db):
