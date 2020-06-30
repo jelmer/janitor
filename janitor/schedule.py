@@ -59,6 +59,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'worker-killed',
     'too-many-requests',
     'autopkgtest-testbed-chroot-disappeared',
+    'autopkgtest-file-fetch-failure',
 ]
 
 # In some cases, we want to ignore certain results when guessing

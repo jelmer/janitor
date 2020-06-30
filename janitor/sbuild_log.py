@@ -401,7 +401,7 @@ def worker_failure_from_sbuild_log(f) -> SbuildFailure:
                         error.revision)
                     break
             else:
-                for line in reversed(paragraphs[None][-4:]):
+                for line in reversed(paragraphs[None][-8:]):
                     if line.startswith('brz: ERROR: '):
                         (error, description) = parse_brz_error(
                             line[len('brz: ERROR: '):])
@@ -1541,6 +1541,23 @@ def imagemagick_delegate_missing(m):
     return ImageMagickDelegateMissing(m.group(1))
 
 
+class MissingSphinxTheme(Problem):
+
+    kind = 'missing-sphinx-theme'
+
+    def __init__(self, theme):
+        self.theme = theme
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and other.theme == self.theme
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.theme)
+
+    def __str__(self):
+        return "Missing sphinx theme: %s" % self.theme
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1630,6 +1647,8 @@ build_failure_regexps = [
      cmake_pkg_config_missing),
     (r'dh: Unknown sequence --(.*) '
      r'\(options should not come before the sequence\)', dh_with_order),
+    (r'dh: Compatibility levels before [0-9]+ are no longer supported '
+     r'\(level [0-9]+ requested\)', None),
     (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
     (r'.*: .*: No space left on device', install_no_space),
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
@@ -1663,6 +1682,10 @@ build_failure_regexps = [
      r'Cannot access central \(https://repo.maven.apache.org/maven2\) '
      r'in offline mode and the artifact .* has not been downloaded '
      'from it before. @', maven_missing_artifact),
+    (MAVEN_ERROR_PREFIX + r'Non-resolvable import POM: Cannot access central '
+     r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
+     r'artifact (.*) has not been downloaded from it before. '
+     r'@ line [0-9]+, column [0-9]+', maven_missing_artifact),
     (r'\[FATAL\] Non-resolvable parent POM for .*: Cannot access central '
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      'artifact (.*) has not been downloaded from it before. .*',
@@ -1751,6 +1774,9 @@ build_failure_regexps = [
      r'(.*):([0-9]+)', php_missing_class),
     (r'Caused by: java.lang.ClassNotFoundException: (.*)',
      java_missing_class),
+    (r'\[(.*)\] \t\t:: (.*)\#(.*);\$\{(.*)\}: not found',
+     lambda m: MissingMavenArtifacts([
+         '%s:%s:jar:debian' % (m.group(2), m.group(3))])),
     (r'Caused by: java.lang.IllegalArgumentException: '
      r'Cannot find JAR \'(.*)\' required by module \'(.*)\' '
      r'using classpath or distribution directory \'(.*)\'', None),
@@ -1840,11 +1866,16 @@ build_failure_regexps = [
     (r'error: Package `(.*)\' not found in specified Vala API directories '
      r'or GObject-Introspection GIR directories', vala_package_missing),
     (r'.*.scala:[0-9]+: error: (.*)', None),
+    # JavaScript
+    (r'error TS6053: File \'(.*)\' not found.',
+     file_not_found),
     (r'(.*\.ts)\([0-9]+,[0-9]+\): error TS[0-9]+: (.*)', None),
     (r'(.*.nim)\([0-9]+, [0-9]+\) Error: .*', None),
     (r'dh_installinit: upstart jobs are no longer supported\!  '
      r'Please remove (.*) and check if you need to add a conffile removal',
      dh_installinit_upstart_file),
+    (r'dh_installinit: --no-restart-on-upgrade has been renamed to '
+     '--no-stop-on-upgrade', None),
     (r'find: paths must precede expression: .*', None),
     (r'find: ‘(.*)’: No such file or directory', file_not_found),
     (r'ninja: fatal: posix_spawn: Argument list too long', None),
@@ -1890,6 +1921,7 @@ build_failure_regexps = [
     (r'flag provided but not defined: .*', None),
     (r'CMake Error: The source directory "(.*)" does not exist.',
      directory_not_found),
+    (r'.*: [0-9]+: cd: can\'t cd to (.*)', directory_not_found),
     (r'/bin/sh: [0-9]+: cannot open (.*): No such file',
      file_not_found),
     (r'.*: line [0-9]+: (.*): No such file or directory', file_not_found),
@@ -1904,6 +1936,7 @@ build_failure_regexps = [
      file_not_found),
     (r'dh_installman: mv (.*) (.*): No such file or directory',
      file_not_found),
+    (r'dh_installman: Could not determine section for (.*)', None),
     (r'failed to initialize build cache at (.*): mkdir (.*): '
      r'permission denied', None),
     (r'Can\'t exec "(.*)": No such file or directory at (.*) line ([0-9]+).',
@@ -1964,6 +1997,12 @@ build_failure_regexps = [
      None),
     (r'dh_auto_configure: invalid or non-existing path '
      r'to the source directory: .*', None),
+    (r'(.*) is no longer a hard dependency since version (.*). '
+     r'Please install it manually.\(pip install (.*)\)',
+     lambda m: MissingSphinxTheme(m.group(1))),
+    # Sphinx
+    (r'There is a syntax error in your configuration file: (.*)',
+     None),
 ]
 
 compiled_build_failure_regexps = []
@@ -2011,6 +2050,7 @@ secondary_build_failure_regexps = [
     r'FAIL\s+(.*) \[.*\] ?',
     r'TEST FAILURE',
     r'make\[[0-9]+\]: \*\*\* \[.*\] Error [0-9]+',
+    r'make\[[0-9]+\]: \*\*\* \[.*\] Aborted',
     r'E: pybuild pybuild:[0-9]+: test: plugin [^ ]+ failed with:'
     r'exit code=[0-9]+: .*',
     r'chmod: cannot access \'.*\': No such file or directory',
@@ -2065,9 +2105,11 @@ secondary_build_failure_regexps = [
     r'ln: failed to create symbolic link \'(.*)\': File exists',
     r'ln: failed to create symbolic link \'(.*)\': No such file or directory',
     r'ln: failed to create symbolic link \'(.*)\': Permission denied',
+    r'ln: invalid option -- .*',
     r'mkdir: cannot create directory ‘(.*)’: No such file or directory',
     r'mkdir: missing operand',
     r'Fatal error: .*',
+    'Fatal Error: (.*)',
     r'ERROR: Test "(.*)" failed. Exiting.',
     # scons
     r'ERROR: test\(s\) failed in (.*)',
@@ -2170,8 +2212,8 @@ def find_build_failure_description(
             r'\s*Could not find a configuration file for package "(.*)".*')
         binary_pat = re.compile(r'  Could NOT find (.*) \(missing: .*\)')
         cmake_files_pat = re.compile(
-            '  Could not find a package configuration file provided '
-            'by "(.*)" with')
+            '^  Could not find a package configuration file provided '
+            'by "(.*)" with any of the following names:')
         # Urgh, multi-line regexes---
         for lineno in range(len(lines)):
             m = re.fullmatch(binary_pat, lines[lineno].rstrip('\n'))
@@ -2206,18 +2248,20 @@ def find_build_failure_description(
                 return (
                     lineno + 1, lines[lineno],
                     MissingPkgConfig(package, version))
-            m = re.fullmatch(cmake_files_pat, lines[lineno].strip('\n'))
-            if (m and
-                    lines[lineno+1] == '  any of the following names:\n' and
-                    lines[lineno+2] == '\n'):
-                i = 3
-                filenames = []
-                while lines[lineno + i].strip():
-                    filenames.append(lines[lineno + i].strip())
-                    i += 1
-                return (
-                    lineno + 1, lines[lineno],
-                    CMakeFilesMissing(filenames))
+            if lineno+1 < len(lines):
+                m = re.fullmatch(
+                    cmake_files_pat,
+                    lines[lineno].strip('\n') + ' ' +
+                    lines[lineno+1].lstrip(' ').strip('\n'))
+                if m and lines[lineno+2] == '\n':
+                    i = 3
+                    filenames = []
+                    while lines[lineno + i].strip():
+                        filenames.append(lines[lineno + i].strip())
+                        i += 1
+                    return (
+                        lineno + 1, lines[lineno],
+                        CMakeFilesMissing(filenames))
 
     # And forwards for vague ("secondary") errors.
     for lineno in range(max(0, len(lines) - OFFSET), len(lines)):
@@ -2481,14 +2525,15 @@ def find_autopkgtest_failure_description(
                         if error is not None:
                             assert offset is not None
                             return (
-                                test_output_offset[field] + offset, last_test, error,
-                                description)
+                                test_output_offset[field] + offset, last_test,
+                                error, description)
 
                     if (testbed_failure_reason ==
                             'cannot send to testbed: [Errno 32] Broken pipe'):
                         pass # TODO(jelmer)
                     return (i + 1, last_test,
-                            AutopkgtestTestbedFailure(testbed_failure_reason), None)
+                            AutopkgtestTestbedFailure(testbed_failure_reason),
+                            None)
                 m = re.fullmatch(r'erroneous package: (.*)', msg)
                 if m:
                     return (i + 1, last_test,
@@ -2496,7 +2541,8 @@ def find_autopkgtest_failure_description(
                 if current_field is not None:
                     offset, line, error = find_apt_get_failure(
                         test_output[current_field])
-                    if error is not None:
+                    if (error is not None and offset is not None and
+                            current_field in test_output_offset):
                         return (test_output_offset[current_field] + offset,
                                 last_test, error, line)
                 return (i + 1, last_test, None, msg)
