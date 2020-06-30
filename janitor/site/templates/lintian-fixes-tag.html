@@ -8,6 +8,10 @@
 
 <p>Lintian Info page: {{ lintian_tag_link(tag) }}</p>
 
+{% if oldnames %}
+<p>Old tag names: {% for oldname in oldnames %}{{ oldname }}{% if not loop.last %}, {% endif %}{% endfor %}.
+{% endif %}
+
 <ul>
 {% for package, command, build_version, result_code, context, start_time, id, tag in packages %}
 	<li><a href="../pkg/{{ package }}">{{ package }}</a></li>
