@@ -20,6 +20,7 @@ from janitor.sbuild_log import (
     AptMissingReleaseFile,
     AutopkgtestTestbedFailure,
     AutopkgtestDepsUnsatisfiable,
+    AutopkgtestDepChrootDisappeared,
     AutopkgtestTimedOut,
     AutopkgtestStderrFailure,
     CMakeFilesMissing,
@@ -64,6 +65,7 @@ from janitor.sbuild_log import (
     DhWithOrderIncorrect,
     FailedGoTest,
     UpstartFilePresent,
+    DirectoryNonExistant,
     parse_brz_error,
     )
 import unittest
@@ -119,6 +121,11 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             'See https://github.com/rails/execjs for a list '
             'of available runtimes.'], 1,
             MissingJavaScriptRuntime())
+
+    def test_directory_missing(self):
+        self.run_test([
+            'debian/components/build: 19: cd: can\'t cd to rollup-plugin',
+            ], 1, DirectoryNonExistant('rollup-plugin'))
 
     def test_missing_sprockets_file(self):
         self.run_test([
@@ -350,6 +357,11 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
         self.run_test([
             'Could not import extension sphinx.ext.pngmath (exception: '
             'No module named pngmath)'], 1, MissingPythonModule('pngmath'))
+
+    def test_sphinx(self):
+        self.run_test([
+            'There is a syntax error in your configuration file: '
+            'Unknown syntax: Constant'], 1, None)
 
     def test_go_missing(self):
         self.run_test([
@@ -653,6 +665,13 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             'been downloaded from it before. and \'parent.relativePath\' '
             'points at wrong local POM @ line 8, column 10'], 1,
             MissingMavenArtifacts(['org.joda:joda-parent:pom:1.4.0']))
+
+        self.run_test([
+            '[ivy:retrieve] \t\t:: '
+            'com.carrotsearch.randomizedtesting#junit4-ant;'
+            '${/com.carrotsearch.randomizedtesting/junit4-ant}: not found'], 1,
+            MissingMavenArtifacts([
+                'com.carrotsearch.randomizedtesting:junit4-ant:jar:debian']))
 
     def test_maven_errors(self):
         self.run_test([
@@ -1124,9 +1143,8 @@ Exiting with 4
 
     def test_dpkg_failure(self):
         self.assertEqual(
-            (8, 'runtestsuite', None, """\
-"dpkg --unpack /tmp/autopkgtest.hdIETy/4-autopkgtest-satdep.deb" \
-failed with stderr "W: /var/lib/schroot/session/unstable-amd64-\
+            (8, 'runtestsuite', AutopkgtestDepChrootDisappeared(),  """\
+W: /var/lib/schroot/session/unstable-amd64-\
 sbuild-7fb1b836-14f9-4709-8584-cbbae284db97: \
 Failed to stat file: No such file or directory"""),
             find_autopkgtest_failure_description("""\
