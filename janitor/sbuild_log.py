@@ -2023,6 +2023,7 @@ secondary_build_failure_regexps = [
     r'make\[[0-9]+\]: \*\*\* \[.*:[0-9]+: .*\] Segmentation fault',
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
      r'\'(?!maintainer-clean)(?!clean)(.*)\'\.  Stop\.'),
+    r'.*:[0-9]+: \*\*\* empty variable name.  Stop.',
     # QMake
     r'Project ERROR: .*',
     # pdflatex
@@ -2530,7 +2531,15 @@ def find_autopkgtest_failure_description(
 
                     if (testbed_failure_reason ==
                             'cannot send to testbed: [Errno 32] Broken pipe'):
-                        pass # TODO(jelmer)
+                        pass  # TODO(jelmer)
+                    if (testbed_failure_reason ==
+                            'apt repeatedly failed to download packages'):
+                        offset, line, error = find_apt_get_failure(lines)
+                        if error and offset:
+                            return (offset, last_test, error, line)
+                        return (i + 1, last_test,
+                                AptFetchFailure(None, testbed_failure_reason),
+                                None)
                     return (i + 1, last_test,
                             AutopkgtestTestbedFailure(testbed_failure_reason),
                             None)
@@ -2643,7 +2652,7 @@ class AptUpdateError(Problem):
 class AptFetchFailure(AptUpdateError):
     """Apt file fetch failed."""
 
-    kind = 'file-fetch-failure'
+    kind = 'apt-file-fetch-failure'
 
     def __init__(self, url, error):
         self.url = url
