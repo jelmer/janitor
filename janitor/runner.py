@@ -527,10 +527,10 @@ class ActiveRemoteRun(ActiveRun):
     def _extra_json(self):
         return {'jenkins': self._jenkins_metadata}
 
-    def start_watchdog(self):
+    def start_watchdog(self, queue_processor):
         if self._watch_dog is not None:
             raise Exception('Watchdog already started')
-        self._watch_dog = asyncio.create_task(self.watchdog())
+        self._watch_dog = asyncio.create_task(self.watchdog(queue_processor))
 
     def stop_watchdog(self):
         if self._watch_dog is None:
@@ -555,7 +555,7 @@ class ActiveRemoteRun(ActiveRun):
         f.write(data)
         return ret
 
-    async def watchdog(self):
+    async def watchdog(self, queue_processor):
         while True:
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
             duration = datetime.now() - self.last_keepalive
@@ -566,9 +566,9 @@ class ActiveRemoteRun(ActiveRun):
                 result = JanitorResult(
                     self.queue_item.package, log_id=self.log_id,
                     branch_url=self.queue_item.branch_url,
-                    description=('No keepalives received in %ds.' % duration),
+                    description=('No keepalives received in %s.' % duration),
                     code='worker-timeout', logfilenames=[])
-                await self.queue_processor.finish_run(self, result)
+                await queue_processor.finish_run(self, result)
                 return
 
     def kill(self) -> None:
@@ -1343,7 +1343,7 @@ async def handle_assign(request):
          },
         }
 
-    active_run.start_watchdog()
+    active_run.start_watchdog(queue_processor)
     return web.json_response(assignment, status=201)
 
 
