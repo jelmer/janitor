@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS package (
    vcs_type text,
    vcs_url text,
    vcs_browse text,
+   vcs_last_revision text,
    popcon_inst integer,
    removed boolean default false,
    vcswatch_status vcswatch_status,

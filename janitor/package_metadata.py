@@ -19,10 +19,13 @@
 
 from __future__ import absolute_import
 
+import asyncpg
 import asyncio
 from debian.changelog import Version
 from email.utils import parseaddr
 from typing import List, Optional, Iterator, AsyncIterator, Tuple
+
+from breezy.git.mapping import default_mapping
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
@@ -55,7 +58,7 @@ def extract_uploader_emails(uploaders: str) -> List[str]:
 async def iter_packages_with_metadata(
         udd: UDD, packages: Optional[List[str]] = None
         ) -> AsyncIterator[Tuple[
-            str, str, str, int, str,
+            str, str, str, int, str, str,
             str, str, str, str, Version, Version]]:
     args = []
     query = """
@@ -65,6 +68,7 @@ coalesce(vcswatch.vcs, sources.vcs_type),
 coalesce(vcswatch.url, sources.vcs_url),
 vcswatch.branch,
 coalesce(vcswatch.browser, sources.vcs_browser),
+commit_id,
 status as vcswatch_status,
 sources.version,
 vcswatch.version
@@ -90,6 +94,42 @@ select name, version from package_removal where 'source' = any(arch_array)
         query += " and name = ANY($1::text[])"
         args.append(packages)
     return await udd.fetch(query, *args)
+
+
+async def store_packages(conn: asyncpg.Connection, packages):
+    """Store packages in the database.
+
+    Args:
+      packages: list of tuples with (
+        name, branch_url, subpath, maintainer_email, uploader_emails,
+        unstable_version, vcs_type, vcs_url, vcs_browse, vcs_last_revision,
+        vcswatch_status, vcswatch_version, popcon_inst, removed,
+        upstream_branch_url)
+    """
+    await conn.executemany(
+        "INSERT INTO package "
+        "(name, branch_url, subpath, maintainer_email, uploader_emails, "
+        "unstable_version, vcs_type, vcs_url, vcs_browse, vcs_last_revision, "
+        "vcswatch_status, vcswatch_version, popcon_inst, removed, "
+        "upstream_branch_url) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
+        "$14, $15) "
+        "ON CONFLICT (name) DO UPDATE SET "
+        "branch_url = EXCLUDED.branch_url, "
+        "subpath = EXCLUDED.subpath, "
+        "maintainer_email = EXCLUDED.maintainer_email, "
+        "uploader_emails = EXCLUDED.uploader_emails, "
+        "unstable_version = EXCLUDED.unstable_version, "
+        "vcs_type = EXCLUDED.vcs_type, "
+        "vcs_url = EXCLUDED.vcs_url, "
+        "vcs_last_revision = EXCLUDED.vcs_last_revision, "
+        "vcs_browse = EXCLUDED.vcs_browse, "
+        "vcswatch_status = EXCLUDED.vcswatch_status, "
+        "vcswatch_version = EXCLUDED.vcswatch_version, "
+        "popcon_inst = EXCLUDED.popcon_inst, "
+        "removed = EXCLUDED.removed, "
+        "upstream_branch_url = EXCLUDED.upstream_branch_url",
+        packages)
 
 
 async def update_package_metadata(
@@ -119,7 +159,8 @@ async def update_package_metadata(
         trace.note('Updating package metadata.')
         packages = []
         async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-                   vcs_branch, vcs_browser, vcswatch_status, sid_version,
+                   vcs_branch, vcs_browser, commit_id, vcswatch_status,
+                   sid_version,
                    vcswatch_version) in iter_packages_with_metadata(
                        udd, selected_packages):
             try:
@@ -132,12 +173,18 @@ async def update_package_metadata(
 
             uploader_emails = extract_uploader_emails(uploaders)
 
+            vcs_last_revision = None
+
             if vcs_type and vcs_type.capitalize() == 'Git':
                 new_vcs_url = fixup_broken_git_url(vcs_url)
                 if new_vcs_url != vcs_url:
                     trace.note('Fixing up VCS URL: %s -> %s',
                                vcs_url, new_vcs_url)
                     vcs_url = new_vcs_url
+                if commit_id is not None:
+                    vcs_last_revision = (
+                        default_mapping.revision_id_foreign_to_bzr(
+                            commit_id.encode('ascii')))
 
             if vcs_url and vcs_branch:
                 (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
@@ -171,9 +218,11 @@ async def update_package_metadata(
             packages.append((
                 name, branch_url, subpath, maintainer_email, uploader_emails,
                 sid_version, vcs_type, vcs_url, vcs_browser,
+                vcs_last_revision.decode('utf-8')
+                    if vcs_last_revision else None,
                 vcswatch_status.lower() if vcswatch_status else None,
                 vcswatch_version, insts, removed, upstream_branch_url))
-        await state.store_packages(conn, packages)
+        await store_packages(conn, packages)
 
 
 async def main():

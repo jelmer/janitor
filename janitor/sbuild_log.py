@@ -826,7 +826,7 @@ class MissingPkgConfig(Problem):
 
 
 def pkg_config_missing(m):
-    expr = m.group(1)
+    expr = m.group(1).strip().split('\t')[0]
     if '>=' in expr:
         pkg, minimum = expr.split('>=')
         return MissingPkgConfig(pkg.strip(), minimum.strip())
@@ -1921,6 +1921,8 @@ build_failure_regexps = [
     # QMake
     (r'Project ERROR: Unknown module\(s\) in QT: (.*)', None),
     (r'Project ERROR: (.*) development package not found',
+     pkg_config_missing),
+    (r'Package \'(.*)\', required by \'(.*)\', not found\n',
      pkg_config_missing),
     (r'configure: error: .* not found: Package dependency requirement '
      r'\'([^\']+)\' could not be satisfied.', pkg_config_missing),
