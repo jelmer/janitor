@@ -47,38 +47,6 @@ class Database(object):
             yield conn
 
 
-async def store_packages(conn: asyncpg.Connection, packages):
-    """Store packages in the database.
-
-    Args:
-      packages: list of tuples with (
-        name, branch_url, subpath, maintainer_email, uploader_emails,
-        unstable_version, vcs_type, vcs_url, vcs_browse, vcswatch_status,
-        vcswatch_version, popcon_inst, removed, upstream_branch_url)
-    """
-    await conn.executemany(
-        "INSERT INTO package "
-        "(name, branch_url, subpath, maintainer_email, uploader_emails, "
-        "unstable_version, vcs_type, vcs_url, vcs_browse, vcswatch_status, "
-        "vcswatch_version, popcon_inst, removed, upstream_branch_url) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) "
-        "ON CONFLICT (name) DO UPDATE SET "
-        "branch_url = EXCLUDED.branch_url, "
-        "subpath = EXCLUDED.subpath, "
-        "maintainer_email = EXCLUDED.maintainer_email, "
-        "uploader_emails = EXCLUDED.uploader_emails, "
-        "unstable_version = EXCLUDED.unstable_version, "
-        "vcs_type = EXCLUDED.vcs_type, "
-        "vcs_url = EXCLUDED.vcs_url, "
-        "vcs_browse = EXCLUDED.vcs_browse, "
-        "vcswatch_status = EXCLUDED.vcswatch_status, "
-        "vcswatch_version = EXCLUDED.vcswatch_version, "
-        "popcon_inst = EXCLUDED.popcon_inst, "
-        "removed = EXCLUDED.removed, "
-        "upstream_branch_url = EXCLUDED.upstream_branch_url",
-        packages)
-
-
 async def popcon(conn: asyncpg.Connection):
     return await conn.fetch(
         "SELECT name, popcon_inst FROM package")
