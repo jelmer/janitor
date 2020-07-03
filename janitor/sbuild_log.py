@@ -1067,6 +1067,10 @@ def maven_missing_artifact(m):
     return MissingMavenArtifacts([a.strip() for a in artifacts])
 
 
+def maven_missing_plugin(m):
+    return MissingMavenArtifacts([m.group(1)])
+
+
 class MissingXmlEntity(Problem):
 
     kind = 'missing-xml-entity'
@@ -1558,6 +1562,27 @@ class MissingSphinxTheme(Problem):
         return "Missing sphinx theme: %s" % self.theme
 
 
+class DebianVersionRejected(Problem):
+
+    kind = 'debian-version-rejected'
+
+    def __init__(self, version):
+        self.version = version
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and other.version == self.version
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.version)
+
+    def __str__(self):
+        return "Debian Version Rejected; %s" % self.version
+
+
+def debian_version_rejected(m):
+    return DebianVersionRejected(m.group(1))
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1681,7 +1706,7 @@ build_failure_regexps = [
      r'Plugin (.*) or one of its dependencies could not be resolved: '
      r'Cannot access central \(https://repo.maven.apache.org/maven2\) '
      r'in offline mode and the artifact .* has not been downloaded '
-     'from it before. @', maven_missing_artifact),
+     'from it before. @', maven_missing_plugin),
     (MAVEN_ERROR_PREFIX + r'Non-resolvable import POM: Cannot access central '
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      r'artifact (.*) has not been downloaded from it before. '
@@ -1694,7 +1719,7 @@ build_failure_regexps = [
      r'not be resolved: Cannot access central '
      r'\(https://repo.maven.apache.org/maven2\) in offline mode and the '
      r'artifact .* has not been downloaded from it before. -> \[Help 1\]',
-     maven_missing_artifact),
+     maven_missing_plugin),
     (MAVEN_ERROR_PREFIX + r'Failed to execute goal on project .*: '
      r'Could not resolve dependencies for project .*: Cannot access '
      r'.* \([^\)]+\) in offline mode and the artifact '
@@ -1707,6 +1732,10 @@ build_failure_regexps = [
      maven_missing_artifact),
     (MAVEN_ERROR_PREFIX +
      'Failed to execute goal (.*) on project (.*): (.*)', None),
+    (MAVEN_ERROR_PREFIX +
+     r'Error resolving version for plugin \'(.*)\' from the repositories '
+     r'\[.*\]: Plugin not found in any plugin repository -> \[Help 1\]',
+     maven_missing_plugin),
     (r'dh_missing: (.*) exists in debian/.* but is not installed to anywhere',
      dh_missing_uninstalled),
     (r'dh_link: link destination (.*) is a directory',
@@ -2003,6 +2032,9 @@ build_failure_regexps = [
     # Sphinx
     (r'There is a syntax error in your configuration file: (.*)',
      None),
+    (r'E: The Debian version (.*) cannot be used as an ELPA version.',
+     debian_version_rejected),
+    (r'"(.*)" is not exported by the ExtUtils::MakeMaker module', None),
 ]
 
 compiled_build_failure_regexps = []
