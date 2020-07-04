@@ -1356,6 +1356,8 @@ async def handle_finish(request):
         return web.json_response(
             {'reason': 'No such current run: %s' % run_id}, status=404)
 
+    active_run.stop_watchdog()
+
     reader = await request.multipart()
     worker_result = None
 
