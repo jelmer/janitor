@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, ClientResponseError, ClientTimeout
+from aiohttp import ClientSession, ClientResponseError, ClientTimeout, ServerDisconnectedError
 import gzip
 from io import BytesIO
 import os
@@ -164,7 +164,9 @@ class GCSLogFilemanager(LogFileManager):
         except ClientResponseError as e:
             if e.status == 404:
                 raise FileNotFoundError(name)
-            raise
+            raise ServiceUnavailable()
+        except ServerDisconnectedError:
+            raise ServiceUnavailable()
 
     async def import_log(self, pkg, run_id, orig_path, timeout=360):
         object_name = self._get_object_name(
