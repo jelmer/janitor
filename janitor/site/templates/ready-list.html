@@ -1,5 +1,12 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include suite + "-sidebar.html" %}{% endblock %}
+{% block sidebar %}
+{% if suite in ('fresh-releases', 'fresh-snapshots') %}
+{% include (suite or "cupboard") + "-sidebar.html" %}
+{% elif not suite %}
+{% include "cupboard-sidebar.html" %}
+{% else %}
+{% include suite + "-sidebar.html" %}
+{% endblock %}
 {% from "lintian-fixes-util.html" import lintian_brush_summary %}
 {% from "multiarch-fixes-util.html" import multiarch_hints_summary %}
 {% block page_title %}Changes ready to publish{% if suite %} - {{ suite }}{% endif %}{% endblock %}
@@ -15,7 +22,7 @@
 {% else %}: Merge new upstream release <b>{{ run.result['upstream_version'] }}</b> {% endif %}
 {% elif run.command.startswith('apply-multiarch-hints') %}
 Apply multi-arch hints: {{ multiarch_hints_summary(run.result['applied-hints']) }}
-{% elif run.command.startwith('orphan') %}
+{% elif run.command.startswith('orphan') %}
 Move orphaned package to QA team.
 {% else %}: Unknown command {{ run.command }}
 {% endif %}
