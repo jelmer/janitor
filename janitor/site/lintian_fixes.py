@@ -269,10 +269,11 @@ ON absorbed.tag = unabsorbed.tag
             per_tag[canonical_name][0] + absorbed,
             per_tag[canonical_name][1] + unabsorbed,
             per_tag[canonical_name][2] + total)
-    return sorted([
+    entries = [
         (tag, absorbed, unabsorbed, total) for
-        (tag, (absorbed, unabsorbed, total)) in per_tag.items()],
-        key=lambda k, v: v[2])
+        (tag, (absorbed, unabsorbed, total)) in per_tag.items()]
+    entries.sort(key=lambda v: v[3], reverse=True)
+    return entries
 
 
 async def generate_stats(db):
