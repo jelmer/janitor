@@ -29,7 +29,7 @@
 {% for run in history %}
 <tr class="row-even"><td><a class="reference external" href="pkg/{{ run.package }}">{{ run.package }}</a></td>
 <td><a href="/{{ run.suite}}">{{ run.suite }}</a></td>
-<td>{{ run.worker_name }}</td>
+<td>{% if run.worker_link %}<a href="{{ run.worker_link }}">{{ run.worker_name }}</a>{% else %}{{ run.worker_name }}{% endif %}</td>
 <td>{{ format_duration(run.duration) }}</td>
 <td><a class="reference external" href="pkg/{{ run.package }}/{{ run.id }}">{{ display_result_code(run.result_code)|safe }}</a></td>
 <td>{% if run.result_code != 'success' %}{{ run.description }}{% endif %}</td>
