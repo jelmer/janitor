@@ -2183,6 +2183,7 @@ secondary_build_failure_regexps = [
     r'.*: \*\*\* ERROR: '
     r'There where errors/warnings in server logs after running test cases.',
     r'Errno::EEXIST: File exists @ dir_s_mkdir - .*',
+    r'Test environment was found to be incomplete at configuration time,',
 ]
 
 compiled_secondary_build_failure_regexps = [
