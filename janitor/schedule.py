@@ -22,6 +22,7 @@ __all__ = [
     'schedule_from_candidates',
 ]
 
+from debian.changelog import Version
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 
@@ -234,8 +235,9 @@ async def add_to_queue(
 
 
 async def dep_available(
-        conn, suite, name, archqual=None, arch=None, version=None,
-        restrictions=None):
+        conn: asyncpg.Connection, suite: str, name: str,
+        archqual: Optional[str] = None, arch: Optional[str] = None,
+        version: Optional[Version] = None, restrictions=None) -> bool:
     available = await state.version_available(conn, name, suite, version)
     if available:
         return True
@@ -306,14 +308,21 @@ async def main():
 
 
 async def do_schedule_control(
-        conn, package, main_branch_revision, offset=None,
-        refresh=False, requestor=None):
-    if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode('utf-8')
+        conn: asyncpg.Connection, package: str, main_branch_revision: bytes,
+        offset: Optional[int] = None, refresh: bool = False,
+        requestor: Optional[str] = None) -> Tuple[int, timedelta]:
     return await do_schedule(
         conn, package, 'unchanged', offset=offset, refresh=refresh,
         requestor=requestor,
-        command=['just-build --revision=%s' % main_branch_revision])
+        command=[
+            'just-build --revision=%s' % main_branch_revision.decode('utf-8')])
+
+
+class PublishPolicyUnavailable(Exception):
+
+    def __init__(self, suite: str, package: str):
+        self.suite = suite
+        self.package = package
 
 
 async def do_schedule(
@@ -326,8 +335,8 @@ async def do_schedule(
     if command is None:
         (unused_publish_policy, update_changelog, command) = (
             await state.get_publish_policy(conn, package, suite))
-        if not command:
-            return None, None
+        if not command or not update_changelog:
+            raise PublishPolicyUnavailable(suite, package)
         command = full_command(update_changelog, command)
     estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(

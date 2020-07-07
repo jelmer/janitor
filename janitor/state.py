@@ -21,7 +21,7 @@ import json
 import shlex
 import asyncpg
 from contextlib import asynccontextmanager
-from typing import Optional, Tuple, List, AsyncIterator, Any, Union, Callable
+from typing import Optional, Tuple, List, Any, Union, Callable, AsyncIterable
 from breezy import urlutils
 
 
@@ -706,7 +706,7 @@ group by 1
 
 async def iter_previous_runs(
         conn: asyncpg.Connection,
-        package: str, suite: str) -> AsyncIterator[Run]:
+        package: str, suite: str) -> AsyncIterable[Run]:
     for row in await conn.fetch("""
 SELECT
   id,
@@ -885,7 +885,7 @@ async def iter_last_runs(
         result_code: Optional[str] = None,
         suite: Optional[str] = None,
         main_branch_revision: Optional[bytes] = None
-        ) -> AsyncIterator[Run]:
+        ) -> AsyncIterable[Run]:
     query = """
 SELECT
   id,
@@ -956,8 +956,7 @@ async def iter_publish_ready(
         review_status: Optional[Union[str, List[str]]] = None,
         limit: Optional[int] = None,
         publishable_only: bool = False
-        ) -> AsyncIterator[
-            Tuple[Run, str, List[str], str, str, str, List[str]]]:
+        ) -> AsyncIterable[Tuple[Run, str, List[str], str, str, bool, str]]:
     args: List[Any] = []
     query = """
 SELECT
@@ -1026,7 +1025,7 @@ ORDER BY
 
 async def iter_unscanned_branches(
         conn: asyncpg.Connection, last_scanned_minimum: datetime.datetime
-        ) -> AsyncIterator[Tuple[str, str, str, datetime.datetime]]:
+        ) -> AsyncIterable[Tuple[str, str, str, datetime.datetime]]:
     return await conn.fetch("""
 SELECT
   name,
@@ -1325,7 +1324,9 @@ ORDER BY timestamp DESC
     return await conn.fetchrow(query, package, branch_name)
 
 
-async def get_publish(conn: asyncpg.Connection, publish_id):
+async def get_publish(
+        conn: asyncpg.Connection, publish_id: str) -> Optional[
+            Tuple[str, str, bytes, bytes, str, str, str, str]]:
     query = """
 SELECT
   package,
@@ -1338,10 +1339,16 @@ SELECT
   description
 FROM publish WHERE id = $1
 """
-    return await conn.fetchrow(query, publish_id)
+    row = await conn.fetchrow(query, publish_id)
+    if row:
+        return None
+    return (row[0], row[1], row[2].encode('utf-8') if row[2] else None,
+            row[3].encode('utf-8') if row[3] else None, row[4],
+            row[5], row[6], row[7])
 
 
-async def update_removals(conn: asyncpg.Connection, items):
+async def update_removals(
+        conn: asyncpg.Connection, items: List[Tuple[str, Version]]) -> None:
     if not items:
         return
     query = """\
@@ -1488,7 +1495,7 @@ async def update_publish_policy(
         (' '.join(command) if command else None))
 
 
-async def iter_publish_policy(conn: asyncpg.Connection, package=None):
+async def iter_publish_policy(conn: asyncpg.Connection, package: Optional[str] = None):
     query = (
         'SELECT package, suite, mode, update_changelog, command '
         'FROM publish_policy')
@@ -1501,22 +1508,29 @@ async def iter_publish_policy(conn: asyncpg.Connection, package=None):
                shlex.split(row[4]) if row[4] else None))
 
 
-async def get_publish_policy(conn: asyncpg.Connection, package, suite):
+async def get_publish_policy(
+        conn: asyncpg.Connection, package: str, suite: str
+        ) -> Tuple[Optional[str], Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
         'SELECT mode, update_changelog, command '
         'FROM publish_policy WHERE package = $1 AND suite = $2', package,
         suite)
     if row:
-        return (row[0], row[1], shlex.split(row[2]) if row[2] else None)
+        return (  # type: ignore
+            row[0], row[1],
+            shlex.split(row[2]) if row[2] else None)
+    return None, None, None
 
 
-async def get_successful_push_count(conn: asyncpg.Connection):
+async def get_successful_push_count(
+        conn: asyncpg.Connection) -> Optional[int]:
     return await conn.fetchval(
         "select count(*) from publish where result_code = "
         "'success' and mode = 'push'")
 
 
-async def get_publish_attempt_count(conn: asyncpg.Connection, revision):
+async def get_publish_attempt_count(
+        conn: asyncpg.Connection, revision: bytes) -> None:
     return await conn.fetchval(
         "select count(*) from publish where revision = $1",
         revision.decode('utf-8'))
