@@ -575,8 +575,11 @@ async def handle_publish_id(request):
     return web.json_response({
         'package': package,
         'branch': branch_name,
-        'main_branch_revision': main_branch_revision,
-        'revision': revision,
+        'main_branch_revision':
+            main_branch_revision.decode('utf-8')
+            if main_branch_revision else None,
+        'revision':
+            revision.decode('utf-8') if revision else None,
         'mode': mode,
         'merge_proposal_url': merge_proposal_url,
         'result_code': result_code,
