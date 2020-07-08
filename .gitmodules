@@ -16,3 +16,6 @@
 [submodule "python-debian"]
 	path = python-debian
 	url = https://salsa.debian.org/janitor-team/python-debian.git
+[submodule "debmutate"]
+	path = debmutate
+	url = https://salsa.debian.org/jelmer/debmutate.git
