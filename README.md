@@ -19,17 +19,31 @@ Design
 
 The janitor is made up out of multiple components:
 
-* the *udd* syncer imports package metadata from UDD
+Several cron jobs that run daily:
+
+* the *package_metadata* syncer imports package metadata from UDD
+* the *candidate* syncer determines candidates
 * the *scheduler* determines what packages are ready for processing
   based on lintian and upstream data, and queues them.
+
+Several permanently running jobs:
+
 * the *publisher* proposes or pushes changes that have been successfully
-  created and built previously
+  created and built previously, and which can provide VCS diffs
 * the *runner* processes the queue, kicks off workers for
   each package and stores the results.
 * one or more *workers* which are responsible for actual generating and
   building changes.
 * an *archiver* combined with a *repository manager* (aptly) that takes
-  care of managing the apt archives and publishes them
+  care of managing the apt archives and publishes them; it
+  also takes care of running e.g. debdiff or diffoscope
+* a *site* job that renders the web site
+
+There are no requirements that these jobs run on the same machine, but they are
+expected to have secure network access to each other.
+
+Every job runs a HTTP server to allow API requests and use of /metrics, for
+prometheus monitoring.
 
 Workers are fairly naive; they simply run a ``silver-platter`` subcommand
 to create branches and they build the resulting branches. The runner
