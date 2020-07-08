@@ -36,19 +36,19 @@ from lintian_brush import (
 from lintian_brush.changelog import (
     add_changelog_entry,
     )
-from lintian_brush.control import (
+from debmutate.control import (
     ensure_some_version,
     ensure_minimum_version,
     pg_buildext_updatecontrol,
-    ControlUpdater,
+    ControlEditor,
     )
-from lintian_brush.debhelper import (
+from debmutate.debhelper import (
     get_debhelper_compat_level,
     )
-from lintian_brush.deb822 import (
+from debmutate.deb822 import (
     Deb822Updater,
     )
-from lintian_brush.reformatting import (
+from debmutate.reformatting import (
     FormattingUnpreservable,
     GeneratedFile,
     )
@@ -132,7 +132,7 @@ def add_build_dependency(tree, package, minimum_version=None,
 
     control_path = os.path.join(tree.abspath(subpath), 'debian/control')
     try:
-        with ControlUpdater(path=control_path) as updater:
+        with ControlEditor(path=control_path) as updater:
             for binary in updater.binaries:
                 if binary["Package"] == package:
                     raise CircularDependency(package)

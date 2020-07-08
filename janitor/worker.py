@@ -57,12 +57,7 @@ from silver_platter.debian.lintian import (
 )
 from silver_platter.proposal import Hoster
 from lintian_brush.config import Config as LintianBrushConfig
-from lintian_brush.reformatting import GeneratedFile, FormattingUnpreservable
-from lintian_brush import (
-    SUPPORTED_CERTAINTIES,
-    version_string as lintian_brush_version_string,
-    NoChanges,
-    )
+from debmutate.reformatting import GeneratedFile, FormattingUnpreservable
 from silver_platter.debian.upstream import (
     merge_upstream,
     refresh_quilt_patches,
@@ -199,6 +194,7 @@ class MultiArchHintsWorker(SubWorker):
             any previous runs this one is based on
           subpath: Path in the branch where the package resides
         """
+        from lintian_brush import NoChanges
         update_changelog = self.args.update_changelog
         try:
             cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
@@ -331,6 +327,9 @@ class LintianBrushWorker(SubWorker):
     """Janitor-specific Lintian Fixer."""
 
     def __init__(self, command, env):
+        from lintian_brush import (
+            SUPPORTED_CERTAINTIES,
+            )
         self.committer = env.get('COMMITTER')
         subparser = argparse.ArgumentParser(
             prog='lintian-brush', parents=[common_parser])
@@ -358,6 +357,9 @@ class LintianBrushWorker(SubWorker):
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
+        from lintian_brush import (
+            version_string as lintian_brush_version_string,
+            )
         fixers = get_fixers(
             available_lintian_fixers(), tags=self.args.tags,
             exclude=self.args.exclude)

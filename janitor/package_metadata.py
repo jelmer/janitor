@@ -32,11 +32,13 @@ from silver_platter.debian import (
 )
 from . import state, trace
 from .config import read_config
-from lintian_brush.vcs import (
+from debmutate.vcs import (
     split_vcs_url,
+    unsplit_vcs_url,
+    )
+from lintian_brush.vcs import (
     fixup_broken_git_url,
     canonicalize_vcs_url,
-    unsplit_vcs_url,
     )
 from .udd import UDD
 
