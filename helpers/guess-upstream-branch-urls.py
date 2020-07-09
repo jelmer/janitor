@@ -2,7 +2,9 @@
 
 import argparse
 import asyncio
+import asyncpg
 import sys
+from typing import Optional
 
 from google.protobuf import text_format
 
@@ -17,10 +19,27 @@ from lintian_brush.upstream_metadata import (
     )
 
 
+async def iter_missing_upstream_branch_packages(conn: asyncpg.Connection):
+    query = """\
+select
+  package.name,
+  package.unstable_version
+from
+  last_runs
+inner join package on last_runs.package = package.name
+left outer join upstream on upstream.name = package.name
+where
+  result_code = 'upstream-branch-unknown' and
+  upstream.upstream_branch_url is null
+order by package.name asc
+"""
+    for row in await conn.fetch(query):
+        yield row[0], row[1]
+
+
 async def main(db, start=None):
     async with db.acquire() as conn:
-        async for pkg, version in state.iter_missing_upstream_branch_packages(
-                conn):
+        async for pkg, version in iter_missing_upstream_branch_packages(conn):
             if start and pkg < start:
                 continue
             sys.stderr.write('Package: %s\n' % pkg)

@@ -15,9 +15,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from typing import Optional
+
 from google.protobuf import text_format  # type: ignore
 
 import asyncio
+import asyncpg
 
 from . import package_overrides_pb2
 
@@ -29,6 +32,15 @@ def read_package_overrides(f):
     for override in config.package:
         ret[override.name] = override
     return ret
+
+
+async def set_upstream_branch_url(
+        conn: asyncpg.Connection, package: str, url: Optional[str]) -> None:
+    await conn.execute(
+        'insert into upstream (name, upstream_branch_url) values ($1, $2) '
+        'on conflict (name) do update set '
+        'upstream_branch_url = EXCLUDED.upstream_branch_url',
+        package, url)
 
 
 async def main(args):
@@ -52,7 +64,7 @@ async def main(args):
             desired = (override.upstream_branch_url if override else None)
             if desired == current:
                 continue
-            await state.set_upstream_branch_url(conn, name, desired)
+            await set_upstream_branch_url(conn, name, desired)
             print('Updating upstream branch URL for %s: %s' % (name, desired))
             if args.reschedule:
                 await do_schedule(

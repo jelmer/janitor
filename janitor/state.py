@@ -587,10 +587,11 @@ SELECT
     queue.refresh,
     queue.requestor,
     package.vcs_type,
-    package.upstream_branch_url
+    upstream.upstream_branch_url
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
+LEFT OUTER JOIN upstream ON upstream.name = package.name
 ORDER BY
 queue.priority ASC,
 queue.id ASC
@@ -1438,35 +1439,12 @@ group by 1
     return await conn.fetch(query)
 
 
-async def iter_missing_upstream_branch_packages(conn: asyncpg.Connection):
-    query = """\
-select
-  package.name,
-  package.unstable_version
-from
-  last_runs
-inner join package on last_runs.package = package.name
-where
-  result_code = 'upstream-branch-unknown' and
-  package.upstream_branch_url is null
-order by package.name asc
-"""
-    for row in await conn.fetch(query):
-        yield row[0], row[1]
-
-
-async def set_upstream_branch_url(conn: asyncpg.Connection, package, url):
-    await conn.execute(
-        'update package set upstream_branch_url = $1 where name = $2',
-        url, package)
-
-
 async def iter_upstream_branch_urls(conn: asyncpg.Connection):
     query = """
 select
   name,
   upstream_branch_url
-from package
+from upstream
 where upstream_branch_url is not null
 """
     return await conn.fetch(query)
