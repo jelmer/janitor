@@ -2,47 +2,102 @@ Source: janitor
 Priority: optional
 Section: vcs
 Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
-Build-Depends: debhelper-compat (= 12), flake8, python3-breezy (>= 3.1~), silver-platter, python3-all, dh-python, dh-exec, mypy <typing>, mypy-protobuf <typing>, silver-platter, python3-asynctest, protobuf-compiler, python3-protobuf, python3-jinja2
+Build-Depends: debhelper-compat (= 12),
+               dh-exec,
+               dh-python,
+               flake8,
+               mypy <typing>,
+               mypy-protobuf <typing>,
+               protobuf-compiler,
+               python3-all,
+               python3-asynctest,
+               python3-breezy (>= 3.1~),
+               python3-jinja2,
+               python3-protobuf,
+               silver-platter
 Rules-Requires-Root: no
 
 Package: python3-janitor
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, python3-aiohttp, python3-prometheus-client, python3-breezy, brz-debian, python3-protobuf
+Depends: brz-debian,
+         python3-aiohttp,
+         python3-breezy,
+         python3-prometheus-client,
+         python3-protobuf,
+         ${misc:Depends},
+         ${python3:Depends}
 
 Package: janitor-worker
-Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, lintian-brush, brz-debian, python3-dulwich, silver-platter
-Recommends: libdist-zilla-perl, postgresql-server-dev-all
+Depends: brz-debian,
+         lintian-brush,
+         python3-aiohttp,
+         python3-dulwich,
+         silver-platter,
+         ${misc:Depends},
+         ${python3:Depends}
+Recommends: libdist-zilla-perl,
+            postgresql-server-dev-all
 Architecture: all
 Description: Worker for the Debian janitor
 
 Package: janitor-archiver
-Depends: python3-aiohttp, python3-aionotify, aptly, ${python3:Depends}, ${misc:Depends}, diffoscope, devscripts, python3-asyncpg
+Depends: aptly,
+         devscripts,
+         diffoscope,
+         python3-aiohttp,
+         python3-aionotify,
+         python3-asyncpg,
+         ${misc:Depends},
+         ${python3:Depends}
 Architecture: all
 Description: Archiver for the Debian janitor
 
 Package: janitor-runner
-Depends: python3-aiohttp, ${python3:Depends}, ${misc:Depends}, silver-platter, python3-asyncpg,
+Depends: python3-aiohttp,
+         python3-asyncpg,
+         silver-platter,
+         ${misc:Depends},
+         ${python3:Depends}
 Architecture: all
 Description: Runner for the Debian janitor
 
 Package: janitor-site
-Depends: python3-aiohttp, python3-asyncpg, python3-jinja2, ${python3:Depends}, ${misc:Depends}, libjs-jquery, libjs-chart.js, diffoscope
+Depends: diffoscope,
+         libjs-chart.js,
+         libjs-jquery,
+         python3-aiohttp,
+         python3-asyncpg,
+         python3-jinja2,
+         ${misc:Depends},
+         ${python3:Depends}
 Architecture: all
 Description: Site for the Debian janitor
 
 Package: janitor-irc-notify
-Depends: python3-pydle, python3-janitor, python3-prometheus-client, ${python3:Depends}, ${misc:Depends}
+Depends: python3-janitor,
+         python3-prometheus-client,
+         python3-pydle,
+         ${misc:Depends},
+         ${python3:Depends}
 Architecture: all
 Description: IRC notifier for the Debian Janitor
 
 Package: janitor-mastodon-notify
 Architecture: all
-Depends: python3-janitor, python3-mastodon, python3-prometheus-client, ${python3:Depends}, ${misc:Depends}
+Depends: python3-janitor,
+         python3-mastodon,
+         python3-prometheus-client,
+         ${misc:Depends},
+         ${python3:Depends}
 Description: Mastodon notifier for the Debian Janitor
 
 Package: janitor-dovecot-filter
 Architecture: all
-Depends: dovecot, dovecot-sieve, ${misc:Depends}, ${python3:Depends}, python3-aiohttp
+Depends: dovecot,
+         dovecot-sieve,
+         python3-aiohttp,
+         ${misc:Depends},
+         ${python3:Depends}
 Description: Mail filter for the Debian Janitor
 
 Package: janitor-agent
