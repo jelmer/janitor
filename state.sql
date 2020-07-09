@@ -1,3 +1,9 @@
+CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+CREATE TABLE IF NOT EXISTS upstream (
+   name text,
+   upstream_branch_url text
+   primary key(name)
+);
 CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
 CREATE DOMAIN package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS package (
