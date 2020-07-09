@@ -2,7 +2,7 @@ syntax = "proto2";
 
 package janitor;
 
-message Package {
+message PackageOverrides {
    optional string name = 1;
 
    optional string upstream_branch_url = 2;
@@ -11,5 +11,5 @@ message Package {
 };
 
 message OverrideConfig {
-    repeated Package package = 1;
+    repeated PackageOverrides package = 1;
 };

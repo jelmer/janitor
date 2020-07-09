@@ -15,15 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-"""Importing of upstream metadata from UDD."""
+"""Importing of upstream metadata."""
 
 from __future__ import absolute_import
 
 import asyncpg
 import asyncio
 from debian.changelog import Version
-from email.utils import parseaddr
-from typing import List, Optional, Iterator, AsyncIterator, Tuple
+from google.protobuf import text_format  # type: ignore
+from typing import List, Optional
 
 from breezy.git.mapping import default_mapping
 
@@ -32,6 +32,7 @@ from silver_platter.debian import (
 )
 from . import state, trace
 from .config import read_config
+from .package_metadata_pb2 import PackageList
 from debmutate.vcs import (
     split_vcs_url,
     unsplit_vcs_url,
@@ -40,74 +41,72 @@ from lintian_brush.vcs import (
     fixup_broken_git_url,
     canonicalize_vcs_url,
     )
-from .udd import UDD
 
 
-def extract_uploader_emails(uploaders: str) -> List[str]:
-    if not uploaders:
-        return []
-    ret = []
-    for uploader in uploaders.split(','):
-        if not uploader:
-            continue
-        email = parseaddr(uploader)[1]
-        if not email:
-            continue
-        ret.append(email)
-    return ret
+async def update_package_metadata(conn, provided_packages, package_overrides):
+    trace.note('Updating package metadata.')
+    packages = []
+    for package in provided_packages:
+        try:
+            override = package_overrides[package.name]
+        except KeyError:
+            upstream_branch_url = None
+            vcs_url = package.vcs_url
+        else:
+            vcs_url = override.branch_url or package.vcs_url or None
+            upstream_branch_url = override.upstream_branch_url
 
+        vcs_last_revision = None
 
-async def iter_packages_with_metadata(
-        udd: UDD, packages: Optional[List[str]] = None
-        ) -> AsyncIterator[Tuple[
-            str, str, str, int, str, str,
-            str, str, str, str, Version, Version]]:
-    args = []
-    query = """
-select distinct on (sources.source) sources.source,
-sources.maintainer_email, sources.uploaders, popcon_src.insts,
-coalesce(vcswatch.vcs, sources.vcs_type),
-coalesce(vcswatch.url, sources.vcs_url),
-vcswatch.branch,
-coalesce(vcswatch.browser, sources.vcs_browser),
-commit_id,
-status as vcswatch_status,
-sources.version,
-vcswatch.version
-from sources left join popcon_src on sources.source = popcon_src.source
-left join vcswatch on vcswatch.source = sources.source
-where sources.release = 'sid'
-"""
-    if packages:
-        query += " and sources.source = ANY($1::text[])"
-        args.append(packages)
-    query += " order by sources.source, sources.version desc"
-    for row in await udd.fetch(query, *args):
-        yield row
+        if package.vcs_type and package.vcs_type.capitalize() == 'Git':
+            new_vcs_url = fixup_broken_git_url(vcs_url)
+            if new_vcs_url != vcs_url:
+                trace.note('Fixing up VCS URL: %s -> %s',
+                           vcs_url, new_vcs_url)
+                vcs_url = new_vcs_url
+            if package.commit_id:
+                vcs_last_revision = (
+                    default_mapping.revision_id_foreign_to_bzr(
+                        package.commit_id.encode('ascii')))
 
+        if vcs_url and package.vcs_branch:
+            (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
+            if orig_branch != package.vcs_branch:
+                new_vcs_url = unsplit_vcs_url(
+                    repo_url, package.vcs_branch, subpath)
+                trace.note('Fixing up branch name from vcswatch: %s -> %s',
+                           vcs_url, new_vcs_url)
+                vcs_url = new_vcs_url
 
-async def iter_removals(
-        udd: UDD, packages: Optional[List[str]] = None) -> Iterator:
-    query = """\
-select name, version from package_removal where 'source' = any(arch_array)
-"""
-    args = []
-    if packages:
-        query += " and name = ANY($1::text[])"
-        args.append(packages)
-    return await udd.fetch(query, *args)
+        if package.vcs_type:
+            # Drop the subpath, we're storing it separately.
+            (url, branch, subpath) = split_vcs_url(vcs_url)
+            url = unsplit_vcs_url(url, branch)
+            url = canonicalize_vcs_url(package.vcs_type, url)
+            try:
+                branch_url = convert_debian_vcs_url(
+                    package.vcs_type.capitalize(), url)
+            except ValueError as e:
+                trace.note('%s: %s', package.name, e)
+                branch_url = None
+        else:
+            subpath = None
+            branch_url = None
 
-
-async def store_packages(conn: asyncpg.Connection, packages):
-    """Store packages in the database.
-
-    Args:
-      packages: list of tuples with (
-        name, branch_url, subpath, maintainer_email, uploader_emails,
-        unstable_version, vcs_type, vcs_url, vcs_browse, vcs_last_revision,
-        vcswatch_status, vcswatch_version, popcon_inst, removed,
-        upstream_branch_url)
-    """
+        packages.append((
+            package.name, branch_url if branch_url else None,
+            subpath if subpath else None,
+            package.maintainer_email if package.maintainer_email else None,
+            package.uploader_email if package.uploader_email else None,
+            package.archive_version if package.archive_version else None,
+            package.vcs_type if package.vcs_type else None, vcs_url,
+            package.vcs_browser if package.vcs_browser else None,
+            vcs_last_revision.decode('utf-8') if vcs_last_revision else None,
+            package.vcswatch_status.lower()
+                if package.vcswatch_status else None,
+            package.vcswatch_version if package.vcswatch_version else None,
+            package.insts, package.removed,
+            upstream_branch_url))
     await conn.executemany(
         "INSERT INTO package "
         "(name, branch_url, subpath, maintainer_email, uploader_emails, "
@@ -134,97 +133,26 @@ async def store_packages(conn: asyncpg.Connection, packages):
         packages)
 
 
-async def update_package_metadata(
-        db, udd: UDD, package_overrides,
-        selected_packages: Optional[List[str]] = None):
-    async with db.acquire() as conn:
-        existing_packages = {
-            package.name: package
-            for package in await state.iter_packages(conn)}
+async def mark_removed_packages(conn, removals):
+    existing_packages = {
+        package.name: package
+        for package in await state.iter_packages(conn)}
+    trace.note('Updating removals.')
+    filtered_removals = [
+        (removal.name, Version(removal.version) if removal.version else None)
+        for removal in removals
+        if removal.name in existing_packages and
+        not existing_packages[removal.name].removed]
+    await state.update_removals(conn, filtered_removals)
 
-        removals = {}
-        for name, version in await iter_removals(
-                udd, packages=selected_packages):
-            if name not in removals:
-                removals[name] = Version(version)
-            else:
-                removals[name] = max(Version(version), removals[name])
 
-        if not selected_packages:
-            trace.note('Updating removals.')
-            filtered_removals = [
-                (name, version) for (name, version) in removals.items()
-                if name in existing_packages and
-                not existing_packages[name].removed]
-            await state.update_removals(conn, filtered_removals)
-
-        trace.note('Updating package metadata.')
-        packages = []
-        async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-                   vcs_branch, vcs_browser, commit_id, vcswatch_status,
-                   sid_version,
-                   vcswatch_version) in iter_packages_with_metadata(
-                       udd, selected_packages):
-            try:
-                override = package_overrides[name]
-            except KeyError:
-                upstream_branch_url = None
-            else:
-                vcs_url = override.branch_url or vcs_url
-                upstream_branch_url = override.upstream_branch_url
-
-            uploader_emails = extract_uploader_emails(uploaders)
-
-            vcs_last_revision = None
-
-            if vcs_type and vcs_type.capitalize() == 'Git':
-                new_vcs_url = fixup_broken_git_url(vcs_url)
-                if new_vcs_url != vcs_url:
-                    trace.note('Fixing up VCS URL: %s -> %s',
-                               vcs_url, new_vcs_url)
-                    vcs_url = new_vcs_url
-                if commit_id is not None:
-                    vcs_last_revision = (
-                        default_mapping.revision_id_foreign_to_bzr(
-                            commit_id.encode('ascii')))
-
-            if vcs_url and vcs_branch:
-                (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
-                if orig_branch != vcs_branch:
-                    new_vcs_url = unsplit_vcs_url(
-                        repo_url, vcs_branch, subpath)
-                    trace.note('Fixing up branch name from vcswatch: %s -> %s',
-                               vcs_url, new_vcs_url)
-                    vcs_url = new_vcs_url
-
-            if vcs_type is not None:
-                # Drop the subpath, we're storing it separately.
-                (url, branch, subpath) = split_vcs_url(vcs_url)
-                url = unsplit_vcs_url(url, branch)
-                url = canonicalize_vcs_url(vcs_type, url)
-                try:
-                    branch_url = convert_debian_vcs_url(
-                        vcs_type.capitalize(), url)
-                except ValueError as e:
-                    trace.note('%s: %s', name, e)
-                    branch_url = None
-            else:
-                subpath = None
-                branch_url = None
-
-            if name not in removals:
-                removed = False
-            else:
-                removed = Version(sid_version) <= removals[name]
-
-            packages.append((
-                name, branch_url, subpath, maintainer_email, uploader_emails,
-                sid_version, vcs_type, vcs_url, vcs_browser,
-                vcs_last_revision.decode('utf-8')
-                    if vcs_last_revision else None,
-                vcswatch_status.lower() if vcswatch_status else None,
-                vcswatch_version, insts, removed, upstream_branch_url))
-        await store_packages(conn, packages)
+async def iter_packages_from_script(args):
+    p = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE)
+    (stdout, unused_stderr) = await p.communicate()
+    package_list = text_format.Parse(stdout, PackageList())
+    return package_list.package, package_list.removal
 
 
 async def main():
@@ -237,7 +165,6 @@ async def main():
     )
 
     parser = argparse.ArgumentParser(prog='candidates')
-    parser.add_argument("packages", nargs='*')
     parser.add_argument('--prometheus', type=str,
                         help='Prometheus push gateway to export to.')
     parser.add_argument(
@@ -260,12 +187,14 @@ async def main():
     with open(args.package_overrides, 'r') as f:
         package_overrides = read_package_overrides(f)
 
-    udd = await UDD.public_udd_mirror()
-
     db = state.Database(config.database_location)
 
-    await update_package_metadata(
-        db, udd, package_overrides, args.packages)
+    packages, removals = await iter_packages_from_script(['./udd-package-metadata.py'])
+
+    async with db.acquire() as conn:
+        await update_package_metadata(conn, packages, package_overrides)
+        if removals:
+            await mark_removed_packages(conn, removals)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
