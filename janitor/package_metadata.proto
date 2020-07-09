@@ -1,0 +1,34 @@
+syntax = "proto2";
+
+package janitor;
+
+message PackageMetadata {
+   optional string name = 1;
+
+   optional string maintainer_email = 2;
+
+   repeated string uploader_email = 3;
+
+   optional int32 insts = 4;
+
+   optional string vcs_type = 5;
+   optional string vcs_url = 6;
+   optional string vcs_branch = 7;
+   optional string vcs_browser = 8;
+   optional string commit_id = 9;
+   optional string vcswatch_status = 10;
+   optional string archive_version = 11;
+   optional string vcswatch_version = 12;
+
+   optional bool removed = 13 [default=false];
+};
+
+message Removal {
+   optional string name = 1;
+   optional string version = 2;
+};
+
+message PackageList {
+    repeated PackageMetadata package = 1;
+    repeated Removal removal = 2;
+};
