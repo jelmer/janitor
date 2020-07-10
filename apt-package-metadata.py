@@ -59,6 +59,9 @@ async def main():
     import argparse
     parser = argparse.ArgumentParser(prog='apt-package-metadata')
     parser.add_argument("url", nargs='*')
+    parser.add_argument(
+        '--maintainer', action='append',
+        help='Filter by maintainer email')
     args = parser.parse_args()
 
     for url in args.url:
@@ -67,6 +70,9 @@ async def main():
             package = PackageMetadata()
             package.name = source['Package']
             package.maintainer_email = parseaddr(source['Maintainer'])[1]
+            if (args.maintainer and
+                    package.maintainer_email not in args.maintainer):
+                continue
             package.uploader_email.extend(
                 extract_uploader_emails(source.get('Uploaders')))
             try:
