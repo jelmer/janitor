@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS run (
    value integer,
    -- Name of the worker that executed this run.
    worker text not null,
-   foreign key (package) references package(name),
+   foreign key (package) references package(name)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
 CREATE INDEX ON run (start_time);
