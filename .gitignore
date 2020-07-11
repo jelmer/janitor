@@ -16,3 +16,4 @@ build.log
 debian_janitor.egg-info/
 janitor/*_pb2.py
 .mypy_cache/
+env
