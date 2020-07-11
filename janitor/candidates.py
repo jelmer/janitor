@@ -70,7 +70,7 @@ async def main():
         CANDIDATE_SCRIPTS = [
             ('unchanged', './unchanged-candidates.py'),
             ('lintian-fixes', './lintian-fixes-candidates.py'),
-            ('fresh-releases', './fresh-releases-candidates.py')
+            ('fresh-releases', './fresh-releases-candidates.py'),
             ('fresh-snapshots', './fresh-snapshots-candidates.py'),
             ('multiarch-fixes', './multi-arch-candidates.py'),
             ('orphan', './orphan-candidates.py'),
