@@ -32,7 +32,7 @@ async def iter_candidates_from_script(args):
     (stdout, unused_stderr) = await p.communicate()
     candidate_list = text_format.Parse(stdout, CandidateList())
     for candidate in candidate_list.candidate:
-        yield (candidate.package, candidate.value, candidate.context,
+        yield (candidate.package, candidate.context, candidate.value,
                candidate.success_chance)
 
 
