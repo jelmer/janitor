@@ -19,8 +19,6 @@
 
 from __future__ import absolute_import
 
-import asyncpg
-import asyncio
 from debian.changelog import Version
 from google.protobuf import text_format  # type: ignore
 from typing import List, Optional
@@ -50,11 +48,9 @@ async def update_package_metadata(conn, provided_packages, package_overrides):
         try:
             override = package_overrides[package.name]
         except KeyError:
-            upstream_branch_url = None
             vcs_url = package.vcs_url
         else:
             vcs_url = override.branch_url or package.vcs_url or None
-            upstream_branch_url = override.upstream_branch_url
 
         vcs_last_revision = None
 
@@ -105,16 +101,14 @@ async def update_package_metadata(conn, provided_packages, package_overrides):
             package.vcswatch_status.lower()
                 if package.vcswatch_status else None,
             package.vcswatch_version if package.vcswatch_version else None,
-            package.insts, package.removed,
-            upstream_branch_url))
+            package.insts, package.removed))
     await conn.executemany(
         "INSERT INTO package "
         "(name, branch_url, subpath, maintainer_email, uploader_emails, "
         "unstable_version, vcs_type, vcs_url, vcs_browse, vcs_last_revision, "
-        "vcswatch_status, vcswatch_version, popcon_inst, removed, "
-        "upstream_branch_url) "
+        "vcswatch_status, vcswatch_version, popcon_inst, removed) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
-        "$14, $15) "
+        "$14) "
         "ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
@@ -128,8 +122,7 @@ async def update_package_metadata(conn, provided_packages, package_overrides):
         "vcswatch_status = EXCLUDED.vcswatch_status, "
         "vcswatch_version = EXCLUDED.vcswatch_version, "
         "popcon_inst = EXCLUDED.popcon_inst, "
-        "removed = EXCLUDED.removed, "
-        "upstream_branch_url = EXCLUDED.upstream_branch_url",
+        "removed = EXCLUDED.removed",
         packages)
 
 
@@ -146,17 +139,14 @@ async def mark_removed_packages(conn, removals):
     await state.update_removals(conn, filtered_removals)
 
 
-async def iter_packages_from_script(args):
-    p = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE)
-    (stdout, unused_stderr) = await p.communicate()
-    package_list = text_format.Parse(stdout, PackageList())
+def iter_packages_from_script(stdin):
+    package_list = text_format.Parse(stdin.read(), PackageList())
     return package_list.package, package_list.removal
 
 
 async def main():
     import argparse
+    import sys
     from janitor.package_overrides import read_package_overrides
     from prometheus_client import (
         Gauge,
@@ -189,7 +179,7 @@ async def main():
 
     db = state.Database(config.database_location)
 
-    packages, removals = await iter_packages_from_script(['./udd-package-metadata.py'])
+    packages, removals = iter_packages_from_script(sys.stdin)
 
     async with db.acquire() as conn:
         await update_package_metadata(conn, packages, package_overrides)
@@ -203,5 +193,6 @@ async def main():
 
 
 if __name__ == '__main__':
+    import asyncio
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
