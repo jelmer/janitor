@@ -39,6 +39,7 @@ sources.release = 'sid'
         candidate = Candidate()
         candidate.package = row[0]
         candidate.value = DEFAULT_VALUE_UNCHANGED
+        candidate.suite = 'unchanged'
         yield candidate
 
 

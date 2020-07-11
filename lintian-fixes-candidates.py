@@ -91,6 +91,7 @@ WHERE sources.release = 'sid' AND vcs_type != ''"""
         candidate.package = row[0]
         candidate.context = context
         candidate.value = value
+        candidate.suite = 'lintian-fixes'
         yield candidate
 
 

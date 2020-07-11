@@ -16,6 +16,8 @@ message Candidate {
 
     // TODO(jelmer): Add a branch URL field
     // optional string vcs_url = 5;
+
+    optional string suite = 6;
 };
 
 message CandidateList {
