@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS debversion;
 CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS upstream (
    name text,
