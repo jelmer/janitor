@@ -46,7 +46,7 @@ from debmutate.debhelper import (
     get_debhelper_compat_level,
     )
 from debmutate.deb822 import (
-    Deb822Updater,
+    Deb822Editor,
     )
 from debmutate.reformatting import (
     FormattingUnpreservable,
@@ -172,7 +172,7 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
         tree.abspath(subpath), 'debian/tests/control')
 
     try:
-        with Deb822Updater(path=tests_control_path) as updater:
+        with Deb822Editor(path=tests_control_path) as updater:
             command_counter = 1
             for control in updater.paragraphs:
                 try:
