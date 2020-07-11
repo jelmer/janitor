@@ -194,11 +194,10 @@ CREATE OR REPLACE VIEW absorbed_runs AS
   SELECT * FROM run WHERE result_code = 'success' and revision in (SELECT revision FROM absorbed_revisions);
 
 CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
-  select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
-
+  select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset((result->'applied')::json) as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
 
 CREATE OR REPLACE VIEW last_unabsorbed_lintian_fixes AS
-  select last_unabsorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from last_unabsorbed_runs, json_to_recordset(result->'applied') as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]) WHERE result_code = 'success';
+  select last_unabsorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from last_unabsorbed_runs, json_to_recordset((result->'applied')::json) as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]) WHERE result_code = 'success';
 
 CREATE OR REPLACE VIEW perpetual_candidates AS
   select suite, package from candidate union select suite, package from run;
