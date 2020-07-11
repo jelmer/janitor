@@ -141,7 +141,7 @@ CREATE INDEX ON candidate (suite);
 CREATE TABLE worker (
    name text not null unique,
    password text not null,
-   link text,
+   link text
 );
 
 -- The last run per package/suite
