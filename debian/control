@@ -30,13 +30,19 @@ Depends: brz-debian,
 Package: janitor-worker
 Depends: brz-debian,
          lintian-brush,
+         sbuild,
+         lintian,
+         piuparts,
+         autopkgtest,
          python3-aiohttp,
          python3-dulwich,
          silver-platter,
+         quilt,
          ${misc:Depends},
          ${python3:Depends}
 Recommends: libdist-zilla-perl,
-            postgresql-server-dev-all
+            postgresql-server-dev-all,
+            gnome-pkg-tools
 Architecture: all
 Description: Worker for the Debian janitor
 
@@ -100,5 +106,7 @@ Depends: dovecot,
          ${python3:Depends}
 Description: Mail filter for the Debian Janitor
 
-Package: janitor-agent
+Package: janitor-pull-worker
 Architecture: all
+Depends: janitor-worker
+Description: 
