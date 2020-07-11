@@ -25,6 +25,7 @@ sources.release = 'sid'
         if 'nmu' in str(row[1]):
             value += UNCOMMITTED_NMU_BONUS
         candidate = Candidate()
+        candidate.suite = 'uncommitted'
         candidate.package = row[0]
         candidate.value = value
         yield candidate

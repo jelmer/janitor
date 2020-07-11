@@ -24,6 +24,7 @@ sources.maintainer != 'Debian QA Group <packages@qa.debian.org>')
     for row in await udd.fetch(query, *args):
         candidate = Candidate()
         candidate.package = row[0]
+        candidate.suite = 'orphan'
         candidate.context = str(row[2])
         candidate.value = DEFAULT_VALUE_ORPHAN
         yield candidate

@@ -25,6 +25,7 @@ sources.release = 'sid'
     for row in await udd.fetch(query, *args):
         candidate = Candidate()
         candidate.package = row[0]
+        candidate.suite = 'fresh-snapshots'
         candidate.value = DEFAULT_VALUE_NEW_UPSTREAM_SNAPSHOTS
         candidate.success_chance = 1.0 if row[1] else 0.1
         yield candidate

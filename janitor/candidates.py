@@ -19,21 +19,18 @@
 
 import asyncio
 from google.protobuf import text_format  # type: ignore
+import sys
 
 from . import state, trace
 from .config import read_config
 from .candidates_pb2 import CandidateList
 
 
-async def iter_candidates_from_script(args):
-    p = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE)
-    (stdout, unused_stderr) = await p.communicate()
-    candidate_list = text_format.Parse(stdout, CandidateList())
+def iter_candidates_from_script(stdin):
+    candidate_list = text_format.Parse(stdin, CandidateList())
     for candidate in candidate_list.candidate:
-        yield (candidate.package, candidate.context, candidate.value,
-               candidate.success_chance)
+        yield (candidate.package, candidate.suite, candidate.context,
+               candidate.value, candidate.success_chance)
 
 
 async def main():
@@ -51,9 +48,6 @@ async def main():
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
-    parser.add_argument(
-        '--suite', type=str, action='append',
-        help='Suite to retrieve candidates for.')
 
     args = parser.parse_args()
 
@@ -67,27 +61,13 @@ async def main():
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
-        CANDIDATE_SCRIPTS = [
-            ('unchanged', './unchanged-candidates.py'),
-            ('lintian-fixes', './lintian-fixes-candidates.py'),
-            ('fresh-releases', './fresh-releases-candidates.py'),
-            ('fresh-snapshots', './fresh-snapshots-candidates.py'),
-            ('multiarch-fixes', './multi-arch-candidates.py'),
-            ('orphan', './orphan-candidates.py'),
-            ('uncommitted', './uncommitted-candidates.py'),
-            ]
-
-        for suite, script in CANDIDATE_SCRIPTS:
-            if args.suite and suite not in args.suite:
-                continue
-            trace.note('Adding candidates for %s.', suite)
-            candidates = [
-                (package, suite, context, value, success_chance)
-                async for (package, context, value, success_chance)
-                in iter_candidates_from_script([script] + args.packages)]
-            trace.note('Collected %d candidates for %s.',
-                       len(candidates), suite)
-            await state.store_candidates(conn, candidates)
+        trace.note('Adding candidates.')
+        candidates = [
+            (package, suite, context, value, success_chance)
+            for (package, suite, context, value, success_chance)
+            in iter_candidates_from_script(sys.stdin)]
+        trace.note('Collected %d candidates.', len(candidates))
+        await state.store_candidates(conn, candidates)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:

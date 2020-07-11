@@ -28,6 +28,7 @@ sources.release = 'sid'
         candidate = Candidate()
         candidate.package = row[0]
         candidate.context = row[1]
+        candidate.suite = 'fresh-releases'
         candidate.value = DEFAULT_VALUE_NEW_UPSTREAM
         try:
             Version(row[1])
