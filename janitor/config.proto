@@ -9,6 +9,8 @@ message Distribution {
 
   // This should eventually be distribution-specific
   optional string tracker_url = 3;
+
+  repeated string component = 4;
 }
 
 message Config {

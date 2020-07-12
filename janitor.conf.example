@@ -10,6 +10,7 @@ distribution {
   name: "unstable"
   archive_mirror_uri: "http://deb.debian.org/debian"
   tracker_url: "https://tracker.debian.org/pkg/"
+  component: "main"
 }
 
 suite {
