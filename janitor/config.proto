@@ -10,6 +10,9 @@ message Distribution {
   // This should eventually be distribution-specific
   optional string tracker_url = 3;
 
+  // Chroot name to use in sbuild
+  optional string chroot = 5;
+
   repeated string component = 4;
 }
 
@@ -29,6 +32,8 @@ message Config {
   // Default committer to use when committing changes.
   optional string committer = 5;
 
+  // TODO(jelmer): Allow this to be repeated rather than just having
+  // a singleton distribution.
   optional Distribution distribution = 7;
 
   repeated Suite suite = 6;
