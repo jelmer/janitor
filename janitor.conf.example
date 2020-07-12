@@ -6,6 +6,12 @@ database_location: 'postgresql://janitor@example.com:5432/janitor'
 # (i.e. ~/.gitconfig)
 committer: 'Debian Janitor <janitor@jelmer.uk>'
 
+distribution {
+  name: "unstable"
+  archive_mirror_uri: "http://deb.debian.org/debian"
+  tracker_url: "https://tracker.debian.org/pkg/"
+}
+
 suite {
   name: "lintian-fixes"
   archive_description: "Builds of lintian fixes"
