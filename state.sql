@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS publish_policy (
    suite suite_name not null,
    mode publish_mode default 'build-only',
    update_changelog changelog_mode default 'auto',
-   command text[],
+   command text,
    foreign key (package) references package(name),
    unique(package, suite)
 );
