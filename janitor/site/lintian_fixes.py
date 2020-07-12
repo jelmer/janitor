@@ -210,7 +210,7 @@ async def generate_failing_fixer(db, fixer):
 
 async def iter_failed_lintian_fixers(conn):
     query = """
-select json_object_keys(result->'failed'), count(*) from last_runs
+select json_object_keys((result->'failed')::json), count(*) from last_runs
 where
   suite = 'lintian-fixes' and
   json_typeof((result->'failed')::json) = 'object' group by 1 order by 2 desc
