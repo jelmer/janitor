@@ -909,7 +909,8 @@ class ActiveLocalRun(ActiveRun):
         if result.changes_filename:
             changes_path = os.path.join(
                 self.output_directory, result.changes_filename)
-            debsign(changes_path, debsign_keyid)
+            if debsign_keyid:
+                debsign(changes_path, debsign_keyid)
             if incoming_url is not None:
                 run_incoming_url = urllib.parse.urljoin(
                     incoming_url, 'upload/%s' % self.log_id)
@@ -973,7 +974,7 @@ class QueueProcessor(object):
     def __init__(
             self, database, config, worker_kind, build_command, pre_check=None,
             post_check=None, dry_run=False, incoming_url=None,
-            logfile_manager=None, debsign_keyid=None, vcs_manager=None,
+            logfile_manager=None, debsign_keyid: Optional[str] = None, vcs_manager=None,
             public_vcs_manager=None, concurrency=1, use_cached_only=False,
             overall_timeout=None, committer=None, apt_location=None,
             backup_incoming_directory=None):
