@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS run (
    main_branch_revision text,
    branch_name text,
    revision text,
-   result jsonb,
+   result json,
    suite suite_name not null,
    branch_url text,
    logfilenames text[] not null,
