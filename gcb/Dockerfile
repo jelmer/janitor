@@ -14,7 +14,7 @@ RUN apt-get install --no-install-recommends -y brz git python3-debian python3-du
 RUN brz branch lp:brz-debian /opt/brz-debian
 # Check out debian-janitor
 RUN git clone --recurse-submodules https://salsa.debian.org/jelmer/debian-janitor /opt/debian-janitor
-ENV PYTHONPATH=/opt/debian-janitor:/opt/debian-janitor/silver-platter:/opt/debian-janitor/lintian-brush
+ENV PYTHONPATH=/opt/debian-janitor:/opt/debian-janitor/silver-platter:/opt/debian-janitor/lintian-brush:/opt/debian-janitor/dulwich:/opt/debian-janitor/debmutate:/opt/debian-janitor/python-debian/lib:/opt/debian-janitor/breezy
 ENV BRZ_PLUGINS_AT=debian@/opt/brz-debian
 ENV BRZ_HOME=/brzhome
 RUN mkdir -p /brzhome
