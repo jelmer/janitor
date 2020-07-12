@@ -213,7 +213,7 @@ async def iter_failed_lintian_fixers(conn):
 select json_object_keys(result->'failed'), count(*) from last_runs
 where
   suite = 'lintian-fixes' and
-  json_typeof(result->'failed') = 'object' group by 1 order by 2 desc
+  json_typeof((result->'failed')::json) = 'object' group by 1 order by 2 desc
 """
     return await conn.fetch(query)
 
