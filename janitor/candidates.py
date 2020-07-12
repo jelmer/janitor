@@ -27,7 +27,7 @@ from .candidates_pb2 import CandidateList
 
 
 def iter_candidates_from_script(stdin):
-    candidate_list = text_format.Parse(stdin, CandidateList())
+    candidate_list = text_format.Parse(stdin.read(), CandidateList())
     for candidate in candidate_list.candidate:
         yield (candidate.package, candidate.suite, candidate.context,
                candidate.value, candidate.success_chance)
