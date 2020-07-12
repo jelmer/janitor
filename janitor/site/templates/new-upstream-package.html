@@ -8,7 +8,7 @@
 <h1>New Upstream {% if suite == 'fresh-snapshots' %}Snapshot{% else %}Release{% endif %} - {{ package }}</h1>
 
 <ul class="metadata">
-<li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
+<li><a class="reference external" href="{{ tracker_url(package) }}">QA Page</a></li>
 <li>Maintainer email: {{ display_maintainer_email(maintainer_email) }}</li>
 {% if removed %}
 <li class="removed-in-unstable">This package is removed in unstable.</li>

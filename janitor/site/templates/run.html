@@ -9,7 +9,7 @@
 
 <ul class="metadata">
 <li>Worker: {{ run.worker_name }}</li>
-<li>Package: <a class="reference external" href="..">{{ package }}</a> (<a href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a>)</li>
+<li>Package: <a class="reference external" href="..">{{ package }}</a>{% if tracker_url(package) %} (<a href="{{ tracker_url(package) }}">QA Page</a>){% endif %}</li>
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
 {% endif %}

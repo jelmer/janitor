@@ -11,11 +11,11 @@ from janitor.site import (
 SUITE = 'multiarch-fixes'
 
 
-async def generate_pkg_file(db, policy, client, archiver_url, publisher_url,
-                            package, run_id=None):
+async def generate_pkg_file(db, config, policy, client, archiver_url,
+                            publisher_url, package, run_id=None):
     kwargs = await generate_pkg_context(
-        db, SUITE, policy, client, archiver_url, publisher_url, package,
-        run_id=run_id)
+        db, config, SUITE, policy, client, archiver_url, publisher_url,
+        package, run_id=run_id)
     template = env.get_template('multiarch-fixes-package.html')
     return await template.render_async(**kwargs)
 

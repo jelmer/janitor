@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from aiohttp import ClientConnectorError
+from functools import partial
 import urllib.parse
 
 from janitor import state
@@ -8,10 +9,11 @@ from janitor.site import (
     get_archive_diff,
     get_vcs_type,
     DebdiffRetrievalError,
+    tracker_url,
     )
 
 
-async def generate_pkg_context(db, suite, policy, client, archiver_url,
+async def generate_pkg_context(db, config, suite, policy, client, archiver_url,
                                publisher_url, package, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
@@ -140,4 +142,5 @@ async def generate_pkg_context(db, suite, policy, client, archiver_url,
         'queue_wait_time': queue_wait_time,
         'publish_policy': publish_policy,
         'changelog_policy': changelog_policy,
+        'tracker_url': partial(tracker_url, config),
         }
