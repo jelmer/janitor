@@ -19,6 +19,7 @@
 
 from debian.deb822 import Sources
 from aiohttp import ClientSession
+from email.utils import parseaddr
 import gzip
 from janitor.candidates_pb2 import CandidateList, Candidate
 
@@ -52,6 +53,10 @@ async def main():
 
     for url in args.url:
         async for source in iter_sources(url):
+            maintainer_email = parseaddr(source['Maintainer'])[1]
+            if (args.maintainer and
+                    maintainer_email not in args.maintainer):
+                continue
             for suite in args.suite:
                 cl = CandidateList()
                 candidate = Candidate()
