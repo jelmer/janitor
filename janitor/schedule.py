@@ -189,7 +189,7 @@ async def add_to_queue(
     removed = set(p.name for p in await state.iter_packages(conn)
                   if p.removed)
     max_inst = max([(v or 0) for v in popcon.values()])
-    if max_inst is not None:
+    if max_inst:
         trace.note('Maximum inst count: %d', max_inst)
     for package, context, command, suite, value, success_chance in todo:
         assert package is not None
@@ -207,7 +207,7 @@ async def add_to_queue(
             success_chance *= estimated_probability_of_success
         estimated_cost = 50 + estimated_duration.total_seconds()
         assert estimated_cost > 0, "Estimated cost: %d" % estimated_cost
-        if max_inst is not None:
+        if max_inst:
             estimated_popularity = max(popcon.get(package, 0), 10) / max_inst
         else:
             estimated_popularity = 1.0
