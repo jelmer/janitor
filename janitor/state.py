@@ -43,6 +43,12 @@ class Database(object):
                         schema='pg_catalog'
                     )
             await conn.set_type_codec(
+                        'jsonb',
+                        encoder=json.dumps,
+                        decoder=json.loads,
+                        schema='pg_catalog'
+                    )
+            await conn.set_type_codec(
                 'debversion', format='text', encoder=str, decoder=Version)
             yield conn
 
