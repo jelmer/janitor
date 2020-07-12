@@ -2,6 +2,15 @@ syntax = "proto2";
 
 package janitor;
 
+message Distribution {
+  optional string name = 1;
+
+  optional string archive_mirror_uri = 2;
+
+  // This should eventually be distribution-specific
+  optional string tracker_url = 3;
+}
+
 message Config {
   // Location at which to store VCS repositories.
   optional string vcs_location = 1;
@@ -17,6 +26,8 @@ message Config {
 
   // Default committer to use when committing changes.
   optional string committer = 5;
+
+  optional Distribution distribution = 7;
 
   repeated Suite suite = 6;
 }
