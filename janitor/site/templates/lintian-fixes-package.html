@@ -7,7 +7,9 @@
 <div class="section" id="{{ package }}">
 <h1>Lintian Fixes - {{ package }}</h1>
 <ul class="metadata">
-<li><a class="reference external" href="https://tracker.debian.org/pkg/{{ package }}">QA Page</a></li>
+{% if tracker_url(package) %}
+<li><a class="reference external" href="{{ tracker_url(package) }}">QA Page</a></li>
+{% endif %}
 <li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
 {% if publish_policy %}
 <li>Automatic publish policy: {{ publish_policy }}</li>

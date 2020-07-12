@@ -1,14 +1,16 @@
 #!/usr/bin/python3
 
+from functools import partial
 from janitor import state
 
 from janitor.site import (
     env,
+    tracker_url,
 )
 
 
 async def generate_pkg_file(
-        db, client, archiver_url, package, suite, run_id=None):
+        db, config, client, archiver_url, package, suite, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, package)
         if package is None:
@@ -84,6 +86,7 @@ async def generate_pkg_file(
         'run': run,
         'queue_position': queue_position,
         'queue_wait_time': queue_wait_time,
+        'tracker_url': partial(tracker_url, config),
         }
 
     template = env.get_template('new-upstream-package.html')

@@ -18,6 +18,7 @@
 import aiohttp
 from aiohttp import ClientConnectorError, web, BasicAuth
 from jinja2 import Environment, PackageLoader, select_autoescape
+from typing import Optional
 import urllib.parse
 
 from janitor import state
@@ -168,3 +169,10 @@ async def check_worker_creds(db, request):
     if not login:
         raise web.HTTPUnauthorized(body='worker login required')
     return login
+
+
+def tracker_url(config, pkg: str) -> Optional[str]:
+    if config.distribution.tracker_url:
+        return ('%s/%s' % config.distribution.tracker_url.rstrip('/'), pkg)
+    return None
+

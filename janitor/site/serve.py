@@ -499,6 +499,7 @@ if __name__ == '__main__':
         try:
             text = await generate_pkg_file(
                 request.app.database,
+                request.app.config,
                 request.app.policy,
                 request.app.http_client_session,
                 request.app.archiver_url,
@@ -517,6 +518,7 @@ if __name__ == '__main__':
         try:
             text = await generate_pkg_file(
                 request.app.database,
+                request.app.config,
                 request.app.policy,
                 request.app.http_client_session,
                 request.app.archiver_url,
@@ -535,6 +537,7 @@ if __name__ == '__main__':
         try:
             text = await generate_pkg_file(
                 request.app.database,
+                request.app.config,
                 request.app.policy,
                 request.app.http_client_session,
                 request.app.archiver_url,
@@ -597,7 +600,9 @@ if __name__ == '__main__':
         run_id = request.match_info.get('run_id')
         try:
             text = await generate_pkg_file(
-                request.app.database, request.app.http_client_session,
+                request.app.database,
+                request.app.config,
+                request.app.http_client_session,
                 request.app.archiver_url,
                 pkg, suite, run_id)
         except KeyError:

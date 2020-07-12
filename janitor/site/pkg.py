@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from aiohttp import ClientConnectorError
+from functools import partial
 from io import BytesIO
 from typing import Optional
 import urllib.parse
@@ -20,6 +21,7 @@ from janitor.site import (
     get_archive_diff,
     get_vcs_type,
     DebdiffRetrievalError,
+    tracker_url,
 )
 
 FAIL_BUILD_LOG_LEN = 15
@@ -84,8 +86,9 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
-async def generate_run_file(db, client, archiver_url, logfile_manager, run,
-                            publisher_url, is_admin):
+async def generate_run_file(
+        db, client, config, archiver_url, logfile_manager, run,
+        publisher_url, is_admin):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -102,6 +105,7 @@ async def generate_run_file(db, client, archiver_url, logfile_manager, run,
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['branch_url'] = run.branch_url
+    kwargs['tracker_url'] = tracker_url
     async with db.acquire() as conn:
         if run.main_branch_revision:
             kwargs['unchanged_run'] = await state.get_unchanged_run(
@@ -216,6 +220,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs):
     kwargs['runs'] = [run async for run in runs]
     kwargs['removed'] = package.removed
     kwargs['suites'] = [suite.name for suite in config.suite]
+    kwargs['tracker_url'] = partial(tracker_url, config)
     async with db.acquire() as conn:
         kwargs['candidates'] = {
             suite: (context, value, success_chance)
