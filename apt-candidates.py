@@ -20,7 +20,7 @@
 from debian.deb822 import Sources
 from aiohttp import ClientSession
 import gzip
-from janitor.package_metadata_pb2 import CandidateList, Candidate
+from janitor.candidates_pb2 import CandidateList, Candidate
 
 
 async def iter_sources(url):
