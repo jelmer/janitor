@@ -91,6 +91,7 @@ from .vcs import (
     BranchOpenFailure,
     LocalVcsManager,
     RemoteVcsManager,
+    UnsupportedVcs,
     VcsManager,
     )
 
@@ -665,11 +666,17 @@ def dget(changes_location, target_dir):
         os.path.join(target_dir, os.path.basename(changes_location)))
 
 
-def suite_build_env(suite_config, apt_location):
+def suite_build_env(distro_config, suite_config, apt_location):
     env = {
         'EXTRA_REPOSITORIES': ':'.join([
             'deb %s %s/ main' % (apt_location, suite)
             for suite in suite_config.extra_build_suite])}
+
+    if distro_config.chroot:
+        env['CHROOT'] = distro_config.chroot
+
+    if distro_config.name:
+        env['DISTRIBUTION'] = distro_config.name
 
     env.update([(env.key, env.value) for env in suite_config.sbuild_env])
     return env
@@ -743,7 +750,10 @@ class ActiveLocalRun(ActiveRun):
                 logfilenames=[],
                 branch_url=self.queue_item.branch_url)
 
-        env.update(suite_build_env(suite_config, apt_location))
+        # This is simple for now, since we only support one distribution..
+        distro_config = config.distribution
+
+        env.update(suite_build_env(distro_config, suite_config, apt_location))
 
         if not use_cached_only:
             async with db.acquire() as conn:
@@ -1251,6 +1261,9 @@ async def handle_assign(request):
 
     queue_processor.register_run(active_run)
 
+    # This is simple for now, since we only support one distribution.
+    distro_config = queue_processor.config.distribution
+
     suite_config = get_suite_config(queue_processor.config, item.suite)
 
     async with queue_processor.database.acquire() as conn:
@@ -1334,7 +1347,8 @@ async def handle_assign(request):
             'distribution': suite_config.build_distribution,
             'suffix': suite_config.build_suffix,
             'environment':
-                suite_build_env(suite_config, queue_processor.apt_location),
+                suite_build_env(
+                    distro_config, suite_config, queue_processor.apt_location),
         },
         'env': env,
         'command': item.command,
