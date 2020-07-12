@@ -43,17 +43,22 @@ async def main():
     parser = argparse.ArgumentParser(prog='apt-candidates')
     parser.add_argument("url", nargs='*')
     parser.add_argument(
-        '--maintainer', action='append',
+        '--maintainer', action='append', type=str,
         help='Filter by maintainer email')
+    parser.add_argument(
+        '--suite', action='append', type=str,
+        help='Suite to generate candidate for.')
     args = parser.parse_args()
 
     for url in args.url:
         async for source in iter_sources(url):
-            cl = CandidateList()
-            candidate = Candidate()
-            candidate.package = source['Package']
-            cl.candidate.append(candidate)
-            print(cl)
+            for suite in args.suite:
+                cl = CandidateList()
+                candidate = Candidate()
+                candidate.suite = suite
+                candidate.package = source['Package']
+                cl.candidate.append(candidate)
+                print(cl)
 
 
 if __name__ == '__main__':
