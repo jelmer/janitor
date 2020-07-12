@@ -1111,12 +1111,12 @@ class QueueProcessor(object):
                         break
                     note('Nothing to do. Sleeping for 60s.')
                     await asyncio.sleep(60)
-                    continue
-                done, pending = await asyncio.wait(
-                    todo, return_when='FIRST_COMPLETED')
-                for task in done:
-                    task.result()
-                todo = pending  # type: ignore
+                else:
+                    done, pending = await asyncio.wait(
+                        todo, return_when='FIRST_COMPLETED')
+                    for task in done:
+                        task.result()
+                    todo = pending  # type: ignore
                 if self.concurrency:
                     todo.update([
                         self.process_queue_item(item)
