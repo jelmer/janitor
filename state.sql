@@ -9,7 +9,7 @@ CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unr
 CREATE DOMAIN package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS package (
    name package_name,
-   branch_url text not null,
+   branch_url text,
    subpath text,
    maintainer_email text not null,
    uploader_emails text[] not null,
