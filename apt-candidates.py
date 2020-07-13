@@ -49,6 +49,10 @@ async def main():
     parser.add_argument(
         '--suite', action='append', type=str,
         help='Suite to generate candidate for.')
+    parser.add_argument(
+        '--value', type=int,
+        help='Value to specify.',
+        default=10)
     args = parser.parse_args()
 
     for url in args.url:
@@ -62,6 +66,7 @@ async def main():
                 candidate = Candidate()
                 candidate.suite = suite
                 candidate.package = source['Package']
+                candidate.value = args.value
                 cl.candidate.append(candidate)
                 print(cl)
 
