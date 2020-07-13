@@ -39,7 +39,7 @@ def gcb_start_build(http, bearer, args, timeout=None):
             "name": "gcr.io/$PROJECT_ID/worker",
             "args": [
                 '--build-command='
-                'sbuild -A -s -v -d$$DISTRIBUTION -c unstable-amd64-sbuild',
+                'sbuild -A -s -v',
                 ] + [arg.replace('$', '$$') for arg in args],
             "env": ['%s=%s' % item for item in env.items()],
         }],
