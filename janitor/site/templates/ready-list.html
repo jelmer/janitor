@@ -6,6 +6,7 @@
 {% include "cupboard-sidebar.html" %}
 {% else %}
 {% include suite + "-sidebar.html" %}
+{% endif %}
 {% endblock %}
 {% from "lintian-fixes-util.html" import lintian_brush_summary %}
 {% from "multiarch-fixes-util.html" import multiarch_hints_summary %}
