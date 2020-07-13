@@ -105,7 +105,7 @@ async def generate_run_file(
     kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['branch_url'] = run.branch_url
-    kwargs['tracker_url'] = tracker_url
+    kwargs['tracker_url'] = partial(tracker_url, config)
     async with db.acquire() as conn:
         if run.main_branch_revision:
             kwargs['unchanged_run'] = await state.get_unchanged_run(
