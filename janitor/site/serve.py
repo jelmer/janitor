@@ -450,6 +450,7 @@ if __name__ == '__main__':
         text = await generate_run_file(
             request.app.database,
             request.app.http_client_session,
+            request.app.config,
             request.app.archiver_url,
             logfile_manager, run, request.app.publisher_url,
             is_admin=is_admin(request))
