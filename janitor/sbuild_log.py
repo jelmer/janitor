@@ -828,7 +828,7 @@ class MissingPkgConfig(Problem):
 def pkg_config_missing(m):
     expr = m.group(1).strip().split('\t')[0]
     if '>=' in expr:
-        pkg, minimum = expr.split('>=')
+        pkg, minimum = expr.split('>=', 1)
         return MissingPkgConfig(pkg.strip(), minimum.strip())
     if ' ' not in expr:
         return MissingPkgConfig(expr)
@@ -1583,6 +1583,11 @@ def debian_version_rejected(m):
     return DebianVersionRejected(m.group(1))
 
 
+def dh_missing_addon(m):
+    return DhAddonLoadFailure(
+        'pybuild', 'Debian/Debhelper/Buildsystem/pybuild.pm')
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -2037,6 +2042,9 @@ build_failure_regexps = [
     (r'E: The Debian version (.*) cannot be used as an ELPA version.',
      debian_version_rejected),
     (r'"(.*)" is not exported by the ExtUtils::MakeMaker module', None),
+    (r'E: Please add appropriate interpreter package to Build-Depends, '
+     r'see pybuild\(1\) for details\..*',
+     dh_missing_addon),
 ]
 
 compiled_build_failure_regexps = []

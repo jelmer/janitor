@@ -145,6 +145,25 @@ class FindBuildFailureDescriptionTests(unittest.TestCase):
             '/<<PKGBUILDDIR>>/lib does not exist.'], 1,
             None)
 
+    def test_dh_missing_addon(self):
+        self.run_test([
+           '   dh_auto_clean -O--buildsystem=pybuild',
+           'E: Please add appropriate interpreter package to Build-Depends, '
+           'see pybuild(1) for details.this: $VAR1 = bless( {',
+           "     'py3vers' => '3.8',",
+           "     'py3def' => '3.8',",
+           "     'pyvers' => '',",
+           "     'parallel' => '2',",
+           "     'cwd' => '/<<PKGBUILDDIR>>',",
+           "     'sourcedir' => '.',",
+           "     'builddir' => undef,",
+           "     'pypydef' => '',",
+           "     'pydef' => ''",
+           "   }, 'Debian::Debhelper::Buildsystem::pybuild' );",
+           "deps: $VAR1 = [];"], 2,
+           DhAddonLoadFailure(
+               'pybuild', 'Debian/Debhelper/Buildsystem/pybuild.pm'))
+
     def test_libtoolize_missing_file(self):
         self.run_test([
             "libtoolize:   error: '/usr/share/aclocal/ltdl.m4' "
