@@ -64,7 +64,7 @@ SELECT
       queue.refresh,
       queue.requestor,
       package.vcs_type,
-      package.upstream_branch_url,
+      upstream.upstream_branch_url,
       run.id,
       run.result_code
   FROM
@@ -79,6 +79,7 @@ SELECT
   LEFT JOIN
       package
   ON package.name = queue.package
+  LEFT OUTER JOIN upstream ON package.name = upstream.name
   ORDER BY
   queue.priority ASC,
   queue.id ASC
