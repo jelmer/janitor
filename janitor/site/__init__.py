@@ -173,6 +173,5 @@ async def check_worker_creds(db, request):
 
 def tracker_url(config, pkg: str) -> Optional[str]:
     if config.distribution.tracker_url:
-        return ('%s/%s' % config.distribution.tracker_url.rstrip('/'), pkg)
+        return '%s/%s' % (config.distribution.tracker_url.rstrip('/'), pkg)
     return None
-
