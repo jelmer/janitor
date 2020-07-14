@@ -449,9 +449,14 @@ async def publish_from_policy(
             else:
                 description = (
                     'Missing binary diff; requesting control run.')
-                await do_schedule_control(
-                    conn, run.package, run.main_branch_revision,
-                    requestor='publisher (missing binary diff)')
+                if run.main_branch_revision is not None:
+                    await do_schedule_control(
+                        conn, run.package, run.main_branch_revision,
+                        requestor='publisher (missing binary diff)')
+                else:
+                    warning(
+                        'Successful run (%s) does not have main branch '
+                        'revision set', run.id)
         branch_name = None
         proposal_url = None
         note('Failed(%s): %s', code, description)
