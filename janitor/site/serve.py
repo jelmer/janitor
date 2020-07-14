@@ -212,6 +212,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--debug', action='store_true',
         help='Enable debugging mode. For example, avoid minified JS.')
+    parser.add_argument(
+        '--no-external-workers', action='store_true', default=False,
+        help='Disable support for external workers.')
 
     args = parser.parse_args()
 
@@ -936,5 +939,6 @@ if __name__ == '__main__':
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url,  # type: ignore
-            args.archiver_url, policy_config))
+            args.archiver_url, policy_config,
+            enable_external_workers=(not args.no_external_workers)))
     web.run_app(app, host=args.host, port=args.port)
