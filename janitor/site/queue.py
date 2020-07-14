@@ -15,14 +15,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncpg
+from datetime import datetime, timedelta
 
 from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
 
-from datetime import datetime, timedelta
+import asyncpg
 
 from janitor import state
-from janitor.site import env
 
 
 def lintian_tag_link(tag: str) -> str:
@@ -146,7 +145,6 @@ async def write_queue(client, conn: asyncpg.Connection,
                       only_command=None, limit=None,
                       is_admin=False,
                       queue_status=None):
-    template = env.get_template('queue.html')
     if queue_status:
         processing = get_processing(queue_status)
         active_queue_ids = set(
@@ -154,8 +152,8 @@ async def write_queue(client, conn: asyncpg.Connection,
     else:
         processing = iter([])
         active_queue_ids = set()
-    return await template.render_async(
-        is_admin=is_admin,
-        queue=get_queue(conn, only_command, limit),
-        active_queue_ids=active_queue_ids,
-        processing=processing)
+    return {
+        'queue': get_queue(conn, only_command, limit),
+        'active_queue_ids': active_queue_ids,
+        'processing': processing,
+        }

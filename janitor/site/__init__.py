@@ -30,11 +30,31 @@ from janitor.vcs import (
 )
 
 
+def json_chart_data(max_age=None):
+    if max_age is not None:
+        headers = {'Cache-Control': 'max-age=%d' % max_age}
+    else:
+        headers = {}
+
+    def decorator(fn):
+        async def handle(request):
+            async with request.app.database.acquire() as conn:
+                return web.json_response(
+                    await fn(request, conn), headers=headers)
+        return handle
+    return decorator
+
+
 def html_template(template_name, headers={}):
     def decorator(fn):
         async def handle(request):
             template = request.app.jinja_env.get_template(template_name)
             vs = await fn(request)
+            if isinstance(vs, web.Response):
+                return vs
+            vs['is_admin'] = is_admin(request)
+            vs['rel_url'] = request.rel_url
+            vs['url'] = request.url
             text = await template.render_async(**vs)
             return web.Response(
                 content_type='text/html', text=text,
