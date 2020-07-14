@@ -22,6 +22,7 @@ from typing import Optional
 import urllib.parse
 
 from janitor import state
+from janitor.config import Config
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import (
     CACHE_URL_BZR,
@@ -140,16 +141,16 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
         raise DebdiffRetrievalError(str(e))
 
 
-def is_admin(request):
+def is_admin(request: web.Request) -> bool:
     return request.debsso_email == 'jelmer@debian.org'
 
 
-def check_admin(request):
+def check_admin(request: web.Request) -> None:
     if not is_admin(request):
-        return web.Response(text='Unauthorized', status=401)
+        raise web.HTTPUnauthorized()
 
 
-async def is_worker(db, request):
+async def is_worker(db, request: web.Request) -> Optional[str]:
     auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
     if not auth_header:
         return None
@@ -161,7 +162,7 @@ async def is_worker(db, request):
     return None
 
 
-async def check_worker_creds(db, request):
+async def check_worker_creds(db, request: web.Request) -> Optional[str]:
     auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
     if not auth_header:
         raise web.HTTPUnauthorized(body='worker login required')
@@ -171,7 +172,7 @@ async def check_worker_creds(db, request):
     return login
 
 
-def tracker_url(config, pkg: str) -> Optional[str]:
+def tracker_url(config: Config, pkg: str) -> Optional[str]:
     if config.distribution.tracker_url:
         return '%s/%s' % (config.distribution.tracker_url.rstrip('/'), pkg)
     return None
