@@ -254,6 +254,10 @@ class ContentsAptFileSearcher(FileSearcher):
     def __init__(self):
         self._db = {}
 
+    @classmethod
+    def from_env(cls):
+        return cls.from_urls(os.environ['APT_CONTENTS_URL'].split(','))
+
     def __setitem__(self, path, package):
         self._db[path] = package
 
@@ -272,6 +276,13 @@ class ContentsAptFileSearcher(FileSearcher):
             package = rest.split(b'/')[-1]
             decoded_path = '/' + path.decode('utf-8', 'surrogateescape')
             self[decoded_path] = package.decode('utf-8')
+
+    @classmethod
+    def from_urls(cls, urls):
+        self = cls()
+        for url in urls:
+            self.load_url(url)
+        return self
 
     def load_url(self, url):
         from urllib.request import urlopen, Request
@@ -323,10 +334,8 @@ def search_apt_file(path, regex=False):
         if CliAptFileSearcher.available():
             _apt_file_searcher = CliAptFileSearcher()
         else:
-            # TODO(jelmer): don't hardcode this URL
             # TODO(jelmer): cache file
-            _apt_file_searcher = ContentsAptFileSearcher()
-            _apt_file_searcher.load_url(CONTENTS_URL)
+            _apt_file_searcher = ContentsAptFileSearcher.from_env()
     yield from _apt_file_searcher.search_files(path, regex=regex)
     yield from GENERATED_FILE_SEARCHER.search_files(path, regex=regex)
 
@@ -1134,7 +1143,7 @@ def main(argv=None):
     parser.add_argument(
         '--build-command', type=str,
         help='Build command',
-        default=(DEFAULT_BUILDER + ' -A -s -v -d$DISTRIBUTION'))
+        default=(DEFAULT_BUILDER + ' -A -s -v'))
     parser.add_argument(
         '--no-update-changelog', action="store_false", default=None,
         dest="update_changelog", help="do not update the changelog")

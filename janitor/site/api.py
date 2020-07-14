@@ -22,6 +22,7 @@ from . import (
     get_archive_diff,
     DebdiffRetrievalError,
     )
+from ..policy_pb2 import PolicyConfig
 from ..schedule import do_schedule, do_schedule_control
 
 
@@ -689,7 +690,7 @@ async def handle_run_assign(request):
             status=502)
 
 
-async def handle_run_finish(request):
+async def handle_run_finish(request: web.Request) -> web.Response:
     worker_name = await check_worker_creds(request.app.db, request)
     run_id = request.match_info['run_id']
     reader = await request.multipart()
@@ -800,7 +801,10 @@ async def handle_get_active_run(request):
         return web.json_response({}, status=404)
 
 
-def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
+def create_app(
+        db, publisher_url: str, runner_url: str, archiver_url: str,
+        policy_config: PolicyConfig,
+        enable_external_workers: bool = True) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.http_client_session = ClientSession()
@@ -901,13 +905,14 @@ def create_app(db, publisher_url, runner_url, archiver_url, policy_config):
     app.router.add_get(
         '/active-runs/{run_id}', handle_get_active_run,
         name='api-active-run-get')
-    app.router.add_post(
-        '/active-runs', handle_run_assign,
-        name='api-run-assign')
-    app.router.add_post(
-        '/active-runs/{run_id}/finish',
-        handle_run_finish,
-        name='api-run-finish')
+    if enable_external_workers:
+        app.router.add_post(
+            '/active-runs', handle_run_assign,
+            name='api-run-assign')
+        app.router.add_post(
+            '/active-runs/{run_id}/finish',
+            handle_run_finish,
+            name='api-run-finish')
     app.router.add_post(
         '/active-runs/{run_id}/kill',
         handle_runner_kill,
