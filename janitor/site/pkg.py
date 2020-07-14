@@ -205,8 +205,7 @@ async def generate_run_file(
     if has_log(WORKER_LOG_NAME):
         kwargs['worker_log_name'] = WORKER_LOG_NAME
 
-    template = env.get_template('run.html')
-    return await template.render_async(**kwargs)
+    return kwargs
 
 
 async def generate_pkg_file(db, config, package, merge_proposals, runs):
@@ -231,9 +230,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs):
 
 
 async def generate_pkg_list(packages):
-    template = env.get_template('package-name-list.html')
-    return await template.render_async(
-        packages=[name for (name, maintainer) in packages])
+    return {'packages': [name for (name, maintainer) in packages]}
 
 
 async def generate_maintainer_list(packages):

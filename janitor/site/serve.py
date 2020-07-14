@@ -247,10 +247,12 @@ if __name__ == '__main__':
             content_type='text/html', text=await render_start(),
             headers={'Cache-Control': 'max-age=3600'})
 
+    @html_template('orphan-start.html')
     async def handle_orphan_start(request):
-        from .orphan import render_start
-        return await render_start(request)
+        return {}
 
+    @html_template(
+        'orphan-candidates.html', headers={'Cache-Control': 'max-age=3600'})
     async def handle_orphan_candidates(request):
         from .orphan import generate_candidates
         return await generate_candidates(request.app.database)
@@ -280,27 +282,22 @@ if __name__ == '__main__':
                 text=await write_history(conn, worker=worker, limit=limit),
                 headers={'Cache-Control': 'max-age=60'})
 
+    @html_template(
+        'publish-history.html', headers={'Cache-Control': 'max-age=10'})
     async def handle_publish_history(request):
         limit = int(request.query.get('limit', '100'))
         from .publish import write_history
         async with request.app.database.acquire() as conn:
-            return web.Response(
-                content_type='text/html',
-                text=await write_history(
-                    conn, limit=limit,
-                    is_admin=is_admin(request)),
-                headers={'Cache-Control': 'max-age=10'})
+            return await write_history(conn, limit=limit)
 
+    @html_template('queue.html', headers={'Cache-Control': 'max-age=10'})
     async def handle_queue(request):
         limit = int(request.query.get('limit', '100'))
         from .queue import write_queue
         async with request.app.database.acquire() as conn:
-            return web.Response(
-                content_type='text/html', text=await write_queue(
-                    request.app.http_client_session, conn,
-                    is_admin=is_admin(request),
-                    queue_status=app.runner_status, limit=limit),
-                headers={'Cache-Control': 'max-age=10'})
+            return await write_queue(
+                request.app.http_client_session, conn,
+                queue_status=app.runner_status, limit=limit)
 
     async def handle_cupboard_maintainer_stats(request):
         from .stats import write_maintainer_stats
@@ -355,6 +352,8 @@ if __name__ == '__main__':
     async def handle_static_file(path, request):
         return web.FileResponse(path)
 
+    @html_template(
+        'package-name-list.html', headers={'Cache-Control': 'max-age=600'})
     async def handle_pkg_list(request):
         # TODO(jelmer): The javascript plugin thingy should just redirect to
         # the right URL, not rely on query parameters here.
@@ -368,10 +367,7 @@ if __name__ == '__main__':
                 (item.name, item.maintainer_email)
                 for item in await state.iter_packages(conn)
                 if not item.removed]
-        text = await generate_pkg_list(packages)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_pkg_list(packages)
 
     async def handle_maintainer_list(request):
         from .pkg import generate_maintainer_list
@@ -435,6 +431,8 @@ if __name__ == '__main__':
             regressions = await state.iter_vcs_regressions(conn)
         return {'regressions': regressions}
 
+    @html_template(
+        'run.html', headers={'Cache-Control': 'max-age=3600'})
     async def handle_run(request):
         from .pkg import generate_run_file
         from .. import state
@@ -444,16 +442,13 @@ if __name__ == '__main__':
             run = await state.get_run(conn, run_id, pkg)
             if run is None:
                 raise web.HTTPNotFound(text='No run with id %r' % run_id)
-        text = await generate_run_file(
+        return await generate_run_file(
             request.app.database,
             request.app.http_client_session,
             request.app.config,
             request.app.archiver_url,
             logfile_manager, run, request.app.publisher_url,
             is_admin=is_admin(request))
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=3600'})
 
     async def handle_log(request):
         pkg = request.match_info['pkg']
@@ -508,6 +503,8 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    @html_template(
+        'orphan-package.html', headers={'Cache-Control': 'max-age=600'})
     async def handle_orphan_pkg(request):
         from .orphan import generate_pkg_file
         # TODO(jelmer): Handle Accept: text/diff

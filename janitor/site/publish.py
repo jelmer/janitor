@@ -21,9 +21,8 @@ ORDER BY timestamp DESC
         yield row
 
 
-async def write_history(conn, limit=None, is_admin=False):
-    template = env.get_template('publish-history.html')
-    return await template.render_async(
-        count=limit,
-        is_admin=is_admin,
-        history=iter_publish_history(conn, limit=limit))
+async def write_history(conn, limit=None):
+    return {
+        'count': limit,
+        'history': iter_publish_history(conn, limit=limit),
+        }

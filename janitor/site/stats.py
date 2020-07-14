@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from . import env
+from . import env, json_chart_data
 from aiohttp import web
 from .. import state
 
@@ -43,7 +43,8 @@ async def write_maintainer_overview(conn, maintainer):
         proposals=proposals)
 
 
-async def graph_pushes_over_time(conn):
+@json_chart_data(max_age=60)
+async def handle_graph_pushes_over_time(request, conn):
     labels = []
     counts = []
     for (timestamp, count) in await conn.fetch(
@@ -57,13 +58,6 @@ async def graph_pushes_over_time(conn):
     return {
         'labels': labels,
         'push_count': counts}
-
-
-async def handle_graph_pushes_over_time(request):
-    async with request.app.database.acquire() as conn:
-        return web.json_response(
-            await graph_pushes_over_time(conn),
-            headers={'Cache-Control': 'max-age=60'})
 
 
 async def write_stats(conn):
@@ -92,7 +86,8 @@ async def handle_stats(request):
                 conn), headers={'Cache-Control': 'max-age=60'})
 
 
-async def graph_merges_over_time(conn):
+@json_chart_data(max_age=60)
+async def handle_graph_merges_over_time(request, conn):
     return {
         'opened': {timestamp.isoformat(): int(count)
                    for (timestamp, count) in await conn.fetch("""
@@ -115,14 +110,8 @@ where status = 'merged' and merged_at is not null group by 1""")}
         }
 
 
-async def handle_graph_merges_over_time(request):
-    async with request.app.database.acquire() as conn:
-        return web.json_response(
-            await graph_merges_over_time(conn),
-            headers={'Cache-Control': 'max-age=60'})
-
-
-async def graph_review_status(conn):
+@json_chart_data(max_age=60)
+async def handle_graph_review_status(request, conn):
     return {
         status: count for (status, count) in await conn.fetch("""\
 select review_status, count(*) from last_unabsorbed_runs
@@ -134,14 +123,8 @@ publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
 group by 1""")}
 
 
-async def handle_graph_review_status(request):
-    async with request.app.database.acquire() as conn:
-        return web.json_response(
-            await graph_review_status(conn),
-            headers={'Cache-Control': 'max-age=60'})
-
-
-async def graph_time_to_merge(conn):
+@json_chart_data(max_age=60)
+async def handle_graph_time_to_merge(request, conn):
     return {
             ndays: count for (ndays, count) in await conn.fetch("""
 select extract(day from merged_at - timestamp) ndays, count(*)
@@ -152,14 +135,9 @@ order by 1
 """) if ndays is not None and ndays > 0}
 
 
-async def handle_graph_time_to_merge(request):
-    async with request.app.database.acquire() as conn:
-        return web.json_response(
-            await graph_time_to_merge(conn),
-            headers={'Cache-Control': 'max-age=60'})
-
-
-async def graph_burndown(conn, suite=None):
+@json_chart_data(max_age=60)
+async def handle_graph_burndown(request, conn):
+    suite = request.query.get('suite')
     query = "select count(*) from perpetual_candidates"
     args = []
     if suite is not None:
@@ -184,13 +162,6 @@ from first_run_time%s) as r where mod(rn, 200) = 0
     return [
         (start_time.isoformat(), int(c))
         for (start_time, c) in await conn.fetch(query, *args)]
-
-
-async def handle_graph_burndown(request):
-    async with request.app.database.acquire() as conn:
-        return web.json_response(
-            await graph_burndown(conn, suite=request.query.get('suite')),
-            headers={'Cache-Control': 'max-age=60'})
 
 
 def stats_app(database):
