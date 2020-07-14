@@ -586,12 +586,15 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=30'})
 
+    @html_template(
+        'new-upstream-package.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_new_upstream_pkg(suite, request):
         from .new_upstream import generate_pkg_file
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(
+            return await generate_pkg_file(
                 request.app.database,
                 request.app.config,
                 request.app.http_client_session,
@@ -599,9 +602,6 @@ if __name__ == '__main__':
                 pkg, suite, run_id)
         except KeyError:
             raise web.HTTPNotFound()
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
@@ -626,13 +626,12 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    @html_template(
+        'new-upstream-candidates.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_new_upstream_candidates(suite, request):
         from .new_upstream import generate_candidates
-        text = await generate_candidates(
-            request.app.database, suite)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_candidates(request.app.database, suite)
 
     async def handle_rejected(request):
         from .review import generate_rejected
