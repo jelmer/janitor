@@ -2119,7 +2119,7 @@ secondary_build_failure_regexps = [
     'redis.exceptions.ConnectionError|builtins.OverflowError|ArgumentError|'
     'httptools.parser.errors.HttpParserInvalidURLError|HypothesisException|'
     'SSLError|KeyError|Exception|rnc2rng.parser.ParseError|'
-    'pkg_resources.UnknownExtra|'
+    'pkg_resources.UnknownExtra|tarfile.ReadError|'
     'datalad.support.exceptions.IncompleteResultsError'
     r'): .*',
     # Rake
