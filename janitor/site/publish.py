@@ -17,12 +17,11 @@ ORDER BY timestamp DESC
 """
     if limit:
         query += " LIMIT %d" % limit
-    for row in await conn.fetch(query):
-        yield row
+    return await conn.fetch(query)
 
 
 async def write_history(conn, limit=None):
     return {
         'count': limit,
-        'history': iter_publish_history(conn, limit=limit),
+        'history': await iter_publish_history(conn, limit=limit),
         }

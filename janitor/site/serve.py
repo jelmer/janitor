@@ -24,7 +24,8 @@ from aiohttp.web_urldispatcher import (
     URL,
     UrlMappingMatchInfo,
     )
-from . import is_worker, html_template
+from yarl import URL
+from . import is_worker, html_template, update_vars_from_request
 
 
 class ForwardedResource(PrefixResource):
@@ -104,6 +105,8 @@ class ForwardedResource(PrefixResource):
                 request.method, url, params=params, headers=headers,
                 data=request.content) as client_response:
             status = client_response.status
+
+            note('Forwarding result: %d', status)
 
             if status == 404:
                 raise web.HTTPNotFound()
@@ -216,6 +219,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '--no-external-workers', action='store_true', default=False,
         help='Disable support for external workers.')
+    parser.add_argument(
+        '--external-url', type=str, default=None, 
+        help='External URL')
 
     args = parser.parse_args()
 
@@ -235,11 +241,11 @@ if __name__ == '__main__':
             content_type='text/html', text=await render_simple(templatename),
             headers={'Cache-Control': 'max-age=3600'})
 
+    @html_template(
+        'lintian-fixes-start.html', headers={'Cache-Control': 'max-age=3600'})
     async def handle_lintian_fixes(request):
         from .lintian_fixes import render_start
-        return web.Response(
-            content_type='text/html', text=await render_start(),
-            headers={'Cache-Control': 'max-age=3600'})
+        return await render_start()
 
     async def handle_multiarch_fixes(request):
         from .multiarch_hints import render_start
@@ -257,19 +263,22 @@ if __name__ == '__main__':
         from .orphan import generate_candidates
         return await generate_candidates(request.app.database)
 
+    @html_template(
+        'merge-proposals.html', headers={'Cache-Control': 'max-age=60'})
     async def handle_merge_proposals(suite, request):
         from .merge_proposals import write_merge_proposals
-        return web.Response(
-            content_type='text/html', text=await write_merge_proposals(
-                request.app.database, suite),
-            headers={'Cache-Control': 'max-age=60'})
+        return await write_merge_proposals(request.app.database, suite)
 
     async def handle_apt_repo(suite, request):
         from .apt_repo import write_apt_repo
         async with request.app.database.acquire() as conn:
+            template = request.app.jinja_env.get_template(suite + '.html')
+            vs = await write_apt_repo(conn, suite)
+            update_vars_from_request(vs, request)
+            text = await template.render_async(**vs)
             return web.Response(
                 content_type='text/html',
-                text=await write_apt_repo(conn, suite),
+                text=text,
                 headers={'Cache-Control': 'max-age=60'})
 
     async def handle_history(request):
@@ -369,6 +378,9 @@ if __name__ == '__main__':
                 if not item.removed]
         return await generate_pkg_list(packages)
 
+    @html_template(
+        'by-maintainer-package-list.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_maintainer_list(request):
         from .pkg import generate_maintainer_list
         from .. import state
@@ -377,11 +389,11 @@ if __name__ == '__main__':
                 (item.name, item.maintainer_email)
                 for item in await state.iter_packages(conn)
                 if not item.removed]
-        text = await generate_maintainer_list(packages)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_maintainer_list(packages)
 
+    @html_template(
+        'package-overview.html', 
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_pkg(request):
         from .pkg import generate_pkg_file
         from .. import state
@@ -399,30 +411,28 @@ if __name__ == '__main__':
             text = await generate_pkg_file(
                 request.app.database, request.app.config,
                 package, merge_proposals, runs)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
+    @html_template(
+            'lintian-fixes-failed-list.html',
+            headers={'Cache-Control': 'max-age=600'})
+    async def handle_failed_lintian_brush_fixers_list(request):
+        from .lintian_fixes import generate_failing_fixers_list
+        return await generate_failing_fixers_list(request.app.database)
+
+    @html_template(
+            'lintian-fixes-failed.html',
+            headers={'Cache-Control': 'max-age=600'})
     async def handle_failed_lintian_brush_fixers(request):
-        from .lintian_fixes import (
-            generate_failing_fixers_list, generate_failing_fixer)
-        fixer = request.match_info.get('fixer')
-        if fixer:
-            text = await generate_failing_fixer(
-                request.app.database, fixer)
-        else:
-            text = await generate_failing_fixers_list(
-                request.app.database)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        from .lintian_fixes import generate_failing_fixer
+        fixer = request.match_info['fixer']
+        return await generate_failing_fixer(request.app.database, fixer)
 
+    @html_template(
+        'lintian-fixes-regressions.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_lintian_brush_regressions(request):
         from .lintian_fixes import generate_regressions_list
-        text = await generate_regressions_list(request.app.database)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_regressions_list(request.app.database)
 
     @html_template(
         'vcs-regressions.html', headers={'Cache-Control': 'max-age=600'})
@@ -475,14 +485,14 @@ if __name__ == '__main__':
             content_type='text/plain', text=text,
             headers={'Cache-Control': 'max-age=3600'})
 
+    @html_template(
+        'ready-list.html', )
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_ready_proposals(suite, request):
         from .pkg import generate_ready_list
         review_status = request.query.get('review_status')
-        text = await generate_ready_list(
+        return await generate_ready_list(
             request.app.database, suite, review_status)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_lintian_fixes_pkg(request):
         from .lintian_fixes import generate_pkg_file
@@ -619,12 +629,11 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    @html_template(
+        'lintian-fixes-stats.html', headers={'Cache-Control': 'max-age=600'})
     async def handle_lintian_fixes_stats(request):
         from .lintian_fixes import generate_stats
-        text = await generate_stats(request.app.database)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_stats(request.app.database)
 
     @html_template(
         'new-upstream-candidates.html',
@@ -851,7 +860,7 @@ if __name__ == '__main__':
         name='cupboard-review-post')
     app.router.add_get(
         '/cupboard/failed-lintian-brush-fixers/',
-        handle_failed_lintian_brush_fixers,
+        handle_failed_lintian_brush_fixers_list,
         name='failed-lintian-brush-fixer-list')
     app.router.add_get(
         '/cupboard/failed-lintian-brush-fixers/{fixer}',
@@ -909,6 +918,10 @@ if __name__ == '__main__':
     app.policy = policy_config
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
+    if args.external_url:
+        app.external_url = URL(args.external_url)
+    else:
+        app.external_url = None
     database = state.Database(config.database_location)
     app.database = database
     from .stats import stats_app
@@ -927,5 +940,8 @@ if __name__ == '__main__':
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url,  # type: ignore
             args.archiver_url, policy_config,
-            enable_external_workers=(not args.no_external_workers)))
+            enable_external_workers=(not args.no_external_workers),
+            external_url=(
+                app.external_url.join(URL('api')
+                if app.external_url else None))))
     web.run_app(app, host=args.host, port=args.port)

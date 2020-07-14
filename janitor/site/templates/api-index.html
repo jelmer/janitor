@@ -36,7 +36,7 @@
 <p>E.g. to schedule a new run of <i>lintian-brush</i> for <i>cowsay</i>:
 
 <pre>
-curl -X POST https://janitor.debian.net/api/lintian-fixes/pkg/cowsay/schedule
+curl -X POST {{ url.join(URL('lintian-fixes/pkg/cowsay/schedule')) }}
 </pre>
 
 </body>

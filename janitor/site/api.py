@@ -10,7 +10,9 @@ from aiohttp import (
     WSMsgType,
     )
 from aiohttp.web_middlewares import normalize_path_middleware
+from typing import Optional
 import urllib.parse
+from yarl import URL
 
 from janitor import state, SUITE_REGEX
 from janitor.trace import warning
@@ -19,6 +21,7 @@ from . import (
     check_worker_creds,
     env,
     highlight_diff,
+    html_template,
     get_archive_diff,
     DebdiffRetrievalError,
     )
@@ -485,11 +488,9 @@ async def handle_published_packages(request):
     return web.json_response(response_obj)
 
 
+@html_template('api-index.html', headers={'Cache-Control': 'max-age=600'})
 async def handle_index(request):
-    template = env.get_template('api-index.html')
-    return web.Response(
-        content_type='text/html', text=await template.render_async(),
-        headers={'Cache-Control': 'max-age=600'})
+    return {}
 
 
 async def handle_global_policy(request):
@@ -804,11 +805,14 @@ async def handle_get_active_run(request):
 def create_app(
         db, publisher_url: str, runner_url: str, archiver_url: str,
         policy_config: PolicyConfig,
-        enable_external_workers: bool = True) -> web.Application:
+        enable_external_workers: bool = True,
+        external_url: Optional[URL] = None) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.http_client_session = ClientSession()
+    app.jinja_env = env
     app.db = db
+    app.external_url = external_url
     app.policy_config = policy_config
     app.publisher_url = publisher_url
     app.runner_url = runner_url

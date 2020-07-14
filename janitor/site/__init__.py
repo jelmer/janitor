@@ -20,6 +20,7 @@ from aiohttp import ClientConnectorError, web, BasicAuth
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Optional
 import urllib.parse
+from yarl import URL
 
 from janitor import state
 from janitor.config import Config
@@ -45,6 +46,15 @@ def json_chart_data(max_age=None):
     return decorator
 
 
+def update_vars_from_request(vs, request):
+    vs['is_admin'] = is_admin(request)
+    vs['rel_url'] = request.rel_url
+    if request.app.external_url is not None:
+        vs['url'] = request.app.external_url.join(request.rel_url)
+    else:
+        vs['url'] = request.url
+
+
 def html_template(template_name, headers={}):
     def decorator(fn):
         async def handle(request):
@@ -52,9 +62,7 @@ def html_template(template_name, headers={}):
             vs = await fn(request)
             if isinstance(vs, web.Response):
                 return vs
-            vs['is_admin'] = is_admin(request)
-            vs['rel_url'] = request.rel_url
-            vs['url'] = request.url
+            update_vars_from_request(vs, request)
             text = await template.render_async(**vs)
             return web.Response(
                 content_type='text/html', text=text,
@@ -129,6 +137,7 @@ env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 env.globals.update(enumerate=enumerate)
 env.globals.update(highlight_diff=highlight_diff)
 env.globals.update(classify_result_code=classify_result_code)
+env.globals.update(URL=URL)
 
 
 class DebdiffRetrievalError(Exception):

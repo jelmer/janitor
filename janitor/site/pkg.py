@@ -17,7 +17,6 @@ from janitor.sbuild_log import (
 )
 from janitor.logs import LogRetrievalError
 from janitor.site import (
-    env,
     get_archive_diff,
     get_vcs_type,
     DebdiffRetrievalError,
@@ -225,8 +224,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs):
             suite: (context, value, success_chance)
             for (package, suite, context, value, success_chance) in
             await state.iter_candidates(conn, packages=[package.name])}
-    template = env.get_template('package-overview.html')
-    return await template.render_async(**kwargs)
+    return kwargs
 
 
 async def generate_pkg_list(packages):
@@ -234,20 +232,18 @@ async def generate_pkg_list(packages):
 
 
 async def generate_maintainer_list(packages):
-    template = env.get_template('by-maintainer-package-list.html')
     by_maintainer = {}
     for name, maintainer in packages:
         by_maintainer.setdefault(maintainer, []).append(name)
-    return await template.render_async(by_maintainer=by_maintainer)
+    return {'by_maintainer': by_maintainer}
 
 
 async def generate_ready_list(
         db, suite: Optional[str], review_status: Optional[str] = None):
-    template = env.get_template('ready-list.html')
     async with db.acquire() as conn:
         runs = [
             row async for row in state.iter_publish_ready(
                 conn, suites=([suite] if suite else None),
                 review_status=review_status,
                 publishable_only=True)]
-    return await template.render_async(runs=runs, suite=suite)
+    return {'runs': runs, 'suite': suite}

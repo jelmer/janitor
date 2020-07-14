@@ -65,9 +65,9 @@ there’s anything that can be done to improve them.</p>
 <h3><a class="toc-backref" href="#id20">How do I download the diff for a package?</a></h3>
 <p>There is a well-formed URL that can be used to download the diff for a specific package, if a diff has been generated:</p>
 
-<pre>https://janitor.debian.net/api/lintian-fixes/pkg/PACKAGE/diff</pre>
+<pre>{{ url.join(URL('../api/lintian-fixes/pkg/PACKAGE/diff')) }}</pre>
 
-<p>E.g. for gunicorn, the URL would be <a href="https://janitor.debian.net/api/lintian-fixes/pkg/gunicorn/diff">https://janitor.debian.net/api/lintian-fixes/pkg/gunicorn/diff</a>.</p>
+<p>E.g. for gunicorn, the URL would be <a href="{{ url.join(URL('../api/lintian-fixes/pkg/gunicorn/diff')) }}">{{ url.join(URL('../api/lintian-fixes/pkg/gunicorn/diff')) }}</a>.</p>
 
 </div>
 <div class="section" id="#why-does-or-does-the-bot-not-update-changelog">
