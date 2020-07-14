@@ -2,11 +2,7 @@
 
 from functools import partial
 from janitor import state
-
-from janitor.site import (
-    env,
-    tracker_url,
-)
+from . import tracker_url
 
 
 async def generate_pkg_file(
@@ -60,7 +56,7 @@ async def generate_pkg_file(
             state.iter_previous_runs(conn, package.name, suite)]
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package.name)
-    kwargs = {
+    return {
         'package': package.name,
         'merge_proposals': merge_proposals,
         'maintainer_email': package.maintainer_email,
@@ -89,15 +85,11 @@ async def generate_pkg_file(
         'tracker_url': partial(tracker_url, config),
         }
 
-    template = env.get_template('new-upstream-package.html')
-    return await template.render_async(**kwargs)
-
 
 async def generate_candidates(db, suite):
-    template = env.get_template('new-upstream-candidates.html')
     async with db.acquire() as conn:
         candidates = [(package.name, context, value, success_chance) for
                       (package, suite, context, value, success_chance) in
                       await state.iter_candidates(conn, suite=suite)]
     candidates.sort()
-    return await template.render_async(candidates=candidates, suite=suite)
+    return {'candidates': candidates, 'suite': suite}
