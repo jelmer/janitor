@@ -201,11 +201,10 @@ where
 
 
 async def generate_failing_fixer(db, fixer):
-    template = env.get_template('lintian-fixes-failed.html')
     async with db.acquire() as conn:
         failures = await iter_lintian_brush_fixer_failures(
             conn, fixer)
-    return await template.render_async(failures=failures, fixer=fixer)
+        return {'failures': failures, 'fixer': fixer}
 
 
 async def iter_failed_lintian_fixers(conn):
@@ -219,7 +218,7 @@ where
 
 
 async def generate_failing_fixers_list(db):
-    template = env.get_template('lintian-fixes-failed-list.html')
+    template = env.get_template(
     async with db.acquire() as conn:
         fixers = await iter_failed_lintian_fixers(conn)
     return await template.render_async(fixers=fixers)
@@ -239,7 +238,7 @@ SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
 
 
 async def generate_regressions_list(db):
-    template = env.get_template('lintian-fixes-regressions.html')
+    template = env.get_template(
     async with db.acquire() as conn:
         packages = await iter_lintian_fixes_regressions(conn)
     return await template.render_async(packages=packages)
@@ -277,7 +276,6 @@ ON absorbed.tag = unabsorbed.tag
 
 
 async def generate_stats(db):
-    template = env.get_template('lintian-fixes-stats.html')
     async with db.acquire() as conn:
         by_tag = await iter_lintian_fixes_counts(conn)
         tags_per_run = {c: nr for (c, nr) in await conn.fetch("""\
@@ -293,16 +291,16 @@ where result_code = 'success' and suite = 'lintian-fixes'
 group by 1 order by 1 desc
 """)}
 
-    return await template.render_async(
-        by_tag=by_tag,
-        tags_per_run=tags_per_run,
-        lintian_brush_versions=lintian_brush_versions)
+    return {
+        'by_tag': by_tag,
+        'tags_per_run': tags_per_run,
+        'lintian_brush_versions': lintian_brush_versions,
+        }
 
 
 async def render_start():
-    template = env.get_template('lintian-fixes-start.html')
     import lintian_brush
     from silver_platter.debian.lintian import DEFAULT_ADDON_FIXERS
-    return await template.render_async(
-        {'lintian_brush': lintian_brush,
-         'ADDON_FIXERS': DEFAULT_ADDON_FIXERS})
+    return {
+        'lintian_brush': lintian_brush,
+        'ADDON_FIXERS': DEFAULT_ADDON_FIXERS}
