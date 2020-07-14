@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+"""Serve the janitor site."""
 
 import asyncio
 from aiohttp.web_urldispatcher import (
@@ -23,7 +24,7 @@ from aiohttp.web_urldispatcher import (
     URL,
     UrlMappingMatchInfo,
     )
-from . import is_worker
+from . import is_worker, html_template
 
 
 class ForwardedResource(PrefixResource):
@@ -248,16 +249,11 @@ if __name__ == '__main__':
 
     async def handle_orphan_start(request):
         from .orphan import render_start
-        return web.Response(
-            content_type='text/html', text=await render_start(),
-            headers={'Cache-Control': 'max-age=3600'})
+        return await render_start(request)
 
     async def handle_orphan_candidates(request):
         from .orphan import generate_candidates
-        text = await generate_candidates(request.app.database)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_candidates(request.app.database)
 
     async def handle_merge_proposals(suite, request):
         from .merge_proposals import write_merge_proposals
@@ -432,14 +428,12 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    @html_template(
+        'vcs-regressions.html', headers={'Cache-Control': 'max-age=600'})
     async def handle_vcs_regressions(request):
-        template = request.app.jinja_env.get_template('vcs-regressions.html')
         async with request.app.database.acquire() as conn:
             regressions = await state.iter_vcs_regressions(conn)
-        text = await template.render_async(regressions=regressions)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return {'regressions': regressions}
 
     async def handle_run(request):
         from .pkg import generate_run_file
@@ -520,7 +514,7 @@ if __name__ == '__main__':
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(
+            return await generate_pkg_file(
                 request.app.database,
                 request.app.config,
                 request.app.policy,
@@ -529,9 +523,6 @@ if __name__ == '__main__':
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_multiarch_fixes_pkg(request):
         from .multiarch_hints import generate_pkg_file
