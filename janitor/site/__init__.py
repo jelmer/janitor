@@ -30,6 +30,19 @@ from janitor.vcs import (
 )
 
 
+def html_template(template_name, headers={}):
+    def decorator(fn):
+        async def handle(request):
+            template = request.app.jinja_env.get_template(template_name)
+            vs = await fn(request)
+            text = await template.render_async(**vs)
+            return web.Response(
+                content_type='text/html', text=text,
+                headers=headers)
+        return handle
+    return decorator
+
+
 def format_duration(duration):
     weeks = duration.days // 7
     days = duration.days % 7
