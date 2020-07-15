@@ -15,7 +15,7 @@
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url) }}</li>
 {% endif %}
 {% if removed %}
-<li class="removed-in-unstable">This package is removed in unstable.</li>
+<li class="not-in-archive">This package is not present in the archive.</li>
 {% endif %}
 {% if vcswatch_status == 'commits' %}
 <li class="vcswatch-commits">This package has <a href="https://qa.debian.org/cgi-bin/vcswatch?package={{ package }}">unuploaded commits</a>.</li>

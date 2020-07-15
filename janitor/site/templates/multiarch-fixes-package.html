@@ -21,7 +21,7 @@
 <li>Release compatibility: {{ compat_release }}</li>
 {% endif %}
 {% if removed %}
-<li class="removed-in-unstable">This package is removed in unstable.</li>
+<li class="not-in-archive">This package is not present in the archive.</li>
 {% endif %}
 {% if previous_runs %}
 <li>Last processed: {{ format_timestamp(previous_runs[0].times[1]) }} (took {{ format_duration(previous_runs[0].times[1] - previous_runs[0].times[0]) }})</li>
