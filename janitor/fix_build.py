@@ -300,6 +300,7 @@ class ContentsAptFileSearcher(FileSearcher):
         self.load_file(f)
 
 
+# TODO(jelmer): Get contents URL from distribution config
 CONTENTS_URL = (
     'http://deb.debian.org/debian/dists/unstable/main/Contents-amd64.gz')
 

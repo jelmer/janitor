@@ -54,9 +54,6 @@ from .trace import note
 
 SUPPORTED_VCSES = ['git', 'bzr']
 
-CACHE_URL_BZR = 'https://janitor.debian.net/bzr/'
-CACHE_URL_GIT = 'https://janitor.debian.net/git/'
-
 
 class BranchOpenFailure(Exception):
     """Failure to open a branch."""
@@ -258,23 +255,30 @@ class UnsupportedVcs(Exception):
     """Specified vcs type is not supported."""
 
 
-def get_cached_branch_url(
-        vcs_type: str, package: str, branch_name: str) -> str:
-    if vcs_type == 'git':
-        return '%s%s,branch=%s' % (
-            CACHE_URL_GIT, package, branch_name)
-    elif vcs_type == 'bzr':
-        return '%s%s/%s' % (
-            CACHE_URL_BZR, package, branch_name)
+def get_cached_repository_url(
+        base_url: str, vcs_type: str, package: str) -> str:
+    if vcs_type in SUPPORTED_VCSES:
+        return '%s/%s/%s' % (base_url.rstrip('/'), vcs_type, package)
     else:
         raise UnsupportedVcs(vcs_type)
 
 
-def get_cached_branch(vcs_type: str,
-                      package: str,
+def get_cached_branch_url(
+        base_url: str, vcs_type: str, package: str, branch_name: str) -> str:
+    if vcs_type == 'git':
+        return '%s/git/%s,branch=%s' % (
+            base_url.rstrip('/'), package, branch_name)
+    elif vcs_type == 'bzr':
+        return '%s/bzr/%s/%s' % (
+            base_url.rstrip('/'), package, branch_name)
+    else:
+        raise UnsupportedVcs(vcs_type)
+
+
+def get_cached_branch(base_url: str, vcs_type: str, package: str,
                       branch_name: str) -> Optional[Branch]:
     try:
-        url = get_cached_branch_url(vcs_type, package, branch_name)
+        url = get_cached_branch_url(base_url, vcs_type, package, branch_name)
     except UnsupportedVcs:
         return None
     try:
@@ -395,23 +399,28 @@ class LocalVcsManager(VcsManager):
 
 class RemoteVcsManager(VcsManager):
 
-    def __init__(self, cache_url_git: str = CACHE_URL_BZR,
-                 cache_url_bzr: str = CACHE_URL_BZR):
-        self.cache_url_git = cache_url_git
-        self.cache_url_bzr = cache_url_bzr
+    def __init__(self, base_url: str):
+        self.base_url = base_url
 
     def get_branch(self, package, branch_name, vcs_type=None):
         if vcs_type:
-            return get_cached_branch(package, branch_name, vcs_type)
+            return get_cached_branch(
+                self.base_url, package, branch_name, vcs_type)
         for vcs_type in SUPPORTED_VCSES:
-            branch = get_cached_branch(package, branch_name, vcs_type)
+            branch = get_cached_branch(
+                self. base_url, package, branch_name, vcs_type)
             if branch:
                 return branch
         else:
             return None
 
     def get_branch_url(self, package, branch_name, vcs_type):
-        return get_cached_branch_url(vcs_type, package, branch_name)
+        return get_cached_branch_url(
+            self.base_url, vcs_type, package, branch_name)
+
+    def get_repository_url(self, package: str, vcs_type: str) -> str:
+        return get_cached_repository_url(
+            self.base_url, vcs_type, package)
 
 
 def get_run_diff(vcs_manager: VcsManager, run) -> bytes:

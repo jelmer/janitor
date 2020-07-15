@@ -1497,6 +1497,9 @@ def main(argv=None):
         '--backup-incoming-directory', type=str,
         default=None,
         help='Backup directory to write files to if archiver is down')
+    parser.add_argument(
+        '--public-vcs-location', type=str,
+        defaults='https://janitor.debian.net/')
 
     args = parser.parse_args()
 
@@ -1506,7 +1509,7 @@ def main(argv=None):
         config = read_config(f)
 
     state.DEFAULT_URL = config.database_location
-    public_vcs_manager = RemoteVcsManager()
+    public_vcs_manager = RemoteVcsManager(args.public_vcs_location)
     if config.vcs_location:
         vcs_manager = LocalVcsManager(config.vcs_location)
     else:

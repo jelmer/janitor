@@ -165,6 +165,8 @@ async def estimate_success_probability(
 
 async def estimate_duration(
         conn: asyncpg.Connection, package: str, suite: str) -> timedelta:
+    """Estimate the duration of a package build for a certain suite.
+    """
     estimated_duration = await state.estimate_duration(
         conn, package=package, suite=suite)
     if estimated_duration is not None:
