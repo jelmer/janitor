@@ -25,9 +25,7 @@ async def generate_rejected(conn, suite=None):
     def entry_key(entry):
         return entry[0].times[1]
     entries.sort(key=entry_key, reverse=True)
-    template = env.get_template('rejected.html')
-    kwargs = {'entries': entries, 'suite': suite}
-    return await template.render_async(**kwargs)
+    return {'entries': entries, 'suite': suite}
 
 
 async def generate_review(conn, client, archiver_url, publisher_url,
@@ -64,7 +62,7 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         if unchanged_run is None:
             return '<p>No control run</p>'
         try:
-            text, content_type = await get_archive_diff(
+            text, unused_content_type = await get_archive_diff(
                 client, archiver_url, run, unchanged_run,
                 kind='debdiff', filter_boring=True, accept='text/html')
             return text.decode('utf-8', 'replace')

@@ -6,8 +6,6 @@ from .. import state
 
 
 async def write_maintainer_stats(conn):
-    template = env.get_template('maintainer-stats.html')
-
     by_maintainer = {}
 
     for maintainer_email, status, count in await conn.fetch("""
@@ -17,7 +15,7 @@ group by maintainer_email, status
 order by maintainer_email asc
 """):
         by_maintainer.setdefault(maintainer_email, {})[status] = count
-    return await template.render_async(by_maintainer=by_maintainer)
+    return {'by_maintainer': by_maintainer}
 
 
 async def write_maintainer_overview(conn, maintainer):

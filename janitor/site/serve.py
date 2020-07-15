@@ -248,11 +248,12 @@ if __name__ == '__main__':
         from .lintian_fixes import render_start
         return await render_start()
 
+    @html_template(
+        'multiarch-fixes-start.html',
+        headers={'Cache-Control': 'max-age=3600'})
     async def handle_multiarch_fixes(request):
         from .multiarch_hints import render_start
-        return web.Response(
-            content_type='text/html', text=await render_start(),
-            headers={'Cache-Control': 'max-age=3600'})
+        return await render_start()
 
     @html_template('orphan-start.html')
     async def handle_orphan_start(request):
@@ -309,20 +310,21 @@ if __name__ == '__main__':
             request.app.http_client_session, request.app.database,
             queue_status=app.runner_status, limit=limit)
 
+    @html_template(
+        'maintainer-stats.html',
+        headers={'Cache-Control': 'max-age=60'})
     async def handle_cupboard_maintainer_stats(request):
         from .stats import write_maintainer_stats
         async with request.app.database.acquire() as conn:
-            return web.Response(
-                content_type='text/html', text=await write_maintainer_stats(
-                    conn), headers={'Cache-Control': 'max-age=60'})
+            return await write_maintainer_stats(conn)
 
+    @html_template(
+        'maintainer-overview.html', headers={'Cache-Control': 'max-age=60'})
     async def handle_maintainer_overview(request):
         from .stats import write_maintainer_overview
         async with request.app.database.acquire() as conn:
-            return web.Response(
-                content_type='text/html', text=await write_maintainer_overview(
-                    conn, request.match_info['maintainer']),
-                headers={'Cache-Control': 'max-age=60'})
+            return await write_maintainer_overview(
+                conn, request.match_info['maintainer'])
 
     async def handle_result_codes(request):
         from .result_codes import (
@@ -330,7 +332,7 @@ if __name__ == '__main__':
             generate_result_code_page)
         from .. import state
         suite = request.query.get('suite')
-        if suite == '_all':
+        if suite.lower() == '_all':
             suite = None
         code = request.match_info.get('code')
         all_suites = [s.name for s in config.suite]
@@ -536,13 +538,16 @@ if __name__ == '__main__':
         except KeyError:
             raise web.HTTPNotFound()
 
+    @html_template(
+        'multiarch-fixes-package.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_multiarch_fixes_pkg(request):
         from .multiarch_hints import generate_pkg_file
         # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(
+            return await generate_pkg_file(
                 request.app.database,
                 request.app.config,
                 request.app.policy,
@@ -551,9 +556,6 @@ if __name__ == '__main__':
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_lintian_fixes_tag_list(request):
         from .lintian_fixes import generate_tag_list
@@ -563,29 +565,29 @@ if __name__ == '__main__':
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
+    @html_template(
+        'multiarch-fixes-hint-list.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_multiarch_fixes_hint_list(request):
         from .multiarch_hints import generate_hint_list
         async with request.app.database.acquire() as conn:
-            text = await generate_hint_list(conn)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+            return await generate_hint_list(conn)
 
+    @html_template(
+        'lintian-fixes-tag.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_lintian_fixes_tag_page(request):
         from .lintian_fixes import generate_tag_page
-        text = await generate_tag_page(
+        return await generate_tag_page(
             request.app.database, request.match_info['tag'])
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
+    @html_template(
+        'multiarch-fixes-hint.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_multiarch_fixes_hint_page(request):
         from .multiarch_hints import generate_hint_page
-        text = await generate_hint_page(
+        return await generate_hint_page(
             request.app.database, request.match_info['hint'])
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
     async def handle_lintian_fixes_developer_table_page(request):
         from .lintian_fixes import generate_developer_table_page
@@ -618,21 +620,19 @@ if __name__ == '__main__':
         except KeyError:
             raise web.HTTPNotFound()
 
+    @html_template(
+        'lintian-fixes-candidates.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_lintian_fixes_candidates(request):
         from .lintian_fixes import generate_candidates
-        text = await generate_candidates(
-            request.app.database)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_candidates(request.app.database)
 
+    @html_template(
+        'multiarch-fixes-candidates.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_multiarch_fixes_candidates(request):
         from .multiarch_hints import generate_candidates
-        text = await generate_candidates(
-            request.app.database)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+        return await generate_candidates(request.app.database)
 
     @html_template(
         'lintian-fixes-stats.html', headers={'Cache-Control': 'max-age=600'})
@@ -647,12 +647,12 @@ if __name__ == '__main__':
         from .new_upstream import generate_candidates
         return await generate_candidates(request.app.database, suite)
 
+    @html_template('rejected.html')
     async def handle_rejected(request):
         from .review import generate_rejected
         suite = request.query.get('suite')
         async with request.app.database.acquire() as conn:
-            text = await generate_rejected(conn, suite=suite)
-        return web.Response(content_type='text/html', text=text)
+            return await generate_rejected(conn, suite=suite)
 
     async def handle_review_post(request):
         from .review import generate_review

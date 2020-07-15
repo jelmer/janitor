@@ -95,7 +95,6 @@ where
 
 
 async def generate_tag_page(db, tag):
-    template = env.get_template('lintian-fixes-tag.html')
     oldnames = []
     for oldname, newname in renamed_tags.items():
         if newname == tag:
@@ -103,12 +102,14 @@ async def generate_tag_page(db, tag):
     async with db.acquire() as conn:
         packages = list(await iter_last_successes_by_lintian_tag(
             conn, [tag] + oldnames))
-    return await template.render_async(
-        tag=tag, oldnames=oldnames, packages=packages)
+    return {
+        'tag': tag,
+        'oldnames': oldnames,
+        'packages': packages,
+        }
 
 
 async def generate_candidates(db):
-    template = env.get_template('lintian-fixes-candidates.html')
     supported_tags = set()
     for fixer in available_lintian_fixers():
         supported_tags.update(fixer.lintian_tags)
@@ -117,8 +118,10 @@ async def generate_candidates(db):
                       (package, suite, context, value, success_chance) in
                       await state.iter_candidates(conn, suite=SUITE)]
         candidates.sort()
-    return await template.render_async(
-        supported_tags=supported_tags, candidates=candidates)
+    return {
+        'supported_tags': supported_tags,
+        'candidates': candidates,
+        }
 
 
 async def generate_developer_table_page(db, developer):
