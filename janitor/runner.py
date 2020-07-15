@@ -1508,7 +1508,7 @@ def main(argv=None):
         help='Backup directory to write files to if archiver is down')
     parser.add_argument(
         '--public-vcs-location', type=str,
-        defaults='https://janitor.debian.net/')
+        default='https://janitor.debian.net/')
 
     args = parser.parse_args()
 
