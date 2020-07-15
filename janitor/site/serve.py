@@ -407,7 +407,7 @@ if __name__ == '__main__':
                     conn, package=package.name):
                 merge_proposals.append((url, status, run))
             runs = state.iter_runs(conn, package=package.name)
-            text = await generate_pkg_file(
+            return await generate_pkg_file(
                 request.app.database, request.app.config,
                 package, merge_proposals, runs)
 

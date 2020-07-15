@@ -25,10 +25,7 @@ from yarl import URL
 from janitor import state
 from janitor.config import Config
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
-from janitor.vcs import (
-    CACHE_URL_BZR,
-    CACHE_URL_GIT,
-)
+from janitor.vcs import RemoteVcsManager
 
 
 def json_chart_data(max_age=None):
@@ -51,8 +48,10 @@ def update_vars_from_request(vs, request):
     vs['rel_url'] = request.rel_url
     if request.app.external_url is not None:
         vs['url'] = request.app.external_url.join(request.rel_url)
+        vs['vcs_manager'] = RemoteVcsManager(str(request.app.external_url))
     else:
         vs['url'] = request.url
+        vs['vcs_manager'] = RemoteVcsManager(str(request.url.with_path('/')))
 
 
 def html_template(template_name, headers={}):
@@ -132,8 +131,6 @@ def classify_result_code(result_code):
 
 env.globals.update(format_duration=format_duration)
 env.globals.update(format_timestamp=format_timestamp)
-env.globals.update(cache_url_git=CACHE_URL_GIT)
-env.globals.update(cache_url_bzr=CACHE_URL_BZR)
 env.globals.update(enumerate=enumerate)
 env.globals.update(highlight_diff=highlight_diff)
 env.globals.update(classify_result_code=classify_result_code)
