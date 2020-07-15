@@ -13,16 +13,13 @@ SUITE = 'multiarch-fixes'
 
 async def generate_pkg_file(db, config, policy, client, archiver_url,
                             publisher_url, package, run_id=None):
-    kwargs = await generate_pkg_context(
+    return await generate_pkg_context(
         db, config, SUITE, policy, client, archiver_url, publisher_url,
         package, run_id=run_id)
-    template = env.get_template('multiarch-fixes-package.html')
-    return await template.render_async(**kwargs)
 
 
 async def render_start():
-    template = env.get_template('multiarch-fixes-start.html')
-    return await template.render_async()
+    return {}
 
 
 async def iter_hint_links(conn):
@@ -43,8 +40,7 @@ select hint, count(hint) from (
 async def generate_hint_list(conn: asyncpg.Connection):
     hint_links = await iter_hint_links(conn)
     hints = [(link.split('#')[-1], count) for link, count in hint_links]
-    template = env.get_template('multiarch-fixes-hint-list.html')
-    return await template.render_async(hints=hints)
+    return {'hints': hints}
 
 
 async def iter_last_successes_by_hint(conn: asyncpg.Connection, hint: str):
@@ -70,14 +66,12 @@ where
 
 
 async def generate_hint_page(db, hint):
-    template = env.get_template('multiarch-fixes-hint.html')
     async with db.acquire() as conn:
         packages = list(await iter_last_successes_by_hint(conn, hint))
-    return await template.render_async(hint=hint, packages=packages)
+    return {'hint': hint, 'packages': packages}
 
 
 async def generate_candidates(db):
-    template = env.get_template('multiarch-fixes-candidates.html')
     candidates = []
     async with db.acquire() as conn:
         for (package, suite, context, value,
@@ -88,4 +82,4 @@ async def generate_candidates(db):
                 hints[h] += 1
             candidates.append((package.name, list(hints.items()), value))
         candidates.sort(key=lambda x: x[2], reverse=True)
-    return await template.render_async(candidates=candidates)
+    return {'candidates': candidates}
