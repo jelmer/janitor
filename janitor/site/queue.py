@@ -19,8 +19,6 @@ from datetime import datetime, timedelta
 
 from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
 
-import asyncpg
-
 from janitor import state
 
 
@@ -46,7 +44,7 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
 
 
 async def iter_queue_with_last_run(
-        conn: asyncpg.Connection,
+        db: state.Database,
         limit: Optional[int] = None
         ) -> AsyncIterator[
                 Tuple[state.QueueItem, Optional[str], Optional[str]]]:
@@ -85,20 +83,21 @@ SELECT
 """
     if limit:
         query += " LIMIT %d" % limit
-    for row in await conn.fetch(query):
-        yield (
-            state.QueueItem.from_row(row[:-2]),
-            row[-2], row[-1])
+    async with db.acquire() as conn:
+        for row in await conn.fetch(query):
+            yield (
+                state.QueueItem.from_row(row[:-2]),
+                row[-2], row[-1])
 
 
 async def get_queue(
-        conn: asyncpg.Connection,
+        db: state.Database,
         only_command: Optional[str] = None,
         limit: Optional[int] = None) -> AsyncIterator[
             Tuple[int, str, Optional[str], str, str,
                   Optional[timedelta], Optional[str], Optional[str]]]:
     async for entry, log_id, result_code in (
-            iter_queue_with_last_run(conn, limit=limit)):
+            iter_queue_with_last_run(db, limit=limit)):
         if only_command is not None and entry.command != only_command:
             continue
         expecting = None
@@ -141,7 +140,7 @@ async def get_queue(
             log_id, result_code)
 
 
-async def write_queue(client, conn: asyncpg.Connection,
+async def write_queue(client, db: state.Database,
                       only_command=None, limit=None,
                       is_admin=False,
                       queue_status=None):
@@ -153,7 +152,7 @@ async def write_queue(client, conn: asyncpg.Connection,
         processing = iter([])
         active_queue_ids = set()
     return {
-        'queue': get_queue(conn, only_command, limit),
+        'queue': get_queue(db, only_command, limit),
         'active_queue_ids': active_queue_ids,
         'processing': processing,
         }

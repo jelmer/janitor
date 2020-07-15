@@ -36,8 +36,7 @@ async def generate_pkg_file(db, config, policy, client, archiver_url, publisher_
     kwargs['candidate_tags'] = (
         set(kwargs['candidate_context'].split(' '))
         if kwargs['candidate_context'] else set())
-    template = env.get_template('lintian-fixes-package.html')
-    return await template.render_async(**kwargs)
+    return kwargs
 
 
 async def iter_lintian_tags(conn):
@@ -207,21 +206,20 @@ async def generate_failing_fixer(db, fixer):
         return {'failures': failures, 'fixer': fixer}
 
 
-async def iter_failed_lintian_fixers(conn):
+async def iter_failed_lintian_fixers(db):
     query = """
 select json_object_keys((result->'failed')::json), count(*) from last_runs
 where
   suite = 'lintian-fixes' and
   json_typeof((result->'failed')::json) = 'object' group by 1 order by 2 desc
 """
-    return await conn.fetch(query)
+    async with db.acquire() as conn:
+        for row in await conn.fetch(query):
+            yield row
 
 
 async def generate_failing_fixers_list(db):
-    template = env.get_template(
-    async with db.acquire() as conn:
-        fixers = await iter_failed_lintian_fixers(conn)
-    return await template.render_async(fixers=fixers)
+    return {'fixers': iter_failed_lintian_fixers(db)}
 
 
 async def iter_lintian_fixes_regressions(conn):
@@ -238,10 +236,9 @@ SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
 
 
 async def generate_regressions_list(db):
-    template = env.get_template(
     async with db.acquire() as conn:
         packages = await iter_lintian_fixes_regressions(conn)
-    return await template.render_async(packages=packages)
+    return {'packages': packages}
 
 
 async def iter_lintian_fixes_counts(conn):
