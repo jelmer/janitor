@@ -24,7 +24,8 @@ from aiohttp.web_urldispatcher import (
     URL,
     UrlMappingMatchInfo,
     )
-from yarl import URL
+from ..config import get_suite_config
+
 from . import is_worker, html_template, update_vars_from_request
 
 
@@ -274,6 +275,7 @@ if __name__ == '__main__':
         async with request.app.database.acquire() as conn:
             template = request.app.jinja_env.get_template(suite + '.html')
             vs = await write_apt_repo(conn, suite)
+            vs['suite_config'] = get_suite_config(request.app.config, suite)
             update_vars_from_request(vs, request)
             text = await template.render_async(**vs)
             return web.Response(

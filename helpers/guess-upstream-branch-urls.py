@@ -23,7 +23,7 @@ async def iter_missing_upstream_branch_packages(conn: asyncpg.Connection):
     query = """\
 select
   package.name,
-  package.unstable_version
+  package.archive_version
 from
   last_runs
 inner join package on last_runs.package = package.name

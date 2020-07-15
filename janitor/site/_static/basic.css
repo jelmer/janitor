@@ -627,7 +627,7 @@ tr.package-proposal {
   background-color: lightgreen;
 }
 
-li.removed-in-unstable {
+li.not-in-archive {
   font-weight: bolder;
 }
 
