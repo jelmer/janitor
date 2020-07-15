@@ -12,10 +12,10 @@
     <link rel="stylesheet" href="/_static/chart.css" type="text/css" />
 
     <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
-
   </head><body>
 
     <script src="/_static/jquery.js"></script>
+    <!-- TODO(jelmer): Use local copy of typeahead. -->
     <script src="https://twitter.github.io/typeahead.js/releases/latest/typeahead.bundle.js"></script>
     <script src="/_static/moment.js"></script>
     <script src="/_static/chart.js"></script>
@@ -26,9 +26,18 @@ registerHandler = function(kind, cb) {
   handlers.push({'kind': kind, 'callback': cb});
 };
 
+var ws_url;
 window.onload = function() {
-const url = 'wss://janitor.debian.net/ws/notifications';
-const connection = new WebSocket(url);
+if(location.protocol == 'http:') {
+    ws_url = 'ws://' + location.hostname + '/ws/notifications';
+} else if(location.protocol == 'https:') {
+    ws_url = 'wss://' + location.hostname + '/ws/notifications';
+} else {
+    console.log('Unknown protocol: ' + location.protocol);
+    ws_url = undefined;
+}
+
+const connection = new WebSocket(ws_url);
 
 connection.onerror = (error) => {
   console.log('WebSocket error: ');
@@ -69,13 +78,13 @@ format_duration = function(n) {
 
 
 window.chartColors = {
-	red: 'rgb(255, 99, 132)',
-	orange: 'rgb(255, 159, 64)',
-	yellow: 'rgb(255, 205, 86)',
-	green: 'rgb(75, 192, 192)',
-	blue: 'rgb(54, 162, 235)',
-	purple: 'rgb(153, 102, 255)',
-	grey: 'rgb(201, 203, 207)'
+   red: 'rgb(255, 99, 132)',
+   orange: 'rgb(255, 159, 64)',
+   yellow: 'rgb(255, 205, 86)',
+   green: 'rgb(75, 192, 192)',
+   blue: 'rgb(54, 162, 235)',
+   purple: 'rgb(153, 102, 255)',
+   grey: 'rgb(201, 203, 207)'
 };
 
     </script>
