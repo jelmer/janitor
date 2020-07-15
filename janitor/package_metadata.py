@@ -41,7 +41,8 @@ from lintian_brush.vcs import (
     )
 
 
-async def update_package_metadata(conn, provided_packages, package_overrides):
+async def update_package_metadata(
+        conn, distribution: str, provided_packages, package_overrides):
     trace.note('Updating package metadata.')
     packages = []
     for package in provided_packages:
@@ -90,7 +91,7 @@ async def update_package_metadata(conn, provided_packages, package_overrides):
             branch_url = None
 
         packages.append((
-            package.name, branch_url if branch_url else None,
+            package.name, distribution, branch_url if branch_url else None,
             subpath if subpath else None,
             package.maintainer_email if package.maintainer_email else None,
             package.uploader_email if package.uploader_email else [],
@@ -104,17 +105,16 @@ async def update_package_metadata(conn, provided_packages, package_overrides):
             package.insts, package.removed))
     await conn.executemany(
         "INSERT INTO package "
-        "(name, branch_url, subpath, maintainer_email, uploader_emails, "
-        "unstable_version, vcs_type, vcs_url, vcs_browse, vcs_last_revision, "
-        "vcswatch_status, vcswatch_version, popcon_inst, removed) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, "
-        "$14) "
-        "ON CONFLICT (name) DO UPDATE SET "
+        "(name, distribution, branch_url, subpath, maintainer_email, "
+        "uploader_emails, archive_version, vcs_type, vcs_url, vcs_browse, "
+        "vcs_last_revision, vcswatch_status, vcswatch_version, popcon_inst, "
+        "removed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
+        "$13, $14, $15) ON CONFLICT (name, distribution) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
         "maintainer_email = EXCLUDED.maintainer_email, "
         "uploader_emails = EXCLUDED.uploader_emails, "
-        "unstable_version = EXCLUDED.unstable_version, "
+        "archive_version = EXCLUDED.archive_version, "
         "vcs_type = EXCLUDED.vcs_type, "
         "vcs_url = EXCLUDED.vcs_url, "
         "vcs_last_revision = EXCLUDED.vcs_last_revision, "
@@ -126,7 +126,7 @@ async def update_package_metadata(conn, provided_packages, package_overrides):
         packages)
 
 
-async def mark_removed_packages(conn, removals):
+async def mark_removed_packages(conn, distribution: str, removals):
     existing_packages = {
         package.name: package
         for package in await state.iter_packages(conn)}
@@ -136,7 +136,7 @@ async def mark_removed_packages(conn, removals):
         for removal in removals
         if removal.name in existing_packages and
         not existing_packages[removal.name].removed]
-    await state.update_removals(conn, filtered_removals)
+    await state.update_removals(conn, distribution, filtered_removals)
 
 
 def iter_packages_from_script(stdin):
@@ -154,12 +154,16 @@ async def main():
         REGISTRY,
     )
 
-    parser = argparse.ArgumentParser(prog='candidates')
+    parser = argparse.ArgumentParser(prog='package_metadata')
     parser.add_argument('--prometheus', type=str,
                         help='Prometheus push gateway to export to.')
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+
+    parser.add_argument(
+        '--distribution', type=str, default='unstable',
+        help='Distribution to import metadata for.')
 
     parser.add_argument(
         '--package-overrides', type=str, default='package_overrides.conf',
@@ -182,9 +186,9 @@ async def main():
     packages, removals = iter_packages_from_script(sys.stdin)
 
     async with db.acquire() as conn:
-        await update_package_metadata(conn, packages, package_overrides)
+        await update_package_metadata(conn, args.distribution, packages, package_overrides)
         if removals:
-            await mark_removed_packages(conn, removals)
+            await mark_removed_packages(conn, args.distribution, removals)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:

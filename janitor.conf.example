@@ -1,6 +1,18 @@
+# Storage location for APT repository; can be:
+#  + a local file path
+#  + a GCS location
 apt_location: 'http://storage.googleapis.com/debian-janitor-apt/'
+
+# Logs location; can be:
+#  + a local file path
+#  + a GCS location (https://storage.googleapis.com/...)
+#  + a S3 location (https://...)
 logs_location: 'https://s3.nl-ams.scw.cloud'
+
+# VCS Location; most be a local path.
 vcs_location: '/home/janitor/vcs'
+
+
 database_location: 'postgresql://janitor@example.com:5432/janitor'
 # Set the default committer; if unset defaults to current users' preferences
 # (i.e. ~/.gitconfig)
@@ -23,6 +35,7 @@ suite {
   build_distribution: "lintian-fixes"
   branch_name: "lintian-fixes"
   build_suffix: "jan+lint"
+  base_distribution: "unstable"
 }
 
 suite {
@@ -31,6 +44,7 @@ suite {
   build_distribution: "unchanged"
   branch_name: "master"
   build_suffix: "jan+unchanged"
+  base_distribution: "unstable"
 }
 
 suite {
@@ -39,6 +53,7 @@ suite {
   build_distribution: "fresh-releases"
   branch_name: "new-upstream"
   build_suffix: "jan+nur"
+  base_distribution: "unstable"
 }
 
 suite {
@@ -47,6 +62,7 @@ suite {
   build_distribution: "fresh-snapshots"
   branch_name: "new-upstream-snapshot"
   build_suffix: "jan+nus"
+  base_distribution: "unstable"
 }
 
 suite {
@@ -55,6 +71,7 @@ suite {
   build_distribution: "multiarch-fixes"
   branch_name: "multiarch-fixes"
   build_suffix: "jan+maf"
+  base_distribution: "unstable"
 }
 
 suite {
@@ -63,4 +80,5 @@ suite {
   build_distribution: "uncommitted"
   branch_name: "uncommitted"
   build_suffix: "jan+unc"
+  base_distribution: "unstable"
 }
