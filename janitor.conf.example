@@ -6,6 +6,9 @@ database_location: 'postgresql://janitor@example.com:5432/janitor'
 # (i.e. ~/.gitconfig)
 committer: 'Debian Janitor <janitor@jelmer.uk>'
 
+# Origin set in published archives
+origin: "janitor.debian.net"
+
 distribution {
   name: "unstable"
   archive_mirror_uri: "http://deb.debian.org/debian"

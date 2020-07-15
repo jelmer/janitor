@@ -37,6 +37,9 @@ message Config {
   optional Distribution distribution = 7;
 
   repeated Suite suite = 6;
+
+  // Origin in published archives
+  optional string origin = 8;
 }
 
 message Env {

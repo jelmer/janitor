@@ -338,10 +338,11 @@ async def handle_publish(request):
                 'Sources': [suite.name],
                 'Distribution': suite.name,
                 'Label': suite.archive_description,
-                'Origin': 'janitor.debian.net',
                 'NotAutomatic': 'yes',
                 'ButAutomaticUpgrades': 'yes',
                 }
+            if request.app.config.origin:
+                params['Origin'] = request.app.config.origin
             async with request.app.aptly_session.post(
                     'http://localhost/api/publish/%s' % loc,
                     json=params) as resp:
