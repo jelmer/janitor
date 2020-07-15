@@ -43,7 +43,7 @@ def parse_email(f):
             (field, value) = line.split(':', 1)
         except ValueError:
             continue
-        if field == 'Merge Request url':
+        if field.lower() == 'merge request url':
             return value.strip()
     return None
 

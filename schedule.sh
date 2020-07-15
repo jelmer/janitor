@@ -1,6 +1,6 @@
 #!/bin/bash
 export PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter:$(pwd)/breezy"
-./udd-package-metadata.py | python3 -m janitor.package_metadata "$@"
+./udd-package-metadata.py | python3 -m janitor.package_metadata --distribution=unstable "$@"
 (
    python3 ./unchanged-candidates.py
    python3 ./lintian-fixes-candidates.py

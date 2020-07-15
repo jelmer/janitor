@@ -142,7 +142,7 @@ class Package(object):
     uploader_emails: List[str]
     branch_url: str
     subpath: Optional[str]
-    unstable_version: Optional[Version]
+    archive_version: Optional[Version]
     vcs_type: Optional[str]
     vcs_url: Optional[str]
     vcs_browse: Optional[str]
@@ -697,7 +697,7 @@ WHERE
 
 async def iter_published_packages(conn: asyncpg.Connection, suite):
     return await conn.fetch("""
-select distinct on (package.name) package.name, build_version, unstable_version
+select distinct on (package.name) package.name, build_version, archive_version
 from run left join package on package.name = run.package
 where run.build_distribution = $1 and not package.removed
 order by package.name, build_version desc
@@ -1229,11 +1229,11 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
         "WHERE package = $1 AND suite = $2", package, suite)
 
 
-async def iter_sources_with_unstable_version(
+async def iter_sources_with_archive_version(
         conn: asyncpg.Connection, packages: List[str]
         ) -> List[Tuple[str, Version]]:
     return await conn.fetch(
-        "SELECT name, unstable_version FROM package "
+        "SELECT name, archive_version FROM package "
         "WHERE name = any($1::text[])", packages)
 
 
@@ -1355,13 +1355,16 @@ FROM publish WHERE id = $1
 
 
 async def update_removals(
-        conn: asyncpg.Connection, items: List[Tuple[str, Version]]) -> None:
+        conn: asyncpg.Connection, distribution: str,
+        items: List[Tuple[str, Version]]) -> None:
     if not items:
         return
     query = """\
-UPDATE package SET removed = True WHERE name = $1 AND unstable_version <= $2
+UPDATE package SET removed = True WHERE name = $1 AND distribution = $2 AND archive_version <= $3
 """
-    await conn.executemany(query, items)
+    await conn.executemany(
+        query, [(name, distribution, archive_version)
+                for (name, archive_version) in items])
 
 
 async def version_available(
@@ -1383,7 +1386,7 @@ UNION
 SELECT
   name,
   'unchanged',
-  unstable_version
+  archive_version
 FROM
   package
 WHERE name = $1 AND %(version_match2)s
@@ -1392,7 +1395,7 @@ WHERE name = $1 AND %(version_match2)s
     if version:
         query = query % {
             'version_match1': "build_version %s $3" % (version[0], ),
-            'version_match2': "unstable_version %s $3" % (version[0], )}
+            'version_match2': "archive_version %s $3" % (version[0], )}
         args.append(version[1])
     else:
         query = query % {
