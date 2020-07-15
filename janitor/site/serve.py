@@ -303,10 +303,9 @@ if __name__ == '__main__':
     async def handle_queue(request):
         limit = int(request.query.get('limit', '100'))
         from .queue import write_queue
-        async with request.app.database.acquire() as conn:
-            return await write_queue(
-                request.app.http_client_session, conn,
-                queue_status=app.runner_status, limit=limit)
+        return await write_queue(
+            request.app.http_client_session, request.app.database,
+            queue_status=app.runner_status, limit=limit)
 
     async def handle_cupboard_maintainer_stats(request):
         from .stats import write_maintainer_stats
@@ -485,22 +484,29 @@ if __name__ == '__main__':
             content_type='text/plain', text=text,
             headers={'Cache-Control': 'max-age=3600'})
 
-    @html_template(
-        'ready-list.html', )
-        headers={'Cache-Control': 'max-age=600'})
     async def handle_ready_proposals(suite, request):
         from .pkg import generate_ready_list
+        template = request.app.jinja_env.get_template('ready-list.html')
         review_status = request.query.get('review_status')
-        return await generate_ready_list(
+        vs = await generate_ready_list(
             request.app.database, suite, review_status)
+        update_vars_from_request(vs, request)
+        text = await template.render_async(**vs)
+        return web.Response(
+            content_type='text/html',
+            text=text,
+            headers={'Cache-Control': 'max-age=60'})
 
+    @html_template(
+        'lintian-fixes-package.html',
+         headers={'Cache-Control': 'max-age=600'})
     async def handle_lintian_fixes_pkg(request):
         from .lintian_fixes import generate_pkg_file
         # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
-            text = await generate_pkg_file(
+            return await generate_pkg_file(
                 request.app.database,
                 request.app.config,
                 request.app.policy,
@@ -509,9 +515,6 @@ if __name__ == '__main__':
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
 
     @html_template(
         'orphan-package.html', headers={'Cache-Control': 'max-age=600'})
@@ -740,7 +743,7 @@ if __name__ == '__main__':
         name='orphan-start')
     app.router.add_get(
         '/orphan/candidates', handle_orphan_candidates,
-        name='orphanfixes-candidates')
+        name='orphan-candidates')
     for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
                   'multiarch-fixes', 'orphan']:
         app.router.add_get(
