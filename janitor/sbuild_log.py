@@ -201,8 +201,10 @@ class InconsistentSourceFormat(Problem):
         return "Inconsistent source format between version and source format"
 
 
-def find_preamble_failure_description(lines):
+def find_preamble_failure_description(lines: List[str]) -> Tuple[
+        Optional[int], Optional[str], Optional[Problem]]:
     OFFSET = 20
+    err: Problem
     for i in range(1, OFFSET):
         lineno = len(lines) - i
         if lineno < 0:
@@ -239,7 +241,8 @@ def find_preamble_failure_description(lines):
     return None, None, None
 
 
-def parse_brz_error(line):
+def parse_brz_error(line: str) -> Tuple[Optional[Problem], str]:
+    error: Problem
     line = line.strip()
     m = re.match(
         'Unable to find the needed upstream tarball for '
@@ -276,7 +279,7 @@ class MissingRevision(Problem):
         return "Missing revision: %r" % self.revision
 
 
-def worker_failure_from_sbuild_log(f) -> SbuildFailure:
+def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
     paragraphs = {}
     for title, offsets, lines in parse_sbuild_log(f):
         if title is not None:
@@ -450,12 +453,13 @@ def parse_sbuild_log(
     yield title, (begin_offset, lineno), lines
 
 
-def find_failed_stage(lines):
+def find_failed_stage(lines: List[str]) -> Optional[str]:
     for line in lines:
         if not line.startswith('Fail-Stage: '):
             continue
         (key, value) = line.split(': ', 1)
         return value.strip()
+    return None
 
 
 class MissingPythonModule(Problem):

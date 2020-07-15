@@ -678,6 +678,15 @@ def suite_build_env(distro_config, suite_config, apt_location):
     if distro_config.name:
         env['DISTRIBUTION'] = distro_config.name
 
+    urls = []
+    for component in distro_config.component:
+        urls.append('%s/dists/%s/%s/Contents-amd64.gz' % (
+            distro_config.mirror_archive_uri,
+            distro_config.name,
+            distro_config.component))
+
+    env['APT_CONTENTS_URL'] = ','.join(urls)
+
     env.update([(env.key, env.value) for env in suite_config.sbuild_env])
     return env
 
@@ -984,10 +993,10 @@ class QueueProcessor(object):
     def __init__(
             self, database, config, worker_kind, build_command, pre_check=None,
             post_check=None, dry_run=False, incoming_url=None,
-            logfile_manager=None, debsign_keyid: Optional[str] = None, vcs_manager=None,
-            public_vcs_manager=None, concurrency=1, use_cached_only=False,
-            overall_timeout=None, committer=None, apt_location=None,
-            backup_incoming_directory=None):
+            logfile_manager=None, debsign_keyid: Optional[str] = None,
+            vcs_manager=None, public_vcs_manager=None, concurrency=1,
+            use_cached_only=False, overall_timeout=None, committer=None,
+            apt_location=None, backup_incoming_directory=None):
         """Create a queue processor.
 
         Args:
@@ -1015,7 +1024,7 @@ class QueueProcessor(object):
         self.topic_result = Topic()
         self.overall_timeout = overall_timeout
         self.committer = committer
-        self.active_runs = {}
+        self.active_runs: Dict[str, ActiveRun] = {}
         self.apt_location = apt_location
         self.backup_incoming_directory = backup_incoming_directory
 
@@ -1296,7 +1305,7 @@ async def handle_assign(request):
 
         (resume_branch, active_run.resume_branch_name,
          resume_branch_result) = await check_resume_result(
-            conn, item.suite, resume_branch)
+             conn, item.suite, resume_branch)
 
         if resume_branch is not None:
             resume_branch_url = (
@@ -1355,8 +1364,8 @@ async def handle_assign(request):
         'suite': item.suite,
         'result_branch': {
             'url': result_branch_url,
-         },
-        }
+        },
+    }
 
     active_run.start_watchdog(queue_processor)
     return web.json_response(assignment, status=201)

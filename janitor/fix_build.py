@@ -23,6 +23,7 @@ import os
 import re
 import subprocess
 import sys
+from typing import Iterator
 
 from debian.deb822 import (
     Deb822,
@@ -300,11 +301,6 @@ class ContentsAptFileSearcher(FileSearcher):
         self.load_file(f)
 
 
-# TODO(jelmer): Get contents URL from distribution config
-CONTENTS_URL = (
-    'http://deb.debian.org/debian/dists/unstable/main/Contents-amd64.gz')
-
-
 class GeneratedFileSearcher(FileSearcher):
 
     def __init__(self, db):
@@ -328,7 +324,7 @@ GENERATED_FILE_SEARCHER = GeneratedFileSearcher({
 _apt_file_searcher = None
 
 
-def search_apt_file(path, regex=False):
+def search_apt_file(path: str, regex: bool = False) -> Iterator[FileSearcher]:
     global _apt_file_searcher
     if _apt_file_searcher is None:
         # TODO(jelmer): Also check that apt-file uses unstable?
