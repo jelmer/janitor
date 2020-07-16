@@ -332,7 +332,7 @@ if __name__ == '__main__':
             generate_result_code_page)
         from .. import state
         suite = request.query.get('suite')
-        if suite.lower() == '_all':
+        if suite is not None and suite.lower() == '_all':
             suite = None
         code = request.match_info.get('code')
         all_suites = [s.name for s in config.suite]
