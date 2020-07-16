@@ -683,7 +683,7 @@ def suite_build_env(distro_config, suite_config, apt_location):
         urls.append('%s/dists/%s/%s/Contents-amd64.gz' % (
             distro_config.archive_mirror_uri,
             distro_config.name,
-            distro_config.component))
+            component))
 
     env['APT_CONTENTS_URL'] = ','.join(urls)
 
