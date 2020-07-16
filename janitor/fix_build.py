@@ -250,6 +250,10 @@ class CliAptFileSearcher(FileSearcher):
         return os.path.exists('/usr/bin/apt-file')
 
 
+class ContentsFileNotFound(Exception):
+    """The contents file was not found."""
+
+
 class ContentsAptFileSearcher(FileSearcher):
 
     def __init__(self):
@@ -287,9 +291,15 @@ class ContentsAptFileSearcher(FileSearcher):
 
     def load_url(self, url):
         from urllib.request import urlopen, Request
+        from urllib.error import HTTPError
         request = Request(url, headers={'User-Agent': 'Debian Janitor'})
-        response = urlopen(request)
-        if response.headers.get_content_type() == 'application/x-gzip':
+        try:
+            response = urlopen(request)
+        except HTTPError as e:
+            if e.status == 404:
+                raise ContentsFileNotFound(url)
+            raise
+        if url.endswith('.gz'):
             import gzip
             f = gzip.GzipFile(fileobj=response)
         elif response.headers.get_content_type() == 'text/plain':
