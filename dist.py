@@ -17,6 +17,7 @@
 
 import os
 import subprocess
+import stat
 import sys
 
 from janitor.trace import note
@@ -33,7 +34,12 @@ if os.path.exists('pyproject.toml'):
     if 'poetry' in pyproject['tool']:
         sys.exit(subprocess.call(['poetry', 'build', '-f', 'sdist']))
 if os.path.exists('setup.py'):
-    sys.exit(subprocess.call(['./setup.py', 'sdist', '--distdir=..']))
+    if os.stat('setup.py').st_mode & stat.S_IEXEC:
+        sys.exit(subprocess.call(
+            ['./setup.py', 'sdist', '--distdir=..']))
+    else:
+        sys.exit(subprocess.call(
+            ['python3', './setup.py', 'sdist', '--distdir=..']))
 if os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
     with open('dist.ini', 'rb') as f:
         for line in f:
