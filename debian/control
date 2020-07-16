@@ -42,7 +42,9 @@ Depends: brz-debian,
          ${python3:Depends}
 Recommends: libdist-zilla-perl,
             postgresql-server-dev-all,
-            gnome-pkg-tools
+            gnome-pkg-tools,
+            python3-toml,
+            php-pear
 Architecture: all
 Description: Worker for the Debian janitor
 
