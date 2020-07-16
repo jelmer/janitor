@@ -36,10 +36,10 @@ if os.path.exists('pyproject.toml'):
 if os.path.exists('setup.py'):
     if os.stat('setup.py').st_mode & stat.S_IEXEC:
         sys.exit(subprocess.call(
-            ['./setup.py', 'sdist', '--distdir=..']))
+            ['./setup.py', 'sdist', '--dist-dir=..']))
     else:
         sys.exit(subprocess.call(
-            ['python3', './setup.py', 'sdist', '--distdir=..']))
+            ['python3', './setup.py', 'sdist', '--dist-dir=..']))
 if os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
     with open('dist.ini', 'rb') as f:
         for line in f:
