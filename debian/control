@@ -44,7 +44,8 @@ Recommends: libdist-zilla-perl,
             postgresql-server-dev-all,
             gnome-pkg-tools,
             python3-toml,
-            php-pear
+            php-pear,
+            php-horde-core
 Architecture: all
 Description: Worker for the Debian janitor
 
