@@ -31,7 +31,7 @@ if os.path.exists('pyproject.toml'):
     import toml
     with open('pyproject.toml', 'r') as pf:
         pyproject = toml.load(pf)
-    if 'poetry' in pyproject['tool']:
+    if 'poetry' in pyproject.get('tool', []):
         sys.exit(subprocess.call(['poetry', 'build', '-f', 'sdist']))
 if os.path.exists('setup.py'):
     if os.stat('setup.py').st_mode & stat.S_IEXEC:
