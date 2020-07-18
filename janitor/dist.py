@@ -87,6 +87,12 @@ def run_dist_in_chroot(session):
             session.check_call(['python3', './setup.py', 'sdist'])
         return
 
+    if os.path.exists('setup.cfg'):
+        note('Found setup.cfg, assuming python project.')
+        apt_install(session, ['python3-pep517'])
+        session.check_call(['python3', '-m', 'pep517.build', '-s', '.'])
+        return
+
     if os.path.exists('dist.ini') and not os.path.exists('Makefile.PL'):
         apt_install(session, ['libdist-inkt-perl'])
         with open('dist.ini', 'rb') as f:
