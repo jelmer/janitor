@@ -24,6 +24,7 @@ import json
 import os
 import subprocess
 import sys
+import traceback
 from typing import Callable, Dict, List, Optional, Any, Type, Iterator, Tuple
 
 import breezy
@@ -478,6 +479,7 @@ class NewUpstreamWorker(SubWorker):
                         tree, subdir=package, target_filename=target_filename,
                         packaging_tree=local_tree, chroot=self.args.chroot)
                 except Exception as e:
+                    traceback.print_last()
                     raise DistCommandFailed(str(e))
 
             try:
