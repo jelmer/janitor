@@ -107,6 +107,15 @@ def run_dist_in_chroot(session):
         session.check_call(['dzil', 'build', '--in', '..'])
         return
 
+    if os.path.exists('Makefile.PL') and not os.path.exists('Makefile'):
+        apt_install(session, ['perl'])
+        session.check_call(['perl', 'Makefile.PL'])
+
+    if os.path.exists('Makefile.PL'):
+        apt_install(session, ['make'])
+        session.check_call(['make', 'dist'])
+        return
+
     raise Exception('no known build tools found')
 
 
