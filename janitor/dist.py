@@ -84,7 +84,8 @@ def run_dist_in_chroot(session):
             apt_install(session, ['python3-setuptools'])
         if 'setuptools_scm' in setup_contents:
             note('Reference to setuptools-scm found, installing.')
-            apt_install(session, ['python3-setuptools-scm', 'git', 'mercurial'])
+            apt_install(
+                session, ['python3-setuptools-scm', 'git', 'mercurial'])
 
         if os.stat('setup.py').st_mode & stat.S_IEXEC:
             apt_install(session, ['python'])
@@ -115,7 +116,8 @@ def run_dist_in_chroot(session):
                          'assuming distinkt.')
                     # TODO(jelmer): install via apt if possible
                     session.check_call(
-                        ['cpan', 'install', value.decode().strip("'")])
+                        ['cpan', 'install', value.decode().strip("'")],
+                        user='root')
                     session.check_call(['distinkt-dist'])
         # Default to invoking Dist::Zilla
         note('Found dist.ini, assuming dist-zilla.')
