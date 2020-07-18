@@ -40,12 +40,9 @@ Depends: brz-debian,
          quilt,
          ${misc:Depends},
          ${python3:Depends}
-Recommends: libdist-zilla-perl,
-            postgresql-server-dev-all,
+Recommends: postgresql-server-dev-all,
             gnome-pkg-tools,
-            python3-toml,
-            php-pear,
-            php-horde-core
+            python3-toml
 Architecture: all
 Description: Worker for the Debian janitor
 
