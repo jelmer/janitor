@@ -98,6 +98,9 @@ def run_dist_in_chroot(session):
                         value.strip().startswith(b"'Dist::Inkt")):
                     note('Found Dist::Inkt section in dist.ini, '
                          'assuming distinkt.')
+                    # TODO(jelmer): install via apt if possible
+                    session.check_call(
+                        ['cpan', 'install', value.decode().strip("'")])
                     session.check_call(['distinkt-dist'])
         # Default to invoking Dist::Zilla
         note('Found dist.ini, assuming dist-zilla.')
