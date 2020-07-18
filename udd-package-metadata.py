@@ -99,10 +99,9 @@ async def main():
 
     for name, version in removals.items():
         pl = PackageList()
-        removal = Removal()
+        removal = pl.removal.add()
         removal.name = name
         removal.version = str(version)
-        pl.removal.append(removal)
         print(pl)
 
     async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
@@ -110,7 +109,7 @@ async def main():
          vcswatch_version) in iter_packages_with_metadata(
                     udd, args.packages):
         pl = PackageList()
-        package = PackageMetadata()
+        package = pl.package.add()
         package.name = name
         package.maintainer_email = maintainer_email
         package.uploader_email.extend(extract_uploader_emails(uploaders))
@@ -135,7 +134,6 @@ async def main():
             package.removed = False
         else:
             package.removed = Version(sid_version) <= removals[name]
-        pl.package.append(package)
         print(pl)
 
 if __name__ == '__main__':
