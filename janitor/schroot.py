@@ -25,6 +25,7 @@ class Session(object):
     def __init__(self, chroot):
         self.chroot = chroot
         self._location = None
+        self._cwd = None
 
     def _get_location(self):
         return subprocess.check_output(
@@ -44,6 +45,9 @@ class Session(object):
         self._end_session()
         return False
 
+    def chdir(self, cwd):
+        self._cwd = cwd
+
     @property
     def location(self):
         if self._location is None:
@@ -53,6 +57,8 @@ class Session(object):
     def _run_argv(self, argv: List[str], cwd: Optional[str] = None,
                   user: Optional[str] = None):
         base_argv = ['schroot', '-r', '-c', 'session:' + self.session_id]
+        if cwd is None:
+            cwd = self._cwd
         if cwd is not None:
             base_argv.extend(['-d', cwd])
         if user is not None:
