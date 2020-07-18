@@ -16,6 +16,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from breezy.export import export
+from breezy.tree import Tree
+from breezy.workingtree import WorkingTree
 from debian.deb822 import Deb822
 from janitor.schroot import Session
 from janitor.trace import note
@@ -23,6 +25,7 @@ import os
 import shutil
 import stat
 import tempfile
+from typing import Optional
 from breezy.plugins.debian.repack_tarball import get_filetype
 
 
@@ -120,8 +123,9 @@ def run_dist_in_chroot(session):
 
 
 def create_dist_schroot(
-        tree, subdir, target_filename, packaging_tree, chroot,
-        include_controldir=True):
+        tree: Tree, target_filename: str,
+        chroot: str, packaging_tree: Optional[Tree] = None,
+        include_controldir: bool = True, subdir: Optional[str] = None) -> bool:
     if subdir is None:
         subdir = 'package'
     with Session(chroot) as session:
@@ -136,10 +140,13 @@ def create_dist_schroot(
         if not include_controldir:
             export(tree, export_directory, 'dir', subdir)
         else:
-            tree.branch.controldir.sprout(
+            with tree.lock_read():
+                if isinstance(tree, WorkingTree):
+                    tree = tree.basis_tree()
+            tree._repository.controldir.sprout(
                 export_directory,
                 create_tree_if_local=True,
-                source_branch=tree.branch)
+                revision_id=tree.get_revision_id())
 
         existing_files = os.listdir(export_directory)
 
@@ -153,11 +160,12 @@ def create_dist_schroot(
 
         new_files = os.listdir(export_directory)
         diff_files = set(new_files) - set(existing_files)
-        diff = [n for n in diff_files if get_filetype(n) is not None]
+        diff = set([n for n in diff_files if get_filetype(n) is not None])
         if len(diff) == 1:
-            note('Found tarball %s in package directory.', diff[0])
+            fn = diff.pop()
+            note('Found tarball %s in package directory.', fn)
             shutil.copy(
-                os.path.join(export_directory, diff[0]),
+                os.path.join(export_directory, fn),
                 target_filename)
             return True
         if 'dist' in diff_files:
@@ -186,12 +194,14 @@ if __name__ == '__main__':
     from breezy.workingtree import WorkingTree
     import breezy.bzr
     import breezy.git
+    import sys
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--chroot', default='unstable-amd64-sbuild', type=str,
         help='Name of chroot to use')
     parser.add_argument(
-        'directory', default='.', type=str,
+        'directory', default='.', type=str, nargs='?',
         help='Directory with upstream source.')
     parser.add_argument(
         '--packaging-directory', type=str,
@@ -213,6 +223,11 @@ if __name__ == '__main__':
         target_filename = args.target_filename or 'dist.tar.gz'
         subdir = None
 
-    create_dist_schroot(
-        tree, subdir, os.path.abspath(target_filename), packaging_tree,
-        args.chroot)
+    ret = create_dist_schroot(
+        tree, subdir=subdir, target_filename=os.path.abspath(target_filename),
+        packaging_tree=packaging_tree,
+        chroot=args.chroot)
+    if ret:
+        sys.exit(0)
+    else:
+        sys.exit(1)
