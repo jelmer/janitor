@@ -479,7 +479,7 @@ class NewUpstreamWorker(SubWorker):
                         tree, subdir=package, target_filename=target_filename,
                         packaging_tree=local_tree, chroot=self.args.chroot)
                 except Exception as e:
-                    traceback.print_last()
+                    traceback.print_exc()
                     raise DistCommandFailed(str(e))
 
             try:
