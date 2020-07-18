@@ -66,6 +66,8 @@ def run_dist_in_chroot(session):
         with open('pyproject.toml', 'r') as pf:
             pyproject = toml.load(pf)
         if 'poetry' in pyproject.get('tool', []):
+            apt_install(session, ['python3-venv', 'python3-pip'])
+            session.check_call(['pip3', 'install', 'poetry'])
             session.check_call(['poetry', 'build', '-f', 'sdist'])
             return
 
