@@ -120,7 +120,8 @@ def run_dist_in_chroot(session):
 
 
 def create_dist_schroot(
-        tree, subdir, target_filename, packaging_tree, chroot):
+        tree, subdir, target_filename, packaging_tree, chroot,
+        include_controldir=True):
     if subdir is None:
         subdir = 'package'
     with Session(chroot) as session:
@@ -132,7 +133,13 @@ def create_dist_schroot(
         reldir = '/' + os.path.relpath(directory, session.location)
 
         export_directory = os.path.join(directory, subdir)
-        export(tree, export_directory, 'dir', subdir)
+        if not include_controldir:
+            export(tree, export_directory, 'dir', subdir)
+        else:
+            tree.branch.controldir.sprout(
+                export_directory,
+                create_tree_if_local=True,
+                source_branch=tree.branch)
 
         existing_files = os.listdir(export_directory)
 
