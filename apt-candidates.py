@@ -21,7 +21,7 @@ from debian.deb822 import Sources
 from aiohttp import ClientSession
 from email.utils import parseaddr
 import gzip
-from janitor.candidates_pb2 import CandidateList, Candidate
+from janitor.candidates_pb2 import CandidateList
 
 
 async def iter_sources(url):
@@ -63,11 +63,10 @@ async def main():
                 continue
             for suite in args.suite:
                 cl = CandidateList()
-                candidate = Candidate()
+                candidate = cl.candidate.add()
                 candidate.suite = suite
                 candidate.package = source['Package']
                 candidate.value = args.value
-                cl.candidate.append(candidate)
                 print(cl)
 
 
