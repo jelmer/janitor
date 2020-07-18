@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS upstream (
 CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
 CREATE DOMAIN package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS package (
-   name package_name not null,
+   name package_name not null primary key,
    distribution distribution_name not null,
    branch_url text,
    subpath text,
