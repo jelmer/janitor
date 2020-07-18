@@ -78,6 +78,7 @@ def run_dist_in_chroot(session):
                 'python3', 'python3-setuptools',
                 'python3-setuptools-scm'])
         if os.stat('setup.py').st_mode & stat.S_IEXEC:
+            apt_install(session, ['python'])
             session.check_call(['./setup.py', 'sdist'])
         else:
             session.check_call(['python3', './setup.py', 'sdist'])
