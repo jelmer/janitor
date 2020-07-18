@@ -88,17 +88,20 @@ async def main():
         if 'ubuntu' not in sp.source_package_version:
             continue
         ps = parentseries.main_archive.getPublishedSources(source_name=sp.source_package_name, status='Published')
-        if len(ps):
-            continue
         pl = PackageList()
-        package = pl.package.add()
-        package.name = sp.source_package_name
-        package.vcs_type = 'Git'
-        package.vcs_url = 'https://git.launchpad.net/ubuntu/+source/ubuntu-dev-tools -b ubuntu/devel'
-        package.vcs_browser = 'https://code.launchpad.net/~usd-import-team/ubuntu/+source/%s/+git/%s/+ref/ubuntu/devel' % (
-            package.name, package.name)
-        package.archive_version = sp.source_package_version
-        package.removed = False
+        if len(ps):
+            removal = pl.removal.add()
+            removal.name = sp.source_package_name
+            removal.version = sp.source_package_version
+        else:
+            package = pl.package.add()
+            package.name = sp.source_package_name
+            package.vcs_type = 'Git'
+            package.vcs_url = 'https://git.launchpad.net/ubuntu/+source/ubuntu-dev-tools -b ubuntu/devel'
+            package.vcs_browser = 'https://code.launchpad.net/~usd-import-team/ubuntu/+source/%s/+git/%s/+ref/ubuntu/devel' % (
+                package.name, package.name)
+            package.archive_version = sp.source_package_version
+            package.removed = False
         print(pl)
 
 
