@@ -22,21 +22,27 @@ from typing import Optional, List
 
 class Session(object):
 
-    def __init__(self, chroot):
+    _cwd: Optional[str]
+    _location: Optional[str]
+    chroot: str
+
+    def __init__(self, chroot: str):
+        if not isinstance(chroot, str):
+            raise TypeError('not a valid chroot: %r' % chroot)
         self.chroot = chroot
         self._location = None
         self._cwd = None
 
-    def _get_location(self):
+    def _get_location(self) -> str:
         return subprocess.check_output(
             ['schroot', '--location', '-c', 'session:' + self.session_id
              ]).strip().decode()
 
-    def _end_session(self):
+    def _end_session(self) -> None:
         subprocess.check_output(
             ['schroot', '-c', 'session:' + self.session_id, '-e'])
 
-    def __enter__(self):
+    def __enter__(self) -> 'Session':
         self.session_id = subprocess.check_output(
             ['schroot', '-c', self.chroot, '-b']).strip().decode()
         return self
@@ -45,11 +51,11 @@ class Session(object):
         self._end_session()
         return False
 
-    def chdir(self, cwd):
+    def chdir(self, cwd: str) -> None:
         self._cwd = cwd
 
     @property
-    def location(self):
+    def location(self) -> str:
         if self._location is None:
             self._location = self._get_location()
         return self._location
