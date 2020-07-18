@@ -78,7 +78,7 @@ def run_dist_in_chroot(session):
         note('Found setup.py, assuming python project.')
         apt_install(
             session, [
-                'python3', 'python3-setuptools',
+                'python3', 'python3-pip', 'python3-setuptools',
                 'python3-setuptools-scm'])
         if os.stat('setup.py').st_mode & stat.S_IEXEC:
             apt_install(session, ['python'])
