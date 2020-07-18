@@ -760,7 +760,7 @@ def fix_missing_php_class(
 def fix_missing_jdk_file(
         tree, error, context, committer=None, update_changelog=True,
         subpath=''):
-    path = error.jdk_path + '.*/' % error.filename
+    path = error.jdk_path + '.*/' + error.filename
     package = get_package_for_paths([path], regex=True)
     if package is None:
         warning('no package found for %s (JDK: %s) - regex %s',
