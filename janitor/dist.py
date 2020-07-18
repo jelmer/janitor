@@ -89,7 +89,7 @@ def run_dist_in_chroot(session):
 
     if os.path.exists('setup.cfg'):
         note('Found setup.cfg, assuming python project.')
-        apt_install(session, ['python3-pep517'])
+        apt_install(session, ['python3-pep517', 'python3-pip'])
         session.check_call(['python3', '-m', 'pep517.build', '-s', '.'])
         return
 
