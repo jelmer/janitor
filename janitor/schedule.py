@@ -190,9 +190,12 @@ async def add_to_queue(
     popcon = {k: (v or 0) for (k, v) in await state.popcon(conn)}
     removed = set(p.name for p in await state.iter_packages(conn)
                   if p.removed)
-    max_inst = max([(v or 0) for v in popcon.values()])
-    if max_inst:
-        trace.note('Maximum inst count: %d', max_inst)
+    if popcon:
+        max_inst = max([(v or 0) for v in popcon.values()])
+        if max_inst:
+            trace.note('Maximum inst count: %d', max_inst)
+    else:
+        max_inst = None
     for package, context, command, suite, value, success_chance in todo:
         assert package is not None
         assert value > 0, "Value: %s" % value
