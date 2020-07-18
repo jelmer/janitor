@@ -78,14 +78,22 @@ def run_dist_in_chroot(session):
         note('Found setup.py, assuming python project.')
         apt_install(session, ['python3', 'python3-pip'])
         with open('setup.py', 'r') as f:
-            setup_contents = f.read()
-        if 'setuptools' in setup_contents:
+            setup_py_contents = f.read()
+        try:
+            with open('setup.cfg', 'r') as f:
+                setup_cfg_contents = f.read()
+        except FileNotFoundError:
+            setup_cfg_contents = ''
+        if 'setuptools' in setup_py_contents:
             note('Reference to setuptools found, installing.')
             apt_install(session, ['python3-setuptools'])
-        if 'setuptools_scm' in setup_contents:
+        if ('setuptools_scm' in setup_py_contents or
+                'setuptools_scm' in setup_cfg_contents):
             note('Reference to setuptools-scm found, installing.')
             apt_install(
                 session, ['python3-setuptools-scm', 'git', 'mercurial'])
+
+        # TODO(jelmer): Install setup_requires
 
         if os.stat('setup.py').st_mode & stat.S_IEXEC:
             apt_install(session, ['python'])
