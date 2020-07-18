@@ -454,6 +454,9 @@ class NewUpstreamWorker(SubWorker):
         subparser = argparse.ArgumentParser(
             prog='new-upstream', parents=[common_parser])
         subparser.add_argument(
+            '--chroot', type=str, help="Name of chroot",
+            default=os.environ.get('CHROOT'))
+        subparser.add_argument(
             '--snapshot',
             help='Merge a new upstream snapshot rather than a release',
             action='store_true')
@@ -468,12 +471,18 @@ class NewUpstreamWorker(SubWorker):
                     'control files live in root rather than debian/ '
                     '(LarstIQ mode)')
 
+            def create_dist(tree, package, version, target_filename):
+                from janitor.dist import create_dist_schroot
+                return create_dist_schroot(
+                    tree, subdir=package, target_filename=target_filename,
+                    packaging_tree=local_tree, chroot=self.args.chroot)
+
             try:
                 result = merge_upstream(
                     tree=local_tree, subpath=(subpath or ''),
                     snapshot=self.args.snapshot, committer=self.committer,
                     trust_package=TRUST_PACKAGE,
-                    dist_command=DEFAULT_DIST_COMMAND)
+                    create_dist=create_dist)
             except UpstreamAlreadyImported as e:
                 report_context(e.version)
                 metadata['upstream_version'] = e.version
