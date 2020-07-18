@@ -84,7 +84,7 @@ def run_dist_in_chroot(session):
             apt_install(session, ['python3-setuptools'])
         if 'setuptools_scm' in setup_contents:
             note('Reference to setuptools-scm found, installing.')
-            apt_install(session, ['python3-setuptools-scm', 'git', 'hg'])
+            apt_install(session, ['python3-setuptools-scm', 'git', 'mercurial'])
 
         if os.stat('setup.py').st_mode & stat.S_IEXEC:
             apt_install(session, ['python'])
