@@ -20,7 +20,7 @@
 from debian.deb822 import Sources
 from aiohttp import ClientSession
 import gzip
-from janitor.package_metadata_pb2 import PackageList, PackageMetadata
+from janitor.package_metadata_pb2 import PackageList
 from typing import List, Optional
 from email.utils import parseaddr
 from breezy.plugins.debian.directory import source_package_vcs
@@ -67,7 +67,7 @@ async def main():
     for url in args.url:
         async for source in iter_sources(url):
             pl = PackageList()
-            package = PackageMetadata()
+            package = pl.package.add()
             package.name = source['Package']
             package.maintainer_email = parseaddr(source['Maintainer'])[1]
             if (args.maintainer and
@@ -86,7 +86,6 @@ async def main():
                 package.vcs_browser = source['Vcs-Browser']
             package.archive_version = source['Version']
             package.removed = False
-            pl.package.append(package)
             print(pl)
 
 
