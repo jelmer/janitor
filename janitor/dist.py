@@ -79,10 +79,12 @@ def run_dist_in_chroot(session):
         apt_install(session, ['python3', 'python3-pip'])
         with open('setup.py', 'r') as f:
             setup_contents = f.read()
-            if 'setuptools' in setup_contents:
-                apt_install(session, ['python3-setuptools'])
-            if 'setuptools_scm' in setup_contents:
-                apt_install(session, ['python3-setuptools-scm', 'git', 'hg'])
+        if 'setuptools' in setup_contents:
+            note('Reference to setuptools found, installing.')
+            apt_install(session, ['python3-setuptools'])
+        if 'setuptools_scm' in setup_contents:
+            note('Reference to setuptools-scm found, installing.')
+            apt_install(session, ['python3-setuptools-scm', 'git', 'hg'])
 
         if os.stat('setup.py').st_mode & stat.S_IEXEC:
             apt_install(session, ['python'])
