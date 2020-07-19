@@ -39,12 +39,16 @@ from breezy.config import (
     GlobalStack,
     PlainTextCredentialStore,
     )
-from breezy.errors import NotBranchError
+from breezy.errors import (
+    NotBranchError,
+    InvalidHttpResponse,
+    )
 from breezy.controldir import ControlDir
 from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
 
+from janitor.sbuild_log import Problem
 from janitor.trace import note
 from janitor.worker import (
     WorkerFailure,
@@ -142,6 +146,24 @@ def push_branch(
         overwrite=overwrite, name=branch_name)
 
 
+class ResultPushFailed(Problem):
+
+    kind = 'result-push-failed'
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and 
+                other.inner == other.inner)
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.inner)
+
+    def __str__(self):
+        return "Failed to push result branch: %s" % self.inner
+
+
 def run_worker(branch_url, subpath, vcs_type, env,
                command, output_directory, metadata,
                build_command=None,
@@ -173,11 +195,14 @@ def run_worker(branch_url, subpath, vcs_type, env,
                possible_transports=possible_transports) as (ws, result):
             enable_tag_pushing(ws.local_tree.branch)
             note('Pushing result branch to %s', result_branch_url)
-            push_branch(
-                ws.local_tree.branch,
-                result_branch_url, overwrite=True,
-                vcs_type=vcs_type.lower(),
-                possible_transports=possible_transports)
+            try:
+                push_branch(
+                    ws.local_tree.branch,
+                    result_branch_url, overwrite=True,
+                    vcs_type=vcs_type.lower(),
+                    possible_transports=possible_transports)
+            except InvalidHttpResponse as e:
+                return ResultPushFailed(e)
             note('Pushing packaging branch cache to %s',
                  cached_branch_url)
             push_branch(
