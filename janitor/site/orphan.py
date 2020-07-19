@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from . import state, html_template
+from . import state
 from .common import generate_pkg_context
 
 
