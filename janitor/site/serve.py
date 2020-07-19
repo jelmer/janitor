@@ -116,6 +116,9 @@ class ForwardedResource(PrefixResource):
                 raise web.HTTPUnauthorized(headers={
                     'WWW-Authenticate': 'Basic Realm="Debian Janitor"'})
 
+            if status == 502:
+                warning('Upstream URL %s returned 502', url)
+
             if status != 200:
                 raise web.HTTPBadGateway(
                     text='Upstream server returned %d' % status)
@@ -265,16 +268,13 @@ if __name__ == '__main__':
         from .orphan import generate_candidates
         return await generate_candidates(request.app.database)
 
-    async def handle_merge_proposals(suite, request):
+    @html_template(
+        'merge-proposals.html',
+        headers={'Cache-Control': 'max-age=60'})
+    async def handle_merge_proposals(request):
         from .merge_proposals import write_merge_proposals
-        template = request.app.jinja_env.get_template('merge-proposals.html')
-        vs = await write_merge_proposals(request.app.database, suite)
-        update_vars_from_request(vs, request)
-        text = await template.render_async(**vs)
-        return web.Response(
-            content_type='text/html',
-            text=text,
-            headers={'Cache-Control': 'max-age=60'})
+        suite = request.match_info['suite']
+        return await write_merge_proposals(request.app.database, suite)
 
     async def handle_apt_repo(suite, request):
         from .apt_repo import write_apt_repo
@@ -493,18 +493,15 @@ if __name__ == '__main__':
             content_type='text/plain', text=text,
             headers={'Cache-Control': 'max-age=3600'})
 
-    async def handle_ready_proposals(suite, request):
+    @html_template(
+        'ready-list.html',
+        headers={'Cache-Control': 'max-age=60'})
+    async def handle_ready_proposals(request):
         from .pkg import generate_ready_list
-        template = request.app.jinja_env.get_template('ready-list.html')
+        suite = request.match_info.get('suite')
         review_status = request.query.get('review_status')
-        vs = await generate_ready_list(
+        return await generate_ready_list(
             request.app.database, suite, review_status)
-        update_vars_from_request(vs, request)
-        text = await template.render_async(**vs)
-        return web.Response(
-            content_type='text/html',
-            text=text,
-            headers={'Cache-Control': 'max-age=60'})
 
     @html_template(
         'lintian-fixes-package.html',
@@ -751,22 +748,23 @@ if __name__ == '__main__':
     app.router.add_get(
         '/orphan/candidates', handle_orphan_candidates,
         name='orphan-candidates')
-    for suite in ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
-                  'multiarch-fixes', 'orphan']:
-        app.router.add_get(
-            '/%s/merge-proposals' % suite,
-            functools.partial(handle_merge_proposals, suite),
-            name='%s-merge-proposals' % suite)
-        app.router.add_get(
-            '/%s/ready' % suite,
-            functools.partial(handle_ready_proposals, suite),
-            name='%s-ready' % suite)
-        app.router.add_get(
-            '/%s/maintainer' % suite, handle_maintainer_list,
-            name='%s-maintainer-list' % suite)
-        app.router.add_get(
-            '/%s/pkg/' % suite, handle_pkg_list,
-            name='%s-package-list' % suite)
+    SUITE_REGEX = '|'.join(
+            ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
+             'multiarch-fixes', 'orphan'])
+    app.router.add_get(
+        '/{suite:%s}/merge-proposals' % SUITE_REGEX,
+        handle_merge_proposals,
+        name='suite-merge-proposals')
+    app.router.add_get(
+        '/{suite:%s}/ready' % SUITE_REGEX,
+        handle_ready_proposals,
+        name='suite-ready')
+    app.router.add_get(
+        '/{suite:%s}/maintainer' % SUITE_REGEX, handle_maintainer_list,
+        name='suite-maintainer-list')
+    app.router.add_get(
+        '/{suite:%s}/pkg/' % SUITE_REGEX, handle_pkg_list,
+        name='suite-package-list')
     apt_location = config.apt_location or args.archiver_url
     app.router.register_resource(
         ForwardedResource('dists', apt_location.rstrip('/') + '/dists'))
@@ -850,7 +848,7 @@ if __name__ == '__main__':
     app.router.add_get(
         '/cupboard/publish', handle_publish_history, name='publish-history')
     app.router.add_get(
-        '/cupboard/ready', functools.partial(handle_ready_proposals, None),
+        '/cupboard/ready', handle_ready_proposals,
         name='cupboard-ready')
     app.router.add_get(
         '/cupboard/pkg/', handle_pkg_list, name='package-list')
