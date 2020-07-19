@@ -265,11 +265,16 @@ if __name__ == '__main__':
         from .orphan import generate_candidates
         return await generate_candidates(request.app.database)
 
-    @html_template(
-        'merge-proposals.html', headers={'Cache-Control': 'max-age=60'})
     async def handle_merge_proposals(suite, request):
         from .merge_proposals import write_merge_proposals
-        return await write_merge_proposals(request.app.database, suite)
+        template = request.app.jinja_env.get_template('merge-proposals.html')
+        vs = await write_merge_proposals(request.app.database, suite)
+        update_vars_from_request(vs, request)
+        text = await template.render_async(**vs)
+        return web.Response(
+            content_type='text/html',
+            text=text,
+            headers={'Cache-Control': 'max-age=60'})
 
     async def handle_apt_repo(suite, request):
         from .apt_repo import write_apt_repo
