@@ -67,6 +67,9 @@ Depends: python3-aiohttp,
 Architecture: all
 Description: Runner for the Debian janitor
 
+Package: janitor-publisher
+Depends: python3-aiohttp-wsgi, python3-klaus
+
 Package: janitor-site
 Depends: diffoscope,
          libjs-chart.js,

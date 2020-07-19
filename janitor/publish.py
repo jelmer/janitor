@@ -17,6 +17,7 @@
 
 """Publishing VCS changes."""
 
+from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 from datetime import datetime, timedelta
 from dulwich.repo import Repo as DulwichRepo
@@ -655,6 +656,75 @@ def _git_check_service(service: str, allow_writes: bool = False):
     raise web.HTTPForbidden(text='Unsupported service %s' % service)
 
 
+async def handle_klaus(request):
+    package = request.match_info['package']
+
+    repo = await _git_open_repo(
+        request.app.vcs_manager, request.app.db, package)
+
+    from klaus import views, utils, KLAUS_VERSION
+    from flask import Flask
+    from klaus.repo import FancyRepo
+
+    class Klaus(Flask):
+
+        def __init__(self, package, repo):
+            super(Klaus, self).__init__('klaus')
+            self.package = package
+            self.valid_repos = {
+                package: FancyRepo(repo._transport.local_abspath('.'))}
+
+        def should_use_ctags(self, git_repo, git_commit):
+            return False
+
+        def create_jinja_environment(self):
+            """Called by Flask.__init__"""
+            env = super(Klaus, self).create_jinja_environment()
+            for func in [
+                    'force_unicode',
+                    'timesince',
+                    'shorten_sha1',
+                    'shorten_message',
+                    'extract_author_name',
+                    'formattimestamp']:
+                env.filters[func] = getattr(utils, func)
+
+            env.globals['KLAUS_VERSION'] = KLAUS_VERSION
+            env.globals['USE_SMARTHTTP'] = False
+            env.globals['SITE_NAME'] = 'Package list'
+            return env
+
+    app = Klaus(package, repo)
+
+    for endpoint, rule in [
+            ('blob',        '/blob/'),
+            ('blob',        '/blob/<rev>/<path:path>'),
+            ('blame',       '/blame/'),
+            ('blame',       '/blame/<rev>/<path:path>'),
+            ('raw',         '/raw/<path:path>/'),
+            ('raw',         '/raw/<rev>/<path:path>'),
+            ('submodule',   '/submodule/<rev>/'),
+            ('submodule',   '/submodule/<rev>/<path:path>'),
+            ('commit',      '/commit/<path:rev>/'),
+            ('patch',       '/commit/<path:rev>.diff'),
+            ('patch',       '/commit/<path:rev>.patch'),
+            ('index',       '/'),
+            ('index',       '/<path:rev>'),
+            ('history',     '/tree/<rev>/'),
+            ('history',     '/tree/<rev>/<path:path>'),
+            ('download',    '/tarball/<path:rev>/'),
+            ('repo_list',   '/..'),
+          ]:
+        app.add_url_rule(
+            rule, view_func=getattr(views, endpoint),
+            defaults={'repo': package})
+
+    from aiohttp_wsgi import WSGIHandler
+    wsgi_handler = WSGIHandler(app)
+
+    return await wsgi_handler(request)
+
+
 async def dulwich_refs(request):
     package = request.match_info['package']
 
@@ -790,7 +860,8 @@ async def run_web_server(listen_addr: str, port: int, rate_limiter: RateLimiter,
                          dry_run: bool, require_binary_diff: bool = False,
                          push_limit: Optional[int] = None,
                          modify_mp_limit: Optional[int] = None):
-    app = web.Application()
+    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+    app = web.Application(middlewares=[trailing_slash_redirect])
     app.vcs_manager = vcs_manager
     app.db = db
     app.rate_limiter = rate_limiter
@@ -808,6 +879,9 @@ async def run_web_server(listen_addr: str, port: int, rate_limiter: RateLimiter,
         dulwich_service)
     app.router.add_get(
         "/git/{package}/info/refs", dulwich_refs)
+    app.router.add_get(
+        "/git/{package}/{path_info:.*}",
+        handle_klaus)
     app.router.add_post(
         "/bzr/{package}/.bzr/smart", bzr_backend)
     app.router.add_post(
