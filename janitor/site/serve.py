@@ -912,6 +912,11 @@ if __name__ == '__main__':
             handle_static_file,
             '/usr/share/javascript/jquery/jquery.%sjs' % minified))
     app.router.add_get(
+        '/_static/jquery.typehead.js', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/jquery-typeahead/jquery.typeahead.%sjs'
+            % minified))
+    app.router.add_get(
         '/_static/moment.js', functools.partial(
             handle_static_file,
             '/usr/share/javascript/moment/moment.%sjs' % minified))
