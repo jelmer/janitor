@@ -51,7 +51,7 @@ document.getElementById("result-code-chart").onclick = function(e) {
 
 </script>
 
-<table class="docutils" border="1">
+<table id="result-code-table" class="docutils display" border="1">
 <colgroup>
 <col width="95%">
 <col width="5%">
@@ -73,5 +73,6 @@ document.getElementById("result-code-chart").onclick = function(e) {
 {% endfor %}
 </tbody>
 </table>
+	<script>$(function(){ $('#result-code-table').DataTable({"order": [[ 1, "desc" ]], "pageLength": 200, "lengthMenu": [50, 200]}); });</script>
 </div>
 {% endblock %}
