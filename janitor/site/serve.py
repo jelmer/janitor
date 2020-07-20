@@ -893,6 +893,8 @@ if __name__ == '__main__':
         app.router.add_get(
             '/_static/%s' % entry.name,
             functools.partial(handle_static_file, entry.path))
+    app.router.add_static(
+        '/_static/images/datatables', '/usr/share/javascript/jquery-datatables/images')
     app.router.add_get(
         '/janitor.asc', functools.partial(
             handle_static_file,
@@ -915,6 +917,11 @@ if __name__ == '__main__':
         '/_static/jquery.typehead.js', functools.partial(
             handle_static_file,
             '/usr/share/javascript/jquery-typeahead/jquery.typeahead.%sjs'
+            % minified))
+    app.router.add_get(
+        '/_static/jquery.datatables.js', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/jquery-datatables/jquery.datatables.%sjs'
             % minified))
     app.router.add_get(
         '/_static/moment.js', functools.partial(
