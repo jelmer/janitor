@@ -6,7 +6,7 @@
 <div class="section" id="{{ code }}">
 <h1>{{ code }}</h1>
 {{ result_code_explanation(code) }}
-<table class="docutils" border="1">
+<table id="result-codes-t" class="display docutils" border="1">
 <colgroup>
 <col width="31%">
 <col width="6%">
@@ -30,5 +30,6 @@
 {% endfor %}
 </tbody>
 </table>
+<script>$(document).ready(function() {$('#result-codes-t').DataTable({"pageLength": 200, "lengthMenu": [50, 200, 500, 1000, -1], "order": [2, "desc"]}); });</script>
 </div>
 {% endblock %}
