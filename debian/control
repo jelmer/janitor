@@ -74,6 +74,7 @@ Package: janitor-site
 Depends: diffoscope,
          libjs-chart.js,
          libjs-jquery,
+         libjs-jquery-datatables,
          libjs-moment,
          python3-aiohttp,
          python3-asyncpg,
