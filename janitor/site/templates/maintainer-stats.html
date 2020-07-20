@@ -19,7 +19,7 @@ tr.optin {
 
 <div name="current">
 <h2>Merge Proposals by Maintainer</h2>
-<table class="docutils" border="1">
+<table id="maintainer-stats" class="display docutils" border="1">
 <thead valign="bottom">
 <tr class="row-odd">
   <th class="head">Maintainer</th>
@@ -40,6 +40,7 @@ tr.optin {
 
 </tbody>
 </table>
+<script>$(function(){$('#maintainer-stats').DataTable({"pageLength": 200, "lengthMenu": [50, 100, 200, 1000]});});</script>
 
 </div>
 {% endblock %}

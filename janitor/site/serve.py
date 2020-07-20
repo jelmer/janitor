@@ -276,7 +276,8 @@ if __name__ == '__main__':
         suite = request.match_info['suite']
         return await write_merge_proposals(request.app.database, suite)
 
-    async def handle_apt_repo(suite, request):
+    async def handle_apt_repo(request):
+        suite = request.match_info['suite']
         from .apt_repo import write_apt_repo
         async with request.app.database.acquire() as conn:
             template = request.app.jinja_env.get_template(suite + '.html')
@@ -608,8 +609,9 @@ if __name__ == '__main__':
     @html_template(
         'new-upstream-package.html',
         headers={'Cache-Control': 'max-age=600'})
-    async def handle_new_upstream_pkg(suite, request):
+    async def handle_new_upstream_pkg(request):
         from .new_upstream import generate_pkg_file
+        suite = request.match_info['suite']
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
@@ -645,8 +647,9 @@ if __name__ == '__main__':
     @html_template(
         'new-upstream-candidates.html',
         headers={'Cache-Control': 'max-age=600'})
-    async def handle_new_upstream_candidates(suite, request):
+    async def handle_new_upstream_candidates(request):
         from .new_upstream import generate_candidates
+        suite = request.match_info['suite']
         return await generate_candidates(request.app.database, suite)
 
     @html_template('rejected.html')
@@ -786,7 +789,7 @@ if __name__ == '__main__':
         '/multiarch-fixes/pkg/{pkg}/{run_id}', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package-run')
     app.router.add_get(
-        '/unchanged', functools.partial(handle_apt_repo, 'unchanged'),
+        '/{suite:unchanged}', handle_apt_repo,
         name='unchanged-start')
     app.router.add_get(
         '/lintian-fixes/pkg/{pkg}/', handle_lintian_fixes_pkg,
@@ -814,22 +817,22 @@ if __name__ == '__main__':
     app.router.add_get(
         '/lintian-fixes/stats', handle_lintian_fixes_stats,
         name='lintian-fixes-stats')
-    for suite in ['fresh-releases', 'fresh-snapshots']:
-        app.router.add_get(
-            '/%s/' % suite, functools.partial(handle_apt_repo, suite),
-            name='%s-start' % suite)
-        app.router.add_get(
-            '/%s/pkg/{pkg}/' % suite,
-            functools.partial(handle_new_upstream_pkg, suite),
-            name='%s-package' % suite)
-        app.router.add_get(
-            '/%s/pkg/{pkg}/{run_id}' % suite,
-            functools.partial(handle_new_upstream_pkg, suite),
-            name='%s-run' % suite)
-        app.router.add_get(
-            '/%s/candidates' % suite,
-            functools.partial(handle_new_upstream_candidates, suite),
-            name='%s-candidates' % suite)
+    NEW_UPSTREAM_REGEX = 'fresh-(releases|snapshots)'
+    app.router.add_get(
+        '/{suite:%s}/' % NEW_UPSTREAM_REGEX, handle_apt_repo,
+        name='new-upstream-start')
+    app.router.add_get(
+        '/{suite:%s}/pkg/{pkg}/' % NEW_UPSTREAM_REGEX,
+        handle_new_upstream_pkg,
+        name='new-upstream-package')
+    app.router.add_get(
+        '/{suite:%s}/pkg/{pkg}/{run_id}' % NEW_UPSTREAM_REGEX,
+        handle_new_upstream_pkg,
+        name='new-upstream-run')
+    app.router.add_get(
+        '/{suite:%s}/candidates' % NEW_UPSTREAM_REGEX,
+        handle_new_upstream_candidates,
+        name='new-upstream-candidates')
 
     app.router.add_get('/cupboard/history', handle_history, name='history')
     app.router.add_get('/cupboard/queue', handle_queue, name='queue')
@@ -914,7 +917,7 @@ if __name__ == '__main__':
             handle_static_file,
             '/usr/share/javascript/jquery/jquery.%sjs' % minified))
     app.router.add_get(
-        '/_static/jquery.typehead.js', functools.partial(
+        '/_static/jquery.typeahead.js', functools.partial(
             handle_static_file,
             '/usr/share/javascript/jquery-typeahead/jquery.typeahead.%sjs'
             % minified))
@@ -927,6 +930,10 @@ if __name__ == '__main__':
         '/_static/moment.js', functools.partial(
             handle_static_file,
             '/usr/share/javascript/moment/moment.%sjs' % minified))
+    app.router.add_get(
+        '/_static/jquery.datatables.js', functools.partial(
+            handle_static_file,
+            '/usr/share/javascript/jquery-datatables/jquery.dataTables.%sjs' % minified))
     from .api import create_app as create_api_app
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
