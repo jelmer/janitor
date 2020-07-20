@@ -8,7 +8,7 @@ $run_autopkgtest = 1;
 $autopkgtest_require_success = 1;
 $autopkgtest_root_args = '';
 $autopkgtest_opts = [ '--no-auto-control', '--', 'schroot', '%r-%a-sbuild' ];
-$lintian_opts = ['--suppress-tags', 'bad-distribution-in-changes-file,changelog-should-mention-nmu,changelog-should-mention-nmu,source-nmu-has-incorrect-version-number'];
+$lintian_opts = ['--suppress-tags', 'bad-distribution-in-changes-file,no-nmu-in-changelog,source-nmu-has-incorrect-version-number'];
 $aspcud_criteria = '-removed,-changed,-new,-count(solution,APT-Release:=/o=Debian Janitor/)';
 $build_dep_resolver = 'aspcud';
 $clean_source = 0;
