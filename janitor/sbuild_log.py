@@ -2500,6 +2500,67 @@ def parse_autopkgtest_summary(lines):
         i += 1
 
 
+class AutopkgtestTestbedSetupFailure(Problem):
+
+    kind = 'testbed-setup-failure'
+
+    def __init__(self, command, exit_status, error):
+        self.command = command
+        self.exit_status = exit_status
+        self.error = error
+
+    def __str__(self):
+        return "Error setting up testbed %r failed (%d): %s" % (
+            self.command, self.exit_status, self.error)
+
+    def __repr__(self):
+        return "%s(%r, %r, %r)" % (
+            type(self).__name__, self.command, self.exit_status, self.error)
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, type(self)) and
+            self.command == other.command and
+            self.exit_status == other.exit_status and
+            self.error == other.error)
+
+
+class ChrootNotFound(Problem):
+
+    kind = 'chroot-not-found'
+
+    def __init__(self, chroot):
+        self.chroot = chroot
+
+    def __str__(self):
+        return "Chroot not found: %s" % self.chroot
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.chroot)
+
+    def __eq__(self, other):
+        return isinstance(self, type(other)) and self.chroot == other.chroot
+
+
+def find_testbed_setup_failure(lines):
+    for i in range(len(lines)-1, 0, -1):
+        line = lines[i]
+        m = re.fullmatch(
+            r'\[(.*)\] failed \(exit status ([0-9]+), stderr \'(.*)\'\)\n',
+            line)
+        if m:
+            command = m.group(1)
+            status_code = int(m.group(2))
+            stderr = m.group(3)
+            m = re.fullmatch(r'E: (.*): Chroot not found\\n', stderr)
+            if m:
+                return (i + 1, line, ChrootNotFound(m.group(1)))
+            return (
+                i + 1, line,
+                AutopkgtestTestbedSetupFailure(command, status_code, stderr))
+    return None, None, None
+
+
 def find_autopkgtest_failure_description(
         lines: List[str]) -> Tuple[
                 Optional[int], Optional[str], Optional['Problem'],
@@ -2579,7 +2640,9 @@ def find_autopkgtest_failure_description(
 
                     if (testbed_failure_reason ==
                             'cannot send to testbed: [Errno 32] Broken pipe'):
-                        pass  # TODO(jelmer)
+                        offset, line, error = find_testbed_setup_failure(lines)
+                        if error and offset:
+                            return (offset, last_test, error, line)
                     if (testbed_failure_reason ==
                             'apt repeatedly failed to download packages'):
                         offset, line, error = find_apt_get_failure(lines)
