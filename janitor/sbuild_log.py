@@ -2112,6 +2112,7 @@ secondary_build_failure_regexps = [
     r'Failed [0-9]+\/[0-9]+ test programs. [0-9]+/[0-9]+ subtests failed.',
     r'Original error was: (.*)',
     r'[^:]+: error: (.*)',
+    r'[^:]+:[0-9]+: error: (.*)',
     r'^FAILED \(.*\)',
     r'cat: (.*): No such file or directory',
     # Random Python errors
