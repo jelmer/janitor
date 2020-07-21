@@ -31,6 +31,7 @@ from janitor.trace import note, warning
 import os
 import shutil
 import stat
+import sys
 import tempfile
 from typing import Optional
 from breezy.plugins.debian.repack_tarball import get_filetype
