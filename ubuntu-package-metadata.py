@@ -17,43 +17,10 @@
 
 """Exporting of upstream metadata from Ubuntu."""
 
-from debian.deb822 import Sources
-from aiohttp import ClientSession
-import gzip
 from janitor.package_metadata_pb2 import PackageList
 from launchpadlib.launchpad import Launchpad
 from launchpadlib.uris import LPNET_SERVICE_ROOT
 from typing import List, Optional
-from email.utils import parseaddr
-from breezy.plugins.debian.directory import source_package_vcs
-
-
-def extract_uploader_emails(uploaders: Optional[str]) -> List[str]:
-    if not uploaders:
-        return []
-    ret = []
-    for uploader in uploaders.split(','):
-        if not uploader:
-            continue
-        email = parseaddr(uploader)[1]
-        if not email:
-            continue
-        ret.append(email)
-    return ret
-
-
-async def iter_sources(url):
-    async with ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status != 200:
-                raise Exception(
-                    'URL %s returned response code %d' % (
-                        url, resp.status))
-            contents = await resp.read()
-            if url.endswith('.gz'):
-                contents = gzip.decompress(contents)
-            for source in Sources.iter_paragraphs(contents):
-                yield source
 
 
 async def main():
@@ -87,7 +54,8 @@ async def main():
             status='Published', distro_series=distroseries):
         if 'ubuntu' not in sp.source_package_version:
             continue
-        ps = parentseries.main_archive.getPublishedSources(source_name=sp.source_package_name, status='Published')
+        ps = parentseries.main_archive.getPublishedSources(
+                source_name=sp.source_package_name, status='Published')
         pl = PackageList()
         if len(ps):
             removal = pl.removal.add()
@@ -97,9 +65,12 @@ async def main():
             package = pl.package.add()
             package.name = sp.source_package_name
             package.vcs_type = 'Git'
-            package.vcs_url = 'https://git.launchpad.net/ubuntu/+source/ubuntu-dev-tools -b ubuntu/devel'
-            package.vcs_browser = 'https://code.launchpad.net/~usd-import-team/ubuntu/+source/%s/+git/%s/+ref/ubuntu/devel' % (
-                package.name, package.name)
+            package.vcs_url = (
+                'https://git.launchpad.net/ubuntu/+source/ubuntu-dev-tools '
+                '-b ubuntu/devel')
+            package.vcs_browser = (
+                'https://code.launchpad.net/~usd-import-team/ubuntu/+source'
+                '/%s/+git/%s/+ref/ubuntu/devel' % (package.name, package.name))
             package.archive_version = sp.source_package_version
             package.removed = False
         print(pl)
