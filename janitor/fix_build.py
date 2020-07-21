@@ -23,7 +23,7 @@ import os
 import re
 import subprocess
 import sys
-from typing import Iterator
+from typing import Iterator, List, Callable, Type, Tuple
 
 from debian.deb822 import (
     Deb822,
@@ -65,6 +65,7 @@ from silver_platter.debian import (
 from .build import attempt_build
 from .trace import note, warning
 from .sbuild_log import (
+    Problem,
     MissingConfigStatusInput,
     MissingPythonModule,
     MissingPythonDistribution,
@@ -96,6 +97,7 @@ from .sbuild_log import (
     AptFetchFailure,
     MissingMavenArtifacts,
     GnomeCommonMissing,
+    MissingGnomeCommonDependency,
     )
 
 
@@ -109,21 +111,42 @@ class CircularDependency(Exception):
         self.package = package
 
 
-def add_dependency(
-        tree, context, package, minimum_version=None, committer=None,
-        subpath='', update_changelog=True):
-    if context == ('build', ):
+class DependencyContext(object):
+
+    def __init__(self, tree, subpath='', committer=None,
+                 update_changelog=True):
+        self.tree = tree
+        self.subpath = subpath
+        self.committer = committer
+        self.update_changelog = update_changelog
+
+    def add_dependency(self, package, minimum_version=None):
+        raise NotImplementedError(self.add_dependency)
+
+
+class BuildDependencyContext(DependencyContext):
+
+    def add_dependency(self, package, minimum_version=None):
         return add_build_dependency(
-            tree, package, minimum_version=minimum_version,
-            committer=committer, subpath=subpath,
-            update_changelog=update_changelog)
-    elif context[0] == 'autopkgtest':
+            self.tree, package, minimum_version=minimum_version,
+            committer=self.committer, subpath=self.subpath,
+            update_changelog=self.update_changelog)
+
+
+class AutopkgtestDependencyContext(DependencyContext):
+
+    def __init__(self, testname, tree, subpath='', committer=None,
+                 update_changelog=True):
+        self.testname = testname
+        super(AutopkgtestDependencyContext, self).__init__(
+            tree, subpath, committer, update_changelog)
+
+    def add_dependency(self, package, minimum_version=None):
         return add_test_dependency(
-            tree, context[1], package, minimum_version=minimum_version,
-            committer=committer, subpath=subpath,
-            update_changelog=update_changelog)
-    else:
-        raise AssertionError('context %r invalid' % context)
+            self.tree, self.testname, package,
+            minimum_version=minimum_version,
+            committer=self.committer, subpath=self.subpath,
+            update_changelog=self.update_changelog)
 
 
 def add_build_dependency(tree, package, minimum_version=None,
@@ -442,24 +465,17 @@ def package_exists(package):
     return False
 
 
-def fix_missing_javascript_runtime(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_javascript_runtime(error, context):
     package = get_package_for_paths(
         ['/usr/bin/node', '/usr/bin/duk'],
         regex=False)
     if package is None:
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog,
-        subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_python_distribution(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
-    targeted = targeted_python_versions(tree)
+def fix_missing_python_distribution(error, context):
+    targeted = targeted_python_versions(context.tree)
     default = not targeted
 
     pypy_pkg = get_package_for_paths(
@@ -516,18 +532,14 @@ def fix_missing_python_distribution(
 
     for dep_pkg in extra_build_deps:
         assert dep_pkg is not None
-        if not add_dependency(
-                tree, context, dep_pkg, minimum_version=error.minimum_version,
-                committer=committer, update_changelog=update_changelog,
-                subpath=subpath):
+        if not context.add_dependency(
+                dep_pkg, minimum_version=error.minimum_version):
             return False
     return True
 
 
-def fix_missing_python_module(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
-    targeted = targeted_python_versions(tree)
+def fix_missing_python_module(error, context):
+    targeted = targeted_python_versions(context.tree)
     default = (not targeted)
 
     pypy_pkg = get_package_for_python_module(error.module, 'pypy')
@@ -564,31 +576,21 @@ def fix_missing_python_module(
 
     for dep_pkg in extra_build_deps:
         assert dep_pkg is not None
-        if not add_dependency(
-                tree, context, dep_pkg, error.minimum_version,
-                committer=committer, update_changelog=update_changelog,
-                subpath=subpath):
+        if not context.add_dependency(dep_pkg, error.minimum_version):
             return False
     return True
 
 
-def fix_missing_go_package(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_go_package(error, context):
     package = get_package_for_paths(
         [os.path.join('/usr/share/gocode/src', error.package, '.*')],
         regex=True)
     if package is None:
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog,
-        subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_c_header(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_c_header(error, context):
     package = get_package_for_paths(
         [os.path.join('/usr/include', error.header)], regex=False)
     if package is None:
@@ -596,14 +598,10 @@ def fix_missing_c_header(
             [os.path.join('/usr/include', '.*', error.header)], regex=True)
     if package is None:
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_pkg_config(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_pkg_config(error, context):
     package = get_package_for_paths(
         [os.path.join('/usr/lib/pkgconfig', error.module + '.pc')])
     if package is None:
@@ -613,16 +611,11 @@ def fix_missing_pkg_config(
             regex=True)
     if package is None:
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        minimum_version=error.minimum_version,
-        update_changelog=update_changelog,
-        subpath=subpath)
+    return context.add_dependency(
+        package, minimum_version=error.minimum_version)
 
 
-def fix_missing_command(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_command(error, context):
     if os.path.isabs(error.command):
         paths = [error.command]
     else:
@@ -633,27 +626,17 @@ def fix_missing_command(
     if package is None:
         note('No packages found that contain %r', paths)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog,
-        subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_file(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_file(error, context):
     package = get_package_for_paths([error.path])
     if package is None:
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog,
-        subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_sprockets_file(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_sprockets_file(error, context):
     if error.content_type == 'application/javascript':
         path = '/usr/share/.*/app/assets/javascripts/%s.js$' % error.name
     else:
@@ -662,21 +645,17 @@ def fix_missing_sprockets_file(
     package = get_package_for_paths([path], regex=True)
     if package is None:
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
 DEFAULT_PERL_PATHS = ['/usr/share/perl5']
 
 
-def fix_missing_perl_file(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_perl_file(error, context):
 
     if (error.filename == 'Makefile.PL' and
-            not tree.has_filename('Makefile.PL') and
-            tree.has_filename('dist.ini')):
+            not context.tree.has_filename('Makefile.PL') and
+            context.tree.has_filename('dist.ini')):
         # TODO(jelmer): add dist-zilla add-on to debhelper
         raise NotImplementedError
 
@@ -700,9 +679,7 @@ def fix_missing_perl_file(
             warning('perl file %s not found (paths searched for: %r).',
                     error.filename, paths)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
 def get_package_for_node_package(node_package):
@@ -713,81 +690,58 @@ def get_package_for_node_package(node_package):
     return get_package_for_paths(paths, regex=True)
 
 
-def fix_missing_node_module(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_node_module(error, context):
     package = get_package_for_node_package(error.module)
     if package is None:
         warning('no node package found for %s.',
                 error.module)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_dh_addon(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_dh_addon(error, context):
     paths = [os.path.join('/usr/share/perl5', error.path)]
     package = get_package_for_paths(paths)
     if package is None:
         warning('no package for debhelper addon %s', error.name)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def retry_apt_failure(tree, error, context, committer=None,
-                      update_changelog=True, subpath=''):
+def retry_apt_failure(error, context):
     return True
 
 
-def fix_missing_php_class(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_php_class(error, context):
     path = '/usr/share/php/%s.php' % error.php_class.replace('\\', '/')
     package = get_package_for_paths([path])
     if package is None:
         warning('no package for PHP class %s', error.php_class)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_jdk_file(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_jdk_file(error, context):
     path = error.jdk_path + '.*/' + error.filename
     package = get_package_for_paths([path], regex=True)
     if package is None:
         warning('no package found for %s (JDK: %s) - regex %s',
                 error.filename, error.jdk_path, path)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_vala_package(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_vala_package(error, context):
     path = '/usr/share/vala-[0-9.]+/vapi/%s.vapi' % error.package
     package = get_package_for_paths([path], regex=True)
     if package is None:
         warning('no file found for package %s - regex %s',
                 error.package, path)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_xml_entity(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_xml_entity(error, context):
     # Ideally we should be using the XML catalog for this, but hardcoding
     # a few URLs will do for now..
     URL_MAP = {
@@ -804,14 +758,10 @@ def fix_missing_xml_entity(
     package = get_package_for_paths([search_path], regex=False)
     if package is None:
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_library(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_library(error, context):
     paths = [os.path.join('/usr/lib/lib%s.so$' % error.library),
              os.path.join('/usr/lib/.*/lib%s.so$' % error.library),
              os.path.join('/usr/lib/lib%s.a$' % error.library),
@@ -820,14 +770,10 @@ def fix_missing_library(
     if package is None:
         warning('no package for library %s', error.library)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def fix_missing_ruby_gem(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_ruby_gem(error, context):
     paths = [os.path.join(
         '/usr/share/rubygems-integration/all/'
         'specifications/%s-.*\\.gemspec' % error.gem)]
@@ -835,52 +781,37 @@ def fix_missing_ruby_gem(
     if package is None:
         warning('no package for gem %s', error.gem)
         return False
-    return add_dependency(
-        tree, context, package, minimum_version=error.version,
-        committer=committer, update_changelog=update_changelog,
-        subpath=subpath)
+    return context.add_dependency(package, minimum_version=error.version)
 
 
-def fix_missing_ruby_file(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_ruby_file(error, context):
     paths = [
         os.path.join('/usr/lib/ruby/vendor_ruby/%s.rb' % error.filename)]
     package = get_package_for_paths(paths)
     if package is not None:
-        return add_dependency(
-            tree, context, package, committer=committer,
-            update_changelog=update_changelog, subpath=subpath)
+        return context.add_dependency(package)
     paths = [
         os.path.join(r'/usr/share/rubygems-integration/all/gems/([^/]+)/'
                      'lib/%s.rb' % error.filename)]
     package = get_package_for_paths(paths, regex=True)
     if package is not None:
-        return add_dependency(
-            tree, context, package, committer=committer,
-            update_changelog=update_changelog, subpath=subpath)
+        return context.add_dependency(package)
 
     warning('no package for ruby file %s', error.filename)
     return False
 
 
-def fix_missing_r_package(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_r_package(error, context):
     paths = [os.path.join('/usr/lib/R/site-library/.*/R/%s$' % error.package)]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
         warning('no package for R package %s', error.package)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        minimum_version=error.minimum_version,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(
+        package, minimum_version=error.minimum_version)
 
 
-def fix_missing_java_class(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_java_class(error, context):
     # Unfortunately this only finds classes in jars installed on the host
     # system :(
     output = subprocess.check_output(
@@ -895,16 +826,14 @@ def fix_missing_java_class(
     if package is None:
         warning('no package for files in %r', classpath)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def enable_dh_autoreconf(tree, context, committer, update_changelog=True,
-                         subpath=''):
+def enable_dh_autoreconf(context):
     # Debhelper >= 10 depends on dh-autoreconf and enables autoreconf by
     # default.
-    debhelper_compat_version = get_debhelper_compat_level(tree.abspath('.'))
+    debhelper_compat_version = get_debhelper_compat_level(
+            context.tree.abspath('.'))
     if debhelper_compat_version is not None and debhelper_compat_version < 10:
         def add_with_autoreconf(line, target):
             if target != b'%':
@@ -914,38 +843,27 @@ def enable_dh_autoreconf(tree, context, committer, update_changelog=True,
             return dh_invoke_add_with(line, b'autoreconf')
 
         if update_rules(command_line_cb=add_with_autoreconf):
-            return add_dependency(
-                tree, context, 'dh-autoreconf', committer=committer,
-                update_changelog=update_changelog, subpath=subpath)
+            return context.add_dependency('dh-autoreconf')
 
     return False
 
 
-def fix_missing_configure(tree, error, context, committer=None,
-                          update_changelog=True, subpath=''):
-    if (not tree.has_filename('configure.ac') and
-            not tree.has_filename('configure.in')):
+def fix_missing_configure(error, context):
+    if (not context.tree.has_filename('configure.ac') and
+            not context.tree.has_filename('configure.in')):
         return False
 
-    return enable_dh_autoreconf(
-        tree, context, committer=committer, update_changelog=update_changelog,
-        subpath=subpath)
+    return enable_dh_autoreconf(context)
 
 
-def fix_missing_automake_input(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_automake_input(error, context):
     # TODO(jelmer): If it's ./NEWS, ./AUTHORS or ./README that's missing, then
     # try to set 'export AUTOMAKE = automake --foreign' in debian/rules.
     # https://salsa.debian.org/jelmer/debian-janitor/issues/88
-    return enable_dh_autoreconf(
-        tree, context, committer=committer, update_changelog=update_changelog,
-        subpath=subpath)
+    return enable_dh_autoreconf(context)
 
 
-def fix_missing_maven_artifacts(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_maven_artifacts(error, context):
     artifact = error.artifacts[0]
     try:
         (group_id, artifact_id, kind, version) = artifact.split(':')
@@ -959,28 +877,34 @@ def fix_missing_maven_artifacts(
     if package is None:
         warning('no package for artifact %s', artifact)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-def install_gnome_common(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
-    return add_dependency(
-        tree, context, 'gnome-common', committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+def install_gnome_common(error, context):
+    return context.add_dependency('gnome-common')
 
 
-def fix_missing_config_status_input(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def install_gnome_common_dep(error, context):
+    if error.package == 'glib-gettext':
+        package = get_package_for_paths(['/usr/bin/glib-gettextize'])
+    else:
+        package = None
+    if package is None:
+        warning('No debian package for package %s', error.package)
+        return False
+    return context.add_dependency(
+        package=package,
+        minimum_version=error.minimum_version)
+
+
+
+def fix_missing_config_status_input(error, context):
     autogen_path = 'autogen.sh'
     rules_path = 'debian/rules'
-    if subpath not in ('.', ''):
-        autogen_path = os.path.join(subpath, autogen_path)
-        rules_path = os.path.join(subpath, rules_path)
-    if not tree.has_filename(autogen_path):
+    if context.subpath not in ('.', ''):
+        autogen_path = os.path.join(context.subpath, autogen_path)
+        rules_path = os.path.join(context.subpath, rules_path)
+    if not context.tree.has_filename(autogen_path):
         return False
 
     def add_autogen(mf):
@@ -993,10 +917,11 @@ def fix_missing_config_status_input(
     if not update_rules(makefile_cb=add_autogen, path=rules_path):
         return False
 
-    if update_changelog:
+    if context.update_changelog:
         commit_debian_changes(
-            tree, subpath, 'Run autogen.sh during build.', committer=committer,
-            update_changelog=update_changelog)
+            context.tree, context.subpath,
+            'Run autogen.sh during build.', committer=context.committer,
+            update_changelog=context.update_changelog)
 
     return True
 
@@ -1014,19 +939,15 @@ def _find_aclocal_fun(macro):
     raise KeyError
 
 
-def run_pgbuildext_updatecontrol(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def run_pgbuildext_updatecontrol(error, context):
     note("Running 'pg_buildext updatecontrol'")
-    pg_buildext_updatecontrol(tree.abspath(subpath))
+    pg_buildext_updatecontrol(context.tree.abspath(context.subpath))
     return commit_debian_changes(
-        tree, subpath, "Run 'pgbuildext updatecontrol'.",
-        committer=committer, update_changelog=False)
+        context.tree, context.subpath, "Run 'pgbuildext updatecontrol'.",
+        committer=context.committer, update_changelog=False)
 
 
-def fix_missing_autoconf_macro(
-        tree, error, context, committer=None, update_changelog=True,
-        subpath=''):
+def fix_missing_autoconf_macro(error, context):
     try:
         path = _find_aclocal_fun(error.macro)
     except KeyError:
@@ -1036,12 +957,11 @@ def fix_missing_autoconf_macro(
     if package is None:
         warning('no package for macro file %s', path)
         return False
-    return add_dependency(
-        tree, context, package, committer=committer,
-        update_changelog=update_changelog, subpath=subpath)
+    return context.add_dependency(package)
 
 
-FIXERS = [
+FIXERS: List[
+        Tuple[Type[Problem], Callable[[Problem, DependencyContext], bool]]] = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingPythonDistribution, fix_missing_python_distribution),
     (MissingCHeader, fix_missing_c_header),
@@ -1065,6 +985,7 @@ FIXERS = [
     (AptFetchFailure, retry_apt_failure),
     (MissingMavenArtifacts, fix_missing_maven_artifacts),
     (GnomeCommonMissing, install_gnome_common),
+    (MissingGnomeCommonDependency, install_gnome_common_dep),
     (MissingConfigStatusInput, fix_missing_config_status_input),
     (MissingJDKFile, fix_missing_jdk_file),
     (MissingRubyFile, fix_missing_ruby_file),
@@ -1075,13 +996,13 @@ FIXERS = [
 ]
 
 
-def resolve_error(tree, error, context, committer=None, subpath=''):
+def resolve_error(error, context):
     for error_cls, fixer in FIXERS:
         if isinstance(error, error_cls):
             note('Attempting to use fixer %r to address %r',
                  fixer, error)
             try:
-                return fixer(tree, error, context, committer, subpath)
+                return fixer(error, context)
             except GeneratedFile:
                 warning('Control file is generated, unable to edit.')
                 return False
@@ -1113,10 +1034,20 @@ def build_incrementally(
                 warning('Last fix did not address the issue. Giving up.')
                 raise
             reset_tree(local_tree, subpath=subpath)
+            if e.context[0] == 'build':
+                context = BuildDependencyContext(
+                    local_tree, subpath, committer=committer,
+                    update_changelog=update_changelog)
+            elif e.context[0] == 'autopkgtest':
+                context = AutopkgtestDependencyContext(
+                    e.context[1],
+                    local_tree, subpath, committer=committer,
+                    update_changelog=update_changelog)
+            else:
+                warning('unable to install for context %r', e.context)
+                raise
             try:
-                if not resolve_error(
-                        local_tree, e.error, e.context, committer=committer,
-                        subpath=subpath):
+                if not resolve_error(e.error, context):
                     warning('Failed to resolve error %r. Giving up.', e.error)
                     raise
             except CircularDependency:

@@ -32,6 +32,7 @@ from janitor.sbuild_log import (
 from janitor import fix_build
 from janitor.fix_build import (
     resolve_error,
+    BuildDependencyContext,
     )
 from janitor.tests import TestCaseWithTransport
 
@@ -71,8 +72,10 @@ blah (0.1) UNRELEASED; urgency=medium
                     yield pkg
 
     def resolve(self, error, context=('build', )):
-        return resolve_error(
-            self.tree, error, context, committer='Janitor <janitor@jelmer.uk>')
+        context = BuildDependencyContext(
+            self.tree, subpath='', committer='Janitor <janitor@jelmer.uk>',
+            update_changelog=True)
+        return resolve_error(error, context)
 
     def get_build_deps(self):
         with open(self.tree.abspath('debian/control'), 'r') as f:
