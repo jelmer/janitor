@@ -1392,6 +1392,32 @@ def autoconf_undefined_macro(m):
     return MissingAutoconfMacro(m.group(2))
 
 
+class MissingGnomeCommonDependency(Problem):
+
+    kind = 'missing-gnome-common-dependency'
+
+    def __init__(self, package, minimum_version=None):
+        self.package = package
+        self.minimum_version = minimum_version
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.package == other.package and
+                self.minimum_version == other.minimum_version)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.package, self.minimum_version)
+
+    def __str__(self):
+        return "Missing gnome-common dependency: %s: (>= %s)" % (
+            self.package, self.minimum_version)
+
+
+def missing_glib_gettext(m):
+    return MissingGnomeCommonDependency('glib-gettext', m.group(1))
+
+
 class MissingConfigStatusInput(Problem):
 
     kind = 'missing-config.status-input'
@@ -1826,6 +1852,8 @@ build_failure_regexps = [
     (r'strip: \'(.*)\': No such file', file_not_found),
     (r'Sprockets::FileNotFound: couldn\'t find file \'(.*)\' '
      r'with type \'(.*)\'', sprockets_file_not_found),
+    (r'You need to install the gnome-common module and make.*',
+     gnome_common_missing),
     (r'You need to install gnome-common from the GNOME (git|CVS)',
      gnome_common_missing),
     (r'automake: error: cannot open < (.*): No such file or directory',
@@ -1834,6 +1862,8 @@ build_failure_regexps = [
      autoconf_undefined_macro),
     (r'config.status: error: cannot find input file: `(.*)\'',
      config_status_input_missing),
+    (r'\*\*\*Error\*\*\*: You must have glib-gettext >= (.*) installed.*',
+     missing_glib_gettext),
     (r'ERROR: JAVA_HOME is set to an invalid directory: '
      r'/usr/lib/jvm/default-java/', jvm_missing),
     (r'dh_installdocs: --link-doc not allowed between (.*) and (.*) '
@@ -1935,6 +1965,8 @@ build_failure_regexps = [
      pkg_config_missing),
     (r'configure: error: .* not found: Package dependency requirement '
      r'\'([^\']+)\' could not be satisfied.', pkg_config_missing),
+    (r'configure: error: xsltproc is required to build documentation',
+     lambda m: MissingCommand('xsltproc')),
     (r'.*:[0-9]+: (.*) does not exist.', file_not_found),
     # uglifyjs
     (r'ERROR: can\'t read file: (.*)', file_not_found),
