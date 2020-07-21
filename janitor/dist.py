@@ -19,8 +19,15 @@ from breezy.export import export
 from breezy.tree import Tree
 from breezy.workingtree import WorkingTree
 from debian.deb822 import Deb822
+from janitor.fix_build import (
+    DependencyContext,
+    resolve_error,
+    )
+from janitor.sbuild_log import (
+    find_build_failure_description,
+    )
 from janitor.schroot import Session
-from janitor.trace import note
+from janitor.trace import note, warning
 import os
 import shutil
 import stat
@@ -54,6 +61,49 @@ def satisfy_build_deps(session, tree):
         except KeyError:
             pass
     apt_satisfy(session, deps)
+
+
+def run_with_tee(session, args):
+    import subprocess
+    p = session.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    contents = []
+    while p.poll() is None:
+        line = p.stdout.readline()
+        sys.stdout.buffer.write(line)
+        contents.append(line.decode('utf-8', 'surrogateescape'))
+    return p.returncode, contents
+
+
+class SchrootDependencyContext(DependencyContext):
+
+    def __init__(self, session):
+        self.session = session
+
+    def add_dependency(self, package, minimum_version=None):
+        # TODO(jelmer): Handle minimum_version
+        apt_install(self.session, [package])
+        return True
+
+
+def run_with_build_fixer(session, args):
+    fixed_errors = []
+    while True:
+        retcode, lines = run_with_tee(session, args)
+        if retcode == 0:
+            return
+        offset, description, error = find_build_failure_description(lines)
+        if error is None:
+            warning('Build failed with unidentified error. Giving up.')
+            return
+
+        note('Identifier error: %r', error)
+        if error in fixed_errors:
+            warning('Failed to resolve error %r. Giving up.', error)
+            return
+        if not resolve_error(error, SchrootDependencyContext(session)):
+            warning('Failed to resolve error %r. Giving up.', error)
+            return
+        fixed_errors.append(error)
 
 
 def run_dist_in_chroot(session):
@@ -138,7 +188,7 @@ def run_dist_in_chroot(session):
 
     if not os.path.exists('Makefile') and not os.path.exists('configure'):
         if os.path.exists('autogen.sh'):
-            session.check_call(['./autogen.sh'])
+            run_with_build_fixer(session, ['./autogen.sh'])
         elif os.path.exists('configure.ac') or os.path.exists('configure.in'):
             apt_install(session, [
                 'autoconf', 'automake', 'gettext', 'libtool', 'gnu-standards'])
@@ -149,7 +199,7 @@ def run_dist_in_chroot(session):
 
     if os.path.exists('Makefile'):
         apt_install(session, ['make'])
-        session.check_call(['make', 'dist'])
+        run_with_build_fixer(session, ['make', 'dist'])
         return
 
     raise Exception('no known build tools found')

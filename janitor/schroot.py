@@ -77,6 +77,10 @@ class Session(object):
             user: Optional[str] = None):
         subprocess.check_call(self._run_argv(argv, cwd, user))
 
+    def Popen(self, argv, cwd: Optional[str] = None,
+              user: Optional[str] = None, **kwargs):
+        return subprocess.Popen(self._run_argv(argv, cwd, user), **kwargs)
+
     def call(
             self, argv: List[str], cwd: Optional[str] = None,
             user: Optional[str] = None):
