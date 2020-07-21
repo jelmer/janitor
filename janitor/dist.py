@@ -136,7 +136,18 @@ def run_dist_in_chroot(session):
         apt_install(session, ['perl'])
         session.check_call(['perl', 'Makefile.PL'])
 
-    if os.path.exists('Makefile.PL'):
+    if not os.path.exists('Makefile') and not os.path.exists('configure'):
+        if os.path.exists('autogen.sh'):
+            session.check_call(['./autogen.sh'])
+        elif os.path.exists('configure.ac') or os.path.exists('configure.in'):
+            apt_install(session, [
+                'autoconf', 'automake', 'gettext', 'libtool', 'gnu-standards'])
+            session.check_call(['autoreconf', '-i'])
+
+    if not os.path.exists('Makefile') and os.path.exists('configure'):
+        session.check_call(['./configure', '--enable-maintainer-mode'])
+
+    if os.path.exists('Makefile'):
         apt_install(session, ['make'])
         session.check_call(['make', 'dist'])
         return
