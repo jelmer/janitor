@@ -53,7 +53,7 @@ def satisfy_build_deps(session, tree):
     deps = []
     for name in ['Build-Depends', 'Build-Depends-Indep', 'Build-Depends-Arch']:
         try:
-            deps.append(source[name])
+            deps.append(source[name].strip().strip(','))
         except KeyError:
             pass
     for name in ['Build-Conflicts', 'Build-Conflicts-Indeo',
