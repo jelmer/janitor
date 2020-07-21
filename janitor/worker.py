@@ -465,6 +465,10 @@ class NewUpstreamWorker(SubWorker):
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
+        from janitor.dist import (
+            create_dist_schroot,
+            DetailedDistCommandFailed,
+            )
         with local_tree.lock_write():
             if control_files_in_root(local_tree, subpath):
                 raise WorkerFailure(
@@ -473,7 +477,6 @@ class NewUpstreamWorker(SubWorker):
                     '(LarstIQ mode)')
 
             def create_dist(tree, package, version, target_filename):
-                from janitor.dist import create_dist_schroot
                 try:
                     return create_dist_schroot(
                         tree, subdir=package, target_filename=target_filename,
@@ -602,6 +605,10 @@ class NewUpstreamWorker(SubWorker):
             except DistCommandFailed as e:
                 error_description = str(e)
                 error_code = 'dist-command-failed'
+                raise WorkerFailure(error_code, error_description)
+            except DetailedDistCommandFailed as e:
+                error_code = 'dist-' + e.error.code
+                error_description = str(e.error)
                 raise WorkerFailure(error_code, error_description)
             except MissingChangelogError as e:
                 error_description = str(e)
