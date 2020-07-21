@@ -31,6 +31,7 @@ from janitor.trace import note, warning
 import os
 import shutil
 import stat
+import subprocess
 import sys
 import tempfile
 from typing import Optional
@@ -65,12 +66,12 @@ def satisfy_build_deps(session, tree):
 
 
 def run_with_tee(session, args):
-    import subprocess
     p = session.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     contents = []
     while p.poll() is None:
         line = p.stdout.readline()
         sys.stdout.buffer.write(line)
+        sys.stdout.buffer.flush()
         contents.append(line.decode('utf-8', 'surrogateescape'))
     return p.returncode, contents
 
@@ -86,6 +87,14 @@ class SchrootDependencyContext(DependencyContext):
         return True
 
 
+class DetailedDistCommandFailed(Exception):
+
+    def __init__(self, retcode, args, error):
+        self.retcode = retcode
+        self.args = args
+        self.error = error
+
+
 def run_with_build_fixer(session, args):
     fixed_errors = []
     while True:
@@ -95,16 +104,22 @@ def run_with_build_fixer(session, args):
         offset, description, error = find_build_failure_description(lines)
         if error is None:
             warning('Build failed with unidentified error. Giving up.')
-            return
+            raise subprocess.CalledProcessError(retcode, args)
 
         note('Identifier error: %r', error)
         if error in fixed_errors:
-            warning('Failed to resolve error %r. Giving up.', error)
-            return
+            warning('Failed to resolve error %r, it persisted. Giving up.',
+                    error)
+            raise DetailedDistCommandFailed(retcode, args, error)
         if not resolve_error(error, SchrootDependencyContext(session)):
-            warning('Failed to resolve error %r. Giving up.', error)
-            return
+            warning('Failed to find resolution for error %r. Giving up.',
+                    error)
+            raise DetailedDistCommandFailed(retcode, args, error)
         fixed_errors.append(error)
+
+
+class NoBuildToolsFound(Exception):
+    """No supported build tools were found."""
 
 
 def run_dist_in_chroot(session):
@@ -148,9 +163,9 @@ def run_dist_in_chroot(session):
 
         if os.stat('setup.py').st_mode & stat.S_IEXEC:
             apt_install(session, ['python'])
-            session.check_call(['./setup.py', 'sdist'])
+            run_with_build_fixer(session, ['./setup.py', 'sdist'])
         else:
-            session.check_call(['python3', './setup.py', 'sdist'])
+            run_with_build_fixer(session, ['python3', './setup.py', 'sdist'])
         return
 
     if os.path.exists('setup.cfg'):
@@ -178,14 +193,26 @@ def run_dist_in_chroot(session):
                         ['cpan', 'install', value.decode().strip("'")],
                         user='root')
                     session.check_call(['distinkt-dist'])
+                    return
         # Default to invoking Dist::Zilla
         note('Found dist.ini, assuming dist-zilla.')
-        session.check_call(['dzil', 'build', '--in', '..'])
+        apt_install(session, ['libdist-zilla-perl'])
+        run_with_build_fixer(session, ['dzil', 'build', '--in', '..'])
+        return
+
+    if os.path.exists('package.json'):
+        apt_install(session, ['npm'])
+        run_with_build_fixer(session, ['npm', 'pack'])
+        return
+
+    if os.path.exists('Gemfile'):
+        apt_install(session, ['gem2deb'])
+        run_with_build_fixer(session, ['gem2tgz', 'Gemfile'])
         return
 
     if os.path.exists('Makefile.PL') and not os.path.exists('Makefile'):
         apt_install(session, ['perl'])
-        session.check_call(['perl', 'Makefile.PL'])
+        run_with_build_fixer(session, ['perl', 'Makefile.PL'])
 
     if not os.path.exists('Makefile') and not os.path.exists('configure'):
         if os.path.exists('autogen.sh'):
@@ -193,17 +220,17 @@ def run_dist_in_chroot(session):
         elif os.path.exists('configure.ac') or os.path.exists('configure.in'):
             apt_install(session, [
                 'autoconf', 'automake', 'gettext', 'libtool', 'gnu-standards'])
-            session.check_call(['autoreconf', '-i'])
+            run_with_build_fixer(session, ['autoreconf', '-i'])
 
     if not os.path.exists('Makefile') and os.path.exists('configure'):
-        session.check_call(['./configure', '--enable-maintainer-mode'])
+        session.check_call(['./configure'])
 
     if os.path.exists('Makefile'):
         apt_install(session, ['make'])
         run_with_build_fixer(session, ['make', 'dist'])
         return
 
-    raise Exception('no known build tools found')
+    raise NoBuildToolsFound()
 
 
 def create_dist_schroot(
@@ -239,6 +266,9 @@ def create_dist_schroot(
         try:
             session.chdir(os.path.join(reldir, subdir))
             run_dist_in_chroot(session)
+        except NoBuildToolsFound:
+            note('No build tools found, falling back to simple export.')
+            return False
         finally:
             os.chdir(oldcwd)
 

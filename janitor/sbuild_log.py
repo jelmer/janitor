@@ -934,6 +934,10 @@ def perl_missing_plugin(m):
     return MissingPerlModule(None, m.group(1), None)
 
 
+def perl_missing_author_dep(m):
+    return MissingPerlModule(None, m.group(1), None)
+
+
 class MissingPerlFile(Problem):
 
     kind = 'missing-perl-file'
@@ -1348,6 +1352,27 @@ def gnome_common_missing(m):
     return GnomeCommonMissing()
 
 
+class MissingXfceDependency(Problem):
+
+    kind = 'missing-xfce-dependency'
+
+    def __init__(self, package):
+        self.package = package
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.package == other.package)
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.package)
+
+    def __str__(self):
+        return "Missing XFCE build dependency: %s" % (self.package)
+
+
+def xfce_dependency_missing(m):
+    return MissingXfceDependency(m.group(1))
+
 class MissingAutomakeInput(Problem):
 
     kind = 'missing-automake-input'
@@ -1687,6 +1712,8 @@ build_failure_regexps = [
      command_missing),
     (r'No package \'([^\']+)\' found', pkg_config_missing),
     (r'configure: error: No package \'([^\']+)\' found', pkg_config_missing),
+    (r'Error: pkg-config not found\!', lambda m: MissingCommand('pkg-config')),
+    (r' ERROR: BLAS not found\!', lambda m: MissingLibrary('blas')),
     (r'\./configure: [0-9]+: \.: Illegal option .*', None),
     (r'Requested \'(.*)\' but version of ([^ ]+) is ([^ ]+)',
      pkg_config_missing),
@@ -1718,6 +1745,8 @@ build_failure_regexps = [
     (r'Required plugin ([^ ]+) isn\'t installed.', perl_missing_plugin),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_file),
+    (r'Can\'t find author dependency (.*) at (.*) line ([0-9]+).',
+     perl_missing_author_dep),
     (r'> Could not find (.*). Please check that (.*) contains a valid JDK '
      r'installation.', jdk_file_missing),
     (r'(?:/usr/bin/)?install: cannot create regular file \'(.*)\': '
@@ -1852,6 +1881,8 @@ build_failure_regexps = [
     (r'strip: \'(.*)\': No such file', file_not_found),
     (r'Sprockets::FileNotFound: couldn\'t find file \'(.*)\' '
      r'with type \'(.*)\'', sprockets_file_not_found),
+    (r'xdt-autogen: You must have "(.*)" installed. You can get if from',
+     xfce_dependency_missing),
     (r'You need to install the gnome-common module and make.*',
      gnome_common_missing),
     (r'You need to install gnome-common from the GNOME (git|CVS)',

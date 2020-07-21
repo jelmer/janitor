@@ -75,7 +75,10 @@ class Session(object):
             self,
             argv: List[str], cwd: Optional[str] = None,
             user: Optional[str] = None):
-        subprocess.check_call(self._run_argv(argv, cwd, user))
+        try:
+            subprocess.check_call(self._run_argv(argv, cwd, user))
+        except subprocess.CalledProcessError as e:
+            raise subprocess.CalledProcessError(e.returncode, argv)
 
     def Popen(self, argv, cwd: Optional[str] = None,
               user: Optional[str] = None, **kwargs):

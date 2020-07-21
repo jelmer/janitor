@@ -23,7 +23,7 @@ import os
 import re
 import subprocess
 import sys
-from typing import Iterator, List, Callable, Type, Tuple
+from typing import Iterator, List, Callable, Type, Tuple, Set
 
 from debian.deb822 import (
     Deb822,
@@ -31,6 +31,7 @@ from debian.deb822 import (
     )
 
 from breezy.commit import PointlessCommit
+from breezy.tree import Tree
 from lintian_brush import (
     reset_tree,
     )
@@ -91,6 +92,7 @@ from .sbuild_log import (
     MissingRubyFile,
     MissingAutoconfMacro,
     MissingValaPackage,
+    MissingXfceDependency,
     NeedPgBuildExtUpdateControl,
     SbuildFailure,
     DhAddonLoadFailure,
@@ -237,7 +239,8 @@ def commit_debian_changes(tree, subpath, summary, committer=None,
     with tree.lock_write():
         try:
             if update_changelog:
-                add_changelog_entry(tree, subpath, [summary])
+                add_changelog_entry(
+                    tree, os.path.join(subpath, 'debian/changelog'), [summary])
                 debcommit(tree, committer=committer)
             else:
                 tree.commit(message=summary, committer=committer)
@@ -433,7 +436,7 @@ def get_package_for_python_module(module, python_version):
     return get_package_for_paths(paths, regex=True)
 
 
-def targeted_python_versions(tree):
+def targeted_python_versions(tree: Tree) -> Set[str]:
     with tree.get_file('debian/control') as f:
         control = Deb822(f)
     build_depends = PkgRelation.parse_relations(
@@ -539,7 +542,10 @@ def fix_missing_python_distribution(error, context):
 
 
 def fix_missing_python_module(error, context):
-    targeted = targeted_python_versions(context.tree)
+    if getattr(context, 'tree', None) is not None:
+        targeted = targeted_python_versions(context.tree)
+    else:
+        targeted = set()
     default = (not targeted)
 
     pypy_pkg = get_package_for_python_module(error.module, 'pypy')
@@ -897,6 +903,16 @@ def install_gnome_common_dep(error, context):
         minimum_version=error.minimum_version)
 
 
+def install_xfce_dep(error, context):
+    if error.package == 'gtk-doc':
+        package = get_package_for_paths(['/usr/bin/gtkdocize'])
+    else:
+        package = None
+    if package is None:
+        warning('No debian package for package %s', error.package)
+        return False
+    return context.add_dependency(package=package)
+
 
 def fix_missing_config_status_input(error, context):
     autogen_path = 'autogen.sh'
@@ -986,6 +1002,7 @@ FIXERS: List[
     (MissingMavenArtifacts, fix_missing_maven_artifacts),
     (GnomeCommonMissing, install_gnome_common),
     (MissingGnomeCommonDependency, install_gnome_common_dep),
+    (MissingXfceDependency, install_xfce_dep),
     (MissingConfigStatusInput, fix_missing_config_status_input),
     (MissingJDKFile, fix_missing_jdk_file),
     (MissingRubyFile, fix_missing_ruby_file),
