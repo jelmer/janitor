@@ -636,7 +636,7 @@ class NewUpstreamWorker(SubWorker):
 
             report_context(result.new_upstream_version)
 
-            if not self.args.only_import:
+            if not self.args.import_only:
                 patch_series_path = 'debian/patches/series'
                 if subpath not in (None, '', '.'):
                     patch_series_path = os.path.join(
