@@ -47,7 +47,7 @@ async def main(args):
     from .config import read_config
     from . import state
     from .schedule import do_schedule
-    with open('package_overrides.conf', 'r') as f:
+    with open(args.package_overrides, 'r') as f:
         overrides = read_package_overrides(f)
 
     with open(args.config, 'r') as f:
@@ -81,5 +81,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--reschedule', action='store_true',
         help='Reschedule when updating.')
+    parser.add_argument(
+        '--package-overrides', type=str,
+        help='Path to package overrides.', default='package_overrides.conf')
     args = parser.parse_args()
     asyncio.run(main(args))
