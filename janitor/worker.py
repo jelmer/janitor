@@ -60,6 +60,7 @@ from silver_platter.proposal import Hoster
 from lintian_brush.config import Config as LintianBrushConfig
 from debmutate.reformatting import GeneratedFile, FormattingUnpreservable
 from silver_platter.debian.upstream import (
+    import_upstream,
     merge_upstream,
     refresh_quilt_patches,
     InconsistentSourceFormatError,
@@ -461,6 +462,9 @@ class NewUpstreamWorker(SubWorker):
             '--snapshot',
             help='Merge a new upstream snapshot rather than a release',
             action='store_true')
+        subparser.add_argument(
+            '--import-only', action='store_true',
+            help='Only import new version, do not merge into packaging.')
         self.args = subparser.parse_args(command)
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
@@ -486,11 +490,18 @@ class NewUpstreamWorker(SubWorker):
                     raise DistCommandFailed(str(e))
 
             try:
-                result = merge_upstream(
-                    tree=local_tree, subpath=(subpath or ''),
-                    snapshot=self.args.snapshot, committer=self.committer,
-                    trust_package=TRUST_PACKAGE,
-                    create_dist=create_dist)
+                if self.args.import_only:
+                    result = import_upstream(
+                        tree=local_tree, subpath=(subpath or ''),
+                        snapshot=self.args.snapshot, committer=self.committer,
+                        trust_package=TRUST_PACKAGE,
+                        create_dist=create_dist)
+                else:
+                    result = merge_upstream(
+                        tree=local_tree, subpath=(subpath or ''),
+                        snapshot=self.args.snapshot, committer=self.committer,
+                        trust_package=TRUST_PACKAGE,
+                        create_dist=create_dist)
             except UpstreamAlreadyImported as e:
                 report_context(e.version)
                 metadata['upstream_version'] = e.version
@@ -625,35 +636,36 @@ class NewUpstreamWorker(SubWorker):
 
             report_context(result.new_upstream_version)
 
-            patch_series_path = 'debian/patches/series'
-            if subpath not in (None, '', '.'):
-                patch_series_path = os.path.join(
-                    subpath, patch_series_path)
+            if not self.args.only_import:
+                patch_series_path = 'debian/patches/series'
+                if subpath not in (None, '', '.'):
+                    patch_series_path = os.path.join(
+                        subpath, patch_series_path)
 
-            if local_tree.has_filename(patch_series_path):
-                try:
-                    refresh_quilt_patches(
-                        local_tree,
-                        old_version=result.old_upstream_version,
-                        new_version=result.new_upstream_version,
-                        committer=self.committer,
-                        subpath=subpath)
-                except QuiltError as e:
-                    error_description = (
-                        "An error (%d) occurred refreshing quilt patches: "
-                        "%s%s" % (e.retcode, e.stderr, e.extra))
-                    error_code = 'quilt-refresh-error'
-                    raise WorkerFailure(error_code, error_description)
-                except QuiltPatchPushFailure as e:
-                    error_description = (
-                        "An error occurred refreshing quilt patch %s: %s"
-                        % (e.patch_name, e.actual_error.extra))
-                    error_code = 'quilt-refresh-error'
-                    raise WorkerFailure(error_code, error_description)
+                if local_tree.has_filename(patch_series_path):
+                    try:
+                        refresh_quilt_patches(
+                            local_tree,
+                            old_version=result.old_upstream_version,
+                            new_version=result.new_upstream_version,
+                            committer=self.committer,
+                            subpath=subpath)
+                    except QuiltError as e:
+                        error_description = (
+                            "An error (%d) occurred refreshing quilt patches: "
+                            "%s%s" % (e.retcode, e.stderr, e.extra))
+                        error_code = 'quilt-refresh-error'
+                        raise WorkerFailure(error_code, error_description)
+                    except QuiltPatchPushFailure as e:
+                        error_description = (
+                            "An error occurred refreshing quilt patch %s: %s"
+                            % (e.patch_name, e.actual_error.extra))
+                        error_code = 'quilt-refresh-error'
+                        raise WorkerFailure(error_code, error_description)
 
-            old_tree = local_tree.branch.repository.revision_tree(
-                result.old_revision)
-            metadata['notes'] = update_packaging(local_tree, old_tree)
+                old_tree = local_tree.branch.repository.revision_tree(
+                    result.old_revision)
+                metadata['notes'] = update_packaging(local_tree, old_tree)
 
             metadata['old_upstream_version'] = result.old_upstream_version
             metadata['upstream_version'] = result.new_upstream_version
@@ -662,11 +674,18 @@ class NewUpstreamWorker(SubWorker):
                     result.upstream_branch.user_url)
                 metadata['upstream_branch_browse'] = (
                     result.upstream_branch_browse)
-        return SubWorkerResult(
-            description="Merged new upstream version %s" % (
-                result.new_upstream_version),
-            value=None,
-            tags=['upstream/%s' % result.new_upstream_version])
+        if self.args.import_only:
+            return SubWorkerResult(
+                description="Imported new upstream version %s" % (
+                    result.new_upstream_version),
+                value=None,
+                tags=['upstream/%s' % result.new_upstream_version])
+        else:
+            return SubWorkerResult(
+                description="Merged new upstream version %s" % (
+                    result.new_upstream_version),
+                value=None,
+                tags=['upstream/%s' % result.new_upstream_version])
 
 
 class JustBuildWorker(SubWorker):
