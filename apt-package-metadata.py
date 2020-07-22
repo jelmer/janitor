@@ -57,15 +57,27 @@ async def iter_sources(url):
 async def main():
     import apt_pkg
     import argparse
+    import re
     parser = argparse.ArgumentParser(prog='apt-package-metadata')
     parser.add_argument("url", nargs='*')
     parser.add_argument(
         '--maintainer', action='append',
         help='Filter by maintainer email')
+    parser.add_argument(
+        '--version-re', type=str,
+        help='Filter on versions matching regex.')
     args = parser.parse_args()
+
+    if args.version_re:
+        version_re = re.compile(args.version_re)
+    else:
+        version_re = None
 
     for url in args.url:
         async for source in iter_sources(url):
+            if (version_re is not None and
+                    not version_re.search(source['Version'])):
+                continue
             pl = PackageList()
             package = pl.package.add()
             package.name = source['Package']
