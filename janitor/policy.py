@@ -90,7 +90,7 @@ async def main(args):
     from .config import read_config
     from . import state
 
-    with open('policy.conf', 'r') as f:
+    with open(args.policy, 'r') as f:
         policy = read_policy(f)
 
     suites = known_suites(policy)
@@ -122,5 +122,8 @@ if __name__ == '__main__':
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
+    parser.add_argument(
+        '--policy', type=str, default='policy.conf',
+        help='Path to policy configuration.')
     args = parser.parse_args()
     asyncio.run(main(args))
