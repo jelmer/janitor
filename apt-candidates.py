@@ -41,6 +41,7 @@ async def iter_sources(url):
 async def main():
     import apt_pkg
     import argparse
+    import re
     parser = argparse.ArgumentParser(prog='apt-candidates')
     parser.add_argument("url", nargs='*')
     parser.add_argument(
@@ -53,10 +54,21 @@ async def main():
         '--value', type=int,
         help='Value to specify.',
         default=10)
+    parser.add_argument(
+        '--version-re', type=str,
+        help='Filter on versions matching regex.')
     args = parser.parse_args()
+
+    if args.version_re:
+        version_re = re.compile(args.version_re)
+    else:
+        version_re = None
 
     for url in args.url:
         async for source in iter_sources(url):
+            if (version_re is not None and
+                    not version_re.search(source['Version'])):
+                continue
             maintainer_email = parseaddr(source['Maintainer'])[1]
             if (args.maintainer and
                     maintainer_email not in args.maintainer):
