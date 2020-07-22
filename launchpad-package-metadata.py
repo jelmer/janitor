@@ -42,23 +42,26 @@ async def main():
     parser.add_argument(
         '--only-missing-in-parent', action='store_true',
         help='Only include packages that are not in the parent series.')
+    parser.add_argument(
+        '--distribution', type=str, default='ubuntu',
+        help='Distribution name.')
     args = parser.parse_args()
 
     lp = Launchpad.login_with(
         'debian-janitor', service_root=LPNET_SERVICE_ROOT, version='devel')
 
-    ubuntu = lp.distributions['ubuntu']
+    distro = lp.distributions[args.distribution]
 
     if args.distroseries:
-        distroseries = ubuntu.series[args.distroseries]
+        distroseries = distro.series[args.distroseries]
     else:
-        distroseries = ubuntu.current_series
+        distroseries = distro.current_series
 
     parentseries = distroseries.getParentSeries()[0]
 
-    for sp in ubuntu.main_archive.getPublishedSources(
+    for sp in distro.main_archive.getPublishedSources(
             status='Published', distro_series=distroseries):
-        if 'ubuntu' not in sp.source_package_version:
+        if args.distribution not in sp.source_package_version:
             continue
         ps = parentseries.main_archive.getPublishedSources(
                 source_name=sp.source_package_name, status='Published')
@@ -77,11 +80,13 @@ async def main():
                 package.maintainer_email = args.default_maintainer_email
             package.vcs_type = 'Git'
             package.vcs_url = (
-                'https://git.launchpad.net/ubuntu/+source/%s -b ubuntu/devel'
-                % (package.name, ))
+                'https://git.launchpad.net/%s/+source/%s -b %s/devel'
+                % (args.distribution, package.name, args.distribution))
             package.vcs_browser = (
-                'https://code.launchpad.net/~usd-import-team/ubuntu/+source'
-                '/%s/+git/%s/+ref/ubuntu/devel' % (package.name, package.name))
+                'https://code.launchpad.net/~usd-import-team/%s/+source'
+                '/%s/+git/%s/+ref/%s/devel' % (
+                    args.distribution, package.name, package.name,
+                    args.distribution))
             package.archive_version = sp.source_package_version
             package.removed = False
         print(pl)
