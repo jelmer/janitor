@@ -36,6 +36,12 @@ async def main():
         choices=['Unique to derived series', 'Different versions'],
         default='Unique to derived series',
         help='Only return differences of this type')
+    parser.add_argument(
+        '--default-maintainer-email', type=str, default='unknown@ubuntu.com',
+        help='E-mail to use when maintainer e-mail is hidden.')
+    parser.add_argument(
+        '--only-missing-in-parent', action='store_true',
+        help='Only include packages that are not in the parent series.')
     args = parser.parse_args()
 
     lp = Launchpad.login_with(
@@ -57,17 +63,22 @@ async def main():
         ps = parentseries.main_archive.getPublishedSources(
                 source_name=sp.source_package_name, status='Published')
         pl = PackageList()
-        if len(ps):
+        if len(ps) and args.only_missing_in_parent:
             removal = pl.removal.add()
             removal.name = sp.source_package_name
             removal.version = sp.source_package_version
         else:
             package = pl.package.add()
             package.name = sp.source_package_name
+            if sp.package_maintainer.preferred_email_address:
+                package.maintainer_email = (
+                    sp.package_maintainer.preferred_email_address.email)
+            else:
+                package.maintainer_email = args.default_maintainer_email
             package.vcs_type = 'Git'
             package.vcs_url = (
-                'https://git.launchpad.net/ubuntu/+source/ubuntu-dev-tools '
-                '-b ubuntu/devel')
+                'https://git.launchpad.net/ubuntu/+source/%s -b ubuntu/devel'
+                % (package.name, ))
             package.vcs_browser = (
                 'https://code.launchpad.net/~usd-import-team/ubuntu/+source'
                 '/%s/+git/%s/+ref/ubuntu/devel' % (package.name, package.name))
