@@ -89,10 +89,18 @@ class SchrootDependencyContext(DependencyContext):
 
 class DetailedDistCommandFailed(Exception):
 
-    def __init__(self, retcode, args, error):
+    def __init__(self, retcode, argv, error):
         self.retcode = retcode
-        self.args = args
+        self.argv = argv
         self.error = error
+
+
+class UnidentifiedError(Exception):
+
+    def __init__(self, retcode, argv, lines):
+        self.retcode = retcode
+        self.argv = argv
+        self.lines = lines
 
 
 def run_with_build_fixer(session, args):
@@ -104,7 +112,7 @@ def run_with_build_fixer(session, args):
         offset, description, error = find_build_failure_description(lines)
         if error is None:
             warning('Build failed with unidentified error. Giving up.')
-            raise subprocess.CalledProcessError(retcode, args)
+            raise UnidentifiedError(retcode, args, lines)
 
         note('Identifier error: %r', error)
         if error in fixed_errors:
@@ -227,8 +235,14 @@ def run_dist_in_chroot(session):
 
     if os.path.exists('Makefile'):
         apt_install(session, ['make'])
-        run_with_build_fixer(session, ['make', 'dist'])
-        return
+        try:
+            run_with_build_fixer(session, ['make', 'dist'])
+        except UnidentifiedError as e:
+            if ("make: *** No rule to make target 'dist'.  Stop.\n"
+                    not in e.lines):
+                raise
+        else:
+            return
 
     raise NoBuildToolsFound()
 
