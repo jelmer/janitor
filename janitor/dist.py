@@ -171,7 +171,8 @@ def run_dist_in_chroot(session):
 
         # TODO(jelmer): Install setup_requires
 
-        if os.stat('setup.py').st_mode & stat.S_IEXEC:
+        if (os.stat('setup.py').st_mode & stat.S_IEXEC and
+                setup_py_contents.startswith('#!')):
             apt_install(session, ['python'])
             run_with_build_fixer(session, ['./setup.py', 'sdist'])
         else:
