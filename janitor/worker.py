@@ -485,6 +485,8 @@ class NewUpstreamWorker(SubWorker):
                     return create_dist_schroot(
                         tree, subdir=package, target_filename=target_filename,
                         packaging_tree=local_tree, chroot=self.args.chroot)
+                except DetailedDistCommandFailed:
+                    raise
                 except Exception as e:
                     traceback.print_exc()
                     raise DistCommandFailed(str(e))
