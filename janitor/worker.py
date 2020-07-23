@@ -620,7 +620,7 @@ class NewUpstreamWorker(SubWorker):
                 error_code = 'dist-command-failed'
                 raise WorkerFailure(error_code, error_description)
             except DetailedDistCommandFailed as e:
-                error_code = 'dist-' + e.error.code
+                error_code = 'dist-' + e.error.kind
                 error_description = str(e.error)
                 raise WorkerFailure(error_code, error_description)
             except MissingChangelogError as e:
