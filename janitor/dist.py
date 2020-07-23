@@ -238,8 +238,14 @@ def run_dist_in_chroot(session):
         try:
             run_with_build_fixer(session, ['make', 'dist'])
         except UnidentifiedError as e:
-            if ("make: *** No rule to make target 'dist'.  Stop.\n"
-                    not in e.lines):
+            if "make: *** No rule to make target 'dist'.  Stop.\n" in e.lines:
+                pass
+            elif ("Reconfigure the source tree "
+                    "(via './config' or 'perl Configure'), please.\n"
+                  ) in e.lines:
+                run_with_build_fixer(session, ['perl', 'configure'])
+                run_with_build_fixer(session, ['make', 'dist'])
+            else:
                 raise
         else:
             return
