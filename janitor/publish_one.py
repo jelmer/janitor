@@ -261,7 +261,7 @@ class BranchWorkspace(object):
     def propose(self, name, description, hoster=None, existing_proposal=None,
                 overwrite_existing=None, labels=None, dry_run=False,
                 commit_message=None, reviewers=None, tags=None,
-                allow_collaboration=False):
+                allow_collaboration=False, owner=None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return propose_changes(
@@ -273,7 +273,7 @@ class BranchWorkspace(object):
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
             additional_colocated_branches=self.additional_colocated_branches,
-            reviewers=reviewers, tags=tags,
+            reviewers=reviewers, tags=tags, owner=owner,
             allow_collaboration=allow_collaboration)
 
     def push(self, hoster: Optional[Hoster] = None, dry_run: bool = False,
@@ -302,12 +302,14 @@ class BranchWorkspace(object):
 
     def push_derived(self, name: str, hoster: Optional[Hoster] = None,
                      overwrite_existing: bool = False,
-                     tags: Optional[List[str]] = None):
+                     tags: Optional[List[str]] = None,
+                     owner: Optional[str] = None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return push_derived_changes(
             self.local_branch, self.main_branch, hoster, name,
-            overwrite_existing=overwrite_existing, tags=tags)
+            overwrite_existing=overwrite_existing, tags=tags,
+            owner=owner)
 
 
 def publish(
@@ -317,6 +319,7 @@ def publish(
         log_id: Optional[str] = None,
         existing_proposal: Optional[MergeProposal] = None,
         allow_create_proposal: bool = False,
+        derived_owner: Optional[str] = None,
         debdiff: bytes = None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
@@ -372,7 +375,7 @@ def publish(
                     get_proposal_commit_message),
                 dry_run=dry_run, hoster=hoster,
                 allow_create_proposal=allow_create_proposal,
-                overwrite_existing=True,
+                overwrite_existing=True, derived_owner=derived_owner,
                 existing_proposal=existing_proposal,
                 labels=labels, tags=subrunner.tags(),
                 allow_collaboration=True)
@@ -644,7 +647,7 @@ def get_debdiff(log_id):
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, log_id, local_branch_url,
-        dry_run=False, require_binary_diff=False,
+        dry_run=False, require_binary_diff=False, derived_owner=None,
         possible_hosters=None,
         possible_transports=None, allow_create_proposal=None):
 
@@ -700,7 +703,7 @@ def publish_one(
         try:
             (resume_branch, overwrite, existing_proposal) = (
                 find_existing_proposed(
-                    main_branch, hoster, branch_name))
+                    main_branch, hoster, branch_name, owner=derived_owner))
         except NoSuchProject as e:
             if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
                 raise PublishFailure(
@@ -737,7 +740,7 @@ def publish_one(
             resume_branch, dry_run=dry_run, log_id=log_id,
             existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
-            debdiff=debdiff)
+            debdiff=debdiff, derived_owner=derived_owner)
     except EmptyMergeProposal:
         raise PublishFailure(
             code='empty-merge-proposal',
@@ -770,6 +773,7 @@ if __name__ == '__main__':
             log_id=request['log_id'],
             local_branch_url=request['local_branch_url'],
             dry_run=request['dry-run'],
+            derived_owner=request.get('derived-owner'),
             require_binary_diff=request['require-binary-diff'],
             possible_hosters=None, possible_transports=None,
             allow_create_proposal=request['allow_create_proposal'])
