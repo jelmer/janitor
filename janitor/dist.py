@@ -131,6 +131,8 @@ class NoBuildToolsFound(Exception):
 
 
 def run_dist_in_chroot(session):
+    apt_install(session, ['git'])
+
     if os.path.exists('package.xml'):
         apt_install(session, ['php-pear', 'php-horde-core'])
         note('Found package.xml, assuming pear package.')
@@ -218,6 +220,11 @@ def run_dist_in_chroot(session):
         run_with_build_fixer(session, ['gem2tgz', 'Gemfile'])
         return
 
+    if os.path.exists('waf'):
+        apt_install(session, ['python3'])
+        run_with_build_fixer(session, ['./waf', 'dist'])
+        return
+
     if os.path.exists('Makefile.PL') and not os.path.exists('Makefile'):
         apt_install(session, ['perl'])
         run_with_build_fixer(session, ['perl', 'Makefile.PL'])
@@ -239,6 +246,9 @@ def run_dist_in_chroot(session):
             run_with_build_fixer(session, ['make', 'dist'])
         except UnidentifiedError as e:
             if "make: *** No rule to make target 'dist'.  Stop.\n" in e.lines:
+                pass
+            elif ("make[1]: *** No rule to make target 'dist'. Stop.\n"
+                    in e.lines):
                 pass
             elif ("Reconfigure the source tree "
                     "(via './config' or 'perl Configure'), please.\n"
