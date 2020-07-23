@@ -1885,7 +1885,7 @@ build_failure_regexps = [
      xfce_dependency_missing),
     (r'You need to install the gnome-common module and make.*',
      gnome_common_missing),
-    (r'You need to install gnome-common from the GNOME (git|CVS)',
+    (r'You need to install gnome-common from the GNOME (git|CVS|SVN)',
      gnome_common_missing),
     (r'automake: error: cannot open < (.*): No such file or directory',
      automake_input_missing),
@@ -2260,6 +2260,8 @@ secondary_build_failure_regexps = [
     r'There where errors/warnings in server logs after running test cases.',
     r'Errno::EEXIST: File exists @ dir_s_mkdir - .*',
     r'Test environment was found to be incomplete at configuration time,',
+    r'libtool:   error: cannot find the library \'(.*)\' or '
+    r'unhandled argument \'(.*)\'',
 ]
 
 compiled_secondary_build_failure_regexps = [
