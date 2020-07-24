@@ -25,6 +25,10 @@ from aiohttp.web_urldispatcher import (
     UrlMappingMatchInfo,
     )
 from ..config import get_suite_config
+import gpg
+import shutil
+import tempfile
+import time
 
 from . import is_worker, html_template, update_vars_from_request
 
@@ -99,7 +103,7 @@ class ForwardedResource(PrefixResource):
             params['service'] = service
         if await is_worker(request.app.database, request):
             params['allow_writes'] = '1'
-        from janitor.trace import note
+        from janitor.trace import note, warning
         note('Forwarding: method: %s, url: %s, params: %r, headers: %r',
              request.method, url, params, headers)
         async with request.app.http_client_session.request(
@@ -178,9 +182,18 @@ def iter_accept(request):
         h.strip() for h in request.headers.get('Accept', '*/*').split(',')]
 
 
+async def get_credentials(session, publisher_url):
+    url = urllib.parse.urljoin(publisher_url, 'credentials')
+    async with session.get(url=url) as resp:
+        if resp.status != 200:
+            raise Exception('unexpected response')
+        return await resp.json()
+
+
 if __name__ == '__main__':
     import argparse
     import functools
+    from gpg import Context
     import os
     import re
     from janitor import state
@@ -299,6 +312,63 @@ if __name__ == '__main__':
                 content_type='text/html',
                 text=await write_history(conn, worker=worker, limit=limit),
                 headers={'Cache-Control': 'max-age=60'})
+
+    @html_template(
+        'credentials.html', headers={'Cache-Control': 'max-age=10'})
+    async def handle_credentials(request):
+        credentials = await get_credentials(
+            request.app.http_client_session,
+            request.app.publisher_url)
+        pgp_fprs = []
+        for keydata in credentials['pgp_keys']:
+            result = request.app.gpg.key_import(
+                keydata.encode('utf-8'))
+            pgp_fprs.extend([i.fpr for i in result.imports])
+
+        pgp_validity = {
+            gpg.constants.VALIDITY_FULL: 'full',
+            gpg.constants.VALIDITY_MARGINAL: 'marginal',
+            gpg.constants.VALIDITY_NEVER: 'never',
+            gpg.constants.VALIDITY_ULTIMATE: 'ultimate',
+            gpg.constants.VALIDITY_UNDEFINED: 'undefined',
+            gpg.constants.VALIDITY_UNKNOWN: 'unknown',
+        }
+
+        return {
+            'format_pgp_date': lambda ts: time.strftime(
+                '%Y-%m-%d', time.localtime(ts)),
+            'pgp_validity': pgp_validity.get,
+            'pgp_algo': gpg.core.pubkey_algo_name,
+            'ssh_keys': credentials['ssh_keys'],
+            'pgp_keys': request.app.gpg.keylist('\0'.join(pgp_fprs)),
+            'hosting': credentials['hosting'],}
+
+    async def handle_ssh_keys(request):
+        credentials = await get_credentials(
+            request.app.http_client_session,
+            request.app.publisher_url)
+        return web.Response(
+            text='\n'.join(credentials['ssh_keys']),
+            content_type='text/plain')
+
+    async def handle_pgp_keys(request):
+        credentials = await get_credentials(
+            request.app.http_client_session,
+            request.app.publisher_url)
+        armored = request.match_info['extension'] == '.asc'
+        if armored:
+            return web.Response(
+                text='\n'.join(credentials['pgp_keys']),
+                content_type='application/pgp-keys')
+        else:
+            fprs = []
+            for keydata in credentials['pgp_keys']:
+                result = request.app.gpg.key_import(
+                    keydata.encode('utf-8'))
+                fprs.extend([i.fpr for i in result.imports])
+            return web.Response(
+                body=request.app.gpg.key_export_minimal('\0'.join(fprs)),
+                content_type='application/pgp-keys')
 
     @html_template(
         'publish-history.html', headers={'Cache-Control': 'max-age=10'})
@@ -689,6 +759,17 @@ if __name__ == '__main__':
                 suites=suites)
         return web.Response(content_type='text/html', text=text)
 
+    async def start_gpg_context(app):
+        gpg_home = tempfile.TemporaryDirectory()
+        gpg_context = gpg.Context(home_dir=gpg_home.name)
+        app.gpg = gpg_context.__enter__()
+
+        async def cleanup_gpg(app):
+            gpg_context.__exit__(None, None, None)
+            shutil.rmtree(gpg_home)
+
+        app.on_cleanup.append(cleanup_gpg)
+
     async def start_pubsub_forwarder(app):
 
         async def listen_to_publisher_publish(app):
@@ -724,12 +805,20 @@ if __name__ == '__main__':
             ('/', 'index'),
             ('/contact', 'contact'),
             ('/about', 'about'),
-            ('/credentials', 'credentials'),
             ('/apt', 'apt'),
             ('/cupboard/', 'cupboard')]:
         app.router.add_get(
             path, functools.partial(handle_simple, templatename + '.html'),
             name=templatename)
+    app.router.add_get(
+        '/credentials', handle_credentials,
+        name='credentials')
+    app.router.add_get(
+        '/ssh_keys', handle_ssh_keys,
+        name='ssh-keys')
+    app.router.add_get(
+        '/pgp_keys{extension:(\.asc)?}', handle_pgp_keys,
+        name='pgp-keys')
     app.router.add_get(
         '/lintian-fixes/', handle_lintian_fixes,
         name='lintian-fixes-start')
@@ -945,6 +1034,7 @@ if __name__ == '__main__':
     app.policy = policy_config
     app.publisher_url = args.publisher_url
     app.on_startup.append(start_pubsub_forwarder)
+    app.on_startup.append(start_gpg_context)
     if args.external_url:
         app.external_url = URL(args.external_url)
     else:
