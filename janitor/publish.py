@@ -23,8 +23,10 @@ from datetime import datetime, timedelta
 from dulwich.repo import Repo as DulwichRepo
 import asyncio
 import functools
+import gpg
 from io import BytesIO
 import json
+import os
 import shlex
 import sys
 import time
@@ -53,6 +55,7 @@ from prometheus_client import (
 from silver_platter.proposal import (
     iter_all_mps,
     Hoster,
+    hosters,
     )
 from silver_platter.utils import (
     open_branch,
@@ -854,6 +857,39 @@ async def get_vcs_type(request):
     return web.Response(body=vcs_type.encode('utf-8'))
 
 
+async def credentials_request(request):
+    ssh_keys = []
+    for entry in os.scandir(os.path.expanduser('~/.ssh')):
+        if entry.name.endswith('.pub'):
+            with open(entry.path, 'r') as f:
+                ssh_keys.extend([line.strip() for line in f.readlines()])
+    pgp_keys = []
+    for entry in list(request.app.gpg.keylist(secret=True)):
+        pgp_keys.append(request.app.gpg.key_export_minimal(entry.fpr).decode())
+    hosting = []
+    for name, hoster_cls in hosters.items():
+        for instance in hoster_cls.iter_instances():
+            current_user = instance.get_current_user()
+            if current_user:
+                current_user_url = instance.get_user_url(current_user)
+            else:
+                current_user_url = None
+            hoster = {
+                'kind': name,
+                'name': instance.name,
+                'url': instance.base_url,
+                'user': current_user,
+                'user_url': current_user_url,
+            }
+            hosting.append(hoster)
+
+    return web.json_response({
+        'ssh_keys': ssh_keys,
+        'pgp_keys': pgp_keys,
+        'hosting': hosting,
+    })
+
+
 async def run_web_server(listen_addr: str, port: int, rate_limiter: RateLimiter,
                          vcs_manager: VcsManager, db: state.Database,
                          topic_merge_proposal: Topic, topic_publish: Topic,
@@ -862,6 +898,7 @@ async def run_web_server(listen_addr: str, port: int, rate_limiter: RateLimiter,
                          modify_mp_limit: Optional[int] = None):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
+    app.gpg = gpg.Context(armor=True)
     app.vcs_manager = vcs_manager
     app.db = db
     app.rate_limiter = rate_limiter
@@ -896,6 +933,7 @@ async def run_web_server(listen_addr: str, port: int, rate_limiter: RateLimiter,
     app.router.add_post('/scan', scan_request)
     app.router.add_post('/refresh-status', refresh_proposal_status_request)
     app.router.add_post('/autopublish', autopublish_request)
+    app.router.add_get('/credentials', credentials_request)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
