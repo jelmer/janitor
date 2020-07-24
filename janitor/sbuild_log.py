@@ -1712,6 +1712,8 @@ build_failure_regexps = [
      command_missing),
     (r'No package \'([^\']+)\' found', pkg_config_missing),
     (r'configure: error: No package \'([^\']+)\' found', pkg_config_missing),
+    (r'configure: error: Documentation enabled but rst2html not found.',
+     lambda m: MissingCommand('rst2html')),
     (r'Error: pkg-config not found\!', lambda m: MissingCommand('pkg-config')),
     (r' ERROR: BLAS not found\!', lambda m: MissingLibrary('blas')),
     (r'\./configure: [0-9]+: \.: Illegal option .*', None),
