@@ -997,10 +997,11 @@ if __name__ == '__main__':
         '/_static/chart.js', functools.partial(
             handle_static_file,
             '/usr/share/javascript/chart.js/Chart.%sjs' % minified))
-    app.router.add_get(
-        '/_static/chart.css', functools.partial(
-            handle_static_file,
-            '/usr/share/javascript/chart.js/Chart.%scss' % minified))
+    if os.path.exists('/usr/share/javascript/chart.js/Chart.css'):
+        app.router.add_get(
+            '/_static/chart.css', functools.partial(
+                handle_static_file,
+                '/usr/share/javascript/chart.js/Chart.%scss' % minified))
     app.router.add_get(
         '/_static/jquery.js', functools.partial(
             handle_static_file,
