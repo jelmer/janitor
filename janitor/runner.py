@@ -1131,6 +1131,7 @@ class QueueProcessor(object):
                         break
                     note('Nothing to do. Sleeping for 60s.')
                     await asyncio.sleep(60)
+                    done = []
                 else:
                     done, pending = await asyncio.wait(
                         todo, return_when='FIRST_COMPLETED')
