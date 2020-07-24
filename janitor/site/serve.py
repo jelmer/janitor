@@ -993,37 +993,23 @@ if __name__ == '__main__':
             os.path.join(
                 os.path.dirname(__file__), '..', '..', 'janitor.asc')),
         name='gpg-key')
-    app.router.add_get(
-        '/_static/chart.js', functools.partial(
-            handle_static_file,
-            '/usr/share/javascript/chart.js/Chart.%sjs' % minified))
-    if os.path.exists('/usr/share/javascript/chart.js/Chart.css'):
+    for (name, kind, basepath) in [
+            ('chart', 'js', '/usr/share/javascript/chart.js/Chart'),
+            ('chart', 'css', '/usr/share/javascript/chart.js/Chart'),
+            ('jquery', 'js', '/usr/share/javascript/jquery/jquery'),
+            ('jquery.typeahead', 'js',
+             '/usr/share/javascript/jquery-typeahead/jquery.typeahead'),
+            ('jquery.datatables', 'js',
+             '/usr/share/javascript/jquery-datatables/jquery.dataTables'),
+            ('moment', 'js', '/usr/share/javascript/moment/moment'),
+            ]:
+        if not os.path.exists(basepath + '.' + kind):
+            continue
         app.router.add_get(
-            '/_static/chart.css', functools.partial(
+            '/_static/%s.%s' % (name, kind), functools.partial(
                 handle_static_file,
-                '/usr/share/javascript/chart.js/Chart.%scss' % minified))
-    app.router.add_get(
-        '/_static/jquery.js', functools.partial(
-            handle_static_file,
-            '/usr/share/javascript/jquery/jquery.%sjs' % minified))
-    app.router.add_get(
-        '/_static/jquery.typeahead.js', functools.partial(
-            handle_static_file,
-            '/usr/share/javascript/jquery-typeahead/jquery.typeahead.%sjs'
-            % minified))
-    app.router.add_get(
-        '/_static/jquery.datatables.js', functools.partial(
-            handle_static_file,
-            '/usr/share/javascript/jquery-datatables/jquery.datatables.%sjs'
-            % minified))
-    app.router.add_get(
-        '/_static/moment.js', functools.partial(
-            handle_static_file,
-            '/usr/share/javascript/moment/moment.%sjs' % minified))
-    app.router.add_get(
-        '/_static/jquery.datatables.js', functools.partial(
-            handle_static_file,
-            '/usr/share/javascript/jquery-datatables/jquery.dataTables.%sjs' % minified))
+                '%s.%s%s' % (basepath, minified, kind)))
+
     from .api import create_app as create_api_app
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
