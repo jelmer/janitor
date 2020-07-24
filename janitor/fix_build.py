@@ -86,6 +86,7 @@ from .sbuild_log import (
     MissingRubyGem,
     MissingLibrary,
     MissingJavaClass,
+    MissingCSharpCompiler,
     MissingConfigure,
     MissingAutomakeInput,
     MissingRPackage,
@@ -976,6 +977,10 @@ def fix_missing_autoconf_macro(error, context):
     return context.add_dependency(package)
 
 
+def fix_missing_c_sharp_compiler(error, context):
+    return context.add_dependency('mono-mcs')
+
+
 FIXERS: List[
         Tuple[Type[Problem], Callable[[Problem, DependencyContext], bool]]] = [
     (MissingPythonModule, fix_missing_python_module),
@@ -1010,6 +1015,7 @@ FIXERS: List[
     (MissingAutoconfMacro, fix_missing_autoconf_macro),
     (NeedPgBuildExtUpdateControl, run_pgbuildext_updatecontrol),
     (MissingValaPackage, fix_missing_vala_package),
+    (MissingCSharpCompiler, fix_missing_c_sharp_compiler),
 ]
 
 

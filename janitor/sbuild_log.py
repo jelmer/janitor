@@ -1643,6 +1643,27 @@ def dh_missing_addon(m):
         'pybuild', 'Debian/Debhelper/Buildsystem/pybuild.pm')
 
 
+class MissingCSharpCompiler(Problem):
+
+    kind = 'missing-c#-compiler'
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return "No C# compiler found"
+
+    def __repr__(self):
+        return "%s()" % type(self).__name__
+
+
+def c_sharp_compiler_missing(m):
+    return MissingCSharpCompiler()
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -1727,6 +1748,10 @@ build_failure_regexps = [
      None),
     (r'configure: error: .*\. Please install (bison|flex)',
      lambda m: MissingCommand(m.group(1))),
+    (r'configure: error: No C\# compiler found. You need to install either '
+     'mono \(>=(.*)\) or \.Net', c_sharp_compiler_missing),
+    (r'configure: error: gmcs Not found', c_sharp_compiler_missing),
+    (r'configure: error: You need to install gmcs', c_sharp_compiler_missing),
     ('.*meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
      'tried pkgconfig', meson_pkg_config_missing),
     ('.*meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
