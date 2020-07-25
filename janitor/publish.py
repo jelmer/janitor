@@ -872,7 +872,7 @@ async def credentials_request(request):
             try:
                 current_user = instance.get_current_user()
             except HosterLoginRequired:
-                current_user = None
+                continue
             if current_user:
                 current_user_url = instance.get_user_url(current_user)
             else:
