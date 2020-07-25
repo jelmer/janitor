@@ -217,7 +217,6 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs):
     kwargs['merge_proposals'] = merge_proposals
     kwargs['runs'] = [run async for run in runs]
     kwargs['removed'] = package.removed
-    kwargs['suites'] = [suite.name for suite in config.suite]
     kwargs['tracker_url'] = partial(tracker_url, config)
     async with db.acquire() as conn:
         kwargs['candidates'] = {
