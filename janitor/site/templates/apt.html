@@ -7,7 +7,7 @@
 <p>For each changes that the janitor makes successfully, it publishes the
 resulting Debian package.</p>
 <p>To use the apt repository, e.g. for lintian fixes, run:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb {{ url.join(UR:('..')) }} lintian-fixes main &gt; /etc/apt/sources.list.d/janitor.list
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb {{ url.join(URL('..')) }} lintian-fixes main &gt; /etc/apt/sources.list.d/janitor.list
 curl {{ url.join(URL('../janitor.asci')) }} | sudo apt-key add -
 apt update
 </pre></div>
