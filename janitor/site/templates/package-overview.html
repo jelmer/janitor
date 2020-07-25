@@ -28,7 +28,7 @@
 <h2>Per-suite pages</h2>
 <ul>
 {% for suite in suites %}
-<li><a href="/{{ suite }}/pkg/{{ package }}">{{ suite }}</a></li>
+<li><a href="/{{ suite.name }}/pkg/{{ package }}">{{ suite.name }}</a></li>
 {% endfor %}
 </ul>
 </div>
