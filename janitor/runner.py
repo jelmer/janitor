@@ -837,7 +837,10 @@ class ActiveLocalRun(ActiveRun):
                     subpath=self.queue_item.subpath,
                     build_distribution=suite_config.build_distribution,
                     build_suffix=suite_config.build_suffix),
-                timeout=overall_timeout), name=self.log_id)
+                timeout=overall_timeout))
+            # set_name is only available on Python 3.8
+            if getattr(self._task, 'set_name', None):
+                self._task.set_name(self.log_id)
             retcode = await self._task
         except asyncio.CancelledError:
             return JanitorResult(
