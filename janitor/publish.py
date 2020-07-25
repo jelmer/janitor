@@ -63,7 +63,7 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 
-from breezy.propose import get_proposal_by_url
+from breezy.propose import get_proposal_by_url, HosterLoginRequired
 from breezy.transport import Transport
 import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.launchpad  # noqa: F401
@@ -869,7 +869,10 @@ async def credentials_request(request):
     hosting = []
     for name, hoster_cls in hosters.items():
         for instance in hoster_cls.iter_instances():
-            current_user = instance.get_current_user()
+            try:
+                current_user = instance.get_current_user()
+            except HosterLoginRequired:
+                current_user = None
             if current_user:
                 current_user_url = instance.get_user_url(current_user)
             else:
