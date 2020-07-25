@@ -253,9 +253,11 @@ if __name__ == '__main__':
     logfile_manager = get_log_manager(config.logs_location)
 
     async def handle_simple(templatename, request):
-        from .generate import render_simple
+        vs = {}
+        update_vars_from_request(vs, request)
+        template = env.get_template(templatename)
         return web.Response(
-            content_type='text/html', text=await render_simple(templatename),
+            content_type='text/html', text=await template.render_async(**vs),
             headers={'Cache-Control': 'max-age=3600'})
 
     @html_template(
@@ -801,6 +803,7 @@ if __name__ == '__main__':
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
+
     for path, templatename in [
             ('/', 'index'),
             ('/contact', 'contact'),
