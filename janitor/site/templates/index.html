@@ -17,16 +17,27 @@ in a web UI and allowing users to try out newer upstream versions of packages
 without the involvement of the maintainer.</p>
 
 <h2>For Developers</h2>
+{% set suite_names = suites|map(attribute='name') %}
 <ul>
+{% if 'lintian-fixes' in suite_names %}
   <li><a href="lintian-fixes">Fixes for common issues reported by Lintian</a></li>
+{% endif %}
+{% if 'multiarch-fixes' in suite_names %}
   <li><a href="multiarch-fixes">Application of multi-arch hints</a></li>
+{% endif %}
+{% if 'orphan' in suite_names %}
   <li><a href="orphan">Moving orphaned packages to the QA team</a></li>
+{% endif %}
 </ul>
 
 <h2>For Users</h2>
 <ul>
+{% if 'fresh-releases' in suite_names %}
   <li><a href="fresh-releases">Packages of new upstream releases</a></li>
+{% endif %}
+{% if 'fresh-snapshots' in suite_names %}
   <li><a href="fresh-snapshots">Packages of new upstream snapshots</a></li>
+{% endif %}
 </ul>
 
 </div>
