@@ -45,7 +45,7 @@ from breezy.errors import PermissionDenied
 from breezy.plugins.debian.util import (
     debsign,
     )
-from breezy.propose import Hoster
+from breezy.propose import Hoster, HosterLoginRequired
 from breezy.transport import Transport
 
 from prometheus_client import (
@@ -777,9 +777,17 @@ class ActiveLocalRun(ActiveRun):
                         description=e.description,
                         code=e.code, logfilenames=[])
 
-            resume_branch = await open_resume_branch(
-                main_branch, suite_config.branch_name,
-                possible_hosters=possible_hosters)
+            try:
+                resume_branch = await open_resume_branch(
+                    main_branch, suite_config.branch_name,
+                    possible_hosters=possible_hosters)
+            except HosterLoginRequired as e:
+                return JanitorResult(
+                    self.queue_item.package, log_id=self.log_id,
+                    branch_url=self.queue_item.branch_url,
+                    description=str(e),
+                    code='hoster-login-required',
+                    logfilenames=[])
 
             if resume_branch is None:
                 resume_branch = vcs_manager.get_branch(
