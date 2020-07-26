@@ -1039,6 +1039,9 @@ def build_incrementally(
             if e.error is None:
                 warning('Build failed with unidentified error. Giving up.')
                 raise
+            if e.context is None:
+                note('No relevant context, not making any changes.')
+                raise
             if (e.error, e.context) in fixed_errors:
                 warning('Error was still not fixed on second try. Giving up.')
                 raise
