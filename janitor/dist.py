@@ -24,6 +24,7 @@ from janitor.fix_build import (
     resolve_error,
     )
 from janitor.sbuild_log import (
+    find_apt_get_failure,
     find_build_failure_description,
     )
 from janitor.schroot import Session
@@ -38,14 +39,23 @@ from typing import Optional, TextIO, List
 from breezy.plugins.debian.repack_tarball import get_filetype
 
 
+def run_apt(session: Session, args: List[str]) -> None:
+    args = ['apt', '-y'] + args
+    retcode, lines = run_with_tee(session, args, cwd='/', user='root')
+    if retcode == 0:
+        return
+    offset, line, error = find_apt_get_failure(lines)
+    if error is not None:
+        raise error
+    raise UnidentifiedError(retcode, args, lines)
+
+
 def apt_install(session: Session, packages: List[str]) -> None:
-    session.check_call(
-        ['apt', '-y', 'install'] + packages, cwd='/', user='root')
+    run_apt(session, ['install'] + packages)
 
 
 def apt_satisfy(session: Session, deps: List[str]) -> None:
-    session.check_call(
-        ['apt', '-y', 'satisfy'] + deps, cwd='/', user='root')
+    run_apt(session, ['satisfy'] + deps)
 
 
 def satisfy_build_deps(session: Session, tree):
@@ -65,8 +75,9 @@ def satisfy_build_deps(session: Session, tree):
     apt_satisfy(session, deps)
 
 
-def run_with_tee(session: Session, args: List[str]):
-    p = session.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+def run_with_tee(session: Session, args: List[str], **kwargs):
+    p = session.Popen(
+        args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kwargs)
     contents = []
     while p.poll() is None:
         line = p.stdout.readline()
@@ -203,7 +214,7 @@ def run_dist_in_chroot(session):
                     session.check_call(
                         ['cpan', 'install', value.decode().strip("'")],
                         user='root')
-                    session.check_call(['distinkt-dist'])
+                    run_with_build_fixer(session, ['distinkt-dist'])
                     return
         # Default to invoking Dist::Zilla
         note('Found dist.ini, assuming dist-zilla.')

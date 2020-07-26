@@ -562,6 +562,11 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             1, MissingPerlModule(
                 filename=None, module='Dist::Zilla::Plugin::PPPort'))
 
+    def test_perl_expand(self):
+        self.run_test([
+            ">(error): Could not expand [ 'Dist::Inkt::Profile::TOBYINK'"],
+            1, MissingPerlModule(None, module='Dist::Inkt::Profile::TOBYINK'))
+
     def test_missing_perl_module(self):
         self.run_test([
             'Converting tags.ledger... Can\'t locate String/Interpolate.pm in '

@@ -59,6 +59,7 @@ SBUILD_FOCUS_SECTION = {
     'explain-bd-uninstallable': 'install package build dependencies',
     'apt-get-update': 'update chroot',
     'arch-check': 'check architectures',
+    'check-space': 'cleanup',
 }
 
 
@@ -334,6 +335,11 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
             description = str(error)
     if failed_stage == 'arch-check':
         (offset, line, error) = find_arch_check_failure_description(
+                section_lines)
+        if error:
+            description = str(error)
+    if failed_stage == 'check-space':
+        (offset, line, error) = find_check_space_failure_description(
                 section_lines)
         if error:
             description = str(error)
@@ -928,6 +934,10 @@ class MissingPerlModule(Problem):
 def perl_missing_module(m):
     return MissingPerlModule(
         m.group(1) + '.pm', m.group(2), m.group(3).split(' '))
+
+
+def perl_expand_failed(m):
+    return MissingPerlModule(None, m.group(1), None)
 
 
 def perl_missing_plugin(m):
@@ -1733,6 +1743,8 @@ build_failure_regexps = [
      command_missing),
     (r'No package \'([^\']+)\' found', pkg_config_missing),
     (r'configure: error: No package \'([^\']+)\' found', pkg_config_missing),
+    (r'configure: error: asciidoc is not available and maintainer mode '
+     r'is enabled', lambda m: MissingCommand('asciidoc')),
     (r'configure: error: Documentation enabled but rst2html not found.',
      lambda m: MissingCommand('rst2html')),
     (r'Error: pkg-config not found\!', lambda m: MissingCommand('pkg-config')),
@@ -1768,6 +1780,8 @@ build_failure_regexps = [
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_module),
+    (r'\>\(error\): Could not expand \[ \'(.*)\'',
+     perl_expand_failed),
     (r'Required plugin bundle ([^ ]+) isn\'t installed.', perl_missing_plugin),
     (r'Required plugin ([^ ]+) isn\'t installed.', perl_missing_plugin),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
@@ -2098,6 +2112,8 @@ build_failure_regexps = [
     # autoconf
     (r'configure.ac:[0-9]+: error: required file \'(.*)\' not found',
      file_not_found),
+    # automake
+    (r'Makefile.am: error: required file \'(.*)\' not found', file_not_found),
     # sphinx
     (r'config directory doesn\'t contain a conf.py file \((.*)\)',
      None),
@@ -2139,6 +2155,7 @@ build_failure_regexps = [
     (r'E: Please add appropriate interpreter package to Build-Depends, '
      r'see pybuild\(1\) for details\..*',
      dh_missing_addon),
+    (r'dpkg: error: .*: No space left on device', lambda m: NoSpaceOnDevice()),
 ]
 
 compiled_build_failure_regexps = []
@@ -2731,6 +2748,15 @@ def find_autopkgtest_failure_description(
                                 error, description)
 
                     if (testbed_failure_reason ==
+                            "sent `auxverb_debug_fail', got `copy-failed', "
+                            "expected `ok...'"):
+                        (offset, description, error) = (
+                            find_build_failure_description(lines))
+                        if error is not None:
+                            assert offset is not None
+                            return (offset, last_test, error, description)
+
+                    if (testbed_failure_reason ==
                             'cannot send to testbed: [Errno 32] Broken pipe'):
                         offset, line, error = find_testbed_setup_failure(lines)
                         if error and offset:
@@ -3019,7 +3045,10 @@ def find_apt_get_failure(lines):
                 return lineno + 1, line, AptFetchFailure(
                     m.group(1), m.group(2))
             return lineno + 1, line, None
-        if line == 'E: Broken packages':
+        if line in (
+                'E: Broken packages',
+                'E: Unable to correct problems, you have held broken '
+                'packages.'):
             error = AptBrokenPackages(lines[lineno-1].strip())
             return lineno, lines[lineno-1].strip(), error
         m = re.match(
@@ -3066,6 +3095,40 @@ def find_arch_check_failure_description(lines):
             error = ArchitectureNotInList(m.group(1), m.group(2))
             return offset, line, error
     return len(lines) - 1, lines[-1], None
+
+
+class InsufficientDiskSpace(Problem):
+
+    kind = 'insufficient-disk-space'
+
+    def __init__(self, needed, free):
+        self.needed = needed
+        self.free = free
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.needed == other.needed and
+                self.free == other.free)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.needed, self.free)
+
+    def __str__(self):
+        return ("Insufficient disk space for build. "
+                "Need: %d KiB, free: %s KiB" % (self.needed, self.free))
+
+
+def find_check_space_failure_description(lines):
+    for offset, line in enumerate(lines):
+        if line == 'E: Disk space is probably not sufficient for building.\n':
+            m = re.fullmatch(
+                'I: Source needs ([0-9]+) KiB, while ([0-9]+) KiB is free.\)\n',
+                lines[offset+1])
+            if m:
+                return (offset + 1, line,
+                        InsufficientDiskSpace(
+                            int(m.group(1)), int(m.group(2))))
+            return (offset + 1, line, None)
 
 
 def find_install_deps_failure_description(paragraphs):
