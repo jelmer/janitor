@@ -67,6 +67,7 @@ from silver_platter.debian.upstream import (
     InvalidFormatUpstreamVersion,
     DistCommandFailed,
     NewUpstreamMissing,
+    NewUpstreamTarballMissing,
     UnparseableChangelog,
     UpstreamAlreadyImported,
     UpstreamAlreadyMerged,
@@ -527,6 +528,15 @@ class NewUpstreamWorker(SubWorker):
             except NewUpstreamMissing:
                 error_description = "Unable to find new upstream source."
                 error_code = 'new-upstream-missing'
+                raise WorkerFailure(error_code, error_description)
+            except NewUpstreamTarballMissing as e:
+                error_code = 'new-upstream-tarball-missing'
+                error_description = (
+                    'New upstream version (%s/%s) found, but was missing '
+                    'when retrieved as tarball from %r.' % (
+                        e.package, e.version, e.upstream))
+                report_context(e.version)
+                metadata['upstream_version'] = e.version
                 raise WorkerFailure(error_code, error_description)
             except UpstreamBranchUnavailable as e:
                 error_description = (
