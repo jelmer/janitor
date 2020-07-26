@@ -257,26 +257,6 @@ class FileSearcher(object):
         raise NotImplementedError(self.search_files)
 
 
-class CliAptFileSearcher(FileSearcher):
-
-    def search_files(self, path, regex=False):
-        args = ['/usr/bin/apt-file', 'search', '-l']
-        if regex:
-            args.append('-x')
-        else:
-            args.append('-F')
-        args.append(path)
-        try:
-            return iter(subprocess.check_output(args).decode().splitlines())
-        except subprocess.CalledProcessError:
-            return iter([])
-
-    @classmethod
-    def available(cls) -> bool:
-        # TODO(jelmer): Also check whether database has been built?
-        return os.path.exists('/usr/bin/apt-file')
-
-
 class ContentsFileNotFound(Exception):
     """The contents file was not found."""
 
@@ -367,12 +347,8 @@ _apt_file_searcher = None
 def search_apt_file(path: str, regex: bool = False) -> Iterator[FileSearcher]:
     global _apt_file_searcher
     if _apt_file_searcher is None:
-        # TODO(jelmer): Also check that apt-file uses unstable?
-        if CliAptFileSearcher.available():
-            _apt_file_searcher = CliAptFileSearcher()
-        else:
-            # TODO(jelmer): cache file
-            _apt_file_searcher = ContentsAptFileSearcher.from_env()
+        # TODO(jelmer): cache file
+        _apt_file_searcher = ContentsAptFileSearcher.from_env()
     yield from _apt_file_searcher.search_files(path, regex=regex)
     yield from GENERATED_FILE_SEARCHER.search_files(path, regex=regex)
 
