@@ -95,14 +95,20 @@ def _convert_branch_exception(
             code = 'unsupported-vcs-darcs'
         else:
             code = 'branch-unavailable'
-        return BranchOpenFailure(code, str(e))
+        msg = str(e)
+        if e.url not in msg:
+            msg = "%s (%s)" % (msg, e.url)
+        return BranchOpenFailure(code, msg)
     if isinstance(e, BranchMissing):
         if str(e).startswith('Branch does not exist: Not a branch: '
                              '"https://anonscm.debian.org'):
             code = 'hosted-on-alioth'
         else:
             code = 'branch-missing'
-        return BranchOpenFailure(code, str(e))
+        msg = str(e)
+        if e.url not in msg:
+            msg = "%s (%s)" % (msg, e.url)
+        return BranchOpenFailure(code, msg)
     if isinstance(e, BranchUnsupported):
         if str(e).startswith('Unsupported protocol for url '):
             if ('anonscm.debian.org' in str(e) or
@@ -124,7 +130,10 @@ def _convert_branch_exception(
                 code = 'unsupported-vcs-darcs'
             else:
                 code = 'unsupported-vcs'
-        return BranchOpenFailure(code, str(e))
+        msg = str(e)
+        if e.url not in msg:
+            msg = "%s (%s)" % (msg, e.url)
+        return BranchOpenFailure(code, msg)
 
     return e
 
