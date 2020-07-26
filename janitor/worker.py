@@ -472,6 +472,7 @@ class NewUpstreamWorker(SubWorker):
         from janitor.dist import (
             create_dist_schroot,
             DetailedDistCommandFailed,
+            UnidentifiedError,
             )
         with local_tree.lock_write():
             if control_files_in_root(local_tree, subpath):
@@ -487,6 +488,11 @@ class NewUpstreamWorker(SubWorker):
                         packaging_tree=local_tree, chroot=self.args.chroot)
                 except DetailedDistCommandFailed:
                     raise
+                except UnidentifiedError as e:
+                    traceback.print_exc()
+                    raise DistCommandFailed(
+                        'command %r failed with unidentified error '
+                        '(return code %d)' % (e.argv, e.retcode))
                 except Exception as e:
                     traceback.print_exc()
                     raise DistCommandFailed(str(e))
