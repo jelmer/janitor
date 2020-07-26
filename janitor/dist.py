@@ -34,21 +34,21 @@ import stat
 import subprocess
 import sys
 import tempfile
-from typing import Optional
+from typing import Optional, TextIO, List
 from breezy.plugins.debian.repack_tarball import get_filetype
 
 
-def apt_install(session, packages):
+def apt_install(session: Session, packages: List[str]) -> None:
     session.check_call(
         ['apt', '-y', 'install'] + packages, cwd='/', user='root')
 
 
-def apt_satisfy(session, deps):
+def apt_satisfy(session: Session, deps: List[str]) -> None:
     session.check_call(
         ['apt', '-y', 'satisfy'] + deps, cwd='/', user='root')
 
 
-def satisfy_build_deps(session, tree):
+def satisfy_build_deps(session: Session, tree):
     source = Deb822(tree.get_file('debian/control'))
     deps = []
     for name in ['Build-Depends', 'Build-Depends-Indep', 'Build-Depends-Arch']:
@@ -65,7 +65,7 @@ def satisfy_build_deps(session, tree):
     apt_satisfy(session, deps)
 
 
-def run_with_tee(session, args):
+def run_with_tee(session: Session, args: List[str]):
     p = session.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     contents = []
     while p.poll() is None:
@@ -103,7 +103,7 @@ class UnidentifiedError(Exception):
         self.lines = lines
 
 
-def run_with_build_fixer(session, args):
+def run_with_build_fixer(session: Session, args: List[str]):
     fixed_errors = []
     while True:
         retcode, lines = run_with_tee(session, args)
@@ -267,7 +267,8 @@ def run_dist_in_chroot(session):
 def create_dist_schroot(
         tree: Tree, target_filename: str,
         chroot: str, packaging_tree: Optional[Tree] = None,
-        include_controldir: bool = True, subdir: Optional[str] = None) -> bool:
+        include_controldir: bool = True,
+        subdir: Optional[str] = None) -> bool:
     if subdir is None:
         subdir = 'package'
     with Session(chroot) as session:
@@ -336,10 +337,8 @@ def create_dist_schroot(
 
 if __name__ == '__main__':
     import argparse
-    from breezy.workingtree import WorkingTree
     import breezy.bzr
     import breezy.git
-    import sys
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
