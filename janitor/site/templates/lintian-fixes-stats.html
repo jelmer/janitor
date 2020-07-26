@@ -11,7 +11,7 @@
 <p>Absorbed fixes are fixes that have either been pushed directly by the Janitor, or
 have been <a href="/lintian-fixes/merge-proposals">proposed as a merge request
 and then merged</a>.</p>
-<table class="docutils" border="1">
+<table id="tags-table" class="docutils display" border="1">
 <thead valign="bottom">
 <tr class="row-odd">
   <th class="head">Lintian Tag</th>
@@ -33,6 +33,9 @@ and then merged</a>.</p>
     <td><b>{{ by_tag | sum(attribute=2) }}</b></td>
 </tr>
 </table>
+
+<script>$(document).ready(function() {$('#tags-table').DataTable({"pageLength": 500, "lengthMenu": [50, 200, 500, 1000, -1], "order": []}); });</script>
+
 
 <h2>Burndown</h2>
 
