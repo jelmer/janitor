@@ -66,6 +66,15 @@ async def main():
     parser.add_argument(
         '--version-re', type=str,
         help='Filter on versions matching regex.')
+    parser.add_argument(
+        '--override-vcs-type', type=str,
+        help='Override VCS Type.')
+    parser.add_argument(
+        '--override-vcs-url', type=str,
+        help='Override VCS URL; replace $PACKAGE variable.')
+    parser.add_argument(
+        '--override-vcs-browser', type=str,
+        help='Override VCS Browser URL; replace $PACKAGE variable.')
     args = parser.parse_args()
 
     if args.version_re:
@@ -96,6 +105,14 @@ async def main():
                 package.vcs_url = vcs_url
             if 'Vcs-Browser' in source:
                 package.vcs_browser = source['Vcs-Browser']
+            if args.override_vcs_type:
+                package.vcs_type = args.override_vcs_type
+            if args.override_vcs_url:
+                package.vcs_url = args.override_vcs_url.replace(
+                    '$PACKAGE', source['Package'])
+            if args.override_vcs_browser:
+                package.vcs_browser = args.override_vcs_browser.replace(
+                    '$PACKAGE', source['Package'])
             package.archive_version = source['Version']
             package.removed = False
             print(pl)
