@@ -118,7 +118,8 @@ WHERE
                 await conn.fetch(query, run_ids)):
             todo.append(
                 reprocess_run(db, package, log_id, result_code, description))
-    await asyncio.wait(todo)
+    if todo:
+        await asyncio.wait(todo)
 
 
 db = state.Database(config.database_location)
