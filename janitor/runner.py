@@ -686,6 +686,10 @@ def suite_build_env(distro_config, suite_config, apt_location):
             component))
 
     env['APT_CONTENTS_URL'] = ','.join(urls)
+    env['APT_CONTENTS_LEGACY_URL'] = (
+        '%s/dists/%s/Contents-amd64.gz' % (
+            distro_config.archive_mirror_uri,
+            distro_config.name))
 
     env.update([(env.key, env.value) for env in suite_config.sbuild_env])
     return env

@@ -288,7 +288,10 @@ class ContentsAptFileSearcher(FileSearcher):
 
     @classmethod
     def from_env(cls):
-        return cls.from_urls(os.environ['APT_CONTENTS_URL'].split(','))
+        try:
+            return cls.from_urls(os.environ['APT_CONTENTS_URL'].split(','))
+        except ContentsFileNotFound:
+            return cls.from_urls([os.environ['APT_CONTENTS_LEGACY_URL']])
 
     def __setitem__(self, path, package):
         self._db[path] = package
