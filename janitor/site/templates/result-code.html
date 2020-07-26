@@ -8,23 +8,26 @@
 {{ result_code_explanation(code) }}
 <table id="result-codes-t" class="display docutils" border="1">
 <colgroup>
-<col width="31%">
+<col width="21%">
 <col width="6%">
 <col width="10%">
+<col width="6%">
 <col width="63%">
 </colgroup>
 <thead valign="bottom">
-<tr class="row-odd"><th class="head">Package</th>
+<tr><th class="head">Package</th>
 <th class="head">Suite</th>
 <th class="head">Start Time</th>
+<th class="head">Duration</th>
 <th class="head">Description</th>
 </tr>
 </thead>
 <tbody valign="top">
 {% for run in runs %}
-<tr class="row-even"><td><a class="reference external" href="../pkg/{{ run.package }}/">{{ run.package }}</a></td>
+<tr><td><a class="reference external" href="../pkg/{{ run.package }}/">{{ run.package }}</a></td>
 <td>{{ run.suite }}</td>
 <td>{{ format_timestamp(run.times[0]) }}</td>
+<td>{{ format_duration(run.duration) }}</td>
 <td><a class="reference external" href="../pkg/{{ run.package }}/{{ run.id }}">{{ run.description }}</a></td>
 </tr>
 {% endfor %}
