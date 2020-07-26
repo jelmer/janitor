@@ -61,7 +61,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'too-many-requests',
     'autopkgtest-testbed-chroot-disappeared',
     'autopkgtest-file-fetch-failure',
-    'insufficient-disk-space',
+    'check-space-insufficient-disk-space',
 ]
 
 # In some cases, we want to ignore certain results when guessing
