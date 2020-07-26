@@ -1743,8 +1743,9 @@ build_failure_regexps = [
      command_missing),
     (r'No package \'([^\']+)\' found', pkg_config_missing),
     (r'configure: error: No package \'([^\']+)\' found', pkg_config_missing),
-    (r'configure: error: asciidoc is not available and maintainer mode '
-     r'is enabled', lambda m: MissingCommand('asciidoc')),
+    (r'configure: error: (doxygen|asciidoc) is not available '
+     r'and maintainer mode is enabled',
+     lambda m: MissingCommand(m.group(1))),
     (r'configure: error: Documentation enabled but rst2html not found.',
      lambda m: MissingCommand('rst2html')),
     (r'Error: pkg-config not found\!', lambda m: MissingCommand('pkg-config')),
@@ -1780,7 +1781,7 @@ build_failure_regexps = [
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_module),
-    (r'\>\(error\): Could not expand \[ \'(.*)\'',
+    (r'\>\(error\): Could not expand \[(.*)\'',
      perl_expand_failed),
     (r'Required plugin bundle ([^ ]+) isn\'t installed.', perl_missing_plugin),
     (r'Required plugin ([^ ]+) isn\'t installed.', perl_missing_plugin),

@@ -46,7 +46,7 @@ def run_apt(session: Session, args: List[str]) -> None:
         return
     offset, line, error = find_apt_get_failure(lines)
     if error is not None:
-        raise error
+        raise DetailedDistCommandFailed(retcode, args, error)
     raise UnidentifiedError(retcode, args, lines)
 
 
@@ -120,9 +120,11 @@ def run_with_build_fixer(session: Session, args: List[str]):
         retcode, lines = run_with_tee(session, args)
         if retcode == 0:
             return
-        offset, description, error = find_build_failure_description(lines)
+        offset, line, error = find_build_failure_description(lines)
         if error is None:
             warning('Build failed with unidentified error. Giving up.')
+            if line is not None:
+                raise UnidentifiedError(retcode, args, [line])
             raise UnidentifiedError(retcode, args, lines)
 
         note('Identifier error: %r', error)
