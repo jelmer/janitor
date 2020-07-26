@@ -491,9 +491,14 @@ class NewUpstreamWorker(SubWorker):
                     raise
                 except UnidentifiedError as e:
                     traceback.print_exc()
-                    raise DistCommandFailed(
-                        'command %r failed with unidentified error '
-                        '(return code %d)' % (e.argv, e.retcode))
+                    lines = [line for line in e.lines if line]
+                    if len(lines) == 1:
+                        raise DistCommandFailed(
+                            'command %r failed: %s' % (e.argv, lines[0]))
+                    else:
+                        raise DistCommandFailed(
+                            'command %r failed with unidentified error '
+                            '(return code %d)' % (e.argv, e.retcode))
                 except Exception as e:
                     traceback.print_exc()
                     raise DistCommandFailed(str(e))
