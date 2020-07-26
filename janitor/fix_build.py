@@ -851,15 +851,26 @@ def fix_missing_automake_input(error, context):
 
 def fix_missing_maven_artifacts(error, context):
     artifact = error.artifacts[0]
-    try:
-        (group_id, artifact_id, kind, version) = artifact.split(':')
-    except ValueError:
-        (group_id, artifact_id, version) = artifact.split(':')
+    parts = artifact.split(':')
+    if len(parts) == 4:
+        (group_id, artifact_id, kind, version) = parts
+        regex = False
+    elif len(parts) == 3:
+        (group_id, artifact_id, version) = parts
         kind = 'jar'
+        regex = False
+    elif len(parts) == 2:
+        version = '.*'
+        (group_id, artifact_id) = parts
+        kind = 'jar'
+        regex = True
+    else:
+        raise AssertionError(
+            'invalid number of parts to artifact %s' % artifact)
     paths = [os.path.join(
         '/usr/share/maven-repo', group_id.replace('.', '/'),
         artifact_id, version, '%s-%s.%s' % (artifact_id, version, kind))]
-    package = get_package_for_paths(paths)
+    package = get_package_for_paths(paths, regex=regex)
     if package is None:
         warning('no package for artifact %s', artifact)
         return False
