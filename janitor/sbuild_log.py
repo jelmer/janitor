@@ -333,6 +333,11 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
          error) = find_install_deps_failure_description(paragraphs)
         if error:
             description = str(error)
+        elif line:
+            if line.startswith('E: '):
+                description = line[3:]
+            else:
+                description = line
     if failed_stage == 'arch-check':
         (offset, line, error) = find_arch_check_failure_description(
                 section_lines)
@@ -1781,7 +1786,7 @@ build_failure_regexps = [
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_module),
-    (r'\>\(error\): Could not expand \[(.*)\'',
+    (r'>\(error\): Could not expand \[(.*)\'',
      perl_expand_failed),
     (r'Required plugin bundle ([^ ]+) isn\'t installed.', perl_missing_plugin),
     (r'Required plugin ([^ ]+) isn\'t installed.', perl_missing_plugin),
