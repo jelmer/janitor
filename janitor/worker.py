@@ -521,8 +521,7 @@ class NewUpstreamWorker(SubWorker):
                 metadata['upstream_version'] = e.version
                 error_description = (
                     "Upstream version %s already imported." % (e.version))
-                raise WorkerFailure(
-                    'upstream-already-imported', error_description)
+                raise WorkerFailure('nothing-to-do', error_description)
             except UpstreamAlreadyMerged as e:
                 error_description = (
                     "Last upstream version %s already merged." % e.version)
