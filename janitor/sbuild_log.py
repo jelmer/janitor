@@ -2312,6 +2312,7 @@ secondary_build_failure_regexps = [
     r'Test environment was found to be incomplete at configuration time,',
     r'libtool:   error: cannot find the library \'(.*)\' or '
     r'unhandled argument \'(.*)\'',
+    r'npm ERR\! (.*)',
 ]
 
 compiled_secondary_build_failure_regexps = [
