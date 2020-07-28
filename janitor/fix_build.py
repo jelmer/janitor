@@ -268,8 +268,9 @@ class ContentsAptFileSearcher(FileSearcher):
 
     @classmethod
     def from_env(cls):
+        urls = os.environ['APT_CONTENTS_URL'].split(',')
         try:
-            return cls.from_urls(os.environ['APT_CONTENTS_URL'].split(','))
+            return cls.from_urls(urls)
         except ContentsFileNotFound:
             return cls.from_urls([os.environ['APT_CONTENTS_LEGACY_URL']])
 
@@ -349,7 +350,8 @@ def search_apt_file(path: str, regex: bool = False) -> Iterator[FileSearcher]:
     if _apt_file_searcher is None:
         # TODO(jelmer): cache file
         _apt_file_searcher = ContentsAptFileSearcher.from_env()
-    yield from _apt_file_searcher.search_files(path, regex=regex)
+    if _apt_file_searcher:
+        yield from _apt_file_searcher.search_files(path, regex=regex)
     yield from GENERATED_FILE_SEARCHER.search_files(path, regex=regex)
 
 
@@ -971,7 +973,15 @@ def fix_missing_c_sharp_compiler(error, context):
     return context.add_dependency('mono-mcs')
 
 
-FIXERS: List[
+VERSIONED_PACKAGE_FIXERS: List[
+        Tuple[Type[Problem], Callable[[Problem, DependencyContext], bool]]] = [
+    (NeedPgBuildExtUpdateControl, run_pgbuildext_updatecontrol),
+    (MissingConfigure, fix_missing_configure),
+    (MissingAutomakeInput, fix_missing_automake_input),
+]
+
+
+APT_FIXERS: List[
         Tuple[Type[Problem], Callable[[Problem, DependencyContext], bool]]] = [
     (MissingPythonModule, fix_missing_python_module),
     (MissingPythonDistribution, fix_missing_python_distribution),
@@ -989,8 +999,6 @@ FIXERS: List[
     (MissingRPackage, fix_missing_r_package),
     (MissingLibrary, fix_missing_library),
     (MissingJavaClass, fix_missing_java_class),
-    (MissingConfigure, fix_missing_configure),
-    (MissingAutomakeInput, fix_missing_automake_input),
     (DhAddonLoadFailure, fix_missing_dh_addon),
     (MissingPhpClass, fix_missing_php_class),
     (AptFetchFailure, retry_apt_failure),
@@ -1003,23 +1011,28 @@ FIXERS: List[
     (MissingRubyFile, fix_missing_ruby_file),
     (MissingJavaScriptRuntime, fix_missing_javascript_runtime),
     (MissingAutoconfMacro, fix_missing_autoconf_macro),
-    (NeedPgBuildExtUpdateControl, run_pgbuildext_updatecontrol),
     (MissingValaPackage, fix_missing_vala_package),
     (MissingCSharpCompiler, fix_missing_c_sharp_compiler),
 ]
 
 
-def resolve_error(error, context):
-    for error_cls, fixer in FIXERS:
+def resolve_error(error, context, fixers):
+    relevant_fixers = []
+    for error_cls, fixer in fixers:
         if isinstance(error, error_cls):
-            note('Attempting to use fixer %r to address %r',
-                 fixer, error)
-            try:
-                return fixer(error, context)
-            except GeneratedFile:
-                warning('Control file is generated, unable to edit.')
-                return False
-    warning('No fixer found for %r', error)
+            relevant_fixers.append(fixer)
+    if not relevant_fixers:
+        warning('No fixer found for %r', error)
+        return False
+    note('Attempting to use fixer %r to address %r',
+         fixer, error)
+    try:
+        made_changes = fixer(error, context)
+    except GeneratedFile:
+        warning('Control file is generated, unable to edit.')
+        return False
+    if made_changes:
+        return True
     return False
 
 
@@ -1063,7 +1076,9 @@ def build_incrementally(
                 warning('unable to install for context %r', e.context)
                 raise
             try:
-                if not resolve_error(e.error, context):
+                if not resolve_error(
+                        e.error, context,
+                        VERSIONED_PACKAGE_FIXERS + APT_FIXERS):
                     warning('Failed to resolve error %r. Giving up.', e.error)
                     raise
             except CircularDependency:
