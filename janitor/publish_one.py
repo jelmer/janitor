@@ -323,7 +323,8 @@ def publish(
         existing_proposal: Optional[MergeProposal] = None,
         allow_create_proposal: bool = False,
         derived_owner: Optional[str] = None,
-        debdiff: bytes = None):
+        debdiff: bytes = None,
+        reviewers: Optional[List[str]] = None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
@@ -381,7 +382,7 @@ def publish(
                 overwrite_existing=True, derived_owner=derived_owner,
                 existing_proposal=existing_proposal,
                 labels=labels, tags=subrunner.tags(),
-                allow_collaboration=True)
+                allow_collaboration=True, reviewers=reviewers)
         except UnsupportedHoster:
             raise PublishFailure(
                 description='Hoster unsupported: %s.' % main_branch.user_url,
@@ -658,7 +659,8 @@ def publish_one(
         mode, log_id, local_branch_url,
         dry_run=False, require_binary_diff=False, derived_owner=None,
         possible_hosters=None,
-        possible_transports=None, allow_create_proposal=None):
+        possible_transports=None, allow_create_proposal=None,
+        reviewers=None):
 
     if command.startswith('new-upstream'):
         subrunner = NewUpstreamPublisher(command)
@@ -749,7 +751,8 @@ def publish_one(
             resume_branch, dry_run=dry_run, log_id=log_id,
             existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
-            debdiff=debdiff, derived_owner=derived_owner)
+            debdiff=debdiff, derived_owner=derived_owner,
+            reviewers=reviewers)
     except EmptyMergeProposal:
         raise PublishFailure(
             code='empty-merge-proposal',
@@ -785,7 +788,8 @@ if __name__ == '__main__':
             derived_owner=request.get('derived-owner'),
             require_binary_diff=request['require-binary-diff'],
             possible_hosters=None, possible_transports=None,
-            allow_create_proposal=request['allow_create_proposal'])
+            allow_create_proposal=request['allow_create_proposal'],
+            reviewers=request.get('reviewers'))
     except PublishFailure as e:
         json.dump({'code': e.code, 'description': e.description}, sys.stdout)
         sys.exit(1)
