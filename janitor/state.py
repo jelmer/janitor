@@ -963,7 +963,8 @@ async def iter_publish_ready(
         review_status: Optional[Union[str, List[str]]] = None,
         limit: Optional[int] = None,
         publishable_only: bool = False
-        ) -> AsyncIterable[Tuple[Run, str, List[str], str, str, bool, str]]:
+        ) -> AsyncIterable[
+            Tuple[Run, str, List[str], str, str, str, List[str]]]:
     args: List[Any] = []
     query = """
 SELECT
@@ -1517,7 +1518,7 @@ async def get_successful_push_count(
 
 
 async def get_publish_attempt_count(
-        conn: asyncpg.Connection, revision: bytes) -> None:
+        conn: asyncpg.Connection, revision: bytes) -> int:
     return await conn.fetchval(
         "select count(*) from publish where revision = $1",
         revision.decode('utf-8'))
