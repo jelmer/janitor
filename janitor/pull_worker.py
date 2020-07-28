@@ -202,6 +202,8 @@ def run_worker(branch_url, subpath, vcs_type, env,
                     vcs_type=vcs_type.lower(),
                     possible_transports=possible_transports)
             except InvalidHttpResponse as e:
+                # TODO(jelmer): Retry if this was a server error (5xx) of some
+                # sort?
                 return ResultPushFailed(e)
             note('Pushing packaging branch cache to %s',
                  cached_branch_url)
