@@ -15,8 +15,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-"""Exporting of candidates without ."""
+"""Exporting of candidates from apt sources list."""
 
+from debian.changelog import Version
 from debian.deb822 import Sources
 from aiohttp import ClientSession
 from email.utils import parseaddr
@@ -57,6 +58,9 @@ async def main():
     parser.add_argument(
         '--version-re', type=str,
         help='Filter on versions matching regex.')
+    parser.add_argument(
+        '--exclude-native', action='store_true',
+        help='Exclude native packages.')
     args = parser.parse_args()
 
     if args.version_re:
@@ -68,6 +72,9 @@ async def main():
         async for source in iter_sources(url):
             if (version_re is not None and
                     not version_re.search(source['Version'])):
+                continue
+            if (args.exclude_native and
+                    not Version(source['Version']).debian_revision):
                 continue
             maintainer_email = parseaddr(source['Maintainer'])[1]
             if (args.maintainer and
