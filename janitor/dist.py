@@ -22,10 +22,13 @@ from debian.deb822 import Deb822
 from janitor.fix_build import (
     DependencyContext,
     resolve_error,
+    APT_FIXERS,
     )
 from janitor.sbuild_log import (
     find_apt_get_failure,
     find_build_failure_description,
+    Problem,
+    MissingPerlModule,
     )
 from janitor.schroot import Session
 from janitor.trace import note, warning
@@ -35,7 +38,7 @@ import stat
 import subprocess
 import sys
 import tempfile
-from typing import Optional, TextIO, List
+from typing import Optional, TextIO, List, Tuple, Callable, Type
 from breezy.plugins.debian.repack_tarball import get_filetype
 
 
@@ -114,6 +117,20 @@ class UnidentifiedError(Exception):
         self.lines = lines
 
 
+def fix_perl_module_from_cpan(error, context):
+    # TODO(jelmer): Specify -T to skip tests?
+    context.session.check_call(
+        ['cpan', '-i', error.module], user='root',
+        env={'PERL_MM_USE_DEFAULT': '1'})
+    return True
+
+
+GENERIC_INSTALL_FIXERS: List[
+        Tuple[Type[Problem], Callable[[Problem, DependencyContext], bool]]] = [
+    (MissingPerlModule, fix_perl_module_from_cpan),
+]
+
+
 def run_with_build_fixer(session: Session, args: List[str]):
     fixed_errors = []
     while True:
@@ -132,7 +149,9 @@ def run_with_build_fixer(session: Session, args: List[str]):
             warning('Failed to resolve error %r, it persisted. Giving up.',
                     error)
             raise DetailedDistCommandFailed(retcode, args, error)
-        if not resolve_error(error, SchrootDependencyContext(session)):
+        if not resolve_error(
+                error, SchrootDependencyContext(session),
+                fixers=(APT_FIXERS + GENERIC_INSTALL_FIXERS)):
             warning('Failed to find resolution for error %r. Giving up.',
                     error)
             raise DetailedDistCommandFailed(retcode, args, error)
