@@ -1788,6 +1788,8 @@ build_failure_regexps = [
      perl_missing_module),
     (r'>\(error\): Could not expand \[(.*)\'',
      perl_expand_failed),
+    (r'\[DZ\] could not load class (.*) for license (.*)',
+     lambda m: MissingPerlModule(None, m.group(1), None)),
     (r'Required plugin bundle ([^ ]+) isn\'t installed.', perl_missing_plugin),
     (r'Required plugin ([^ ]+) isn\'t installed.', perl_missing_plugin),
     (r'.*Can\'t locate (.*) in @INC \(@INC contains: (.*)\) at .* line .*.',
