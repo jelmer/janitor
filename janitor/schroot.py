@@ -15,9 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import shlex
 import subprocess
 
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 
 class Session(object):
@@ -61,7 +62,8 @@ class Session(object):
         return self._location
 
     def _run_argv(self, argv: List[str], cwd: Optional[str] = None,
-                  user: Optional[str] = None):
+                  user: Optional[str] = None,
+                  env: Optional[Dict[str, str]] = None):
         base_argv = ['schroot', '-r', '-c', 'session:' + self.session_id]
         if cwd is None:
             cwd = self._cwd
@@ -69,14 +71,22 @@ class Session(object):
             base_argv.extend(['-d', cwd])
         if user is not None:
             base_argv.extend(['-u', user])
+        if env:
+            argv = (
+                ['sh', '-c',
+                 ''.join(
+                     ['%s=%s ' % (key, value)
+                     for (key, value) in env.items()]) +
+                 shlex.join(argv)])
         return base_argv + ['--'] + argv
 
     def check_call(
             self,
             argv: List[str], cwd: Optional[str] = None,
-            user: Optional[str] = None):
+            user: Optional[str] = None,
+            env: Optional[Dict[str, str]] = None):
         try:
-            subprocess.check_call(self._run_argv(argv, cwd, user))
+            subprocess.check_call(self._run_argv(argv, cwd, user, env=env))
         except subprocess.CalledProcessError as e:
             raise subprocess.CalledProcessError(e.returncode, argv)
 
