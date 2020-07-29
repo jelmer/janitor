@@ -72,12 +72,12 @@ class Session(object):
         if user is not None:
             base_argv.extend(['-u', user])
         if env:
-            argv = (
-                ['sh', '-c',
-                 ''.join(
-                     ['%s=%s ' % (key, value)
-                     for (key, value) in env.items()]) +
-                 shlex.join(argv)])
+            argv = [
+                'sh', '-c',
+                ' '.join(
+                    ['%s=%s ' % (key, shlex.quote(value))
+                     for (key, value) in env.items()] +
+                    [shlex.quote(arg) for arg in argv])]
         return base_argv + ['--'] + argv
 
     def check_call(
