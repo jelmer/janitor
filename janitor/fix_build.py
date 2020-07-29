@@ -937,7 +937,7 @@ def fix_missing_config_status_input(error, context):
 
 def _find_aclocal_fun(macro):
     # TODO(jelmer): Use the API for codesearch.debian.net instead?
-    defun_prefix = b'AC_DEFUNE([%s],' % macro.encode('ascii')
+    defun_prefix = b'AC_DEFUN([%s],' % macro.encode('ascii')
     for entry in os.scandir('/usr/share/aclocal'):
         if not entry.is_file():
             continue
