@@ -172,11 +172,12 @@ def run_dist_in_chroot(session):
         return
 
     if os.path.exists('pyproject.toml'):
-        note('Found pyproject.toml, assuming poetry project.')
         import toml
         with open('pyproject.toml', 'r') as pf:
             pyproject = toml.load(pf)
         if 'poetry' in pyproject.get('tool', []):
+            note('Found pyproject.toml with poetry section, '
+                 'assuming poetry project.')
             apt_install(session, ['python3-venv', 'python3-pip'])
             session.check_call(['pip3', 'install', 'poetry'], user='root')
             session.check_call(['poetry', 'build', '-f', 'sdist'])
@@ -248,9 +249,12 @@ def run_dist_in_chroot(session):
         run_with_build_fixer(session, ['npm', 'pack'])
         return
 
-    if os.path.exists('Gemfile'):
+    gemfiles = [name for name in os.listdir('.') if name.endswith('.gem')]
+    if gemfiles:
         apt_install(session, ['gem2deb'])
-        run_with_build_fixer(session, ['gem2tgz', 'Gemfile'])
+        if len(gemfiles) > 1:
+            warning('More than one gemfile. Trying the first?')
+        run_with_build_fixer(session, ['gem2tgz', gemfiles[0]])
         return
 
     if os.path.exists('waf'):
