@@ -56,5 +56,11 @@ that there are no more than X pull requests open per maintainer.
 Web site
 ========
 
-The web site is generated using jinja2 templates from the ``site/``
-subdirectory.
+The web site is served by the ``janitor.site`` module using jinja2 templates
+from the ``janitor/site/templates/`` subdirectory.
+
+Installation
+============
+
+The easiest way to set up a new instance of the Janitor is probably to use the
+ansible playbooks at https://salsa.debian.org/jelmer/debian-janitor-ansible
