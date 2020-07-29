@@ -213,7 +213,8 @@ class SlowStartRateLimiter(RateLimiter):
         self._open_mps_per_maintainer.setdefault(maintainer_email, 0)
         self._open_mps_per_maintainer[maintainer_email] += 1
 
-    def set_mps_per_maintainer(self, mps_per_maintainer: Dict[str, Dict[str, int]]):
+    def set_mps_per_maintainer(
+            self, mps_per_maintainer: Dict[str, Dict[str, int]]):
         self._open_mps_per_maintainer = mps_per_maintainer['open']
         self._merged_mps_per_maintainer = mps_per_maintainer['merged']
 
@@ -230,9 +231,11 @@ async def publish_one(
         suite: str, pkg: str, command, subworker_result, main_branch_url: str,
         mode: str, log_id: str, maintainer_email: str, vcs_manager: VcsManager,
         branch_name: str, topic_merge_proposal, rate_limiter: RateLimiter,
-        dry_run: bool, require_binary_diff: bool=False, possible_hosters=None,
+        dry_run: bool, require_binary_diff: bool = False,
+        possible_hosters=None,
         possible_transports: Optional[List[Transport]] = None,
-        allow_create_proposal: Optional[bool] = None):
+        allow_create_proposal: Optional[bool] = None,
+        reviewers: Optional[List[str]] = None):
     """Publish a single run in some form.
 
     Args:
@@ -259,7 +262,8 @@ async def publish_one(
         'mode': mode,
         'log_id': log_id,
         'require-binary-diff': require_binary_diff,
-        'allow_create_proposal': allow_create_proposal}
+        'allow_create_proposal': allow_create_proposal,
+        'reviewers': reviewers}
 
     args = [sys.executable, '-m', 'janitor.publish_one']
 
@@ -318,6 +322,11 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status,
                        publishable_only=True):
+            if run.revision is None:
+                warning(
+                    'Run %s is publish ready, but does not have revision set.',
+                    run.id)
+                continue
             # TODO(jelmer): next try in SQL query
             attempt_count = await state.get_publish_attempt_count(
                 conn, run.revision)
@@ -893,7 +902,8 @@ async def credentials_request(request):
     })
 
 
-async def run_web_server(listen_addr: str, port: int, rate_limiter: RateLimiter,
+async def run_web_server(listen_addr: str, port: int,
+                         rate_limiter: RateLimiter,
                          vcs_manager: VcsManager, db: state.Database,
                          topic_merge_proposal: Topic, topic_publish: Topic,
                          dry_run: bool, require_binary_diff: bool = False,
