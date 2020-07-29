@@ -339,7 +339,9 @@ class GeneratedFileSearcher(FileSearcher):
 
 # TODO(jelmer): read from a file
 GENERATED_FILE_SEARCHER = GeneratedFileSearcher({
-    '/etc/locale.gen': 'locales'})
+    '/etc/locale.gen': 'locales',
+    # Alternative
+    '/usr/bin/rst2html': '/usr/share/docutils/scripts/python3/rst2html'})
 
 
 _apt_file_searcher = None
@@ -950,6 +952,7 @@ def _find_aclocal_fun(macro):
 
 def run_pgbuildext_updatecontrol(error, context):
     note("Running 'pg_buildext updatecontrol'")
+    # TODO(jelmer): run in the schroot
     pg_buildext_updatecontrol(context.tree.abspath(context.subpath))
     return commit_debian_changes(
         context.tree, context.subpath, "Run 'pgbuildext updatecontrol'.",
