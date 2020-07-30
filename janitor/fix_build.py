@@ -388,6 +388,12 @@ def get_package_for_python_module(module, python_version):
             os.path.join(
                 '/usr/lib/python3\\.[0-9]+/lib-dynload',
                 module.replace('.', '/') + '\\.cpython-.*\\.so'),
+            os.path.join(
+                '/usr/lib/python3\\.[0-9]+/',
+                module.replace('.', '/') + '.py'),
+            os.path.join(
+                '/usr/lib/python3\\.[0-9]+/',
+                module.replace('.', '/'), '__init__.py'),
             ]
     elif python_version == 'python2':
         paths = [
