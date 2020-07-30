@@ -639,7 +639,7 @@ async def publish_request(request):
         request.app.topic_merge_proposal, publish_id, run, mode,
         package.maintainer_email, package.uploader_emails,
         vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
-        external_url=request.db.external_url, allow_create_proposal=True,
+        external_url=request.app.external_url, allow_create_proposal=True,
         require_binary_diff=False, requestor=post.get('requestor')))
 
     return web.json_response(
