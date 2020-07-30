@@ -231,7 +231,8 @@ async def publish_one(
         suite: str, pkg: str, command, subworker_result, main_branch_url: str,
         mode: str, log_id: str, maintainer_email: str, vcs_manager: VcsManager,
         branch_name: str, topic_merge_proposal, rate_limiter: RateLimiter,
-        dry_run: bool, require_binary_diff: bool = False,
+        dry_run: bool, external_url: str,
+        require_binary_diff: bool = False,
         possible_hosters=None,
         possible_transports: Optional[List[Transport]] = None,
         allow_create_proposal: Optional[bool] = None,
@@ -263,6 +264,7 @@ async def publish_one(
         'log_id': log_id,
         'require-binary-diff': require_binary_diff,
         'allow_create_proposal': allow_create_proposal,
+        'external_url': external_url,
         'reviewers': reviewers}
 
     args = [sys.executable, '-m', 'janitor.publish_one']
@@ -304,7 +306,8 @@ async def publish_one(
 
 async def publish_pending_new(db, rate_limiter, vcs_manager,
                               topic_publish, topic_merge_proposal,
-                              dry_run: bool, reviewed_only: bool = False,
+                              dry_run: bool, external_url: str,
+                              reviewed_only: bool = False,
                               push_limit: Optional[int] = None,
                               require_binary_diff: bool = False):
     start = time.time()
@@ -354,6 +357,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                     publish_mode, update_changelog, command,
                     possible_hosters=possible_hosters,
                     possible_transports=possible_transports, dry_run=dry_run,
+                    external_url=external_url,
                     require_binary_diff=require_binary_diff,
                     force=False, requestor='publisher (publish pending)')
             if actual_mode == MODE_PUSH and push_limit is not None:
@@ -364,11 +368,13 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
 
 
 async def publish_from_policy(
-        conn, rate_limiter, vcs_manager, run: state.Run, maintainer_email: str,
+        conn, rate_limiter, vcs_manager, run: state.Run,
+        maintainer_email: str,
         uploader_emails: List[str], main_branch_url: str,
         topic_publish, topic_merge_proposal,
         mode: str, update_changelog: str, command: List[str],
-        dry_run: bool, possible_hosters: Optional[List[Hoster]] = None,
+        dry_run: bool, external_url: str,
+        possible_hosters: Optional[List[Hoster]] = None,
         possible_transports: Optional[List[Transport]] = None,
         require_binary_diff: bool = False, force: bool = False,
         requestor: Optional[str] = None):
@@ -436,7 +442,8 @@ async def publish_from_policy(
             main_branch_url, mode, run.id, maintainer_email,
             vcs_manager=vcs_manager, branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
-            dry_run=dry_run, require_binary_diff=require_binary_diff,
+            dry_run=dry_run, external_url=external_url,
+            require_binary_diff=require_binary_diff,
             possible_hosters=possible_hosters,
             possible_transports=possible_transports,
             rate_limiter=rate_limiter)
@@ -536,14 +543,15 @@ async def diff_request(request):
 async def publish_and_store(
         db, topic_publish, topic_merge_proposal, publish_id, run, mode,
         maintainer_email, uploader_emails, vcs_manager, rate_limiter,
-        dry_run, allow_create_proposal=True, require_binary_diff=False,
-        requestor=None):
+        dry_run, external_url: str, allow_create_proposal: bool = True,
+        require_binary_diff: bool = False, requestor: Optional[str] = None):
     async with db.acquire() as conn:
         try:
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
                 run.branch_url, mode, run.id, maintainer_email, vcs_manager,
                 run.branch_name, dry_run=dry_run,
+                external_url=external_url,
                 require_binary_diff=require_binary_diff,
                 possible_hosters=None, possible_transports=None,
                 allow_create_proposal=allow_create_proposal,
@@ -631,7 +639,7 @@ async def publish_request(request):
         request.app.topic_merge_proposal, publish_id, run, mode,
         package.maintainer_email, package.uploader_emails,
         vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
-        allow_create_proposal=True,
+        external_url=request.db.external_url, allow_create_proposal=True,
         require_binary_diff=False, requestor=post.get('requestor')))
 
     return web.json_response(
@@ -906,7 +914,8 @@ async def run_web_server(listen_addr: str, port: int,
                          rate_limiter: RateLimiter,
                          vcs_manager: VcsManager, db: state.Database,
                          topic_merge_proposal: Topic, topic_publish: Topic,
-                         dry_run: bool, require_binary_diff: bool = False,
+                         dry_run: bool, external_url: str,
+                         require_binary_diff: bool = False,
                          push_limit: Optional[int] = None,
                          modify_mp_limit: Optional[int] = None):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
@@ -914,6 +923,7 @@ async def run_web_server(listen_addr: str, port: int,
     app.gpg = gpg.Context(armor=True)
     app.vcs_manager = vcs_manager
     app.db = db
+    app.external_url = external_url
     app.rate_limiter = rate_limiter
     app.modify_mp_limit = modify_mp_limit
     app.topic_publish = topic_publish
@@ -988,7 +998,8 @@ async def refresh_proposal_status_request(request):
                 vcs_manager=request.app.vcs_manager,
                 rate_limiter=request.app.rate_limiter,
                 topic_merge_proposal=request.app.topic_merge_proposal,
-                dry_run=request.app.dry_run)
+                dry_run=request.app.dry_run,
+                external_url=request.app.external_url)
     request.loop.create_task(scan())
     return web.Response(status=202, text="Refresh of proposal started.")
 
@@ -1011,18 +1022,23 @@ async def autopublish_request(request):
 
 async def process_queue_loop(
         db, rate_limiter, dry_run, vcs_manager, interval,
-        topic_merge_proposal, topic_publish, auto_publish=True,
-        reviewed_only=False, push_limit=None, modify_mp_limit=None,
-        require_binary_diff=False):
+        topic_merge_proposal, topic_publish,
+        external_url: str,
+        auto_publish: bool = True,
+        reviewed_only: bool = False, push_limit: Optional[int] = None,
+        modify_mp_limit: Optional[int] = None,
+        require_binary_diff: bool = False):
     while True:
         async with db.acquire() as conn:
             await check_existing(
                 conn, rate_limiter, vcs_manager, topic_merge_proposal,
-                dry_run=dry_run, modify_limit=modify_mp_limit)
+                dry_run=dry_run, external_url=external_url,
+                modify_limit=modify_mp_limit)
         await asyncio.sleep(interval)
         if auto_publish:
             await publish_pending_new(
                 db, rate_limiter, vcs_manager, dry_run=dry_run,
+                external_url=external_url,
                 topic_publish=topic_publish,
                 topic_merge_proposal=topic_merge_proposal,
                 reviewed_only=reviewed_only, push_limit=push_limit,
@@ -1039,7 +1055,8 @@ def is_conflicted(mp):
 
 async def check_existing_mp(
         conn, mp, status, topic_merge_proposal, vcs_manager,
-        rate_limiter, dry_run: bool, mps_per_maintainer=None,
+        rate_limiter, dry_run: bool, external_url: str,
+        mps_per_maintainer=None,
         possible_transports: Optional[List[Transport]] = None) -> bool:
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'closed':
@@ -1177,7 +1194,8 @@ applied independently.
                 last_run.result, last_run.branch_url, MODE_PROPOSE,
                 last_run.id, maintainer_email,
                 vcs_manager=vcs_manager, branch_name=last_run.branch_name,
-                dry_run=dry_run, require_binary_diff=False,
+                dry_run=dry_run, external_url=external_url,
+                require_binary_diff=False,
                 allow_create_proposal=True,
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter)
@@ -1218,8 +1236,9 @@ applied independently.
         return False
 
 
-async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
-                         dry_run: bool, modify_limit=None):
+async def check_existing(
+        conn, rate_limiter, vcs_manager, topic_merge_proposal,
+        dry_run: bool, external_url: str, modify_limit=None):
     mps_per_maintainer: Dict[str, Dict[str, int]] = {
         'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
     possible_transports: List[Transport] = []
@@ -1236,6 +1255,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
         modified = await check_existing_mp(
             conn, mp, status, topic_merge_proposal=topic_merge_proposal,
             vcs_manager=vcs_manager, dry_run=dry_run,
+            external_url=external_url,
             rate_limiter=rate_limiter,
             possible_transports=possible_transports,
             mps_per_maintainer=mps_per_maintainer)
@@ -1252,6 +1272,7 @@ async def check_existing(conn, rate_limiter, vcs_manager, topic_merge_proposal,
 
 async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                            topic_publish, topic_merge_proposal, dry_run: bool,
+                           external_url: str,
                            require_binary_diff: bool = False):
     async def process_run(conn, run, package):
         mode, update_changelog, command = (
@@ -1263,6 +1284,7 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
             package.branch_url,
             topic_publish, topic_merge_proposal, mode,
             update_changelog, command, dry_run=dry_run,
+            external_url=external_url,
             require_binary_diff=require_binary_diff,
             force=True, requestor='runner')
     from aiohttp.client import ClientSession
@@ -1339,6 +1361,9 @@ def main(argv=None):
     parser.add_argument(
         '--modify-mp-limit', type=int, default=10,
         help='Maximum number of merge proposals to update per cycle.')
+    parser.add_argument(
+        '--external-url', type=str, help='External URL',
+        default='https://janitor.debian.net/')
 
     args = parser.parse_args()
 
@@ -1366,6 +1391,7 @@ def main(argv=None):
     if args.once:
         loop.run_until_complete(publish_pending_new(
             db, rate_limiter, dry_run=args.dry_run,
+            external_url=args.external_url,
             vcs_manager=vcs_manager, topic_publish=topic_publish,
             topic_merge_proposal=topic_merge_proposal,
             reviewed_only=args.reviewed_only,
@@ -1384,6 +1410,7 @@ def main(argv=None):
                 topic_merge_proposal=topic_merge_proposal,
                 topic_publish=topic_publish,
                 auto_publish=not args.no_auto_publish,
+                external_url=args.external_url,
                 reviewed_only=args.reviewed_only,
                 push_limit=args.push_limit,
                 modify_mp_limit=args.modify_mp_limit,
@@ -1392,7 +1419,9 @@ def main(argv=None):
                 run_web_server(
                     args.listen_address, args.port, rate_limiter,
                     vcs_manager, db, topic_merge_proposal, topic_publish,
-                    args.dry_run, args.require_binary_diff,
+                    dry_run=args.dry_run,
+                    external_url=args.external_url,
+                    require_binary_diff=args.require_binary_diff,
                     modify_mp_limit=args.modify_mp_limit,
                     push_limit=args.push_limit)),
         ]
@@ -1402,6 +1431,7 @@ def main(argv=None):
                     db, rate_limiter, vcs_manager,
                     args.runner_url, topic_publish,
                     topic_merge_proposal, dry_run=args.dry_run,
+                    external_url=args.external_url,
                     require_binary_diff=args.require_binary_diff)))
         loop.run_until_complete(asyncio.gather(*tasks))
 
