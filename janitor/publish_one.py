@@ -80,7 +80,7 @@ DEBDIFF_INLINE_THRESHOLD = 40
 JANITOR_BLURB = """
 This merge proposal was created automatically by the Janitor bot.
 For more information, including instructions on how to disable
-these merge proposals, see https://janitor.debian.net/%(suite)s.
+these merge proposals, see %(external_url)s/%(suite)s.
 
 You can follow up to this merge proposal as you normally would.
 
@@ -91,7 +91,7 @@ or close the merge proposal when all changes are applied through other means
 
 JANITOR_BLURB_MD = """
 This merge proposal was created automatically by the \
-[Janitor bot](https://janitor.debian.net/%(suite)s).
+[Janitor bot](%(external_url)s/%(suite)s).
 
 You can follow up to this merge proposal as you normally would.
 
@@ -102,18 +102,18 @@ or close the merge proposal when all changes are applied through other means
 
 LOG_BLURB = """
 Build and test logs for this branch can be found at
-https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
+%(external_url)s/%(suite)s/pkg/%(package)s/%(log_id)s.
 """
 
 LOG_BLURB_MD = """
 Build and test logs for this branch can be found at
-https://janitor.debian.net/%(suite)s/pkg/%(package)s/%(log_id)s.
+%(external_url)s/%(suite)s/pkg/%(package)s/%(log_id)s.
 """
 
 DEBDIFF_LINK_BLURB = """
 These changes affect the binary packages. See the build logs page
 or download the full debdiff from
-https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1
+%(external_url)s/api/run/%(log_id)s/debdiff?filter_boring=1
 """
 
 DEBDIFF_BLURB_MD = """
@@ -132,31 +132,31 @@ These changes affect the binary packages:
 
 DEBDIFF_LINK_BLURB_MD = """
 These changes affect the binary packages; see the
-[debdiff](https://janitor.debian.net/api/run/\
+[debdiff](%(external_url)s/api/run/\
 %(log_id)s/debdiff?filter_boring=1)
 """
 
 NO_DEBDIFF_BLURB = """
 These changes have no impact on the binary debdiff. See
-https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1 to
+%(external_url)s/api/run/%(log_id)s/debdiff?filter_boring=1 to
 download the raw debdiff.
 """
 
 NO_DEBDIFF_BLURB_MD = """
 These changes have no impact on the [binary debdiff](
-https://janitor.debian.net/api/run/%(log_id)s/debdiff?filter_boring=1).
+%(external_url)s/api/run/%(log_id)s/debdiff?filter_boring=1).
 """
 
 DIFFOSCOPE_LINK_BLURB_MD = """
 You can also view the [diffoscope diff](\
-https://janitor.debian.net/api/run/%(log_id)s/diffoscope?filter_boring=1) \
-([unfiltered](https://janitor.debian.net/api/run/%(log_id)s/diffoscope)).
+%(external_url)s/api/run/%(log_id)s/diffoscope?filter_boring=1) \
+([unfiltered](%(external_url)s/api/run/%(log_id)s/diffoscope)).
 """
 
 DIFFOSCOPE_LINK_BLURB = """
 You can also view the diffoscope diff at
-https://janitor.debian.net/api/run/%(log_id)s/diffoscope?filter_boring=1,
-or unfiltered at https://janitor.debian.net/api/run/%(log_id)s/diffoscope.
+%(external_url)s/api/run/%(log_id)s/diffoscope?filter_boring=1,
+or unfiltered at %(external_url)s/api/run/%(log_id)s/diffoscope.
 """
 
 
@@ -191,17 +191,21 @@ def strip_janitor_blurb(text, suite):
     raise ValueError
 
 
-def add_janitor_blurb(format, text, pkg, log_id, suite):
+def add_janitor_blurb(format, text, pkg, log_id, suite, external_url):
     text += '\n' + (
         (JANITOR_BLURB_MD if format == 'markdown' else JANITOR_BLURB) %
-        {'suite': suite})
+        {'suite': suite, 'external_url': external_url})
     text += (
         (LOG_BLURB_MD if format == 'markdown' else LOG_BLURB) %
-        {'package': pkg, 'log_id': log_id, 'suite': suite})
+        {'package': pkg,
+         'log_id': log_id,
+         'suite': suite,
+         'external_url': external_url,
+         })
     return text
 
 
-def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff):
+def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff, external_url):
     if not debdiff_is_empty(debdiff):
         blurb = (
             NO_DEBDIFF_BLURB_MD if format == 'markdown' else NO_DEBDIFF_BLURB)
@@ -217,12 +221,13 @@ def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff):
         'log_id': log_id,
         'suite': suite,
         'debdiff': debdiff,
-        'debdiff_md': markdownify_debdiff(debdiff)
+        'debdiff_md': markdownify_debdiff(debdiff),
+        'external_url': external_url,
         })
     return text
 
 
-def add_diffoscope_blurb(format, text, pkg, log_id, suite):
+def add_diffoscope_blurb(format, text, pkg, log_id, suite, external_url):
     blurb = (
        DIFFOSCOPE_LINK_BLURB_MD
        if format == 'markdown' else DIFFOSCOPE_LINK_BLURB)
@@ -230,6 +235,7 @@ def add_diffoscope_blurb(format, text, pkg, log_id, suite):
         'package': pkg,
         'log_id': log_id,
         'suite': suite,
+        'external_url': external_url,
         })
     return text
 
@@ -340,13 +346,16 @@ def publish(
         description = subrunner.get_proposal_description(
             description_format, existing_description)
         description = add_janitor_blurb(
-            description_format, description, pkg, log_id, suite)
+            description_format, description, pkg, log_id, suite,
+            external_url)
         if debdiff is not None:
             description = add_debdiff_blurb(
                 description_format, description, pkg, log_id, suite,
-                debdiff.decode('utf-8', 'replace'))
+                debdiff.decode('utf-8', 'replace'),
+                external_url)
             description = add_diffoscope_blurb(
-                description_format, description, pkg, log_id, suite)
+                description_format, description, pkg, log_id, suite,
+                external_url)
         return description
 
     def get_proposal_commit_message(existing_proposal):
@@ -784,7 +793,7 @@ if __name__ == '__main__':
             subworker_result=request['subworker_result'],
             main_branch_url=request['main_branch_url'], mode=request['mode'],
             log_id=request['log_id'],
-            external_url=request['external_url'],
+            external_url=request['external_url'].rstrip('/'),
             local_branch_url=request['local_branch_url'],
             dry_run=request['dry-run'],
             derived_owner=request.get('derived-owner'),
