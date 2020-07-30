@@ -1027,15 +1027,16 @@ def resolve_error(error, context, fixers):
     if not relevant_fixers:
         warning('No fixer found for %r', error)
         return False
-    note('Attempting to use fixer %r to address %r',
-         fixer, error)
-    try:
-        made_changes = fixer(error, context)
-    except GeneratedFile:
-        warning('Control file is generated, unable to edit.')
-        return False
-    if made_changes:
-        return True
+    for fixer in relevant_fixers:
+        note('Attempting to use fixer %r to address %r',
+             fixer, error)
+        try:
+            made_changes = fixer(error, context)
+        except GeneratedFile:
+            warning('Control file is generated, unable to edit.')
+            return False
+        if made_changes:
+            return True
     return False
 
 
