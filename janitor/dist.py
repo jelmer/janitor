@@ -42,6 +42,13 @@ from typing import Optional, TextIO, List, Tuple, Callable, Type
 from breezy.plugins.debian.repack_tarball import get_filetype
 
 
+def has_shebang(p):
+    if not (os.stat(p).st_mode & stat.S_IEXEC):
+        return False
+    with open(p, 'rb') as f:
+        return f.read().startswith(b'#!')
+
+
 def run_apt(session: Session, args: List[str]) -> None:
     args = ['apt', '-y'] + args
     retcode, lines = run_with_tee(session, args, cwd='/', user='root')
@@ -50,6 +57,8 @@ def run_apt(session: Session, args: List[str]) -> None:
     offset, line, error = find_apt_get_failure(lines)
     if error is not None:
         raise DetailedDistCommandFailed(retcode, args, error)
+    if line is not None:
+        raise UnidentifiedError(retcode, args, [line])
     raise UnidentifiedError(retcode, args, lines)
 
 
@@ -204,8 +213,7 @@ def run_dist_in_chroot(session):
 
         # TODO(jelmer): Install setup_requires
 
-        if (os.stat('setup.py').st_mode & stat.S_IEXEC and
-                setup_py_contents.startswith('#!')):
+        if not has_shebang('setup.py'):
             apt_install(session, ['python'])
             run_with_build_fixer(session, ['./setup.py', 'sdist'])
         else:
@@ -268,7 +276,10 @@ def run_dist_in_chroot(session):
 
     if not os.path.exists('Makefile') and not os.path.exists('configure'):
         if os.path.exists('autogen.sh'):
-            run_with_build_fixer(session, ['./autogen.sh'])
+            if not has_shebang('autogen.sh'):
+                run_with_build_fixer(session, ['/bin/sh', './autogen.sh'])
+            else:
+                run_with_build_fixer(session, ['./autogen.sh'])
         elif os.path.exists('configure.ac') or os.path.exists('configure.in'):
             apt_install(session, [
                 'autoconf', 'automake', 'gettext', 'libtool', 'gnu-standards'])
