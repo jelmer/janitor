@@ -62,6 +62,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'autopkgtest-testbed-chroot-disappeared',
     'autopkgtest-file-fetch-failure',
     'check-space-insufficient-disk-space',
+    'worker-resume-branch-unavailable',
 ]
 
 # In some cases, we want to ignore certain results when guessing
