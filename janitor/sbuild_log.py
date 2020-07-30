@@ -1681,7 +1681,7 @@ build_failure_regexps = [
     ('E   ImportError: cannot import name ([^\']+)', python_module_not_found),
     (r'django.core.exceptions.ImproperlyConfigured: Error loading .* module: '
      r'No module named \'(.*)\'', python_module_not_found),
-    ('E   ImportError: No module named (.*)', python2_module_not_found),
+    ('E   ImportError: No module named (.*)', python_module_not_found),
     ('ModuleNotFoundError: No module named \'(.*)\'',
      python3_module_not_found),
     (r'Could not import extension .* \(exception: No module named (.*)\)',
@@ -1692,7 +1692,7 @@ build_failure_regexps = [
     ('.*: cannot find package "(.*)" in any of:', missing_go_package),
     (r'ImportError: Error importing plugin ".*": No module named (.*)',
      python_module_not_found),
-    ('ImportError: No module named (.*)', python2_module_not_found),
+    ('ImportError: No module named (.*)', python_module_not_found),
     (r'[^:]+:\d+:\d+: fatal error: (.+\.h|.+\.hpp): No such file or directory',
      c_header_missing),
     (r'[^:]+\.[ch]:\d+:\d+: fatal error: (.+): No such file or directory',
