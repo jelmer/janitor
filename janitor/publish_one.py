@@ -318,6 +318,7 @@ class BranchWorkspace(object):
 def publish(
         suite: str, pkg: str, subrunner: 'Publisher',
         mode: str, hoster: Hoster, main_branch: Branch, local_branch: Branch,
+        external_url: str,
         resume_branch: Optional[Branch] = None, dry_run: bool = False,
         log_id: Optional[str] = None,
         existing_proposal: Optional[MergeProposal] = None,
@@ -633,10 +634,10 @@ class NewUpstreamPublisher(Publisher):
             ]
 
 
-def get_debdiff(log_id):
+def get_debdiff(external_url: str, log_id: str) -> bytes:
     debdiff_url = (
-        'https://janitor.debian.net/api/run/%s/debdiff?filter_boring=1'
-        % log_id)
+        urllib.parse.urljoin(
+            external_url, '/api/run/%s/debdiff?filter_boring=1' % log_id))
     headers = {'Accept': 'text/plain'}
 
     request = urllib.request.Request(debdiff_url, headers=headers)
@@ -656,7 +657,7 @@ def get_debdiff(log_id):
 
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
-        mode, log_id, local_branch_url,
+        mode, log_id, local_branch_url, external_url,
         dry_run=False, require_binary_diff=False, derived_owner=None,
         possible_hosters=None,
         possible_transports=None, allow_create_proposal=None,
@@ -733,7 +734,7 @@ def publish_one(
         allow_create_proposal = subrunner.allow_create_proposal()
 
     try:
-        debdiff = get_debdiff(log_id)
+        debdiff = get_debdiff(external_url, log_id)
     except DebdiffRetrievalError:
         raise PublishFailure(
             description='Unable to contact archiver for debdiff',
@@ -748,7 +749,7 @@ def publish_one(
     try:
         publish_result = publish(
             suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
-            resume_branch, dry_run=dry_run, log_id=log_id,
+            external_url, resume_branch, dry_run=dry_run, log_id=log_id,
             existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
             debdiff=debdiff, derived_owner=derived_owner,
@@ -783,6 +784,7 @@ if __name__ == '__main__':
             subworker_result=request['subworker_result'],
             main_branch_url=request['main_branch_url'], mode=request['mode'],
             log_id=request['log_id'],
+            external_url=request['external_url'],
             local_branch_url=request['local_branch_url'],
             dry_run=request['dry-run'],
             derived_owner=request.get('derived-owner'),
