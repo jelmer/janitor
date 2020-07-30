@@ -1061,7 +1061,7 @@ class DhMissingUninstalled(Problem):
 
 
 def dh_missing_uninstalled(m):
-    return DhMissingUninstalled(m.group(1))
+    return DhMissingUninstalled(m.group(2))
 
 
 class DhLinkDestinationIsDirectory(Problem):
@@ -1615,23 +1615,6 @@ def imagemagick_delegate_missing(m):
     return ImageMagickDelegateMissing(m.group(1))
 
 
-class MissingSphinxTheme(Problem):
-
-    kind = 'missing-sphinx-theme'
-
-    def __init__(self, theme):
-        self.theme = theme
-
-    def __eq__(self, other):
-        return isinstance(other, type(self)) and other.theme == self.theme
-
-    def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, self.theme)
-
-    def __str__(self):
-        return "Missing sphinx theme: %s" % self.theme
-
-
 class DebianVersionRejected(Problem):
 
     kind = 'debian-version-rejected'
@@ -1717,6 +1700,7 @@ build_failure_regexps = [
     ('✖ \x1b\\[31mERROR:\x1b\\[39m Cannot find module \'(.*)\'',
      node_module_missing),
     ('\\[31mError: No test files found: "(.*)"\\[39m', None),
+    ('\x1b\[31mError: No test files found: "(.*)"\x1b\[39m', None),
     (r'\s*Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'>> Error: Cannot find module \'(.*)\'', node_module_missing),
     (r'>> Got an unexpected exception from the coffee-script compiler. '
@@ -1849,7 +1833,7 @@ build_failure_regexps = [
      r'Error resolving version for plugin \'(.*)\' from the repositories '
      r'\[.*\]: Plugin not found in any plugin repository -> \[Help 1\]',
      maven_missing_plugin),
-    (r'dh_missing: (.*) exists in debian/.* but is not installed to anywhere',
+    (r'dh_missing: (warning: )?(.*) exists in debian/.* but is not installed to anywhere',
      dh_missing_uninstalled),
     (r'dh_link: link destination (.*) is a directory',
      dh_link_destination_is_dir),
@@ -2000,6 +1984,8 @@ build_failure_regexps = [
     (r'convert convert: Image pixel limit exceeded '
      r'\(see -limit Pixels\) \(-1\).',
      None),
+    (r'convert convert: Improper image header \(.*\).',
+     None),
     (r'convert convert: invalid primitive argument \([0-9]+\).', None),
     (r'ERROR: Sphinx requires at least Python (.*) to run.',
      None),
@@ -2043,6 +2029,7 @@ build_failure_regexps = [
      pkg_config_missing),
     (r'Package \'(.*)\', required by \'(.*)\', not found\n',
      pkg_config_missing),
+    (r'pkg-config cannot find (.*)', pkg_config_missing),
     (r'configure: error: .* not found: Package dependency requirement '
      r'\'([^\']+)\' could not be satisfied.', pkg_config_missing),
     (r'configure: error: xsltproc is required to build documentation',
@@ -2107,6 +2094,8 @@ build_failure_regexps = [
     # JavaScript
     (r'.*: ENOENT: no such file or directory, open \'(.*)\'',
      file_not_found),
+    (r'\[Error: ENOENT: no such file or directory, stat \'(.*)\'\] \{',
+     file_not_found),
     # libtoolize
     (r'libtoolize:   error: \'(.*)\' does not exist.',
      file_not_found),
@@ -2151,10 +2140,10 @@ build_failure_regexps = [
      None),
     (r'dh_auto_configure: invalid or non-existing path '
      r'to the source directory: .*', None),
-    (r'(.*) is no longer a hard dependency since version (.*). '
-     r'Please install it manually.\(pip install (.*)\)',
-     lambda m: MissingSphinxTheme(m.group(1))),
     # Sphinx
+    (r'sphinx_rtd_theme is no longer a hard dependency since version (.*). '
+     r'Please install it manually.\(pip install (.*)\)',
+     lambda m: MissingPythonModule('sphinx_rtd_theme')),
     (r'There is a syntax error in your configuration file: (.*)',
      None),
     (r'E: The Debian version (.*) cannot be used as an ELPA version.',
@@ -2193,6 +2182,8 @@ secondary_build_failure_regexps = [
     r'\! Undefined control sequence\.',
     r'\! Emergency stop\.',
     r'\!pdfTeX error: pdflatex: fwrite\(\) failed',
+    # inkscape
+    r'Unknown option .*',
     # CTest
     r'Errors while running CTest',
     r'dh_auto_install: error: .*',
@@ -2240,6 +2231,7 @@ secondary_build_failure_regexps = [
     'httptools.parser.errors.HttpParserInvalidURLError|HypothesisException|'
     'SSLError|KeyError|Exception|rnc2rng.parser.ParseError|'
     'pkg_resources.UnknownExtra|tarfile.ReadError|'
+    'numpydoc.docscrape.ParseError|'
     'datalad.support.exceptions.IncompleteResultsError'
     r'): .*',
     # Rake
@@ -2270,6 +2262,7 @@ secondary_build_failure_regexps = [
     r'ln: failed to create symbolic link \'(.*)\': Permission denied',
     r'ln: invalid option -- .*',
     r'mkdir: cannot create directory ‘(.*)’: No such file or directory',
+    r'mkdir: cannot create directory ‘(.*)’: File exists',
     r'mkdir: missing operand',
     r'Fatal error: .*',
     'Fatal Error: (.*)',
@@ -2315,6 +2308,9 @@ secondary_build_failure_regexps = [
     r'libtool:   error: cannot find the library \'(.*)\' or '
     r'unhandled argument \'(.*)\'',
     r'npm ERR\! (.*)',
+    r'install: failed to access \'(.*)\': (.*)',
+    r'MSBUILD: error MSBUILD[0-9]+: Project file \'(.*)\' not found.',
+    r'E: (.*)',
 ]
 
 compiled_secondary_build_failure_regexps = [
