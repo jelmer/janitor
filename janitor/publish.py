@@ -1012,6 +1012,7 @@ async def autopublish_request(request):
             request.app.db, request.app.rate_limiter, request.app.vcs_manager,
             dry_run=request.app.dry_run,
             topic_publish=request.app.topic_publish,
+            external_url=request.app.external_url,
             topic_merge_proposal=request.app.topic_merge_proposal,
             reviewed_only=reviewed_only, push_limit=request.app.push_limit,
             require_binary_diff=request.app.require_binary_diff)
