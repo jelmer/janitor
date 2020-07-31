@@ -406,7 +406,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     app.router.add_static('/pool', os.path.join(archive_path, 'pool'))
     app.router.add_post('/publish', handle_publish, name='publish')
     app.router.add_get('/pending/', handle_pending, name='pending')
-    app.router.add_get('/pending/{subdir}', handle_pending,
+    app.router.add_get('/pending/{subdir}/', handle_pending,
                        name='pending-subdir')
     runner = web.AppRunner(app)
     await runner.setup()
