@@ -15,10 +15,23 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import errno
+import os
+import shutil
+import stat
+import subprocess
+import sys
+import tempfile
+from typing import Optional, TextIO, List, Tuple, Callable, Type
+
+from debian.deb822 import Deb822
+
 from breezy.export import export
 from breezy.tree import Tree
 from breezy.workingtree import WorkingTree
-from debian.deb822 import Deb822
+
+from breezy.plugins.debian.repack_tarball import get_filetype
+
 from janitor.fix_build import (
     DependencyContext,
     resolve_error,
@@ -33,14 +46,6 @@ from janitor.sbuild_log import (
     )
 from janitor.schroot import Session
 from janitor.trace import note, warning
-import os
-import shutil
-import stat
-import subprocess
-import sys
-import tempfile
-from typing import Optional, TextIO, List, Tuple, Callable, Type
-from breezy.plugins.debian.repack_tarball import get_filetype
 
 
 def has_shebang(p):
@@ -331,7 +336,7 @@ def create_dist_schroot(
         try:
             directory = tempfile.mkdtemp(dir=build_dir)
         except OSError:
-            if e.errno = errno.ENOSPC:
+            if e.errno == errno.ENOSPC:
                 raise DetailedDistCommandFailed(
                     1, ['mkdtemp'], NoSpaceOnDevice())
         reldir = '/' + os.path.relpath(directory, session.location)
