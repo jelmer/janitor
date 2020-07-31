@@ -309,12 +309,20 @@ async def handle_diffoscope(request):
     return web.Response(text=debdiff, content_type=content_type)
 
 
+class AptlyError(Exception):
+
+    def __init__(self, message):
+        self.message = message
+
+
 async def aptly_call(aptly_session, method, path, json=None, params=None):
     async with aptly_session.request(
             method=method, url='http://localhost/api/' + path, json=json,
             params=params) as resp:
         if resp.status // 100 != 2:
-            raise Exception('error %d in /api/%s' % (resp.status, path))
+            raise AptlyError(
+                'error %d in /api/%s: %s' % (
+                    resp.status, path, await resp.read()))
         return await resp.json()
 
 
@@ -349,7 +357,7 @@ async def handle_publish(request):
                     request.app.aptly_session, 'PUT',
                     'publish/%s/%s' % (loc, suite.name),
                     json=params)
-            except Exception:
+            except AptlyError:
                 traceback.print_exc()
                 failed_suites.append(suite.name)
             else:
@@ -359,7 +367,7 @@ async def handle_publish(request):
                 await aptly_call(
                     request.app.aptly_session, 'POST', 'publish/%s' % loc,
                     json=params)
-            except Exception:
+            except AptlyError:
                 traceback.print_exc()
                 failed_suites.append(suite.name)
             else:
@@ -395,7 +403,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     await site.start()
 
 
-async def upload_directory(aptly_session, directory):
+async def upload_directory(aptly_session: ClientSession, directory: str):
     suite = None
     changes_filename = None
     for entry in os.scandir(directory):
@@ -415,7 +423,7 @@ async def upload_directory(aptly_session, directory):
             aptly_session, 'POST', 'repos/%s/include/%s/%s' % (
                     suite, os.path.basename(directory), changes_filename),
             params={'acceptUnsigned': 1})
-    except Exception as e:
+    except AptlyError as e:
         warning('Unable to include files %s in %s: %s ',
                 directory, suite, e)
     else:
