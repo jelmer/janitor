@@ -29,6 +29,7 @@ from janitor.sbuild_log import (
     find_build_failure_description,
     Problem,
     MissingPerlModule,
+    NoSpaceOnDevice,
     )
 from janitor.schroot import Session
 from janitor.trace import note, warning
@@ -327,7 +328,12 @@ def create_dist_schroot(
             satisfy_build_deps(session, packaging_tree)
         build_dir = os.path.join(session.location, 'build')
 
-        directory = tempfile.mkdtemp(dir=build_dir)
+        try:
+            directory = tempfile.mkdtemp(dir=build_dir)
+        except OSError:
+            if e.errno = errno.ENOSPC:
+                raise DetailedDistCommandFailed(
+                    1, ['mkdtemp'], NoSpaceOnDevice())
         reldir = '/' + os.path.relpath(directory, session.location)
 
         export_directory = os.path.join(directory, subdir)
