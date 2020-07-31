@@ -338,6 +338,11 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
                 description = line[3:]
             else:
                 description = line
+    if failed_stage == 'explain-bd-uninstallable':
+        (offset, line, error) = find_apt_get_failure(
+                section_lines)
+        if error:
+            description = str(error)
     if failed_stage == 'arch-check':
         (offset, line, error) = find_arch_check_failure_description(
                 section_lines)
@@ -2311,6 +2316,8 @@ secondary_build_failure_regexps = [
     r'install: failed to access \'(.*)\': (.*)',
     r'MSBUILD: error MSBUILD[0-9]+: Project file \'(.*)\' not found.',
     r'E: (.*)',
+    # C #
+    r'(.*)\.cs\([0-9]+,[0-9]+\): error CS[0-9]+: .*',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -3061,6 +3068,11 @@ def find_apt_get_failure(lines):
             line)
         if m:
             return lineno + 1, line, AptMissingReleaseFile(m.group(1))
+        m = re.match(
+            'dpkg-deb: error: unable to write file \'(.*)\': '
+            'No space left on device', line)
+        if m:
+            return lineno + 1, line, NoSpaceOnDevice()
         if line.startswith('E: ') and ret[0] is None:
             ret = (lineno + 1, line, None)
         m = re.match('E: Unable to locate package (.*)', line)
