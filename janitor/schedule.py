@@ -63,6 +63,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'autopkgtest-file-fetch-failure',
     'check-space-insufficient-disk-space',
     'worker-resume-branch-unavailable',
+    'explain-bd-uninstallable-no-space-on-device',
 ]
 
 # In some cases, we want to ignore certain results when guessing
