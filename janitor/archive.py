@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import ClientSession, UnixConnector
+from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
 import json
 import os
@@ -379,13 +380,20 @@ async def handle_publish(request):
 
 
 async def handle_pending(request):
-    json = await aptly_call(request.app.aptly_session, 'GET', 'files')
+    try:
+        dirname = request.match_info['subdir']
+    except KeyError:
+        path = 'files'
+    else:
+        path = 'files/%s' % % dirname
+    json = await aptly_call(request.app.aptly_session, 'GET', path)
     return web.json_response(json)
 
 
 async def run_web_server(listen_addr, port, archive_path, incoming_dir,
                          aptly_session, config):
-    app = web.Application()
+    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+    app = web.Application(middlewares=[trailing_slash_redirect])
     app.archive_path = archive_path
     app.incoming_dir = incoming_dir
     app.aptly_session = aptly_session
@@ -397,7 +405,8 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     app.router.add_static('/dists', os.path.join(archive_path, 'dists'))
     app.router.add_static('/pool', os.path.join(archive_path, 'pool'))
     app.router.add_post('/publish', handle_publish, name='publish')
-    app.router.add_get('/pending', handle_pending, name='pending')
+    app.router.add_get('/pending/', handle_pending, name='pending')
+    app.router.add_get('/pending/{subdir}', handle_pending, name='pending')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -415,7 +424,7 @@ async def upload_directory(aptly_session: ClientSession, directory: str):
             changes_filename = entry.name
             cl = Changelog(parse_multiline(changes['Changes']))
             suite = cl.distributions
-    if suite is None:
+    if suite is None or changes_filename is None:
         warning('No valid changes file found, skipping %s',
                 directory)
         return
