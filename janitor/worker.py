@@ -493,8 +493,7 @@ class NewUpstreamWorker(SubWorker):
                     traceback.print_exc()
                     lines = [line for line in e.lines if line]
                     if len(lines) == 1:
-                        raise DistCommandFailed(
-                            'command %r failed: %s' % (e.argv, lines[0]))
+                        raise DistCommandFailed(lines[0])
                     else:
                         raise DistCommandFailed(
                             'command %r failed with unidentified error '
