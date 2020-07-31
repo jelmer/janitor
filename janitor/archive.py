@@ -23,6 +23,7 @@ import re
 import sys
 import traceback
 from typing import List, Tuple, Optional
+from urllib.parse import quote
 
 from aiohttp import web
 from debian.deb822 import Changes
@@ -421,7 +422,8 @@ async def upload_directory(aptly_session: ClientSession, directory: str):
     try:
         result = await aptly_call(
             aptly_session, 'POST', 'repos/%s/include/%s/%s' % (
-                    suite, os.path.basename(directory), changes_filename),
+                    suite, quote(os.path.basename(directory)),
+                    quote(changes_filename)),
             params={'acceptUnsigned': 1})
     except AptlyError as e:
         warning('Unable to include files %s in %s: %s ',
