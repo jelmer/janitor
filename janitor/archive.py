@@ -385,7 +385,7 @@ async def handle_pending(request):
     except KeyError:
         path = 'files'
     else:
-        path = 'files/%s' % % dirname
+        path = 'files/%s' % dirname
     json = await aptly_call(request.app.aptly_session, 'GET', path)
     return web.json_response(json)
 
