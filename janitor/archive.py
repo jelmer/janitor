@@ -427,7 +427,7 @@ async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
 async def update_archive_loop(
         config: Config, aptly_session: ClientSession, incoming_dir: str):
     # Give aptly some time to start
-    await asyncio.sleep(15)
+    await asyncio.sleep(25)
     while True:
         await update_aptly(aptly_session, incoming_dir)
         await asyncio.sleep(30 * 60)
