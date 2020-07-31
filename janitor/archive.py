@@ -21,6 +21,7 @@ import json
 import os
 import re
 import sys
+import traceback
 from typing import List, Tuple, Optional
 
 from aiohttp import web
@@ -28,6 +29,7 @@ from debian.deb822 import Changes
 from debian.changelog import Changelog, Version
 from debian.copyright import parse_multiline
 
+from .config import read_config, Config, Suite
 from .debdiff import (
     run_debdiff,
     DebdiffError,
@@ -307,17 +309,22 @@ async def handle_diffoscope(request):
     return web.Response(text=debdiff, content_type=content_type)
 
 
+async def aptly_call(aptly_session, method, path, json=None, params=None):
+    async with aptly_session.request(
+            method=method, url='http://localhost/api/' + path, json=json,
+            params=params) as resp:
+        if resp.status // 100 != 2:
+            raise Exception('error %d in /api/%s' % (resp.status, path))
+        return await resp.json()
+
+
 async def handle_publish(request):
     post = await request.post()
     suites_processed = []
     failed_suites = []
-    async with request.app.aptly_session.get(
-            'http://localhost/api/publish') as resp:
-        if resp.status != 200:
-            raise Exception('retrieving in progress publish failed')
-        publish = {}
-        for p in await resp.json():
-            publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
+    publish = {}
+    for p in await aptly_call(request.app.aptly_session, 'GET', 'publish'):
+        publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
 
     for suite in request.app.config.suite:
         if post.get('suite') not in (suite.name, None):
@@ -325,31 +332,38 @@ async def handle_publish(request):
         storage = post.get('storage', '')
         prefix = post.get('prefix', '.')
         loc = "%s:%s" % (storage, prefix)
+        params = {
+            'SourceKind': 'local',
+            'Sources': [suite.name],
+            'Distribution': suite.name,
+            'Label': suite.archive_description,
+            'NotAutomatic': 'yes',
+            'ButAutomaticUpgrades': 'yes',
+            }
+        if request.app.config.origin:
+            params['Origin'] = request.app.config.origin
+
         if (storage, prefix, suite.name) in publish:
-            async with request.app.aptly_session.put(
-                    'http://localhost/api/publish/%s/%s' % (loc, suite.name)):
-                if resp.status != 200:
-                    failed_suites.append(suite.name)
-                else:
-                    suites_processed.append(suite.name)
+            try:
+                await aptly_call(
+                    request.app.aptly_session, 'PUT',
+                    'publish/%s/%s' % (loc, suite.name),
+                    json=params)
+            except Exception:
+                traceback.print_exc()
+                failed_suites.append(suite.name)
+            else:
+                suites_processed.append(suite.name)
         else:
-            params = {
-                'SourceKind': 'local',
-                'Sources': [suite.name],
-                'Distribution': suite.name,
-                'Label': suite.archive_description,
-                'NotAutomatic': 'yes',
-                'ButAutomaticUpgrades': 'yes',
-                }
-            if request.app.config.origin:
-                params['Origin'] = request.app.config.origin
-            async with request.app.aptly_session.post(
-                    'http://localhost/api/publish/%s' % loc,
-                    json=params) as resp:
-                if resp.status != 200:
-                    failed_suites.append(suite.name)
-                else:
-                    suites_processed.append(suite.name)
+            try:
+                await aptly_call(
+                    request.app.aptly_session, 'POST', 'publish/%s' % loc,
+                    json=params)
+            except Exception:
+                traceback.print_exc()
+                failed_suites.append(suite.name)
+            else:
+                suites_processed.append(suite.name)
     return web.json_response(
         {'suites-processed': suites_processed,
          'suites-failed': failed_suites})
@@ -390,19 +404,19 @@ async def upload_directory(aptly_session, directory):
         warning('No valid changes file found, skipping %s',
                 directory)
         return
-    async with aptly_session.post(
-            'http://localhost/api/repos/%s/include/%s/%s' % (
-                suite, os.path.basename(directory), changes_filename),
-            data={'acceptUnsigned': 1}) as resp:
-        if resp.status != 200:
-            warning('Unable to include files %s in %s: %d ',
-                    directory, suite, resp.status)
-            return
-        result = await resp.json()
+    try:
+        result = await aptly_call(
+            aptly_session, 'POST', 'repos/%s/include/%s/%s' % (
+                    suite, os.path.basename(directory), changes_filename),
+            params={'acceptUnsigned': 1})
+    except Exception as e:
+        warning('Unable to include files %s in %s: %s ',
+                directory, suite, e)
+    else:
         note('Result from aptly include: %r', result)
 
 
-async def update_aptly(aptly_session, incoming_dir):
+async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
     for entry in os.scandir(incoming_dir):
         if not entry.is_dir():
             # Weird
@@ -410,7 +424,8 @@ async def update_aptly(aptly_session, incoming_dir):
         await upload_directory(aptly_session, entry.path)
 
 
-async def update_archive_loop(config, aptly_session, incoming_dir):
+async def update_archive_loop(
+        config: Config, aptly_session: ClientSession, incoming_dir: str):
     # Give aptly some time to start
     await asyncio.sleep(15)
     while True:
@@ -418,52 +433,35 @@ async def update_archive_loop(config, aptly_session, incoming_dir):
         await asyncio.sleep(30 * 60)
 
 
-async def sync_aptly_repos(session, suites):
-    async with session.get('http://localhost/api/repos') as resp:
-        if resp.status != 200:
-            raise Exception('failed: %r' % resp.status)
-        repos = {repo['Name']: repo for repo in await resp.json()}
-        print("current repos: %r" % repos)
+async def sync_aptly_repos(session: ClientSession, suites: List[Suite]):
+    repos = {repo['Name']: repo for repo in await aptly_call(
+        session, 'GET', 'repos')}
     for suite in suites:
         intended_repo = {
             'Name': suite.name,
             'DefaulDistribution': suite.name,
             'DefaultComponent': '',
             'Comment': ''}
-        if intended_repo == repos.get(suite.name):
+        actual_repo = repos.get(suite.name)
+        if intended_repo == actual_repo:
             del repos[suite.name]
             continue
-        if suite.name not in repos:
-            async with session.post(
-                    'http://localhost/api/repos',
-                    json=intended_repo) as resp:
-                if resp.status != 201:
-                    raise Exception('Unable to create repo %s: %d' % (
-                                    suite.name, resp.status))
+        if not actual_repo:
+            await aptly_call(session, 'POST', 'repos', json=intended_repo)
         else:
-            async with session.put(
-                   'http://localhost/api/repos/%s' % intended_repo.pop('Name'),
-                   json=intended_repo) as resp:
-                if resp.status != 200:
-                    raise Exception('Unable to edit repo %s: %d' % (
-                                    suite.name, resp.status))
+            await aptly_call(
+                session, 'PUT', 'repos/%s' % intended_repo.pop('Name'),
+                json=intended_repo)
             del repos[suite.name]
     for suite in repos:
-        async with session.delete(
-                'http://localhost/api/repos/%s' % suite) as resp:
-            if resp.status != 200:
-                raise Exception('Error removing repo %s: %d' % (
-                    suite, resp.status))
+        await aptly_call(session, 'DELETE', 'repos/%s' % suite)
 
 
-async def sync_aptly(aptly_session, suites):
+async def sync_aptly(aptly_session: ClientSession, suites: List[Suite]):
     # Give aptly some time to start
     await asyncio.sleep(15)
-    async with aptly_session.get('http://localhost/api/version') as resp:
-        if resp.status != 200:
-            raise Exception('failed: %r' % resp.status)
-        ret = await resp.json()
-        print('aptly version %s connected' % ret['Version'])
+    ret = await aptly_call(aptly_session, 'GET', 'version')
+    note('aptly version %s connected' % ret['Version'])
     await sync_aptly_repos(aptly_session, suites)
 
 
@@ -479,7 +477,6 @@ async def run_aptly(sock_path, config_path):
 
 def main(argv=None):
     import argparse
-    from .config import read_config
     parser = argparse.ArgumentParser(prog='janitor.archive')
     parser.add_argument(
         '--listen-address', type=str,
@@ -510,6 +507,8 @@ def main(argv=None):
     aptly_root_dir = aptly_config['rootDir']
 
     incoming_dir = os.path.join(aptly_root_dir, 'upload')
+    if not os.path.exists(incoming_dir):
+        os.mkdir(incoming_dir)
     archive_dir = os.path.join(aptly_root_dir, 'public')
 
     aptly_socket_path = os.path.abspath(args.aptly_socket_path)
@@ -519,6 +518,12 @@ def main(argv=None):
     loop = asyncio.get_event_loop()
     aptly_session = ClientSession(
         connector=UnixConnector(path=aptly_socket_path))
+
+    for name in ['dists', 'pool']:
+        try:
+            os.makedirs(os.path.join(archive_dir, name))
+        except FileExistsError:
+            pass
 
     loop.run_until_complete(asyncio.gather(
         loop.create_task(run_aptly(aptly_socket_path, aptly_config_path)),
