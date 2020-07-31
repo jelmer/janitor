@@ -64,6 +64,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'check-space-insufficient-disk-space',
     'worker-resume-branch-unavailable',
     'explain-bd-uninstallable-no-space-on-device',
+    'worker-timeout',
 ]
 
 # In some cases, we want to ignore certain results when guessing
