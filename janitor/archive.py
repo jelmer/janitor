@@ -369,6 +369,11 @@ async def handle_publish(request):
          'suites-failed': failed_suites})
 
 
+async def handle_pending(request):
+    json = await aptly_call(request.app.aptly_session, 'GET', 'files')
+    return web.json_response(json)
+
+
 async def run_web_server(listen_addr, port, archive_path, incoming_dir,
                          aptly_session, config):
     app = web.Application()
@@ -383,6 +388,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     app.router.add_static('/dists', os.path.join(archive_path, 'dists'))
     app.router.add_static('/pool', os.path.join(archive_path, 'pool'))
     app.router.add_post('/publish', handle_publish, name='publish')
+    app.router.add_get('/pending', handle_pending, name='pending')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
