@@ -313,6 +313,11 @@ def run_dist_in_chroot(session):
                   ) in e.lines:
                 run_with_build_fixer(session, ['perl', 'configure'])
                 run_with_build_fixer(session, ['make', 'dist'])
+            elif (
+                    "Please try running 'make manifest' and then run "
+                    "'make dist' again.\n" in e.lines):
+                run_with_build_fixer(session, ['make', 'manifest'])
+                run_with_build_fixer(session, ['make', 'dist'])
             else:
                 raise
         else:
