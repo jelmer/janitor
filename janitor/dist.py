@@ -335,7 +335,7 @@ def create_dist_schroot(
 
         try:
             directory = tempfile.mkdtemp(dir=build_dir)
-        except OSError:
+        except OSError as e:
             if e.errno == errno.ENOSPC:
                 raise DetailedDistCommandFailed(
                     1, ['mkdtemp'], NoSpaceOnDevice())
@@ -343,15 +343,27 @@ def create_dist_schroot(
 
         export_directory = os.path.join(directory, subdir)
         if not include_controldir:
-            export(tree, export_directory, 'dir', subdir)
+            try:
+                export(tree, export_directory, 'dir', subdir)
+            except OSError as e:
+                if e.errno == errno.ENOSPC:
+                    raise DetailedDistCommandFailed(
+                        1, ['export'], NoSpaceOnDevice())
+                raise
         else:
             with tree.lock_read():
                 if isinstance(tree, WorkingTree):
                     tree = tree.basis_tree()
-            tree._repository.controldir.sprout(
-                export_directory,
-                create_tree_if_local=True,
-                revision_id=tree.get_revision_id())
+            try:
+                tree._repository.controldir.sprout(
+                    export_directory,
+                    create_tree_if_local=True,
+                    revision_id=tree.get_revision_id())
+            except OSError as e:
+                if e.errno == errno.ENOSPC:
+                    raise DetailedDistCommandFailed(
+                        1, ['sprout'], NoSpaceOnDevice())
+                raise
 
         existing_files = os.listdir(export_directory)
 
