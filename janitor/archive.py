@@ -51,7 +51,15 @@ from .trace import note, warning
 suite_check = re.compile('^[a-z0-9-]+$')
 
 
+class UploadError(Exception):
+
+    def __init__(self, failed_files, details):
+        self.failed_files = failed_files
+        self.details = details
+
+
 async def handle_upload(request):
+    aptly_session = request.app.aptly_session
     directory = request.match_info['directory']
     container = os.path.join(request.app.incoming_dir, directory)
     os.mkdir(container)
@@ -74,6 +82,12 @@ async def handle_upload(request):
                 result['version'] = changes['Version']
                 result['distribution'] = changes['Distribution']
                 result['changes'] = changes['Changes']
+    try:
+        await upload_directory(aptly_session, container)
+    except UploadError as e:
+        return web.json_response(
+            {'msg': str(e), 'failed_files': e.failed_files},
+            status=500)
     note('Uploaded files: %r', filenames)
     result['filenames'] = filenames
     return web.json_response(result, status=200)
@@ -428,7 +442,7 @@ async def upload_directory(aptly_session: ClientSession, directory: str):
     if suite is None or changes_filename is None:
         warning('No valid changes file found, skipping %s',
                 directory)
-        return
+        raise UploadError(os.listdir(directory), 'No valid changes file')
     try:
         result = await aptly_call(
             aptly_session, 'POST', 'repos/%s/include/%s/%s' % (
@@ -436,15 +450,14 @@ async def upload_directory(aptly_session: ClientSession, directory: str):
                     quote(changes_filename)),
             params={'acceptUnsigned': 1})
     except AptlyError as e:
-        warning('Unable to include files %s in %s: %s ',
-                directory, suite, e)
+        raise UploadError(os.listdir(directory), e)
     else:
         failed_files = result['FailedFiles']
         report = result['Report']
         for w in report['Warnings']:
             warning('Aptly warning: %s', w)
         if failed_files:
-            warning('Failed to upload files to aptly: %r', failed_files)
+            raise UploadError(failed_files, report['Warnings'])
 
 
 async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
@@ -452,7 +465,10 @@ async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
         if not entry.is_dir():
             # Weird
             continue
-        await upload_directory(aptly_session, entry.path)
+        try:
+            await upload_directory(aptly_session, entry.path)
+        except UploadError as e:
+            warning('Failed to upload files (%r) to aptly: %s', e.details)
 
 
 async def update_archive_loop(
