@@ -64,7 +64,8 @@ def run_apt(session: Session, args: List[str]) -> None:
     if error is not None:
         raise DetailedDistCommandFailed(retcode, args, error)
     if line is not None:
-        raise UnidentifiedError(retcode, args, [line])
+        raise UnidentifiedError(
+            retcode, args, lines, secondary=(offset, line))
     raise UnidentifiedError(retcode, args, lines)
 
 
@@ -126,10 +127,11 @@ class DetailedDistCommandFailed(Exception):
 
 class UnidentifiedError(Exception):
 
-    def __init__(self, retcode, argv, lines):
+    def __init__(self, retcode, argv, lines, secondary=None):
         self.retcode = retcode
         self.argv = argv
         self.lines = lines
+        self.secondary = secondary
 
 
 def fix_perl_module_from_cpan(error, context):
@@ -156,7 +158,8 @@ def run_with_build_fixer(session: Session, args: List[str]):
         if error is None:
             warning('Build failed with unidentified error. Giving up.')
             if line is not None:
-                raise UnidentifiedError(retcode, args, [line])
+                raise UnidentifiedError(
+                    retcode, args, lines, secondary=(offset, line))
             raise UnidentifiedError(retcode, args, lines)
 
         note('Identifier error: %r', error)
@@ -219,10 +222,12 @@ def run_dist_in_chroot(session):
 
         # TODO(jelmer): Install setup_requires
 
-        if not has_shebang('setup.py'):
-            apt_install(session, ['python'])
+        if has_shebang('setup.py'):
+            apt_install(session, ['python', 'python3'])
             run_with_build_fixer(session, ['./setup.py', 'sdist'])
         else:
+            # Just assume it's Python 3
+            apt_install(session, ['python3'])
             run_with_build_fixer(session, ['python3', './setup.py', 'sdist'])
         return
 
@@ -350,8 +355,8 @@ def dupe_vcs_tree(tree, directory):
                 1, ['sprout'], NoSpaceOnDevice())
         raise
     # Copy parent location - some scripts need this
-    result.open_branch().set_parent(
-        tree.branch.get_parent())
+    base_branch = tree._repository.controldir.open_branch()
+    result.open_branch().set_parent(base_branch.get_parent())
 
 
 def create_dist_schroot(

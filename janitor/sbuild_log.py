@@ -2281,6 +2281,7 @@ secondary_build_failure_regexps = [
     # perl
     r'Execution of (.*) aborted due to compilation errors.',
     r'ls: cannot access \'(.*)\': No such file or directory',
+    r'Problem opening (.*): No such file or directory at (.*) line ([0-9]+)\.',
     # Mocha
     r'     AssertionError \[ERR_ASSERTION\]: Missing expected exception.',
     # lt (C++)
