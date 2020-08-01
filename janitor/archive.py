@@ -352,6 +352,8 @@ async def do_publish(
     for p in await aptly_call(aptly_session, 'GET', 'publish'):
         publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
 
+    note('Publishing %s to %s:%s', suite, storage, prefix)
+
     loc = "%s:%s" % (storage, prefix)
     if (storage, prefix, suite) in publish:
         params = {}
@@ -401,10 +403,10 @@ async def handle_publish(request):
         if post.get('suite') not in (suite.name, None):
             continue
         try:
-            await do_publish(
+            await asyncio.shield(do_publish(
                 request.app.aptly_session, suite.name, storage, prefix,
                 label=suite.archive_description,
-                origin=request.app.config.origin)
+                origin=request.app.config.origin))
         except AptlyError:
             traceback.print_exc()
             failed_suites.append(suite.name)
