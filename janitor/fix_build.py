@@ -431,7 +431,7 @@ def targeted_python_versions(tree: Tree) -> Set[str]:
         control = Deb822(f)
     build_depends = PkgRelation.parse_relations(
         control.get('Build-Depends', ''))
-    all_build_deps = set()
+    all_build_deps: Set[str] = set()
     for or_deps in build_depends:
         all_build_deps.update(or_dep['name'] for or_dep in or_deps)
     targeted = set()
