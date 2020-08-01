@@ -666,9 +666,7 @@ def get_debdiff(external_url: str, log_id: str) -> bytes:
                 resp = json.loads(e.read())
                 raise DebdiffMissingRun(resp['unavailable_run_id'])
             raise
-        elif e.status == 400:
-            raise DebdiffRetrievalError(e.file.read())
-        elif e.status == 503:
+        elif e.status in (502, 503):
             raise DebdiffRetrievalError(e.file.read())
         else:
             raise
@@ -763,13 +761,14 @@ def publish_one(
             if e.missing_run_id == log_id:
                 raise PublishFailure(
                     description=(
-                        'Binary debdiff is not available. Not published?'),
+                        'Binary debdiff is not available. '
+                        'Run (%s) not yet published?' % log_id),
                     code='missing-binary-diff-self')
             else:
                 raise PublishFailure(
                     description=(
                         'Binary debdiff is not available. '
-                        'Control not published?'),
+                        'Control run (%s) not published?' % e.missing_run_id),
                     code='missing-binary-diff-control')
 
     try:
