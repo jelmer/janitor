@@ -374,6 +374,22 @@ async def do_publish(
             aptly_session, 'POST', 'publish/%s' % loc, json=params)
 
 
+async def loop_local_publish(aptly_session, config):
+    await asyncio.sleep(15 * 60)
+    while True:
+        for suite in config.suite:
+            try:
+                await do_publish(
+                    aptly_session, suite.name,
+                    storage='', prefix='.',
+                    label=suite.archive_description,
+                    origin=config.origin)
+            except AptlyError as e:
+                warning('Error while publishing %s: %s',
+                        suite.name, e)
+        await asyncio.sleep(30 * 60)
+
+
 async def handle_publish(request):
     post = await request.post()
     storage = post.get('storage', '')
@@ -467,7 +483,7 @@ async def upload_directory(aptly_session: ClientSession, directory: str):
             raise UploadError(failed_files, report['Warnings'])
 
 
-async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
+async def process_incoming(aptly_session: ClientSession, incoming_dir: str):
     for entry in os.scandir(incoming_dir):
         if not entry.is_dir():
             # Weird
@@ -479,12 +495,12 @@ async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
                     e.failed_files, e.details)
 
 
-async def update_archive_loop(
+async def loop_process_incoming(
         config: Config, aptly_session: ClientSession, incoming_dir: str):
     # Give aptly some time to start
     await asyncio.sleep(25)
     while True:
-        await update_aptly(aptly_session, incoming_dir)
+        await process_incoming(aptly_session, incoming_dir)
         await asyncio.sleep(30 * 60)
 
 
@@ -586,7 +602,8 @@ def main(argv=None):
         loop.create_task(run_web_server(
             args.listen_address, args.port, archive_dir,
             incoming_dir, aptly_session, config)),
-        loop.create_task(update_archive_loop(
+        loop.create_task(loop_local_publish(aptly_session, config)),
+        loop.create_task(loop_process_incoming(
             config, aptly_session, incoming_dir))))
     loop.run_forever()
 
