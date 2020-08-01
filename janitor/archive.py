@@ -346,52 +346,55 @@ async def aptly_call(aptly_session, method, path, json=None, params=None):
         return await resp.json()
 
 
+async def do_publish(
+        aptly_session, suite, storage, prefix, label, origin=None):
+    publish = {}
+    for p in await aptly_call(aptly_session, 'GET', 'publish'):
+        publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
+
+    loc = "%s:%s" % (storage, prefix)
+    if (storage, prefix, suite) in publish:
+        params = {}
+        await aptly_call(
+            aptly_session, 'PUT',
+            'publish/%s/%s' % (loc, suite), json=params)
+    else:
+        params = {
+            'SourceKind': 'local',
+            'Sources': [{'Name': suite}],
+            'Distribution': suite,
+            'Label': label,
+            'NotAutomatic': 'yes',
+            'ButAutomaticUpgrades': 'yes',
+            }
+        if origin:
+            params['Origin'] = origin
+
+        await aptly_call(
+            aptly_session, 'POST', 'publish/%s' % loc, json=params)
+
+
 async def handle_publish(request):
     post = await request.post()
+    storage = post.get('storage', '')
+    prefix = post.get('prefix', '.')
     suites_processed = []
     failed_suites = []
-    publish = {}
-    for p in await aptly_call(request.app.aptly_session, 'GET', 'publish'):
-        publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
 
     for suite in request.app.config.suite:
         if post.get('suite') not in (suite.name, None):
             continue
-        storage = post.get('storage', '')
-        prefix = post.get('prefix', '.')
-        loc = "%s:%s" % (storage, prefix)
-        params = {
-            'SourceKind': 'local',
-            'Sources': [suite.name],
-            'Distribution': suite.name,
-            'Label': suite.archive_description,
-            'NotAutomatic': 'yes',
-            'ButAutomaticUpgrades': 'yes',
-            }
-        if request.app.config.origin:
-            params['Origin'] = request.app.config.origin
-
-        if (storage, prefix, suite.name) in publish:
-            try:
-                await aptly_call(
-                    request.app.aptly_session, 'PUT',
-                    'publish/%s/%s' % (loc, suite.name),
-                    json=params)
-            except AptlyError:
-                traceback.print_exc()
-                failed_suites.append(suite.name)
-            else:
-                suites_processed.append(suite.name)
+        try:
+            await do_publish(
+                request.app.aptly_session, suite.name, storage, prefix,
+                label=suite.archive_description,
+                origin=request.app.config.origin)
+        except AptlyError:
+            traceback.print_exc()
+            failed_suites.append(suite.name)
         else:
-            try:
-                await aptly_call(
-                    request.app.aptly_session, 'POST', 'publish/%s' % loc,
-                    json=params)
-            except AptlyError:
-                traceback.print_exc()
-                failed_suites.append(suite.name)
-            else:
-                suites_processed.append(suite.name)
+            suites_processed.append(suite.name)
+
     return web.json_response(
         {'suites-processed': suites_processed,
          'suites-failed': failed_suites})
