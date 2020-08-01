@@ -326,6 +326,34 @@ def run_dist_in_chroot(session):
     raise NoBuildToolsFound()
 
 
+def export_vcs_tree(tree, directory):
+    try:
+        export(tree, directory, 'dir', None)
+    except OSError as e:
+        if e.errno == errno.ENOSPC:
+            raise DetailedDistCommandFailed(
+                1, ['export'], NoSpaceOnDevice())
+        raise
+
+
+def dupe_vcs_tree(tree, directory):
+    with tree.lock_read():
+        if isinstance(tree, WorkingTree):
+            tree = tree.basis_tree()
+    try:
+        result = tree._repository.controldir.sprout(
+            directory, create_tree_if_local=True,
+            revision_id=tree.get_revision_id())
+    except OSError as e:
+        if e.errno == errno.ENOSPC:
+            raise DetailedDistCommandFailed(
+                1, ['sprout'], NoSpaceOnDevice())
+        raise
+    # Copy parent location - some scripts need this
+    result.open_branch().set_parent(
+        tree.branch.get_parent())
+
+
 def create_dist_schroot(
         tree: Tree, target_filename: str,
         chroot: str, packaging_tree: Optional[Tree] = None,
@@ -348,27 +376,9 @@ def create_dist_schroot(
 
         export_directory = os.path.join(directory, subdir)
         if not include_controldir:
-            try:
-                export(tree, export_directory, 'dir', subdir)
-            except OSError as e:
-                if e.errno == errno.ENOSPC:
-                    raise DetailedDistCommandFailed(
-                        1, ['export'], NoSpaceOnDevice())
-                raise
+            export_vcs_tree(tree, export_directory)
         else:
-            with tree.lock_read():
-                if isinstance(tree, WorkingTree):
-                    tree = tree.basis_tree()
-            try:
-                tree._repository.controldir.sprout(
-                    export_directory,
-                    create_tree_if_local=True,
-                    revision_id=tree.get_revision_id())
-            except OSError as e:
-                if e.errno == errno.ENOSPC:
-                    raise DetailedDistCommandFailed(
-                        1, ['sprout'], NoSpaceOnDevice())
-                raise
+            dupe_vcs_tree(tree, export_directory)
 
         existing_files = os.listdir(export_directory)
 
