@@ -136,6 +136,19 @@ Mark package as orphaned.
 
 {% endif %}
 
+{% if publish_history %}
+<h2>Publish History</h2>
+
+<ul>
+{% for pmode, mp_url, pdesc, pcode, requestor, timestamp in publish_history[:10] %}
+<li>{{ format_timestamp(timestamp) }}: {{ pmode }} resulted in {{ pcode }} ({% if '\n' in pdesc %}<pre>{{ pdesc }}</pre>{% else %}{{ pdesc }}{% endif %}){% if mp_url %} - <a href="{{ mp_url }}">Merge Proposal</a>{% endif %}.</li>
+{% endfor %}
+</ul>
+
+{% endif %}
+
+
+
 {% if binary_packages %}
 <h2>Resulting package</h2>
 

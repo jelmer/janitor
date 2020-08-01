@@ -1552,3 +1552,13 @@ where revision = $1 and run.package is not null
     if len(rows) == 1:
         return rows[0][0], rows[0][1]
     return None, None
+
+
+async def get_publish_history(
+        conn: asyncpg.Connection, revision: bytes) -> Tuple[
+                str, Optional[str], str, str, str, datetime.datetime]:
+    return await conn.fetch(
+        "select mode, merge_proposal_url, description, result_code, "
+        "requestor, timestamp from publish where revision = $1 "
+        "ORDER BY timestamp DESC",
+        revision.decode('utf-8'))
