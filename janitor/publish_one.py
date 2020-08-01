@@ -662,7 +662,7 @@ def get_debdiff(external_url: str, log_id: str) -> bytes:
             return f.read()
     except urllib.error.HTTPError as e:
         if e.status == 404:
-            if e.content_type == 'application/json':
+            if e.headers.get_content_type() == 'application/json':
                 resp = json.loads(e.read())
                 raise DebdiffMissingRun(resp['unavailable_run_id'])
             raise
