@@ -439,7 +439,12 @@ async def upload_directory(aptly_session: ClientSession, directory: str):
         warning('Unable to include files %s in %s: %s ',
                 directory, suite, e)
     else:
-        note('Result from aptly include: %r', result)
+        failed_files = result['FailedFiles']
+        report = result['Report']
+        for w in report['Warnings']:
+            warning('Aptly warning: %s', w)
+        if failed_files:
+            warning('Failed to upload files to aptly: %r', failed_files)
 
 
 async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
