@@ -91,6 +91,9 @@ def satisfy_build_deps(session: Session, tree):
             deps.append('Conflicts: ' + source[name])
         except KeyError:
             pass
+    deps = [
+        dep.strip().strip(',')
+        for dep in deps]
     apt_satisfy(session, deps)
 
 
