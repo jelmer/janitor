@@ -323,6 +323,9 @@ def run_dist_in_chroot(session):
                     "'make dist' again.\n" in e.lines):
                 run_with_build_fixer(session, ['make', 'manifest'])
                 run_with_build_fixer(session, ['make', 'dist'])
+            elif "Please run ./configure first\n" in e.lines:
+                run_with_build_fixer(session, ['./configure'])
+                run_with_build_fixer(session, ['make', 'dist'])
             else:
                 raise
         else:
