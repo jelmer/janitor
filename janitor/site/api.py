@@ -364,7 +364,7 @@ async def handle_archive_diff(request):
              'run_id': [unchanged_run.id, run.id],
              'build_version': [str(unchanged_run.build_version),
                                str(run.build_version)],
-             'unavailable_run': (
+             'unavailable_run_id': (
                  e.unavailable_run.id if e.unavailable_run else None),
              'suite': [unchanged_run.suite, run.suite],
              },
