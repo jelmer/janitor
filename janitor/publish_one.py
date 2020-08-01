@@ -643,6 +643,13 @@ class NewUpstreamPublisher(Publisher):
             ]
 
 
+class DebdiffMissingRun(Exception):
+    """Raised when the debdiff was missing a run."""
+
+    def __init__(self, missing_run_id):
+        self.missing_run_id = missing_run_id
+
+
 def get_debdiff(external_url: str, log_id: str) -> bytes:
     debdiff_url = (
         urllib.parse.urljoin(
@@ -655,7 +662,10 @@ def get_debdiff(external_url: str, log_id: str) -> bytes:
             return f.read()
     except urllib.error.HTTPError as e:
         if e.status == 404:
-            return None
+            if e.content_type == 'application/json':
+                resp = json.loads(e.read())
+                raise DebdiffMissingRun(resp['unavailable_run_id'])
+            raise
         elif e.status == 400:
             raise DebdiffRetrievalError(e.file.read())
         elif e.status == 503:
@@ -748,12 +758,19 @@ def publish_one(
         raise PublishFailure(
             description='Unable to contact archiver for debdiff',
             code='archiver-unreachable')
-
-    if (mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and
-            debdiff is None and require_binary_diff):
-        raise PublishFailure(
-            description='Binary debdiff is not available. No control build?',
-            code='missing-binary-diff')
+    except DebdiffMissingRun as e:
+        if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and require_binary_diff:
+            if e.missing_run_id == log_id:
+                raise PublishFailure(
+                    description=(
+                        'Binary debdiff is not available. Not published?'),
+                    code='missing-binary-diff-self')
+            else:
+                raise PublishFailure(
+                    description=(
+                        'Binary debdiff is not available. '
+                        'Control not published?'),
+                    code='missing-binary-diff-control')
 
     try:
         publish_result = publish(

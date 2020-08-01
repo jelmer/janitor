@@ -190,7 +190,8 @@ async def handle_debdiff(request):
     if old_binaries is None:
         return web.Response(
             status=404, text='Old source %s/%s does not exist.' % (
-                source, old_version))
+                source, old_version),
+            headers={'X-Arm': 'old'})
 
     new_binaries = find_binary_paths(
             request.app.incoming_dir, archive_path,
@@ -199,7 +200,8 @@ async def handle_debdiff(request):
     if new_binaries is None:
         return web.Response(
             status=404, text='New source %s/%s does not exist.' % (
-                source, new_version))
+                source, new_version),
+            headers={'X-Arm': 'new'})
 
     try:
         debdiff = await run_debdiff(old_binaries, new_binaries)
@@ -258,7 +260,8 @@ async def handle_diffoscope(request):
     if old_binaries is None:
         return web.Response(
             status=404, text='Old source %s/%s does not exist.' % (
-                source, old_version))
+                source, old_version),
+            headers={'X-Arm': 'old'})
 
     new_binaries = find_binary_paths(
             request.app.incoming_dir, request.app.archive_path,
@@ -267,7 +270,8 @@ async def handle_diffoscope(request):
     if new_binaries is None:
         return web.Response(
             status=404, text='New source %s/%s does not exist.' % (
-                source, new_version))
+                source, new_version),
+            headers={'X-Arm': 'new'})
 
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/plain', '*/*'):

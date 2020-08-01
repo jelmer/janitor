@@ -23,6 +23,7 @@ from . import (
     highlight_diff,
     html_template,
     get_archive_diff,
+    ArchiveDiffUnavailable,
     DebdiffRetrievalError,
     )
 from ..policy_pb2 import PolicyConfig
@@ -355,7 +356,7 @@ async def handle_archive_diff(request):
             request.app.http_client_session, request.app.archiver_url, run,
             unchanged_run, kind=kind, filter_boring=filter_boring,
             accept=request.headers.get('ACCEPT', '*/*'))
-    except FileNotFoundError:
+    except ArchiveDiffUnavailable as e:
         return web.json_response(
             {'reason':
                 'debdiff not calculated yet (run: %s, unchanged run: %s)' %
@@ -363,6 +364,8 @@ async def handle_archive_diff(request):
              'run_id': [unchanged_run.id, run.id],
              'build_version': [str(unchanged_run.build_version),
                                str(run.build_version)],
+             'unavailable_run': (
+                 e.unavailable_run.id if e.unavailable_run else None),
              'suite': [unchanged_run.suite, run.suite],
              },
             status=404)

@@ -302,6 +302,9 @@ class Run(object):
     def duration(self) -> datetime.timedelta:
         return self.times[1] - self.times[0]
 
+    def age(self):
+        return datetime.datetime.now() - self.times[1]
+
     @classmethod
     def from_row(cls, row) -> 'Run':
         return cls(run_id=row[0],
