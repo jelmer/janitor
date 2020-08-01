@@ -142,6 +142,13 @@ class DebdiffRetrievalError(Exception):
     """Error occurred while retrieving debdiff."""
 
 
+class ArchiveDiffUnavailable(Exception):
+    """The archive diff is not available."""
+
+    def __init__(self, unavailable_run):
+        self.unavailable_run = unavailable_run
+
+
 async def get_archive_diff(client, archiver_url, run, unchanged_run,
                            kind, accept=None, filter_boring=False):
     if unchanged_run.build_version is None:
@@ -173,7 +180,14 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
             if resp.status == 200:
                 return await resp.read(), resp.content_type
             elif resp.status == 404:
-                raise FileNotFoundError
+                unavailable_arm = resp.headers.get('X-Arm')
+                if unavailable_arm == 'old':
+                    unavailable_run = unchanged_run
+                elif unavailable_arm == 'new':
+                    unavailable_run = run
+                else:
+                    unavailable_run = None
+                raise ArchiveDiffUnavailable(unavailable_run)
             else:
                 raise DebdiffRetrievalError(
                     'Unable to get debdiff: %s' % await resp.text())

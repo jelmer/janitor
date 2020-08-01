@@ -18,6 +18,7 @@ from janitor.sbuild_log import (
 from janitor.logs import LogRetrievalError
 from janitor.site import (
     get_archive_diff,
+    ArchiveDiffUnavailable,
     get_vcs_type,
     DebdiffRetrievalError,
     tracker_url,
@@ -146,7 +147,7 @@ async def generate_run_file(
                 client, archiver_url, run, unchanged_run,
                 kind='debdiff', filter_boring=True, accept='text/html')
             return debdiff.decode('utf-8', 'replace')
-        except FileNotFoundError:
+        except ArchiveDiffUnavailable:
             return ''
         except DebdiffRetrievalError as e:
             return 'Error retrieving debdiff: %s' % e

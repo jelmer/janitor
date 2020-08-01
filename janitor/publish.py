@@ -455,7 +455,8 @@ async def publish_from_policy(
             await do_schedule(
                 conn, run.package, run.suite,
                 requestor='publisher (pre-creation merge conflict)')
-        elif e.code == 'missing-binary-diff':
+        elif e.code in (
+                'missing-binary-diff-self', 'missing-binary-diff-control'):
             unchanged_run = await state.get_unchanged_run(
                 conn, run.main_branch_revision)
             if unchanged_run and unchanged_run.result_code == 'success':

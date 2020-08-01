@@ -7,6 +7,7 @@ from janitor import state
 from janitor.site import (
     env,
     get_archive_diff,
+    ArchiveDiffUnavailable,
     DebdiffRetrievalError,
     )
 
@@ -68,7 +69,7 @@ async def generate_review(conn, client, archiver_url, publisher_url,
             return text.decode('utf-8', 'replace')
         except DebdiffRetrievalError as e:
             return 'Unable to retrieve debdiff: %r' % e
-        except FileNotFoundError:
+        except ArchiveDiffUnavailable:
             return '<p>No debdiff generated</p>'
 
     kwargs = {
