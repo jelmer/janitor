@@ -475,7 +475,8 @@ async def update_aptly(aptly_session: ClientSession, incoming_dir: str):
         try:
             await upload_directory(aptly_session, entry.path)
         except UploadError as e:
-            warning('Failed to upload files (%r) to aptly: %s', e.details)
+            warning('Failed to upload files (%r) to aptly: %s',
+                    e.failed_files, e.details)
 
 
 async def update_archive_loop(
