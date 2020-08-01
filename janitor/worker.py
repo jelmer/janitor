@@ -76,6 +76,7 @@ from silver_platter.debian.upstream import (
     UpstreamBranchUnknown,
     PackageIsNative,
     PreviousVersionTagMissing,
+    UnsupportedRepackFormat,
     PristineTarError,
     QuiltError,
     UScanError,
@@ -492,7 +493,9 @@ class NewUpstreamWorker(SubWorker):
                 except UnidentifiedError as e:
                     traceback.print_exc()
                     lines = [line for line in e.lines if line]
-                    if len(lines) == 1:
+                    if e.secondary:
+                        raise DistCommandFailed(e.secondary[1])
+                    elif len(lines) == 1:
                         raise DistCommandFailed(lines[0])
                     else:
                         raise DistCommandFailed(
@@ -521,6 +524,12 @@ class NewUpstreamWorker(SubWorker):
                 error_description = (
                     "Upstream version %s already imported." % (e.version))
                 raise WorkerFailure('nothing-to-do', error_description)
+            except UnsupportedRepackFormat as e:
+                error_description = (
+                    'Unable to repack file %s to supported tarball format.' % (
+                        os.path.basename(e.location)))
+                raise Workerfailure(
+                    'unsupported-repack-format', error_description)
             except UpstreamAlreadyMerged as e:
                 error_description = (
                     "Last upstream version %s already merged." % e.version)

@@ -460,8 +460,8 @@ async def publish_from_policy(
                 conn, run.main_branch_revision)
             if unchanged_run and unchanged_run.result_code == 'success':
                 description = (
-                    'Missing binary diff, but unchanged run exists. '
-                    'Not published yet?')
+                    'Missing binary diff, but successful control run '
+                    'exists. Not published yet?')
             elif unchanged_run:
                 description = (
                     'Missing binary diff; last control run failed (%s).' %
