@@ -113,12 +113,14 @@ async def generate_run_file(
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package)
         package = await state.get_package(conn, run.package)
+        publish_history = await state.get_publish_history(conn, run.revision)
     kwargs['queue_wait_time'] = queue_wait_time
     kwargs['queue_position'] = queue_position
     kwargs['vcs_url'] = package.vcs_url
     kwargs['vcs_browse'] = package.vcs_browse
     kwargs['vcswatch_version'] = package.vcswatch_version
     kwargs['is_admin'] = is_admin
+    kwargs['publish_history'] = publish_history
 
     async def show_diff():
         if not run.revision or run.revision == run.main_branch_revision:
