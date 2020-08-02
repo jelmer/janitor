@@ -180,10 +180,11 @@ class DebdiffRetrievalError(Exception):
         self.reason = reason
 
 
-def strip_janitor_blurb(text, suite):
+def strip_janitor_blurb(text, suite, external_url):
     for blurb in [JANITOR_BLURB, JANITOR_BLURB_MD]:
         try:
-            i = text.index(blurb % {'suite': suite})
+            i = text.index(blurb % {
+                'suite': suite, 'external_url': external_url})
         except ValueError:
             pass
         else:
@@ -337,7 +338,7 @@ def publish(
             existing_description = existing_proposal.get_description()
             try:
                 existing_description = strip_janitor_blurb(
-                    existing_description, suite)
+                    existing_description, suite, external_url)
             except ValueError:
                 # Oh, well...
                 existing_description = None
@@ -770,6 +771,7 @@ def publish_one(
                         'Binary debdiff is not available. '
                         'Control run (%s) not published?' % e.missing_run_id),
                     code='missing-binary-diff-control')
+        debdiff = None
 
     try:
         publish_result = publish(
