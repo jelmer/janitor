@@ -46,9 +46,21 @@ from .diffoscope import (
     format_diffoscope,
     )
 from .prometheus import setup_metrics
+from prometheus_client import (
+    Gauge,
+    )
+
 from .trace import note, warning
 
 suite_check = re.compile('^[a-z0-9-]+$')
+
+last_suite_publish_success = Gauge(
+    'last_suite_publish_success',
+    'Last time publishing a suite succeeded',
+    labelnames=('suite', ))
+last_local_publish_success = Gauge(
+    'last_local_publish_success',
+    'Last time regular publishing to local succeeded')
 
 
 class UploadError(Exception):
@@ -375,6 +387,8 @@ async def do_publish(
         await aptly_call(
             aptly_session, 'POST', 'publish/%s' % loc, json=params)
 
+    last_suite_publish_success.labels(suite=suite).set_to_current_time()
+
 
 async def loop_local_publish(aptly_session, config):
     await asyncio.sleep(15 * 60)
@@ -389,6 +403,8 @@ async def loop_local_publish(aptly_session, config):
             except AptlyError as e:
                 warning('Error while publishing %s: %s',
                         suite.name, e)
+            else:
+                last_local_publish_success.set_to_current_time()
         await asyncio.sleep(30 * 60)
 
 
