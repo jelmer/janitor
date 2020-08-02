@@ -715,7 +715,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
                      }, status=400)
             if part.filename == 'result.json':
                 result = await part.json()
-            if part.filename.endswith('.log'):
+            elif part.filename.endswith('.log'):
                 runner_writer.append(await part.read(), headers=part.headers)
             else:
                 archiver_writer.append(await part.read(), headers=part.headers)
