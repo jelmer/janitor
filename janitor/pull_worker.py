@@ -146,24 +146,6 @@ def push_branch(
         overwrite=overwrite, name=branch_name)
 
 
-class ResultPushFailed(Problem):
-
-    kind = 'result-push-failed'
-
-    def __init__(self, inner):
-        self.inner = inner
-
-    def __eq__(self, other):
-        return (isinstance(other, type(self)) and 
-                other.inner == other.inner)
-
-    def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, self.inner)
-
-    def __str__(self):
-        return "Failed to push result branch: %s" % self.inner
-
-
 def run_worker(branch_url, subpath, vcs_type, env,
                command, output_directory, metadata,
                build_command=None,
@@ -204,7 +186,9 @@ def run_worker(branch_url, subpath, vcs_type, env,
             except InvalidHttpResponse as e:
                 # TODO(jelmer): Retry if this was a server error (5xx) of some
                 # sort?
-                return ResultPushFailed(e)
+                raise WorkerFailure(
+                    'result-push-failed',
+                    "Failed to push result branch: %s" % e)
             note('Pushing packaging branch cache to %s',
                  cached_branch_url)
             push_branch(
