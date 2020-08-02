@@ -74,6 +74,7 @@ from silver_platter.debian.upstream import (
     UpstreamMergeConflicted,
     UpstreamBranchUnavailable,
     UpstreamBranchUnknown,
+    NoUpstreamSourceKnown,
     PackageIsNative,
     PreviousVersionTagMissing,
     UnsupportedRepackFormat,
@@ -662,6 +663,10 @@ class NewUpstreamWorker(SubWorker):
             except InvalidNormalization as e:
                 error_description = str(e)
                 error_code = 'invalid-path-normalization'
+                raise WorkerFailure(error_code, error_description)
+            except NoUpstreamSourceKnown as e:
+                error_description = str(e)
+                error_code = 'no-upstream-source-known'
                 raise WorkerFailure(error_code, error_description)
 
             report_context(result.new_upstream_version)
