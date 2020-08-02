@@ -90,6 +90,17 @@ class Session(object):
         except subprocess.CalledProcessError as e:
             raise subprocess.CalledProcessError(e.returncode, argv)
 
+    def check_output(
+            self,
+            argv: List[str], cwd: Optional[str] = None,
+            user: Optional[str] = None,
+            env: Optional[Dict[str, str]] = None) -> bytes:
+        try:
+            return subprocess.check_output(
+                self._run_argv(argv, cwd, user, env=env))
+        except subprocess.CalledProcessError as e:
+            raise subprocess.CalledProcessError(e.returncode, argv)
+
     def Popen(self, argv, cwd: Optional[str] = None,
               user: Optional[str] = None, **kwargs):
         return subprocess.Popen(self._run_argv(argv, cwd, user), **kwargs)
@@ -98,3 +109,12 @@ class Session(object):
             self, argv: List[str], cwd: Optional[str] = None,
             user: Optional[str] = None):
         return subprocess.call(self._run_argv(argv, cwd, user))
+
+    def create_home(self) -> None:
+        """Create the user's home directory."""
+        home = self.check_output(
+            ['sh', '-c', 'echo $HOME']).decode().rstrip('\n')
+        user = self.check_output(
+            ['sh', '-c', 'echo $LOGNAME']).decode().rstrip('\n')
+        self.check_call(['mkdir', '-p', home], user='root')
+        self.check_call(['chown', user, home], user='root')
