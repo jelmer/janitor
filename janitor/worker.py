@@ -528,7 +528,7 @@ class NewUpstreamWorker(SubWorker):
                 error_description = (
                     'Unable to repack file %s to supported tarball format.' % (
                         os.path.basename(e.location)))
-                raise Workerfailure(
+                raise WorkerFailure(
                     'unsupported-repack-format', error_description)
             except UpstreamAlreadyMerged as e:
                 error_description = (
