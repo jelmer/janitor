@@ -1158,7 +1158,12 @@ applied independently.
             except PermissionDenied as e:
                 warning('Permission denied posting comment to %s: %s',
                         mp.url, e)
-            mp.close()
+            try:
+                mp.close()
+            except PermissionDenied as e:
+                warning('Permission denied closing merge request %s: %s',
+                        mp.url, e)
+                return False
         return True
 
     if last_run.result_code != 'success':
