@@ -63,6 +63,7 @@ from silver_platter.utils import (
     BranchUnavailable,
     )
 
+from breezy.errors import PermissionDenied
 from breezy.propose import get_proposal_by_url, HosterLoginRequired
 from breezy.transport import Transport
 import breezy.plugins.gitlab  # noqa: F401
@@ -1149,10 +1150,14 @@ async def check_existing_mp(
              'closing proposal.', mp.url)
         if not dry_run:
             await update_proposal_status(mp, 'applied', revision, package_name)
-            mp.post_comment("""
+            try:
+                mp.post_comment("""
 This merge proposal will be closed, since all remaining changes have been
 applied independently.
 """)
+            except PermissionDenied as e:
+                warning('Permission denied posting comment to %s: %s',
+                        mp.url, e)
             mp.close()
         return True
 
