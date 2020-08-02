@@ -721,31 +721,33 @@ async def handle_run_finish(request: web.Request) -> web.Response:
                 archiver_writer.append(await part.read(), headers=part.headers)
 
     if result is None:
-        return web.json_response({'reason': 'missing result.json'}, status=400)
+        return web.json_response(
+            {'reason': 'missing result.json'}, status=400)
 
-    archiver_url = urllib.parse.urljoin(
-        request.app.archiver_url, 'upload/%s' % run_id)
-    try:
-        async with request.app.http_client_session.post(
-                archiver_url, data=archiver_writer) as resp:
-            if resp.status not in (201, 200):
-                try:
-                    internal_error = await resp.json()
-                except ContentTypeError:
-                    internal_error = await resp.text()
-                return web.json_response({
-                    'internal-status': resp.status,
-                    'internal-reporter': 'archiver',
-                    'internal-result': internal_error},
-                    status=400)
-            archiver_result = await resp.json()
-    except ClientConnectorError:
-        return web.Response(
-            text='unable to contact archiver',
-            status=502)
+    if len(archiver_writer) > 0:
+        archiver_url = urllib.parse.urljoin(
+            request.app.archiver_url, 'upload/%s' % run_id)
+        try:
+            async with request.app.http_client_session.post(
+                    archiver_url, data=archiver_writer) as resp:
+                if resp.status not in (201, 200):
+                    try:
+                        internal_error = await resp.json()
+                    except ContentTypeError:
+                        internal_error = await resp.text()
+                    return web.json_response({
+                        'internal-status': resp.status,
+                        'internal-reporter': 'archiver',
+                        'internal-result': internal_error},
+                        status=400)
+                archiver_result = await resp.json()
+        except ClientConnectorError:
+            return web.Response(
+                text='unable to contact archiver',
+                status=502)
 
-    for key in ['changes_filename', 'build_version', 'build_distribution']:
-        result[key] = archiver_result.get(key)
+        for key in ['changes_filename', 'build_version', 'build_distribution']:
+            result[key] = archiver_result.get(key)
 
     result['worker_name'] = worker_name
 
