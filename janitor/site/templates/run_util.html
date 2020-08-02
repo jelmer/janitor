@@ -155,3 +155,16 @@ $("#{{ propose_id }}").click(function() {
 {% macro display_maintainer_email(maintainer_email) %}
 <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
 {% endmacro %}
+
+{% macro display_publish_result(mode, code, description, mp_url) %}
+{% if mode == 'push' %}
+ {% if code == 'success' %}Successfully pushed
+ {% else %}Failed to push: <span class="publish-failure">{{ code }}</span>
+ {% endif %}
+{% elif mode == 'propose' %}
+ {% if code == 'success' %}<a href="{{ mp_url }}">Merge proposal</a> updated
+ {% else %}Failed to create merge proposal: <span class="publish-failure">{{ code }}</span>
+ {% endif %}
+{% endif %}
+({% if '\n' in description %}<pre>{{ description }}</pre>{% else %}{{ description }}{% endif %})
+{% endmacro %}
