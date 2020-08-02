@@ -110,14 +110,9 @@ open_proposal_count = Gauge(
 merge_proposal_count = Gauge(
     'merge_proposal_count', 'Number of merge proposals by status.',
     labelnames=('status',))
-last_success_gauge = Gauge(
-    'job_last_success_unixtime',
-    'Last time a batch job successfully finished')
-publish_ready_count = Gauge(
-    'publish_ready_count', 'Number of publish ready runs by status.',
-    labelnames=('review_status', 'publish_mode'))
-successful_push_count = Gauge(
-    'successful_push_count', 'Number of successful pushes.')
+last_publish_pending_success = Gauge(
+    'last_publish_pending_success',
+    'Last time pending changes were successfully published')
 publish_latency = Histogram(
     'publish_latency', 'Delay between build finish and publish.')
 
@@ -365,6 +360,8 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
 
     note('Done publishing pending changes; duration: %.2fs' % (
          time.time() - start))
+
+    last_publish_pending_success.set_to_current_time()
 
 
 async def publish_from_policy(
@@ -1398,8 +1395,6 @@ def main(argv=None):
             topic_merge_proposal=topic_merge_proposal,
             reviewed_only=args.reviewed_only,
             require_binary_diff=args.require_binary_diff))
-
-        last_success_gauge.set_to_current_time()
         if args.prometheus:
             push_to_gateway(
                 args.prometheus, job='janitor.publish',
