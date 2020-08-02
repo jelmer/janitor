@@ -113,7 +113,11 @@ async def generate_run_file(
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package)
         package = await state.get_package(conn, run.package)
-        publish_history = await state.get_publish_history(conn, run.revision)
+        if run.revision:
+            publish_history = await state.get_publish_history(
+                conn, run.revision)
+        else:
+            publish_history = []
     kwargs['queue_wait_time'] = queue_wait_time
     kwargs['queue_position'] = queue_position
     kwargs['vcs_url'] = package.vcs_url

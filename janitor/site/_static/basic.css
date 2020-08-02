@@ -602,6 +602,10 @@ span.result-code-nothing-to-do {
     color: grey;
 }
 
+span.publish-failure {
+    color: red;
+}
+
 blockquote.result-code-explanation {
     background-color: #FE9;
 }
