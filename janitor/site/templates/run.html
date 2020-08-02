@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
 {% from "codeblock.html" import include_console_log with context %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, schedule_control_button, publish_buttons, install_commands, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, schedule_control_button, publish_buttons, install_commands, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url, display_publish_result with context %}
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
@@ -141,7 +141,7 @@ Mark package as orphaned.
 
 <ul>
 {% for pmode, mp_url, pdesc, pcode, requestor, timestamp in publish_history[:10] %}
-<li>{{ format_timestamp(timestamp) }}: {{ pmode }} resulted in {{ pcode }} ({% if '\n' in pdesc %}<pre>{{ pdesc }}</pre>{% else %}{{ pdesc }}{% endif %}){% if mp_url %} - <a href="{{ mp_url }}">Merge Proposal</a>{% endif %}.</li>
+<li>{{ format_timestamp(timestamp) }}: {{ display_publish_result(pmode, pcode, pdesc, mp_url) }}{% if requestor and not requestor.startswith('publisher') %} (requested by {{ requestor }}){% endif %}</li>
 {% endfor %}
 </ul>
 
