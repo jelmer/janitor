@@ -186,6 +186,10 @@ class NoBuildToolsFound(Exception):
 def run_dist_in_chroot(session):
     apt_install(session, ['git'])
 
+    # Some things want to write to the user's home directory,
+    # e.g. pip caches in ~/.cache
+    session.create_home()
+
     if os.path.exists('package.xml'):
         apt_install(session, ['php-pear', 'php-horde-core'])
         note('Found package.xml, assuming pear package.')
