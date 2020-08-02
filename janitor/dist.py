@@ -328,7 +328,7 @@ def run_dist_in_chroot(session):
                     in e.lines):
                 pass
             elif ("Reconfigure the source tree "
-                    "(via './config' or 'perl Configure'), please.\n"
+                    "\(via './config' or 'perl Configure'\), please.\n"
                   ) in e.lines:
                 run_with_build_fixer(session, ['./config'])
                 run_with_build_fixer(session, ['make', 'dist'])
