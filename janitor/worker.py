@@ -664,8 +664,11 @@ class NewUpstreamWorker(SubWorker):
                 error_description = str(e)
                 error_code = 'invalid-path-normalization'
                 raise WorkerFailure(error_code, error_description)
-            except NoUpstreamLocationsKnown as e:
-                error_description = str(e)
+            except NoUpstreamLocationsKnown:
+                error_description = (
+                    'No debian/watch file or Repository in '
+                    'debian/upstream/metadata to retrieve new upstream version'
+                    'from.')
                 error_code = 'no-upstream-locations-known'
                 raise WorkerFailure(error_code, error_description)
 
