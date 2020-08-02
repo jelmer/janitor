@@ -70,7 +70,7 @@ async def abort_run(
     async with session.post(finish_url) as resp:
         if resp.status not in (201, 200):
             raise Exception('Unable to abort run: %r: %d' % (
-                await resp.read(), resp.status))
+                await resp.text(), resp.status))
 
 
 @contextmanager
@@ -105,7 +105,7 @@ async def upload_results(
             if resp.status not in (201, 200):
                 raise ResultUploadFailure(
                     'Unable to submit result: %r: %d' % (
-                        await resp.read(), resp.status))
+                        await resp.text(), resp.status))
             return await resp.json()
 
 
@@ -212,7 +212,7 @@ async def get_assignment(
     async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
             raise ValueError('Unable to get assignment: %r' %
-                             await resp.read())
+                             await resp.text())
         return await resp.json()
 
 
