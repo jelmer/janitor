@@ -195,9 +195,10 @@ async def generate_developer_table_page(db, developer):
 
 async def iter_lintian_brush_fixer_failures(conn: asyncpg.Connection, fixer):
     query = """
-select id, package, result->'failed'->$1 FROM last_runs
+select id, finish_time, package, result->'failed'->$1 FROM last_runs
 where
   suite = 'lintian-fixes' and (result->'failed')::jsonb?$1
+order by finish_time desc
 """
     return await conn.fetch(query, fixer)
 
