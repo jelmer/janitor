@@ -46,7 +46,8 @@ def json_chart_data(max_age=None):
 def update_vars_from_request(vs, request):
     vs['is_admin'] = is_admin(request)
     vs['rel_url'] = request.rel_url
-    vs['suites'] = request.app.config.suite
+    if getattr(request.app, 'config', None):
+        vs['suites'] = request.app.config.suite
     if request.app.external_url is not None:
         vs['url'] = request.app.external_url.join(request.rel_url)
         vs['vcs_manager'] = RemoteVcsManager(str(request.app.external_url))
