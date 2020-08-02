@@ -321,6 +321,7 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
                 apt_description = str(apt_error)
         if apt_description and not description:
             description = apt_description
+        if apt_offset is not None:
             offset = apt_offset
         context = ('autopkgtest', testname)
     if failed_stage == 'apt-get-update':
@@ -2751,7 +2752,7 @@ def find_autopkgtest_failure_description(
                     testbed_failure_reason = m.group(1)
                     if (current_field is not None and
                             testbed_failure_reason ==
-                                'testbed auxverb failed with exit code 255'):
+                            'testbed auxverb failed with exit code 255'):
                         field = (current_field[0], 'output')
                         (offset, description, error) = (
                             find_build_failure_description(test_output[field]))
@@ -2788,6 +2789,10 @@ def find_autopkgtest_failure_description(
                             None)
                 m = re.fullmatch(r'erroneous package: (.*)', msg)
                 if m:
+                    (offset, description, error) = (
+                        find_build_failure_description(lines[:i]))
+                    if error:
+                        return (offset, last_test, error, description)
                     return (i + 1, last_test,
                             AutopkgtestErroneousPackage(m.group(1)), None)
                 if current_field is not None:
