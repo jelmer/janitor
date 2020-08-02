@@ -1761,6 +1761,8 @@ build_failure_regexps = [
      'mono \(>=(.*)\) or \.Net', c_sharp_compiler_missing),
     (r'configure: error: gmcs Not found', c_sharp_compiler_missing),
     (r'configure: error: You need to install gmcs', c_sharp_compiler_missing),
+    (r'configure: error: (.*) requires libkqueue \(or system kqueue\). .*',
+     lambda m: MissingPkgConfig('libkqueue')),
     ('.*meson.build:([0-9]+):([0-9]+): ERROR: Dependency "(.*)" not found, '
      'tried pkgconfig', meson_pkg_config_missing),
     ('.*meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
