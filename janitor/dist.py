@@ -299,7 +299,16 @@ def run_dist_in_chroot(session):
             if not has_shebang('autogen.sh'):
                 run_with_build_fixer(session, ['/bin/sh', './autogen.sh'])
             else:
-                run_with_build_fixer(session, ['./autogen.sh'])
+                try:
+                    run_with_build_fixer(session, ['./autogen.sh'])
+                except UnidentifiedError as e:
+                    if ("Gnulib not yet bootstrapped; "
+                            "run ./bootstrap instead.\n" in e.lines):
+                        run_with_build_fixer(session, ["./bootstrap"])
+                        run_with_build_fixer(session, ['./autogen.sh'])
+                    else:
+                        raise
+
         elif os.path.exists('configure.ac') or os.path.exists('configure.in'):
             apt_install(session, [
                 'autoconf', 'automake', 'gettext', 'libtool', 'gnu-standards'])
@@ -318,10 +327,6 @@ def run_dist_in_chroot(session):
             elif ("make[1]: *** No rule to make target 'dist'. Stop.\n"
                     in e.lines):
                 pass
-            elif ("Gnulib not yet bootstrapped; run ./bootstrap instead.\n"
-                  in e.lines):
-                run_with_build_fixer(session, ["./bootstrap"])
-                run_with_build_fixer(session, ['make', 'dist'])
             elif ("Reconfigure the source tree "
                     "(via './config' or 'perl Configure'), please.\n"
                   ) in e.lines:
