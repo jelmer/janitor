@@ -403,8 +403,7 @@ async def loop_local_publish(aptly_session, config):
             except AptlyError as e:
                 warning('Error while publishing %s: %s',
                         suite.name, e)
-            else:
-                last_local_publish_success.set_to_current_time()
+        last_local_publish_success.set_to_current_time()
         await asyncio.sleep(30 * 60)
 
 
