@@ -17,6 +17,7 @@
 
 import errno
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -152,6 +153,7 @@ GENERIC_INSTALL_FIXERS: List[
 
 
 def run_with_build_fixer(session: Session, args: List[str]):
+    note('Running %r', args)
     fixed_errors = []
     while True:
         retcode, lines = run_with_tee(session, args)
@@ -323,7 +325,7 @@ def run_dist_in_chroot(session):
             elif ("Reconfigure the source tree "
                     "(via './config' or 'perl Configure'), please.\n"
                   ) in e.lines:
-                run_with_build_fixer(session, ['perl', 'configure'])
+                run_with_build_fixer(session, ['./config'])
                 run_with_build_fixer(session, ['make', 'dist'])
             elif (
                     "Please try running 'make manifest' and then run "
@@ -331,6 +333,12 @@ def run_dist_in_chroot(session):
                 run_with_build_fixer(session, ['make', 'manifest'])
                 run_with_build_fixer(session, ['make', 'dist'])
             elif "Please run ./configure first\n" in e.lines:
+                run_with_build_fixer(session, ['./configure'])
+                run_with_build_fixer(session, ['make', 'dist'])
+            elif any([re.match(
+                    'Makefile:[0-9]+: \*\*\* Missing \'Make.inc\' '
+                    'Run \'./configure \[options\]\' and retry.  Stop.\n',
+                    line) for line in e.lines]):
                 run_with_build_fixer(session, ['./configure'])
                 run_with_build_fixer(session, ['make', 'dist'])
             else:
