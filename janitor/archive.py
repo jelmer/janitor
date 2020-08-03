@@ -76,14 +76,13 @@ async def handle_upload(request):
     container = os.path.join(request.app.incoming_dir, directory)
     os.mkdir(container)
     reader = await request.multipart()
-    filenames = []
-    result = {}
+    result = {'filenames': []}
     while True:
         part = await reader.next()
         if part is None:
             break
         path = os.path.join(container, part.filename)
-        filenames.append(part.filename)
+        result['filenames'].append(part.filename)
         with open(path, 'wb') as f:
             f.write(await part.read())
         if path.endswith('.changes'):
@@ -94,14 +93,18 @@ async def handle_upload(request):
                 result['version'] = changes['Version']
                 result['distribution'] = changes['Distribution']
                 result['changes'] = changes['Changes']
+    if 'changes_filename' not in result:
+        note('No changes file in uploaded directory: %r',
+             result['filenames'])
+        return web.json_response(result, 200)
     try:
-        await upload_directory(aptly_session, container)
+        report = await upload_directory(aptly_session, container)
     except UploadError as e:
         return web.json_response(
             {'msg': str(e), 'failed_files': e.failed_files},
             status=500)
-    note('Uploaded files: %r', filenames)
-    result['filenames'] = filenames
+    result['report'] = report
+    note('Uploaded files: %r', result['filenames'])
     return web.json_response(result, status=200)
 
 
@@ -498,6 +501,7 @@ async def upload_directory(aptly_session: ClientSession, directory: str):
             warning('Aptly warning: %s', w)
         if failed_files:
             raise UploadError(failed_files, report['Warnings'])
+        return report
 
 
 async def process_incoming(aptly_session: ClientSession, incoming_dir: str):
