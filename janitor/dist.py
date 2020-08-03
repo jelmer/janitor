@@ -167,7 +167,7 @@ def run_with_build_fixer(session: Session, args: List[str]):
                     retcode, args, lines, secondary=(offset, line))
             raise UnidentifiedError(retcode, args, lines)
 
-        note('Identifier error: %r', error)
+        note('Identified error: %r', error)
         if error in fixed_errors:
             warning('Failed to resolve error %r, it persisted. Giving up.',
                     error)
@@ -328,7 +328,7 @@ def run_dist_in_chroot(session):
                     in e.lines):
                 pass
             elif ("Reconfigure the source tree "
-                    "\(via './config' or 'perl Configure'\), please.\n"
+                    "(via './config' or 'perl Configure'), please.\n"
                   ) in e.lines:
                 run_with_build_fixer(session, ['./config'])
                 run_with_build_fixer(session, ['make', 'dist'])
