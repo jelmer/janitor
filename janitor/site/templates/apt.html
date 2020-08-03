@@ -8,7 +8,7 @@
 resulting Debian package.</p>
 <p>To use the apt repository, e.g. for lintian fixes, run:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>echo deb {{ url.join(URL('..')) }} lintian-fixes main &gt; /etc/apt/sources.list.d/janitor.list
-curl {{ url.join(URL('../janitor.asci')) }} | sudo apt-key add -
+curl {{ url.join(URL('../pgp_keys.asci')) }} | sudo apt-key add -
 apt update
 </pre></div>
 </div>
