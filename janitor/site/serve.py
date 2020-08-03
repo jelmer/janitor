@@ -990,12 +990,6 @@ if __name__ == '__main__':
             functools.partial(handle_static_file, entry.path))
     app.router.add_static(
         '/_static/images/datatables', '/usr/share/javascript/jquery-datatables/images')
-    app.router.add_get(
-        '/janitor.asc', functools.partial(
-            handle_static_file,
-            os.path.join(
-                os.path.dirname(__file__), '..', '..', 'janitor.asc')),
-        name='gpg-key')
     for (name, kind, basepath) in [
             ('chart', 'js', '/usr/share/javascript/chart.js/Chart'),
             ('chart', 'css', '/usr/share/javascript/chart.js/Chart'),
