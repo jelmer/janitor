@@ -484,10 +484,10 @@ class NewUpstreamWorker(SubWorker):
                     'control files live in root rather than debian/ '
                     '(LarstIQ mode)')
 
-            def create_dist(tree, package, version, target_filename):
+            def create_dist(tree, package, version, target_dir):
                 try:
                     return create_dist_schroot(
-                        tree, subdir=package, target_filename=target_filename,
+                        tree, subdir=package, target_dir=target_dir,
                         packaging_tree=local_tree, chroot=self.args.chroot)
                 except DetailedDistCommandFailed:
                     raise
