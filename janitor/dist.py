@@ -383,7 +383,7 @@ def dupe_vcs_tree(tree, directory):
 
 
 def create_dist_schroot(
-        tree: Tree, target_directory: str,
+        tree: Tree, target_dir: str,
         chroot: str, packaging_tree: Optional[Tree] = None,
         include_controldir: bool = True,
         subdir: Optional[str] = None) -> Optional[str]:
@@ -429,13 +429,13 @@ def create_dist_schroot(
             note('Found tarball %s in package directory.', fn)
             shutil.copy(
                 os.path.join(export_directory, fn),
-                target_directory)
+                target_dir)
             return fn
         if 'dist' in diff_files:
             for entry in os.scandir(os.path.join(export_directory, 'dist')):
                 if get_filetype(entry.name) is not None:
                     note('Found tarball %s in dist directory.', entry.name)
-                    shutil.copy(entry.path, target_directory)
+                    shutil.copy(entry.path, target_dir)
                     return entry.name
             note('No tarballs found in dist directory.')
 
@@ -445,7 +445,7 @@ def create_dist_schroot(
             note('Found tarball %s in parent directory.', fn)
             shutil.copy(
                 os.path.join(directory, fn),
-                target_directory)
+                target_dir)
             return fn
 
         note('No tarball created :(')
