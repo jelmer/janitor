@@ -20,7 +20,7 @@ from a human.</p>
 <h2>Using the repository</h2>
 <p>To use the apt repository, run something like:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>echo deb {{ url.join(URL('..')) }} fresh-snapshots main &gt; /etc/apt/sources.list.d/fresh-snapshots.list
-curl {{ url.join(URL('../janitor.asc')) }} | sudo apt-key add -
+curl {{ url.join(URL('../pgp_keys.asc')) }} | sudo apt-key add -
 apt update
 </pre></div>
 </div>
