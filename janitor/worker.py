@@ -667,8 +667,8 @@ class NewUpstreamWorker(SubWorker):
             except NoUpstreamLocationsKnown:
                 error_description = (
                     'No debian/watch file or Repository in '
-                    'debian/upstream/metadata to retrieve new upstream version'
-                    'from.')
+                    'debian/upstream/metadata to retrieve new upstream '
+                    'version from.')
                 error_code = 'no-upstream-locations-known'
                 raise WorkerFailure(error_code, error_description)
 
