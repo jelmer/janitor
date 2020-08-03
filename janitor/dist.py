@@ -383,10 +383,10 @@ def dupe_vcs_tree(tree, directory):
 
 
 def create_dist_schroot(
-        tree: Tree, target_filename: str,
+        tree: Tree, target_directory: str,
         chroot: str, packaging_tree: Optional[Tree] = None,
         include_controldir: bool = True,
-        subdir: Optional[str] = None) -> bool:
+        subdir: Optional[str] = None) -> Optional[str]:
     if subdir is None:
         subdir = 'package'
     with Session(chroot) as session:
@@ -417,7 +417,7 @@ def create_dist_schroot(
             run_dist_in_chroot(session)
         except NoBuildToolsFound:
             note('No build tools found, falling back to simple export.')
-            return False
+            return None
         finally:
             os.chdir(oldcwd)
 
@@ -429,14 +429,14 @@ def create_dist_schroot(
             note('Found tarball %s in package directory.', fn)
             shutil.copy(
                 os.path.join(export_directory, fn),
-                target_filename)
-            return True
+                target_directory)
+            return fn
         if 'dist' in diff_files:
             for entry in os.scandir(os.path.join(export_directory, 'dist')):
                 if get_filetype(entry.name) is not None:
                     note('Found tarball %s in dist directory.', entry.name)
-                    shutil.copy(entry.path, target_filename)
-                    return True
+                    shutil.copy(entry.path, target_directory)
+                    return entry.name
             note('No tarballs found in dist directory.')
 
         diff = set(os.listdir(directory)) - set([subdir])
@@ -445,11 +445,11 @@ def create_dist_schroot(
             note('Found tarball %s in parent directory.', fn)
             shutil.copy(
                 os.path.join(directory, fn),
-                target_filename)
-            return True
+                target_directory)
+            return fn
 
         note('No tarball created :(')
-        return False
+        return None
 
 
 if __name__ == '__main__':
@@ -468,8 +468,8 @@ if __name__ == '__main__':
         '--packaging-directory', type=str,
         help='Path to packaging directory.')
     parser.add_argument(
-        '--target-filename', type=str,
-        help='Target filename')
+        '--target-directory', type=str, default='..',
+        help='Target directory')
     args = parser.parse_args()
     tree = WorkingTree.open(args.directory)
     if args.packaging_directory:
@@ -478,14 +478,12 @@ if __name__ == '__main__':
             source = Deb822(packaging_tree.get_file('debian/control'))
         package = source['Source']
         subdir = package
-        target_filename = args.target_filename or ('%s.tar.gz' % package)
     else:
         packaging_tree = None
-        target_filename = args.target_filename or 'dist.tar.gz'
         subdir = None
 
     ret = create_dist_schroot(
-        tree, subdir=subdir, target_filename=os.path.abspath(target_filename),
+        tree, subdir=subdir, target_dir=os.path.abspath(args.target_directory),
         packaging_tree=packaging_tree,
         chroot=args.chroot)
     if ret:
