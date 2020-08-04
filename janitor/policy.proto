@@ -3,9 +3,6 @@ syntax = "proto2";
 package janitor;
 
 enum Mode {
-    // Don't make any changes to this package
-    skip = 0;
-
     // Push changes directly to the packaging repository
     push = 1;
 
@@ -39,12 +36,16 @@ message Match {
     repeated string source_package = 3;
 }
 
+message PublishPolicy {
+    optional Mode mode = 1;
+}
+
 message SuitePolicy {
     optional string name = 1;
 
     optional string command = 2;
 
-    optional Mode mode = 3;
+    optional PublishPolicy publish = 4;
 };
 
 message Policy {
