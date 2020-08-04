@@ -64,6 +64,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'check-space-insufficient-disk-space',
     'worker-resume-branch-unavailable',
     'explain-bd-uninstallable-no-space-on-device',
+    'explain-bd-uninstallable-apt-file-fetch-failure',
     'worker-timeout',
 ]
 

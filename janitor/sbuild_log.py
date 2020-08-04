@@ -329,7 +329,7 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
                 find_apt_get_update_failure(paragraphs))
         if error:
             description = str(error)
-    if failed_stage == 'install-deps':
+    if failed_stage in ('install-deps', 'explain-bd-uninstallable'):
         (focus_section, offset, line,
          error) = find_install_deps_failure_description(paragraphs)
         if error:
@@ -339,11 +339,6 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
                 description = line[3:]
             else:
                 description = line
-    if failed_stage == 'explain-bd-uninstallable':
-        (offset, line, error) = find_apt_get_failure(
-                section_lines)
-        if error:
-            description = str(error)
     if failed_stage == 'arch-check':
         (offset, line, error) = find_arch_check_failure_description(
                 section_lines)
