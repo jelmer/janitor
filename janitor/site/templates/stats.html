@@ -107,8 +107,9 @@ new Chart($("#burndown"), {
 
 <canvas id="review-status-chart" width="800" height="450"></canvas>
 <script>
+var review_status_chart;
 $.getJSON("/cupboard/stats/+chart/review-status", function (json) {
-new Chart($("#review-status-chart"), {
+review_status_chart = new Chart($("#review-status-chart"), {
     type: 'pie',
     data: {
        labels: ["rejected", "approved", "unreviewed"],
@@ -130,6 +131,23 @@ new Chart($("#review-status-chart"), {
     },
 });
 });
+
+document.getElementById("review-status-chart").onclick = function(e) {
+   var slice = review_status_chart.getElementAtEvent(e);
+   if (!slice.length) return;  // not a slice they clicked on
+   var label = slice[0]._model.label;
+   if (label == "unreviewed") {
+        window.open("/cupboard/review/");
+   } else if (label == "approved") {
+	window.open("/cupboard/ready");
+   } else if (label == "rejected") {
+	window.open("/cupboard/rejected");
+   } else {
+	console.log("Unknown label: " + label);
+   }
+}
+
+
 </script>
 
 
