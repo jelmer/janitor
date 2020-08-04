@@ -19,11 +19,12 @@ from email.utils import parseaddr
 from fnmatch import fnmatch
 import shlex
 from google.protobuf import text_format  # type: ignore
+from typing import List, TextIO, Tuple
 
 from . import policy_pb2
 
 
-def read_policy(f):
+def read_policy(f: TextIO) -> policy_pb2.PolicyConfig:
     return text_format.Parse(f.read(), policy_pb2.PolicyConfig())
 
 
@@ -52,8 +53,11 @@ def known_suites(config):
     return ret
 
 
-def apply_policy(config, suite, package_name, maintainer, uploaders):
-    mode = policy_pb2.skip
+def apply_policy(
+        config: policy_pb2.PolicyConfig, suite: str,
+        package_name: str, maintainer: str,
+        uploaders: List[str]) -> Tuple[str, str, List[str]]:
+    publish_mode = policy_pb2.build_only
     update_changelog = policy_pb2.auto
     command = None
     for policy in config.policy:
@@ -68,17 +72,16 @@ def apply_policy(config, suite, package_name, maintainer, uploaders):
                 break
         else:
             continue
-        if s.HasField('mode'):
-            mode = s.mode
+        if s.publish and s.publish.HasField('mode'):
+            publish_mode = s.publish.mode
         if s.command:
             command = s.command
     return (
         {policy_pb2.propose: 'propose',
          policy_pb2.attempt_push: 'attempt-push',
          policy_pb2.push: 'push',
-         policy_pb2.skip: 'skip',
          policy_pb2.build_only: 'build-only',
-         }[mode],
+         }[publish_mode],
         {policy_pb2.auto: 'auto',
          policy_pb2.update_changelog: 'update',
          policy_pb2.leave_changelog: 'leave',

@@ -1046,9 +1046,10 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         else:
             changes_name = None
 
-        yield ws, WorkerResult(
+        wr = WorkerResult(
             subworker_result.description, subworker_result.value,
             changes_filename=changes_name)
+        yield ws, wr
 
 
 def main(argv=None):
