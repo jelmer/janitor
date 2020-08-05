@@ -290,9 +290,7 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
         offset, description, error = find_preamble_failure_description(
             paragraphs[None])
         if error:
-            return SbuildFailure(
-                'unpack', 'unexpected upstream changes',
-                DpkgSourceLocalChanges())
+            return SbuildFailure('unpack', description, error)
 
     failed_stage = find_failed_stage(paragraphs.get('summary', []))
     focus_section = SBUILD_FOCUS_SECTION.get(failed_stage)
