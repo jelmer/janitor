@@ -348,7 +348,7 @@ def run_dist_in_chroot(session):
                 run_with_build_fixer(session, ['make', 'dist'])
             elif any([re.match(
                       'Problem opening MANIFEST: No such file or directory '
-                      '.* at [0-9]+\.', line) for line in e.lines]):
+                      'at .* line [0-9]+\.', line) for line in e.lines]):
                 run_with_build_fixer(session, ['make', 'manifest'])
                 run_with_build_fixer(session, ['make', 'dist'])
             else:
