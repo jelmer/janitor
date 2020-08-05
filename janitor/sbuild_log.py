@@ -1389,6 +1389,7 @@ class MissingXfceDependency(Problem):
 def xfce_dependency_missing(m):
     return MissingXfceDependency(m.group(1))
 
+
 class MissingAutomakeInput(Problem):
 
     kind = 'missing-automake-input'
@@ -1837,8 +1838,8 @@ build_failure_regexps = [
      r'Error resolving version for plugin \'(.*)\' from the repositories '
      r'\[.*\]: Plugin not found in any plugin repository -> \[Help 1\]',
      maven_missing_plugin),
-    (r'dh_missing: (warning: )?(.*) exists in debian/.* but is not installed to anywhere',
-     dh_missing_uninstalled),
+    (r'dh_missing: (warning: )?(.*) exists in debian/.* but is not '
+     r'installed to anywhere', dh_missing_uninstalled),
     (r'dh_link: link destination (.*) is a directory',
      dh_link_destination_is_dir),
     (r'I/O error : Attempt to load network entity (.*)',
@@ -2157,12 +2158,32 @@ build_failure_regexps = [
      r'see pybuild\(1\) for details\..*',
      dh_missing_addon),
     (r'dpkg: error: .*: No space left on device', lambda m: NoSpaceOnDevice()),
+    (r'You need the GNU readline library(ftp://ftp.gnu.org/gnu/readline/ ) '
+     r'to build', lambda m: MissingLibrary('readline')),
 ]
+
+
+class SingleLineMatcher(object):
+
+    def __init__(self, regexp, cb=None):
+        self.regexp = re.compile(regexp)
+        self.cb = cb
+
+    def match(self, line):
+        m = self.regexp.match(line)
+        if not m:
+            return False, None
+        if self.cb:
+            err = self.cb(m)
+        else:
+            err = None
+        return True, err
+
 
 compiled_build_failure_regexps = []
 for (regexp, cb) in build_failure_regexps:
     try:
-        compiled_build_failure_regexps.append((re.compile(regexp), cb))
+        compiled_build_failure_regexps.append(SingleLineMatcher(regexp, cb))
     except re.error as e:
         raise Exception('Error in %s: %s' % (regexp, e))
 
@@ -2318,6 +2339,9 @@ secondary_build_failure_regexps = [
     r'E: (.*)',
     # C #
     r'(.*)\.cs\([0-9]+,[0-9]+\): error CS[0-9]+: .*',
+    # Haskell
+    # TODO(jelmer): Parse the next line for dependencies
+    r'(.*\.setup): Encountered missing or private dependencies:',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -2366,13 +2390,9 @@ def find_build_failure_description(
         line = lines[lineno].strip('\n')
         if 'cmake' in line:
             cmake = True
-        for regexp, cb in compiled_build_failure_regexps:
-            m = regexp.match(line)
+        for matcher in compiled_build_failure_regexps:
+            m, err = matcher.match(line)
             if m:
-                if cb:
-                    err = cb(m)
-                else:
-                    err = None
                 return lineno + 1, line, err
 
     if cmake:
@@ -3143,7 +3163,8 @@ def find_check_space_failure_description(lines):
     for offset, line in enumerate(lines):
         if line == 'E: Disk space is probably not sufficient for building.\n':
             m = re.fullmatch(
-                'I: Source needs ([0-9]+) KiB, while ([0-9]+) KiB is free.\)\n',
+                r'I: Source needs ([0-9]+) KiB, '
+                r'while ([0-9]+) KiB is free.\)\n',
                 lines[offset+1])
             if m:
                 return (offset + 1, line,
