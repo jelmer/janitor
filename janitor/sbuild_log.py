@@ -1641,6 +1641,63 @@ def dh_missing_addon(m):
         'pybuild', 'Debian/Debhelper/Buildsystem/pybuild.pm')
 
 
+class MissingHaskellDependencies(Problem):
+
+    kind = 'missing-haskell-dependencies'
+
+    def __init__(self, deps):
+        self.deps = deps
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.deps == other.deps
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.deps)
+
+    def __str__(self):
+        return "Missing Haskell dependencies: %r" % self.deps
+
+
+class Matcher(object):
+
+    def match(self, line: List[str], i: int) -> Tuple[bool, Optional[Problem]]:
+        raise NotImplementedError(self.match)
+
+
+class SingleLineMatcher(Matcher):
+
+    def __init__(self, regexp, cb=None):
+        self.regexp = re.compile(regexp)
+        self.cb = cb
+
+    def match(self, lines, i):
+        m = self.regexp.match(lines[i].rstrip('\n'))
+        if not m:
+            return False, None
+        if self.cb:
+            err = self.cb(m)
+        else:
+            err = None
+        return True, err
+
+
+class HaskellMissingDependencyMatcher(Matcher):
+
+    regexp = re.compile(
+        'hlibrary\.setup: Encountered missing or private dependencies:\n')
+
+    def match(self, lines, i):
+        m = self.regexp.fullmatch(lines[i])
+        if not m:
+            return False, None
+        deps = []
+        for line in lines[i+1:]:
+            if not line.strip('\n'):
+                break
+            deps.append(tuple(line.rstrip('\n').split(' ', 1)))
+        return True, MissingHaskellDependencies(deps)
+
+
 class MissingCSharpCompiler(Problem):
 
     kind = 'missing-c#-compiler'
@@ -2158,30 +2215,19 @@ build_failure_regexps = [
     (r'dpkg: error: .*: No space left on device', lambda m: NoSpaceOnDevice()),
     (r'You need the GNU readline library(ftp://ftp.gnu.org/gnu/readline/ ) '
      r'to build', lambda m: MissingLibrary('readline')),
+    HaskellMissingDependencyMatcher(),
 ]
 
 
-class SingleLineMatcher(object):
-
-    def __init__(self, regexp, cb=None):
-        self.regexp = re.compile(regexp)
-        self.cb = cb
-
-    def match(self, line):
-        m = self.regexp.match(line)
-        if not m:
-            return False, None
-        if self.cb:
-            err = self.cb(m)
-        else:
-            err = None
-        return True, err
-
-
 compiled_build_failure_regexps = []
-for (regexp, cb) in build_failure_regexps:
+for entry in build_failure_regexps:
     try:
-        compiled_build_failure_regexps.append(SingleLineMatcher(regexp, cb))
+        if isinstance(entry, tuple):
+            (regexp, cb) = entry
+            matcher = SingleLineMatcher(regexp, cb)
+        else:
+            matcher = entry
+        compiled_build_failure_regexps.append(matcher)
     except re.error as e:
         raise Exception('Error in %s: %s' % (regexp, e))
 
@@ -2337,9 +2383,6 @@ secondary_build_failure_regexps = [
     r'E: (.*)',
     # C #
     r'(.*)\.cs\([0-9]+,[0-9]+\): error CS[0-9]+: .*',
-    # Haskell
-    # TODO(jelmer): Parse the next line for dependencies
-    r'(.*\.setup): Encountered missing or private dependencies:',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -2385,13 +2428,12 @@ def find_build_failure_description(
         lineno = len(lines) - i
         if lineno < 0:
             break
-        line = lines[lineno].strip('\n')
-        if 'cmake' in line:
+        if 'cmake' in lines[lineno]:
             cmake = True
         for matcher in compiled_build_failure_regexps:
-            m, err = matcher.match(line)
+            m, err = matcher.match(lines, lineno)
             if m:
-                return lineno + 1, line, err
+                return lineno + 1, lines[lineno].rstrip('\n'), err
 
     if cmake:
         missing_file_pat = re.compile(
