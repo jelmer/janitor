@@ -243,9 +243,10 @@ def commit_debian_changes(tree, subpath, summary, committer=None,
             if update_changelog:
                 add_changelog_entry(
                     tree, os.path.join(subpath, 'debian/changelog'), [summary])
-                debcommit(tree, committer=committer)
+                debcommit(tree, committer=committer, subpath=subpath)
             else:
-                tree.commit(message=summary, committer=committer)
+                tree.commit(message=summary, committer=committer,
+                            specific_files=[subpath])
         except PointlessCommit:
             return False
         else:
