@@ -94,6 +94,7 @@ from .sbuild_log import (
     MissingAutoconfMacro,
     MissingValaPackage,
     MissingXfceDependency,
+    MissingHaskellDependencies,
     NeedPgBuildExtUpdateControl,
     SbuildFailure,
     DhAddonLoadFailure,
@@ -982,6 +983,15 @@ def fix_missing_c_sharp_compiler(error, context):
     return context.add_dependency('mono-mcs')
 
 
+def fix_missing_haskell_dependencies(error, context):
+    path = "/var/lib/ghc/package.conf.d/%s-.*.conf" % error.deps[0][0]
+    package = get_package_for_paths([path], regex=True)
+    if package is None:
+        warning('no package for macro file %s', path)
+        return False
+    return context.add_dependency(package)
+
+
 VERSIONED_PACKAGE_FIXERS: List[
         Tuple[Type[Problem], Callable[[Problem, DependencyContext], bool]]] = [
     (NeedPgBuildExtUpdateControl, run_pgbuildext_updatecontrol),
@@ -1022,6 +1032,7 @@ APT_FIXERS: List[
     (MissingAutoconfMacro, fix_missing_autoconf_macro),
     (MissingValaPackage, fix_missing_vala_package),
     (MissingCSharpCompiler, fix_missing_c_sharp_compiler),
+    (MissingHaskellDependencies, fix_missing_haskell_dependencies),
 ]
 
 
