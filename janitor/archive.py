@@ -96,7 +96,7 @@ async def handle_upload(request):
     if 'changes_filename' not in result:
         note('No changes file in uploaded directory: %r',
              result['filenames'])
-        return web.json_response(result, 200)
+        return web.json_response(result, status=200)
     try:
         report = await upload_directory(aptly_session, container)
     except UploadError as e:
