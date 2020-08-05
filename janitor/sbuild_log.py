@@ -72,8 +72,20 @@ class DpkgSourceLocalChanges(Problem):
 
     kind = 'unexpected-local-upstream-changes'
 
+    def __init__(self, files=None):
+        self.files = files
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.files == other.files
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.files)
+
     def __str__(self):
-        return "Tree has local changes."
+        if self.files:
+            return "Tree has local changes: %r" % self.files
+        else:
+            return "Tree has local changes"
 
 
 class DpkgSourceUnrepresentableChanges(Problem):
@@ -214,8 +226,18 @@ def find_preamble_failure_description(lines: List[str]) -> Tuple[
         if line.startswith(
                 'dpkg-source: error: aborting due to unexpected upstream '
                 'changes, see '):
+            j = lineno - 1
+            files: List[str] = []
+            while j > 0:
+                if lines[j] == (
+                        'dpkg-source: info: local changes detected, '
+                        'the modified files are:\n'):
+                    error = DpkgSourceLocalChanges(files)
+                    return lineno + 1, str(error), error
+                files.append(lines[j].strip())
+                j -= 1
             err = DpkgSourceLocalChanges()
-            return lineno + 1, line, err
+            return lineno + 1, str(error), err
         if line == 'dpkg-source: error: unrepresentable changes to source':
             err = DpkgSourceUnrepresentableChanges()
             return lineno + 1, line, err
