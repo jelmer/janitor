@@ -66,7 +66,7 @@ async def main(db, start=None):
             print("# From %s" % urls[0][0])
             text_format.PrintMessage(config, sys.stdout)
 
-parser = argparse.ArgumentParser('reschedule')
+parser = argparse.ArgumentParser('guess-upstream-branch-urls')
 parser.add_argument(
     '--config', type=str, default='janitor.conf',
     help='Path to configuration.')
