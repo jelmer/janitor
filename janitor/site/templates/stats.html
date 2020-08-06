@@ -69,28 +69,28 @@ new Chart($("#burndown"), {
         label: 'Packages remaining',
         backgroundColor: window.chartColors.red,
         borderColor: window.chartColors.red,
-	data: $.map(json, function(entry) { return { t: moment(entry[0]).toDate(), y: entry[1] } } ),
+        data: $.map(json, function(entry) { return { t: moment(entry[0]).toDate(), y: entry[1] } } ),
       }],
     },
     options: {
       title: { display: true, text: 'Package burndown' },
       scales: {
         xAxes: [{
-	  type: 'time',
+          type: 'time',
           distribution: 'series',
-	  offset: true,
-	  ticks: {
-	    major: {
-	      enabled: true,
-	      fontStyle: 'bold'
+          offset: true,
+          ticks: {
+            major: {
+              enabled: true,
+              fontStyle: 'bold'
             },
             source: 'data',
             autoSkip: true,
             autoSkipPadding: 75,
             maxRotation: 0,
             sampleSize: 100
-	  },
-	}],
+          },
+        }],
         yAxes: [{
           display: true,
           ticks: {
@@ -137,13 +137,13 @@ document.getElementById("review-status-chart").onclick = function(e) {
    if (!slice.length) return;  // not a slice they clicked on
    var label = slice[0]._model.label;
    if (label == "unreviewed") {
-        window.open("/cupboard/review/");
+        window.open("/cupboard/review");
    } else if (label == "approved") {
-	window.open("/cupboard/ready");
+        window.open("/cupboard/ready");
    } else if (label == "rejected") {
-	window.open("/cupboard/rejected");
+        window.open("/cupboard/rejected");
    } else {
-	console.log("Unknown label: " + label);
+        console.log("Unknown label: " + label);
    }
 }
 
@@ -191,7 +191,7 @@ new Chart($("#merges-over-time-chart"), {
          label: '{{ key }}',
          borderColor: window.chartColors.{{ color }},
          backgroundColor: Chart.helpers.color(window.chartColors.{{ color }}).alpha(0.5).rgbString(),
-	 data: $.map(json['{{ key }}'], function(count, ts) { return { x: moment(ts).toDate(), y: count }; }),
+         data: $.map(json['{{ key }}'], function(count, ts) { return { x: moment(ts).toDate(), y: count }; }),
        },
 {% endfor %}
        ],
