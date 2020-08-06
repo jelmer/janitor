@@ -43,6 +43,7 @@ from janitor.sbuild_log import (
     find_build_failure_description,
     Problem,
     MissingPerlModule,
+    MissingCommand,
     NoSpaceOnDevice,
     )
 from janitor.schroot import Session
@@ -146,9 +147,24 @@ def fix_perl_module_from_cpan(error, context):
     return True
 
 
+NPM_COMMAND_PACKAGES = {
+    'del-cli': 'del-cli',
+    }
+
+def fix_npm_missing_command(error, context):
+    try:
+        package = NPM_COMMAND_PACKAGES[error.command]
+    except KeyError:
+        return False
+
+    context.session.check_call(['npm', '-g', 'install', package])
+    return True
+
+
 GENERIC_INSTALL_FIXERS: List[
         Tuple[Type[Problem], Callable[[Problem, DependencyContext], bool]]] = [
     (MissingPerlModule, fix_perl_module_from_cpan),
+    (MissingCommand, fix_npm_missing_command),
 ]
 
 
