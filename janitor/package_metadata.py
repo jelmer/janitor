@@ -90,6 +90,14 @@ async def update_package_metadata(
             subpath = None
             branch_url = None
 
+        if vcs_url:
+            vcs_browser = determine_browser_url(vcs_type, vcs_url)
+        else:
+            vcs_browser = None
+
+         if vcs_browser is None and package.vcs_browser:
+             vcs_browser = package.vcs_browser
+
         packages.append((
             package.name, distribution, branch_url if branch_url else None,
             subpath if subpath else None,
@@ -97,7 +105,7 @@ async def update_package_metadata(
             package.uploader_email if package.uploader_email else [],
             package.archive_version if package.archive_version else None,
             package.vcs_type if package.vcs_type else None, vcs_url,
-            package.vcs_browser if package.vcs_browser else None,
+            vcs_browser,
             vcs_last_revision.decode('utf-8') if vcs_last_revision else None,
             package.vcswatch_status.lower()
                 if package.vcswatch_status else None,
