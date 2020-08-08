@@ -1741,6 +1741,41 @@ def c_sharp_compiler_missing(m):
     return MissingCSharpCompiler()
 
 
+class MissingCargoCrate(Problem):
+
+    kind = 'missing-cargo-crate'
+
+    def __init__(self, crate, requirement):
+        self.crate = crate
+        self.requirement = requirement
+
+    def __eq__(self, other):
+        return (
+            isinstance(other, type(self)) and
+            self.crate == other.crate and
+            self.requirement == other.requirement)
+
+    def __str__(self):
+        if self.requirement:
+            return "Missing crate: %s (%s)" % (
+                self.crate, self.requirement)
+        else:
+            return "Missing crate: %s" % self.crate
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.crate, self.requirement)
+
+
+def cargo_missing_requirement(m):
+    try:
+        crate, requirement = m.group(1).split(' ', 1)
+    except ValueError:
+        crate = m.group(1)
+        requirement = None
+    return MissingCargoCrate(crate, requirement)
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -2238,6 +2273,8 @@ build_failure_regexps = [
     (r'You need the GNU readline library(ftp://ftp.gnu.org/gnu/readline/ ) '
      r'to build', lambda m: MissingLibrary('readline')),
     HaskellMissingDependencyMatcher(),
+    (r'error: failed to select a version for the requirement `(.*)`',
+    cargo_missing_requirement),
 ]
 
 
