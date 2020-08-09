@@ -205,3 +205,23 @@ CREATE OR REPLACE VIEW perpetual_candidates AS
 CREATE OR REPLACE VIEW first_run_time AS
  SELECT DISTINCT ON (run.package, run.suite) run.package, run.suite, run.start_time
  FROM run ORDER BY run.package, run.suite;
+
+CREATE OR REPLACE FUNCTION drop_candidates_for_deleted_packages()
+  RETURNS TRIGGER
+  LANGUAGE PLPGSQL
+  AS
+$$
+BEGIN
+    IF NEW.removed AND NOT OLD.removed THEN
+        DELETE FROM candidate WHERE package = NEW.name;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER drop_candidates_when_removed
+  AFTER UPDATE OF removed
+  ON package
+  FOR EACH ROW
+  EXECUTE PROCEDURE drop_candidates_for_deleted_packages();
