@@ -16,8 +16,8 @@
 </thead>
 <tbody valign="top">
 {% for package, suite in never_processed %}
-<tr><td><a class="reference external" href="../pkg/{{ package }}/">{{ package }}</a></td>
-<td>{{ suite }}</td>
+<tr><td><a class="reference external" href="/cupboard/pkg/{{ package }}/">{{ package }}</a></td>
+<td><a href="/{{ suite }}/pkg/{{ package }}">{{ suite }}</a></td>
 </tr>
 {% endfor %}
 </tbody>
