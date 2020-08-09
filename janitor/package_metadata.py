@@ -38,6 +38,7 @@ from debmutate.vcs import (
 from lintian_brush.vcs import (
     fixup_broken_git_url,
     canonicalize_vcs_url,
+    determine_browser_url,
     )
 
 
@@ -91,12 +92,12 @@ async def update_package_metadata(
             branch_url = None
 
         if vcs_url:
-            vcs_browser = determine_browser_url(vcs_type, vcs_url)
+            vcs_browser = determine_browser_url(package.vcs_type, vcs_url)
         else:
             vcs_browser = None
 
-         if vcs_browser is None and package.vcs_browser:
-             vcs_browser = package.vcs_browser
+        if vcs_browser is None and package.vcs_browser:
+            vcs_browser = package.vcs_browser
 
         packages.append((
             package.name, distribution, branch_url if branch_url else None,
@@ -108,7 +109,7 @@ async def update_package_metadata(
             vcs_browser,
             vcs_last_revision.decode('utf-8') if vcs_last_revision else None,
             package.vcswatch_status.lower()
-                if package.vcswatch_status else None,
+            if package.vcswatch_status else None,
             package.vcswatch_version if package.vcswatch_version else None,
             package.insts, package.removed))
     await conn.executemany(
