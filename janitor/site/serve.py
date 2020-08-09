@@ -411,8 +411,9 @@ if __name__ == '__main__':
         if suite is not None and suite.lower() == '_all':
             suite = None
         suites = [suite] if suite else None
-        never_processed = await state.get_never_processed(conn, suites)
-        return {'never_processed': never_processed}
+        async with request.app.database.acquire() as conn:
+            never_processed = await state.get_never_processed(conn, suites)
+            return {'never_processed': never_processed}
 
     async def handle_result_codes(request):
         from .result_codes import (
@@ -942,7 +943,7 @@ if __name__ == '__main__':
                        name='result-code-list')
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes,
                        name='result-code')
-    app.router.add.get('/cupboard/never-processed', handle_never_processed,
+    app.router.add_get('/cupboard/never-processed', handle_never_processed,
                        name='never-processed')
     app.router.add_get(
         '/cupboard/maintainer-stats', handle_cupboard_maintainer_stats,
