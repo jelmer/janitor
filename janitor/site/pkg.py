@@ -113,7 +113,8 @@ async def generate_run_file(
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package)
         package = await state.get_package(conn, run.package)
-        if run.revision and run.result_code == 'success':
+        if run.revision and run.result_code in (
+                'success', 'nothing-new-to-do'):
             publish_history = await state.get_publish_history(
                 conn, run.revision)
         else:
