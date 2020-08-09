@@ -400,7 +400,9 @@ def dupe_vcs_tree(tree, directory):
         raise
     # Copy parent location - some scripts need this
     base_branch = tree._repository.controldir.open_branch()
-    result.open_branch().set_parent(base_branch.get_parent())
+    parent = base_branch.get_parent()
+    if parent:
+        result.open_branch().set_parent(parent)
 
 
 def create_dist_schroot(
