@@ -1248,9 +1248,25 @@ async def iter_packages_by_maintainer(conn: asyncpg.Connection, maintainer):
         maintainer)]
 
 
-async def get_never_processed(conn: asyncpg.Connection, suites=None):
+async def get_never_processed_count(conn: asyncpg.Connection, suites=None):
     query = """\
 select suite, count(*) from candidate c
+where not exists (
+    SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+"""
+    args = []
+    if suites:
+        query += " AND suite = ANY($1::text[])"
+        args.append(suites)
+
+    query += " group by suite"
+
+    return await conn.fetch(query, *args)
+
+
+async def get_never_processed(conn: asyncpg.Connection, suites=None):
+    query = """\
+select candidate.package, candidate.suite from candidate c
 where not exists (
     SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
 """

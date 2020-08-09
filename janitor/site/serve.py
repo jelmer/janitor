@@ -404,6 +404,16 @@ if __name__ == '__main__':
             return await write_maintainer_overview(
                 conn, request.match_info['maintainer'])
 
+    @html_template(
+        'never-processed.html', headers={'Cache-Control': 'max-age=60'})
+    async def handle_never_processed(request):
+        suite = request.query.get('suite')
+        if suite is not None and suite.lower() == '_all':
+            suite = None
+        suites = [suite] if suite else None
+        never_processed = await state.get_never_processed(conn, suites)
+        return {'never_processed': never_processed}
+
     async def handle_result_codes(request):
         from .result_codes import (
             generate_result_code_index,
@@ -422,7 +432,7 @@ if __name__ == '__main__':
                 else:
                     suites = None
                 never_processed = sum(dict(
-                    await state.get_never_processed(conn, suites)).values())
+                    await state.get_never_processed_count(conn, suites)).values())
                 text = await generate_result_code_index(
                     stats, never_processed, suite, all_suites=all_suites)
             else:
@@ -932,6 +942,8 @@ if __name__ == '__main__':
                        name='result-code-list')
     app.router.add_get('/cupboard/result-codes/{code}', handle_result_codes,
                        name='result-code')
+    app.router.add.get('/cupboard/never-processed', handle_never_processed,
+                       name='never-processed')
     app.router.add_get(
         '/cupboard/maintainer-stats', handle_cupboard_maintainer_stats,
         name='cupboard-maintainer-stats')

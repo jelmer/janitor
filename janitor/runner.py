@@ -994,7 +994,7 @@ async def export_stats(db: state.Database) -> None:
             for (suite, result_code), count in by_suite_result.items():
                 run_result_count.labels(
                     suite=suite, result_code=result_code).set(count)
-            for suite, count in await state.get_never_processed(conn):
+            for suite, count in await state.get_never_processed_count(conn):
                 never_processed_count.labels(suite).set(count)
             for review_status, count in await state.iter_review_status(conn):
                 review_status_count.labels(review_status).set(count)
