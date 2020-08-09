@@ -1,0 +1,28 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% block page_title %}Never Processed packages{% if suite %} - for {{ suite }}{% endif %}{% endblock %}
+{% block body %}
+<div class="section" id="{{ code }}">
+<h1>never-processed</h1>
+{{ result_code_explanation('never-processed') }}
+<table id="never-processed-table" class="display docutils" border="1">
+<colgroup>
+<col width="21%">
+<col width="6%">
+</colgroup>
+<thead valign="bottom">
+<tr><th class="head">Package</th>
+<th class="head">Suite</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for package, suite in never_processed %}
+<tr><td><a class="reference external" href="../pkg/{{ package }}/">{{ package }}</a></td>
+<td>{{ suite }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<script>$(document).ready(function() {$('#never-processed-table').DataTable({"pageLength": 200, "lengthMenu": [50, 200, 500, 1000, -1], "order": []}); });</script>
+</div>
+{% endblock %}

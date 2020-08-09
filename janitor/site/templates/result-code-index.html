@@ -21,7 +21,7 @@ Select suite to display:
 {% macro random_colors(n) %}[ {% for i in range(n) %}'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]{% endmacro %}
 
 <div style="width: 400px; height: 600px;">
-	<canvas id="result-code-chart"/>
+<canvas id="result-code-chart"/>
 </div>
 <script>
 var result_code_chart = new Chart($("#result-code-chart"), {
@@ -46,7 +46,13 @@ document.getElementById("result-code-chart").onclick = function(e) {
    var slice = result_code_chart.getElementAtEvent(e);
    if (!slice.length) return;  // not a slice they clicked on
    var code = slice[0]._model.label;
-   window.open("/cupboard/result-codes/" + code{% if suite %} + "?suite={{ suite }}"{% endif %}, "_self");
+   var url;
+   if (code == 'never-processed') {
+       url = '/cupboard/never-processed';
+   } else {
+       url = '/cupboard/result-codes/' + code;
+   }
+   window.open(url{% if suite %} + "?suite={{ suite }}"{% endif %}, "_self");
 }
 
 </script>
@@ -64,7 +70,7 @@ document.getElementById("result-code-chart").onclick = function(e) {
 <tbody valign="top">
 {% for code, count in result_codes %}
 {% if code == 'never-processed' %}
-<tr class="row-even"><td>{{ code }}</a></td>
+<tr class="row-even"><td><a class="reference external" href="/cupboard/never-processed{% if suite %}?suite={{ suite }}{% endif %}">{{ code }}</a></td>
 {% else %}
 <tr class="row-even"><td><a class="reference external" href="/cupboard/result-codes/{{ code }}{% if suite %}?suite={{ suite }}{% endif %}">{{ display_result_code(code)|safe }}</a></td>
 {% endif %}
