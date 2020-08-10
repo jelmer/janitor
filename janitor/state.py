@@ -1445,7 +1445,8 @@ where
     'branch-missing',
     'branch-unavailable',
     '401-unauthorized',
-    'hosted-on-alioth'
+    'hosted-on-alioth',
+    'missing-control-file'
   )
 and
   vcswatch_status in ('old', 'new', 'commits', 'ok')
