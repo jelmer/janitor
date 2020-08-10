@@ -2178,6 +2178,7 @@ build_failure_regexps = [
     (r'CMake Error: The source directory "(.*)" does not exist.',
      directory_not_found),
     (r'.*: [0-9]+: cd: can\'t cd to (.*)', directory_not_found),
+    (r'/bin/sh: 0: Can\'t open (.*)', file_not_found),
     (r'/bin/sh: [0-9]+: cannot open (.*): No such file',
      file_not_found),
     (r'.*: line [0-9]+: (.*): No such file or directory', file_not_found),
