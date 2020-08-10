@@ -27,7 +27,11 @@ from . import (
     DebdiffRetrievalError,
     )
 from ..policy_pb2 import PolicyConfig
-from ..schedule import do_schedule, do_schedule_control
+from ..schedule import (
+    do_schedule,
+    do_schedule_control,
+    PublishPolicyUnavailable,
+    )
 
 
 from breezy.git.urls import git_url_to_bzr_url
@@ -147,9 +151,14 @@ async def handle_schedule(request):
         if package.branch_url is None:
             return web.json_response(
                 {'reason': 'No branch URL defined.'}, status=400)
-        offset, estimated_duration = await do_schedule(
-            conn, package.name, suite, offset, refresh,
-            requestor=requestor)
+        try:
+            offset, estimated_duration = await do_schedule(
+                conn, package.name, suite, offset, refresh,
+                requestor=requestor)
+        except PublishPolicyUnavailable:
+            return web.json_response(
+                {'reason': 'Publish policy not yet available.'},
+                status=503)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package.name)
     response_obj = {
