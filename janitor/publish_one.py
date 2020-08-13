@@ -42,6 +42,7 @@ from silver_platter.proposal import (
     NoSuchProject,
     PermissionDenied,
     UnsupportedHoster,
+    SourceNotDerivedFromTarget,
     )
 from silver_platter.debian import (
     pick_additional_colocated_branches,
@@ -418,6 +419,12 @@ def publish(
                 description=(
                     'Conflict during GitLab operation. '
                     'Reached repository limit?'))
+        except SourceNotDerivedFromTarget:
+            raise PublishFailure(
+                code='source-not-derived-from-target',
+                description=(
+                    'The source repository is not a fork of the '
+                    'target repository.'))
 
 
 class Publisher(object):
