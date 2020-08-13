@@ -23,7 +23,7 @@ import stat
 import subprocess
 import sys
 import tempfile
-from typing import Optional, TextIO, List, Tuple, Callable, Type
+from typing import Optional, List, Tuple, Callable, Type
 
 from debian.deb822 import Deb822
 
@@ -150,6 +150,7 @@ def fix_perl_module_from_cpan(error, context):
 NPM_COMMAND_PACKAGES = {
     'del-cli': 'del-cli',
     }
+
 
 def fix_npm_missing_command(error, context):
     try:
@@ -478,7 +479,7 @@ def create_dist_schroot(
 if __name__ == '__main__':
     import argparse
     import breezy.bzr
-    import breezy.git
+    import breezy.git  # noqa: F401
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
