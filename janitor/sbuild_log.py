@@ -200,6 +200,23 @@ class UpstreamPGPSignatureVerificationFailed(Problem):
         return "Unable to verify the PGP signature on the upstream source"
 
 
+class UScanRequestVersionMissing(Problem):
+
+    kind = 'uscan-requested-version-missing'
+
+    def __init__(self, version):
+        self.version = version
+
+    def __str__(self):
+        return "UScan can not find requested version %s." % self.version
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.version)
+
+    def __eq__(self, other):
+        return isinstance(self, type(other)) and self.version == other.version
+
+
 class InconsistentSourceFormat(Problem):
 
     kind = 'inconsistent-source-format'
@@ -287,6 +304,12 @@ def parse_brz_error(line: str) -> Tuple[Optional[Problem], str]:
         r'version is( not)? native, format is( not)? native\.', line)
     if m:
         error = InconsistentSourceFormat()
+        return (error, line)
+    m = re.match(
+        r'UScan failed to run: In (.*) no matching hrefs '
+        'for version (.*) in watch line', line)
+    if m:
+        error = UScanRequestVersionMissing(m.group(2))
         return (error, line)
     return (None, line)
 
