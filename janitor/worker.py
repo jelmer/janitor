@@ -81,6 +81,7 @@ from silver_platter.debian.upstream import (
     PristineTarError,
     QuiltError,
     UScanError,
+    WatchLineWithoutMatches,
     UpstreamVersionMissingInUpstreamBranch,
     UpstreamMetadataSyntaxError,
     MissingChangelogError,
@@ -625,6 +626,10 @@ class NewUpstreamWorker(SubWorker):
             except UnparseableChangelog as e:
                 error_description = str(e)
                 error_code = 'unparseable-changelog'
+                raise WorkerFailure(error_code, error_description)
+            except WatchLineWithoutMatches as e:
+                error_description = str(e)
+                error_code = 'uscan-watch-line-without-matches'
                 raise WorkerFailure(error_code, error_description)
             except UScanError as e:
                 error_description = str(e)
