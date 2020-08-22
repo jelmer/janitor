@@ -179,13 +179,6 @@ def run_worker(branch_url, subpath, vcs_type, env,
             enable_tag_pushing(ws.local_tree.branch)
             note('Pushing result branch to %s', result_branch_url)
 
-            metadata['branch-updates'] = {}
-            for update in result.branch_updates:
-                metadata['branch-updates'].append({
-                    'function': 'master',
-                    'base': update.base_branch.user_url,
-                    'old-revision': update.old_revision,
-                    'new-revision': update.new_revision})
             try:
                 push_branch(
                     ws.local_tree.branch,
