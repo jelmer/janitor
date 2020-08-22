@@ -21,6 +21,7 @@ from aiohttp import ClientSession, MultipartWriter, BasicAuth
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
 import functools
+from http.client import IncompleteRead
 from io import BytesIO
 import json
 import os
@@ -177,15 +178,23 @@ def run_worker(branch_url, subpath, vcs_type, env,
                possible_transports=possible_transports) as (ws, result):
             enable_tag_pushing(ws.local_tree.branch)
             note('Pushing result branch to %s', result_branch_url)
+
+            metadata['branch-updates'] = {}
+            for update in result.branch_updates:
+                metadata['branch-updates'].append({
+                    'function': 'master',
+                    'base': update.base_branch.user_url,
+                    'old-revision': update.old_revision,
+                    'new-revision': update.new_revision})
             try:
                 push_branch(
                     ws.local_tree.branch,
                     result_branch_url, overwrite=True,
                     vcs_type=vcs_type.lower(),
                     possible_transports=possible_transports)
-            except InvalidHttpResponse as e:
-                # TODO(jelmer): Retry if this was a server error (5xx) of some
-                # sort?
+            except (InvalidHttpResponse, IncompleteRead) as e:
+                # TODO(jelmer): Retry if this was a server error (5xx) of
+                # some  sort?
                 raise WorkerFailure(
                     'result-push-failed',
                     "Failed to push result branch: %s" % e)
