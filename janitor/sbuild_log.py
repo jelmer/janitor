@@ -2386,6 +2386,7 @@ secondary_build_failure_regexps = [
     'numpydoc.docscrape.ParseError|'
     'datalad.support.exceptions.IncompleteResultsError'
     r'): .*',
+    '^E   DeprecationWarning: .*',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
     r'[0-9]+ skips',
