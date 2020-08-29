@@ -722,7 +722,7 @@ if __name__ == '__main__':
         return await generate_candidates(request.app.database)
 
     @html_template(
-        'lintian-fixes-stats.html', headers={'Cache-Control': 'max-age=600'})
+        'lintian-fixes-stats.html', headers={'Cache-Control': 'max-age=3600'})
     async def handle_lintian_fixes_stats(request):
         from .lintian_fixes import generate_stats
         return await generate_stats(request.app.database)
@@ -952,7 +952,13 @@ if __name__ == '__main__':
         '/cupboard/maintainer', handle_maintainer_list, name='maintainer-list')
     app.router.add_get(
         '/cupboard/maintainer/{maintainer}', handle_maintainer_overview,
+        name='cupboard-maintainer-overview')
+    app.router.add_get(
+        '/maintainer/{maintainer}', handle_maintainer_overview,
         name='maintainer-overview')
+    app.router.add_get(
+        '/m/{maintainer}', handle_maintainer_overview,
+        name='maintainer-overview-short')
     app.router.add_get(
         '/cupboard/publish', handle_publish_history, name='publish-history')
     app.router.add_get(
