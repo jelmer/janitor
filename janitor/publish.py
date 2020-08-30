@@ -91,6 +91,7 @@ MODE_PUSH = 'push'
 MODE_PUSH_DERIVED = 'push-derived'
 MODE_PROPOSE = 'propose'
 MODE_ATTEMPT_PUSH = 'attempt-push'
+MODE_BTS = 'bts'
 SUPPORTED_MODES = [
     MODE_PUSH,
     MODE_SKIP,
@@ -98,6 +99,7 @@ SUPPORTED_MODES = [
     MODE_PUSH_DERIVED,
     MODE_PROPOSE,
     MODE_ATTEMPT_PUSH,
+    MODE_BTS,
     ]
 
 

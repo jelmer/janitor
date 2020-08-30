@@ -79,6 +79,7 @@ def apply_policy(
     return (
         {policy_pb2.propose: 'propose',
          policy_pb2.attempt_push: 'attempt-push',
+         policy_pb2.bts: 'bts',
          policy_pb2.push: 'push',
          policy_pb2.build_only: 'build-only',
          }[publish_mode],
