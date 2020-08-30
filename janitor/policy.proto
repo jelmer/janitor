@@ -15,6 +15,9 @@ enum Mode {
 
     // Build the package, but don't propose/push the changes.
     build_only = 4;
+
+    // Create bug in the BTS with patch attached.
+    bts = 5;
 }
 
 enum ChangelogMode {
