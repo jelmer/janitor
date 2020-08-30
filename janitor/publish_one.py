@@ -71,6 +71,7 @@ MODE_PUSH = 'push'
 MODE_PUSH_DERIVED = 'push-derived'
 MODE_PROPOSE = 'propose'
 MODE_ATTEMPT_PUSH = 'attempt-push'
+MODE_BTS = 'bts'
 
 # Maximum number of lines of debdiff to inline in the merge request
 # description. If this threshold is reached, we'll just include a link to the
@@ -721,7 +722,13 @@ def publish_one(
     branch_name = subrunner.branch_name()
 
     try:
-        hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
+        if mode == MODE_BTS:
+            from breezy.plugins.debian.bts import DebianBtsHoster
+            hoster = DebianBtsHoster()
+            mode = MODE_PROPOSE
+        else:
+            hoster = get_hoster(
+                main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
         if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
             netloc = urllib.parse.urlparse(main_branch.user_url).netloc
