@@ -83,3 +83,12 @@ async def generate_candidates(db):
             candidates.append((package.name, list(hints.items()), value))
         candidates.sort(key=lambda x: x[2], reverse=True)
     return {'candidates': candidates}
+
+
+async def generate_stats(db):
+    async with db.acquire() as conn:
+        hints_per_run = {c: nr for (c, nr) in await conn.fetch("""\
+elect json_array_length(result->'applied-hints'), count(*) from run
+where result_code = 'success' and suite = 'multiarch-fixes' group by 1
+""")}
+    return {'hints_per_run': hints_per_run}

@@ -728,6 +728,13 @@ if __name__ == '__main__':
         return await generate_stats(request.app.database)
 
     @html_template(
+        'multiarch-fixes-stats.html',
+        headers={'Cache-Control': 'max-age=3600'})
+    async def handle_multiarch_fixes_stats(request):
+        from .multiarch_hints import generate_stats
+        return await generate_stats(request.app.database)
+
+    @html_template(
         'new-upstream-candidates.html',
         headers={'Cache-Control': 'max-age=600'})
     async def handle_new_upstream_candidates(request):
@@ -842,6 +849,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/multiarch-fixes/by-hint/', handle_multiarch_fixes_hint_list,
         name='multiarch-fixes-hint-list')
+    app.router.add_get(
+        '/multiarch-fixes/stats', handle_multiarch_fixes_stats,
+        name='multiarch-fixes-stats')
     app.router.add_get(
         '/multiarch-fixes/by-hint/{hint}', handle_multiarch_fixes_hint_page,
         name='multiarch-fixes-hint')
