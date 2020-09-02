@@ -1,0 +1,12 @@
+<div class="section" id="won-t-this-mean-i-get-a-pull-request-for-each-bit-of-trailing-whitespace">
+<h3><a class="toc-backref" href="#id13">Won’t this mean I get a pull request for each bit of trailing whitespace?</a></h3>
+<p>Some lintian tags are considered to be “add-on only”. Fixes for these lintian
+tags are only included in a pull request if there were other fixes as well.</p>
+<p>Tags currently considered add-on only are:</p>
+<ul class="simple">
+{% for tag in ADDON_FIXERS  %}
+<li>{{ lintian_tag_link(tag) }}</li>
+{% endfor %}
+</ul>
+</div>
+

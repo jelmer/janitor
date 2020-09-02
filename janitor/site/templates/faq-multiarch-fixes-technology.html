@@ -1,0 +1,13 @@
+<div class="section" id="what-technologies-are-used">
+<h3><a class="toc-backref" href="#id19">What technologies are used?</a></h3>
+<p>The <a class="reference external" href="https://wiki.debian.org/MultiArch/Hints">Multi-Arch Hinter</a> is responsible for finding the issues
+in packages.</p>
+<p><a class="reference external" href="https://wiki.debian.org/UltimateDebianDatabase/">UDD</a> is used to find package VCS URLs.</p>
+<p><a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
+ provides abstractions over the version control system (Git, Bazaar,
+Mercurial, Subversion) and the supported hosting platforms (GitHub,
+GitLab, Launchpad).</p>
+<p><a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">Lintian-brush</a>'s apply-multiarch-hints command is responsible for actually making changes to the packages.</p>
+<p><a class="reference external" href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
+ ties this all together and downloads packaging branches, invokes apply-multiarch-hints and pushes back or creates merge proposals.</p>
+</div>

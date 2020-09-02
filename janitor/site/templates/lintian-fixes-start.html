@@ -42,178 +42,24 @@ GitHub, GitLab, Launchpad).</p>
 <li><a class="reference internal" href="#what-technologies-are-used" id="id19">What technologies are used?</a></li>
 </ul>
 </div>
-<div class="section" id="how-do-i-opt-in">
-<h3><a class="toc-backref" href="#id7">How do I opt in?</a></h3>
-<p>Propose a change to the <a class="reference" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> that adds an entry for the relevant maintainer or package.</p>
-<p>Alternatively, you can send me an e-mail (<a class="reference external" href="mailto:jelmer@debian.org">jelmer@debian.org</a>).</p>
-</div>
-<div class="section" id="i-dont-find-this-useful-how-do-i-stop-it">
-<h3><a class="toc-backref" href="#id8">I don’t find this useful. How do I stop it?</a></h3>
 
-<p>If you ignore or close the first merge proposal, there won't be any more for
-the same maintainer.</p>
+{% include "faq-opt-in.html" %}
+{% include "faq-update-changelog.html" %}
+{% include "faq-auto-push.html" %}
+{% include "faq-vcs-finding.html" %}
+{% include "faq-supported-vcs.html" %}
+{% include "faq-lintian-fixes-kinds.html" %}
+{% include "faq-lintian-fixes-restrict.html" %}
+{% include "faq-lintian-fixes-addon.html" %}
+{% include "faq-incorrect.hml" %}
+{% include "faq-other-problem.html" %}
+{% include "faq-out-of-date-proposal.html" %}
+{% include "faq-lintian-fixes-locally.html" %}
+{% include "faq-lintian-fixes-contributing.html" %}
+{% include "faq-api.html" %}
+{% include "faq-lintian-fixes-ubuntu.html" %}
+{% include "faq-lintian-fixes-technology.html" %}
 
-<p>You can also just comment on the merge proposal that you don't want any
-automated merge proposals.</p>
-
-<p>It would be great if you can also give us an idea of what
-specifically you don’t appreciate about these merge proposals, and if
-there’s anything that can be done to improve them.</p>
-<p>Alternatively, propose a change to the <a class="reference" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> on Salsa.</p>
-</div>
-<div class="section" id="how-do-i-download-just-the-diff">
-<h3><a class="toc-backref" href="#id20">How do I download the diff for a package?</a></h3>
-<p>There is a well-formed URL that can be used to download the diff for a specific package, if a diff has been generated:</p>
-
-<pre>{{ url.join(URL('../api/lintian-fixes/pkg/PACKAGE/diff')) }}</pre>
-
-<p>E.g. for gunicorn, the URL would be <a href="{{ url.join(URL('../api/lintian-fixes/pkg/gunicorn/diff')) }}">{{ url.join(URL('../api/lintian-fixes/pkg/gunicorn/diff')) }}</a>.</p>
-
-</div>
-<div class="section" id="#why-does-or-does-the-bot-not-update-changelog">
-<h3><a class="toc-backref" href="#id22">Why does or doesn't the bot update debian/changelog?</a></h3>
-<p>Some maintainers generate their debian/changelog files from commit messages
-in Git using e.g. <em>gbp dch</em>. The janitor attempts to autodetect whether
-or not the changelog file should be updated along with any changes, by looking at
-the packages commit history and whether or not it has a <b>[dch]</b> section
-in <i>debian/gbp.conf</i>.
-</p>
-
-<p>If this autodetection does not work correctly, then you can force it to not update the changelog by
-adding a <b>[dch]</b> section to your <i>debian/gbp.conf</i> or get it to (not) update the changelog by setting
-the <em>update-changelog = False|True</em> flag in <a
-   href="https://manpages.debian.org/testing/lintian-brush/lintian-brush.conf.5.en.html"><i>debian/lintian-brush.conf</i></a>.
-</p>
-
-<p>Bug reports about broken autodetect would also be most welcome.</p>
-
-</div>
-<div class="section" id="this-is-great-how-do-i-get-it-to-automatically-push-improvements-to-my-repository">
-<h3><a class="toc-backref" href="#id9">This is great. How do I get it to automatically push improvements to my repository?</a></h3>
-<p>Simply give the bot commit access to your repository, and it will push fixes rather than proposing them.</p>
-</div>
-<div class="section" id="how-are-repositories-located">
-<h3><a class="toc-backref" href="#id10">How are repositories located?</a></h3>
-<p>The bot uses the Vcs-Git and Vcs-Bzr fields in source packages in unstable to locate repositories.</p>
-</div>
-<div class="section" id="what-repositories-are-supported">
-<h3><a class="toc-backref" href="#id11">What repositories are supported?</a></h3>
-<p>Repositories on the following hosting platforms are supported:</p>
-<ul class="simple">
-<li><a class="reference external" href="https://www.gitlab.com/">GitLab</a> (currently supported instances: <a class="reference external" href="https://gitlab.com/">GitLab.com</a>, <a class="reference external" href="https://salsa.debian.org/">salsa.debian.org</a>)</li>
-<li><a class="reference external" href="https://github.com/">GitHub</a></li>
-<li><a class="reference external" href="https://launchpad.net/">Launchpad</a> (both <a class="reference external" href="https://bazaar-vcs.org/">Bazaar</a> and <a class="reference external" href="https://git-scm.com/">Git</a> repositories)</li>
-</ul>
-<p>Work is under way to also support Mercurial. Subversion support may
-also be an option, though I have yet to work out what the equivalent of
-pull requests in Subversion would be.</p>
-</div>
-<div class="section" id="what-kind-of-changes-are-made">
-<h3><a class="toc-backref" href="#id12">What kind of changes are made?</a></h3>
-<p>The janitor currently proposes changes that can be made by the <a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">lintian-brush</a> tool. This includes fixes for the following issues flagged by lintian:</p>
-<ul class="simple">
-{% for fixer in lintian_brush.available_lintian_fixers() %}
-   {% for tag in fixer.lintian_tags %}
-   <li>{{ lintian_tag_link(tag) }}</li>
-   {% endfor %}
-{% endfor %}
-</ul>
-</div>
-<div class="section" id="how-do-i-prevent-the-janitor-from-making-certain-changes">
-<h3><a class="toc-backref" href="#id20">How do I prevent the janitor from making certain changes?</a></h3>
-<p>You can tweak the behaviour of the janitor for a package by editing the
-configuration file (<i>debian/lintian-brush.conf</i>) in the package. For
-example, to prevent any changes that are incompatible with <b>oldstable</b>,
-add the following contents:</p>
-
-<pre>
-compat-release = oldstable
-</pre>
-
-<p>(the default <i>compat-release</i> is <b>stable</b>)</p>
-
-<p>For a full list of supported options, see the <a
-href="https://dyn.manpages.debian.org/buster/lintian-brush/lintian-brush.conf.5.en.html">lintian-brush.conf(5)</a>
-manual page.</p>
-
-<p>These configuration options can also be set on a per-maintainer basis;
-please send me a message if you'd like me to do that.</p>
-
-</div>
-<div class="section" id="won-t-this-mean-i-get-a-pull-request-for-each-bit-of-trailing-whitespace">
-<h3><a class="toc-backref" href="#id13">Won’t this mean I get a pull request for each bit of trailing whitespace?</a></h3>
-<p>Some lintian tags are considered to be “add-on only”. Fixes for these lintian
-tags are only included in a pull request if there were other fixes as well.</p>
-<p>Tags currently considered add-on only are:</p>
-<ul class="simple">
-{% for tag in ADDON_FIXERS  %}
-<li>{{ lintian_tag_link(tag) }}</li>
-{% endfor %}
-</ul>
-</div>
-<div class="section" id="the-bot-is-proposing-an-incorrect-change-where-do-i-report-this">
-<h3><a class="toc-backref" href="#id14">The bot is proposing an incorrect change. Where do I report this?</a></h3>
-<p>For issues with a fix that the bot has proposed, please just follow up on the merge proposal.</p>
-</div>
-<div class="section" id="the-bot-is-doing-something-else-wrong-where-do-i-report-this">
-<h3><a class="toc-backref" href="#id15">The bot is doing something else wrong. Where do I report this?</a></h3>
-<p>Please report issues in the <a class="reference external" href="https://salsa.debian.org/jelmer/debian-janitor">Debian Janitor</a> project on Salsa.</p>
-</div>
-<div class="section" id="what-do-i-do-about-out-of-date-proposals">
-<h3><a class="toc-backref" href="#id21">What do I do with out-of-date merge proposals?</a></h3>
-<p>The Janitor will automatically reschedule processing of packages with a
-conflicted merge proposal. Once a conflict appears, it may take a couple of
-hours before the merge proposal is updated.</p>
-
-<p>It will also regularly rebase merge proposals on the packaging branch. It
-can take several days before this happens, since there is no mechanism to
-notify the janitor of new commits. You can manually trigger a rerun
-from the package-specific page linked from the merge proposal.
-</p>
-</div>
-<div class="section" id="how-do-i-run-the-fixers-locally">
-<h3><a class="toc-backref" href="#id16">How do I run the fixers locally?</a></h3>
-<p>To run the collection of fixer scripts on a locally checked out package, simply run <em>lintian-brush</em>:</p>
-<div class="highlight-default"><div class="highlight"><pre><span></span>$ apt install lintian-brush
-$ lintian-brush
-</pre></div>
-</div>
-<p>This will report the fixers that were run and automatically commit the changes to the local repository.</p>
-</div>
-<div class="section" id="how-can-i-contribute-more-fixer-scripts">
-<h3><a class="toc-backref" href="#id17">How can I contribute more fixer scripts?</a></h3>
-<p>You can contribute scripts to the <em>lintian-brush</em> repository at <a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">https://salsa.debian.org/jelmer/lintian-brush</a>. See the lintian-brush <a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush/blob/master/README.md">README file</a> for details.</p>
-<p>Consider also adding relevant lintian tags to <a class="reference external" href="https://salsa.debian.org/lintian">lintian upstream</a>. This allows silver-platter’s infrastructure to recognize which repositories it needs to process.</p>
-</div>
-
-<div class="section" id="automation">
-<h3><a class="toc-backref" href="#id18">How can I automate interactions with the Janitor?</a></h3>
-<p>There is an <a href="/api">JSON API</a> that can be used to retrieve information about packages, to reschedule runs and trigger creation of merge proposals.</p>
-</div>
-
-<div class="section" id="would-it-be-possible-to-run-the-debian-janitor-on-the-ubuntu-archive">
-<h3><a class="toc-backref" href="#id18">Would it be possible to run the Debian Janitor on the Ubuntu archive?</a></h3>
-<p>The Debian Janitor already supports creating merge proposals for Ubuntu
-packaging branches on Launchpad. However, there is currently no easy mechanism
-for these merge proposals to be merged and they do not yet appear on the
-<a class="reference external" href="http://reqorts.qa.ubuntu.com/reports/sponsoring/index.html">Sponsoring Overview page</a>.</p>
-</div>
-<div class="section" id="what-technologies-are-used">
-<h3><a class="toc-backref" href="#id19">What technologies are used?</a></h3>
-<p><a class="reference external" href="https://lintian.debian.org/">Lintian</a> is responsible for finding the issues
-in packages.</p>
-<p><a class="reference external" href="https://wiki.debian.org/UltimateDebianDatabase/">UDD</a> is used to find package VCS URLs and to retrieve the lintian results.</p>
-<p><a class="reference external" href="https://www.breezy-vcs.org/">Breezy</a>
- provides abstractions over the version control system (Git, Bazaar,
-Mercurial, Subversion) and the supported hosting platforms (GitHub,
-GitLab, Launchpad).</p>
-<p><a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">Lintian-brush</a> is responsible for actually making changes to the packages.</p>
-<p><a class="reference external" href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
- ties this all together; it trawls UDD to find packages that are
-affected by lintian tags that lintian-brush knows how to fix, clones the
- packaging branches, invokes lintian-brush and pushes back or creates
-merge proposals.</p>
-</div>
 </div>
 </div>
 
