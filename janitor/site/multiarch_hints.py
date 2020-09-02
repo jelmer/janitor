@@ -88,13 +88,19 @@ async def generate_candidates(db):
 async def generate_stats(db):
     async with db.acquire() as conn:
         hints_per_run = {c: nr for (c, nr) in await conn.fetch("""\
-elect json_array_length(result->'applied-hints'), count(*) from run
+select json_array_length(result->'applied-hints'), count(*) from run
 where result_code = 'success' and suite = 'multiarch-fixes' group by 1
 """)}
+        per_kind = {h: nr for (h, nr) in await conn.fetch("""\
+select split_part(link::text, '#', 2), count(*) from
+multiarch_hints group by 1
+""")}
+
         absorbed_per_kind = {h: nr for (h, nr) in await conn.fetch("""\
 select split_part(link::text, '#', 2), count(*) from
 absorbed_multiarch_hints group by 1
 """)}
     return {
         'hints_per_run': hints_per_run,
+        'per_kind': per_kind,
         'absorbed_per_kind': absorbed_per_kind}
