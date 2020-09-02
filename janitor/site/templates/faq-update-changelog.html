@@ -1,0 +1,18 @@
+<div class="section" id="#why-does-or-does-the-bot-not-update-changelog">
+<h3><a class="toc-backref" href="#id22">Why does or doesn't the bot update debian/changelog?</a></h3>
+<p>Some maintainers generate their debian/changelog files from commit messages
+in Git using e.g. <em>gbp dch</em>. The janitor attempts to autodetect whether
+or not the changelog file should be updated along with any changes, by looking at
+the packages commit history and whether or not it has a <b>[dch]</b> section
+in <i>debian/gbp.conf</i>.
+</p>
+
+<p>If this autodetection does not work correctly, then you can force it to not update the changelog by
+adding a <b>[dch]</b> section to your <i>debian/gbp.conf</i> or get it to (not) update the changelog by setting
+the <em>update-changelog = False|True</em> flag in <a
+   href="https://manpages.debian.org/testing/lintian-brush/lintian-brush.conf.5.en.html"><i>debian/lintian-brush.conf</i></a>.
+</p>
+
+<p>Bug reports about broken autodetect would also be most welcome.</p>
+
+</div>
