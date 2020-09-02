@@ -18,7 +18,7 @@
 {% for run, maintainer_email, uploader_emails, branch_url, publish_mode, changelog_mode, compat_release in runs %}
 <li><a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>{% if run.command.startswith('lintian-brush') %}
 {{ lintian_brush_summary(run.result['applied']) }}
-{% elif run.command.startswith('new-upstream ') %}
+{% elif run.command.startswith('new-upstream ') or run.command == 'new-upstream' %}
 {% if '--snapshot' in run.command %}: Merge new upstream snapshot <b>{{ run.result['upstream_version'] }}</b>
 {% else %}: Merge new upstream release <b>{{ run.result['upstream_version'] }}</b> {% endif %}
 {% elif run.command.startswith('apply-multiarch-hints') %}
