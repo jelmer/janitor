@@ -91,4 +91,10 @@ async def generate_stats(db):
 elect json_array_length(result->'applied-hints'), count(*) from run
 where result_code = 'success' and suite = 'multiarch-fixes' group by 1
 """)}
-    return {'hints_per_run': hints_per_run}
+        absorbed_per_kind = {h: nr for (h, nr) in await conn.fetch("""\
+select split_part(link::text, '#', 2), count(*) from
+absorbed_multiarch_hints group by 1
+""")}
+    return {
+        'hints_per_run': hints_per_run,
+        'absorbed_per_kind': absorbed_per_kind}
