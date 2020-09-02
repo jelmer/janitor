@@ -225,3 +225,9 @@ CREATE TRIGGER drop_candidates_when_removed
   ON package
   FOR EACH ROW
   EXECUTE PROCEDURE drop_candidates_for_deleted_packages();
+
+CREATE OR REPLACE VIEW absorbed_multiarch_hints AS
+  select package, id, x->>'binary' as binary, x->>'link'::text as link, x->>'severity' as severity, x->>'source' as source, (x->>'version')::debversion as version, x->'action' as action, x->>'certainty' as certainty from (select package, id, json_array_elements(result->'applied-hints') as x from absorbed_runs where suite = 'multiarch-fixes') as f;
+
+CREATE OR REPLACE VIEW multiarch_hints AS
+  select package, id, x->>'binary' as binary, x->>'link'::text as link, x->>'severity' as severity, x->>'source' as source, (x->>'version')::debversion as version, x->'action' as action, x->>'certainty' as certainty from (select package, id, json_array_elements(result->'applied-hints') as x from run where suite = 'multiarch-fixes') as f;
