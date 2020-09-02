@@ -343,7 +343,7 @@ if __name__ == '__main__':
             'pgp_algo': gpg.core.pubkey_algo_name,
             'ssh_keys': credentials['ssh_keys'],
             'pgp_keys': request.app.gpg.keylist('\0'.join(pgp_fprs)),
-            'hosting': credentials['hosting'],}
+            'hosting': credentials['hosting']}
 
     async def handle_ssh_keys(request):
         credentials = await get_credentials(
@@ -625,6 +625,24 @@ if __name__ == '__main__':
             raise web.HTTPNotFound()
 
     @html_template(
+        'cme-package.html', headers={'Cache-Control': 'max-age=600'})
+    async def handle_cme_pkg(request):
+        from .cme import generate_pkg_file
+        # TODO(jelmer): Handle Accept: text/diff
+        pkg = request.match_info['pkg']
+        run_id = request.match_info.get('run_id')
+        try:
+            return await generate_pkg_file(
+                request.app.database,
+                request.app.config,
+                request.app.policy,
+                request.app.http_client_session,
+                request.app.archiver_url,
+                request.app.publisher_url, pkg, run_id)
+        except KeyError:
+            raise web.HTTPNotFound()
+
+    @html_template(
         'multiarch-fixes-package.html',
         headers={'Cache-Control': 'max-age=600'})
     async def handle_multiarch_fixes_pkg(request):
@@ -866,7 +884,7 @@ if __name__ == '__main__':
         name='orphan-candidates')
     SUITE_REGEX = '|'.join(
             ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
-             'multiarch-fixes', 'orphan'])
+             'multiarch-fixes', 'orphan', 'cme'])
     app.router.add_get(
         '/{suite:%s}/merge-proposals' % SUITE_REGEX,
         handle_merge_proposals,
@@ -898,6 +916,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package')
+    app.router.add_get(
+        '/cme/pkg/{pkg}/', handle_cme_pkg,
+        name='cme-package')
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/{run_id}', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package-run')
