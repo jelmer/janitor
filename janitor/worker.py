@@ -299,7 +299,7 @@ class CMEWorker(SubWorker):
         subparser = argparse.ArgumentParser(
             prog='cme-fix', parents=[common_parser])
         from silver_platter.debian.cme import CMEChanger
-        self.changer = CMEChanger(salsa_push=False)
+        self.changer = CMEChanger()
         self.changer.setup_parser(subparser)
         self.args = subparser.parse_args(command)
 
