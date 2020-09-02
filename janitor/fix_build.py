@@ -1087,12 +1087,12 @@ def build_incrementally(
             reset_tree(local_tree, subpath=subpath)
             if e.context[0] == 'build':
                 context = BuildDependencyContext(
-                    local_tree, subpath, committer=committer,
+                    local_tree, subpath=subpath, committer=committer,
                     update_changelog=update_changelog)
             elif e.context[0] == 'autopkgtest':
                 context = AutopkgtestDependencyContext(
                     e.context[1],
-                    local_tree, subpath, committer=committer,
+                    local_tree, subpath=subpath, committer=committer,
                     update_changelog=update_changelog)
             else:
                 warning('unable to install for context %r', e.context)
