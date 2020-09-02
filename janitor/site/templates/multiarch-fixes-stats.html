@@ -23,6 +23,26 @@ new Chart($("#hints-per-run-chart"), {
 });
 </script>
 
+<canvas id="absorbed-per-kind-chart" width="800" height="450"></canvas>
+<script>
+new Chart($("#absorbed-per-kind-chart"), {
+    type: 'bar',
+    data: {
+       labels: {{ absorbed_per_kind.items()|list|sort|map(attribute=0)|list|tojson }},
+       datasets: [{
+         label: "Number of hints merged or pushed",
+         backgroundColor: Chart.helpers.color(window.chartColors.blue).alpha(0.5).rgbString(),
+         data: {{ absorbed_per_kind.items()|list|sort|map(attribute=1)|list|tojson }}
+       }],
+    },
+    options: {
+      title: { text: "Hints absorbed", display: true },
+    },
+});
+</script>
+
+
+
 </div>
 </div>
 {% endblock %}
