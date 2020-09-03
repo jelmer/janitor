@@ -1799,6 +1799,23 @@ def cargo_missing_requirement(m):
     return MissingCargoCrate(crate, requirement)
 
 
+class MissingDHCompatLevel(Problem):
+
+    kind = 'missing-dh-compat-level'
+
+    def __init__(self, command):
+        self.command = command
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.command)
+
+    def __str__(self):
+        return "Missing DH Compat Level (command: %s)" % self.command
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.command == other.command
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -2088,8 +2105,8 @@ build_failure_regexps = [
      'first defined here', None),
     ('dh(.*): debhelper compat level specified both in debian/compat '
      'and via build-dependency on debhelper-compat', None),
-    ('dh(.*): Please specify the compatibility level in debian/compat',
-     None),
+    ('(dh.*): Please specify the compatibility level in debian/compat',
+     lambda m: MissingDHCompatLevel(m.group(1))),
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
      'but --add-udeb=(.*) was passed!?', None),
     ('dpkg-gensymbols: error: some symbols or patterns disappeared in the '
@@ -2206,6 +2223,8 @@ build_failure_regexps = [
      file_not_found),
     (r'.*: line [0-9]+: (.*): No such file or directory', file_not_found),
     (r'error: No member named \$memberName', None),
+    (r'(?:/usr/bin/)?install: cannot create regular file \'(.*)\': '
+     r'Permission denied', None),
     (r'/usr/bin/install: missing destination file operand after .*', None),
     # Ruby
     (r'rspec .*\.rb:[0-9]+ # (.*)', None),
@@ -2298,7 +2317,9 @@ build_failure_regexps = [
      r'to build', lambda m: MissingLibrary('readline')),
     HaskellMissingDependencyMatcher(),
     (r'error: failed to select a version for the requirement `(.*)`',
-    cargo_missing_requirement),
+     cargo_missing_requirement),
+    (r'^Environment variable \$SOURCE_DATE_EPOCH: No digits were found: $',
+     None),
 ]
 
 
@@ -2387,6 +2408,7 @@ secondary_build_failure_regexps = [
     'datalad.support.exceptions.IncompleteResultsError'
     r'): .*',
     '^E   DeprecationWarning: .*',
+    '^E       fixture \'(.*)\' not found',
     # Rake
     r'[0-9]+ runs, [0-9]+ assertions, [0-9]+ failures, [0-9]+ errors, '
     r'[0-9]+ skips',
