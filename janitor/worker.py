@@ -609,6 +609,7 @@ class NewUpstreamWorker(SubWorker):
                 error_code = 'roundtripping-error'
                 raise WorkerFailure(error_code, error_description)
             except MalformedTransform:
+                traceback.print_exc()
                 error_description = (
                     'Malformed tree transform during new upstream merge')
                 error_code = 'malformed-transform'
