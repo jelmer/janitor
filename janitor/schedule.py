@@ -67,6 +67,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'explain-bd-uninstallable-apt-file-fetch-failure',
     'worker-timeout',
     'result-push-failed',
+    'dist-no-space-on-device',
 ]
 
 # In some cases, we want to ignore certain results when guessing
