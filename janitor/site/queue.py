@@ -126,6 +126,8 @@ async def get_queue(
             description = 'Mark as orphaned'
         elif entry.command[0] == 'import-upload':
             description = 'Import archive changes missing from VCS'
+        elif entry.command[0] == 'cme-fix':
+            description = 'Apply Configuration Model Editor (CME) fixes'
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:
