@@ -289,7 +289,6 @@ if __name__ == '__main__':
         from .orphan import generate_candidates
         return await generate_candidates(request.app.database)
 
-
     @html_template(
         'cme-candidates.html', headers={'Cache-Control': 'max-age=3600'})
     async def handle_cme_candidates(request):
@@ -427,10 +426,7 @@ if __name__ == '__main__':
             return {'never_processed': never_processed}
 
     async def handle_result_codes(request):
-        from .result_codes import (
-            generate_result_code_index,
-            generate_result_code_page)
-        from .. import state
+        from .result_codes import generate_result_code_index
         suite = request.query.get('suite')
         if suite is not None and suite.lower() == '_all':
             suite = None
@@ -494,7 +490,6 @@ if __name__ == '__main__':
         if pkg:
             return web.HTTPFound(pkg)
         from .pkg import generate_pkg_list
-        from .. import state
         async with request.app.database.acquire() as conn:
             packages = [
                 (item.name, item.maintainer_email)
@@ -507,7 +502,6 @@ if __name__ == '__main__':
         headers={'Cache-Control': 'max-age=600'})
     async def handle_maintainer_list(request):
         from .pkg import generate_maintainer_list
-        from .. import state
         async with request.app.database.acquire() as conn:
             packages = [
                 (item.name, item.maintainer_email)
@@ -520,7 +514,6 @@ if __name__ == '__main__':
         headers={'Cache-Control': 'max-age=600'})
     async def handle_pkg(request):
         from .pkg import generate_pkg_file
-        from .. import state
         package_name = request.match_info['pkg']
         async with request.app.database.acquire() as conn:
             package = await state.get_package(conn, package_name)
@@ -569,7 +562,6 @@ if __name__ == '__main__':
         'run.html', headers={'Cache-Control': 'max-age=3600'})
     async def handle_run(request):
         from .pkg import generate_run_file
-        from .. import state
         run_id = request.match_info['run_id']
         pkg = request.match_info.get('pkg')
         async with request.app.database.acquire() as conn:
