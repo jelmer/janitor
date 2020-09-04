@@ -44,21 +44,17 @@ async def metrics(request):
     return resp
 
 
-@asyncio.coroutine
-def metrics_middleware(app, handler):
-    @asyncio.coroutine
-    def wrapper(request):
-        start_time = time.time()
-        route = request.match_info.route.name
-        requests_in_progress_gauge.labels(request.method, route).inc()
-        response = yield from handler(request)
-        resp_time = time.time() - start_time
-        request_latency_hist.labels(route).observe(resp_time)
-        requests_in_progress_gauge.labels(request.method, route).dec()
-        request_counter.labels(
-            request.method, route, response.status).inc()
-        return response
-    return wrapper
+@web.middleware
+def metrics_middleware(request, handler):
+    start_time = time.time()
+    route = request.match_info.route.name
+    requests_in_progress_gauge.labels(request.method, route).inc()
+    response = await handler(request)
+    resp_time = time.time() - start_time
+    request_latency_hist.labels(route).observe(resp_time)
+    requests_in_progress_gauge.labels(request.method, route).dec()
+    request_counter.labels(request.method, route, response.status).inc()
+    return response
 
 
 def setup_metrics(app):
