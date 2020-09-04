@@ -427,27 +427,26 @@ async def handle_run(request):
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async with request.app.db.acquire() as conn:
-        async for run in state.iter_runs(
-                    conn, package, run_id=run_id, limit=limit):
-            if run.build_version:
-                build_info = {
-                    'version': str(run.build_version),
-                    'distribution': run.build_distribution}
-            else:
-                build_info = None
-            (start_time, finish_time) = run.times
-            response_obj.append({
-                'run_id': run.id,
-                'start_time': start_time.isoformat(),
-                'finish_time': finish_time.isoformat(),
-                'command': run.command,
-                'description': run.description,
-                'package': run.package,
-                'build_info': build_info,
-                'result_code': run.result_code,
-                'branch_name': run.branch_name,
-                })
+    async for run in state.iter_runs(
+                request.app.db, package, run_id=run_id, limit=limit):
+        if run.build_version:
+            build_info = {
+                'version': str(run.build_version),
+                'distribution': run.build_distribution}
+        else:
+            build_info = None
+        (start_time, finish_time) = run.times
+        response_obj.append({
+            'run_id': run.id,
+            'start_time': start_time.isoformat(),
+            'finish_time': finish_time.isoformat(),
+            'command': run.command,
+            'description': run.description,
+            'package': run.package,
+            'build_info': build_info,
+            'result_code': run.result_code,
+            'branch_name': run.branch_name,
+            })
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=600'})
 
