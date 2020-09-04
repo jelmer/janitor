@@ -231,3 +231,24 @@ CREATE OR REPLACE VIEW absorbed_multiarch_hints AS
 
 CREATE OR REPLACE VIEW multiarch_hints AS
   select package, id, x->>'binary' as binary, x->>'link'::text as link, x->>'severity' as severity, x->>'source' as source, (x->>'version')::debversion as version, x->'action' as action, x->>'certainty' as certainty from (select package, id, json_array_elements(result->'applied-hints') as x from run where suite = 'multiarch-fixes') as f;
+
+CREATE TABLE site_session (
+  id text primary key,
+  timestamp timestamp not null default now(),
+  userinfo json
+);
+
+
+CREATE FUNCTION expire_site_session_delete_old_rows() RETURNS trigger
+  LANGUAGE PLPGSQL
+  AS
+$$
+BEGIN
+  DELETE FROM site_session WHERE timestamp < NOW() - INTERVAL '1 week';
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER expire_site_session_delete_old_rows_trigger
+   AFTER INSERT ON site_session
+   EXECUTE PROCEDURE expire_site_session_delete_old_rows();
