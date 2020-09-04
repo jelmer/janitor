@@ -86,4 +86,5 @@ suite {
 oauth2_provider {
   client_id: "some-client-id"
   client_secret: "totally-secret"
+  base_url: "https://gitlab.com"
 }

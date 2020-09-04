@@ -78,4 +78,8 @@ message OAuth2Provider {
   optional string client_id = 1;
 
   optional string client_secret = 2;
+
+  // A URL such as https://salsa.debian.org/
+  // Used for finding e.g. token and authorize URLs
+  optional string base_url = 3;
 };
