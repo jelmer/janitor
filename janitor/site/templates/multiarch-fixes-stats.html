@@ -59,7 +59,51 @@ new Chart($("#absorbed-per-kind-chart"), {
 });
 </script>
 
+<h2>Burndown</h2>
 
+<canvas id="burndown" width="800" height="450"></canvas>
+<script>
+$.getJSON("/cupboard/stats/+chart/burndown?suite=multiarch-fixes", function (json) {
+new Chart($("#burndown"), {
+    type: 'line',
+    data: {
+      datasets: [{
+        label: 'Packages remaining',
+        backgroundColor: window.chartColors.red,
+        borderColor: window.chartColors.red,
+	data: $.map(json, function(entry) { return { t: moment(entry[0]).toDate(), y: entry[1] } } ),
+      }],
+    },
+    options: {
+      title: { display: true, text: 'Package burndown' },
+      scales: {
+        xAxes: [{
+	  type: 'time',
+          distribution: 'series',
+	  offset: true,
+	  ticks: {
+	    major: {
+	      enabled: true,
+	      fontStyle: 'bold'
+            },
+            source: 'data',
+            autoSkip: true,
+            autoSkipPadding: 75,
+            maxRotation: 0,
+            sampleSize: 100
+	  },
+	}],
+        yAxes: [{
+          display: true,
+          ticks: {
+              beginAtZero: true   // minimum value will be 0.
+          }
+        }],
+      }
+    },
+});
+});
+</script>
 
 </div>
 </div>
