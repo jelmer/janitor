@@ -82,4 +82,10 @@ message OAuth2Provider {
   // A URL such as https://salsa.debian.org/
   // Used for finding e.g. token and authorize URLs
   optional string base_url = 3;
+
+  // Name of the OpenID group for QA reviewers
+  optional string qa_reviewer_group = 4;
+
+  // Name of the OpenID group for admins
+  optional string admin_group = 5;
 };
