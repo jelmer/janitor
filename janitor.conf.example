@@ -82,3 +82,8 @@ suite {
   build_suffix: "jan+unc"
   base_distribution: "unstable"
 }
+
+oauth2_provider {
+  client_id: "some-client-id"
+  client_secret: "totally-secret"
+}
