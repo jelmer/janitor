@@ -4,6 +4,12 @@
 
 <h3><a href="/multiarch-fixes">Multi Arch Fixes</a></h3>
 
+{% if user %}
+Logged in as <a href="/m/{{ user['email'] }}">{{ user['name'] }}</a>
+{% else %}
+{% include "login.html" %}
+{% endif %}
+
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="/multiarch-fixes/merge-proposals">Merge Proposals</a></li>
 <li class="toctree-l1"><a class="reference internal" href="/multiarch-fixes/by-hint">By Hint</a></li>
