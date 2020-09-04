@@ -173,8 +173,6 @@ async def openid_middleware(request, handler):
         userinfo = None
     request.user = userinfo
     resp = await handler(request)
-    resp.add_header('X-User', ('' if not userinfo else userinfo['profile']))
-    resp.add_header('Vary', 'X-User, Accept')
     return resp
 
 
@@ -324,10 +322,9 @@ if __name__ == '__main__':
     async def handle_history(request):
         limit = int(request.query.get('limit', '100'))
         worker = request.query.get('worker', None)
-        async with request.app.database.acquire() as conn:
-            return {
-                'count': limit,
-                'history': state.iter_runs(conn, worker=worker, limit=limit)})
+        return {
+            'count': limit,
+            'history': state.iter_runs(request.app.database, worker=worker, limit=limit)}
 
     @html_template(
         'credentials.html', headers={'Cache-Control': 'max-age=10'})
@@ -534,10 +531,10 @@ if __name__ == '__main__':
             async for (run, url, status) in state.iter_proposals_with_run(
                     conn, package=package.name):
                 merge_proposals.append((url, status, run))
-            runs = state.iter_runs(conn, package=package.name)
-            return await generate_pkg_file(
-                request.app.database, request.app.config,
-                package, merge_proposals, runs)
+        runs = state.iter_runs(request.app.database, package=package.name)
+        return await generate_pkg_file(
+            request.app.database, request.app.config,
+            package, merge_proposals, runs)
 
     @html_template(
             'lintian-fixes-failed-list.html',

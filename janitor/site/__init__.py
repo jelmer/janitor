@@ -49,7 +49,7 @@ def update_vars_from_request(vs, request):
     vs['user'] = request.user
     vs['rel_url'] = request.rel_url
     vs['suites'] = request.app.config.suite
-    vs['openid_configured'] = bool(request.app.openid_config)
+    vs['openid_configured'] = bool(getattr(request.app, 'openid_config', None))
     if request.app.external_url is not None:
         vs['url'] = request.app.external_url.join(request.rel_url)
         vs['vcs_manager'] = RemoteVcsManager(str(request.app.external_url))

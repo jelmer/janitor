@@ -19,6 +19,8 @@ from aiohttp import web
 import asyncio
 import time
 
+from janitor.trace import note
+
 from prometheus_client import (
     Counter,
     Gauge,
@@ -45,7 +47,7 @@ async def metrics(request):
 
 
 @web.middleware
-def metrics_middleware(request, handler):
+async def metrics_middleware(request, handler):
     start_time = time.time()
     route = request.match_info.route.name
     requests_in_progress_gauge.labels(request.method, route).inc()
