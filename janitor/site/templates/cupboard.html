@@ -12,6 +12,9 @@
 <li class="toctree-l1"><a class="reference internal" href="maintainer">Packages by maintainer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="result-codes">Result Codes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="ready">Ready</a></li>
+{% if is_qa_reviewer %}
+<li class="toctree-l1"><a class="reference internal" href="review">Review</a></li>
+{% endif %}
 <li class="toctree-l1"><a class="reference internal" href="publish">Publish history</a></li>
 <li class="toctree-l1"><a class="reference internal" href="stats">Statistics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="maintainer-stats">Maintainer Statistics</a></li>
