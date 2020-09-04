@@ -87,4 +87,6 @@ oauth2_provider {
   client_id: "some-client-id"
   client_secret: "totally-secret"
   base_url: "https://gitlab.com"
+  qa_reviewer_group: "janitor-team/qa-reviewers"
+  admin_group: "janitor-team/admins"
 }
