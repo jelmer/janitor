@@ -40,6 +40,8 @@ message Config {
 
   // Origin in published archives
   optional string origin = 8;
+
+  optional OAuth2Provider oauth2_provider = 9;
 }
 
 message Env {
@@ -71,3 +73,9 @@ message Suite {
 
   optional string base_distribution = 9;
 }
+
+message OAuth2Provider {
+  optional string client_id = 1;
+
+  optional string client_secret = 2;
+};
