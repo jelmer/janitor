@@ -9,6 +9,7 @@ from janitor.site import (
     get_archive_diff,
     ArchiveDiffUnavailable,
     DebdiffRetrievalError,
+    render_template_for_request,
     )
 
 
@@ -29,15 +30,15 @@ async def generate_rejected(conn, suite=None):
     return {'entries': entries, 'suite': suite}
 
 
-async def generate_review(conn, client, archiver_url, publisher_url,
+async def generate_review(conn, request, client, archiver_url, publisher_url,
                           suites=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
                        conn, review_status=['unreviewed'], limit=40,
                        suites=suites, publishable_only=True)]
     if not entries:
-        template = env.get_template('review-done.html')
-        return await template.render_async()
+        return await render_template_for_request(
+            'review-done.html', request, {})
 
     (run, maintainer_email, uploader_emails, branch_url,
      publish_mode, changelog_mode,
@@ -80,5 +81,4 @@ async def generate_review(conn, client, archiver_url, publisher_url,
         'suite': run.suite,
         'todo': [(entry[0].package, entry[0].id) for entry in entries],
         }
-    template = env.get_template('review.html')
-    return await template.render_async(**kwargs)
+    return await render_template_for_request('review.html', request, kwargs)

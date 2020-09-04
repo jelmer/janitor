@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from . import env, json_chart_data
+from . import env, json_chart_data, html_template
 from aiohttp import web
 from .. import state
 
@@ -60,31 +60,21 @@ async def handle_graph_pushes_over_time(request, conn):
         'push_count': counts}
 
 
-async def write_stats(conn):
-    template = env.get_template('stats.html')
-
-    by_status = {}
-    by_hoster = {}
-    for hoster, status, count in await conn.fetch("""
-SELECT
-    REGEXP_REPLACE(url, '^(https?://)([^/]+)/.*', '\\2'),
-    status,
-    count(*)
-FROM merge_proposal group by 1, 2"""):
-        by_hoster.setdefault(hoster, {})[status] = count
-        by_status.setdefault(status, {})[hoster] = count
-
-    return await template.render_async(
-        by_hoster=by_hoster,
-        by_status_chart=by_status)
-
-
+@html_template('stats.html', headers={'Cache-Control': 'max-age=60'})
 async def handle_stats(request):
     async with request.app.database.acquire() as conn:
-        return web.Response(
-            content_type='text/html', text=await write_stats(
-                conn), headers={'Cache-Control': 'max-age=60'})
+        by_status = {}
+        by_hoster = {}
+        for hoster, status, count in await conn.fetch("""
+    SELECT
+        REGEXP_REPLACE(url, '^(https?://)([^/]+)/.*', '\\2'),
+        status,
+        count(*)
+    FROM merge_proposal group by 1, 2"""):
+            by_hoster.setdefault(hoster, {})[status] = count
+            by_status.setdefault(status, {})[hoster] = count
 
+        return {'by_hoster': by_hoster, 'by_status_chart': by_status}
 
 @json_chart_data(max_age=60)
 async def handle_graph_merges_over_time(request, conn):
@@ -167,8 +157,7 @@ from first_run_time%s) as r where mod(rn, 200) = 0
 def stats_app(database):
     app = web.Application()
     app.database = database
-    app.router.add_get(
-        '/', handle_stats, name='index')
+    app.router.add_get('/', handle_stats, name='index')
     app.router.add_get(
         '/+chart/review-status', handle_graph_review_status,
         name='graph-review-status')

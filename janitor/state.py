@@ -1577,3 +1577,16 @@ async def get_publish_history(
         "requestor, timestamp from publish where revision = $1 "
         "ORDER BY timestamp DESC",
         revision.decode('utf-8'))
+
+
+async def store_site_session(
+        conn: asyncpg.Connection, session_id: str, user: Any) -> None:
+    await conn.execute("""
+INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
+ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
+        session_id, user)
+
+
+async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
+    return await conn.fetchrow(
+        "SELECT userinfo FROM site_session WHERE id = $1", session_id)

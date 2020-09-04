@@ -15,14 +15,17 @@ import urllib.parse
 from yarl import URL
 
 from janitor import state, SUITE_REGEX
+from janitor.config import Config
 from janitor.trace import warning
 from . import (
     check_admin,
+    check_qa_reviewer,
     check_worker_creds,
     env,
     highlight_diff,
     html_template,
     get_archive_diff,
+    render_template_for_request,
     ArchiveDiffUnavailable,
     DebdiffRetrievalError,
     )
@@ -68,8 +71,8 @@ async def handle_publish(request):
             {'error': 'Invalid mode', 'mode': mode}, status=400)
     url = urllib.parse.urljoin(
         publisher_url, '%s/%s/publish' % (suite, package))
-    if request.debsso_email:
-        requestor = request.debsso_email
+    if request.user:
+        requestor = request.user['email']
     else:
         requestor = 'user from web UI'
     try:
@@ -105,9 +108,9 @@ async def get_package_from_gitlab_webhook(conn, body):
 
 async def handle_webhook(request):
     if request.headers.get('Content-Type') != 'application/json':
-        template = env.get_template('webhook.html')
+        text = await render_template_for_request('webhook.html', request, {})
         return web.Response(
-            content_type='text/html', text=await template.render_async(),
+            content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
     if request.headers['X-Gitlab-Event'] != 'Push Hook':
         return web.json_response({}, status=200)
@@ -144,8 +147,8 @@ async def handle_schedule(request):
         if package is None:
             return web.json_response(
                 {'reason': 'Package not found'}, status=404)
-        if request.debsso_email:
-            requestor = request.debsso_email
+        if request.user:
+            requestor = request.user['email']
         else:
             requestor = 'user from web UI'
         if package.branch_url is None:
@@ -187,8 +190,8 @@ async def handle_schedule_control(request):
             return web.json_response(
                 {'reason': 'Run not found'}, status=404)
         package = await state.get_package(conn, run.package)
-        if request.debsso_email:
-            requestor = request.debsso_email
+        if request.user:
+            requestor = request.user['email']
         else:
             requestor = 'user from web UI'
         if package.branch_url is None:
@@ -398,6 +401,7 @@ async def handle_archive_diff(request):
 
 async def handle_run_post(request):
     run_id = request.match_info['run_id']
+    check_qa_reviewer(request)
     post = await request.post()
     review_status = post.get('review-status')
     review_comment = post.get('review-comment')
@@ -822,12 +826,13 @@ async def handle_get_active_run(request):
 
 def create_app(
         db, publisher_url: str, runner_url: str, archiver_url: str,
-        policy_config: PolicyConfig,
+        config: Config, policy_config: PolicyConfig,
         enable_external_workers: bool = True,
         external_url: Optional[URL] = None) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.http_client_session = ClientSession()
+    app.config = config
     app.jinja_env = env
     app.db = db
     app.external_url = external_url

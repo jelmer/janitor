@@ -18,19 +18,26 @@
 """Serve the janitor site."""
 
 import asyncio
+import uuid
 from aiohttp.web_urldispatcher import (
     PrefixResource,
     ResourceRoute,
     URL,
     UrlMappingMatchInfo,
     )
+from aiohttp.web import middleware
 from ..config import get_suite_config
 import gpg
 import shutil
 import tempfile
 import time
 
-from . import is_worker, html_template, update_vars_from_request
+from . import (
+    is_worker,
+    html_template,
+    update_vars_from_request,
+    render_template_for_request,
+    )
 
 
 class ForwardedResource(PrefixResource):
@@ -156,25 +163,23 @@ class ForwardedResource(PrefixResource):
             name=name, prefix=self._prefix, location=self._location)
 
 
-@asyncio.coroutine
-def debsso_middleware(app, handler):
-    @asyncio.coroutine
-    def wrapper(request):
-        dn = request.headers.get('SSL_CLIENT_S_DN')
-        request.debsso_email = None
-        if dn and request.headers.get('SSL_CLIENT_VERIFY') == 'SUCCESS':
-            m = re.match('.*CN=([^/,]+)', dn)
-            if m:
-                request.debsso_email = m.group(1)
-        response = yield from handler(request)
-        if request.debsso_email:
-            response.headers['X-DebSSO-User'] = request.debsso_email
-        return response
-    return wrapper
+@middleware
+async def openid_middleware(request, handler):
+    session_id = request.cookies.get('session_id')
+    if session_id is not None:
+        async with request.app.database.acquire() as conn:
+            (userinfo, ) = await state.get_site_session(conn, session_id)
+    else:
+        userinfo = None
+    request.user = userinfo
+    resp = await handler(request)
+    resp.add_header('X-User', ('' if not userinfo else userinfo['profile']))
+    resp.add_header('Vary', 'X-User, Accept')
+    return resp
 
 
 def setup_debsso(app):
-    app.middlewares.insert(0, debsso_middleware)
+    app.middlewares.insert(0, openid_middleware)
 
 
 def iter_accept(request):
@@ -254,10 +259,9 @@ if __name__ == '__main__':
 
     async def handle_simple(templatename, request):
         vs = {}
-        update_vars_from_request(vs, request)
-        template = env.get_template(templatename)
         return web.Response(
-            content_type='text/html', text=await template.render_async(**vs),
+            content_type='text/html',
+            text=await render_template_for_request(templatename, request, vs),
             headers={'Cache-Control': 'max-age=3600'})
 
     @html_template(
@@ -265,6 +269,10 @@ if __name__ == '__main__':
     async def handle_lintian_fixes(request):
         from .lintian_fixes import render_start
         return await render_start()
+
+    @html_template('cme-start.html')
+    async def handle_cme(request):
+        return {}
 
     @html_template(
         'multiarch-fixes-start.html',
@@ -283,6 +291,13 @@ if __name__ == '__main__':
         from .orphan import generate_candidates
         return await generate_candidates(request.app.database)
 
+
+    @html_template(
+        'cme-candidates.html', headers={'Cache-Control': 'max-age=3600'})
+    async def handle_cme_candidates(request):
+        from .cme import generate_candidates
+        return await generate_candidates(request.app.database)
+
     @html_template(
         'merge-proposals.html',
         headers={'Cache-Control': 'max-age=60'})
@@ -295,25 +310,24 @@ if __name__ == '__main__':
         suite = request.match_info['suite']
         from .apt_repo import write_apt_repo
         async with request.app.database.acquire() as conn:
-            template = request.app.jinja_env.get_template(suite + '.html')
             vs = await write_apt_repo(conn, suite)
             vs['suite_config'] = get_suite_config(request.app.config, suite)
-            update_vars_from_request(vs, request)
-            text = await template.render_async(**vs)
+            text = await render_template_for_request(
+                suite + 'html', request, vs)
             return web.Response(
                 content_type='text/html',
                 text=text,
                 headers={'Cache-Control': 'max-age=60'})
 
+    @html_template(
+        'history.html', headers={'Cache-Control': 'max-age=10'})
     async def handle_history(request):
         limit = int(request.query.get('limit', '100'))
         worker = request.query.get('worker', None)
-        from .history import write_history
         async with request.app.database.acquire() as conn:
-            return web.Response(
-                content_type='text/html',
-                text=await write_history(conn, worker=worker, limit=limit),
-                headers={'Cache-Control': 'max-age=60'})
+            return {
+                'count': limit,
+                'history': state.iter_runs(conn, worker=worker, limit=limit)})
 
     @html_template(
         'credentials.html', headers={'Cache-Control': 'max-age=10'})
@@ -433,22 +447,43 @@ if __name__ == '__main__':
                 else:
                     suites = None
                 never_processed = sum(dict(
-                    await state.get_never_processed_count(conn, suites)).values())
-                text = await generate_result_code_index(
+                    await state.get_never_processed_count(conn, suites)
+                    ).values())
+
+                vs = await generate_result_code_index(
                     stats, never_processed, suite, all_suites=all_suites)
+                text = await render_template_for_request(
+                    'result-code-index.html', request, vs)
             else:
                 runs = [run async for run in state.iter_last_runs(
                     conn, code, suite=suite)]
-                text = await generate_result_code_page(
-                    code, runs, suite, all_suites=all_suites)
+
+                text = await render_template_for_request(
+                    'result-code.html', request, {
+                        'code': code, 'runs': runs, 'suite': suite,
+                        'all_suites': all_suites})
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
 
     async def handle_login(request):
-        return web.Response(
-            content_type='text/plain',
-            text=repr(request.debsso_email))
+        state = str(uuid.uuid4())
+        callback_path = request.app.router['oauth2-callback'].url_for()
+        location = URL(
+            request.app.openid_config['authorization_endpoint']).with_query({
+                'client_id': request.app.config.oauth2_provider.client_id,
+                'redirect_uri':
+                    str(request.app.external_url.join(callback_path)),
+                'response_type': 'code',
+                'scope': 'openid',
+                'state': state})
+        response = web.HTTPFound(location)
+        response.set_cookie(
+            'state', state, max_age=60, path=callback_path, httponly=True,
+            secure=True)
+        if 'url' in request.query:
+            response.set_cookie('back_url', request.query['url'])
+        return response
 
     async def handle_static_file(path, request):
         return web.FileResponse(path)
@@ -661,13 +696,13 @@ if __name__ == '__main__':
         except KeyError:
             raise web.HTTPNotFound()
 
+    @html_template(
+        'lintian-fixes-tag-list.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_lintian_fixes_tag_list(request):
         from .lintian_fixes import generate_tag_list
         async with request.app.database.acquire() as conn:
-            text = await generate_tag_list(conn)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
+            return await generate_tag_list(conn)
 
     @html_template(
         'multiarch-fixes-hint-list.html',
@@ -693,6 +728,8 @@ if __name__ == '__main__':
         return await generate_hint_page(
             request.app.database, request.match_info['hint'])
 
+    @html_template('lintian-fixes-developer-table.html',
+                   headers={'Cache-Control': 'max-age=30'})
     async def handle_lintian_fixes_developer_table_page(request):
         from .lintian_fixes import generate_developer_table_page
         try:
@@ -701,11 +738,8 @@ if __name__ == '__main__':
             developer = request.query.get('developer')
         if developer and '@' not in developer:
             developer = '%s@debian.org' % developer
-        text = await generate_developer_table_page(
+        return await generate_developer_table_page(
             request.app.database, developer)
-        return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=30'})
 
     @html_template(
         'new-upstream-package.html',
@@ -782,10 +816,10 @@ if __name__ == '__main__':
             await state.set_run_review_status(
                 conn, post['run_id'], review_status)
             text = await generate_review(
-                conn, request.app.http_client_session,
+                conn, request, request.app.http_client_session,
                 request.app.archiver_url, request.app.publisher_url,
                 suites=[run.suite])
-        return web.Response(content_type='text/html', text=text)
+            return web.Response(content_type='text/html', text=text)
 
     async def handle_review(request):
         from .review import generate_review
@@ -797,6 +831,61 @@ if __name__ == '__main__':
                 suites=suites)
         return web.Response(content_type='text/html', text=text)
 
+    async def handle_oauth_callback(request):
+        code = request.query.get('code')
+        state_code = request.query.get('state')
+        if request.cookies.get('state') != state_code:
+            return web.Response(status=400, text='state variable mismatch')
+        token_url = URL(request.app.openid_config['token_endpoint'])
+        redirect_uri = (request.app.external_url or request.url).join(
+            request.app.router['oauth2-callback'].url_for())
+        params = {
+            'code': code,
+            'client_id': request.app.config.oauth2_provider.client_id,
+            'client_secret': request.app.config.oauth2_provider.client_secret,
+            'grant_type': 'authorization_code',
+            'redirect_uri': str(redirect_uri),
+        }
+        async with request.app.http_client_session.post(
+                token_url, params=params) as resp:
+            if resp.status != 200:
+                return web.json_response(
+                    status=resp.status,
+                    data={'error': 'token-error'})
+            resp = await resp.json()
+            if resp['token_type'] != 'Bearer':
+                return web.Response(
+                    status=500,
+                    text='Expected bearer token, got %s' % resp['token_type'])
+            refresh_token = resp['refresh_token']
+            access_token = resp['access_token']
+
+        try:
+            back_url = request.cookies['back_url']
+        except KeyError:
+            back_url = '/'
+
+        async with request.app.http_client_session.get(
+                request.app.openid_config['userinfo_endpoint'], headers={
+                    'Authorization': 'Bearer %s' % access_token}) as resp:
+            if resp.status != 200:
+                raise Exception('unable to get user info (%s): %s' % (
+                    resp.status, await resp.read()))
+            userinfo = await resp.json()
+        session_id = str(uuid.uuid4())
+        async with request.app.database.acquire() as conn:
+            await state.store_site_session(conn, session_id, userinfo)
+
+        # TODO(jelmer): Store access token / refresh token?
+
+        resp = web.HTTPFound(back_url)
+
+        resp.del_cookie('state')
+        resp.del_cookie('back_url')
+        resp.set_cookie(
+            'session_id', session_id, secure=True, httponly=True)
+        return resp
+
     async def start_gpg_context(app):
         gpg_home = tempfile.TemporaryDirectory()
         gpg_context = gpg.Context(home_dir=gpg_home.name)
@@ -807,6 +896,17 @@ if __name__ == '__main__':
             shutil.rmtree(gpg_home)
 
         app.on_cleanup.append(cleanup_gpg)
+
+    async def discover_openid_config(app):
+        url = URL(app.config.oauth2_provider.base_url).join(
+            URL('/.well-known/openid-configuration'))
+        async with app.http_client_session.get(url) as resp:
+            if resp.status != 200:
+                # TODO(jelmer): Fail? Set flag?
+                warning('Unable to find openid configuration (%s): %s',
+                        resp.status, await resp.read())
+                return
+            app.openid_config = await resp.json()
 
     async def start_pubsub_forwarder(app):
 
@@ -859,6 +959,9 @@ if __name__ == '__main__':
         '/pgp_keys{extension:(\.asc)?}', handle_pgp_keys,
         name='pgp-keys')
     app.router.add_get(
+        '/cme/', handle_cme,
+        name='cme-start')
+    app.router.add_get(
         '/lintian-fixes/', handle_lintian_fixes,
         name='lintian-fixes-start')
     app.router.add_get(
@@ -882,6 +985,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/orphan/candidates', handle_orphan_candidates,
         name='orphan-candidates')
+    app.router.add_get(
+        '/cme/candidates', handle_cme_candidates,
+        name='cme-candidates')
     SUITE_REGEX = '|'.join(
             ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
              'multiarch-fixes', 'orphan', 'cme'])
@@ -1056,6 +1162,10 @@ if __name__ == '__main__':
             '/_static/%s.%s' % (name, kind), functools.partial(
                 handle_static_file,
                 '%s.%s%s' % (basepath, minified, kind)))
+    app.router.add_get(
+        '/oauth/callback',
+        handle_oauth_callback,
+        name='oauth2-callback')
 
     from .api import create_app as create_api_app
     with open(args.policy, 'r') as f:
@@ -1067,6 +1177,8 @@ if __name__ == '__main__':
     app.archiver_url = args.archiver_url
     app.policy = policy_config
     app.publisher_url = args.publisher_url
+    if config.oauth2_provider and config.oauth2_provider.base_url:
+        app.on_startup.append(discover_openid_config)
     app.on_startup.append(start_pubsub_forwarder)
     app.on_startup.append(start_gpg_context)
     if args.external_url:
@@ -1090,7 +1202,7 @@ if __name__ == '__main__':
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url,  # type: ignore
-            args.archiver_url, policy_config,
+            args.archiver_url, config, policy_config,
             enable_external_workers=(not args.no_external_workers),
             external_url=(
                 app.external_url.join(URL('api')

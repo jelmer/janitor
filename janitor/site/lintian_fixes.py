@@ -65,9 +65,8 @@ async def generate_tag_list(conn: asyncpg.Connection):
             tags.append(tag)
         else:
             oldnames.setdefault(newname, []).append(tag)
-    template = env.get_template('lintian-fixes-tag-list.html')
     tags.sort()
-    return await template.render_async(tags=tags, oldnames=oldnames)
+    return {'tags': tags, 'oldnames': oldnames}
 
 
 async def iter_last_successes_by_lintian_tag(
@@ -125,7 +124,6 @@ async def generate_candidates(db):
 
 
 async def generate_developer_table_page(db, developer):
-    template = env.get_template('lintian-fixes-developer-table.html')
     async with db.acquire() as conn:
         packages = [p for p, removed in
                     await state.iter_packages_by_maintainer(
@@ -188,9 +186,9 @@ async def generate_developer_table_page(db, developer):
             status,
             queue_data.get(package, (None, None)))
 
-    return await template.render_async(
-        packages=packages, by_package=by_package, suite=SUITE,
-        developer=developer)
+    return {
+        'packages': packages, 'by_package': by_package, 'suite': SUITE,
+        'developer': developer}
 
 
 async def iter_lintian_brush_fixer_failures(conn: asyncpg.Connection, fixer):

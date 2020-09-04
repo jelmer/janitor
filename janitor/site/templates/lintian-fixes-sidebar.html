@@ -41,7 +41,7 @@ $('#sidebar-package').typeahead(null, {
 See the status for a developer:
 <form autocomplete="off" action="/lintian-fixes/by-developer">
   <div class="developers" style="width:300px;">
-    <input id="developer" type="text" name="developer" placeholder="E-mail address" class="typeahead tt-input" value="{{ debsso_email }}">
+    <input id="developer" type="text" name="developer" placeholder="E-mail address" class="typeahead tt-input"{% if user %} value="{{ user['email'] }}"{% endif %}>
   </div>
   <input type="submit" style="display: none">
 </form>

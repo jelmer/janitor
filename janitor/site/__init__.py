@@ -45,15 +45,23 @@ def json_chart_data(max_age=None):
 
 def update_vars_from_request(vs, request):
     vs['is_admin'] = is_admin(request)
+    vs['is_qa_reviewer'] = is_qa_reviewer(request)
+    vs['user'] = request.user
     vs['rel_url'] = request.rel_url
-    if getattr(request.app, 'config', None):
-        vs['suites'] = request.app.config.suite
+    vs['suites'] = request.app.config.suite
+    vs['openid_configured'] = bool(request.app.openid_config)
     if request.app.external_url is not None:
         vs['url'] = request.app.external_url.join(request.rel_url)
         vs['vcs_manager'] = RemoteVcsManager(str(request.app.external_url))
     else:
         vs['url'] = request.url
         vs['vcs_manager'] = RemoteVcsManager(str(request.url.with_path('/')))
+
+
+async def render_template_for_request(templatename, request, vs):
+    update_vars_from_request(vs, request)
+    template = env.get_template(templatename)
+    return await template.render_async(**vs)
 
 
 def html_template(template_name, headers={}):
@@ -197,7 +205,26 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
 
 
 def is_admin(request: web.Request) -> bool:
-    return request.debsso_email == 'jelmer@debian.org'
+    if not request.user:
+        return False
+    admin_group = request.app.config.oauth2_provider.admin_group
+    if admin_group is None:
+        return True
+    return admin_group in request.user['groups']
+
+
+def check_qa_reviewer(request: web.Request) -> None:
+    if not is_qa_reviewer(request):
+        raise web.HTTPUnauthorized()
+
+
+def is_qa_reviewer(request: web.Request) -> bool:
+    if not request.user:
+        return False
+    qa_reviewer_group = request.app.config.oauth2_provider.qa_reviewer_group
+    if qa_reviewer_group is None:
+        return True
+    return qa_reviewer_group in request.user['groups']
 
 
 def check_admin(request: web.Request) -> None:
