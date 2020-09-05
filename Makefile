@@ -1,3 +1,5 @@
+export PYTHONPATH=.:breezy:silver-platter:lintian-brush:python-debian/lib:debmutate
+
 PB2_PY_OUTPUT = janitor/policy_pb2.py janitor/config_pb2.py janitor/package_overrides_pb2.py janitor/candidates_pb2.py janitor/package_metadata_pb2.py
 
 all: janitor/site/_static/pygments.css $(PB2_PY_OUTPUT)
@@ -11,8 +13,14 @@ endif
 janitor/%_pb2.py: janitor/%.proto
 	protoc $(PROTOC_ARGS) $<
 
-check: typing
-	PYTHONPATH=.:silver-platter:lintian-brush:breezy python3 setup.py test
+check:: typing
+
+check:: test
+
+check:: style
+
+test:
+	PYTHONPATH=$(PYTHONPATH) python3 setup.py test
 
 style:
 	flake8

@@ -986,7 +986,7 @@ def perl_missing_module(m):
 
 
 def perl_expand_failed(m):
-    return MissingPerlModule(None, m.group(1), None)
+    return MissingPerlModule(None, m.group(1).strip().strip("'"), None)
 
 
 def perl_missing_plugin(m):
