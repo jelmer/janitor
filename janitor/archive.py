@@ -102,7 +102,7 @@ async def handle_upload(request):
     except UploadError as e:
         return web.json_response(
             {'msg': str(e), 'failed_files': e.failed_files},
-            status=500)
+            status=400)
     result['report'] = report
     note('Uploaded files: %r', result['filenames'])
     return web.json_response(result, status=200)

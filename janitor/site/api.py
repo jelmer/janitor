@@ -746,6 +746,12 @@ async def handle_run_finish(request: web.Request) -> web.Response:
         try:
             async with request.app.http_client_session.post(
                     archiver_url, data=archiver_writer) as resp:
+                if resp.status == 400:
+                    archiver_resp = await resp.json()
+                    return web.json_response({
+                        'component': 'archiver',
+                        'msg': archiver_resp['msg'],
+                        'failed_files': archiver_resp['failed_files']})
                 if resp.status not in (201, 200):
                     try:
                         internal_error = await resp.json()
@@ -755,7 +761,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
                         'internal-status': resp.status,
                         'internal-reporter': 'archiver',
                         'internal-result': internal_error},
-                        status=400)
+                        status=500)
                 archiver_result = await resp.json()
         except ClientConnectorError:
             return web.Response(
