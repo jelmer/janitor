@@ -176,7 +176,7 @@ def attempt_build(
     Returns: Tuple with (changes_name, cl_version)
     """
     add_dummy_changelog_entry(
-        local_tree.abspath(subpath), suffix, build_suite,
+        local_tree, subpath, suffix, build_suite,
         build_changelog_entry)
     return build_once(
         local_tree, build_suite, output_directory, build_command, subpath,
