@@ -33,6 +33,7 @@ from janitor import fix_build
 from janitor.fix_build import (
     resolve_error,
     VERSIONED_PACKAGE_FIXERS,
+    APT_FIXERS,
     BuildDependencyContext,
     )
 from janitor.tests import TestCaseWithTransport
@@ -76,7 +77,8 @@ blah (0.1) UNRELEASED; urgency=medium
         context = BuildDependencyContext(
             self.tree, subpath='', committer='Janitor <janitor@jelmer.uk>',
             update_changelog=True)
-        return resolve_error(error, context, VERSIONED_PACKAGE_FIXERS)
+        return resolve_error(
+            error, context, VERSIONED_PACKAGE_FIXERS + APT_FIXERS)
 
     def get_build_deps(self):
         with open(self.tree.abspath('debian/control'), 'r') as f:
@@ -98,7 +100,7 @@ blah (0.1) UNRELEASED; urgency=medium
         rev = self.tree.branch.repository.get_revision(
             self.tree.branch.last_revision())
         self.assertEqual(
-            'Add missing build dependency on brz.',
+            'Add missing build dependency on brz.\n',
             rev.message)
         self.assertFalse(self.resolve(MissingCommand('brz')))
         self.assertEqual('libc6, brz', self.get_build_deps())

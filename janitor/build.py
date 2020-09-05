@@ -23,17 +23,21 @@ __all__ = [
     'SbuildFailure',
 ]
 
+from datetime import datetime
 import os
+import re
 import subprocess
 import sys
 
 from debian.changelog import Changelog
+from debmutate.changelog import get_maintainer, format_datetime
 
 from breezy import osutils
 from breezy.plugins.debian.util import (
     changes_filename,
     get_build_architecture,
     )
+from breezy.mutabletree import MutableTree
 from silver_platter.debian import (
     BuildFailedError,
     DEFAULT_BUILDER,
@@ -53,7 +57,9 @@ class MissingChangesFile(Exception):
         self.filename = filename
 
 
-def add_dummy_changelog_entry(directory, suffix, suite, message):
+def add_dummy_changelog_entry(
+        tree: MutableTree, subpath: str, suffix: str, suite: str,
+        message: str, timestamp=None, maintainer=None):
     """Add a dummy changelog entry to a package.
 
     Args:
@@ -62,13 +68,38 @@ def add_dummy_changelog_entry(directory, suffix, suite, message):
       suite: Debian suite
       message: Changelog message
     """
-    p = subprocess.Popen(
-        ["dch", "-l" + suffix, "--no-auto-nmu", "--distribution", suite,
-            "--force-distribution", message], cwd=directory,
-        stderr=subprocess.PIPE)
-    (stdout, stderr) = p.communicate(b'\n')
-    if p.returncode != 0:
-        raise Exception('dch failed: %s' % stderr)
+    def add_suffix(v, suffix):
+        m = re.fullmatch('(.*)(' + re.escape(suffix) + ')([0-9]+)', v,)
+        if m:
+            return (m.group(1) + m.group(2) + '%d' % (int(m.group(3)) + 1))
+        else:
+            return v + suffix + '1'
+
+    path = os.path.join(subpath, 'debian', 'changelog')
+    if maintainer is None:
+        maintainer = get_maintainer()
+    if timestamp is None:
+        timestamp = datetime.now()
+    with tree.get_file(path) as f:
+        cl = Changelog()
+        cl.parse_changelog(
+            f, max_blocks=None, allow_empty_author=True, strict=False)
+        version = cl[0].version
+        if version.debian_revision:
+            version.debian_revision = add_suffix(
+                version.debian_revision, suffix)
+        else:
+            version.upstream_version = add_suffix(
+                version.upstream_version, suffix)
+        cl.new_block(
+            package=cl[0].package,
+            version=version,
+            urgency='low',
+            distributions=suite,
+            author='%s <%s>' % maintainer,
+            date=format_datetime(timestamp),
+            changes=['', '  * ' + message, ''])
+    tree.put_file_bytes_non_atomic(path, bytes(cl))
 
 
 def get_latest_changelog_version(local_tree, subpath=''):

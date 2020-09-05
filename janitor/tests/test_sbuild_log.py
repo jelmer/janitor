@@ -36,6 +36,7 @@ from janitor.sbuild_log import (
     MissingJVM,
     MissingConfigStatusInput,
     MissingCHeader,
+    MissingDHCompatLevel,
     MissingJDKFile,
     MissingPythonModule,
     MissingPythonDistribution,
@@ -282,7 +283,7 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
     def test_dh_compat_missing(self):
         self.run_test([
             'dh_clean: Please specify the compatibility level in '
-            'debian/compat'], 1)
+            'debian/compat'], 1, MissingDHCompatLevel('dh_clean'))
 
     def test_dh_udeb_shared_library(self):
         self.run_test([
@@ -330,7 +331,7 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
             MissingPythonModule('cmod'))
         self.run_test([
             'E   ImportError: No module named mock'], 1,
-            MissingPythonModule('mock', 2))
+            MissingPythonModule('mock'))
         self.run_test([
             'pluggy.manager.PluginValidationError: '
             'Plugin \'xdist.looponfail\' could not be loaded: '
@@ -350,7 +351,7 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
     def test_python2_import(self):
         self.run_test(
                 ['ImportError: No module named pytz'], 1,
-                MissingPythonModule('pytz', 2))
+                MissingPythonModule('pytz'))
         self.run_test(
                 ['ImportError: cannot import name SubfieldBase'], 1,
                 None)
