@@ -17,7 +17,6 @@
 
 """Serve the janitor site."""
 
-import asyncio
 import uuid
 from aiohttp.web_urldispatcher import (
     PrefixResource,
@@ -35,7 +34,6 @@ import time
 from . import (
     is_worker,
     html_template,
-    update_vars_from_request,
     render_template_for_request,
     )
 
