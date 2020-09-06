@@ -813,7 +813,7 @@ if __name__ == '__main__':
         suites = request.query.getall('suite', None)
         async with request.app.database.acquire() as conn:
             text = await generate_review(
-                conn, request.app.http_client_session,
+                conn, request, request.app.http_client_session,
                 request.app.archiver_url, request.app.publisher_url,
                 suites=suites)
         return web.Response(content_type='text/html', text=text)
@@ -1175,7 +1175,8 @@ if __name__ == '__main__':
     database = state.Database(config.database_location)
     app.database = database
     from .stats import stats_app
-    app.add_subapp('/cupboard/stats', stats_app(database))
+    app.add_subapp(
+        '/cupboard/stats', stats_app(database, config, app.external_url))
     app.config = config
     from janitor.site import env, is_admin
     app.jinja_env = env
