@@ -154,8 +154,11 @@ from first_run_time%s) as r where mod(rn, 200) = 0
         for (start_time, c) in await conn.fetch(query, *args)]
 
 
-def stats_app(database):
+def stats_app(database, config, external_url):
     app = web.Application()
+    app.jinja_env = env
+    app.config = config
+    app.external_url = external_url
     app.database = database
     app.router.add_get('/', handle_stats, name='index')
     app.router.add_get(
