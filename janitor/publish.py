@@ -780,7 +780,7 @@ async def dulwich_refs(request):
     handler.proto.write_pkt_line(
         b'# service=' + service.encode('ascii') + b'\n')
     handler.proto.write_pkt_line(None)
-    request.loop.run_in_executor(None, handler.handle)
+    await request.loop.run_in_executor(None, handler.handle)
 
     await response.write(out.getvalue())
 
@@ -821,7 +821,7 @@ async def dulwich_service(request):
     proto = ReceivableProtocol(inf.read, outf.write)
     handler = handler_cls(
         DictBackend({'.': r}), ['.'], proto, stateless_rpc=True)
-    request.loop.run_in_executor(None, handler.handle)
+    await request.loop.run_in_executor(None, handler.handle)
 
     await response.write(outf.getvalue())
 
