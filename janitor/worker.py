@@ -405,7 +405,7 @@ class LintianBrushWorker(SubWorker):
                         minimum_certainty=minimum_certainty,
                         allow_reformatting=allow_reformatting,
                         trust_package=TRUST_PACKAGE,
-                        net_access=True, subpath=(subpath or '.'),
+                        net_access=True, subpath=subpath,
                         opinionated=False,
                         diligence=10)
             except ChangelogCreateError as e:
@@ -510,13 +510,13 @@ class NewUpstreamWorker(SubWorker):
             try:
                 if self.args.import_only:
                     result = import_upstream(
-                        tree=local_tree, subpath=(subpath or ''),
+                        tree=local_tree, subpath=subpath,
                         snapshot=self.args.snapshot, committer=self.committer,
                         trust_package=TRUST_PACKAGE,
                         create_dist=create_dist)
                 else:
                     result = merge_upstream(
-                        tree=local_tree, subpath=(subpath or ''),
+                        tree=local_tree, subpath=subpath,
                         snapshot=self.args.snapshot, committer=self.committer,
                         trust_package=TRUST_PACKAGE,
                         create_dist=create_dist)
@@ -681,10 +681,8 @@ class NewUpstreamWorker(SubWorker):
             report_context(result.new_upstream_version)
 
             if not self.args.import_only:
-                patch_series_path = 'debian/patches/series'
-                if subpath not in (None, '', '.'):
-                    patch_series_path = os.path.join(
-                        subpath, patch_series_path)
+                patch_series_path = os.path.join(
+                    subpath, 'debian/patches/series')
 
                 if local_tree.has_filename(patch_series_path):
                     try:
@@ -825,14 +823,10 @@ debian_info = distro_info.DebianDistroInfo()
 
 
 def control_files_in_root(tree: Tree, subpath: str) -> bool:
-    debian_path = 'debian'
-    if subpath not in (None, '', '.'):
-        debian_path = os.path.join(subpath, 'debian')
+    debian_path = os.path.join(subpath, 'debian')
     if tree.has_filename(debian_path):
         return False
-    control_path = 'control'
-    if subpath not in (None, '', '.'):
-        control_path = os.path.join(subpath, control_path)
+    control_path = os.path.join(subpath, 'control')
     if tree.has_filename(control_path):
         return True
     if tree.has_filename(control_path + '.in'):
@@ -851,8 +845,7 @@ def control_file_present(tree: Tree, subpath: str) -> bool:
     """
     for name in ['debian/control', 'debian/control.in', 'control',
                  'control.in']:
-        if subpath not in ('', '.'):
-            name = os.path.join(subpath, name)
+        name = os.path.join(subpath, name)
         if tree.has_filename(name):
             return True
     return False
