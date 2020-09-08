@@ -355,7 +355,9 @@ async def main(argv=None):
 
         branch_url = assignment['branch']['url']
         vcs_type = assignment['branch']['vcs_type']
-        result_branch_url = assignment['result_branch']['url'].rstrip('/')
+        result_branch_url = assignment['result_branch']['url']
+        if result_branch_url is not None:
+            result_branch_url = result_branch_url.rstrip('/')
         subpath = assignment['branch'].get('subpath', '') or ''
         if assignment['resume']:
             resume_result = assignment['resume'].get('result')
