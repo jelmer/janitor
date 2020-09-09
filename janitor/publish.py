@@ -1145,6 +1145,28 @@ async def check_existing_mp(
         warning('%s: Unable to find any relevant runs.', mp.url)
         return False
 
+    package = await state.get_package(conn, mp_run.package)
+    if package is None:
+        warning('%s: Unable to find package.', mp.url)
+        return False
+
+    if package.removed:
+        try:
+            mp.post_comment("""
+This merge proposal will be closed, since the package has been removed from the
+archive.
+""")
+        except PermissionDenied as e:
+            warning('Permission denied posting comment to %s: %s',
+                    mp.url, e)
+        try:
+            mp.close()
+        except PermissionDenied as e:
+            warning('Permission denied closing merge request %s: %s',
+                    mp.url, e)
+            return False
+        return True
+
     if last_run.result_code == 'nothing-to-do':
         # A new run happened since the last, but there was nothing to
         # do.
