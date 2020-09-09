@@ -1924,6 +1924,7 @@ build_failure_regexps = [
      r'\(level [0-9]+ requested\)', None),
     (r'dh: Unknown sequence (.*) \(choose from: .*\)', None),
     (r'.*: .*: No space left on device', install_no_space),
+    (r'^No space left on device.', install_no_space),
     (r'.*Can\'t locate (.*).pm in @INC \(you may need to install the '
      r'(.*) module\) \(@INC contains: (.*)\) at .* line .*.',
      perl_missing_module),
@@ -2144,6 +2145,7 @@ build_failure_regexps = [
     (r'convert convert: Improper image header \(.*\).',
      None),
     (r'convert convert: invalid primitive argument \([0-9]+\).', None),
+    (r'convert convert: Unexpected end-of-file \(\)\.', None),
     (r'ERROR: Sphinx requires at least Python (.*) to run.',
      None),
     (r'convert convert: No encode delegate for this image format \((.*)\) '
@@ -2487,8 +2489,10 @@ secondary_build_failure_regexps = [
     r'install: failed to access \'(.*)\': (.*)',
     r'MSBUILD: error MSBUILD[0-9]+: Project file \'(.*)\' not found.',
     r'E: (.*)',
+    r'(.*)\(([0-9]+),([0-9]+)\): Error: .*',
     # C #
     r'(.*)\.cs\([0-9]+,[0-9]+\): error CS[0-9]+: .*',
+    r'.*Segmentation fault.*',
 ]
 
 compiled_secondary_build_failure_regexps = [
