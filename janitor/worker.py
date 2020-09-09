@@ -416,7 +416,7 @@ class LintianBrushWorker(SubWorker):
         if overall_result.failed_fixers:
             for fixer_name, failure in overall_result.failed_fixers.items():
                 note('Fixer %r failed to run:', fixer_name)
-                sys.stderr.write(failure.errors)
+                sys.stderr.write(str(failure))
 
         metadata['versions'] = {
             'lintian-brush': lintian_brush_version_string,
@@ -434,8 +434,7 @@ class LintianBrushWorker(SubWorker):
                 'revision_id': result.revision_id.decode('utf-8'),
                 'certainty': result.certainty})
         metadata['failed'] = {
-            name: e.errors
-            for (name, e) in overall_result.failed_fixers.items()}
+            name: str(e) for (name, e) in overall_result.failed_fixers.items()}
         metadata['add_on_only'] = not has_nontrivial_changes(
             overall_result.success, self.args.propose_addon_only)
         if base_metadata and not base_metadata['add_on_only']:
