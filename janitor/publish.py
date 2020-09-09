@@ -234,7 +234,8 @@ async def publish_one(
         possible_hosters=None,
         possible_transports: Optional[List[Transport]] = None,
         allow_create_proposal: Optional[bool] = None,
-        reviewers: Optional[List[str]] = None):
+        reviewers: Optional[List[str]] = None,
+        derived_owner: Optional[str] = None):
     """Publish a single run in some form.
 
     Args:
@@ -263,6 +264,7 @@ async def publish_one(
         'require-binary-diff': require_binary_diff,
         'allow_create_proposal': allow_create_proposal,
         'external_url': external_url,
+        'derived-owner': derived_owner,
         'reviewers': reviewers}
 
     args = [sys.executable, '-m', 'janitor.publish_one']
