@@ -1153,21 +1153,24 @@ async def check_existing_mp(
         return False
 
     if package.removed:
-        try:
-            mp.post_comment("""
+        note('%s: package has been removed from the archive, '
+             'closing proposal.', mp.url)
+        if not dry_run:
+            try:
+                mp.post_comment("""
 This merge proposal will be closed, since the package has been removed from the
 archive.
 """)
-        except PermissionDenied as e:
-            warning('Permission denied posting comment to %s: %s',
-                    mp.url, e)
-        try:
-            mp.close()
-        except PermissionDenied as e:
-            warning('Permission denied closing merge request %s: %s',
-                    mp.url, e)
-            return False
-        return True
+            except PermissionDenied as e:
+                warning('Permission denied posting comment to %s: %s',
+                        mp.url, e)
+            try:
+                mp.close()
+            except PermissionDenied as e:
+                warning('Permission denied closing merge request %s: %s',
+                        mp.url, e)
+                return False
+            return True
 
     if last_run.result_code == 'nothing-to-do':
         # A new run happened since the last, but there was nothing to
