@@ -396,6 +396,10 @@ def publish(
                 existing_proposal=existing_proposal,
                 labels=labels, tags=subrunner.tags(),
                 allow_collaboration=True, reviewers=reviewers)
+        except DivergedBranches:
+            raise PublishFailure(
+                description='Upstream branch has diverged from local changes.',
+                code='diverged-branches')
         except UnsupportedHoster:
             raise PublishFailure(
                 description='Hoster unsupported: %s.' % main_branch.user_url,
