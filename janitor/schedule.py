@@ -88,6 +88,7 @@ PUBLISH_MODE_VALUE = {
     'push': 500,
     'propose': 400,
     'attempt-push': 450,
+    'bts': 100,
     }
 
 
