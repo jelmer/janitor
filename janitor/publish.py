@@ -20,7 +20,6 @@
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 from datetime import datetime, timedelta
-from dulwich.repo import Repo as DulwichRepo
 import asyncio
 import functools
 import gpg
@@ -457,6 +456,11 @@ async def publish_from_policy(
             await do_schedule(
                 conn, run.package, run.suite,
                 requestor='publisher (pre-creation merge conflict)')
+        elif e.code == 'diverged-branches':
+            note('Branches have diverged; restarting.')
+            await do_schedule(
+                conn, run.package, run.suite,
+                requestor='publisher (diverged branches)')
         elif e.code in (
                 'missing-binary-diff-self', 'missing-binary-diff-control'):
             unchanged_run = await state.get_unchanged_run(
@@ -755,7 +759,7 @@ async def dulwich_refs(request):
 
     repo = await _git_open_repo(
         request.app.vcs_manager, request.app.db, package)
-    r = DulwichRepo(repo._transport.local_abspath('.'))
+    r = repo._git
 
     service = request.query.get('service')
     _git_check_service(service, allow_writes)
@@ -799,7 +803,6 @@ async def dulwich_service(request):
 
     repo = await _git_open_repo(
         request.app.vcs_manager, request.app.db, package)
-    r = DulwichRepo(repo._transport.local_abspath('.'))
 
     _git_check_service(service, allow_writes)
 
@@ -820,10 +823,13 @@ async def dulwich_service(request):
     inf = BytesIO(await request.read())
     outf = BytesIO()
 
-    proto = ReceivableProtocol(inf.read, outf.write)
-    handler = handler_cls(
-        DictBackend({'.': r}), ['.'], proto, stateless_rpc=True)
-    await request.loop.run_in_executor(None, handler.handle)
+    def handle():
+        r = repo._git
+        proto = ReceivableProtocol(inf.read, outf.write)
+        handler = handler_cls(
+             DictBackend({'.': r}), ['.'], proto, stateless_rpc=True)
+        handler.handle()
+    await request.loop.run_in_executor(None, handle)
 
     await response.write(outf.getvalue())
 
