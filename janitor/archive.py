@@ -309,17 +309,20 @@ async def handle_diffoscope(request):
 
     def set_limits():
         import resource
-        # Limit to 200Mb
+        # Limit to 2Gb
         resource.setrlimit(
-            resource.RLIMIT_AS, (200 * 1024 * 1024, 200 * 1024 * 1024))
+            resource.RLIMIT_AS, (1800 * 1024 * 1024, 2000 * 1024 * 1024))
 
     try:
-        diffoscope_diff = await run_diffoscope(
-            old_binaries, new_binaries,
-            set_limits)
+        diffoscope_diff = await asyncio.wait_for(
+                run_diffoscope(
+                old_binaries, new_binaries,
+                set_limits), 60.0)
     except MemoryError:
         raise web.HTTPServiceUnavailable(
-            text='diffoscope used too much memory')
+             'diffoscope used too much memory')
+    except asyncio.TimeoutError:
+        raise web.HTTPServiceUnavailable('diffoscope timed out')
 
     diffoscope_diff['source1'] = '%s version %s (%s)' % (
         source, old_version, old_suite)
