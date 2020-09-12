@@ -162,7 +162,7 @@ $("#{{ propose_id }}").click(function() {
  {% else %}Failed to push: <span class="publish-failure">{{ code }}</span>
  {% endif %}
 {% elif mode == 'propose' %}
- {% if code == 'success' %}{% if mp_url %}<a href="{{ mp_url }}">Merge proposal</a> updated{% else %}success{% endif %}
+ {% if code == 'success' %}{% if mp_url %}<a href="{{ mp_url }}">Merge proposal</a> updated{% else %}Changes not significant enough for merge request.{% endif %}
  {% else %}Failed to create merge proposal: <span class="publish-failure">{{ code }}</span>
  {% endif %}
 {% endif %}
