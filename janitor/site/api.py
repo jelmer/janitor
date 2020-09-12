@@ -337,7 +337,11 @@ async def handle_diff(request):
     except ClientConnectorError:
         return web.Response(
             text='unable to contact publisher',
-            status=400)
+            status=502)
+    except ClientOSError:
+        return web.Response(
+            text='unable to contact publisher - oserror',
+            status=502)
 
 
 async def handle_archive_diff(request):
