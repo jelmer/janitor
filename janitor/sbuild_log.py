@@ -2097,6 +2097,8 @@ build_failure_regexps = [
      r'Use override targets instead.', None),
     ('(.*):([0-9]+): undefined reference to `(.*)\'', None),
     ('(.*):([0-9]+): error: undefined reference to \'(.*)\'', None),
+    (r'\/usr\/bin\/ld: (.*): multiple definition of `*.\'; '
+     r'(.*): first defined here', None),
     (r'\/usr\/bin\/ld: (.*): undefined reference to `(.*)\'', None),
     (r'\/usr\/bin\/ld: (.*): undefined reference to symbol \'(.*)\'', None),
     (r'\/usr\/bin\/ld: (.*): relocation (.*) against symbol `(.*)\' '
@@ -2493,6 +2495,7 @@ secondary_build_failure_regexps = [
     # C #
     r'(.*)\.cs\([0-9]+,[0-9]+\): error CS[0-9]+: .*',
     r'.*Segmentation fault.*',
+    r'a2x: ERROR: (.*) returned non-zero exit status ([0-9]+)',
 ]
 
 compiled_secondary_build_failure_regexps = [
