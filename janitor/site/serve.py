@@ -166,7 +166,12 @@ async def openid_middleware(request, handler):
     session_id = request.cookies.get('session_id')
     if session_id is not None:
         async with request.app.database.acquire() as conn:
-            (userinfo, ) = await state.get_site_session(conn, session_id)
+            row = await state.get_site_session(conn, session_id)
+            if row is not None:
+                (userinfo, ) = row
+            else:
+                # Session expired?
+                userinfo = None
     else:
         userinfo = None
     request.user = userinfo
@@ -506,6 +511,20 @@ if __name__ == '__main__':
                 for item in await state.iter_packages(conn)
                 if not item.removed]
         return await generate_maintainer_list(packages)
+
+    @html_template(
+        'maintainer-index.html',
+        headers={'Cache-Control': 'max-age=600'})
+    async def handle_maintainer_index(request):
+        if request.user:
+            email = request.user['email']
+        else:
+            email = request.query.get('email')
+        if email:
+            raise web.HTTPFound(
+                request.app.router['maintainer-overview-short'].url_for(
+                    maintainer=email))
+        return {}
 
     @html_template(
         'package-overview.html', 
@@ -1080,6 +1099,9 @@ if __name__ == '__main__':
     app.router.add_get(
         '/maintainer/{maintainer}', handle_maintainer_overview,
         name='maintainer-overview')
+    app.router.add_get(
+        '/m/', handle_maintainer_index,
+        name='maintainer-index-short')
     app.router.add_get(
         '/m/{maintainer}', handle_maintainer_overview,
         name='maintainer-overview-short')
