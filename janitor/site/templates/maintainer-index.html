@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% block page_title %}Maintainer Overview{% endblock %}
+{% block body %}
+<div class="section" id="maintainer-overview">
+<h1>Maintainer Overview</h1>
+
+{% if openid_configured %}
+<p>
+<a href="/login?url={{ url | urlencode }}">Log in</a> to see your packages, or
+enter a maintainer e-mail address. </p>
+{% endif %}
+
+<form method="GET"><p>Maintainer: <input type="text" name="email"/></p></form> 
+
+{% endblock %}
