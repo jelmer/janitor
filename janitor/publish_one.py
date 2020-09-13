@@ -27,6 +27,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    full_branch_url,
     )
 from silver_platter.proposal import (
     EmptyMergeProposal,
@@ -402,7 +403,8 @@ def publish(
                 code='diverged-branches')
         except UnsupportedHoster:
             raise PublishFailure(
-                description='Hoster unsupported: %s.' % main_branch.user_url,
+                description='Hoster unsupported: %s.' % (
+                    main_branch.repository.user_url),
                 code='hoster-unsupported')
         except NoSuchProject as e:
             raise PublishFailure(
@@ -410,7 +412,8 @@ def publish(
                 code='project-not-found')
         except ForkingDisabled:
             raise PublishFailure(
-                description='Forking disabled: %s' % main_branch.user_url,
+                description='Forking disabled: %s' % (
+                    main_branch.repository.user_url),
                 code='forking-disabled')
         except PermissionDenied as e:
             raise PublishFailure(
@@ -745,7 +748,7 @@ def publish_one(
         existing_proposal = None
         if mode == MODE_PUSH:
             warning('Unsupported hoster (%s), will attempt to push to %s',
-                    e, main_branch.user_url)
+                    e, full_branch_url(main_branch))
         hoster = None
     else:
         try:

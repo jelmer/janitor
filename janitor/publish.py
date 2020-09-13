@@ -60,6 +60,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    full_branch_url,
     )
 
 from breezy.errors import PermissionDenied
@@ -257,7 +258,7 @@ async def publish_one(
         'command': command,
         'subworker_result': subworker_result,
         'main_branch_url': main_branch_url.rstrip('/'),
-        'local_branch_url': local_branch.user_url,
+        'local_branch_url': full_branch_url(local_branch),
         'mode': mode,
         'log_id': log_id,
         'require-binary-diff': require_binary_diff,

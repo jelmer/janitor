@@ -75,6 +75,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    full_branch_url,
     )
 
 from . import (
@@ -396,7 +397,8 @@ async def open_branch_with_fallback(
             else:
                 if branch:
                     await state.update_branch_url(
-                        conn, pkg, 'Git', branch.user_url.rstrip('/'))
+                        conn, pkg, 'Git',
+                        full_branch_url(branch).rstrip('/'))
                     return branch
         raise
 
@@ -562,8 +564,8 @@ class ActiveRemoteRun(ActiveRun):
             duration = datetime.now() - self.last_keepalive
             if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL*2)):
                 warning(
-                    'No keepalives received from %s for %s in %r, aborting.',
-                    self.worker_name, self.log_id, duration)
+                    'No keepalives received from %s for %s in %d, aborting.',
+                    self.worker_name, self.log_id, duration.total_seconds())
                 result = JanitorResult(
                     self.queue_item.package, log_id=self.log_id,
                     branch_url=self.queue_item.branch_url,
@@ -598,7 +600,7 @@ async def open_canonical_main_branch(
             description=e.description, revision=None)
         raise
     else:
-        branch_url = main_branch.user_url
+        branch_url = full_branch_url(main_branch)
         await state.update_branch_status(
             conn, queue_item.branch_url, branch_url,
             status='success', revision=main_branch.last_revision())
@@ -799,7 +801,7 @@ class ActiveLocalRun(ActiveRun):
                     get_vcs_abbreviation(main_branch.repository))
 
             if resume_branch is not None:
-                note('Resuming from %s', resume_branch.user_url)
+                note('Resuming from %s', full_branch_url(resume_branch))
 
             cached_branch_url = vcs_manager.get_branch_url(
                 self.queue_item.package, 'master',
@@ -815,7 +817,7 @@ class ActiveLocalRun(ActiveRun):
                     description='Missing cache branch for %s' %
                                 self.queue_item.package,
                     logfilenames=[])
-            note('Using cached branch %s', main_branch.user_url)
+            note('Using cached branch %s', full_branch_url(main_branch))
             resume_branch = vcs_manager.get_branch(
                 self.queue_item.package, suite_config.branch_name)
             cached_branch_url = None
@@ -836,10 +838,10 @@ class ActiveLocalRun(ActiveRun):
         try:
             self._task = asyncio.create_task(asyncio.wait_for(
                 invoke_subprocess_worker(
-                    worker_kind, main_branch.user_url.rstrip('/'), env,
+                    worker_kind, full_branch_url(main_branch).rstrip('/'), env,
                     self.queue_item.command, self.output_directory,
                     resume_branch_url=(
-                        resume_branch.user_url if resume_branch else None),
+                        full_branch_url(resume_branch) if resume_branch else None),
                     cached_branch_url=cached_branch_url, pre_check=pre_check,
                     post_check=post_check,
                     build_command=build_command,
@@ -857,13 +859,13 @@ class ActiveLocalRun(ActiveRun):
         except asyncio.CancelledError:
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
-                branch_url=main_branch.user_url, code='cancelled',
+                branch_url=full_branch_url(main_branch), code='cancelled',
                 description='Job cancelled',
                 logfilenames=[])
         except asyncio.TimeoutError:
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
-                branch_url=main_branch.user_url, code='timeout',
+                branch_url=full_branch_url(main_branch), code='timeout',
                 description='Run timed out after %d seconds' %
                             overall_timeout,  # type: ignore
                 logfilenames=[])
@@ -886,7 +888,7 @@ class ActiveLocalRun(ActiveRun):
 
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
-                branch_url=main_branch.user_url, code=code,
+                branch_url=full_branch_url(main_branch), code=code,
                 description=description,
                 logfilenames=logfilenames)
 
@@ -901,14 +903,15 @@ class ActiveLocalRun(ActiveRun):
         if worker_result.code is not None:
             return JanitorResult(
                 self.queue_item.package, log_id=self.log_id,
-                branch_url=main_branch.user_url, worker_result=worker_result,
+                branch_url=full_branch_url(main_branch),
+                worker_result=worker_result,
                 logfilenames=logfilenames, branch_name=(
                     resume_branch_name
                     if worker_result.code == 'nothing-to-do' else None))
 
         result = JanitorResult(
             self.queue_item.package, log_id=self.log_id,
-            branch_url=main_branch.user_url,
+            branch_url=full_branch_url(main_branch),
             code='success', worker_result=worker_result,
             logfilenames=logfilenames)
 
@@ -925,7 +928,8 @@ class ActiveLocalRun(ActiveRun):
                 os.path.join(self.output_directory, self.queue_item.package))
         except (BranchMissing, BranchUnavailable) as e:
             return JanitorResult(
-                self.queue_item.package, self.log_id, main_branch.user_url,
+                self.queue_item.package, self.log_id,
+                full_branch_url(main_branch),
                 description='result branch unavailable: %s' % e,
                 code='result-branch-unavailable',
                 worker_result=worker_result,
@@ -1303,7 +1307,7 @@ async def handle_assign(request):
             resume_branch = None
             vcs_type = item.vcs_type
         else:
-            active_run.main_branch_url = main_branch.user_url
+            active_run.main_branch_url = full_branch_url(main_branch)
             vcs_type = get_vcs_abbreviation(main_branch.repository)
             if not item.refresh:
                 resume_branch = await open_resume_branch(
