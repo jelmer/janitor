@@ -44,6 +44,7 @@ from lintian_brush.vcs import (
 from silver_platter.utils import (
     open_branch_containing,
     open_branch,
+    full_branch_url,
     BranchMissing,
     BranchUnavailable,
     BranchUnsupported,
@@ -219,7 +220,7 @@ def mirror_branches(vcs_result_dir: str, pkg: str,
             if public_master_branch:
                 try:
                     target_branch.set_stacked_on_url(
-                        public_master_branch.user_url)
+                        full_branch_url(public_master_branch))
                 except IncompatibleRepositories:
                     pass
             try:

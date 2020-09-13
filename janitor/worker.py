@@ -90,6 +90,7 @@ from silver_platter.debian.upstream import (
 )
 
 from silver_platter.utils import (
+    full_branch_url,
     run_pre_check,
     run_post_check,
     PreCheckFailed,
@@ -712,7 +713,7 @@ class NewUpstreamWorker(SubWorker):
             metadata['upstream_version'] = result.new_upstream_version
             if result.upstream_branch:
                 metadata['upstream_branch_url'] = (
-                    result.upstream_branch.user_url)
+                    full_branch_url(result.upstream_branch))
                 metadata['upstream_branch_browse'] = (
                     result.upstream_branch_browse)
         if self.args.import_only:
@@ -918,7 +919,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     cached_branch_url, e)
             cached_branch = None
         else:
-            note('Using cached branch %s', cached_branch.user_url)
+            note('Using cached branch %s', full_branch_url(cached_branch))
     else:
         cached_branch = None
 
@@ -932,7 +933,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         except BranchMissing as e:
             raise WorkerFailure('worker-resume-branch-missing', str(e))
         else:
-            note('Resuming from branch %s', resume_branch.user_url)
+            note('Resuming from branch %s', full_branch_url(resume_branch))
     else:
         resume_branch = None
 
