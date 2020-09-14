@@ -67,15 +67,6 @@ async def update_package_metadata(
                     default_mapping.revision_id_foreign_to_bzr(
                         package.commit_id.encode('ascii')))
 
-        if vcs_url and package.vcs_branch:
-            (repo_url, orig_branch, subpath) = split_vcs_url(vcs_url)
-            if orig_branch != package.vcs_branch:
-                new_vcs_url = unsplit_vcs_url(
-                    repo_url, package.vcs_branch, subpath)
-                trace.note('Fixing up branch name from vcswatch: %s -> %s',
-                           vcs_url, new_vcs_url)
-                vcs_url = new_vcs_url
-
         if package.vcs_type:
             # Drop the subpath, we're storing it separately.
             (url, branch, subpath) = split_vcs_url(vcs_url)

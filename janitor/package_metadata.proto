@@ -13,8 +13,9 @@ message PackageMetadata {
 
    optional string vcs_type = 5;
    optional string vcs_url = 6;
-   optional string vcs_branch = 7;
+   // 7 was vcs_branch
    optional string vcs_browser = 8;
+
    optional string commit_id = 9;
    optional string vcswatch_status = 10;
    optional string archive_version = 11;
