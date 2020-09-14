@@ -127,8 +127,8 @@ async def main():
                 package.vcs_url = unsplit_vcs_url(
                     repo_url, vcswatch_branch, subpath)
                 sys.stderr.write(
-                    'Fixing up branch name from vcswatch: %s -> %s\n',
-                    vcswatch_vcs_url, package.vcs_url)
+                    'Fixing up branch name from vcswatch: %s -> %s\n' % (
+                    vcswatch_vcs_url, package.vcs_url))
             else:
                 package.vcs_url = vcswatch_vcs_url
             package.vcs_browser = vcswatch_vcs_browser
