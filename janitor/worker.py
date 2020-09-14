@@ -97,6 +97,7 @@ from silver_platter.utils import (
     PostCheckFailed,
     open_branch,
     BranchMissing,
+    BranchUnsupported,
     BranchUnavailable,
 )
 
@@ -905,6 +906,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             'worker-branch-unavailable', msg)
     except BranchMissing as e:
         raise WorkerFailure('worker-branch-missing', str(e))
+    except BranchUnsupported as e:
+        raise WorkerFailure('worker-branch-unsupported', str(e))
 
     if cached_branch_url:
         try:
