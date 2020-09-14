@@ -17,7 +17,10 @@
 
 """Exporting of upstream metadata from UDD."""
 
+import sys
+
 from debian.changelog import Version
+from debmutate.vcs import unsplit_vcs_url, split_vcs_url
 from email.utils import parseaddr
 from google.protobuf import text_format  # type: ignore
 from typing import List, Optional, Iterator, AsyncIterator, Tuple
@@ -43,16 +46,16 @@ def extract_uploader_emails(uploaders: str) -> List[str]:
 async def iter_packages_with_metadata(
         udd: UDD, packages: Optional[List[str]] = None
         ) -> AsyncIterator[Tuple[
-            str, str, str, int, str, str,
-            str, str, str, str, Version, Version]]:
+            str, str, str, int, str, str, str, str,
+            str, str, str, str, str, Version, Version]]:
     args = []
     query = """
 select distinct on (sources.source) sources.source,
 sources.maintainer_email, sources.uploaders, popcon_src.insts,
-coalesce(vcswatch.vcs, sources.vcs_type),
-coalesce(vcswatch.url, sources.vcs_url),
+vcswatch.vcs, sources.vcs_type,
+vcswatch.url, sources.vcs_url,
 vcswatch.branch,
-coalesce(vcswatch.browser, sources.vcs_browser),
+vcswatch.browser, sources.vcs_browser,
 commit_id,
 status as vcswatch_status,
 sources.version,
@@ -104,9 +107,11 @@ async def main():
         removal.version = str(version)
         print(pl)
 
-    async for (name, maintainer_email, uploaders, insts, vcs_type, vcs_url,
-         vcs_branch, vcs_browser, commit_id, vcswatch_status, sid_version,
-         vcswatch_version) in iter_packages_with_metadata(
+    async for (name, maintainer_email, uploaders, insts, vcswatch_vcs_type,
+               control_vcs_type, vcswatch_vcs_url, control_vcs_url,
+               vcswatch_branch, vcswatch_vcs_browser,
+               control_vcs_browser, commit_id, vcswatch_status,
+               sid_version, vcswatch_version) in iter_packages_with_metadata(
                     udd, args.packages):
         pl = PackageList()
         package = pl.package.add()
@@ -115,14 +120,22 @@ async def main():
         package.uploader_email.extend(extract_uploader_emails(uploaders))
         if insts is not None:
             package.insts = insts
-        if vcs_type:
-            package.vcs_type = vcs_type
-        if vcs_url:
-            package.vcs_url = vcs_url
-        if vcs_branch:
-            package.vcs_branch = vcs_branch
-        if vcs_browser:
-            package.vcs_browser = vcs_browser
+        if vcswatch_vcs_type:
+            package.vcs_type = vcswatch_vcs_type
+            repo_url, oldbranch, subpath = split_vcs_url(vcswatch_vcs_url)
+            if oldbranch != vcswatch_branch:
+                package.vcs_url = unsplit_vcs_url(
+                    repo_url, vcswatch_branch, subpath)
+                sys.stderr.write(
+                    'Fixing up branch name from vcswatch: %s -> %s\n',
+                    vcswatch_vcs_url, package.vcs_url)
+            else:
+                package.vcs_url = vcswatch_vcs_url
+            package.vcs_browser = vcswatch_vcs_browser
+        elif control_vcs_type:
+            package.vcs_type = control_vcs_type
+            package.vcs_url = control_vcs_url
+            package.vcs_browser = control_vcs_browser
         if commit_id:
             package.commit_id = commit_id
         if vcswatch_status:
