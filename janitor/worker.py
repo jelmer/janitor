@@ -954,6 +954,12 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             ws.main_branch.last_revision().decode())
 
         if not control_file_present(ws.local_tree, subpath):
+            if ws.local_tree.has_filename(
+                    os.path.join(subpath, 'debian', 'debcargo.toml')):
+                raise WorkerFailure(
+                    'debcargo-package',
+                    'This is a debcargo package, '
+                    'which does not have a control file')
             raise WorkerFailure(
                 'missing-control-file',
                 'missing control file: debian/control')
