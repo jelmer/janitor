@@ -111,6 +111,10 @@ from .trace import (
     note,
     warning,
 )
+from .vcs import (
+    BranchOpenFailure,
+    open_branch_ext,
+    )
 
 
 # Whether to trust packages enough to run code from them,
@@ -895,19 +899,10 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
     note('Opening branch at %s', vcs_url)
     try:
-        main_branch = open_branch(
+        main_branch = open_branch_ext(
             vcs_url, possible_transports=possible_transports)
-    except BranchUnavailable as e:
-        if e.url in str(e):
-            msg = str(e)
-        else:
-            msg = '%s: %s' % (str(e), e.url)
-        raise WorkerFailure(
-            'worker-branch-unavailable', msg)
-    except BranchMissing as e:
-        raise WorkerFailure('worker-branch-missing', str(e))
-    except BranchUnsupported as e:
-        raise WorkerFailure('worker-branch-unsupported', str(e))
+    except BranchOpenFailure as e:
+        raise WorkerFailure('worker-%s' % e.code, e.description)
 
     if cached_branch_url:
         try:
