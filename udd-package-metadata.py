@@ -128,14 +128,16 @@ async def main():
                     repo_url, vcswatch_branch, subpath)
                 sys.stderr.write(
                     'Fixing up branch name from vcswatch: %s -> %s\n' % (
-                    vcswatch_vcs_url, package.vcs_url))
+                     vcswatch_vcs_url, package.vcs_url))
             else:
                 package.vcs_url = vcswatch_vcs_url
-            package.vcs_browser = vcswatch_vcs_browser
+            if vcswatch_vcs_browser:
+                package.vcs_browser = vcswatch_vcs_browser
         elif control_vcs_type:
             package.vcs_type = control_vcs_type
             package.vcs_url = control_vcs_url
-            package.vcs_browser = control_vcs_browser
+            if control_vcs_browser:
+                package.vcs_browser = control_vcs_browser
         if commit_id:
             package.commit_id = commit_id
         if vcswatch_status:
