@@ -104,6 +104,23 @@ class DpkgUnwantedBinaryFiles(Problem):
         return "Tree has unwanted binary files."
 
 
+class DpkgBinaryFileChanged(Problem):
+
+    kind = 'changed-binary-files'
+
+    def __init__(self, paths):
+        self.paths = paths
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.paths)
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.paths == other.paths
+
+    def __str__(self):
+        return "Tree has binary files with changes: %r" % self.paths
+
+
 class MissingControlFile(Problem):
 
     kind = 'missing-control-file'
@@ -231,6 +248,17 @@ class InconsistentSourceFormat(Problem):
         return "Inconsistent source format between version and source format"
 
 
+class DpkgSourcPackFailed(Problem):
+
+    kind = 'dpkg-source-pack-failed'
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return "Packing source directory failed."
+
+
 def find_preamble_failure_description(lines: List[str]) -> Tuple[
         Optional[int], Optional[str], Optional[Problem]]:
     OFFSET = 20
@@ -276,6 +304,18 @@ def find_preamble_failure_description(lines: List[str]) -> Tuple[
             'tar: .*: Cannot write: No space left on device', line)
         if m:
             err = NoSpaceOnDevice()
+            return lineno + 1, line, err
+        m = re.match(
+            'dpkg-source: error: cannot represent change to (.*): '
+            'binary file contents changed', line)
+        if m:
+            err = DpkgBinaryFileChanged([m.group(1)])
+            return lineno + 1, line, err
+
+        m = re.match(
+            'E: Failed to package source directory (.*)', line)
+        if m:
+            err = DpkgSourcPackFailed()
             return lineno + 1, line, err
 
     return None, None, None
