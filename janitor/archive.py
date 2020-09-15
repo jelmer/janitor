@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, UnixConnector
+from aiohttp import ClientSession, UnixConnector, ClientTimeout
 from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
 import json
@@ -353,10 +353,10 @@ class AptlyError(Exception):
         self.message = message
 
 
-async def aptly_call(aptly_session, method, path, json=None, params=None):
+async def aptly_call(aptly_session, method, path, json=None, params=None, timeout=None):
     async with aptly_session.request(
             method=method, url='http://localhost/api/' + path, json=json,
-            params=params) as resp:
+            params=params, timeout=timeout) as resp:
         if resp.status // 100 != 2:
             raise AptlyError(
                 'error %d in /api/%s: %s' % (
@@ -375,9 +375,13 @@ async def do_publish(
     loc = "%s:%s" % (storage, prefix)
     if (storage, prefix, suite) in publish:
         params = {}
-        await aptly_call(
-            aptly_session, 'PUT',
-            'publish/%s/%s' % (loc, suite), json=params)
+        try:
+            await aptly_call(
+                aptly_session, 'PUT',
+                'publish/%s/%s' % (loc, suite), json=params,
+                timeout=ClientTimeout(30 * 60))
+        except asyncio.exceptions.TimeoutError:
+            raise AptlyError('timeout while publishing %s' % suite)
     else:
         params = {
             'SourceKind': 'local',
