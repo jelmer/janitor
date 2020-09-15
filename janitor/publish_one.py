@@ -551,11 +551,7 @@ These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
         self.applied = result['applied-hints']
 
     def allow_create_proposal(self):
-        for hint in self.applied:
-            kind = hint['link'].rsplit('#', 1)[1]
-            if kind in ('file-conflict', ):
-                return True
-        return False
+        return True
 
     def push_colocated(self):
         return False
