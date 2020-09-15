@@ -375,6 +375,8 @@ class VcsManager(object):
             repo = self.get_repository(package)
         except NotBranchError:
             return None
+        if repo is None:
+            return None
         return get_vcs_abbreviation(repo)
 
 
