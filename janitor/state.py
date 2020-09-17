@@ -446,7 +446,7 @@ FROM
     merge_proposal
 LEFT JOIN run ON merge_proposal.revision = run.revision
 """
-    if package:
+    if package is not None:
         if isinstance(package, list):
             args.append(package)
             query += " WHERE run.package = ANY($1::text[])"
