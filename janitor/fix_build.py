@@ -1084,7 +1084,7 @@ def build_incrementally(
                     and len(fixed_errors) > max_iterations:
                 warning('Last fix did not address the issue. Giving up.')
                 raise
-            reset_tree(local_tree, subpath=subpath)
+            reset_tree(local_tree, local_tree.basis_tree(), subpath=subpath)
             if e.context[0] == 'build':
                 context = BuildDependencyContext(
                     local_tree, subpath=subpath, committer=committer,
