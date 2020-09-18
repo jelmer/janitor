@@ -325,14 +325,16 @@ async def main():
 
 
 async def do_schedule_control(
-        conn: asyncpg.Connection, package: str, main_branch_revision: bytes,
+        conn: asyncpg.Connection, package: str,
+        main_branch_revision: Optional[bytes],
         offset: Optional[int] = None, refresh: bool = False,
         requestor: Optional[str] = None) -> Tuple[int, timedelta]:
+    command = ['just-build']
+    if main_branch_revision is not None:
+        command.append('--revision=%s' % main_branch_revision.decode('utf-8'))
     return await do_schedule(
         conn, package, 'unchanged', offset=offset, refresh=refresh,
-        requestor=requestor,
-        command=[
-            'just-build --revision=%s' % main_branch_revision.decode('utf-8')])
+        requestor=requestor, command=command)
 
 
 class PublishPolicyUnavailable(Exception):
