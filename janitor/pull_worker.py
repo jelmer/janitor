@@ -17,7 +17,7 @@
 
 import argparse
 import asyncio
-from aiohttp import ClientSession, MultipartWriter, BasicAuth
+from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
 import functools
@@ -49,13 +49,15 @@ from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
 
-from janitor.sbuild_log import Problem
 from janitor.trace import note
 from janitor.worker import (
     WorkerFailure,
     process_package,
     DEFAULT_BUILD_COMMAND,
     )
+
+
+DEFAULT_UPLOAD_TIMEOUT = ClientTimeout(30 * 60)
 
 
 class ResultUploadFailure(Exception):
@@ -99,7 +101,9 @@ async def upload_results(
     with bundle_results(metadata, output_directory) as mpwriter:
         finish_url = urljoin(
             base_url, 'active-runs/%s/finish' % run_id)
-        async with session.post(finish_url, data=mpwriter) as resp:
+        async with session.post(
+                finish_url, data=mpwriter,
+                timeout=DEFAULT_UPLOAD_TIMEOUT) as resp:
             if resp.status == 404:
                 resp_json = await resp.json()
                 raise ResultUploadFailure(resp_json['reason'])
