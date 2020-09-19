@@ -48,6 +48,7 @@ async def metrics(request):
 
 @web.middleware
 async def metrics_middleware(request, handler):
+    note('Request: %s' % request.url)
     start_time = time.time()
     route = request.match_info.route.name
     requests_in_progress_gauge.labels(request.method, route).inc()
