@@ -234,6 +234,28 @@ class UScanRequestVersionMissing(Problem):
         return isinstance(self, type(other)) and self.version == other.version
 
 
+class UScanFailed(Problem):
+
+    kind = 'uscan-failed'
+
+    def __init__(self, url, reason):
+        self.url = url
+        self.reason = reason
+
+    def __str__(self):
+        return "UScan failed to download %s: %s." % (
+            self.url, self.reason)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.url, self.reason)
+
+    def __eq__(self, other):
+        return (
+            isinstance(self, type(other)) and
+            self.url == other.url and
+            self.reason == other.reason)
+
+
 class InconsistentSourceFormat(Problem):
 
     kind = 'inconsistent-source-format'
@@ -351,7 +373,21 @@ def parse_brz_error(line: str) -> Tuple[Optional[Problem], str]:
     if m:
         error = UScanRequestVersionMissing(m.group(2))
         return (error, line)
-    return (None, line)
+    m = re.match(
+        r'UScan failed to run: In directory ., downloading \s+'
+        r'(.*) failed: (.*)', line)
+    if m:
+        error = UScanFailed(m.group(1), m.group(2))
+        return (error, line)
+    m = re.match(
+        r'UScan failed to run: In watchfile debian/watch, '
+        r'reading webpage\n  (.*) failed: (.*)', line)
+    if m:
+        error = UScanFailed(m.group(1), m.group(2))
+        return (error, line)
+    if line.startswith('UScan failed to run'):
+        return (None, line)
+    return (None, line.split('\n')[0])
 
 
 class MissingRevision(Problem):
@@ -499,10 +535,14 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
                         error.revision)
                     break
             else:
-                for line in reversed(paragraphs[None][-8:]):
+                for i in range(len(paragraphs[None]) - 1, 0, -1):
+                    line = paragraphs[None][i]
                     if line.startswith('brz: ERROR: '):
-                        (error, description) = parse_brz_error(
-                            line[len('brz: ERROR: '):])
+                        rest = [line[len('brz: ERROR: '):]]
+                        for n in paragraphs[None][i+1:]:
+                            if n.startswith(' '):
+                                rest.append(n)
+                        (error, description) = parse_brz_error(''.join(rest))
                         break
 
     return SbuildFailure(
