@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+import operator
+
 from . import env, json_chart_data, html_template
 from aiohttp import web
 from .. import state
@@ -154,6 +156,45 @@ from first_run_time%s) as r where mod(rn, 200) = 0
         for (start_time, c) in await conn.fetch(query, *args)]
 
 
+HOST_RENAMES = {
+    'launchpad.net': 'launchpad',
+    'code.launchpad.net': 'launchpad',
+    'bazaar.launchpad.net': 'launchpad',
+    'git.launchpad.net': 'launchpad',
+    'anonscm.debian.org': 'alioth',
+    'git.debian.org': 'alioth',
+    'bzr.debian.org': 'alioth',
+    'hg.debian.org': 'alioth',
+    'svn.debian.org': 'alioth',
+    'alioth.debian.org': 'alioth',
+    'salsa.debian.org': 'salsa',
+    'git.code.sf.net': 'sourceforge',
+    'hg.code.sf.net': 'sourceforge',
+    'svn.code.sf.net': 'sourceforge',
+}
+
+
+@json_chart_data(max_age=60)
+async def handle_package_hosters(request, conn):
+    from urllib.parse import urlparse
+    query = "select name, vcs_type, branch_url from package where not removed"
+
+    hosters = {}
+    for name, vcs, url in await conn.fetch(query):
+        host = urlparse(url)[1]
+        host = host.split(':')[0]
+        if '@' in host:
+            host = host.split('@')[1]
+        name = HOST_RENAMES.get(host, host)
+        hosters.setdefault((name, vcs), 0)
+        hosters[(name, vcs)] += 1
+
+    return [
+        (name, vcs, count) for (name, vcs), count in sorted(
+            hosters.items(), key=operator.itemgetter(1),
+            reverse=True)]
+
+
 def stats_app(database, config, external_url):
     app = web.Application()
     app.jinja_env = env
@@ -176,4 +217,7 @@ def stats_app(database, config, external_url):
     app.router.add_get(
         '/+chart/burndown', handle_graph_burndown,
         name='graph-burndown')
+    app.router.add_get(
+        '/+chart/package-hosts', handle_package_hosters,
+        name='package-hosts')
     return app

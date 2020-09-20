@@ -226,6 +226,28 @@ new Chart.Scatter($("#time-to-merge"), {
 });
 </script>
 
+<h2>Package Count per Hoster</h2>
+
+<canvas id="package-host-chart" width="800" height="450"></canvas>
+<script>
+var package_host_chart;
+$.getJSON("/cupboard/stats/+chart/package-hosts", function (json) {
+package_host_chart = new Chart($("#package-host-chart"), {
+    type: 'pie',
+    data: {
+       labels: $.map(json, function(a) {
+            if (a[0] == null) { return "no vcs" }
+            return a[0] + " (" + a[1] + ")";
+       }),
+       datasets: [{ data: $.map(json, function(a) { return a[2]; } }],
+    },
+    options: {
+        title: { display: true, text: 'Package hosts' },
+    },
+});
+});
+</script>
+
 </div>
 {% endblock %}
 <!-- vim: expandtab -->
