@@ -112,7 +112,7 @@ def get_latest_changelog_version(local_tree, subpath=''):
 def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
           distribution=None, subpath='', source_date_epoch=None):
     args = [sys.executable, '-m', 'breezy', 'builddeb',
-            '--builder=%s' % build_command]
+            '--guess-upstream-branch-url', '--builder=%s' % build_command]
     if result_dir:
         args.append('--result-dir=%s' % result_dir)
     outf.write('Running %r\n' % (build_command, ))
