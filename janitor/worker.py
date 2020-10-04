@@ -46,7 +46,12 @@ from silver_platter.debian import (
     MissingUpstreamTarball,
     Workspace,
     pick_additional_colocated_branches,
+    control_files_in_root,
 )
+from silver_platter.debian.changer import (
+    ChangerError,
+    DebianChanger,
+    )
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
     get_fixers,
@@ -148,6 +153,8 @@ class SubWorkerResult(object):
 
 class SubWorker(object):
 
+    name: str
+
     def __init__(self, command: List[str], env: Dict[str, str]) -> None:
         """Initialize a subworker.
 
@@ -174,6 +181,30 @@ class SubWorker(object):
         raise NotImplementedError(self.make_changes)
 
 
+class ChangerWorker(SubWorker):
+
+    changer_cls: Type[DebianChanger]
+
+    def __init__(self, command, env):
+        self.committer = env.get('COMMITTER')
+        self.changer = self.changer_cls()
+        subparser = argparse.ArgumentParser(
+            prog=self.name, parents=[common_parser])
+        self.changer.setup_parser(subparser)
+        self.args = subparser.parse_args(command)
+
+    def make_changes(self, local_tree, subpath, report_context, metadata,
+                     base_metadata):
+        try:
+            result = self.changer.make_changes(
+                local_tree, subpath=subpath, committer=self.committer,
+                update_changelog=False)
+        except ChangerError as e:
+            raise WorkerFailure(e.category, e.summary)
+
+        return SubWorkerResult.from_changer_result(result=result)
+
+
 common_parser = argparse.ArgumentParser(add_help=False)
 common_parser.add_argument(
     '--no-update-changelog', action="store_false", default=None,
@@ -183,73 +214,9 @@ common_parser.add_argument(
     help="force updating of the changelog", default=None)
 
 
-class MultiArchHintsWorker(SubWorker):
-
-    def __init__(self, command, env):
-        self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(
-            prog='multiarch-fix', parents=[common_parser])
-        from silver_platter.debian.multiarch import MultiArchHintsChanger
-        self.changer = MultiArchHintsChanger()
-        self.changer.setup_parser(subparser)
-        self.args = subparser.parse_args(command)
-
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
-        """Make the actual changes to a tree.
-
-        Args:
-          local_tree: Tree to make changes to
-          report_context: report context
-          metadata: JSON Dictionary that can be used for storing results
-          base_metadata: Optional JSON Dictionary with results of
-            any previous runs this one is based on
-          subpath: Path in the branch where the package resides
-        """
-        from lintian_brush import NoChanges
-        update_changelog = self.args.update_changelog
-        try:
-            cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
-        except FileNotFoundError:
-            pass
-        else:
-            if update_changelog is None:
-                update_changelog = cfg.update_changelog()
-        if control_files_in_root(local_tree, subpath):
-            raise WorkerFailure(
-                'control-files-in-root',
-                'control files live in root rather than debian/ '
-                '(LarstIQ mode)')
-
-        try:
-            with local_tree.lock_write():
-                result = self.changer.make_changes(
-                    local_tree, subpath, update_changelog=update_changelog,
-                    committer=self.committer)
-        except NoChanges:
-            raise WorkerFailure('nothing-to-do', 'no hints to apply')
-        except FormattingUnpreservable:
-            raise WorkerFailure(
-                'formatting-unpreservable',
-                'unable to preserve formatting while editing')
-        except GeneratedFile as e:
-            raise WorkerFailure(
-                'generated-file',
-                'unable to edit generated file: %r' % e)
-
-        hint_names = []
-        metadata['applied-hints'] = []
-        for (binary, hint, description, certainty) in result.mutator.changes:
-            entry = dict(hint.items())
-            hint_names.append(entry['link'].split('#')[-1])
-            entry['action'] = description
-            entry['certainty'] = certainty
-            metadata['applied-hints'].append(entry)
-            note('%s: %s' % (binary['Package'], description))
-        return SubWorkerResult.from_changer_result(result=result)
-
-
 class OrphanWorker(SubWorker):
+
+    name = 'orphan'
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
@@ -298,45 +265,10 @@ class OrphanWorker(SubWorker):
         return SubWorkerResult.from_changer_result(result=result)
 
 
-class CMEWorker(SubWorker):
-
-    def __init__(self, command, env):
-        self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(
-            prog='cme-fix', parents=[common_parser])
-        from silver_platter.debian.cme import CMEChanger
-        self.changer = CMEChanger()
-        self.changer.setup_parser(subparser)
-        self.args = subparser.parse_args(command)
-
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
-        """Make the actual changes to a tree.
-
-        Args:
-          local_tree: Tree to make changes to
-          report_context: report context
-          metadata: JSON Dictionary that can be used for storing results
-          base_metadata: Optional JSON Dictionary with results of
-            any previous runs this one is based on
-          subpath: Path in the branch where the package resides
-        """
-        update_changelog = self.args.update_changelog
-        try:
-            cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
-        except FileNotFoundError:
-            pass
-        else:
-            if update_changelog is None:
-                update_changelog = cfg.update_changelog()
-        result = self.changer.make_changes(
-            local_tree, subpath=subpath, update_changelog=update_changelog,
-            committer=self.committer)
-        return SubWorkerResult.from_changer_result(result=result)
-
-
 class LintianBrushWorker(SubWorker):
     """Janitor-specific Lintian Fixer."""
+
+    name = 'lintian-brush'
 
     def __init__(self, command, env):
         from lintian_brush import (
@@ -459,6 +391,8 @@ class LintianBrushWorker(SubWorker):
 
 
 class NewUpstreamWorker(SubWorker):
+
+    name = 'new-upstream'
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
@@ -737,6 +671,8 @@ class NewUpstreamWorker(SubWorker):
 
 class JustBuildWorker(SubWorker):
 
+    name = 'just-build'
+
     def __init__(self, command, env):
         subparser = argparse.ArgumentParser(
             prog='just-build', parents=[common_parser])
@@ -757,40 +693,32 @@ class JustBuildWorker(SubWorker):
         return SubWorkerResult(None, None)
 
 
-class UncommittedWorker(SubWorker):
+class UncommittedWorker(ChangerWorker):
 
-    def __init__(self, command, env):
-        self.committer = env.get('COMMITTER')
-        from silver_platter.debian.uncommitted import UncommittedChanger
-        self.changer = UncommittedChanger()
-        subparser = argparse.ArgumentParser(
-            prog='import-upload', parents=[common_parser])
-        self.changer.setup_parser(subparser)
-        self.args = subparser.parse_args(command)
+    from silver_platter.debian.uncommitted import UncommittedChanger
+    name = 'import-upload'
+    changer_cls = UncommittedChanger
 
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
-        from silver_platter.debian.uncommitted import (
-            NoMissingVersions,
-            TreeUpstreamVersionMissing,
-            TreeVersionNotInArchiveChangelog,
-            )
-        try:
-            result = self.changer.make_changes(
-                local_tree, subpath=subpath, committer=self.committer,
-                update_changelog=False)
-        except NoMissingVersions as e:
-            raise WorkerFailure('nothing-to-do', str(e))
-        except TreeUpstreamVersionMissing as e:
-            raise WorkerFailure('tree-upstream-version-missing', str(e))
-        except TreeVersionNotInArchiveChangelog as e:
-            raise WorkerFailure(
-                'tree-version-not-in-archive-changelog', str(e))
 
-        metadata['tags'] = [
-            (tag_name, str(version))
-            for (tag_name, version) in result.mutator]
-        return SubWorkerResult.from_changer_result(result=result)
+class ScrubObsoleteWorker(ChangerWorker):
+    from silver_platter.debian.scrub_obsolete import ScrubObsoleteChanger
+
+    name = 'scrub-obsolete'
+    changer_cls = ScrubObsoleteChanger
+
+
+class CMEWorker(ChangerWorker):
+
+    from silver_platter.debian.cme import CMEChanger
+    name = 'cme-fix'
+    changer_cls = CMEChanger
+
+
+class MultiArchHintsWorker(ChangerWorker):
+
+    from silver_platter.debian.multiarch import MultiArchHintsChanger
+    name = 'apply-multiarch-fixes'
+    changer_cls = MultiArchHintsChanger
 
 
 class WorkerResult(object):
@@ -827,18 +755,6 @@ def tree_set_changelog_version(
 debian_info = distro_info.DebianDistroInfo()
 
 
-def control_files_in_root(tree: Tree, subpath: str) -> bool:
-    debian_path = os.path.join(subpath, 'debian')
-    if tree.has_filename(debian_path):
-        return False
-    control_path = os.path.join(subpath, 'control')
-    if tree.has_filename(control_path):
-        return True
-    if tree.has_filename(control_path + '.in'):
-        return True
-    return False
-
-
 def control_file_present(tree: Tree, subpath: str) -> bool:
     """Check whether there are any control files present in a tree.
 
@@ -854,6 +770,20 @@ def control_file_present(tree: Tree, subpath: str) -> bool:
         if tree.has_filename(name):
             return True
     return False
+
+
+# TODO(jelmer): Just invoke the silver-platter subcommand
+SUBWORKERS = {
+    swc.name: swc for swc in [
+        LintianBrushWorker,
+        NewUpstreamWorker,
+        JustBuildWorker,
+        MultiArchHintsWorker,
+        OrphanWorker,
+        UncommittedWorker,
+        CMEWorker,
+        ScrubObsoleteWorker,
+        ]}
 
 
 @contextmanager
@@ -876,22 +806,9 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
     metadata['command'] = command
 
     subworker_cls: Type[SubWorker]
-    # TODO(jelmer): sort out this mess:
-    if command[0] == 'lintian-brush':
-        subworker_cls = LintianBrushWorker
-    elif command[0] == 'new-upstream':
-        subworker_cls = NewUpstreamWorker
-    elif command[0] == 'just-build':
-        subworker_cls = JustBuildWorker
-    elif command[0] == 'apply-multiarch-hints':
-        subworker_cls = MultiArchHintsWorker
-    elif command[0] == 'orphan':
-        subworker_cls = OrphanWorker
-    elif command[0] == 'import-upload':
-        subworker_cls = UncommittedWorker
-    elif command[0] == 'cme-fix':
-        subworker_cls = CMEWorker
-    else:
+    try:
+        subworker_cls = SUBWORKERS[command[0]]
+    except KeyError:
         raise WorkerFailure(
             'unknown-subcommand',
             'unknown subcommand %s' % command[0])
