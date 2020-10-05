@@ -47,6 +47,7 @@ from silver_platter.debian import (
     Workspace,
     pick_additional_colocated_branches,
     control_files_in_root,
+    control_file_present,
 )
 from silver_platter.debian.changer import (
     ChangerError,
@@ -102,7 +103,6 @@ from silver_platter.utils import (
     PostCheckFailed,
     open_branch,
     BranchMissing,
-    BranchUnsupported,
     BranchUnavailable,
 )
 
@@ -251,14 +251,8 @@ class OrphanWorker(SubWorker):
             result = self.changer.make_changes(
                 local_tree, subpath=subpath, update_changelog=update_changelog,
                 committer=self.committer)
-        except FormattingUnpreservable:
-            raise WorkerFailure(
-                'formatting-unpreservable',
-                'unable to preserve formatting while editing')
-        except GeneratedFile as e:
-            raise WorkerFailure(
-                'generated-file',
-                'unable to edit generated file: %r' % e)
+        except ChangerError as e:
+            raise WorkerFailure(e.category, e.summary)
         metadata['old_vcs_url'] = result.mutator.old_vcs_url
         metadata['new_vcs_url'] = result.mutator.new_vcs_url
         metadata['pushed'] = result.mutator.pushed
@@ -753,23 +747,6 @@ def tree_set_changelog_version(
 
 
 debian_info = distro_info.DebianDistroInfo()
-
-
-def control_file_present(tree: Tree, subpath: str) -> bool:
-    """Check whether there are any control files present in a tree.
-
-    Args:
-      tree: Tree to check
-      subpath: subpath to check
-    Returns:
-      whether control file is present
-    """
-    for name in ['debian/control', 'debian/control.in', 'control',
-                 'control.in']:
-        name = os.path.join(subpath, name)
-        if tree.has_filename(name):
-            return True
-    return False
 
 
 # TODO(jelmer): Just invoke the silver-platter subcommand
