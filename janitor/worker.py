@@ -214,49 +214,11 @@ common_parser.add_argument(
     help="force updating of the changelog", default=None)
 
 
-class OrphanWorker(SubWorker):
+class OrphanWorker(ChangerWorker):
 
     name = 'orphan'
-
-    def __init__(self, command, env):
-        self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(
-            prog='orphan', parents=[common_parser])
-        from silver_platter.debian.orphan import OrphanChanger
-        self.changer = OrphanChanger(salsa_push=False)
-        self.changer.setup_parser(subparser)
-        self.args = subparser.parse_args(command)
-
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
-        """Make the actual changes to a tree.
-
-        Args:
-          local_tree: Tree to make changes to
-          report_context: report context
-          metadata: JSON Dictionary that can be used for storing results
-          base_metadata: Optional JSON Dictionary with results of
-            any previous runs this one is based on
-          subpath: Path in the branch where the package resides
-        """
-        update_changelog = self.args.update_changelog
-        try:
-            cfg = LintianBrushConfig.from_workingtree(local_tree, subpath)
-        except FileNotFoundError:
-            pass
-        else:
-            if update_changelog is None:
-                update_changelog = cfg.update_changelog()
-        try:
-            result = self.changer.make_changes(
-                local_tree, subpath=subpath, update_changelog=update_changelog,
-                committer=self.committer)
-        except ChangerError as e:
-            raise WorkerFailure(e.category, e.summary)
-        metadata['old_vcs_url'] = result.mutator.old_vcs_url
-        metadata['new_vcs_url'] = result.mutator.new_vcs_url
-        metadata['pushed'] = result.mutator.pushed
-        return SubWorkerResult.from_changer_result(result=result)
+    from silver_platter.debian.orphan import OrphanChanger
+    changer_cls = OrphanChanger
 
 
 class LintianBrushWorker(SubWorker):
