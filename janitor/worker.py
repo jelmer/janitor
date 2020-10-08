@@ -282,7 +282,7 @@ class CMEWorker(ChangerWorker):
 class MultiArchHintsWorker(ChangerWorker):
 
     from silver_platter.debian.multiarch import MultiArchHintsChanger
-    name = 'apply-multiarch-fixes'
+    name = 'apply-multiarch-hints'
     changer_cls = MultiArchHintsChanger
 
 
