@@ -132,6 +132,28 @@ class NoChangesFile(Exception):
     """No changes file found."""
 
 
+class DebianResult(object):
+
+    def __init__(self, build_version=None, build_distribution=None,
+                 changes_filename=None):
+        self.build_version = build_version
+        self.build_distribution = build_distribution
+        self.changes_filename = changes_filename
+
+    @classmethod
+    def from_worker_result(cls, worker_result):
+        build_version = (
+            worker_result.build_version if worker_result else None)
+        build_distribution = (
+            worker_result.build_distribution if worker_result else None)
+        changes_filename = (
+            worker_result.changes_filename if worker_result else None)
+        return cls(
+            build_version=build_version,
+            build_distribution=build_distribution,
+            changes_filename=changes_filename)
+
+
 class JanitorResult(object):
 
     def __init__(self, pkg, log_id, branch_url, description=None,
@@ -142,12 +164,6 @@ class JanitorResult(object):
         self.description = description
         self.branch_url = branch_url
         self.code = code
-        self.build_distribution = (
-            worker_result.build_distribution if worker_result else None)
-        self.build_version = (
-            worker_result.build_version if worker_result else None)
-        self.changes_filename = (
-            worker_result.changes_filename if worker_result else None)
         self.branch_name = branch_name
         self.logfilenames = logfilenames
         if worker_result:
@@ -160,12 +176,14 @@ class JanitorResult(object):
             self.subworker_result = worker_result.subworker
             self.revision = worker_result.revision
             self.value = worker_result.value
+            self.target_result = DebianResult.from_worker_result(worker_result)
         else:
             self.context = None
             self.main_branch_revision = None
             self.revision = None
             self.subworker_result = None
             self.value = None
+            self.target_result = DebianResult()
 
     def json(self):
         return {
@@ -173,9 +191,12 @@ class JanitorResult(object):
             'log_id': self.log_id,
             'description': self.description,
             'code': self.code,
-            'build_distribution': self.build_distribution,
-            'build_version': self.build_version,
-            'changes_filename': self.changes_filename,
+            'target': 'debian',
+            'target-details': {
+                'build_distribution': self.build_distribution,
+                'build_version': self.build_version,
+                'changes_filename': self.changes_filename,
+            },
             'branch_name': self.branch_name,
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
@@ -841,7 +862,8 @@ class ActiveLocalRun(ActiveRun):
                     worker_kind, full_branch_url(main_branch).rstrip('/'), env,
                     self.queue_item.command, self.output_directory,
                     resume_branch_url=(
-                        full_branch_url(resume_branch) if resume_branch else None),
+                        full_branch_url(resume_branch)
+                        if resume_branch else None),
                     cached_branch_url=cached_branch_url, pre_check=pre_check,
                     post_check=post_check,
                     build_command=build_command,
@@ -1109,8 +1131,8 @@ class QueueProcessor(object):
                     active_run.start_time, finish_time,
                     item.command, result.description, item.context,
                     result.context, result.main_branch_revision, result.code,
-                    build_version=result.build_version,
-                    build_distribution=result.build_distribution,
+                    build_version=result.target_result.build_version,
+                    build_distribution=result.target_result.build_distribution,
                     branch_name=result.branch_name, revision=result.revision,
                     subworker_result=result.subworker_result, suite=item.suite,
                     logfilenames=result.logfilenames, value=result.value,
