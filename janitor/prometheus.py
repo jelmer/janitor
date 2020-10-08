@@ -16,10 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import web
-import asyncio
 import time
-
-from janitor.trace import note
 
 from prometheus_client import (
     Counter,
@@ -48,7 +45,6 @@ async def metrics(request):
 
 @web.middleware
 async def metrics_middleware(request, handler):
-    note('Request: %s' % request.url)
     start_time = time.time()
     route = request.match_info.route.name
     requests_in_progress_gauge.labels(request.method, route).inc()
