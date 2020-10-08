@@ -140,6 +140,11 @@ class DebianResult(object):
         self.build_distribution = build_distribution
         self.changes_filename = changes_filename
 
+    def from_directory(self, path, package):
+        (self.target_result.changes_filename,
+         self.target_result.build_version,
+         self.target_result.build_distribution) = find_changes(path, package)
+
     @classmethod
     def from_worker_result(cls, worker_result):
         build_version = (
@@ -938,8 +943,7 @@ class ActiveLocalRun(ActiveRun):
             logfilenames=logfilenames)
 
         try:
-            (result.changes_filename, result.build_version,
-             result.build_distribution) = find_changes(
+            result.target_result.from_directory(
                  self.output_directory, self.queue_item.package)
         except NoChangesFile as e:
             # Oh, well.
