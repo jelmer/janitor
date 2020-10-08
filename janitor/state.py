@@ -1116,7 +1116,7 @@ async def get_run_result_by_revision(
 async def get_last_build_version(
         conn: asyncpg.Connection,
         package: str,
-        suite: str) -> Optional[str]:
+        suite: str) -> Optional[Version]:
     return await conn.fetchval(
         "SELECT build_version FROM run WHERE "
         "build_version IS NOT NULL AND package = $1 AND "
