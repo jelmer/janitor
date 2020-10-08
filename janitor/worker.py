@@ -64,36 +64,6 @@ from silver_platter.debian.lintian import (
 )
 from silver_platter.proposal import Hoster
 from lintian_brush.config import Config as LintianBrushConfig
-from debmutate.reformatting import GeneratedFile, FormattingUnpreservable
-from silver_platter.debian.upstream import (
-    import_upstream,
-    merge_upstream,
-    refresh_quilt_patches,
-    InconsistentSourceFormatError,
-    InvalidFormatUpstreamVersion,
-    DistCommandFailed,
-    NewUpstreamMissing,
-    NewUpstreamTarballMissing,
-    UnparseableChangelog,
-    UpstreamAlreadyImported,
-    UpstreamAlreadyMerged,
-    UpstreamMergeConflicted,
-    UpstreamBranchUnavailable,
-    UpstreamBranchUnknown,
-    NoUpstreamLocationsKnown,
-    PackageIsNative,
-    PreviousVersionTagMissing,
-    UnsupportedRepackFormat,
-    PristineTarError,
-    QuiltError,
-    UScanError,
-    WatchLineWithoutMatches,
-    UpstreamVersionMissingInUpstreamBranch,
-    UpstreamMetadataSyntaxError,
-    MissingChangelogError,
-    QuiltPatchPushFailure,
-    update_packaging,
-)
 
 from silver_platter.utils import (
     full_branch_url,
@@ -112,6 +82,12 @@ from .build import (
     MissingChangesFile,
     SbuildFailure,
 )
+from .dist import (
+    create_dist_schroot,
+    DetailedDistCommandFailed,
+    UnidentifiedError,
+    )
+
 from .trace import (
     note,
     warning,
@@ -346,283 +322,48 @@ class LintianBrushWorker(SubWorker):
             value=value, tags=[])
 
 
-class NewUpstreamWorker(SubWorker):
+class NewUpstreamWorker(ChangerWorker):
 
     name = 'new-upstream'
+    from silver_platter.debian.upstream import (
+        NewUpstreamChanger,
+        )
 
-    def __init__(self, command, env):
-        self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(
-            prog='new-upstream', parents=[common_parser])
-        subparser.add_argument(
-            '--chroot', type=str, help="Name of chroot",
-            default=os.environ.get('CHROOT'))
-        subparser.add_argument(
-            '--snapshot',
-            help='Merge a new upstream snapshot rather than a release',
-            action='store_true')
-        subparser.add_argument(
-            '--import-only', action='store_true',
-            help='Only import new version, do not merge into packaging.')
-        self.args = subparser.parse_args(command)
+    class changer_cls(NewUpstreamChanger):
+
+        def create_dist_from_command(self, tree, package, version, target_dir):
+            from silver_platter.debian.upstream import DistCommandFailed
+            try:
+                return create_dist_schroot(
+                    tree, subdir=package, target_dir=target_dir,
+                    packaging_tree=tree, chroot=self.args.chroot)
+            except DetailedDistCommandFailed:
+                raise
+            except UnidentifiedError as e:
+                traceback.print_exc()
+                lines = [line for line in e.lines if line]
+                if e.secondary:
+                    raise DistCommandFailed(e.secondary[1])
+                elif len(lines) == 1:
+                    raise DistCommandFailed(lines[0])
+                else:
+                    raise DistCommandFailed(
+                        'command %r failed with unidentified error '
+                        '(return code %d)' % (e.argv, e.retcode))
+            except Exception as e:
+                traceback.print_exc()
+                raise DistCommandFailed(str(e))
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
-        from janitor.dist import (
-            create_dist_schroot,
-            DetailedDistCommandFailed,
-            UnidentifiedError,
-            )
-        with local_tree.lock_write():
-            if control_files_in_root(local_tree, subpath):
-                raise WorkerFailure(
-                    'control-files-in-root',
-                    'control files live in root rather than debian/ '
-                    '(LarstIQ mode)')
-
-            def create_dist(tree, package, version, target_dir):
-                try:
-                    return create_dist_schroot(
-                        tree, subdir=package, target_dir=target_dir,
-                        packaging_tree=local_tree, chroot=self.args.chroot)
-                except DetailedDistCommandFailed:
-                    raise
-                except UnidentifiedError as e:
-                    traceback.print_exc()
-                    lines = [line for line in e.lines if line]
-                    if e.secondary:
-                        raise DistCommandFailed(e.secondary[1])
-                    elif len(lines) == 1:
-                        raise DistCommandFailed(lines[0])
-                    else:
-                        raise DistCommandFailed(
-                            'command %r failed with unidentified error '
-                            '(return code %d)' % (e.argv, e.retcode))
-                except Exception as e:
-                    traceback.print_exc()
-                    raise DistCommandFailed(str(e))
-
-            try:
-                if self.args.import_only:
-                    result = import_upstream(
-                        tree=local_tree, subpath=subpath,
-                        snapshot=self.args.snapshot, committer=self.committer,
-                        trust_package=TRUST_PACKAGE,
-                        create_dist=create_dist)
-                else:
-                    result = merge_upstream(
-                        tree=local_tree, subpath=subpath,
-                        snapshot=self.args.snapshot, committer=self.committer,
-                        trust_package=TRUST_PACKAGE,
-                        create_dist=create_dist)
-            except UpstreamAlreadyImported as e:
-                report_context(e.version)
-                metadata['upstream_version'] = e.version
-                error_description = (
-                    "Upstream version %s already imported." % (e.version))
-                raise WorkerFailure('nothing-to-do', error_description)
-            except UnsupportedRepackFormat as e:
-                error_description = (
-                    'Unable to repack file %s to supported tarball format.' % (
-                        os.path.basename(e.location)))
-                raise WorkerFailure(
-                    'unsupported-repack-format', error_description)
-            except UpstreamAlreadyMerged as e:
-                error_description = (
-                    "Last upstream version %s already merged." % e.version)
-                error_code = 'nothing-to-do'
-                report_context(e.version)
-                metadata['upstream_version'] = e.version
-                raise WorkerFailure(error_code, error_description)
-            except NewUpstreamMissing:
-                error_description = "Unable to find new upstream source."
-                error_code = 'new-upstream-missing'
-                raise WorkerFailure(error_code, error_description)
-            except NewUpstreamTarballMissing as e:
-                error_code = 'new-upstream-tarball-missing'
-                error_description = (
-                    'New upstream version (%s/%s) found, but was missing '
-                    'when retrieved as tarball from %r.' % (
-                        e.package, e.version, e.upstream))
-                report_context(e.version)
-                metadata['upstream_version'] = e.version
-                raise WorkerFailure(error_code, error_description)
-            except UpstreamBranchUnavailable as e:
-                error_description = (
-                    "The upstream branch at %s was unavailable: %s" % (
-                        e.location, e.error))
-                error_code = 'upstream-branch-unavailable'
-                if 'Fossil branches are not yet supported' in str(e.error):
-                    error_code = 'upstream-unsupported-vcs-fossil'
-                if 'Mercurial branches are not yet supported.' in str(e.error):
-                    error_code = 'upstream-unsupported-vcs-hg'
-                if 'Subversion branches are not yet supported.' in str(
-                        e.error):
-                    error_code = 'upstream-unsupported-vcs-svn'
-                if 'Darcs branches are not yet supported' in str(e.error):
-                    error_code = 'upstream-unsupported-vcs-darcs'
-                if 'Unsupported protocol for url' in str(e.error):
-                    if 'svn://' in str(e.error):
-                        error_code = 'upstream-unsupported-vcs-svn'
-                    elif 'cvs+pserver://' in str(e.error):
-                        error_code = 'upstream-unsupported-vcs-cvs'
-                    else:
-                        error_code = 'upstream-unsupported-vcs'
-                raise WorkerFailure(error_code, error_description)
-            except UpstreamMergeConflicted as e:
-                error_description = "Upstream version %s conflicted." % (
-                    e.version)
-                error_code = 'upstream-merged-conflicts'
-                report_context(e.version)
-                metadata['upstream_version'] = e.version
-                metadata['conflicts'] = e.conflicts
-                raise WorkerFailure(error_code, error_description)
-            except PreviousVersionTagMissing as e:
-                error_description = (
-                     "Previous upstream version %s missing (tag: %s)" %
-                     (e.version, e.tag_name))
-                error_code = 'previous-upstream-missing'
-                raise WorkerFailure(error_code, error_description)
-            except PristineTarError as e:
-                error_description = ('Error from pristine-tar: %s' % e)
-                error_code = 'pristine-tar-error'
-                raise WorkerFailure(error_code, error_description)
-            except UpstreamBranchUnknown:
-                error_description = (
-                    'The location of the upstream branch is unknown.')
-                error_code = 'upstream-branch-unknown'
-                raise WorkerFailure(error_code, error_description)
-            except PackageIsNative:
-                error_description = (
-                    'Package is native; unable to merge upstream.')
-                error_code = 'native-package'
-                raise WorkerFailure(error_code, error_description)
-            except NoRoundtrippingSupport:
-                error_description = (
-                    'Unable to import upstream repository into '
-                    'packaging repository.')
-                error_code = 'roundtripping-error'
-                raise WorkerFailure(error_code, error_description)
-            except MalformedTransform:
-                traceback.print_exc()
-                error_description = (
-                    'Malformed tree transform during new upstream merge')
-                error_code = 'malformed-transform'
-                raise WorkerFailure(error_code, error_description)
-            except InconsistentSourceFormatError as e:
-                error_description = str(e)
-                error_code = 'inconsistent-source-format'
-                raise WorkerFailure(error_code, error_description)
-            except InvalidFormatUpstreamVersion as e:
-                error_description = (
-                        'Invalid format upstream version: %r' %
-                        e.version)
-                error_code = 'invalid-upstream-version-format'
-                raise WorkerFailure(error_code, error_description)
-            except UnparseableChangelog as e:
-                error_description = str(e)
-                error_code = 'unparseable-changelog'
-                raise WorkerFailure(error_code, error_description)
-            except WatchLineWithoutMatches as e:
-                error_description = str(e)
-                error_code = 'uscan-watch-line-without-matches'
-                raise WorkerFailure(error_code, error_description)
-            except UScanError as e:
-                error_description = str(e)
-                if e.errors == 'OpenPGP signature did not verify.':
-                    error_code = 'upstream-pgp-signature-verification-failed'
-                else:
-                    error_code = 'uscan-error'
-                raise WorkerFailure(error_code, error_description)
-            except UpstreamVersionMissingInUpstreamBranch as e:
-                error_description = (
-                    'Upstream version %s not in upstream branch %r' % (
-                        e.version, e.branch))
-                error_code = 'upstream-version-missing-in-upstream-branch'
-                raise WorkerFailure(error_code, error_description)
-            except UpstreamMetadataSyntaxError as e:
-                error_description = 'Syntax error in upstream metadata: %s' % (
-                        e.error)
-                error_code = 'upstream-metadata-syntax-error'
-                raise WorkerFailure(error_code, error_description)
-            except DistCommandFailed as e:
-                error_description = str(e)
-                error_code = 'dist-command-failed'
-                raise WorkerFailure(error_code, error_description)
-            except DetailedDistCommandFailed as e:
-                error_code = 'dist-' + e.error.kind
-                error_description = str(e.error)
-                raise WorkerFailure(error_code, error_description)
-            except MissingChangelogError as e:
-                error_description = str(e)
-                error_code = 'missing-changelog'
-                raise WorkerFailure(error_code, error_description)
-            except MissingUpstreamTarball as e:
-                error_description = str(e)
-                error_code = 'missing-upstream-tarball'
-                raise WorkerFailure(error_code, error_description)
-            except InvalidNormalization as e:
-                error_description = str(e)
-                error_code = 'invalid-path-normalization'
-                raise WorkerFailure(error_code, error_description)
-            except NoUpstreamLocationsKnown:
-                error_description = (
-                    'No debian/watch file or Repository in '
-                    'debian/upstream/metadata to retrieve new upstream '
-                    'version from.')
-                error_code = 'no-upstream-locations-known'
-                raise WorkerFailure(error_code, error_description)
-
-            report_context(result.new_upstream_version)
-
-            if not self.args.import_only:
-                patch_series_path = os.path.join(
-                    subpath, 'debian/patches/series')
-
-                if local_tree.has_filename(patch_series_path):
-                    try:
-                        refresh_quilt_patches(
-                            local_tree,
-                            old_version=result.old_upstream_version,
-                            new_version=result.new_upstream_version,
-                            committer=self.committer,
-                            subpath=subpath)
-                    except QuiltError as e:
-                        error_description = (
-                            "An error (%d) occurred refreshing quilt patches: "
-                            "%s%s" % (e.retcode, e.stderr, e.extra))
-                        error_code = 'quilt-refresh-error'
-                        raise WorkerFailure(error_code, error_description)
-                    except QuiltPatchPushFailure as e:
-                        error_description = (
-                            "An error occurred refreshing quilt patch %s: %s"
-                            % (e.patch_name, e.actual_error.extra))
-                        error_code = 'quilt-refresh-error'
-                        raise WorkerFailure(error_code, error_description)
-
-                old_tree = local_tree.branch.repository.revision_tree(
-                    result.old_revision)
-                metadata['notes'] = update_packaging(local_tree, old_tree)
-
-            metadata['old_upstream_version'] = result.old_upstream_version
-            metadata['upstream_version'] = result.new_upstream_version
-            if result.upstream_branch:
-                metadata['upstream_branch_url'] = (
-                    full_branch_url(result.upstream_branch))
-                metadata['upstream_branch_browse'] = (
-                    result.upstream_branch_browse)
-        if self.args.import_only:
-            return SubWorkerResult(
-                description="Imported new upstream version %s" % (
-                    result.new_upstream_version),
-                value=None,
-                tags=['upstream/%s' % result.new_upstream_version])
-        else:
-            return SubWorkerResult(
-                description="Merged new upstream version %s" % (
-                    result.new_upstream_version),
-                value=None,
-                tags=['upstream/%s' % result.new_upstream_version])
+        try:
+            return NewUpstreamWorker.make_changes(
+                self,
+                local_tree, subpath, report_context, metadata, base_metadata)
+        except DetailedDistCommandFailed as e:
+            error_code = 'dist-' + e.error.kind
+            error_description = str(e.error)
+            raise WorkerFailure(error_code, error_description)
 
 
 class JustBuildWorker(SubWorker):
@@ -703,7 +444,7 @@ def tree_set_changelog_version(
         cl = Changelog(f)
     if Version(str(cl.version) + '~') > build_version:
         return
-    cl.set_version(build_version)
+    cl.version = build_version
     with open(tree.abspath(cl_path), 'w') as f:
         cl.write_to_open_file(f)
 
