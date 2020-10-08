@@ -18,7 +18,7 @@
 import argparse
 from contextlib import contextmanager
 from datetime import datetime
-from debian.changelog import Changelog, Version, ChangelogCreateError
+from debian.changelog import Changelog, Version
 import distro_info
 import json
 import os
@@ -27,7 +27,6 @@ import sys
 import traceback
 from typing import Callable, Dict, List, Optional, Any, Type, Iterator, Tuple
 
-import breezy
 from breezy import osutils
 from breezy.config import GlobalStack
 from breezy.transport import Transport
@@ -44,18 +43,9 @@ from silver_platter.debian import (
 from silver_platter.debian.changer import (
     ChangerError,
     DebianChanger,
+    ChangerReporter,
     )
-from silver_platter.debian.lintian import (
-    available_lintian_fixers,
-    get_fixers,
-    run_lintian_fixers,
-    has_nontrivial_changes,
-    DEFAULT_ADDON_FIXERS,
-    DEFAULT_MINIMUM_CERTAINTY,
-    calculate_value as lintian_brush_calculate_value,
-)
 from silver_platter.proposal import Hoster
-from lintian_brush.config import Config as LintianBrushConfig
 
 from silver_platter.utils import (
     full_branch_url,
@@ -163,10 +153,13 @@ class ChangerWorker(SubWorker):
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
+        reporter = WorkerReporter(
+            metadata, base_metadata, report_context)
+
         try:
             result = self.changer.make_changes(
                 local_tree, subpath=subpath, committer=self.committer,
-                update_changelog=False)
+                update_changelog=self.args.update_changelog, reporter=reporter)
         except ChangerError as e:
             raise WorkerFailure(e.category, e.summary)
 
@@ -189,129 +182,12 @@ class OrphanWorker(ChangerWorker):
     changer_cls = OrphanChanger
 
 
-class LintianBrushWorker(SubWorker):
+class LintianBrushWorker(ChangerWorker):
     """Janitor-specific Lintian Fixer."""
 
     name = 'lintian-brush'
-
-    def __init__(self, command, env):
-        from lintian_brush import (
-            SUPPORTED_CERTAINTIES,
-            )
-        self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(
-            prog='lintian-brush', parents=[common_parser])
-        subparser.add_argument("tags", nargs='*')
-        subparser.add_argument(
-            '--exclude', action='append', type=str,
-            help="Exclude fixer.")
-        subparser.add_argument(
-            '--compat-release', type=str, default=None,
-            help='Oldest Debian release to be compatible with.')
-        subparser.add_argument(
-            '--propose-addon-only',
-            help='Fixers that should be considered add-on-only.',
-            type=str, action='append', default=DEFAULT_ADDON_FIXERS)
-        subparser.add_argument(
-            '--allow-reformatting', default=None, action='store_true',
-            help='Whether to allow reformatting.')
-        subparser.add_argument(
-            '--minimum-certainty',
-            type=str,
-            choices=SUPPORTED_CERTAINTIES,
-            default=None,
-            help=argparse.SUPPRESS)
-        self.args = subparser.parse_args(command)
-
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
-        from lintian_brush import (
-            version_string as lintian_brush_version_string,
-            )
-        fixers = get_fixers(
-            available_lintian_fixers(), tags=self.args.tags,
-            exclude=self.args.exclude)
-
-        compat_release = self.args.compat_release
-        allow_reformatting = self.args.allow_reformatting
-        minimum_certainty = self.args.minimum_certainty
-        try:
-            cfg = LintianBrushConfig.from_workingtree(local_tree, '')
-        except FileNotFoundError:
-            pass
-        else:
-            if compat_release is None:
-                compat_release = cfg.compat_release()
-            allow_reformatting = cfg.allow_reformatting()
-            minimum_certainty = cfg.minimum_certainty()
-        if compat_release is None:
-            compat_release = debian_info.stable()
-        if allow_reformatting is None:
-            allow_reformatting = False
-        if minimum_certainty is None:
-            minimum_certainty = DEFAULT_MINIMUM_CERTAINTY
-
-        with local_tree.lock_write():
-            if control_files_in_root(local_tree, subpath):
-                raise WorkerFailure(
-                    'control-files-in-root',
-                    'control files live in root rather than debian/ '
-                    '(LarstIQ mode)')
-
-            try:
-                overall_result = run_lintian_fixers(
-                        local_tree, fixers,
-                        committer=self.committer,
-                        update_changelog=self.args.update_changelog,
-                        compat_release=compat_release,
-                        minimum_certainty=minimum_certainty,
-                        allow_reformatting=allow_reformatting,
-                        trust_package=TRUST_PACKAGE,
-                        net_access=True, subpath=subpath,
-                        opinionated=False,
-                        diligence=10)
-            except ChangelogCreateError as e:
-                raise WorkerFailure(
-                    'changelog-create-error',
-                    'Error creating changelog entry: %s' % e)
-
-        if overall_result.failed_fixers:
-            for fixer_name, failure in overall_result.failed_fixers.items():
-                note('Fixer %r failed to run:', fixer_name)
-                sys.stderr.write(str(failure))
-
-        metadata['versions'] = {
-            'lintian-brush': lintian_brush_version_string,
-            'silver-platter': silver_platter.version_string,
-            'breezy': breezy.version_string,
-            }
-        metadata['applied'] = []
-        if base_metadata:
-            metadata['applied'].extend(base_metadata['applied'])
-        for result, summary in overall_result.success:
-            metadata['applied'].append({
-                'summary': summary,
-                'description': result.description,
-                'fixed_lintian_tags': result.fixed_lintian_tags,
-                'revision_id': result.revision_id.decode('utf-8'),
-                'certainty': result.certainty})
-        metadata['failed'] = {
-            name: str(e) for (name, e) in overall_result.failed_fixers.items()}
-        metadata['add_on_only'] = not has_nontrivial_changes(
-            overall_result.success, self.args.propose_addon_only)
-        if base_metadata and not base_metadata['add_on_only']:
-            metadata['add_on_only'] = False
-
-        if not overall_result.success:
-            raise WorkerFailure('nothing-to-do', 'no fixers to apply')
-
-        tags = set()
-        for entry in metadata['applied']:
-            tags.update(entry['fixed_lintian_tags'])
-        value = lintian_brush_calculate_value(tags)
-        return SubWorkerResult(
-            description='Applied fixes for %r' % tags,
-            value=value, tags=[])
+    from silver_platter.debian.lintian import LintianBrushChanger
+    changer_cls = LintianBrushChanger
 
 
 class NewUpstreamWorker(ChangerWorker):
@@ -350,8 +226,8 @@ class NewUpstreamWorker(ChangerWorker):
                      base_metadata):
         try:
             return NewUpstreamWorker.make_changes(
-                self,
-                local_tree, subpath, report_context, metadata, base_metadata)
+                self, local_tree, subpath, report_context, metadata,
+                base_metadata)
         except DetailedDistCommandFailed as e:
             error_code = 'dist-' + e.error.kind
             error_description = str(e.error)
@@ -456,6 +332,23 @@ SUBWORKERS = {
         CMEWorker,
         ScrubObsoleteWorker,
         ]}
+
+
+class WorkerReporter(ChangerReporter):
+
+    def __init__(
+            self, metadata_subworker, resume_result, provide_context):
+        self.metadata_subworker = metadata_subworker
+        self.resume_result = resume_result
+        self.report_context = provide_context
+
+    def report_metadata(self, key, value):
+        self.metadata_subworker[key] = value
+
+    def get_base_metadata(self, key, default_value=None):
+        if not self.resume_result:
+            return default_value
+        return self.resume_result.get(key, default_value)
 
 
 @contextmanager
@@ -567,8 +460,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
         try:
             subworker_result = subworker.make_changes(
-                ws.local_tree, subpath, provide_context, metadata['subworker'],
-                resume_subworker_result)
+                ws.local_tree, subpath, provide_context,
+                metadata['subworker'], resume_subworker_result)
         except WorkerFailure as e:
             if (e.code == 'nothing-to-do' and
                     resume_subworker_result is not None):
