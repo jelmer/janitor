@@ -30,14 +30,6 @@ from typing import Callable, Dict, List, Optional, Any, Type, Iterator, Tuple
 import breezy
 from breezy import osutils
 from breezy.config import GlobalStack
-from breezy.errors import (
-    InvalidNormalization,
-    NoRoundtrippingSupport,
-    )
-from breezy.transform import (
-    MalformedTransform,
-    )
-from breezy.tree import Tree
 from breezy.transport import Transport
 from breezy.workingtree import WorkingTree
 
