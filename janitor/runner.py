@@ -978,9 +978,10 @@ class ActiveLocalRun(ActiveRun):
                 pick_additional_colocated_branches(main_branch)))
         result.branch_name = suite_config.branch_name
 
-        if result.changes_filename:
+        if result.target_result.changes_filename:
             changes_path = os.path.join(
-                self.output_directory, result.changes_filename)
+                self.output_directory,
+                result.target_result.changes_filename)
             if debsign_keyid:
                 debsign(changes_path, debsign_keyid)
             if incoming_url is not None:
@@ -990,7 +991,7 @@ class ActiveLocalRun(ActiveRun):
                     await upload_changes(changes_path, run_incoming_url)
                 except UploadFailedError as e:
                     warning('Unable to upload changes file %s: %r',
-                            result.changes_filename, e)
+                            result.target_result.changes_filename, e)
                     if backup_incoming_directory:
                         backup_dir = os.path.join(
                             backup_incoming_directory, self.log_id)
@@ -1121,7 +1122,7 @@ class QueueProcessor(object):
         duration = finish_time - active_run.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds())
-        if result.changes_filename and item.suite != 'unchanged':
+        if result.target_result.changes_filename and item.suite != 'unchanged':
             async with self.database.acquire() as conn:
                 run = await state.get_unchanged_run(
                     conn, result.main_branch_revision)
