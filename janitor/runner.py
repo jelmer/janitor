@@ -17,6 +17,7 @@
 
 from aiohttp import (
     web, MultipartWriter, ClientSession, ClientConnectionError, WSMsgType,
+    ClientTimeout,
     )
 import asyncio
 from contextlib import ExitStack
@@ -126,6 +127,9 @@ never_processed_count = Gauge(
 review_status_count = Gauge(
     'review_status_count', 'Last runs by review status.',
     labelnames=('review_status',))
+
+# Timeout in seconds for uploads
+UPLOAD_TIMEOUT = 30 * 60
 
 
 class NoChangesFile(Exception):
@@ -455,10 +459,14 @@ async def upload_changes(changes_path: str, incoming_url: str):
                     es.enter_context(g)
                     mpwriter.append(g)
             try:
-                async with session.post(incoming_url, data=mpwriter) as resp:
+                async with session.post(
+                        incoming_url, data=mpwriter,
+                        timeout=ClientTimeout(UPLOAD_TIMEOUT)) as resp:
                     if resp.status != 200:
                         raise UploadFailedError(resp)
             except ClientConnectionError as e:
+                raise UploadFailedError(e)
+            except asyncio.TimeoutError as e:
                 raise UploadFailedError(e)
 
 
