@@ -19,7 +19,6 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime
 from debian.changelog import Changelog, Version
-import distro_info
 import json
 import os
 import subprocess
@@ -315,9 +314,6 @@ def tree_set_changelog_version(
     cl.version = build_version
     with open(tree.abspath(cl_path), 'w') as f:
         cl.write_to_open_file(f)
-
-
-debian_info = distro_info.DebianDistroInfo()
 
 
 # TODO(jelmer): Just invoke the silver-platter subcommand
