@@ -144,11 +144,11 @@ class ChangerWorker(SubWorker):
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
-        self.changer = self.changer_cls()
         subparser = argparse.ArgumentParser(
             prog=self.name, parents=[common_parser])
-        self.changer.setup_parser(subparser)
+        self.changer_cls.setup_parser(subparser)
         self.args = subparser.parse_args(command)
+        self.changer = self.changer_cls.from_args(self.args)
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
@@ -224,7 +224,7 @@ class NewUpstreamWorker(ChangerWorker):
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
         try:
-            return NewUpstreamWorker.make_changes(
+            return ChangerWorker.make_changes(
                 self, local_tree, subpath, report_context, metadata,
                 base_metadata)
         except DetailedDistCommandFailed as e:
