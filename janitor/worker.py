@@ -144,8 +144,13 @@ class ChangerWorker(SubWorker):
 
     def __init__(self, command, env):
         self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(
-            prog=self.name, parents=[common_parser])
+        subparser = argparse.ArgumentParser(prog=self.name)
+        subparser.add_argument(
+            '--no-update-changelog', action="store_false", default=None,
+            dest="update_changelog", help="do not update the changelog")
+        subparser.add_argument(
+            '--update-changelog', action="store_true", dest="update_changelog",
+            help="force updating of the changelog", default=None)
         self.changer_cls.setup_parser(subparser)
         self.args = subparser.parse_args(command)
         self.changer = self.changer_cls.from_args(self.args)
@@ -163,15 +168,6 @@ class ChangerWorker(SubWorker):
             raise WorkerFailure(e.category, e.summary)
 
         return SubWorkerResult.from_changer_result(result=result)
-
-
-common_parser = argparse.ArgumentParser(add_help=False)
-common_parser.add_argument(
-    '--no-update-changelog', action="store_false", default=None,
-    dest="update_changelog", help="do not update the changelog")
-common_parser.add_argument(
-    '--update-changelog', action="store_true", dest="update_changelog",
-    help="force updating of the changelog", default=None)
 
 
 class OrphanWorker(ChangerWorker):
