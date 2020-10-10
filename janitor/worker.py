@@ -41,6 +41,7 @@ from silver_platter.debian import (
 )
 from silver_platter.debian.changer import (
     ChangerError,
+    ChangerResult,
     DebianChanger,
     ChangerReporter,
     )
@@ -233,28 +234,43 @@ class NewUpstreamWorker(ChangerWorker):
             raise WorkerFailure(error_code, error_description)
 
 
-class JustBuildWorker(SubWorker):
+class DummyChanger(DebianChanger):
 
     name = 'just-build'
 
-    def __init__(self, command, env):
-        subparser = argparse.ArgumentParser(
-            prog='just-build', parents=[common_parser])
-        subparser.add_argument(
+    @classmethod
+    def setup_parser(cls, parser):
+        parser.add_argument(
             '--revision', type=str,
             help='Specific revision to build.')
-        self.args = subparser.parse_args(command)
 
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
-        if self.args.revision:
-            local_tree.update(revision=self.args.revision.encode('utf-8'))
+    @classmethod
+    def from_args(cls, args):
+        return cls(revision=args.revision)
+
+    def __init__(self, revision=None):
+        self.revision = revision
+
+    def suggest_branch_name(self):
+        return 'unchanged'
+
+    def make_changes(self, local_tree, subpath, update_changelog,
+                     reporter, committer, base_proposal=None):
+        if self.revision:
+            local_tree.update(revision=self.revision.encode('utf-8'))
         if control_files_in_root(local_tree, subpath):
-            raise WorkerFailure(
+            raise ChangerError(
                 'control-files-in-root',
                 'control files live in root rather than debian/ '
                 '(LarstIQ mode)')
-        return SubWorkerResult(None, None)
+
+        return ChangerResult()
+
+
+class JustBuildWorker(ChangerWorker):
+
+    name = 'just-build'
+    changer_cls = DummyChanger
 
 
 class UncommittedWorker(ChangerWorker):
