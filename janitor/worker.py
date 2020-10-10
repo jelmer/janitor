@@ -289,11 +289,9 @@ class WorkerResult(object):
 
     def __init__(
             self, description: Optional[str],
-            value: Optional[int],
-            changes_filename: Optional[str] = None) -> None:
+            value: Optional[int]) -> None:
         self.description = description
         self.value = value
-        self.changes_filename = changes_filename
 
 
 class WorkerFailure(Exception):
@@ -347,6 +345,79 @@ class WorkerReporter(ChangerReporter):
         return self.resume_result.get(key, default_value)
 
 
+class Target(object):
+    """A build target."""
+
+    def build(self, ws, subpath, output_directory, env):
+        raise NotImplementedError(self.build)
+
+    def additional_colocated_branches(self, main_branch):
+        return []
+
+
+class DebianTarget(Target):
+    """Debian target."""
+
+    def __init__(self, build_distribution, build_command, build_suffix,
+                 last_build_version):
+        self.build_distribution = build_distribution
+        self.build_command = build_command
+        self.build_suffix = build_suffix
+        self.last_build_version = last_build_version
+
+    def additional_colocated_branches(self, main_branch):
+        return pick_additional_colocated_branches(main_branch)
+
+    def build(self, ws, subpath, output_directory, env):
+        if self.build_command:
+            if self.last_build_version:
+                # Update the changelog entry with the previous build version;
+                # This allows us to upload incremented versions for subsequent
+                # runs.
+                tree_set_changelog_version(
+                    ws.local_tree, self.last_build_version, subpath)
+
+            source_date_epoch = ws.local_tree.branch.repository.get_revision(
+                ws.main_branch.last_revision()).timestamp
+            try:
+                if not self.build_suffix:
+                    (changes_name, cl_version) = build_once(
+                        ws.local_tree, self.build_distribution,
+                        output_directory,
+                        self.build_command, subpath=subpath,
+                        source_date_epoch=source_date_epoch)
+                else:
+                    (changes_name, cl_version) = build_incrementally(
+                        ws.local_tree, '~' + self.build_suffix,
+                        self.build_distribution, output_directory,
+                        self.build_command, committer=env.get('COMMITTER'),
+                        subpath=subpath, source_date_epoch=source_date_epoch)
+            except MissingUpstreamTarball:
+                raise WorkerFailure(
+                    'build-missing-upstream-source',
+                    'unable to find upstream source')
+            except MissingChangesFile as e:
+                raise WorkerFailure(
+                    'build-missing-changes',
+                    'Expected changes path %s does not exist.' % e.filename)
+            except SbuildFailure as e:
+                if e.error is not None:
+                    if e.stage:
+                        code = '%s-%s' % (e.stage, e.error.kind)
+                    else:
+                        code = e.error.kind
+                elif e.stage is not None:
+                    code = 'build-failed-stage-%s' % e.stage
+                else:
+                    code = 'build-failed'
+                raise WorkerFailure(code, e.description)
+            note('Built %s', changes_name)
+
+
+class GenericBuildTarget(Target):
+    """Generic build target."""
+
+
 @contextmanager
 def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     command: List[str], output_directory: str,
@@ -374,6 +445,12 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             'unknown-subcommand',
             'unknown subcommand %s' % command[0])
     subworker = subworker_cls(command[1:], env)
+
+    target = DebianTarget(
+        build_distribution=build_distribution,
+        build_command=build_command,
+        build_suffix=build_suffix,
+        last_build_version=last_build_version)
 
     note('Opening branch at %s', vcs_url)
     try:
@@ -418,7 +495,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             cached_branch=cached_branch,
             path=os.path.join(output_directory, pkg),
             additional_colocated_branches=(
-                pick_additional_colocated_branches(main_branch))) as ws:
+                target.additional_colocated_branches(main_branch))) as ws:
         if ws.local_tree.has_changes():
             if list(ws.local_tree.iter_references()):
                 raise WorkerFailure(
@@ -481,54 +558,10 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         except PostCheckFailed as e:
             raise WorkerFailure('post-check-failed', str(e))
 
-        if build_command:
-            if last_build_version:
-                # Update the changelog entry with the previous build version;
-                # This allows us to upload incremented versions for subsequent
-                # runs.
-                tree_set_changelog_version(
-                    ws.local_tree, last_build_version, subpath)
-
-            source_date_epoch = ws.local_tree.branch.repository.get_revision(
-                ws.main_branch.last_revision()).timestamp
-            try:
-                if not build_suffix:
-                    (changes_name, cl_version) = build_once(
-                        ws.local_tree, build_distribution, output_directory,
-                        build_command, subpath=subpath,
-                        source_date_epoch=source_date_epoch)
-                else:
-                    (changes_name, cl_version) = build_incrementally(
-                        ws.local_tree, '~' + build_suffix,
-                        build_distribution, output_directory,
-                        build_command, committer=env.get('COMMITTER'),
-                        subpath=subpath, source_date_epoch=source_date_epoch)
-            except MissingUpstreamTarball:
-                raise WorkerFailure(
-                    'build-missing-upstream-source',
-                    'unable to find upstream source')
-            except MissingChangesFile as e:
-                raise WorkerFailure(
-                    'build-missing-changes',
-                    'Expected changes path %s does not exist.' % e.filename)
-            except SbuildFailure as e:
-                if e.error is not None:
-                    if e.stage:
-                        code = '%s-%s' % (e.stage, e.error.kind)
-                    else:
-                        code = e.error.kind
-                elif e.stage is not None:
-                    code = 'build-failed-stage-%s' % e.stage
-                else:
-                    code = 'build-failed'
-                raise WorkerFailure(code, e.description)
-            note('Built %s', changes_name)
-        else:
-            changes_name = None
+        target.build(ws, subpath, output_directory, env)
 
         wr = WorkerResult(
-            subworker_result.description, subworker_result.value,
-            changes_filename=changes_name)
+            subworker_result.description, subworker_result.value)
         yield ws, wr
 
 
@@ -635,8 +668,6 @@ def main(argv=None):
         metadata['value'] = result.value
         metadata['description'] = result.description
         note('%s', result.description)
-        if result.changes_filename is not None:
-            note('Built %s.', result.changes_filename)
         return 0
     finally:
         finish_time = datetime.now()
