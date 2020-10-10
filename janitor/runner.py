@@ -138,6 +138,8 @@ class NoChangesFile(Exception):
 
 class DebianResult(object):
 
+    kind = 'debian'
+
     def __init__(self, build_version=None, build_distribution=None,
                  changes_filename=None):
         self.build_version = build_version
@@ -145,9 +147,10 @@ class DebianResult(object):
         self.changes_filename = changes_filename
 
     def from_directory(self, path, package):
-        (self.target_result.changes_filename,
-         self.target_result.build_version,
-         self.target_result.build_distribution) = find_changes(path, package)
+        self.output_directory = path
+        (self.changes_filename,
+         self.build_version,
+         self.build_distribution) = find_changes(path, package)
 
     @classmethod
     def from_worker_result(cls, worker_result):
@@ -161,6 +164,40 @@ class DebianResult(object):
             build_version=build_version,
             build_distribution=build_distribution,
             changes_filename=changes_filename)
+
+    def upload(self, log_id, incoming_url, debsign_keyid,
+               backup_incoming_directory=None):
+        changes_path = os.path.join(
+            self.output_directory, self.changes_filename)
+        if debsign_keyid:
+            debsign(changes_path, debsign_keyid)
+        if incoming_url is not None:
+            run_incoming_url = urllib.parse.urljoin(
+                incoming_url, 'upload/%s' % log_id)
+            try:
+                await upload_changes(changes_path, run_incoming_url)
+            except UploadFailedError as e:
+                warning('Unable to upload changes file %s: %r',
+                        self.changes_filename, e)
+                if backup_incoming_directory:
+                    backup_dir = os.path.join(
+                        backup_incoming_directory, log_id)
+                    os.mkdir(backup_dir)
+                    note('Uploading results to backup incoming '
+                         'directory %s.', backup_dir)
+                    dget(changes_path, backup_dir)
+                else:
+                    warning('No backup directory set. Discarding results.')
+
+    def json(self):
+        return {
+            'build_distribution': self.build_distribution,
+            'build_version': self.build_version,
+            'changes_filename': self.changes_filename,
+            }
+
+    def __bool__(self):
+        return self.changes_filename is not None
 
 
 class JanitorResult(object):
@@ -200,12 +237,8 @@ class JanitorResult(object):
             'log_id': self.log_id,
             'description': self.description,
             'code': self.code,
-            'target': 'debian',
-            'target-details': {
-                'build_distribution': self.build_distribution,
-                'build_version': self.build_version,
-                'changes_filename': self.changes_filename,
-            },
+            'target': self.target_result.kind,
+            'target-details': self.target_result.json(),
             'branch_name': self.branch_name,
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
@@ -978,29 +1011,12 @@ class ActiveLocalRun(ActiveRun):
                 pick_additional_colocated_branches(main_branch)))
         result.branch_name = suite_config.branch_name
 
-        if result.target_result.changes_filename:
-            changes_path = os.path.join(
-                self.output_directory,
-                result.target_result.changes_filename)
-            if debsign_keyid:
-                debsign(changes_path, debsign_keyid)
-            if incoming_url is not None:
-                run_incoming_url = urllib.parse.urljoin(
-                    incoming_url, 'upload/%s' % self.log_id)
-                try:
-                    await upload_changes(changes_path, run_incoming_url)
-                except UploadFailedError as e:
-                    warning('Unable to upload changes file %s: %r',
-                            result.target_result.changes_filename, e)
-                    if backup_incoming_directory:
-                        backup_dir = os.path.join(
-                            backup_incoming_directory, self.log_id)
-                        os.mkdir(backup_dir)
-                        note('Uploading results to backup incoming '
-                             'directory %s.', backup_dir)
-                        dget(changes_path, backup_dir)
-                    else:
-                        warning('No backup directory set. Discarding results.')
+        if result.target_result:
+            result.target_result.upload(
+                self.log_id,
+                incoming_url=incoming_url,
+                backup_incoming_directory=backup_incoming_directory,
+                debsign_keyid=debsign_keyid)
         return result
 
 
@@ -1185,7 +1201,7 @@ class QueueProcessor(object):
                         break
                     note('Nothing to do. Sleeping for 60s.')
                     await asyncio.sleep(60)
-                    done = []
+                    done: Set[asyncio.Future[None]] = set()
                 else:
                     done, pending = await asyncio.wait(
                         todo, return_when='FIRST_COMPLETED')
