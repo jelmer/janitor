@@ -31,7 +31,6 @@ from breezy.config import GlobalStack
 from breezy.transport import Transport
 from breezy.workingtree import WorkingTree
 
-import silver_platter
 from silver_platter.debian import (
     MissingUpstreamTarball,
     Workspace,
