@@ -16,20 +16,16 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import (
-    web, MultipartWriter, ClientSession, ClientConnectionError, WSMsgType,
-    ClientTimeout,
+    web,
+    WSMsgType,
     )
 import asyncio
-from contextlib import ExitStack
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 import functools
-import itertools
 import json
 from io import BytesIO
 import os
-import re
-import shutil
 import signal
 import socket
 import sys
@@ -39,9 +35,8 @@ import uuid
 import urllib.parse
 
 from debian.changelog import Version
-from debian.deb822 import Changes
 
-from breezy import debug, urlutils
+from breezy import debug
 from breezy.errors import PermissionDenied
 from breezy.plugins.debian.util import (
     debsign,
@@ -52,18 +47,12 @@ from breezy.transport import Transport
 from prometheus_client import (
     Counter,
     Gauge,
-    Histogram,
+    Histogram
 )
 
-from lintian_brush.salsa import (
-    guess_repository_url,
-    salsa_url_from_alioth_url,
-    )
-
 from silver_platter.debian import (
-    select_preferred_probers,
-    select_probers,
     pick_additional_colocated_branches,
+    select_preferred_probers,
     )
 from silver_platter.proposal import (
     find_existing_proposed,
@@ -82,7 +71,19 @@ from silver_platter.utils import (
 from . import (
     state,
     )
+from .artifacts import (
+    get_artifact_manager,
+    ArtifactManager,
+    LocalArtifactManager,
+    )
 from .config import read_config, get_suite_config, Config
+from .debian import (
+    changes_filenames,
+    open_guessed_salsa_branch,
+    find_changes,
+    upload_changes,
+    NoChangesFile,
+    )
 from .logs import get_log_manager, ServiceUnavailable, LogFileManager
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
@@ -128,13 +129,6 @@ review_status_count = Gauge(
     'review_status_count', 'Last runs by review status.',
     labelnames=('review_status',))
 
-# Timeout in seconds for uploads
-UPLOAD_TIMEOUT = 30 * 60
-
-
-class NoChangesFile(Exception):
-    """No changes file found."""
-
 
 class DebianResult(object):
 
@@ -152,6 +146,12 @@ class DebianResult(object):
          self.build_version,
          self.build_distribution) = find_changes(path, package)
 
+    def artifact_filenames(self):
+        if not self.changes_filename:
+            return []
+        return (changes_filenames(self.changes_filename) +
+                [os.path.basename(self.changes_filename)])
+
     @classmethod
     def from_worker_result(cls, worker_result):
         build_version = (
@@ -165,8 +165,7 @@ class DebianResult(object):
             build_distribution=build_distribution,
             changes_filename=changes_filename)
 
-    def upload(self, log_id, incoming_url, debsign_keyid,
-               backup_incoming_directory=None):
+    async def upload(self, log_id, incoming_url, debsign_keyid):
         changes_path = os.path.join(
             self.output_directory, self.changes_filename)
         if debsign_keyid:
@@ -174,20 +173,7 @@ class DebianResult(object):
         if incoming_url is not None:
             run_incoming_url = urllib.parse.urljoin(
                 incoming_url, 'upload/%s' % log_id)
-            try:
-                await upload_changes(changes_path, run_incoming_url)
-            except UploadFailedError as e:
-                warning('Unable to upload changes file %s: %r',
-                        self.changes_filename, e)
-                if backup_incoming_directory:
-                    backup_dir = os.path.join(
-                        backup_incoming_directory, log_id)
-                    os.mkdir(backup_dir)
-                    note('Uploading results to backup incoming '
-                         'directory %s.', backup_dir)
-                    dget(changes_path, backup_dir)
-                else:
-                    warning('No backup directory set. Discarding results.')
+            await upload_changes(changes_path, run_incoming_url)
 
     def json(self):
         return {
@@ -257,18 +243,6 @@ def committer_env(committer):
         env['DEBEMAIL'] = email
     env['COMMITTER'] = committer
     return env
-
-
-def find_changes(path, package):
-    for name in os.listdir(path):
-        if name.startswith('%s_' % package) and name.endswith('.changes'):
-            break
-    else:
-        raise NoChangesFile(path, package)
-
-    with open(os.path.join(path, name), 'r') as f:
-        changes = Changes(f)
-        return (name, changes["Version"], changes["Distribution"])
 
 
 class WorkerResult(object):
@@ -391,55 +365,6 @@ async def invoke_subprocess_worker(
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
-def possible_salsa_urls_from_package_name(package_name, maintainer_email=None):
-    yield guess_repository_url(package_name, maintainer_email)
-    yield 'https://salsa.debian.org/debian/%s.git' % package_name
-
-
-def possible_urls_from_alioth_url(vcs_type, vcs_url):
-    # These are the same transformations applied by vcswatc. The goal is mostly
-    # to get a URL that properly redirects.
-    https_alioth_url = re.sub(
-        r'(https?|git)://(anonscm|git).debian.org/(git/)?',
-        r'https://anonscm.debian.org/git/',
-        vcs_url)
-
-    yield https_alioth_url
-    yield salsa_url_from_alioth_url(vcs_type, vcs_url)
-
-
-async def open_guessed_salsa_branch(
-        conn, pkg, vcs_type, vcs_url, possible_transports=None):
-    package = await state.get_package(conn, pkg)
-    probers = select_probers('git')
-    vcs_url, params = urlutils.split_segment_parameters_raw(vcs_url)
-
-    tried = set(vcs_url)
-
-    for salsa_url in itertools.chain(
-            possible_urls_from_alioth_url(vcs_type, vcs_url),
-            possible_salsa_urls_from_package_name(
-                package.name, package.maintainer_email)):
-        if not salsa_url or salsa_url in tried:
-            continue
-
-        tried.add(salsa_url)
-
-        salsa_url = urlutils.join_segment_parameters_raw(salsa_url, *params)
-
-        note('Trying to access salsa URL %s instead.', salsa_url)
-        try:
-            branch = open_branch_ext(
-                salsa_url, possible_transports=possible_transports,
-                probers=probers)
-        except BranchOpenFailure:
-            pass
-        else:
-            note('Converting alioth URL: %s -> %s', vcs_url, salsa_url)
-            return branch
-    return None
-
-
 async def open_branch_with_fallback(
         conn, pkg, vcs_type, vcs_url, possible_transports=None):
     probers = select_preferred_probers(vcs_type)
@@ -464,43 +389,6 @@ async def open_branch_with_fallback(
                         full_branch_url(branch).rstrip('/'))
                     return branch
         raise
-
-
-class UploadFailedError(Exception):
-    """Upload failed."""
-
-
-async def upload_changes(changes_path: str, incoming_url: str):
-    """Upload changes to the archiver.
-
-    Args:
-      changes_path: Changes path
-      incoming_url: Incoming URL
-    """
-    async with ClientSession() as session:
-        with ExitStack() as es:
-            with MultipartWriter() as mpwriter:
-                f = open(changes_path, 'r')
-                es.enter_context(f)
-                dsc = Changes(f)
-                f.seek(0)
-                mpwriter.append(f)
-                for file_details in dsc['files']:
-                    name = file_details['name']
-                    path = os.path.join(os.path.dirname(changes_path), name)
-                    g = open(path, 'rb')
-                    es.enter_context(g)
-                    mpwriter.append(g)
-            try:
-                async with session.post(
-                        incoming_url, data=mpwriter,
-                        timeout=ClientTimeout(UPLOAD_TIMEOUT)) as resp:
-                    if resp.status != 200:
-                        raise UploadFailedError(resp)
-            except ClientConnectionError as e:
-                raise UploadFailedError(e)
-            except asyncio.TimeoutError as e:
-                raise UploadFailedError(e)
 
 
 async def import_logs(output_directory: str,
@@ -712,29 +600,6 @@ async def check_resume_result(conn, suite, resume_branch):
         return (None, None, None)
 
 
-def dget(changes_location, target_dir):
-    """Copy all files referenced by a .changes file.
-
-    Args:
-      changes_location: Source file location
-      target_dir: Target directory
-    Return:
-      path to target source file
-    """
-    with open(changes_location) as f:
-        changes_contents = f.read()
-    changes = Changes(changes_contents)
-    srcdir = os.path.dirname(changes_location)
-    for file_details in changes['files']:
-        name = file_details['name']
-        shutil.copy(
-            os.path.join(srcdir, name),
-            os.path.join(target_dir, name))
-    shutil.copy(
-        changes_location,
-        os.path.join(target_dir, os.path.basename(changes_location)))
-
-
 def suite_build_env(distro_config, suite_config, apt_location):
     env = {
         'EXTRA_REPOSITORIES': ':'.join([
@@ -789,6 +654,7 @@ class ActiveLocalRun(ActiveRun):
             self, db: state.Database, config: Config,
             vcs_manager: VcsManager,
             logfile_manager: LogFileManager,
+            artifact_manager: Optional[ArtifactManager],
             worker_kind: str,
             build_command: Optional[str],
             apt_location: str,
@@ -802,7 +668,8 @@ class ActiveLocalRun(ActiveRun):
             use_cached_only: bool = False,
             overall_timeout: Optional[int] = None,
             committer: Optional[str] = None,
-            backup_incoming_directory: Optional[str] = None) -> JanitorResult:
+            backup_artifact_manager: Optional[ArtifactManager] = None
+            ) -> JanitorResult:
         note('Running %r on %s', self.queue_item.command,
              self.queue_item.package)
 
@@ -1012,11 +879,33 @@ class ActiveLocalRun(ActiveRun):
         result.branch_name = suite_config.branch_name
 
         if result.target_result:
-            result.target_result.upload(
-                self.log_id,
-                incoming_url=incoming_url,
-                backup_incoming_directory=backup_incoming_directory,
-                debsign_keyid=debsign_keyid)
+            try:
+                await result.target_result.upload(
+                    self.log_id,
+                    incoming_url=incoming_url,
+                    debsign_keyid=debsign_keyid)
+            except Exception as e:
+                warning('Unable to upload artifacts: %r', e)
+
+            if artifact_manager:
+                artifact_names = result.target_result.artifact_filenames()
+                try:
+                    await artifact_manager.store_artifacts(
+                        self.log_id, self.output_directory,
+                        artifact_names)
+                except Exception as e:
+                    warning('Unable to upload artifacts for %r: %r',
+                            self.log_id, e)
+                    if backup_artifact_manager:
+                        await backup_artifact_manager.store_artifacts(
+                            self.log_id, self.output_directory,
+                            artifact_names)
+                        note('Uploading results to backup artifact '
+                             'location %r.', backup_artifact_manager)
+                    else:
+                        warning('No backup artifact manager set. '
+                                'Discarding results.')
+
         return result
 
 
@@ -1063,10 +952,11 @@ class QueueProcessor(object):
     def __init__(
             self, database, config, worker_kind, build_command, pre_check=None,
             post_check=None, dry_run=False, incoming_url=None,
-            logfile_manager=None, debsign_keyid: Optional[str] = None,
+            logfile_manager=None, artifact_manager=None,
+            debsign_keyid: Optional[str] = None,
             vcs_manager=None, public_vcs_manager=None, concurrency=1,
             use_cached_only=False, overall_timeout=None, committer=None,
-            apt_location=None, backup_incoming_directory=None):
+            apt_location=None, backup_artifact_manager=None):
         """Create a queue processor.
 
         Args:
@@ -1085,6 +975,7 @@ class QueueProcessor(object):
         self.dry_run = dry_run
         self.incoming_url = incoming_url
         self.logfile_manager = logfile_manager
+        self.artifact_manager = artifact_manager
         self.debsign_keyid = debsign_keyid
         self.vcs_manager = vcs_manager
         self.public_vcs_manager = public_vcs_manager
@@ -1096,7 +987,7 @@ class QueueProcessor(object):
         self.committer = committer
         self.active_runs: Dict[str, ActiveRun] = {}
         self.apt_location = apt_location
-        self.backup_incoming_directory = backup_incoming_directory
+        self.backup_artifact_manager = backup_artifact_manager
 
     def status_json(self) -> Any:
         return {
@@ -1112,6 +1003,7 @@ class QueueProcessor(object):
             result = await active_run.process(
                 self.database, config=self.config,
                 vcs_manager=self.vcs_manager,
+                artifact_manager=self.artifact_manager,
                 apt_location=self.apt_location,
                 worker_kind=self.worker_kind,
                 pre_check=self.pre_check,
@@ -1122,7 +1014,7 @@ class QueueProcessor(object):
                 use_cached_only=self.use_cached_only,
                 overall_timeout=self.overall_timeout,
                 committer=self.committer,
-                backup_incoming_directory=self.backup_incoming_directory)
+                backup_artifact_manager=self.backup_artifact_manager)
             await self.finish_run(active_run, result)
 
     def register_run(self, active_run: ActiveRun) -> None:
@@ -1574,9 +1466,10 @@ def main(argv=None):
         '--overall-timeout', type=int, default=None,
         help='Overall timeout per run (in seconds).')
     parser.add_argument(
-        '--backup-incoming-directory', type=str,
+        '--backup-artifact-directory', type=str,
         default=None,
-        help='Backup directory to write files to if archiver is down')
+        help=('Backup directory to write files to if artifact '
+              'manager is unreachable'))
     parser.add_argument(
         '--public-vcs-location', type=str,
         default='https://janitor.debian.net/')
@@ -1595,6 +1488,12 @@ def main(argv=None):
     else:
         vcs_manager = public_vcs_manager
     logfile_manager = get_log_manager(config.logs_location)
+    artifact_manager = get_artifact_manager(config.artifact_location)
+    if args.backup_artifact_directory:
+        backup_artifact_manager = LocalArtifactManager(
+            args.backup_artifact_directory)
+    else:
+        backup_artifact_manager = None
     db = state.Database(config.database_location)
     queue_processor = QueueProcessor(
         db,
@@ -1604,6 +1503,7 @@ def main(argv=None):
         args.pre_check, args.post_check,
         args.dry_run, args.incoming_url,
         logfile_manager,
+        artifact_manager,
         args.debsign_keyid,
         vcs_manager,
         public_vcs_manager,
@@ -1612,7 +1512,7 @@ def main(argv=None):
         overall_timeout=args.overall_timeout,
         committer=config.committer,
         apt_location=config.apt_location,
-        backup_incoming_directory=args.backup_incoming_directory)
+        backup_artifact_manager=backup_artifact_manager)
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         loop.create_task(queue_processor.process()),
