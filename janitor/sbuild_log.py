@@ -776,6 +776,8 @@ def interpreter_missing(m):
         if m.group(1).startswith('/<<PKGBUILDDIR>>'):
             return None
         return MissingFile(m.group(1))
+    if '/' in m.group(1):
+        return None
     return MissingCommand(m.group(1))
 
 
