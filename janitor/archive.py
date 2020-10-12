@@ -166,7 +166,8 @@ def find_binary_paths(
     if binaries is not None:
         return binaries
     try:
-        return find_binary_paths_in_pool(archive_path, source, version)
+        return find_binary_paths_in_pool(
+            archive_path, source, version)
     except FileNotFoundError:
         return None
 
