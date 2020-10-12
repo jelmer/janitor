@@ -259,7 +259,7 @@ class DummyChanger(DebianChanger):
                 'control files live in root rather than debian/ '
                 '(LarstIQ mode)')
 
-        return ChangerResult()
+        return ChangerResult(description='Nothing changed', mutator=None)
 
 
 class JustBuildWorker(ChangerWorker):

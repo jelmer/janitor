@@ -149,7 +149,8 @@ class DebianResult(object):
     def artifact_filenames(self):
         if not self.changes_filename:
             return []
-        return (changes_filenames(self.changes_filename) +
+        changes_path = os.path.join(self.output_directory, self.changes_filename)
+        return (list(changes_filenames(changes_path)) +
                 [os.path.basename(self.changes_filename)])
 
     @classmethod
