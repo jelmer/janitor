@@ -17,8 +17,14 @@
 
 """Artifacts."""
 
+from aiohttp import ClientSession, ClientResponseError
+
 import os
 import shutil
+
+
+class ServiceUnavailable(Exception):
+    """The remote server is temporarily unavailable."""
 
 
 class ArtifactManager(object):
@@ -47,6 +53,34 @@ class LocalArtifactManager(ArtifactManager):
                 os.path.join(run_dir, name))
 
 
+class GCSArtifactManager(ArtifactManager):
+
+    def __init__(self,
+                 creds_path=None, bucket_name='debian-janitor-artifacts'):
+        from gcloud.aio.storage import Storage
+        self.bucket_name = bucket_name
+        self.session = ClientSession()
+        self.storage = Storage(service_file=creds_path, session=self.session)
+        self.bucket = self.storage.get_bucket(self.bucket_name)
+
+    async def store_artifacts(self, run_id, local_path, names=None):
+        if names is None:
+            names = os.listdir(local_path)
+        for name in names:
+            with open(os.path.join(local_path, name), 'rb') as f:
+                uploaded_data = f.read()
+            try:
+                await self.storage.upload(
+                    self.bucket_name, '%s/%s' % (run_id, name),
+                    uploaded_data)
+            except ClientResponseError as e:
+                if e.status == 503:
+                    raise ServiceUnavailable()
+                raise
+
+
 def get_artifact_manager(location):
+    if location.startswith('https://storage.googleapis.com'):
+        return GCSArtifactManager()
     # TODO(jelmer): Support uploading to GCS
     return LocalArtifactManager(location)
