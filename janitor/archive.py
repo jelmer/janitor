@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, UnixConnector, ClientTimeout
+from aiohttp import ClientSession, UnixConnector, ClientTimeout, MultipartWriter
 from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
 import json
@@ -23,7 +23,7 @@ import os
 import re
 import sys
 import traceback
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Union
 from urllib.parse import quote
 
 from aiohttp import web
@@ -172,6 +172,41 @@ def find_binary_paths(
         return None
 
 
+async def handle_download(request):
+    suite = request.query['suite']
+
+    if not suite_check.match(suite):
+        return web.Response(
+            status=400, text='Invalid suite %s' % suite)
+
+    source = request.query['source']
+    if not source:
+        return web.Response(status=400, text='No source package specified')
+
+    version = request.query['version']
+
+    archive_path = request.app.archive_path
+
+    binaries = find_binary_paths(
+            request.app.incoming_dir, archive_path,
+            source, version)
+
+    if binaries is None:
+        return web.Response(
+            status=404, text='source %s/%s does not exist.' % (
+                source, version))
+
+    response = web.StreamResponse(request)
+
+    mpwriter = MultipartWriter()
+    for name, path in binaries:
+        with open(path, 'rb') as f:
+            mpwriter.append(f)
+    await mpwriter.write(response)
+    await response.write_eof()
+    return response
+
+
 async def handle_debdiff(request):
     post = await request.post()
 
@@ -317,8 +352,8 @@ async def handle_diffoscope(request):
     try:
         diffoscope_diff = await asyncio.wait_for(
                 run_diffoscope(
-                old_binaries, new_binaries,
-                set_limits), 60.0)
+                    old_binaries, new_binaries,
+                    set_limits), 60.0)
     except MemoryError:
         raise web.HTTPServiceUnavailable(
              'diffoscope used too much memory')
@@ -354,7 +389,8 @@ class AptlyError(Exception):
         self.message = message
 
 
-async def aptly_call(aptly_session, method, path, json=None, params=None, timeout=None):
+async def aptly_call(aptly_session, method, path, json=None, params=None,
+                     timeout=None):
     async with aptly_session.request(
             method=method, url='http://localhost/api/' + path, json=json,
             params=params, timeout=timeout) as resp:
@@ -464,6 +500,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     app.aptly_session = aptly_session
     app.config = config
     setup_metrics(app)
+    app.router.add_get('/download', handle_download, name='download')
     app.router.add_post('/upload/{directory}', handle_upload, name='upload')
     app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
     app.router.add_post('/diffoscope', handle_diffoscope, name='diffoscope')
