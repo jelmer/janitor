@@ -35,6 +35,15 @@ class ArtifactManager(object):
     async def retrieve_artifacts(self, run_id, local_path):
         raise NotImplementedError(self.retrieve_artifacts)
 
+    async def iter_ids(self):
+        raise NotImplementedError(self.iter_ids)
+
+    async def __aenter__(self):
+        pass
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
 
 class LocalArtifactManager(ArtifactManager):
 
@@ -52,18 +61,32 @@ class LocalArtifactManager(ArtifactManager):
                 os.path.join(local_path, name),
                 os.path.join(run_dir, name))
 
+    async def iter_ids(self):
+        for entry in os.scandir(self.path):
+            yield entry.name
+
 
 class GCSArtifactManager(ArtifactManager):
 
     def __init__(self,
                  creds_path=None, bucket_name='debian-janitor-artifacts'):
-        from gcloud.aio.storage import Storage
         self.bucket_name = bucket_name
+        self.creds_path = creds_path
+
+    async def __aenter__(self):
+        from gcloud.aio.storage import Storage
         self.session = ClientSession()
-        self.storage = Storage(service_file=creds_path, session=self.session)
+        await self.session.__aenter__()
+        self.storage = Storage(
+            service_file=self.creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
-    async def store_artifacts(self, run_id, local_path, names=None):
+    async def __aexit__(self, exc_type, exc, tb):
+        await self.session.__aexit__(exc_type, exc, tb)
+        return False
+
+    async def store_artifacts(
+            self, run_id, local_path, names=None, timeout=30):
         if names is None:
             names = os.listdir(local_path)
         for name in names:
@@ -72,11 +95,19 @@ class GCSArtifactManager(ArtifactManager):
             try:
                 await self.storage.upload(
                     self.bucket_name, '%s/%s' % (run_id, name),
-                    uploaded_data)
+                    uploaded_data, timeout=timeout)
             except ClientResponseError as e:
                 if e.status == 503:
                     raise ServiceUnavailable()
                 raise
+
+    async def iter_ids(self):
+        ids = set()
+        for name in await self.bucket.list_blobs():
+            log_id = name.split('/')[0]
+            if log_id not in ids:
+                yield log_id
+            ids.add(log_id)
 
 
 def get_artifact_manager(location):
@@ -84,3 +115,19 @@ def get_artifact_manager(location):
         return GCSArtifactManager()
     # TODO(jelmer): Support uploading to GCS
     return LocalArtifactManager(location)
+
+
+async def list_ids(manager):
+    async with manager:
+        async for id in manager.iter_ids():
+            print(id)
+
+
+if __name__ == '__main__':
+    import argparse
+    import asyncio
+    parser = argparse.ArgumentParser()
+    parser.add_argument('location', type=str)
+    args = parser.parse_args()
+    manager = get_artifact_manager(args.location)
+    asyncio.run(list_ids(manager))

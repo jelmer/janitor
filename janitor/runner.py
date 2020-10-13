@@ -20,6 +20,7 @@ from aiohttp import (
     WSMsgType,
     )
 import asyncio
+from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 import functools
@@ -1515,13 +1516,17 @@ def main(argv=None):
         apt_location=config.apt_location,
         backup_artifact_manager=backup_artifact_manager)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(asyncio.gather(
-        loop.create_task(queue_processor.process()),
-        loop.create_task(export_queue_length(db)),
-        loop.create_task(export_stats(db)),
-        loop.create_task(run_web_server(
-            args.listen_address, args.port, queue_processor)),
-        ))
+
+    async def run():
+        async with artifact_manager:
+            return await asyncio.gather(
+                loop.create_task(queue_processor.process()),
+                loop.create_task(export_queue_length(db)),
+                loop.create_task(export_stats(db)),
+                loop.create_task(run_web_server(
+                    args.listen_address, args.port, queue_processor)),
+                )
+    loop.run_until_complete(run())
 
 
 if __name__ == '__main__':
