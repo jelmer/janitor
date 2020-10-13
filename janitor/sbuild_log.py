@@ -234,6 +234,23 @@ class UScanRequestVersionMissing(Problem):
         return isinstance(self, type(other)) and self.version == other.version
 
 
+class DebcargoFailure(Problem):
+
+    kind = 'debcargo-failed'
+
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return "Debcargo failed"
+
+    def __repr__(self):
+        return "%s()" % type(self).__name__
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+
 class UScanFailed(Problem):
 
     kind = 'uscan-failed'
@@ -387,6 +404,9 @@ def parse_brz_error(line: str) -> Tuple[Optional[Problem], str]:
         return (error, line)
     if line.startswith('UScan failed to run'):
         return (None, line)
+    if line == 'Debcargo failed to run.'):
+        error = DebcargoFailure()
+        return (error, line)
     return (None, line.split('\n')[0])
 
 

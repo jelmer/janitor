@@ -6,6 +6,7 @@ from aiohttp import (
     ClientSession,
     ContentTypeError,
     ClientConnectorError,
+    ClientOSError,
     ServerDisconnectedError,
     WSMsgType,
     )
