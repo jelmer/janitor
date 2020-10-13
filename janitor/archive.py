@@ -130,7 +130,7 @@ def find_binary_paths_from_changes(incoming_dir, source, version):
 
 def find_binary_paths_in_pool(
         archive_path: str, source: str,
-        version: Version) -> List[Tuple[str, str]]:
+        version: Union[str, Version]) -> List[Tuple[str, str]]:
     version = Version(str(version))
     version.epoch = None
     ret = []
