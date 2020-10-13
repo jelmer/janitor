@@ -29,6 +29,10 @@ class ServiceUnavailable(Exception):
     """The remote server is temporarily unavailable."""
 
 
+class ArtifactsMissing(Exception):
+    """The specified artifacts are missing."""
+
+
 class ArtifactManager(object):
 
     async def store_artifacts(self, run_id, local_path, names=None):
