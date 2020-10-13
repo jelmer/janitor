@@ -151,8 +151,11 @@ class DebdiffRetrievalError(Exception):
     """Error occurred while retrieving debdiff."""
 
 
-class ArchiveDiffUnavailable(Exception):
-    """The archive diff is not available."""
+class BuildDiffUnavailable(Exception):
+    """The build diff is not available."""
+
+    def __init__(self, unavailable_run):
+        self.unavailable_run = unavailable_run
 
 
 async def get_archive_diff(client, differ_url, run, unchanged_run,
@@ -163,13 +166,14 @@ async def get_archive_diff(client, differ_url, run, unchanged_run,
         raise DebdiffRetrievalError('run not built')
     if kind not in ('debdiff', 'diffoscope'):
         raise DebdiffRetrievalError('invalid diff kind %r' % kind)
-    url = urllib.parse.urljoin(differ_url, kind, unchanged_run.id, run.id)
-    payload = {
+    url = urllib.parse.urljoin(
+        differ_url, '%s/%s/%s' % (kind, unchanged_run.id, run.id))
+    params = {
         'jquery_url': 'https://janitor.debian.org/_static/jquery.js',
-        'css_url': None,
     }
+    # TODO(jelmer): Set css_url
     if filter_boring:
-        payload["filter_boring"] = "yes"
+        params["filter_boring"] = "yes"
     headers = {}
     if accept:
         headers['Accept'] = (
@@ -177,11 +181,14 @@ async def get_archive_diff(client, differ_url, run, unchanged_run,
             if isinstance(accept, list)
             else accept)
     try:
-        async with client.post(url, data=payload, headers=headers) as resp:
+        async with client.get(url, params=params, headers=headers) as resp:
             if resp.status == 200:
                 return await resp.read(), resp.content_type
             elif resp.status == 404:
-                raise ArchiveDiffUnavailable()
+                if resp.headers.get('unavailable_run_id') == unchanged_run.id:
+                    raise BuildDiffUnavailable(unchanged_run)
+                else:
+                    raise BuildDiffUnavailable(run)
             else:
                 raise DebdiffRetrievalError(
                     'Unable to get debdiff: %s' % await resp.text())

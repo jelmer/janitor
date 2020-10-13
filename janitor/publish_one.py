@@ -772,22 +772,22 @@ def publish_one(
         debdiff = get_debdiff(external_url, log_id)
     except DebdiffRetrievalError:
         raise PublishFailure(
-            description='Unable to contact archiver for debdiff',
-            code='archiver-unreachable')
+            description='Unable to contact differ for build diff',
+            code='differ-unreachable')
     except DebdiffMissingRun as e:
         if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and require_binary_diff:
             if e.missing_run_id == log_id:
                 raise PublishFailure(
                     description=(
-                        'Binary debdiff is not available. '
+                        'Build diff is not available. '
                         'Run (%s) not yet published?' % log_id),
-                    code='missing-binary-diff-self')
+                    code='missing-build-diff-self')
             else:
                 raise PublishFailure(
                     description=(
                         'Binary debdiff is not available. '
                         'Control run (%s) not published?' % e.missing_run_id),
-                    code='missing-binary-diff-control')
+                    code='missing-build-diff-control')
         debdiff = None
 
     try:

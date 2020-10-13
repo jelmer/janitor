@@ -23,6 +23,7 @@ div.documentwrapper {
 
 div.bodywrapper {
     margin: 0 0 0 0px;
+    position: relative;
 }
 
 hr {
