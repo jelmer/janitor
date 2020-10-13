@@ -22,6 +22,8 @@ from aiohttp import ClientSession, ClientResponseError
 import os
 import shutil
 
+from .trace import note
+
 
 class ServiceUnavailable(Exception):
     """The remote server is temporarily unavailable."""
@@ -100,6 +102,8 @@ class GCSArtifactManager(ArtifactManager):
                 if e.status == 503:
                     raise ServiceUnavailable()
                 raise
+        note('Uploaded %r to run %s in bucket %s.',
+             names, run_id, self.bucket_name)
 
     async def iter_ids(self):
         ids = set()
