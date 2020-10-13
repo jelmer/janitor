@@ -150,7 +150,8 @@ class DebianResult(object):
     def artifact_filenames(self):
         if not self.changes_filename:
             return []
-        changes_path = os.path.join(self.output_directory, self.changes_filename)
+        changes_path = os.path.join(
+            self.output_directory, self.changes_filename)
         return (list(changes_filenames(changes_path)) +
                 [os.path.basename(self.changes_filename)])
 
@@ -1350,8 +1351,12 @@ async def handle_finish(request):
     reader = await request.multipart()
     worker_result = None
 
+    filenames = []
     with tempfile.TemporaryDirectory() as output_directory:
-        filenames = []
+        log_directory = os.path.join(output_directory, 'logs')
+        os.mkdir(log_directory)
+        artifact_directory = os.path.join(output_directory, 'artifacts')
+        os.mkdir(artifact_directory)
         while True:
             part = await reader.next()
             if part is None:
@@ -1364,7 +1369,9 @@ async def handle_finish(request):
                      'headers': dict(part.headers)}, status=400)
             else:
                 filenames.append(part.filename)
-                output_path = os.path.join(output_directory, part.filename)
+                output_path = os.path.join(
+                        log_directory if part.filename.endswith('.log')
+                        else artifact_directory, part.filename)
                 with open(output_path, 'wb') as f:
                     f.write(await part.read())
 
@@ -1373,8 +1380,11 @@ async def handle_finish(request):
                 {'reason': 'Missing result JSON'}, status=400)
 
         logfilenames = await import_logs(
-            output_directory, queue_processor.logfile_manager,
+            log_directory, queue_processor.logfile_manager,
             active_run.queue_item.package, run_id)
+
+        await queue_processor.artifact_manager.store_artifacts(
+            run_id, artifact_directory)
 
         if worker_result.code is not None:
             result = JanitorResult(

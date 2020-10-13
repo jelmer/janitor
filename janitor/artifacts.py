@@ -96,6 +96,8 @@ class GCSArtifactManager(ArtifactManager):
             self, run_id, local_path, names=None, timeout=30):
         if names is None:
             names = os.listdir(local_path)
+        if not names:
+            return
         todo = []
         for name in names:
             with open(os.path.join(local_path, name), 'rb') as f:
