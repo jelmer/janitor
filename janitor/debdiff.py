@@ -120,11 +120,9 @@ class DebdiffError(Exception):
 
 
 async def run_debdiff(
-        old_binaries: List[Tuple[str, str]],
-        new_binaries: List[Tuple[str, str]]) -> bytes:
+        old_binaries: List[str], new_binaries: List[str]) -> bytes:
     args = (['debdiff', '--from'] +
-            [p for (n, p) in old_binaries] + ['--to'] +
-            [p for (n, p) in new_binaries])
+            old_binaries + ['--to'] + new_binaries)
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
