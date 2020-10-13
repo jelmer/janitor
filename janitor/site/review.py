@@ -7,7 +7,7 @@ from janitor import state
 from janitor.site import (
     env,
     get_archive_diff,
-    ArchiveDiffUnavailable,
+    BuildDiffUnavailable,
     DebdiffRetrievalError,
     render_template_for_request,
     )
@@ -70,8 +70,8 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
             return text.decode('utf-8', 'replace')
         except DebdiffRetrievalError as e:
             return 'Unable to retrieve debdiff: %r' % e
-        except ArchiveDiffUnavailable:
-            return '<p>No debdiff generated</p>'
+        except BuildDiffUnavailable:
+            return '<p>No build diff generated</p>'
 
     kwargs = {
         'show_diff': show_diff,

@@ -27,7 +27,7 @@ from . import (
     html_template,
     get_archive_diff,
     render_template_for_request,
-    ArchiveDiffUnavailable,
+    BuildDiffUnavailable,
     DebdiffRetrievalError,
     )
 from ..policy_pb2 import PolicyConfig
@@ -377,7 +377,7 @@ async def handle_archive_diff(request):
             request.app.http_client_session, request.app.differ_url, run,
             unchanged_run, kind=kind, filter_boring=filter_boring,
             accept=request.headers.get('ACCEPT', '*/*'))
-    except ArchiveDiffUnavailable as e:
+    except BuildDiffUnavailable as e:
         return web.json_response(
             {'reason':
                 'debdiff not calculated yet (run: %s, unchanged run: %s)' %
@@ -392,7 +392,7 @@ async def handle_archive_diff(request):
             status=404)
     except DebdiffRetrievalError as e:
         return web.json_response(
-            {'reason': 'unable to contact archiver for debdiff: %r' % e,
+            {'reason': 'unable to contact differ for binary diff: %r' % e,
              'inner_reason': e.args[0]},
             status=503)
 
@@ -771,6 +771,10 @@ async def handle_run_finish(request: web.Request) -> web.Response:
         except ClientConnectorError:
             return web.Response(
                 text='unable to contact archiver',
+                status=502)
+        except ServerDisconnectedError:
+            return web.Response(
+                text='server disconnected while uploading to archive',
                 status=502)
 
         for key in ['changes_filename', 'build_version', 'build_distribution']:

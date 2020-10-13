@@ -317,7 +317,7 @@ if __name__ == '__main__':
             vs = await write_apt_repo(conn, suite)
             vs['suite_config'] = get_suite_config(request.app.config, suite)
             text = await render_template_for_request(
-                suite + 'html', request, vs)
+                suite + '.html', request, vs)
             return web.Response(
                 content_type='text/html',
                 text=text,
@@ -521,7 +521,7 @@ if __name__ == '__main__':
         headers={'Cache-Control': 'max-age=600'})
     async def handle_maintainer_index(request):
         if request.user:
-            email = request.user['email']
+            email = request.user.get('email')
         else:
             email = request.query.get('email')
         if email:
@@ -855,7 +855,7 @@ if __name__ == '__main__':
             'client_secret': request.app.config.oauth2_provider.client_secret,
             'grant_type': 'authorization_code',
             'redirect_uri': str(redirect_uri),
-        args.differ_url, }
+        }
         async with request.app.http_client_session.post(
                 token_url, params=params) as resp:
             if resp.status != 200:
