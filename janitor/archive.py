@@ -196,9 +196,10 @@ async def handle_download(request):
             status=404, text='source %s/%s does not exist.' % (
                 source, version))
 
-    response = web.StreamResponse(request)
-
     mpwriter = MultipartWriter()
+    response = web.StreamResponse(status=200)
+    response.headers.update(mpwriter.headers)
+    await response.prepare(request)
     for name, path in binaries:
         with open(path, 'rb') as f:
             mpwriter.append(f)

@@ -117,6 +117,18 @@ class GCSArtifactManager(ArtifactManager):
                 yield log_id
             ids.add(log_id)
 
+    async def retrieve_artifacts(self, run_id, local_path):
+        names = await self.bucket.list_blobs(prefix=run_id+'/')
+        if not names:
+            raise ArtifactsMissing(run_id)
+        # TODO: parallize
+        for name in names:
+            blob = await self.bucket.get_blob(name)
+            with open(
+                    os.path.join(local_path, os.path.basename(name)),
+                    'wb+') as f:
+                f.write(await blob.download())
+
 
 def get_artifact_manager(location):
     if location.startswith('https://storage.googleapis.com'):
