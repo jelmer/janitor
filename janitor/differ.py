@@ -16,8 +16,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp import ClientSession
 import asyncio
 from contextlib import ExitStack
+import json
 import os
 import re
 import sys
@@ -54,14 +56,20 @@ async def retrieve_artifacts_from_apt(archiver_url, run, target):
         'source': run.package,
         'version': str(run.build_version),
         'suite': run.suite})
-    async with web.get(url) as resp:
-        reader = MultipartReader.from_response(resp)
-        while True:
-            part = await reader.next()
-            if part is None:
-                break
-            with open(os.path.join(target, part.filename), 'wb') as f:
-                f.write(await part.read())
+    async with ClientSession() as session:
+        async with session.get(url) as resp:
+            if resp.status == 404:
+                raise ArtifactsMissing(run.id, await resp.text())
+            if resp != 200:
+                raise Exception('failed to retrieve artifact (%s): %d' % (
+                    url, resp.status))
+            reader = MultipartReader.from_response(resp)
+            while True:
+                part = await reader.next()
+                if part is None:
+                    break
+                with open(os.path.join(target, part.filename), 'wb') as f:
+                    f.write(await part.read())
 
 
 async def retrieve_artifacts(artifact_manager, run, target, archiver_url=None):
@@ -84,32 +92,57 @@ def find_binaries(path):
 
 
 async def handle_debdiff(request):
-    old_id = request.query['old_id']
-    new_id = request.query['new_id']
+    old_id = request.match_info['old_id']
+    new_id = request.match_info['new_id']
 
     async with request.app.db.acquire() as conn:
         old_run = await state.get_run(conn, old_id)
         new_run = await state.get_run(conn, new_id)
 
-    with ExitStack() as es:
-        old_dir = es.enter_context(TemporaryDirectory())
-        new_dir = es.enter_context(TemporaryDirectory())
+    if request.app.debdiff_cache_path:
+        cache_path = os.path.join(
+            request.app.debdiff_cache_path, '%s-%s' % (old_id, new_id))
+        try:
+            with open(cache_path, 'rb') as f:
+                debdiff = f.read()
+        except FileNotFoundError:
+            debdiff = None
+    else:
+        cache_path = None
+        debdiff = None
 
-        # TODO: parallelize
-        await retrieve_artifacts(
-            request.app.artifact_manager, old_run, old_dir,
-            request.app.archiver_url)
-        await retrieve_artifacts(
-            request.app.artifact_manager, new_run, new_dir,
-            request.app.archiver_url)
+    if debdiff is None:
+        with ExitStack() as es:
+            old_dir = es.enter_context(TemporaryDirectory())
+            new_dir = es.enter_context(TemporaryDirectory())
 
-    old_binaries = find_binaries(old_dir)
-    new_binaries = find_binaries(new_dir)
+            # TODO: parallelize
+            try:
+                await retrieve_artifacts(
+                    request.app.artifact_manager, old_run, old_dir,
+                    request.app.archiver_url)
+            except ArtifactsMissing as e:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id %s: %r' % (old_run.id, e))
+            try:
+                await retrieve_artifacts(
+                    request.app.artifact_manager, new_run, new_dir,
+                    request.app.archiver_url)
+            except ArtifactsMissing as e:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id %s: %r' % (new_run.id, e))
 
-    try:
-        debdiff = await run_debdiff(old_binaries, new_binaries)
-    except DebdiffError as e:
-        return web.Response(status=400, text=e.args[0])
+            old_binaries = find_binaries(old_dir)
+            new_binaries = find_binaries(new_dir)
+
+            try:
+                debdiff = await run_debdiff(old_binaries, new_binaries)
+            except DebdiffError as e:
+                return web.Response(status=400, text=e.args[0])
+
+        if cache_path:
+            with open(cache_path, 'wb') as f:
+                f.write(debdiff)
 
     if 'filter_boring' in request.query:
         debdiff = filter_debdiff_boring(
@@ -137,28 +170,6 @@ async def handle_debdiff(request):
 async def handle_diffoscope(request):
     post = await request.post()
 
-    old_id = request.query['old_id']
-    new_id = request.query['new_id']
-
-    async with request.app.db.acquire() as conn:
-        old_run = await state.get_run(conn, old_id)
-        new_run = await state.get_run(conn, new_id)
-
-    with ExitStack() as es:
-        old_dir = es.enter_context(TemporaryDirectory())
-        new_dir = es.enter_context(TemporaryDirectory())
-
-        # TODO: parallelize
-        await retrieve_artifacts(
-            request.app.artifact_manager, old_run, old_dir,
-            request.app.archiver_url)
-        await retrieve_artifacts(
-            request.app.artifact_manager, new_run, new_dir,
-            request.app.archiver_url)
-
-    old_binaries = find_binaries(old_dir)
-    new_binaries = find_binaries(new_dir)
-
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/plain', '*/*'):
             content_type = 'text/plain'
@@ -178,25 +189,73 @@ async def handle_diffoscope(request):
                  'text/html, text/plain, application/json, '
                  'application/markdown')
 
-    def set_limits():
-        import resource
-        # Limit to 2Gb
-        resource.setrlimit(
-            resource.RLIMIT_AS, (1800 * 1024 * 1024, 2000 * 1024 * 1024))
+    old_id = request.match_info['old_id']
+    new_id = request.match_info['new_id']
 
-    try:
-        diffoscope_diff = await asyncio.wait_for(
-                run_diffoscope(
-                    old_binaries, new_binaries,
-                    set_limits), 60.0)
-    except MemoryError:
-        raise web.HTTPServiceUnavailable(
-             'diffoscope used too much memory')
-    except asyncio.TimeoutError:
-        raise web.HTTPServiceUnavailable('diffoscope timed out')
+    async with request.app.db.acquire() as conn:
+        old_run = await state.get_run(conn, old_id)
+        new_run = await state.get_run(conn, new_id)
+
+    if request.app.diffoscope_cache_path:
+        cache_path = os.path.join(
+            request.app.diffoscope_cache_path,
+            '%s-%s.json' % (old_run.id, new_run.id))
+        try:
+            with open(cache_path, 'rb') as f:
+                diffoscope_diff = json.load(f)
+        except FileNotFoundError:
+            diffoscope_diff = None
+    else:
+        cache_path = None
+        diffoscope_diff = None
+
+    if diffoscope_diff is None:
+        with ExitStack() as es:
+            old_dir = es.enter_context(TemporaryDirectory())
+            new_dir = es.enter_context(TemporaryDirectory())
+
+            # TODO: parallelize
+            try:
+                await retrieve_artifacts(
+                    request.app.artifact_manager, old_run, old_dir,
+                    request.app.archiver_url)
+            except ArtifactsMissing as e:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id %s: %r' % (old_run.id, e))
+            try:
+                await retrieve_artifacts(
+                    request.app.artifact_manager, new_run, new_dir,
+                    request.app.archiver_url)
+            except ArtifactsMissing as e:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id %s: %r' % (new_run.id, e))
+
+            old_binaries = find_binaries(old_dir)
+            new_binaries = find_binaries(new_dir)
+
+            def set_limits():
+                import resource
+                # Limit to 2Gb
+                resource.setrlimit(
+                    resource.RLIMIT_AS, (1800 * 1024 * 1024, 2000 * 1024 * 1024))
+
+            try:
+                diffoscope_diff = await asyncio.wait_for(
+                        run_diffoscope(
+                            old_binaries, new_binaries,
+                            set_limits), 60.0)
+            except MemoryError:
+                raise web.HTTPServiceUnavailable(
+                     'diffoscope used too much memory')
+            except asyncio.TimeoutError:
+                raise web.HTTPServiceUnavailable('diffoscope timed out')
+        
+        if cache_path is not None:
+            with open(cache_path, 'w') as f:
+                json.dump(diffoscope_diff, f)
 
     diffoscope_diff['source1'] = '%s version %s (%s)' % (
-        new_run.package, old_run.build_version, old_run.suite)
+        old_run.package, old_run.build_version, old_run.suite)
     diffoscope_diff['source2'] = '%s version %s (%s)' % (
         new_run.package, new_run.build_version, new_run.suite)
 
@@ -228,6 +287,16 @@ async def run_web_server(listen_addr, port, config, artifact_manager,
     app.cache_path = cache_path
     app.artifact_manager = artifact_manager
     app.archiver_url = archiver_url
+    if cache_path:
+        app.diffoscope_cache_path = os.path.join(cache_path, 'diffoscope')
+        if not os.path.isdir(app.diffoscope_cache_path):
+            os.mkdir(app.diffoscope_cache_path)
+        app.debdiff_cache_path = os.path.join(cache_path, 'debdiff')
+        if not os.path.isdir(app.debdiff_cache_path):
+            os.mkdir(app.debdiff_cache_path)
+    else:
+        app.diffoscope_cache_path = None
+        app.debdiff_cache_path = None
     setup_metrics(app)
     app.router.add_get(
         '/debdiff/{old_id}/{new_id}',
@@ -235,6 +304,9 @@ async def run_web_server(listen_addr, port, config, artifact_manager,
     app.router.add_get(
         '/diffoscope/{old_id}/{new_id}',
         handle_diffoscope, name='diffoscope')
+    async def connect_artifact_manager(app):
+        await app.artifact_manager.__aenter__()
+    app.on_startup.append(connect_artifact_manager)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -249,7 +321,7 @@ def main(argv=None):
         help='Listen address', default='localhost')
     parser.add_argument(
         '--port', type=int,
-        help='Listen port', default=9919)
+        help='Listen port', default=9920)
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
