@@ -229,6 +229,10 @@ if __name__ == '__main__':
         default='http://localhost:9914/',
         help='URL for runner.')
     parser.add_argument(
+        '--differ-url', type=str,
+        default='http://localhost:9920/',
+        help='URL for differ.')
+    parser.add_argument(
         "--policy",
         help="Policy file to read.", type=str,
         default=os.path.join(
@@ -589,7 +593,7 @@ if __name__ == '__main__':
             request.app.database,
             request.app.http_client_session,
             request.app.config,
-            request.app.archiver_url,
+            request.app.differ_url,
             logfile_manager, run, request.app.publisher_url,
             is_admin=is_admin(request))
 
@@ -642,7 +646,7 @@ if __name__ == '__main__':
                 request.app.config,
                 request.app.policy,
                 request.app.http_client_session,
-                request.app.archiver_url,
+                request.app.differ_url,
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
@@ -660,7 +664,7 @@ if __name__ == '__main__':
                 request.app.config,
                 request.app.policy,
                 request.app.http_client_session,
-                request.app.archiver_url,
+                request.app.differ_url,
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
@@ -678,7 +682,7 @@ if __name__ == '__main__':
                 request.app.config,
                 request.app.policy,
                 request.app.http_client_session,
-                request.app.archiver_url,
+                request.app.differ_url,
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
@@ -697,7 +701,7 @@ if __name__ == '__main__':
                 request.app.config,
                 request.app.policy,
                 request.app.http_client_session,
-                request.app.archiver_url,
+                request.app.differ_url,
                 request.app.publisher_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
@@ -760,7 +764,7 @@ if __name__ == '__main__':
                 request.app.database,
                 request.app.config,
                 request.app.http_client_session,
-                request.app.archiver_url,
+                request.app.differ_url,
                 pkg, suite, run_id)
         except KeyError:
             raise web.HTTPNotFound()
@@ -823,7 +827,7 @@ if __name__ == '__main__':
                 conn, post['run_id'], review_status)
             text = await generate_review(
                 conn, request, request.app.http_client_session,
-                request.app.archiver_url, request.app.publisher_url,
+                request.app.differ_url, request.app.publisher_url,
                 suites=[run.suite])
             return web.Response(content_type='text/html', text=text)
 
@@ -833,7 +837,7 @@ if __name__ == '__main__':
         async with request.app.database.acquire() as conn:
             text = await generate_review(
                 conn, request, request.app.http_client_session,
-                request.app.archiver_url, request.app.publisher_url,
+                request.app.differ_url, request.app.publisher_url,
                 suites=suites)
         return web.Response(content_type='text/html', text=text)
 
@@ -851,7 +855,7 @@ if __name__ == '__main__':
             'client_secret': request.app.config.oauth2_provider.client_secret,
             'grant_type': 'authorization_code',
             'redirect_uri': str(redirect_uri),
-        }
+        args.differ_url, }
         async with request.app.http_client_session.post(
                 token_url, params=params) as resp:
             if resp.status != 200:
@@ -1184,6 +1188,7 @@ if __name__ == '__main__':
     app.topic_notifications = Topic()
     app.runner_url = args.runner_url
     app.archiver_url = args.archiver_url
+    app.differ_url = args.differ_url
     app.policy = policy_config
     app.publisher_url = args.publisher_url
     if config.oauth2_provider and config.oauth2_provider.base_url:
@@ -1212,7 +1217,7 @@ if __name__ == '__main__':
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url,  # type: ignore
-            args.archiver_url, config, policy_config,
+            args.archiver_url, args.differ_url, config, policy_config,
             enable_external_workers=(not args.no_external_workers),
             external_url=(
                 app.external_url.join(URL('api')

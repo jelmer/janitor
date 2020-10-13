@@ -154,11 +154,8 @@ class DebdiffRetrievalError(Exception):
 class ArchiveDiffUnavailable(Exception):
     """The archive diff is not available."""
 
-    def __init__(self, unavailable_run):
-        self.unavailable_run = unavailable_run
 
-
-async def get_archive_diff(client, archiver_url, run, unchanged_run,
+async def get_archive_diff(client, differ_url, run, unchanged_run,
                            kind, accept=None, filter_boring=False):
     if unchanged_run.build_version is None:
         raise DebdiffRetrievalError('unchanged run not built')
@@ -166,13 +163,8 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
         raise DebdiffRetrievalError('run not built')
     if kind not in ('debdiff', 'diffoscope'):
         raise DebdiffRetrievalError('invalid diff kind %r' % kind)
-    url = urllib.parse.urljoin(archiver_url, kind)
+    url = urllib.parse.urljoin(differ_url, kind, unchanged_run.id, run.id)
     payload = {
-        'old_suite': 'unchanged',
-        'new_suite': run.suite,
-        'source': unchanged_run.package,
-        'old_version': unchanged_run.build_version,
-        'new_version': run.build_version,
         'jquery_url': 'https://janitor.debian.org/_static/jquery.js',
         'css_url': None,
     }
@@ -189,14 +181,7 @@ async def get_archive_diff(client, archiver_url, run, unchanged_run,
             if resp.status == 200:
                 return await resp.read(), resp.content_type
             elif resp.status == 404:
-                unavailable_arm = resp.headers.get('X-Arm')
-                if unavailable_arm == 'old':
-                    unavailable_run = unchanged_run
-                elif unavailable_arm == 'new':
-                    unavailable_run = run
-                else:
-                    unavailable_run = None
-                raise ArchiveDiffUnavailable(unavailable_run)
+                raise ArchiveDiffUnavailable()
             else:
                 raise DebdiffRetrievalError(
                     'Unable to get debdiff: %s' % await resp.text())

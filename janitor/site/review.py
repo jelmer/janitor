@@ -30,7 +30,7 @@ async def generate_rejected(conn, suite=None):
     return {'entries': entries, 'suite': suite}
 
 
-async def generate_review(conn, request, client, archiver_url, publisher_url,
+async def generate_review(conn, request, client, differ_url, publisher_url,
                           suites=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
@@ -65,7 +65,7 @@ async def generate_review(conn, request, client, archiver_url, publisher_url,
             return '<p>No control run</p>'
         try:
             text, unused_content_type = await get_archive_diff(
-                client, archiver_url, run, unchanged_run,
+                client, differ_url, run, unchanged_run,
                 kind='debdiff', filter_boring=True, accept='text/html')
             return text.decode('utf-8', 'replace')
         except DebdiffRetrievalError as e:

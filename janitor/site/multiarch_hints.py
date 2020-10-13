@@ -11,10 +11,10 @@ from janitor.site import (
 SUITE = 'multiarch-fixes'
 
 
-async def generate_pkg_file(db, config, policy, client, archiver_url,
+async def generate_pkg_file(db, config, policy, client, differ_url,
                             publisher_url, package, run_id=None):
     return await generate_pkg_context(
-        db, config, SUITE, policy, client, archiver_url, publisher_url,
+        db, config, SUITE, policy, client, differ_url, publisher_url,
         package, run_id=run_id)
 
 
