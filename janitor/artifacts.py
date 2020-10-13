@@ -131,7 +131,10 @@ if __name__ == '__main__':
     import argparse
     import asyncio
     parser = argparse.ArgumentParser()
-    parser.add_argument('location', type=str)
+    subparsers = parser.add_subparsers(dest='command')
+    list_parser = subparsers.add_parser('list')
+    list_parser.add_argument('location', type=str)
     args = parser.parse_args()
-    manager = get_artifact_manager(args.location)
-    asyncio.run(list_ids(manager))
+    if args.command == 'list':
+        manager = get_artifact_manager(args.location)
+        asyncio.run(list_ids(manager))
