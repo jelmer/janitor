@@ -177,17 +177,32 @@ HOST_RENAMES = {
 @json_chart_data(max_age=60)
 async def handle_package_hosters(request, conn):
     from urllib.parse import urlparse
+    minimum = int(request.query.get('min', 0))
     query = "select name, vcs_type, branch_url from package where not removed"
 
     hosters = {}
     for name, vcs, url in await conn.fetch(query):
-        host = urlparse(url)[1]
-        host = host.split(':')[0]
-        if '@' in host:
-            host = host.split('@')[1]
-        name = HOST_RENAMES.get(host, host)
+        if url is None:
+            name = None
+        else:
+            host = urlparse(url)[1]
+            try:
+                host = host.split(':')[0]
+            except TypeError:
+                raise TypeError(url)
+            if '@' in host:
+                host = host.split('@')[1]
+            name = HOST_RENAMES.get(host, host)
         hosters.setdefault((name, vcs), 0)
         hosters[(name, vcs)] += 1
+
+    if minimum:
+        for k, v in list(hosters.items()):
+            if v < minimum:
+                restk = ('rest', k[1])
+                hosters.setdefault(restk, 0)
+                hosters[restk] += v
+                del hosters[k]
 
     return [
         (name, vcs, count) for (name, vcs), count in sorted(
