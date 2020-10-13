@@ -1,10 +1,10 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "orphan-sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cme-sidebar.html" %}{% endblock %}
 {% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, result_code_explanation, display_result_code, display_branch_url with context %}
-{% block page_title %}Orphaning Pakcages - {{ package }}{% endblock %}
+{% block page_title %}CME Packages - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
-<h1>Orphaning Package - {{ package }}</h1>
+<h1>CME Package - {{ package }}</h1>
 <ul class="metadata">
 {% if tracker_url(package) %}
 <li><a class="reference external" href="{{ tracker_url(package) }}">QA Page</a></li>
