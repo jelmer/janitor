@@ -18,6 +18,7 @@
 """Artifacts."""
 
 from aiohttp import ClientSession, ClientResponseError
+import asyncio
 
 import os
 import shutil
@@ -95,17 +96,19 @@ class GCSArtifactManager(ArtifactManager):
             self, run_id, local_path, names=None, timeout=30):
         if names is None:
             names = os.listdir(local_path)
+        todo = []
         for name in names:
             with open(os.path.join(local_path, name), 'rb') as f:
                 uploaded_data = f.read()
-            try:
-                await self.storage.upload(
+                todo.append(self.storage.upload(
                     self.bucket_name, '%s/%s' % (run_id, name),
-                    uploaded_data, timeout=timeout)
-            except ClientResponseError as e:
-                if e.status == 503:
-                    raise ServiceUnavailable()
-                raise
+                    uploaded_data, timeout=timeout))
+        try:
+            await asyncio.gather(*todo)
+        except ClientResponseError as e:
+            if e.status == 503:
+                raise ServiceUnavailable()
+            raise
         note('Uploaded %r to run %s in bucket %s.',
              names, run_id, self.bucket_name)
 
@@ -128,6 +131,19 @@ class GCSArtifactManager(ArtifactManager):
                     os.path.join(local_path, os.path.basename(name)),
                     'wb+') as f:
                 f.write(await blob.download())
+
+    async def retrieve_artifacts(self, run_id, local_path):
+        names = await self.bucket.list_blobs(prefix=run_id+'/')
+        if not names:
+            raise ArtifactsMissing(run_id)
+        async def download_blob(name):
+            blob = await self.bucket.get_blob(name)
+            with open(
+                    os.path.join(local_path, os.path.basename(name)),
+                    'wb+') as f:
+                f.write(await blob.download())
+
+        await asyncio.gather(*[download_blob(name) for name in names])
 
 
 def get_artifact_manager(location):
