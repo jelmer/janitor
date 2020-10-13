@@ -404,7 +404,7 @@ def parse_brz_error(line: str) -> Tuple[Optional[Problem], str]:
         return (error, line)
     if line.startswith('UScan failed to run'):
         return (None, line)
-    if line == 'Debcargo failed to run.'):
+    if line == 'Debcargo failed to run.':
         error = DebcargoFailure()
         return (error, line)
     return (None, line.split('\n')[0])
