@@ -87,7 +87,7 @@ def in_line_boundaries(i, boundaries):
 
 
 async def generate_run_file(
-        db, client, config, archiver_url, logfile_manager, run,
+        db, client, config, differ_url, logfile_manager, run,
         publisher_url, is_admin):
     (start_time, finish_time) = run.times
     kwargs = {}
@@ -151,7 +151,7 @@ async def generate_run_file(
             return ''
         try:
             debdiff, unused_content_type = await get_archive_diff(
-                client, archiver_url, run, unchanged_run,
+                client, differ_url, run, unchanged_run,
                 kind='debdiff', filter_boring=True, accept='text/html')
             return debdiff.decode('utf-8', 'replace')
         except ArchiveDiffUnavailable:

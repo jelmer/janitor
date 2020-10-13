@@ -14,7 +14,7 @@ from janitor.site import (
     )
 
 
-async def generate_pkg_context(db, config, suite, policy, client, archiver_url,
+async def generate_pkg_context(db, config, suite, policy, client, differ_url,
                                publisher_url, package, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, name=package)
@@ -99,7 +99,7 @@ async def generate_pkg_context(db, config, suite, policy, client, archiver_url,
             return ''
         try:
             debdiff, content_type = await get_archive_diff(
-                client, archiver_url, run, unchanged_run,
+                client, differ_url, run, unchanged_run,
                 kind='debdiff', filter_boring=True, accept='text/html')
             return debdiff.decode('utf-8', 'replace')
         except ArchiveDiffUnavailable:

@@ -374,7 +374,7 @@ async def handle_archive_diff(request):
 
     try:
         debdiff, content_type = await get_archive_diff(
-            request.app.http_client_session, request.app.archiver_url, run,
+            request.app.http_client_session, request.app.differ_url, run,
             unchanged_run, kind=kind, filter_boring=filter_boring,
             accept=request.headers.get('ACCEPT', '*/*'))
     except ArchiveDiffUnavailable as e:
@@ -836,7 +836,7 @@ async def handle_get_active_run(request):
 
 def create_app(
         db, publisher_url: str, runner_url: str, archiver_url: str,
-        config: Config, policy_config: PolicyConfig,
+        differ_url: str, config: Config, policy_config: PolicyConfig,
         enable_external_workers: bool = True,
         external_url: Optional[URL] = None) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
@@ -849,6 +849,7 @@ def create_app(
     app.policy_config = policy_config
     app.publisher_url = publisher_url
     app.runner_url = runner_url
+    app.differ_url = differ_url
     app.archiver_url = archiver_url
     app.router.add_get(
         '/pkgnames', handle_packagename_list, name='api-package-names')

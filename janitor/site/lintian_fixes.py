@@ -16,10 +16,10 @@ SUITE = 'lintian-fixes'
 
 renamed_tags = load_renamed_tags()
 
-async def generate_pkg_file(db, config, policy, client, archiver_url, publisher_url,
+async def generate_pkg_file(db, config, policy, client, differ_url, publisher_url,
                             package, run_id=None):
     kwargs = await generate_pkg_context(
-        db, config, SUITE, policy, client, archiver_url,
+        db, config, SUITE, policy, client, differ_url,
         publisher_url, package, run_id=run_id)
     run = kwargs['run']
     if run and run.result:

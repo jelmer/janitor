@@ -6,7 +6,7 @@ from . import tracker_url
 
 
 async def generate_pkg_file(
-        db, config, client, archiver_url, package, suite, run_id=None):
+        db, config, client, differ_url, package, suite, run_id=None):
     async with db.acquire() as conn:
         package = await state.get_package(conn, package)
         if package is None:
