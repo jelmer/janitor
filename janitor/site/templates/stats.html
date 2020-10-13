@@ -231,7 +231,7 @@ new Chart.Scatter($("#time-to-merge"), {
 <canvas id="package-host-chart" width="800" height="450"></canvas>
 <script>
 var package_host_chart;
-$.getJSON("/cupboard/stats/+chart/package-hosts", function (json) {
+$.getJSON("/cupboard/stats/+chart/package-hosts?min=10", function (json) {
 package_host_chart = new Chart($("#package-host-chart"), {
     type: 'pie',
     data: {
@@ -239,10 +239,13 @@ package_host_chart = new Chart($("#package-host-chart"), {
             if (a[0] == null) { return "no vcs" }
             return a[0] + " (" + a[1] + ")";
        }),
-       datasets: [{ data: $.map(json, function(a) { return a[2]; } }],
+       datasets: [{
+	  backgroundColor: $.map(window.chartColors, function(val, key) { return val; }),
+	  data: $.map(json, function(a) { return a[2]; }),
+     }],
     },
     options: {
-        title: { display: true, text: 'Package hosts' },
+        title: { display: true, text: 'Package hosts with at least 10 repositories' },
     },
 });
 });
