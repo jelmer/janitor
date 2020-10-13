@@ -720,8 +720,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
     run_id = request.match_info['run_id']
     reader = await request.multipart()
     result = None
-    with aiohttp.MultipartWriter('mixed') as archiver_writer, \
-            aiohttp.MultipartWriter('mixed') as runner_writer:
+    with aiohttp.MultipartWriter('mixed') as runner_writer:
         while True:
             part = await reader.next()
             if part is None:
@@ -736,49 +735,12 @@ async def handle_run_finish(request: web.Request) -> web.Response:
                      }, status=400)
             if part.filename == 'result.json':
                 result = await part.json()
-            elif part.filename.endswith('.log'):
-                runner_writer.append(await part.read(), headers=part.headers)
             else:
-                archiver_writer.append(await part.read(), headers=part.headers)
+                runner_writer.append(await part.read(), headers=part.headers)
 
     if result is None:
         return web.json_response(
             {'reason': 'missing result.json'}, status=400)
-
-    if len(archiver_writer) > 0:
-        archiver_url = urllib.parse.urljoin(
-            request.app.archiver_url, 'upload/%s' % run_id)
-        try:
-            async with request.app.http_client_session.post(
-                    archiver_url, data=archiver_writer) as resp:
-                if resp.status == 400:
-                    archiver_resp = await resp.json()
-                    return web.json_response({
-                        'component': 'archiver',
-                        'msg': archiver_resp['msg'],
-                        'failed_files': archiver_resp['failed_files']})
-                if resp.status not in (201, 200):
-                    try:
-                        internal_error = await resp.json()
-                    except ContentTypeError:
-                        internal_error = await resp.text()
-                    return web.json_response({
-                        'internal-status': resp.status,
-                        'internal-reporter': 'archiver',
-                        'internal-result': internal_error},
-                        status=500)
-                archiver_result = await resp.json()
-        except ClientConnectorError:
-            return web.Response(
-                text='unable to contact archiver',
-                status=502)
-        except ServerDisconnectedError:
-            return web.Response(
-                text='server disconnected while uploading to archive',
-                status=502)
-
-        for key in ['changes_filename', 'build_version', 'build_distribution']:
-            result[key] = archiver_result.get(key)
 
     result['worker_name'] = worker_name
 
