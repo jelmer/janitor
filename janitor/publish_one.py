@@ -662,10 +662,10 @@ class DebdiffMissingRun(Exception):
         self.missing_run_id = missing_run_id
 
 
-def get_debdiff(external_url: str, log_id: str) -> bytes:
+def get_debdiff(differ_url: str, log_id: str) -> bytes:
     debdiff_url = (
         urllib.parse.urljoin(
-            external_url, '/api/run/%s/debdiff?filter_boring=1' % log_id))
+            differ_url, '/debdiff/BASE/%s?filter_boring=1' % log_id))
     headers = {'Accept': 'text/plain'}
 
     request = urllib.request.Request(debdiff_url, headers=headers)
@@ -686,12 +686,13 @@ def get_debdiff(external_url: str, log_id: str) -> bytes:
 
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
-        mode, log_id, local_branch_url, external_url,
+        mode, log_id, local_branch_url, differ_url: str, external_url: str,
         dry_run=False, require_binary_diff=False, derived_owner=None,
         possible_hosters=None,
         possible_transports=None, allow_create_proposal=None,
         reviewers=None):
 
+    subrunner: Publisher
     if command.startswith('new-upstream'):
         subrunner = NewUpstreamPublisher(command)
     elif command.startswith('lintian-brush'):
@@ -769,7 +770,7 @@ def publish_one(
         allow_create_proposal = subrunner.allow_create_proposal()
 
     try:
-        debdiff = get_debdiff(external_url, log_id)
+        debdiff = get_debdiff(differ_url, log_id)
     except DebdiffRetrievalError:
         raise PublishFailure(
             description='Unable to contact differ for build diff',
@@ -828,6 +829,7 @@ if __name__ == '__main__':
             subworker_result=request['subworker_result'],
             main_branch_url=request['main_branch_url'], mode=request['mode'],
             log_id=request['log_id'],
+            unchanged_log_id=request['unchanged_log_id'],
             external_url=request['external_url'].rstrip('/'),
             local_branch_url=request['local_branch_url'],
             dry_run=request['dry-run'],
@@ -835,6 +837,7 @@ if __name__ == '__main__':
             require_binary_diff=request['require-binary-diff'],
             possible_hosters=None, possible_transports=None,
             allow_create_proposal=request['allow_create_proposal'],
+            differ_url=request['differ_url'],
             reviewers=request.get('reviewers'))
     except PublishFailure as e:
         json.dump({'code': e.code, 'description': e.description}, sys.stdout)

@@ -381,7 +381,7 @@ ORDER BY finish_time DESC
 
 async def iter_runs(db: Database,
                     package: Optional[str] = None,
-                     run_id: Optional[str] = None,
+                    run_id: Optional[str] = None,
                     worker: Optional[str] = None,
                     limit: Optional[int] = None):
     async with db.acquire() as conn:
