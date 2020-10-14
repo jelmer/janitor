@@ -144,10 +144,10 @@ async def generate_run_file(
     kwargs['show_diff'] = show_diff
 
     async def show_debdiff():
-        if not run.build_version or not run.main_branch_revision:
+        if not run.has_artifacts() or not run.main_branch_revision:
             return ''
         unchanged_run = kwargs.get('unchanged_run')
-        if not unchanged_run or not unchanged_run.build_version:
+        if not unchanged_run or not unchanged_run.has_artifacts():
             return ''
         try:
             debdiff, unused_content_type = await get_archive_diff(
