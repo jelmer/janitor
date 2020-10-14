@@ -90,6 +90,9 @@ class GCSArtifactManager(ArtifactManager):
         self.bucket_name = URL(location).host
         self.creds_path = creds_path
 
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, 'gs://%s/' % self.bucket_name)
+
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
         self.session = ClientSession()
@@ -164,7 +167,6 @@ async def list_ids(manager):
 
 if __name__ == '__main__':
     import argparse
-    import asyncio
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest='command')
     list_parser = subparsers.add_parser('list')
