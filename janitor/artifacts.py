@@ -28,6 +28,9 @@ from yarl import URL
 from .trace import note
 
 
+DEFAULT_GCS_TIMEOUT = 60
+
+
 class ServiceUnavailable(Exception):
     """The remote server is temporarily unavailable."""
 
@@ -106,7 +109,7 @@ class GCSArtifactManager(ArtifactManager):
         return False
 
     async def store_artifacts(
-            self, run_id, local_path, names=None, timeout=30):
+            self, run_id, local_path, names=None, timeout=DEFAULT_GCS_TIMEOUT):
         if names is None:
             names = os.listdir(local_path)
         if not names:
@@ -135,17 +138,17 @@ class GCSArtifactManager(ArtifactManager):
                 yield log_id
             ids.add(log_id)
 
-    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None):
+    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None, timeout=DEFAULT_GCS_TIMEOUT):
         names = await self.bucket.list_blobs(prefix=run_id+'/')
         if not names:
             raise ArtifactsMissing(run_id)
 
         async def download_blob(name):
-            blob = await self.bucket.get_blob(name)
             with open(
                     os.path.join(local_path, os.path.basename(name)),
                     'wb+') as f:
-                f.write(await blob.download())
+                f.write(await self.storage.download(
+                    bucket=self.bucket_name, object_name=name, timeout=timeout))
 
         await asyncio.gather(*[
             download_blob(name) for name in names

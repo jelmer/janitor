@@ -64,7 +64,7 @@ from silver_platter.utils import (
     )
 
 from breezy.errors import PermissionDenied
-from breezy.propose import get_proposal_by_url, HosterLoginRequired
+from breezy.propose import get_proposal_by_url, HosterLoginRequired, UnsupportedHoster
 from breezy.transport import Transport
 import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.launchpad  # noqa: F401
@@ -467,24 +467,24 @@ async def publish_from_policy(
                 conn, run.package, run.suite,
                 requestor='publisher (diverged branches)')
         elif e.code in (
-                'missing-binary-diff-self', 'missing-binary-diff-control'):
+                'missing-build-diff-self', 'missing-build-diff-control'):
             unchanged_run = await state.get_unchanged_run(
                 conn, run.main_branch_revision)
-            if unchanged_run and unchanged_run.result_code == 'success':
+            if unchanged_run and unchanged_run.result_code != 'success':
                 description = (
-                    'Missing binary diff, but successful control run '
-                    'exists. Not published yet?')
-            elif unchanged_run:
-                description = (
-                    'Missing binary diff; last control run failed (%s).' %
+                    'Missing build diff; last control run failed (%s).' %
                     unchanged_run.result_code)
+            elif unchanged_run and unchanged_run.has_artifacts():
+                description = (
+                    'Missing build diff, but successful control run '
+                    'exists. Not published yet?')
             else:
                 description = (
                     'Missing binary diff; requesting control run.')
                 if run.main_branch_revision is not None:
                     await do_schedule_control(
                         conn, run.package, run.main_branch_revision,
-                        requestor='publisher (missing binary diff)')
+                        requestor='publisher (missing build diff)')
                 else:
                     warning(
                         'Successful run (%s) does not have main branch '
@@ -971,6 +971,7 @@ async def run_web_server(listen_addr: str, port: int,
     app.router.add_get(
         '/ws/merge-proposal', functools.partial(
             pubsub_handler, topic_merge_proposal))
+    app.router.add_post('/check-proposal', check_mp_request)
     app.router.add_post('/scan', scan_request)
     app.router.add_post('/refresh-status', refresh_proposal_status_request)
     app.router.add_post('/autopublish', autopublish_request)
@@ -982,6 +983,39 @@ async def run_web_server(listen_addr: str, port: int,
     await site.start()
 
 
+async def check_mp_request(request):
+    post = await request.post()
+    url = post['url']
+    try:
+        mp = get_proposal_by_url(url)
+    except UnsupportedHoster:
+        raise web.HTTPNotFound()
+    if mp.is_merged():
+        status = 'merged'
+    elif mp.is_closed():
+        status = 'closed'
+    else:
+        status = 'open'
+    async with request.app.db.acquire() as conn:
+        try:
+            modified = await check_existing_mp(
+                conn, mp, status,
+                topic_merge_proposal=request.app.topic_merge_proposal,
+                vcs_manager=request.app.vcs_manager, dry_run=('dry_run' in post),
+                external_url=request.app.external_url,
+                differ_url=request.app.differ_url,
+                rate_limiter=request.app.rate_limiter)
+        except NoRunForMergeProposal as e:
+            return web.Response(
+                status=500,
+                text="Unable to find local metadata for %s (%r), skipping." % (
+                    e.mp.url, e.revision))
+    if modified:
+        return web.Response(status=200, text="Merge proposal updated.")
+    else:
+        return web.Response(status=200, text="Merge proposal not updated.")
+
+
 async def scan_request(request):
     async def scan():
         async with request.app.db.acquire() as conn:
@@ -989,6 +1023,8 @@ async def scan_request(request):
                 conn, request.app.rate_limiter,
                 request.app.vcs_manager, request.app.topic_merge_proposal,
                 dry_run=request.app.dry_run,
+                differ_url=request.app.differ_url,
+                external_url=request.app.external_url,
                 modify_limit=request.app.modify_mp_limit)
     request.loop.create_task(scan())
     return web.Response(status=202, text="Scan started.")
@@ -1011,14 +1047,17 @@ async def refresh_proposal_status_request(request):
                 status = 'closed'
             else:
                 status = 'open'
-            await check_existing_mp(
-                conn, mp, status,
-                vcs_manager=request.app.vcs_manager,
-                rate_limiter=request.app.rate_limiter,
-                topic_merge_proposal=request.app.topic_merge_proposal,
-                dry_run=request.app.dry_run,
-                differ_url=request.app.differ_url,
-                external_url=request.app.external_url)
+            try:
+                await check_existing_mp(
+                    conn, mp, status,
+                    vcs_manager=request.app.vcs_manager,
+                    rate_limiter=request.app.rate_limiter,
+                    topic_merge_proposal=request.app.topic_merge_proposal,
+                    dry_run=request.app.dry_run,
+                    differ_url=request.app.differ_url,
+                    external_url=request.app.external_url)
+            except NoRunForMergeProposal as e:
+                warning('Unable to find local metadata for %s, skipping.', e.mp.url)
     request.loop.create_task(scan())
     return web.Response(status=202, text="Refresh of proposal started.")
 
@@ -1032,6 +1071,7 @@ async def autopublish_request(request):
             dry_run=request.app.dry_run,
             topic_publish=request.app.topic_publish,
             external_url=request.app.external_url,
+            differ_url=request.app.differ_url,
             topic_merge_proposal=request.app.topic_merge_proposal,
             reviewed_only=reviewed_only, push_limit=request.app.push_limit,
             require_binary_diff=request.app.require_binary_diff)
@@ -1073,6 +1113,14 @@ def is_conflicted(mp):
     except NotImplementedError:
         # TODO(jelmer): Download and attempt to merge locally?
         return None
+
+
+class NoRunForMergeProposal(Exception):
+    """No run matching merge proposal."""
+
+    def __init__(self, mp, revision):
+        self.mp = mp
+        self.revision = revision
 
 
 async def check_existing_mp(
@@ -1148,7 +1196,7 @@ async def check_existing_mp(
                      mp.url)
     if old_status == 'applied' and status == 'closed':
         status = old_status
-    if old_status != status:
+    if old_status != status or revision != old_revision:
         await update_proposal_status(mp, status, revision, package_name)
     if maintainer_email is not None and mps_per_maintainer is not None:
         mps_per_maintainer[status].setdefault(maintainer_email, 0)
@@ -1157,8 +1205,7 @@ async def check_existing_mp(
         return False
     mp_run = await state.get_merge_proposal_run(conn, mp.url)
     if mp_run is None:
-        warning('Unable to find local metadata for %s, skipping.', mp.url)
-        return False
+        raise NoRunForMergeProposal(mp, revision)
 
     last_run = await state.get_last_effective_run(
         conn, mp_run.package, mp_run.suite)
@@ -1310,14 +1357,19 @@ async def check_existing(
             warning('Already modified %d merge proposals, '
                     'waiting with the rest.', modified_mps)
             return
-        modified = await check_existing_mp(
-            conn, mp, status, topic_merge_proposal=topic_merge_proposal,
-            vcs_manager=vcs_manager, dry_run=dry_run,
-            external_url=external_url,
-            differ_url=differ_url,
-            rate_limiter=rate_limiter,
-            possible_transports=possible_transports,
-            mps_per_maintainer=mps_per_maintainer)
+        try:
+            modified = await check_existing_mp(
+                conn, mp, status, topic_merge_proposal=topic_merge_proposal,
+                vcs_manager=vcs_manager, dry_run=dry_run,
+                external_url=external_url,
+                differ_url=differ_url,
+                rate_limiter=rate_limiter,
+                possible_transports=possible_transports,
+                mps_per_maintainer=mps_per_maintainer)
+        except NoRunForMergeProposal as e:
+            warning('Unable to find local metadata for %s, skipping.', e.mp.url)
+            modified = False
+
         if modified:
             modified_mps += 1
 
