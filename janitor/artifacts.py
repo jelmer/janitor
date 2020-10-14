@@ -23,6 +23,8 @@ import asyncio
 import os
 import shutil
 
+from yarl import URL
+
 from .trace import note
 
 
@@ -84,9 +86,8 @@ class LocalArtifactManager(ArtifactManager):
 
 class GCSArtifactManager(ArtifactManager):
 
-    def __init__(self,
-                 creds_path=None, bucket_name='debian-janitor-artifacts'):
-        self.bucket_name = bucket_name
+    def __init__(self, location, creds_path=None):
+        self.bucket_name = URL(location).host
         self.creds_path = creds_path
 
     async def __aenter__(self):
@@ -149,8 +150,8 @@ class GCSArtifactManager(ArtifactManager):
 
 
 def get_artifact_manager(location):
-    if location.startswith('https://storage.googleapis.com'):
-        return GCSArtifactManager()
+    if location.startswith('gs://'):
+        return GCSArtifactManager(location)
     # TODO(jelmer): Support uploading to GCS
     return LocalArtifactManager(location)
 
