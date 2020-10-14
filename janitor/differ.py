@@ -20,6 +20,7 @@ from aiohttp import ClientSession
 import asyncio
 from contextlib import ExitStack
 import json
+import logging
 import os
 import re
 import sys
@@ -45,43 +46,10 @@ from .diffoscope import (
     format_diffoscope,
     )
 from .prometheus import setup_metrics
+from .trace import note
 
 
 suite_check = re.compile('^[a-z0-9-]+$')
-
-
-async def retrieve_artifacts_from_apt(archiver_url, run, target):
-    url = URL(archiver_url + '/download')
-    url = url.with_query({
-        'source': run.package,
-        'version': str(run.build_version),
-        'suite': run.suite})
-    async with ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status == 404:
-                raise ArtifactsMissing(run.id, await resp.text())
-            if resp != 200:
-                raise Exception('failed to retrieve artifact (%s): %d' % (
-                    url, resp.status))
-            reader = MultipartReader.from_response(resp)
-            while True:
-                part = await reader.next()
-                if part is None:
-                    break
-                with open(os.path.join(target, part.filename), 'wb') as f:
-                    f.write(await part.read())
-
-
-async def retrieve_artifacts(artifact_manager, run, target, archiver_url=None):
-    try:
-        await artifact_manager.retrieve_artifacts(run.id, target)
-    except ArtifactsMissing:
-        pass
-    else:
-        return
-    if archiver_url is not None:
-        await retrieve_artifacts_from_apt(archiver_url, run, target)
-    raise ArtifactsMissing(run.id)
 
 
 def find_binaries(path):
@@ -89,6 +57,10 @@ def find_binaries(path):
     for entry in os.scandir(path):
         ret.append((entry.name, entry.path))
     return ret
+
+
+def is_binary(n):
+    return n.endswith('.deb') or n.endswith('.udeb')
 
 
 async def handle_debdiff(request):
@@ -101,7 +73,7 @@ async def handle_debdiff(request):
 
     if request.app.debdiff_cache_path:
         cache_path = os.path.join(
-            request.app.debdiff_cache_path, '%s-%s' % (old_id, new_id))
+            request.app.debdiff_cache_path, '%s_%s' % (old_id, new_id))
         try:
             with open(cache_path, 'rb') as f:
                 debdiff = f.read()
@@ -112,31 +84,33 @@ async def handle_debdiff(request):
         debdiff = None
 
     if debdiff is None:
+        note('Generating debdiff between %s (%s/%s/%s) and %s (%s/%s/%s)',
+             old_run.id, old_run.package, old_run.build_version, old_run.suite,
+             new_run.id, new_run.package, new_run.build_version, new_run.suite)
         with ExitStack() as es:
             old_dir = es.enter_context(TemporaryDirectory())
             new_dir = es.enter_context(TemporaryDirectory())
 
-            # TODO: parallelize
             try:
-                await retrieve_artifacts(
-                    request.app.artifact_manager, old_run, old_dir,
-                    request.app.archiver_url)
+                await asyncio.gather(
+                    request.app.artifact_manager.retrieve_artifacts(
+                        old_run.id, old_dir, filter_fn=is_binary),
+                    request.app.artifact_manager.retrieve_artifacts(
+                        new_run.id, new_dir, filter_fn=is_binary))
             except ArtifactsMissing as e:
                 raise web.HTTPNotFound(
-                    text='No artifacts for run id %s: %r' % (old_run.id, e))
-            try:
-                await retrieve_artifacts(
-                    request.app.artifact_manager, new_run, new_dir,
-                    request.app.archiver_url)
-            except ArtifactsMissing as e:
-                raise web.HTTPNotFound(
-                    text='No artifacts for run id %s: %r' % (new_run.id, e))
+                    text='No artifacts for run id: %r' % e,
+                    headers={'unavailable_run_id': e.args[0]})
+
+            note('downloaded')
 
             old_binaries = find_binaries(old_dir)
             new_binaries = find_binaries(new_dir)
 
             try:
-                debdiff = await run_debdiff(old_binaries, new_binaries)
+                debdiff = await run_debdiff(
+                    [p for (n, p) in old_binaries],
+                    [p for (n, p) in new_binaries])
             except DebdiffError as e:
                 return web.Response(status=400, text=e.args[0])
 
@@ -146,8 +120,8 @@ async def handle_debdiff(request):
 
     if 'filter_boring' in request.query:
         debdiff = filter_debdiff_boring(
-            debdiff.decode(), old_run.build_version,
-            new_run.build_version).encode()
+            debdiff.decode(), str(old_run.build_version),
+            str(new_run.build_version)).encode()
 
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/x-diff', 'text/plain', '*/*'):
@@ -168,8 +142,6 @@ async def handle_debdiff(request):
 
 
 async def handle_diffoscope(request):
-    post = await request.post()
-
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/plain', '*/*'):
             content_type = 'text/plain'
@@ -199,7 +171,7 @@ async def handle_diffoscope(request):
     if request.app.diffoscope_cache_path:
         cache_path = os.path.join(
             request.app.diffoscope_cache_path,
-            '%s-%s.json' % (old_run.id, new_run.id))
+            '%s_%s.json' % (old_run.id, new_run.id))
         try:
             with open(cache_path, 'rb') as f:
                 diffoscope_diff = json.load(f)
@@ -210,25 +182,23 @@ async def handle_diffoscope(request):
         diffoscope_diff = None
 
     if diffoscope_diff is None:
+        note('Generating difoscope between %s (%s/%s/%s) and %s (%s/%s/%s)',
+             old_run.id, old_run.package, old_run.build_version, old_run.suite,
+             new_run.id, new_run.package, new_run.build_version, new_run.suite)
         with ExitStack() as es:
             old_dir = es.enter_context(TemporaryDirectory())
             new_dir = es.enter_context(TemporaryDirectory())
 
-            # TODO: parallelize
             try:
-                await retrieve_artifacts(
-                    request.app.artifact_manager, old_run, old_dir,
-                    request.app.archiver_url)
+                await asyncio.gather(
+                    request.app.artifact_manager.retrieve_artifacts(
+                        old_run.id, old_dir, filter_fn=is_binary),
+                    request.app.artifact_manager.retrieve_artifacts(
+                        new_run.id, new_dir, filter_fn=is_binary))
             except ArtifactsMissing as e:
                 raise web.HTTPNotFound(
-                    text='No artifacts for run id %s: %r' % (old_run.id, e))
-            try:
-                await retrieve_artifacts(
-                    request.app.artifact_manager, new_run, new_dir,
-                    request.app.archiver_url)
-            except ArtifactsMissing as e:
-                raise web.HTTPNotFound(
-                    text='No artifacts for run id %s: %r' % (new_run.id, e))
+                    text='No artifacts for run id: %r' % e,
+                    headers={'unavailable_run_id': e.args[0]})
 
             old_binaries = find_binaries(old_dir)
             new_binaries = find_binaries(new_dir)
@@ -237,19 +207,21 @@ async def handle_diffoscope(request):
                 import resource
                 # Limit to 2Gb
                 resource.setrlimit(
-                    resource.RLIMIT_AS, (1800 * 1024 * 1024, 2000 * 1024 * 1024))
+                    resource.RLIMIT_AS,
+                    (1800 * 1024 * 1024, 2000 * 1024 * 1024))
 
             try:
                 diffoscope_diff = await asyncio.wait_for(
                         run_diffoscope(
-                            old_binaries, new_binaries,
+                            old_binaries,
+                            new_binaries,
                             set_limits), 60.0)
             except MemoryError:
                 raise web.HTTPServiceUnavailable(
-                     'diffoscope used too much memory')
+                     text='diffoscope used too much memory')
             except asyncio.TimeoutError:
-                raise web.HTTPServiceUnavailable('diffoscope timed out')
-        
+                raise web.HTTPServiceUnavailable(text='diffoscope timed out')
+
         if cache_path is not None:
             with open(cache_path, 'w') as f:
                 json.dump(diffoscope_diff, f)
@@ -264,29 +236,28 @@ async def handle_diffoscope(request):
     title = 'diffoscope for %s applied to %s' % (
         new_run.suite, new_run.package)
 
-    if 'filter_boring' in post:
+    if 'filter_boring' in request.query:
         filter_diffoscope_boring(
-            diffoscope_diff, old_run.build_version,
-            new_run.build_version, old_run.suite, new_run.suite)
+            diffoscope_diff, str(old_run.build_version),
+            str(new_run.build_version), old_run.suite, new_run.suite)
         title += ' (filtered)'
 
     debdiff = await format_diffoscope(
         diffoscope_diff, content_type,
-        title=title, jquery_url=post.get('jquery_url'),
-        css_url=post.get('css_url'))
+        title=title, jquery_url=request.query.get('jquery_url'),
+        css_url=request.query.get('css_url'))
 
     return web.Response(text=debdiff, content_type=content_type)
 
 
 async def run_web_server(listen_addr, port, config, artifact_manager,
-                         db, cache_path, archiver_url):
+                         db, cache_path):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.db = db
     app.config = config
     app.cache_path = cache_path
     app.artifact_manager = artifact_manager
-    app.archiver_url = archiver_url
     if cache_path:
         app.diffoscope_cache_path = os.path.join(cache_path, 'diffoscope')
         if not os.path.isdir(app.diffoscope_cache_path):
@@ -328,9 +299,6 @@ def main(argv=None):
     parser.add_argument(
         '--cache-path', type=str, default=None,
         help='Path to cache.')
-    parser.add_argument(
-        '--archiver-url', type=str, default=None,
-        help='Archiver URL')
 
     args = parser.parse_args()
 
@@ -339,12 +307,14 @@ def main(argv=None):
 
     artifact_manager = get_artifact_manager(config.artifact_location)
 
+    logging.basicConfig(level=logging.DEBUG)
+
     db = state.Database(config.database_location)
     loop = asyncio.get_event_loop()
 
     loop.run_until_complete(run_web_server(
             args.listen_address, args.port, config, artifact_manager,
-            db, args.cache_path, args.archiver_url))
+            db, cache_path=args.cache_path))
     loop.run_forever()
 
 
