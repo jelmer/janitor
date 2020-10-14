@@ -362,13 +362,13 @@ async def handle_archive_diff(request):
                  'suite': run.suite,
                  }, status=404)
 
-    if run.result_code != 'success':
+    if not run.has_artifacts():
         raise web.HTTPNotFound(
-            text='Build %s was not successful' % run_id)
+            text='Build %s has no artifacts' % run_id)
 
-    if unchanged_run.result_code != 'success':
+    if not unchanged_run.has_artifacts():
         raise web.HTTPNotFound(
-            text='Unchanged build %s was not successful' % unchanged_run.id)
+            text='Unchanged build %s has no artifacts' % unchanged_run.id)
 
     filter_boring = ('filter_boring' in request.query)
 

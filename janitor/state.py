@@ -305,6 +305,10 @@ class Run(object):
     def age(self):
         return datetime.datetime.now() - self.times[1]
 
+    def has_artifacts(self):
+        # Reasonable proxy, for now?
+        return self.result_code == 'success'
+
     @classmethod
     def from_row(cls, row) -> 'Run':
         return cls(run_id=row[0],
