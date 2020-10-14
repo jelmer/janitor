@@ -34,6 +34,7 @@ import tempfile
 from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
 import uuid
 import urllib.parse
+from yarl import URL
 
 from debian.changelog import Version
 
@@ -604,6 +605,9 @@ async def check_resume_result(conn, suite, resume_branch):
 
 
 def suite_build_env(distro_config, suite_config, apt_location):
+    if apt_location.startswith('gs://'):
+        bucket_name = URL(apt_location).host
+        apt_location = 'https://storage.googleapis.com/%s/' % bucket_name
     env = {
         'EXTRA_REPOSITORIES': ':'.join([
             'deb %s %s/ main' % (apt_location, suite)
