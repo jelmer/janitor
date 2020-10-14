@@ -1016,6 +1016,9 @@ if __name__ == '__main__':
         '/{suite:%s}/pkg/' % SUITE_REGEX, handle_pkg_list,
         name='suite-package-list')
     apt_location = config.apt_location or args.archiver_url
+    if apt_location.startswith('gs://'):
+        apt_location = 'https://storage.googleapis.com/%s/' % (
+            URL(apt_location).host)
     app.router.register_resource(
         ForwardedResource('dists', apt_location.rstrip('/') + '/dists'))
     app.router.register_resource(
