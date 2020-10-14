@@ -362,11 +362,11 @@ async def handle_archive_diff(request):
                  'suite': run.suite,
                  }, status=404)
 
-    if run.build_version is None:
+    if run.result_code != 'success':
         raise web.HTTPNotFound(
             text='Build %s was not successful' % run_id)
 
-    if unchanged_run.build_version is None:
+    if unchanged_run.result_code != 'success':
         raise web.HTTPNotFound(
             text='Unchanged build %s was not successful' % unchanged_run.id)
 
@@ -383,8 +383,6 @@ async def handle_archive_diff(request):
                 'debdiff not calculated yet (run: %s, unchanged run: %s)' %
                 (run.id, unchanged_run.id),
              'run_id': [unchanged_run.id, run.id],
-             'build_version': [str(unchanged_run.build_version),
-                               str(run.build_version)],
              'unavailable_run_id': (
                  e.unavailable_run.id if e.unavailable_run else None),
              'suite': [unchanged_run.suite, run.suite],
