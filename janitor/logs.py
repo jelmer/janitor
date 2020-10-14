@@ -19,6 +19,7 @@ from aiohttp import ClientSession, ClientResponseError, ClientTimeout, ServerDis
 import gzip
 from io import BytesIO
 import os
+from yarl import URL
 
 
 class ServiceUnavailable(Exception):
@@ -140,9 +141,9 @@ class S3LogFileManager(LogFileManager):
 
 class GCSLogFilemanager(LogFileManager):
 
-    def __init__(self, creds_path=None, bucket_name='debian-janitor-logs'):
+    def __init__(self, location, creds_path=None):
         from gcloud.aio.storage import Storage
-        self.bucket_name = bucket_name
+        self.bucket_name = URL(location).host
         self.session = ClientSession()
         self.storage = Storage(service_file=creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
@@ -184,8 +185,8 @@ class GCSLogFilemanager(LogFileManager):
 
 
 def get_log_manager(location):
-    if location.startswith('https://storage.googleapis.com'):
-        return GCSLogFilemanager()
+    if location.startswith('gs://'):
+        return GCSLogFilemanager(location)
     if location.startswith('http:') or location.startswith('https:'):
         return S3LogFileManager(location)
     return FileSystemLogFileManager(location)
