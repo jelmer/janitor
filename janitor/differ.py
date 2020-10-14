@@ -312,6 +312,9 @@ def main(argv=None):
     db = state.Database(config.database_location)
     loop = asyncio.get_event_loop()
 
+    if args.cache_path and not os.path.isdir(args.cache_path):
+        os.makedirs(args.cache_path)
+
     loop.run_until_complete(run_web_server(
             args.listen_address, args.port, config, artifact_manager,
             db, cache_path=args.cache_path))

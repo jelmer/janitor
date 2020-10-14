@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, UnixConnector, ClientTimeout, MultipartWriter
+from aiohttp import ClientSession, UnixConnector, ClientTimeout
 from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
 import json
@@ -32,19 +32,6 @@ from debian.changelog import Changelog, Version
 from debian.copyright import parse_multiline
 
 from .config import read_config, Config, Suite
-from .debdiff import (
-    run_debdiff,
-    DebdiffError,
-    filter_boring as filter_debdiff_boring,
-    htmlize_debdiff,
-    markdownify_debdiff,
-    )
-from .diffoscope import (
-    filter_boring as filter_diffoscope_boring,
-    filter_irrelevant as filter_diffoscope_irrelevant,
-    run_diffoscope,
-    format_diffoscope,
-    )
 from .prometheus import setup_metrics
 from prometheus_client import (
     Gauge,
@@ -172,220 +159,6 @@ def find_binary_paths(
         return None
 
 
-async def handle_download(request):
-    suite = request.query['suite']
-
-    if not suite_check.match(suite):
-        return web.Response(
-            status=400, text='Invalid suite %s' % suite)
-
-    source = request.query['source']
-    if not source:
-        return web.Response(status=400, text='No source package specified')
-
-    version = request.query['version']
-
-    archive_path = request.app.archive_path
-
-    binaries = find_binary_paths(
-            request.app.incoming_dir, archive_path,
-            source, version)
-
-    if binaries is None:
-        return web.Response(
-            status=404, text='source %s/%s does not exist.' % (
-                source, version))
-
-    mpwriter = MultipartWriter()
-    response = web.StreamResponse(status=200)
-    response.headers.update(mpwriter.headers)
-    await response.prepare(request)
-    for name, path in binaries:
-        with open(path, 'rb') as f:
-            mpwriter.append(f)
-    await mpwriter.write(response)
-    await response.write_eof()
-    return response
-
-
-async def handle_debdiff(request):
-    post = await request.post()
-
-    old_suite = post.get('old_suite', 'unchanged')
-    if not suite_check.match(old_suite):
-        return web.Response(
-            status=400, text='Invalid old suite %s' % old_suite)
-
-    try:
-        new_suite = post['new_suite']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: new_suite')
-
-    if not suite_check.match(new_suite):
-        return web.Response(
-            status=400, text='Invalid new suite %s' % new_suite)
-
-    source = post.get('source')
-    if not source:
-        return web.Response(status=400, text='No source package specified')
-
-    old_version = post['old_version']
-    new_version = post['new_version']
-
-    archive_path = request.app.archive_path
-
-    old_binaries = find_binary_paths(
-            request.app.incoming_dir, archive_path,
-            source, old_version)
-
-    if old_binaries is None:
-        return web.Response(
-            status=404, text='Old source %s/%s does not exist.' % (
-                source, old_version),
-            headers={'X-Arm': 'old'})
-
-    new_binaries = find_binary_paths(
-            request.app.incoming_dir, archive_path,
-            source, new_version)
-
-    if new_binaries is None:
-        return web.Response(
-            status=404, text='New source %s/%s does not exist.' % (
-                source, new_version),
-            headers={'X-Arm': 'new'})
-
-    try:
-        debdiff = await run_debdiff(
-            [p for (n, p) in old_binaries],
-            [p for (n, p) in new_binaries])
-    except DebdiffError as e:
-        return web.Response(status=400, text=e.args[0])
-
-    if 'filter_boring' in post:
-        debdiff = filter_debdiff_boring(
-            debdiff.decode(), old_version,
-            new_version).encode()
-
-    for accept in request.headers.get('ACCEPT', '*/*').split(','):
-        if accept in ('text/x-diff', 'text/plain', '*/*'):
-            return web.Response(
-                body=debdiff,
-                content_type='text/plain')
-        if accept == 'text/markdown':
-            return web.Response(
-                text=markdownify_debdiff(debdiff.decode('utf-8', 'replace')),
-                content_type='text/markdown')
-        if accept == 'text/html':
-            return web.Response(
-                text=htmlize_debdiff(debdiff.decode('utf-8', 'replace')),
-                content_type='text/html')
-    raise web.HTTPNotAcceptable(
-        text='Acceptable content types: '
-             'text/html, text/plain, text/markdown')
-
-
-async def handle_diffoscope(request):
-    post = await request.post()
-
-    old_suite = post.get('old_suite', 'unchanged')
-    if not suite_check.match(old_suite):
-        return web.Response(
-            status=400, text='Invalid old suite %s' % old_suite)
-
-    try:
-        new_suite = post['new_suite']
-    except KeyError:
-        return web.Response(
-            status=400, text='Missing argument: new_suite')
-
-    if not suite_check.match(new_suite):
-        return web.Response(
-            status=400, text='Invalid new suite %s' % new_suite)
-
-    source = post['source']
-    old_version = post['old_version']
-    new_version = post['new_version']
-
-    old_binaries = find_binary_paths(
-            request.app.incoming_dir, request.app.archive_path,
-            source, old_version)
-
-    if old_binaries is None:
-        return web.Response(
-            status=404, text='Old source %s/%s does not exist.' % (
-                source, old_version),
-            headers={'X-Arm': 'old'})
-
-    new_binaries = find_binary_paths(
-            request.app.incoming_dir, request.app.archive_path,
-            source, new_version)
-
-    if new_binaries is None:
-        return web.Response(
-            status=404, text='New source %s/%s does not exist.' % (
-                source, new_version),
-            headers={'X-Arm': 'new'})
-
-    for accept in request.headers.get('ACCEPT', '*/*').split(','):
-        if accept in ('text/plain', '*/*'):
-            content_type = 'text/plain'
-            break
-        elif accept in ('text/html', ):
-            content_type = 'text/html'
-            break
-        elif accept in ('application/json', ):
-            content_type = 'application/json'
-            break
-        elif accept in ('text/markdown', ):
-            content_type = 'text/markdown'
-            break
-    else:
-        raise web.HTTPNotAcceptable(
-            text='Acceptable content types: '
-                 'text/html, text/plain, application/json, '
-                 'application/markdown')
-
-    def set_limits():
-        import resource
-        # Limit to 2Gb
-        resource.setrlimit(
-            resource.RLIMIT_AS, (1800 * 1024 * 1024, 2000 * 1024 * 1024))
-
-    try:
-        diffoscope_diff = await asyncio.wait_for(
-                run_diffoscope(
-                    old_binaries, new_binaries,
-                    set_limits), 60.0)
-    except MemoryError:
-        raise web.HTTPServiceUnavailable(
-             text='diffoscope used too much memory')
-    except asyncio.TimeoutError:
-        raise web.HTTPServiceUnavailable(text='diffoscope timed out')
-
-    diffoscope_diff['source1'] = '%s version %s (%s)' % (
-        source, old_version, old_suite)
-    diffoscope_diff['source2'] = '%s version %s (%s)' % (
-        source, new_version, new_suite)
-
-    filter_diffoscope_irrelevant(diffoscope_diff)
-
-    title = 'diffoscope for %s applied to %s' % (new_suite, source)
-
-    if 'filter_boring' in post:
-        filter_diffoscope_boring(
-            diffoscope_diff, old_version,
-            new_version, old_suite, new_suite)
-        title += ' (filtered)'
-
-    debdiff = await format_diffoscope(
-        diffoscope_diff, content_type,
-        title=title, jquery_url=post.get('jquery_url'),
-        css_url=post.get('css_url'))
-
-    return web.Response(text=debdiff, content_type=content_type)
-
-
 class AptlyError(Exception):
 
     def __init__(self, message):
@@ -503,10 +276,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     app.aptly_session = aptly_session
     app.config = config
     setup_metrics(app)
-    app.router.add_get('/download', handle_download, name='download')
     app.router.add_post('/upload/{directory}', handle_upload, name='upload')
-    app.router.add_post('/debdiff', handle_debdiff, name='debdiff')
-    app.router.add_post('/diffoscope', handle_diffoscope, name='diffoscope')
     app.router.add_static('/dists', os.path.join(archive_path, 'dists'))
     app.router.add_static('/pool', os.path.join(archive_path, 'pool'))
     app.router.add_post('/publish', handle_publish, name='publish')
