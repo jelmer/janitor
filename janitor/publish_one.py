@@ -674,9 +674,8 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
             return f.read()
     except urllib.error.HTTPError as e:
         if e.status == 404:
-            if e.headers.get_content_type() == 'application/json':
-                resp = json.loads(e.read())
-                raise DebdiffMissingRun(resp['unavailable_run_id'])
+            if 'unavailable_run_id' in e.headers:
+                raise DebdiffMissingRun(e.headers['unavailable_run_id'])
             raise
         elif e.status in (502, 503):
             raise DebdiffRetrievalError(e.file.read())
@@ -829,7 +828,6 @@ if __name__ == '__main__':
             subworker_result=request['subworker_result'],
             main_branch_url=request['main_branch_url'], mode=request['mode'],
             log_id=request['log_id'],
-            unchanged_log_id=request['unchanged_log_id'],
             external_url=request['external_url'].rstrip('/'),
             local_branch_url=request['local_branch_url'],
             dry_run=request['dry-run'],

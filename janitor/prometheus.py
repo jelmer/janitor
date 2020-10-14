@@ -48,7 +48,13 @@ async def metrics_middleware(request, handler):
     start_time = time.time()
     route = request.match_info.route.name
     requests_in_progress_gauge.labels(request.method, route).inc()
-    response = await handler(request)
+    try:
+        response = await handler(request)
+    except Exception as e:
+        if not isinstance(e, web.HTTPError):
+            import traceback
+            traceback.print_exc()
+        raise
     resp_time = time.time() - start_time
     request_latency_hist.labels(route).observe(resp_time)
     requests_in_progress_gauge.labels(request.method, route).dec()

@@ -87,7 +87,7 @@ async def handle_debdiff(request):
 
     if request.app.debdiff_cache_path:
         cache_path = os.path.join(
-            request.app.debdiff_cache_path, '%s_%s' % (old_id, new_id))
+            request.app.debdiff_cache_path, '%s_%s' % (old_run.id, new_run.id))
         try:
             with open(cache_path, 'rb') as f:
                 debdiff = f.read()
