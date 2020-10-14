@@ -68,8 +68,22 @@ async def handle_debdiff(request):
     new_id = request.match_info['new_id']
 
     async with request.app.db.acquire() as conn:
-        old_run = await state.get_run(conn, old_id)
         new_run = await state.get_run(conn, new_id)
+        if old_id == 'BASE':
+            old_run = await state.get_unchanged_run(
+                conn, new_run.main_branch_revision)
+        else:
+            old_run = await state.get_run(conn, old_id)
+
+    if old_run is None or not old_run.has_artifacts():
+        raise web.HTTPNotFound(
+            text='missing artifacts', 
+            headers={'unavailable_run_id': old_id})
+
+    if new_run is None or not new_run.has_artifacts():
+        raise web.HTTPNotFound(
+            text='missing artifacts',
+            headers={'unavailable_run_id': new_id})
 
     if request.app.debdiff_cache_path:
         cache_path = os.path.join(
@@ -102,8 +116,6 @@ async def handle_debdiff(request):
                     text='No artifacts for run id: %r' % e,
                     headers={'unavailable_run_id': e.args[0]})
 
-            note('downloaded')
-
             old_binaries = find_binaries(old_dir)
             new_binaries = find_binaries(new_dir)
 
@@ -122,6 +134,8 @@ async def handle_debdiff(request):
         debdiff = filter_debdiff_boring(
             debdiff.decode(), str(old_run.build_version),
             str(new_run.build_version)).encode()
+    else:
+        debdiff = debdiff.decode()
 
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/x-diff', 'text/plain', '*/*'):
@@ -165,8 +179,22 @@ async def handle_diffoscope(request):
     new_id = request.match_info['new_id']
 
     async with request.app.db.acquire() as conn:
-        old_run = await state.get_run(conn, old_id)
         new_run = await state.get_run(conn, new_id)
+        if old_id == 'BASE':
+            old_run = await state.get_unchanged_run(
+                conn, new_run.main_branch_revision)
+        else:
+            old_run = await state.get_run(conn, old_id)
+
+    if old_run is None or not old_run.has_artifacts():
+        raise web.HTTPNotFound(
+            text='missing artifacts', 
+            headers={'unavailable_run_id': old_id})
+
+    if new_run is None or not new_run.has_artifacts():
+        raise web.HTTPNotFound(
+            text='missing artifacts',
+            headers={'unavailable_run_id': new_id})
 
     if request.app.diffoscope_cache_path:
         cache_path = os.path.join(
@@ -182,7 +210,7 @@ async def handle_diffoscope(request):
         diffoscope_diff = None
 
     if diffoscope_diff is None:
-        note('Generating difoscope between %s (%s/%s/%s) and %s (%s/%s/%s)',
+        note('Generating diffoscope between %s (%s/%s/%s) and %s (%s/%s/%s)',
              old_run.id, old_run.package, old_run.build_version, old_run.suite,
              new_run.id, new_run.package, new_run.build_version, new_run.suite)
         with ExitStack() as es:
@@ -275,6 +303,7 @@ async def run_web_server(listen_addr, port, config, artifact_manager,
     app.router.add_get(
         '/diffoscope/{old_id}/{new_id}',
         handle_diffoscope, name='diffoscope')
+
     async def connect_artifact_manager(app):
         await app.artifact_manager.__aenter__()
     app.on_startup.append(connect_artifact_manager)
@@ -306,8 +335,6 @@ def main(argv=None):
         config = read_config(f)
 
     artifact_manager = get_artifact_manager(config.artifact_location)
-
-    logging.basicConfig(level=logging.DEBUG)
 
     db = state.Database(config.database_location)
     loop = asyncio.get_event_loop()
