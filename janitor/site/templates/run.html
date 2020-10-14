@@ -79,7 +79,7 @@ function submit_review(status) {
 {{ merge_command(package, branch_name, vcs) }}
 {%  endif %}
 {% else %}
-{%  if result_code not in ('nothing-to-do', 'nothing-new-to-do', 'missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown', 'requires-nested-tree-support', 'upstream-unsupported-vcs-svn', 'control-files-in-root') %}
+{%  if result_code not in ('nothing-to-do', 'nothing-new-to-do', 'missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown', 'requires-nested-tree-support', 'upstream-unsupported-vcs-svn', 'control-files-in-root', 'success') %}
 {%   if build_log_name %}
 {%    with f = get_log(build_log_name) %}
 {{     include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
