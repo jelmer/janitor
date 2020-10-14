@@ -1405,6 +1405,13 @@ async def handle_finish(request):
                 code='success', worker_result=worker_result,
                 logfilenames=logfilenames)
 
+            try:
+                result.target_result.from_directory(
+                     artifact_directory, active_run.queue_item.package)
+            except NoChangesFile as e:
+                # Oh, well.
+                note('No changes file found: %s', e)
+
     await queue_processor.finish_run(active_run, result)
     return web.json_response(
         {'id': active_run.log_id,
