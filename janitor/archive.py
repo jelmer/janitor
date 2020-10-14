@@ -256,7 +256,9 @@ async def handle_debdiff(request):
             headers={'X-Arm': 'new'})
 
     try:
-        debdiff = await run_debdiff(old_binaries, new_binaries)
+        debdiff = await run_debdiff(
+            [p for (n, p) in old_binaries],
+            [p for (n, p) in new_binaries])
     except DebdiffError as e:
         return web.Response(status=400, text=e.args[0])
 
@@ -357,9 +359,9 @@ async def handle_diffoscope(request):
                     set_limits), 60.0)
     except MemoryError:
         raise web.HTTPServiceUnavailable(
-             'diffoscope used too much memory')
+             text='diffoscope used too much memory')
     except asyncio.TimeoutError:
-        raise web.HTTPServiceUnavailable('diffoscope timed out')
+        raise web.HTTPServiceUnavailable(text='diffoscope timed out')
 
     diffoscope_diff['source1'] = '%s version %s (%s)' % (
         source, old_version, old_suite)

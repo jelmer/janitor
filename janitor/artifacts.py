@@ -39,7 +39,7 @@ class ArtifactManager(object):
     async def store_artifacts(self, run_id, local_path, names=None):
         raise NotImplementedError(self.store_artifacts)
 
-    async def retrieve_artifacts(self, run_id, local_path):
+    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None):
         raise NotImplementedError(self.retrieve_artifacts)
 
     async def iter_ids(self):
@@ -71,6 +71,15 @@ class LocalArtifactManager(ArtifactManager):
     async def iter_ids(self):
         for entry in os.scandir(self.path):
             yield entry.name
+
+    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None):
+        run_path = os.path.join(self.path, run_id)
+        if not os.path.isdir(run_path):
+            raise ArtifactsMissing(run_id)
+        for entry in os.scandir(run_path):
+            if filter_fn is not None and not filter_fn(entry.name):
+                continue
+            shutil.copy(entry.path, os.path.join(local_path, entry.name))
 
 
 class GCSArtifactManager(ArtifactManager):
@@ -122,22 +131,11 @@ class GCSArtifactManager(ArtifactManager):
                 yield log_id
             ids.add(log_id)
 
-    async def retrieve_artifacts(self, run_id, local_path):
+    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None):
         names = await self.bucket.list_blobs(prefix=run_id+'/')
         if not names:
             raise ArtifactsMissing(run_id)
-        # TODO: parallize
-        for name in names:
-            blob = await self.bucket.get_blob(name)
-            with open(
-                    os.path.join(local_path, os.path.basename(name)),
-                    'wb+') as f:
-                f.write(await blob.download())
 
-    async def retrieve_artifacts(self, run_id, local_path):
-        names = await self.bucket.list_blobs(prefix=run_id+'/')
-        if not names:
-            raise ArtifactsMissing(run_id)
         async def download_blob(name):
             blob = await self.bucket.get_blob(name)
             with open(
@@ -145,7 +143,9 @@ class GCSArtifactManager(ArtifactManager):
                     'wb+') as f:
                 f.write(await blob.download())
 
-        await asyncio.gather(*[download_blob(name) for name in names])
+        await asyncio.gather(*[
+            download_blob(name) for name in names
+            if filter_fn is None or filter_fn(os.path.basename(name))])
 
 
 def get_artifact_manager(location):

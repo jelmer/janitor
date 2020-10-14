@@ -45,10 +45,10 @@ from silver_platter.debian import (
     select_probers,
     )
 
-from . import (
+from .. import (
     state,
     )
-from .vcs import (
+from ..vcs import (
     open_branch_ext,
     BranchOpenFailure,
     )
