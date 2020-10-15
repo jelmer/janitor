@@ -904,22 +904,10 @@ class ActiveLocalRun(ActiveRun):
 
             if artifact_manager:
                 artifact_names = result.target_result.artifact_filenames()
-                try:
-                    await artifact_manager.store_artifacts(
-                        self.log_id, self.output_directory,
-                        artifact_names)
-                except Exception as e:
-                    warning('Unable to upload artifacts for %r: %r',
-                            self.log_id, e)
-                    if backup_artifact_manager:
-                        await backup_artifact_manager.store_artifacts(
-                            self.log_id, self.output_directory,
-                            artifact_names)
-                        note('Uploading results to backup artifact '
-                             'location %r.', backup_artifact_manager)
-                    else:
-                        warning('No backup artifact manager set. '
-                                'Discarding results.')
+                await store_artifacts_with_backup(
+                    artifact_manager,
+                    backup_artifact_manager,
+                    self.log_id, self.output_directory, artifact_names)
 
         return result
 
@@ -1352,6 +1340,26 @@ async def handle_assign(request):
     return web.json_response(assignment, status=201)
 
 
+async def store_artifacts_with_backup(
+        manager, backup_manager, from_dir, run_id, names):
+    try:
+        await manager.store_artifacts(run_id, from_dir, names)
+    except Exception as e:
+        warning('Unable to upload artifacts for %r: %r',
+                run_id, e)
+        if backup_manager:
+            await backup_manager.store_artifacts(run_id, from_dir, names)
+            note('Uploading results to backup artifact '
+                 'location %r.', backup_manager)
+            return True
+        else:
+            warning('No backup artifact manager set. '
+                    'Discarding results.')
+            return False
+    else:
+        return True
+
+
 async def handle_finish(request):
     queue_processor = request.app.queue_processor
     run_id = request.match_info['run_id']
@@ -1368,10 +1376,6 @@ async def handle_finish(request):
 
     filenames = []
     with tempfile.TemporaryDirectory() as output_directory:
-        log_directory = os.path.join(output_directory, 'logs')
-        os.mkdir(log_directory)
-        artifact_directory = os.path.join(output_directory, 'artifacts')
-        os.mkdir(artifact_directory)
         while True:
             part = await reader.next()
             if part is None:
@@ -1384,9 +1388,7 @@ async def handle_finish(request):
                      'headers': dict(part.headers)}, status=400)
             else:
                 filenames.append(part.filename)
-                output_path = os.path.join(
-                        log_directory if part.filename.endswith('.log')
-                        else artifact_directory, part.filename)
+                output_path = os.path.join(output_directory, part.filename)
                 with open(output_path, 'wb') as f:
                     f.write(await part.read())
 
@@ -1395,12 +1397,9 @@ async def handle_finish(request):
                 {'reason': 'Missing result JSON'}, status=400)
 
         logfilenames = await import_logs(
-            log_directory, queue_processor.logfile_manager,
+            output_directory, queue_processor.logfile_manager,
             queue_processor.backup_logfile_manager,
             active_run.queue_item.package, run_id)
-
-        await queue_processor.artifact_manager.store_artifacts(
-            run_id, artifact_directory)
 
         if worker_result.code is not None:
             result = JanitorResult(
@@ -1419,10 +1418,16 @@ async def handle_finish(request):
 
             try:
                 result.target_result.from_directory(
-                     artifact_directory, active_run.queue_item.package)
+                     output_directory, active_run.queue_item.package)
             except NoChangesFile as e:
                 # Oh, well.
                 note('No changes file found: %s', e)
+
+            artifact_names = result.target_result.artifact_filenames()
+            await store_artifacts_with_backup(
+                queue_processor.artifact_manager,
+                queue_processor.backup_artifact_manager,
+                output_directory, run_id, artifact_names)
 
     await queue_processor.finish_run(active_run, result)
     return web.json_response(
