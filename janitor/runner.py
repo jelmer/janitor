@@ -20,7 +20,6 @@ from aiohttp import (
     WSMsgType,
     )
 import asyncio
-from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 import functools
@@ -86,7 +85,12 @@ from .debian import (
     upload_changes,
     NoChangesFile,
     )
-from .logs import get_log_manager, ServiceUnavailable, LogFileManager
+from .logs import (
+    get_log_manager,
+    ServiceUnavailable,
+    LogFileManager,
+    FileSystemLogFileManager,
+    )
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
 from .trace import note, warning
@@ -397,6 +401,7 @@ async def open_branch_with_fallback(
 
 async def import_logs(output_directory: str,
                       logfile_manager: LogFileManager,
+                      backup_logfile_manager: Optional[LogFileManager],
                       pkg: str,
                       log_id: str) -> List[str]:
     logfilenames = []
@@ -413,8 +418,10 @@ async def import_logs(output_directory: str,
             except ServiceUnavailable as e:
                 warning('Unable to upload logfile %s: %s',
                         entry.name, e)
-            else:
-                logfilenames.append(entry.name)
+                if backup_logfile_manager:
+                    await backup_logfile_manager.import_log(
+                        pkg, log_id, entry.path)
+            logfilenames.append(entry.name)
     return logfilenames
 
 
@@ -661,6 +668,7 @@ class ActiveLocalRun(ActiveRun):
             self, db: state.Database, config: Config,
             vcs_manager: VcsManager,
             logfile_manager: LogFileManager,
+            backup_logfile_manager: Optional[LogFileManager],
             artifact_manager: Optional[ArtifactManager],
             worker_kind: str,
             build_command: Optional[str],
@@ -813,8 +821,8 @@ class ActiveLocalRun(ActiveRun):
                 logfilenames=[])
 
         logfilenames = await import_logs(
-            self.output_directory, logfile_manager, self.queue_item.package,
-            self.log_id)
+            self.output_directory, logfile_manager,
+            backup_logfile_manager, self.queue_item.package, self.log_id)
 
         if retcode != 0:
             if retcode < 0:
@@ -963,7 +971,8 @@ class QueueProcessor(object):
             debsign_keyid: Optional[str] = None,
             vcs_manager=None, public_vcs_manager=None, concurrency=1,
             use_cached_only=False, overall_timeout=None, committer=None,
-            apt_location=None, backup_artifact_manager=None):
+            apt_location=None, backup_artifact_manager=None,
+            backup_logfile_manager=None):
         """Create a queue processor.
 
         Args:
@@ -995,6 +1004,7 @@ class QueueProcessor(object):
         self.active_runs: Dict[str, ActiveRun] = {}
         self.apt_location = apt_location
         self.backup_artifact_manager = backup_artifact_manager
+        self.backup_logfile_manager = backup_logfile_manager
 
     def status_json(self) -> Any:
         return {
@@ -1018,6 +1028,7 @@ class QueueProcessor(object):
                 dry_run=self.dry_run, incoming_url=self.incoming_url,
                 debsign_keyid=self.debsign_keyid,
                 logfile_manager=self.logfile_manager,
+                backup_logfile_manager=self.backup_logfile_manager,
                 use_cached_only=self.use_cached_only,
                 overall_timeout=self.overall_timeout,
                 committer=self.committer,
@@ -1385,6 +1396,7 @@ async def handle_finish(request):
 
         logfilenames = await import_logs(
             log_directory, queue_processor.logfile_manager,
+            queue_processor.backup_logfile_manager,
             active_run.queue_item.package, run_id)
 
         await queue_processor.artifact_manager.store_artifacts(
@@ -1489,9 +1501,9 @@ def main(argv=None):
         '--overall-timeout', type=int, default=None,
         help='Overall timeout per run (in seconds).')
     parser.add_argument(
-        '--backup-artifact-directory', type=str,
+        '--backup-directory', type=str,
         default=None,
-        help=('Backup directory to write files to if artifact '
+        help=('Backup directory to write files to if artifact or log '
               'manager is unreachable'))
     parser.add_argument(
         '--public-vcs-location', type=str,
@@ -1512,11 +1524,21 @@ def main(argv=None):
         vcs_manager = public_vcs_manager
     logfile_manager = get_log_manager(config.logs_location)
     artifact_manager = get_artifact_manager(config.artifact_location)
-    if args.backup_artifact_directory:
+    if args.backup_directory:
+        backup_logfile_directory = os.path.join(args.backup_directory, 'logs')
+        backup_artifact_directory = os.path.join(
+            args.backup_directory, 'artifacts')
+        if not os.path.isdir(backup_logfile_directory):
+            os.mkdir(backup_logfile_directory)
+        if not os.path.isdir(backup_artifact_directory):
+            os.mkdir(backup_artifact_directory)
         backup_artifact_manager = LocalArtifactManager(
-            args.backup_artifact_directory)
+            backup_artifact_directory)
+        backup_logfile_manager = FileSystemLogFileManager(
+            backup_logfile_directory)
     else:
         backup_artifact_manager = None
+        backup_logfile_manager = None
     db = state.Database(config.database_location)
     queue_processor = QueueProcessor(
         db,
@@ -1535,7 +1557,8 @@ def main(argv=None):
         overall_timeout=args.overall_timeout,
         committer=config.committer,
         apt_location=config.apt_location,
-        backup_artifact_manager=backup_artifact_manager)
+        backup_artifact_manager=backup_artifact_manager,
+        backup_logfile_manager=backup_logfile_manager)
     loop = asyncio.get_event_loop()
 
     async def run():
