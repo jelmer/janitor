@@ -677,7 +677,7 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
             if 'unavailable_run_id' in e.headers:
                 raise DebdiffMissingRun(e.headers['unavailable_run_id'])
             raise
-        elif e.status in (502, 503):
+        elif e.status in (502, 503, 504):
             raise DebdiffRetrievalError(e.file.read())
         else:
             raise
