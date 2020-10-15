@@ -19,7 +19,7 @@ async def generate_pkg_file(db, config, policy, client, differ_url,
 
 
 async def render_start():
-    return {}
+    return {'SUITE': SUITE}
 
 
 async def iter_hint_links(conn):
@@ -87,7 +87,7 @@ async def generate_candidates(db):
 
 async def generate_stats(db):
     async with db.acquire() as conn:
-        hints_per_run = {c: nr for (c, nr) in await conn.fetch("""\
+        hints_per_run = {(c or 0): nr for (c, nr) in await conn.fetch("""\
 select json_array_length(result->'applied-hints'), count(*) from run
 where result_code = 'success' and suite = 'multiarch-fixes' group by 1
 """)}

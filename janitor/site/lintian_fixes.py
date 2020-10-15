@@ -301,5 +301,6 @@ async def render_start():
     import lintian_brush
     from silver_platter.debian.lintian import DEFAULT_ADDON_FIXERS
     return {
+        'SUITE': SUITE,
         'lintian_brush': lintian_brush,
         'ADDON_FIXERS': DEFAULT_ADDON_FIXERS}

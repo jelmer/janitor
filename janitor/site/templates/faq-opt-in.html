@@ -3,27 +3,4 @@
 <p>Propose a change to the <a class="reference" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> that adds an entry for the relevant maintainer or package.</p>
 <p>Alternatively, you can send me an e-mail (<a class="reference external" href="mailto:jelmer@debian.org">jelmer@debian.org</a>).</p>
 </div>
-<div class="section" id="i-dont-find-this-useful-how-do-i-stop-it">
-<h3><a class="toc-backref" href="#id8">I don’t find this useful. How do I stop it?</a></h3>
-
-<p>If you ignore or close the first merge proposal, there won't be any more for
-the same maintainer.</p>
-
-<p>You can also just comment on the merge proposal that you don't want any
-automated merge proposals.</p>
-
-<p>It would be great if you can also give us an idea of what
-specifically you don’t appreciate about these merge proposals, and if
-there’s anything that can be done to improve them.</p>
-<p>Alternatively, propose a change to the <a class="reference" href="https://salsa.debian.org/jelmer/debian-janitor/blob/master/policy.conf">policy</a> on Salsa.</p>
-</div>
-<div class="section" id="how-do-i-download-just-the-diff">
-<h3><a class="toc-backref" href="#id20">How do I download the diff for a package?</a></h3>
-<p>There is a well-formed URL that can be used to download the diff for a specific package, if a diff has been generated:</p>
-
-<pre>{{ url.join(URL('../api/lintian-fixes/pkg/PACKAGE/diff')) }}</pre>
-
-<p>E.g. for gunicorn, the URL would be <a href="{{ url.join(URL('../api/lintian-fixes/pkg/gunicorn/diff')) }}">{{ url.join(URL('../api/lintian-fixes/pkg/gunicorn/diff')) }}</a>.</p>
-
-</div>
 
