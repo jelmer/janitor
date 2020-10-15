@@ -51,7 +51,7 @@ async def metrics_middleware(request, handler):
     try:
         response = await handler(request)
     except Exception as e:
-        if not isinstance(e, web.HTTPError):
+        if not isinstance(e, web.HTTPException):
             import traceback
             traceback.print_exc()
         raise

@@ -466,8 +466,16 @@ async def publish_from_policy(
             await do_schedule(
                 conn, run.package, run.suite,
                 requestor='publisher (diverged branches)')
-        elif e.code in (
-                'missing-build-diff-self', 'missing-build-diff-control'):
+        elif e.code == 'missing-build-diff-self':
+            if run.result_code != 'success':
+                description = (
+                    'Missing build diff; run was not actually successful?')
+            else:
+                description = 'Missing build artifacts, rescheduling'
+                await do_schedule(
+                    conn, run.package, run.suite,
+                    requestor='publisher (missing build artifacts - self)')
+        elif e.code == 'missing-build-diff-control':
             unchanged_run = await state.get_unchanged_run(
                 conn, run.main_branch_revision)
             if unchanged_run and unchanged_run.result_code != 'success':
@@ -476,15 +484,18 @@ async def publish_from_policy(
                     unchanged_run.result_code)
             elif unchanged_run and unchanged_run.has_artifacts():
                 description = (
-                    'Missing build diff, but successful control run '
-                    'exists. Not published yet?')
+                    'Missing build diff due to control run, but successful '
+                    'control run exists. Rescheduling.')
+                await do_schedule_control(
+                    conn, unchanged_run.package, unchanged_run.revision,
+                    requestor='publisher (missing build artifacts - control)')
             else:
                 description = (
                     'Missing binary diff; requesting control run.')
                 if run.main_branch_revision is not None:
                     await do_schedule_control(
                         conn, run.package, run.main_branch_revision,
-                        requestor='publisher (missing build diff)')
+                        requestor='publisher (missing control run for diff)')
                 else:
                     warning(
                         'Successful run (%s) does not have main branch '
