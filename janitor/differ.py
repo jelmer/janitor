@@ -116,7 +116,8 @@ async def handle_debdiff(request):
                     text='No artifacts for run id: %r' % e,
                     headers={'unavailable_run_id': e.args[0]})
             except asyncio.TimeoutError:
-                raise web.HTTPGatewayTimeout(text='Timeout retrieving artifacts')
+                raise web.HTTPGatewayTimeout(
+                    text='Timeout retrieving artifacts')
 
             old_binaries = find_binaries(old_dir)
             new_binaries = find_binaries(new_dir)
@@ -136,8 +137,6 @@ async def handle_debdiff(request):
         debdiff = filter_debdiff_boring(
             debdiff.decode(), str(old_run.build_version),
             str(new_run.build_version)).encode()
-    else:
-        debdiff = debdiff.decode()
 
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/x-diff', 'text/plain', '*/*'):
@@ -229,6 +228,8 @@ async def handle_diffoscope(request):
                 raise web.HTTPNotFound(
                     text='No artifacts for run id: %r' % e,
                     headers={'unavailable_run_id': e.args[0]})
+            except asyncio.TimeoutError:
+                raise web.HTTPGatewayTimeout(text='Timeout retrieving artifacts')
 
             old_binaries = find_binaries(old_dir)
             new_binaries = find_binaries(new_dir)
