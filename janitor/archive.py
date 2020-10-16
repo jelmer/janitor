@@ -23,12 +23,12 @@ import os
 import re
 import sys
 import traceback
-from typing import List, Tuple, Optional, Union
+from typing import List
 from urllib.parse import quote
 
 from aiohttp import web
 from debian.deb822 import Changes
-from debian.changelog import Changelog, Version
+from debian.changelog import Changelog
 from debian.copyright import parse_multiline
 
 from .config import read_config, Config, Suite
@@ -203,6 +203,13 @@ async def handle_pending(request):
     return web.json_response(json)
 
 
+async def handle_update(request):
+    # TODO: Find the latest version of each package in db for suite
+    # TODO: Find out latest version of each package in aptly for suite
+    # TODO: Figure out which packages are outdated in aptly
+    # TODO: Upload those packages to aptly
+
+
 async def run_web_server(listen_addr, port, archive_path, incoming_dir,
                          aptly_session, config):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
@@ -215,6 +222,7 @@ async def run_web_server(listen_addr, port, archive_path, incoming_dir,
     app.router.add_post('/upload/{directory}', handle_upload, name='upload')
     app.router.add_static('/dists', os.path.join(archive_path, 'dists'))
     app.router.add_static('/pool', os.path.join(archive_path, 'pool'))
+    app.router.add_post('/update', handle_update, name='update')
     app.router.add_post('/publish', handle_publish, name='publish')
     app.router.add_get('/pending/', handle_pending, name='pending')
     app.router.add_get('/pending/{subdir}/', handle_pending,
