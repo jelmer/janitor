@@ -474,6 +474,7 @@ async def publish_from_policy(
                 description = 'Missing build artifacts, rescheduling'
                 await do_schedule(
                     conn, run.package, run.suite,
+                    refresh=True,
                     requestor='publisher (missing build artifacts - self)')
         elif e.code == 'missing-build-diff-control':
             unchanged_run = await state.get_unchanged_run(
@@ -488,6 +489,7 @@ async def publish_from_policy(
                     'control run exists. Rescheduling.')
                 await do_schedule_control(
                     conn, unchanged_run.package, unchanged_run.revision,
+                    refresh=True,
                     requestor='publisher (missing build artifacts - control)')
             else:
                 description = (
