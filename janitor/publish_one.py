@@ -334,7 +334,7 @@ def publish(
         existing_proposal: Optional[MergeProposal] = None,
         allow_create_proposal: bool = False,
         derived_owner: Optional[str] = None,
-        debdiff: bytes = None,
+        debdiff: Optional[bytes] = None,
         reviewers: Optional[List[str]] = None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
@@ -770,6 +770,7 @@ def publish_one(
     if allow_create_proposal is None:
         allow_create_proposal = subrunner.allow_create_proposal()
 
+    debdiff: Optional[bytes]
     try:
         debdiff = get_debdiff(differ_url, log_id)
     except DebdiffRetrievalError:
