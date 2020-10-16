@@ -46,21 +46,35 @@ def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
 
 
 def filter_boring_wdiff(
-        line: str, old_version: str, new_version: str) -> Optional[str]:
-    if not line:
-        return line
-    field, changes = line.split(':', 1)
+        lines: List[str], old_version: str, new_version: str) -> Optional[str]:
+    if not lines:
+        return lines
+    field, changes = lines[0].split(':', 1)
     if field == 'Installed-Size':
-        return None
+        return []
     if field == 'Version':
-        return None
-    line = re.sub(
+        return []
+    lines = [re.sub(
         r'\[-%s(.*?)-\] \{\+%s\1\+\}' % (
             re.escape(old_version), re.escape(new_version)),
-        '', line)
-    if not re.findall(r'\[-.*?-\] \{\+.*?\+\}', line):
-        return None
-    return line
+        '', line) for line in lines]
+    block = '\n'.join(lines)
+    if (not re.findall(r'\[-.*?-\]', block) and
+            not re.findall('\{\+.*?\+\}', block)):
+        return []
+    return lines
+
+
+def _iter_fields(lines):
+    cl = []
+    for line in lines:
+        if cl and line.startswith(' '):
+            cl.append(line)
+        else:
+            yield cl
+            cl = [line]
+    if cl:
+        yield cl
 
 
 def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
@@ -84,9 +98,10 @@ def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
             package = None
             wdiff = False
         if wdiff:
-            paragraph_unfiltered = [
-                filter_boring_wdiff(line, old_version, new_version)
-                for line in paragraph]
+            paragraph_unfiltered = []
+            for lines in _iter_fields(paragraph):
+                newlines = filter_boring_wdiff(lines, old_version, new_version)
+                paragraph_unfiltered.extend(newlines)
             paragraph = [line for line in paragraph_unfiltered
                          if line is not None]
             if any([line.strip() for line in paragraph]):
@@ -207,9 +222,10 @@ def htmlize_debdiff(debdiff: str) -> str:
                 wdiff = False
             if wdiff:
                 ret.append("<ul>")
-                ret.extend(
-                    ["<li>%s</li>" % highlight_wdiff(line)
-                     for line in lines if line.strip()])
+                for line in _iter_fields(lines):
+                    if not line:
+                        continue
+                    ret.extend(["<li><pre>%s</pre></li>" % highlight_wdiff('\n'.join(line))])
                 ret.append("</ul>")
             else:
                 ret.append("<pre>")
