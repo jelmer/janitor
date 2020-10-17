@@ -287,6 +287,26 @@ class InconsistentSourceFormat(Problem):
         return "Inconsistent source format between version and source format"
 
 
+class UpstreamMetadataFileParseError(Problem):
+
+    kind = 'debian-upstream-metadata-invalid'
+
+    def __init__(self, path, reason):
+        self.path = path
+        self.reason = reason
+
+    def __eq__(self, other):
+        return (isinstance(other, type(self)) and
+                self.path == other.path and
+                self.reason == other.reason)
+
+    def __repr__(self):
+        return "%s(%r, %r)" % (type(self).__name__, self.path, self.reason)
+
+    def __str__(self):
+        return "%s is invalid" % self.path
+
+
 class DpkgSourcPackFailed(Problem):
 
     kind = 'dpkg-source-pack-failed'
@@ -401,6 +421,12 @@ def parse_brz_error(line: str) -> Tuple[Optional[Problem], str]:
         r'reading webpage\n  (.*) failed: (.*)', line)
     if m:
         error = UScanFailed(m.group(1), m.group(2))
+        return (error, line)
+    m = re.match(
+        r'Unable to parse upstream metadata file (.*): (.*)',
+        line)
+    if m:
+        error = UpstreamMetadataFileParseError(m.group(1), m.group(2))
         return (error, line)
     if line.startswith('UScan failed to run'):
         return (None, line)
