@@ -64,3 +64,14 @@ Installation
 
 The easiest way to set up a new instance of the Janitor is probably to use the
 ansible playbooks at https://salsa.debian.org/jelmer/debian-janitor-ansible
+
+Contributing
+============
+
+The easiest way to get started with contributing to the Janitor is to work on
+identifying issues and adding fixers. There is
+[a guide](https://salsa.debian.org/jelmer/lintian-brush/-/blob/master/doc/fixer-writing-guide.rst)
+on identifying good candidates and writing fixers
+in the lintian-brush repository.
+
+Some of us hang out in the ``#debian-janitor`` IRC channel on OFTC (irc.oftc.net).
