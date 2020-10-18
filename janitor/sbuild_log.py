@@ -724,7 +724,8 @@ def python3_module_not_found(m):
 
 
 def sphinx_module_not_found(m):
-    return MissingPythonModule(m.group(1))
+    module = m.group(1).strip("'")
+    return MissingPythonModule(module)
 
 
 def python_reqs_not_found(m):
@@ -1944,6 +1945,23 @@ class MissingDHCompatLevel(Problem):
         return isinstance(other, type(self)) and self.command == other.command
 
 
+class DuplicateDHCompatLevel(Problem):
+
+    kind = 'duplicate-dh-compat-level'
+
+    def __init__(self, command):
+        self.command = command
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.command)
+
+    def __str__(self):
+        return "DH Compat Level specified twice (command: %s)" % self.command
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.command == other.command
+
+
 build_failure_regexps = [
     (r'make\[[0-9]+\]: \*\*\* No rule to make target '
         r'\'(.*)\', needed by \'.*\'\.  Stop\.', file_not_found),
@@ -2234,8 +2252,9 @@ build_failure_regexps = [
      None),
     ('(.*):([0-9]+): multiple definition of `(.*)\'; (.*):([0-9]+): '
      'first defined here', None),
-    ('dh(.*): debhelper compat level specified both in debian/compat '
-     'and via build-dependency on debhelper-compat', None),
+    ('(dh.*): debhelper compat level specified both in debian/compat '
+     'and via build-dependency on debhelper-compat', 
+     lambda m: DuplicateDHCompatLevel(m.group(1))),
     ('(dh.*): Please specify the compatibility level in debian/compat',
      lambda m: MissingDHCompatLevel(m.group(1))),
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
@@ -3252,6 +3271,23 @@ class AptPackageUnknown(Problem):
         return "%s(%r)" % (type(self).__name__, self.package)
 
 
+class DpkgError(Problem):
+
+    kind = 'dpkg-error'
+
+    def __init__(self, error):
+        self.error = error
+
+    def __eq__(self, other):
+        return isinstance(other, type(self)) and self.error == other.error
+
+    def __str__(self):
+        return "Dpkg Error: %s" % self.error
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.error)
+
+
 def find_cudf_output(lines):
     for i in range(len(lines)-1, 0, -1):
         if lines[i].startswith('output-version: '):
@@ -3383,6 +3419,11 @@ def find_apt_get_failure(lines):
         m = re.match('E: Unable to locate package (.*)', line)
         if m:
             return lineno + 1, line, AptPackageUnknown(m.group(1))
+        m = re.match('dpkg: error: (.*)', line)
+        if m:
+            if m.group(1).endswith(': No space left on device'):
+                return lineno + 1, line, NoSpaceOnDevice()
+            return lineno + 1, line, DpkgError(m.group(1))
     return ret
 
 
