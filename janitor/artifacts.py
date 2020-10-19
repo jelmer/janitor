@@ -64,8 +64,10 @@ class LocalArtifactManager(ArtifactManager):
 
     async def store_artifacts(self, run_id, local_path, names=None):
         run_dir = os.path.join(self.path, run_id)
-        # TODO(jelmer): Handle directory already existing
-        os.mkdir(run_dir)
+        try:
+            os.mkdir(run_dir)
+        except FileExistsError:
+            pass
         if names is None:
             names = os.listdir(local_path)
         for name in names:
