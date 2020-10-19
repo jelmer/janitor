@@ -907,7 +907,7 @@ class ActiveLocalRun(ActiveRun):
                 await store_artifacts_with_backup(
                     artifact_manager,
                     backup_artifact_manager,
-                    self.log_id, self.output_directory, artifact_names)
+                    self.output_directory, self.log_id, artifact_names)
 
         return result
 
