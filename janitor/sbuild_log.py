@@ -3414,6 +3414,9 @@ def find_apt_get_failure(lines):
             'No space left on device', line)
         if m:
             return lineno + 1, line, NoSpaceOnDevice()
+        m = re.match('E: You don\'t have enough free space in (.*)\.', line)
+        if m:
+            return lineno + 1, line, NoSpaceOnDevice()
         if line.startswith('E: ') and ret[0] is None:
             ret = (lineno + 1, line, None)
         m = re.match('E: Unable to locate package (.*)', line)
@@ -3424,6 +3427,15 @@ def find_apt_get_failure(lines):
             if m.group(1).endswith(': No space left on device'):
                 return lineno + 1, line, NoSpaceOnDevice()
             return lineno + 1, line, DpkgError(m.group(1))
+
+    for i, line in enumerate(lines):
+        m = re.match(
+            ' cannot copy extracted data for \'(.*)\' to '
+            '\'(.*)\': failed to write \(No space left on device\)',
+            line)
+        if m:
+            return lineno + i, line, NoSpaceOnDevice()
+
     return ret
 
 
