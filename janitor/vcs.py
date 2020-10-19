@@ -465,3 +465,11 @@ def bzr_to_browse_url(url: str) -> str:
         branch = urllib.parse.unquote(branch)
     deb_vcs_url = unsplit_vcs_url(url, branch)
     return determine_browser_url(None, deb_vcs_url)
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('url', type=str)
+    args = parser.parse_args()
+    branch = open_branch_ext(args.url)
