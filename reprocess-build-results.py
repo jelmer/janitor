@@ -73,8 +73,9 @@ async def reprocess_run(db, package, log_id, result_code, description):
         async with db.acquire() as conn:
             await state.update_run_result(
                 conn, log_id, new_code, failure.description)
-        note('Updated %r, %r => %r, %r %r', result_code, description,
-             new_code, failure.description, failure.context)
+        note('%s/%s: Updated %r, %r => %r, %r %r', package, log_id,
+             result_code, description, new_code, failure.description,
+             failure.context)
 
 
 async def process_all_build_failures(db):
