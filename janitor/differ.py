@@ -65,7 +65,7 @@ async def handle_debdiff(request):
     old_id = request.match_info['old_id']
     new_id = request.match_info['new_id']
 
-    old_run, new_run = await get_run_pair(request.app, old_id, new_id)
+    old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
 
     cache_path = request.app.debdiff_cache_path(old_run.id, new_run.id)
     if cache_path:
@@ -155,7 +155,7 @@ async def get_run_pair(db, old_id, new_id):
             text='missing artifacts',
             headers={'unavailable_run_id': new_id})
 
-    return old_run, new_id
+    return old_run, new_run
 
 
 def _set_limits():
@@ -189,7 +189,7 @@ async def handle_diffoscope(request):
     old_id = request.match_info['old_id']
     new_id = request.match_info['new_id']
 
-    old_run, new_run = await get_run_pair(request.app, old_id, new_id)
+    old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
 
     cache_path = request.app.diffoscope_cache_path(old_run.id, new_run.id)
     if cache_path:
@@ -271,19 +271,11 @@ async def precache(app, old_id, new_id):
         old_dir = es.enter_context(TemporaryDirectory())
         new_dir = es.enter_context(TemporaryDirectory())
 
-        try:
-            await asyncio.gather(
-                app.artifact_manager.retrieve_artifacts(
-                    old_id, old_dir, filter_fn=is_binary),
-                app.artifact_manager.retrieve_artifacts(
-                    new_id, new_dir, filter_fn=is_binary))
-        except ArtifactsMissing as e:
-            raise web.HTTPNotFound(
-                text='No artifacts for run id: %r' % e,
-                headers={'unavailable_run_id': e.args[0]})
-        except asyncio.TimeoutError:
-            raise web.HTTPGatewayTimeout(
-                text='Timeout retrieving artifacts')
+        await asyncio.gather(
+            app.artifact_manager.retrieve_artifacts(
+                old_id, old_dir, filter_fn=is_binary),
+            app.artifact_manager.retrieve_artifacts(
+                new_id, new_dir, filter_fn=is_binary))
 
         old_binaries = find_binaries(old_dir)
         new_binaries = find_binaries(new_dir)
@@ -323,9 +315,20 @@ async def handle_precache(request):
     old_id = request.match_info['old_id']
     new_id = request.match_info['new_id']
 
-    old_run, new_run = await get_run_pair(request.app, old_id, new_id)
+    old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
 
-    request.loop.create_task(precache(request.app, old_run.id, new_run.id))
+    async def _precache():
+        try:
+            return precache(request.app, old_run.id, new_run.id)
+        except ArtifactsMissing as e:
+            raise web.HTTPNotFound(
+                text='No artifacts for run id: %r' % e,
+                headers={'unavailable_run_id': e.args[0]})
+        except asyncio.TimeoutError:
+            raise web.HTTPGatewayTimeout(
+                text='Timeout retrieving artifacts')
+
+    request.loop.create_task(_precache())
 
     return web.Response(status=202, text='Precaching started')
 
@@ -341,17 +344,25 @@ where
   run.result_code = 'success' and
   unchanged_run.result_code = 'success' and
   run.suite != 'unchanged'
- order by unchanged_run.finish_time desc
+ order by run.finish_time desc, unchanged_run.finish_time desc
 """)
         for row in rows:
             todo.append(precache(request.app, row[1], row[0]))
 
     async def _precache_all():
         for i in range(0, len(todo), 100):
-            await asyncio.wait(set(todo[i:i+100]))
+            done, pending = await asyncio.wait(
+                set(todo[i:i+100]),
+                return_when=asyncio.ALL_COMPLETED)
+            for x in done:
+                try:
+                    x.result()
+                except Exception as e:
+                    note('Error precaching: %r', e)
 
     request.loop.create_task(_precache_all())
-    return web.Response(status=202, text='Precache started')
+    return web.Response(
+        status=202, text='Precache started (todo: %d)' % len(todo))
 
 
 class DifferWebApp(web.Application):
@@ -390,7 +401,7 @@ async def run_web_server(app, listen_addr, port):
         '/precache/{old_id}/{new_id}',
         handle_precache, name='precache')
     app.router.add_post(
-        '/precache',
+        '/precache-all',
         handle_precache_all, name='precache-all')
 
     async def connect_artifact_manager(app):
