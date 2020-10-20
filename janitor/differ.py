@@ -42,6 +42,7 @@ from .diffoscope import (
     run_diffoscope,
     format_diffoscope,
     )
+from .pubsub import pubsub_reader
 from .prometheus import setup_metrics
 from .trace import note
 
@@ -377,11 +378,7 @@ class DifferWebApp(web.Application):
         return os.path.join(base_path, '%s_%s' % (old_id, new_id))
 
 
-async def run_web_server(listen_addr, port, config, artifact_manager,
-                         db, cache_path):
-    app = DifferWebApp(
-        db=db, config=config, cache_path=cache_path,
-        artifact_manager=artifact_manager)
+async def run_web_server(app, listen_addr, port):
     setup_metrics(app)
     app.router.add_get(
         '/debdiff/{old_id}/{new_id}',
@@ -405,6 +402,38 @@ async def run_web_server(listen_addr, port, config, artifact_manager,
     await site.start()
 
 
+async def listen_to_runner(runner_url, app):
+    from aiohttp.client import ClientSession
+    import urllib.parse
+    url = urllib.parse.urljoin(runner_url, 'ws/result')
+    async with ClientSession() as session, app.db.acquire() as conn:
+        async for result in pubsub_reader(session, url):
+            if result['code'] != 'success':
+                continue
+            to_precache = []
+            if result['suite'] == 'unchanged':
+                for run_id in await conn.fetch(
+                        'select id from run where result_code = \'success\' '
+                        'and main_branch_revision = $1', result['revision']):
+                    to_precache.append((result['log_id'], run_id))
+            else:
+                unchanged_run = await state.get_unchanged_run(
+                    conn, result['main_branch_revision'].encode('utf-8'))
+                if unchanged_run:
+                    to_precache.append((unchanged_run.id, result['log_id']))
+            # This could be concurrent, but risks hitting resource constraints
+            # for large packages.
+            for old_id, new_id in to_precache:
+                try:
+                    await precache(app, old_id, new_id)
+                except ArtifactsMissing as e:
+                    note('Artifacts missing while precaching diff for '
+                         'new result %s: %r', result['log_id'], e)
+                except Exception as e:
+                    note('Error precaching diff for %s: %r',
+                         result['log_id'], e)
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.differ')
@@ -420,6 +449,9 @@ def main(argv=None):
     parser.add_argument(
         '--cache-path', type=str, default=None,
         help='Path to cache.')
+    parser.add_argument(
+        '--runner-url', type=str, default=None,
+        help='URL to reach runner at.')
 
     args = parser.parse_args()
 
@@ -434,10 +466,18 @@ def main(argv=None):
     if args.cache_path and not os.path.isdir(args.cache_path):
         os.makedirs(args.cache_path)
 
-    loop.run_until_complete(run_web_server(
-            args.listen_address, args.port, config, artifact_manager,
-            db, cache_path=args.cache_path))
-    loop.run_forever()
+    app = DifferWebApp(
+        db=db, config=config, cache_path=args.cache_path,
+        artifact_manager=artifact_manager)
+
+    tasks = [
+        loop.create_task(run_web_server(
+            app, args.listen_address, args.port))]
+
+    if args.runner_url and not args.reviewed_only:
+        tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))
+
+    loop.run_until_complete(asyncio.gather(*tasks))
 
 
 if __name__ == '__main__':
