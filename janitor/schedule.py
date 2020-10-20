@@ -68,6 +68,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'worker-timeout',
     'result-push-failed',
     'dist-no-space-on-device',
+    'install-deps-no-space-on-device',
 ]
 
 # In some cases, we want to ignore certain results when guessing
