@@ -237,6 +237,8 @@ class JanitorResult(object):
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
             'value': self.value,
+            'revision': self.revision.decode('utf-8'),
+            'main_branch_revision': self.main_branch_revision.decode('utf-8'),
         }
 
 
