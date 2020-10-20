@@ -16,18 +16,15 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp import ClientSession
 import asyncio
 from contextlib import ExitStack
 import json
-import logging
 import os
 import re
 import sys
 from tempfile import TemporaryDirectory
-from yarl import URL
 
-from aiohttp import web, MultipartReader
+from aiohttp import web
 
 from . import state
 from .artifacts import ArtifactsMissing, get_artifact_manager
@@ -67,34 +64,16 @@ async def handle_debdiff(request):
     old_id = request.match_info['old_id']
     new_id = request.match_info['new_id']
 
-    async with request.app.db.acquire() as conn:
-        new_run = await state.get_run(conn, new_id)
-        if old_id == 'BASE':
-            old_run = await state.get_unchanged_run(
-                conn, new_run.main_branch_revision)
-        else:
-            old_run = await state.get_run(conn, old_id)
+    old_run, new_run = await get_run_pair(request.app, old_id, new_id)
 
-    if old_run is None or not old_run.has_artifacts():
-        raise web.HTTPNotFound(
-            text='missing artifacts', 
-            headers={'unavailable_run_id': old_id})
-
-    if new_run is None or not new_run.has_artifacts():
-        raise web.HTTPNotFound(
-            text='missing artifacts',
-            headers={'unavailable_run_id': new_id})
-
-    if request.app.debdiff_cache_path:
-        cache_path = os.path.join(
-            request.app.debdiff_cache_path, '%s_%s' % (old_run.id, new_run.id))
+    cache_path = request.app.debdiff_cache_path(old_run.id, new_run.id)
+    if cache_path:
         try:
             with open(cache_path, 'rb') as f:
                 debdiff = f.read()
         except FileNotFoundError:
             debdiff = None
     else:
-        cache_path = None
         debdiff = None
 
     if debdiff is None:
@@ -156,6 +135,36 @@ async def handle_debdiff(request):
              'text/html, text/plain, text/markdown')
 
 
+async def get_run_pair(db, old_id, new_id):
+    async with db.acquire() as conn:
+        new_run = await state.get_run(conn, new_id)
+        if old_id == 'BASE':
+            old_run = await state.get_unchanged_run(
+                conn, new_run.main_branch_revision)
+        else:
+            old_run = await state.get_run(conn, old_id)
+
+    if old_run is None or not old_run.has_artifacts():
+        raise web.HTTPNotFound(
+            text='missing artifacts',
+            headers={'unavailable_run_id': old_id})
+
+    if new_run is None or not new_run.has_artifacts():
+        raise web.HTTPNotFound(
+            text='missing artifacts',
+            headers={'unavailable_run_id': new_id})
+
+    return old_run, new_id
+
+
+def _set_limits():
+    import resource
+    # Limit to 2Gb
+    resource.setrlimit(
+        resource.RLIMIT_AS,
+        (1800 * 1024 * 1024, 2000 * 1024 * 1024))
+
+
 async def handle_diffoscope(request):
     for accept in request.headers.get('ACCEPT', '*/*').split(','):
         if accept in ('text/plain', '*/*'):
@@ -179,35 +188,16 @@ async def handle_diffoscope(request):
     old_id = request.match_info['old_id']
     new_id = request.match_info['new_id']
 
-    async with request.app.db.acquire() as conn:
-        new_run = await state.get_run(conn, new_id)
-        if old_id == 'BASE':
-            old_run = await state.get_unchanged_run(
-                conn, new_run.main_branch_revision)
-        else:
-            old_run = await state.get_run(conn, old_id)
+    old_run, new_run = await get_run_pair(request.app, old_id, new_id)
 
-    if old_run is None or not old_run.has_artifacts():
-        raise web.HTTPNotFound(
-            text='missing artifacts', 
-            headers={'unavailable_run_id': old_id})
-
-    if new_run is None or not new_run.has_artifacts():
-        raise web.HTTPNotFound(
-            text='missing artifacts',
-            headers={'unavailable_run_id': new_id})
-
-    if request.app.diffoscope_cache_path:
-        cache_path = os.path.join(
-            request.app.diffoscope_cache_path,
-            '%s_%s.json' % (old_run.id, new_run.id))
+    cache_path = request.app.diffoscope_cache_path(old_run.id, new_run.id)
+    if cache_path:
         try:
             with open(cache_path, 'rb') as f:
                 diffoscope_diff = json.load(f)
         except FileNotFoundError:
             diffoscope_diff = None
     else:
-        cache_path = None
         diffoscope_diff = None
 
     if diffoscope_diff is None:
@@ -229,24 +219,18 @@ async def handle_diffoscope(request):
                     text='No artifacts for run id: %r' % e,
                     headers={'unavailable_run_id': e.args[0]})
             except asyncio.TimeoutError:
-                raise web.HTTPGatewayTimeout(text='Timeout retrieving artifacts')
+                raise web.HTTPGatewayTimeout(
+                    text='Timeout retrieving artifacts')
 
             old_binaries = find_binaries(old_dir)
             new_binaries = find_binaries(new_dir)
-
-            def set_limits():
-                import resource
-                # Limit to 2Gb
-                resource.setrlimit(
-                    resource.RLIMIT_AS,
-                    (1800 * 1024 * 1024, 2000 * 1024 * 1024))
 
             try:
                 diffoscope_diff = await asyncio.wait_for(
                         run_diffoscope(
                             old_binaries,
                             new_binaries,
-                            set_limits), 60.0)
+                            _set_limits), 60.0)
             except MemoryError:
                 raise web.HTTPServiceUnavailable(
                      text='diffoscope used too much memory')
@@ -281,24 +265,123 @@ async def handle_diffoscope(request):
     return web.Response(text=debdiff, content_type=content_type)
 
 
+async def precache(app, old_id, new_id):
+    with ExitStack() as es:
+        old_dir = es.enter_context(TemporaryDirectory())
+        new_dir = es.enter_context(TemporaryDirectory())
+
+        try:
+            await asyncio.gather(
+                app.artifact_manager.retrieve_artifacts(
+                    old_id, old_dir, filter_fn=is_binary),
+                app.artifact_manager.retrieve_artifacts(
+                    new_id, new_dir, filter_fn=is_binary))
+        except ArtifactsMissing as e:
+            raise web.HTTPNotFound(
+                text='No artifacts for run id: %r' % e,
+                headers={'unavailable_run_id': e.args[0]})
+        except asyncio.TimeoutError:
+            raise web.HTTPGatewayTimeout(
+                text='Timeout retrieving artifacts')
+
+        old_binaries = find_binaries(old_dir)
+        new_binaries = find_binaries(new_dir)
+
+        debdiff_cache_path = app.debdiff_cache_path(
+            old_id, new_id)
+
+        if debdiff_cache_path and not os.path.exists(
+                debdiff_cache_path):
+            with open(debdiff_cache_path, 'wb') as f:
+                f.write(await run_debdiff(
+                    [p for (n, p) in old_binaries],
+                    [p for (n, p) in new_binaries]))
+
+        diffoscope_cache_path = app.diffoscope_cache_path(
+            old_id, new_id)
+        if diffoscope_cache_path and not os.path.exists(
+                diffoscope_cache_path):
+            try:
+                diffoscope_diff = await asyncio.wait_for(
+                        run_diffoscope(
+                            old_binaries,
+                            new_binaries,
+                            _set_limits), 60.0)
+            except MemoryError:
+                raise web.HTTPServiceUnavailable(
+                     text='diffoscope used too much memory')
+            except asyncio.TimeoutError:
+                raise web.HTTPServiceUnavailable(text='diffoscope timed out')
+
+            with open(diffoscope_cache_path, 'w') as f:
+                json.dump(diffoscope_diff, f)
+
+
+async def handle_precache(request):
+
+    old_id = request.match_info['old_id']
+    new_id = request.match_info['new_id']
+
+    old_run, new_run = await get_run_pair(request.app, old_id, new_id)
+
+    request.loop.create_task(precache(request.app, old_run.id, new_run.id))
+
+    return web.Response(status=202, text='Precaching started')
+
+
+async def handle_precache_all(request):
+    todo = []
+    async with request.app.db.acquire() as conn:
+        rows = await conn.fetch("""
+select run.id, unchanged_run.id from run
+inner join run as unchanged_run
+on run.main_branch_revision = unchanged_run.revision
+where
+  run.result_code = 'success' and
+  unchanged_run.result_code = 'success' and
+  run.suite != 'unchanged'
+ order by unchanged_run.finish_time desc
+""")
+        for row in rows:
+            todo.append(precache(request.app, row[1], row[0]))
+
+    async def _precache_all():
+        for i in range(0, len(todo), 100):
+            await asyncio.wait(set(todo[i:i+100]))
+
+    request.loop.create_task(_precache_all())
+    return web.Response(status=202, text='Precache started')
+
+
+class DifferWebApp(web.Application):
+
+    def __init__(self, db, config, cache_path, artifact_manager):
+        trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+        super(DifferWebApp, self).__init__(
+            middlewares=[trailing_slash_redirect])
+        self.db = db
+        self.config = config
+        self.cache_path = cache_path
+        self.artifact_manager = artifact_manager
+
+    def diffoscope_cache_path(self, old_id, new_id):
+        base_path = os.path.join(self.cache_path, 'diffoscope')
+        if not os.path.isdir(base_path):
+            os.mkdir(base_path)
+        return os.path.join(base_path, '%s_%s.json' % (old_id, new_id))
+
+    def debdiff_cache_path(self, old_id, new_id):
+        base_path = os.path.join(self.cache_path, 'debdiff')
+        if not os.path.isdir(base_path):
+            os.mkdir(base_path)
+        return os.path.join(base_path, '%s_%s' % (old_id, new_id))
+
+
 async def run_web_server(listen_addr, port, config, artifact_manager,
                          db, cache_path):
-    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-    app = web.Application(middlewares=[trailing_slash_redirect])
-    app.db = db
-    app.config = config
-    app.cache_path = cache_path
-    app.artifact_manager = artifact_manager
-    if cache_path:
-        app.diffoscope_cache_path = os.path.join(cache_path, 'diffoscope')
-        if not os.path.isdir(app.diffoscope_cache_path):
-            os.mkdir(app.diffoscope_cache_path)
-        app.debdiff_cache_path = os.path.join(cache_path, 'debdiff')
-        if not os.path.isdir(app.debdiff_cache_path):
-            os.mkdir(app.debdiff_cache_path)
-    else:
-        app.diffoscope_cache_path = None
-        app.debdiff_cache_path = None
+    app = DifferWebApp(
+        db=db, config=config, cache_path=cache_path,
+        artifact_manager=artifact_manager)
     setup_metrics(app)
     app.router.add_get(
         '/debdiff/{old_id}/{new_id}',
@@ -306,6 +389,12 @@ async def run_web_server(listen_addr, port, config, artifact_manager,
     app.router.add_get(
         '/diffoscope/{old_id}/{new_id}',
         handle_diffoscope, name='diffoscope')
+    app.router.add_post(
+        '/precache/{old_id}/{new_id}',
+        handle_precache, name='precache')
+    app.router.add_post(
+        '/precache',
+        handle_precache_all, name='precache-all')
 
     async def connect_artifact_manager(app):
         await app.artifact_manager.__aenter__()
