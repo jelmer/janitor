@@ -22,6 +22,7 @@ import posixpath
 import re
 import sys
 from typing import List, Tuple, Iterator, BinaryIO, Optional, Dict, Union
+import textwrap
 import yaml
 
 __all__ = [
@@ -380,59 +381,45 @@ def find_preamble_failure_description(lines: List[str]) -> Tuple[
     return None, None, None
 
 
+BRZ_ERRORS = [
+    ('Unable to find the needed upstream tarball for '
+     'package (.*), version (.*)\\.',
+     lambda m: UnableToFindUpstreamTarball(m.group(1), m.group(2))),
+    ('Unknown mercurial extra fields in (.*): b\'(.*)\'.',
+     lambda m: UnknownMercurialExtraFields(m.group(2))),
+    ('UScan failed to run: OpenPGP signature did not verify..',
+     lambda m: UpstreamPGPSignatureVerificationFailed()),
+    (r'Inconsistency between source format and version: '
+     r'version is( not)? native, format is( not)? native\.',
+     lambda m: InconsistentSourceFormat()),
+    (r'UScan failed to run: In (.*) no matching hrefs '
+     'for version (.*) in watch line',
+     lambda m: UScanRequestVersionMissing(m.group(2))),
+    (r'UScan failed to run: In directory ., downloading \s+'
+     r'(.*) failed: (.*)',
+     lambda m: UScanFailed(m.group(1), m.group(2))),
+    (r'UScan failed to run: In watchfile debian/watch, '
+     r'reading webpage\n  (.*) failed: (.*)',
+     lambda m: UScanFailed(m.group(1), m.group(2))),
+    (r'Unable to parse upstream metadata file (.*): (.*)',
+     lambda m: UpstreamMetadataFileParseError(m.group(1), m.group(2))),
+    (r'Debcargo failed to run\.', lambda m: DebcargoFailure()),
+]
+
+
+_BRZ_ERRORS = [(re.compile(r), fn) for (r, fn) in BRZ_ERRORS]
+
+
 def parse_brz_error(line: str) -> Tuple[Optional[Problem], str]:
     error: Problem
     line = line.strip()
-    m = re.match(
-        'Unable to find the needed upstream tarball for '
-        'package (.*), version (.*)\\.', line)
-    if m:
-        error = UnableToFindUpstreamTarball(m.group(1), m.group(2))
-        return (error, str(error))
-    m = re.match(
-        'Unknown mercurial extra fields in (.*): b\'(.*)\'.',
-        line)
-    if m:
-        error = UnknownMercurialExtraFields(m.group(2))
-        return (error, str(error))
-    if line == 'UScan failed to run: OpenPGP signature did not verify..':
-        error = UpstreamPGPSignatureVerificationFailed()
-        return (error, str(error))
-    m = re.match(
-        r'Inconsistency between source format and version: '
-        r'version is( not)? native, format is( not)? native\.', line)
-    if m:
-        error = InconsistentSourceFormat()
-        return (error, line)
-    m = re.match(
-        r'UScan failed to run: In (.*) no matching hrefs '
-        'for version (.*) in watch line', line)
-    if m:
-        error = UScanRequestVersionMissing(m.group(2))
-        return (error, line)
-    m = re.match(
-        r'UScan failed to run: In directory ., downloading \s+'
-        r'(.*) failed: (.*)', line)
-    if m:
-        error = UScanFailed(m.group(1), m.group(2))
-        return (error, line)
-    m = re.match(
-        r'UScan failed to run: In watchfile debian/watch, '
-        r'reading webpage\n  (.*) failed: (.*)', line)
-    if m:
-        error = UScanFailed(m.group(1), m.group(2))
-        return (error, line)
-    m = re.match(
-        r'Unable to parse upstream metadata file (.*): (.*)',
-        line)
-    if m:
-        error = UpstreamMetadataFileParseError(m.group(1), m.group(2))
-        return (error, line)
+    for search_re, fn in _BRZ_ERRORS:
+        m = search_re.match(line)
+        if m:
+            error = fn(m)
+            return (error, str(error))
     if line.startswith('UScan failed to run'):
         return (None, line)
-    if line == 'Debcargo failed to run.':
-        error = DebcargoFailure()
-        return (error, line)
     return (None, line.split('\n')[0])
 
 
@@ -1834,7 +1821,8 @@ class MissingHaskellDependencies(Problem):
 
 class Matcher(object):
 
-    def match(self, line: List[str], i: int) -> Tuple[bool, Optional[Problem]]:
+    def match(self, line: List[str], i: int) -> Tuple[
+            List[int], Optional[Problem]]:
         raise NotImplementedError(self.match)
 
 
@@ -1847,12 +1835,12 @@ class SingleLineMatcher(Matcher):
     def match(self, lines, i):
         m = self.regexp.match(lines[i].rstrip('\n'))
         if not m:
-            return False, None
+            return [], None
         if self.cb:
             err = self.cb(m)
         else:
             err = None
-        return True, err
+        return [i], err
 
 
 class HaskellMissingDependencyMatcher(Matcher):
@@ -1863,13 +1851,90 @@ class HaskellMissingDependencyMatcher(Matcher):
     def match(self, lines, i):
         m = self.regexp.fullmatch(lines[i])
         if not m:
-            return False, None
+            return [], None
         deps = []
+        linenos = [i]
         for line in lines[i+1:]:
             if not line.strip('\n'):
                 break
             deps.append(tuple(line.rstrip('\n').split(' ', 1)))
-        return True, MissingHaskellDependencies(deps)
+            linenos.append(linenos[-1]+1)
+        return linenos, MissingHaskellDependencies(deps)
+
+
+def cmake_command_missing(m):
+    return MissingCommand(m.group(1).lower())
+
+
+def cmake_file_missing(m):
+    return MissingFile(m.group(2))
+
+
+def cmake_config_file_missing(m):
+    return MissingPkgConfig(m.group(1), m.group(3))
+
+
+def cmake_package_config_file_missing(m):
+    return CMakeFilesMissing(m.group(1))
+
+
+def cmake_compiler_failure(m):
+    import pdb; pdb.set_trace()
+
+
+class CMakeErrorMatcher(Matcher):
+
+    regexp = re.compile(r'CMake Error at (.*):([0-9]+) \((.*)\):\n')
+
+    cmake_errors = [
+        (r'--   Package \'(.*)\', required by \'(.*)\', not found',
+         cmake_pkg_config_missing),
+        (r'Could NOT find (.*) \(missing: .*\)', cmake_command_missing),
+        (r'The C++ compiler\n\n  "(.*)"\n\nis not able to compile a '
+         r'simple test program\.\n\nIt fails with the following output:\n\n',
+         cmake_compiler_failure),
+        (r'The imported target \"(.*)\" references the file\n\n\s*"(.*)"\n\n'
+         r'but this file does not exist\.(.*)', cmake_file_missing),
+        (r'Could not find a configuration file for package "(.*)".*'
+         r'.*requested version "(.*)"\.', cmake_config_file_missing),
+        (r'.*Could not find a package configuration file provided by "(.*)"\s'
+         r'with\sany\sof\sthe\sfollowing\snames:\n\n  (.*)$',
+         cmake_package_config_file_missing),
+    ]
+
+    @classmethod
+    def _extract_error_lines(cls, lines, i):
+        linenos = [i]
+        error_lines = []
+        for j, line in enumerate(lines[i+1:]):
+            if line != '\n' and not line.startswith(' '):
+                break
+            error_lines.append(line)
+            linenos.append(i + 1 + j)
+        while error_lines and error_lines[-1] == '\n':
+            error_lines.pop(-1)
+            linenos.pop(-1)
+        return linenos, textwrap.dedent(''.join(error_lines)).splitlines(True)
+
+    def match(self, lines, i):
+        m = self.regexp.fullmatch(lines[i])
+        if not m:
+            return [], None
+
+        path = m.group(1)   # noqa: F841
+        start_lineno = int(m.group(2))   # noqa: F841
+        linenos, error_lines = self._extract_error_lines(lines, i)
+
+        error = None
+        for r, fn in self.cmake_errors:
+            m = re.match(r, ''.join(error_lines), flags=re.S)
+            if m:
+                error = fn(m)
+                break
+
+        if not error:
+            import pdb; pdb.set_trace()
+        return linenos, error
 
 
 class MissingCSharpCompiler(Problem):
@@ -2062,8 +2127,6 @@ build_failure_regexps = [
     ('.*meson.build:([0-9]+):([0-9]+): ERROR: Invalid version of dependency, '
      'need \'([^\']+)\' \\[\'>= ([^\']+)\'\\] found \'([^\']+)\'\\.',
      meson_pkg_config_too_low),
-    (r'--   Package \'(.*)\', required by \'(.*)\', not found',
-     cmake_pkg_config_missing),
     (r'dh: Unknown sequence --(.*) '
      r'\(options should not come before the sequence\)', dh_with_order),
     (r'dh: Compatibility levels before [0-9]+ are no longer supported '
@@ -2467,6 +2530,7 @@ build_failure_regexps = [
     (r'You need the GNU readline library(ftp://ftp.gnu.org/gnu/readline/ ) '
      r'to build', lambda m: MissingLibrary('readline')),
     HaskellMissingDependencyMatcher(),
+    CMakeErrorMatcher(),
     (r'error: failed to select a version for the requirement `(.*)`',
      cargo_missing_requirement),
     (r'^Environment variable \$SOURCE_DATE_EPOCH: No digits were found: $',
@@ -2643,6 +2707,7 @@ secondary_build_failure_regexps = [
     r'(.*)\.cs\([0-9]+,[0-9]+\): error CS[0-9]+: .*',
     r'.*Segmentation fault.*',
     r'a2x: ERROR: (.*) returned non-zero exit status ([0-9]+)',
+    r'-- Configuring incomplete, errors occurred\!',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -2691,8 +2756,9 @@ def find_build_failure_description(
         if 'cmake' in lines[lineno]:
             cmake = True
         for matcher in compiled_build_failure_regexps:
-            m, err = matcher.match(lines, lineno)
-            if m:
+            linenos, err = matcher.match(lines, lineno)
+            if linenos:
+                lineno = linenos[-1]  # For now
                 return lineno + 1, lines[lineno].rstrip('\n'), err
 
     if cmake:
@@ -3433,6 +3499,9 @@ def find_apt_get_failure(lines):
             ' cannot copy extracted data for \'(.*)\' to '
             '\'(.*)\': failed to write \(No space left on device\)',
             line)
+        if m:
+            return lineno + i, line, NoSpaceOnDevice()
+        m = re.match(' .*: No space left on device', line)
         if m:
             return lineno + i, line, NoSpaceOnDevice()
 
