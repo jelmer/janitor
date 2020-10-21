@@ -1878,10 +1878,19 @@ def cmake_config_file_missing(m):
 
 def cmake_package_config_file_missing(m):
     return CMakeFilesMissing(
-        [e.strip() for e in m.group(1).splitlines()])
+        [e.strip() for e in m.group(2).splitlines()])
 
 
 def cmake_compiler_failure(m):
+    compiler_output = textwrap.dedent(m.group(3))
+    offset, description, error = find_build_failure_description(
+        compiler_output.splitlines(True))
+    return error
+
+
+def cmake_compiler_missing(m):
+    if m.group(1) == 'Fortran':
+        return MissingFortranCompiler()
     return None
 
 
@@ -1890,19 +1899,33 @@ class CMakeErrorMatcher(Matcher):
     regexp = re.compile(r'CMake Error at (.*):([0-9]+) \((.*)\):\n')
 
     cmake_errors = [
-        (r'--   Package \'(.*)\', required by \'(.*)\', not found',
+        (r'--  Package \'(.*)\', required by \'(.*)\', not found',
          cmake_pkg_config_missing),
         (r'Could NOT find (.*) \(missing: .*\)', cmake_command_missing),
-        (r'The C\+\+ compiler\n\n  "(.*)"\n\nis not able to compile a '
-         r'simple test program\.\n\nIt fails with the following output:\n\n',
+        (r'The (.+) compiler\n\n  "(.*)"\n\nis not able to compile a '
+         r'simple test program\.\n\nIt fails with the following output:\n\n'
+         r'(.*)\n\n'
+         r'CMake will not be able to correctly generate this project.\n$',
          cmake_compiler_failure),
         (r'The imported target \"(.*)\" references the file\n\n\s*"(.*)"\n\n'
          r'but this file does not exist\.(.*)', cmake_file_missing),
         (r'Could not find a configuration file for package "(.*)".*'
          r'.*requested version "(.*)"\.', cmake_config_file_missing),
         (r'.*Could not find a package configuration file provided by "(.*)"\s'
-         r'with\sany\sof\sthe\sfollowing\snames:\n\n(  .*\n)+\n$',
+         r'with\sany\sof\sthe\sfollowing\snames:\n\n(  .*\n)+\n.*$',
          cmake_package_config_file_missing),
+        (r'No CMAKE_(.*)_COMPILER could be found.\n'
+         r'\n'
+         r'Tell CMake where to find the compiler by setting either'
+         r'\sthe\senvironment\svariable\s"(.*)"\sor\sthe\sCMake\scache'
+         r'\sentry\sCMAKE_(.*)_COMPILER\sto\sthe\sfull\spath\sto'
+         r'\sthe\scompiler,\sor\sto\sthe\scompiler\sname\sif\sit\sis\sin\s'
+         r'the\sPATH.\n', cmake_command_missing),
+        (r'file INSTALL cannot find\s"(.*)".\n',
+         lambda m: MissingFile(m.group(1))),
+        (r'file INSTALL cannot copy file\n"(.*)"\sto\s"(.*)":\s'
+         r'No space left on device.\n', lambda m: NoSpaceOnDevice()),
+        (r'file INSTALL cannot copy file\n"(.*)"\nto\n"(.*)"\.\n', None),
     ]
 
     @classmethod
@@ -1930,12 +1953,32 @@ class CMakeErrorMatcher(Matcher):
 
         error = None
         for r, fn in self.cmake_errors:
-            m = re.match(r, ''.join(error_lines), flags=re.S)
+            if fn is None:
+                error = None
+                break
+            m = re.match(r, ''.join(error_lines), flags=re.DOTALL)
             if m:
                 error = fn(m)
                 break
 
         return linenos, error
+
+
+class MissingFortranCompiler(Problem):
+
+    kind = 'missing-fortran-compiler'
+
+    def __init__(self):
+        pass
+
+    def __eq__(self, other):
+        return isinstance(other, type(self))
+
+    def __str__(self):
+        return "No Fortran compiler found"
+
+    def __repr__(self):
+        return "%s()" % type(self).__name__
 
 
 class MissingCSharpCompiler(Problem):
@@ -2411,6 +2454,8 @@ build_failure_regexps = [
     (r'ERROR: can\'t read file: (.*)', file_not_found),
     (r'jh_build: Cannot find \(any matches for\) "(.*)" \(tried in .*\)',
      None),
+    (r'--   Package \'(.*)\', required by \'(.*)\', not found',
+     lambda m: MissingPkgConfig(m.group(1))),
     (r'.*.rb:[0-9]+:in `require_relative\': cannot load such file '
      r'-- (.*) \(LoadError\)', None),
     (r'.*.rb:[0-9]+:in `require\': cannot load such file '
@@ -2709,6 +2754,8 @@ secondary_build_failure_regexps = [
     r'.*Segmentation fault.*',
     r'a2x: ERROR: (.*) returned non-zero exit status ([0-9]+)',
     r'-- Configuring incomplete, errors occurred\!',
+    r'Error opening link script "(.*)"',
+    r'cc: error: (.*)',
 ]
 
 compiled_secondary_build_failure_regexps = [
@@ -2762,6 +2809,7 @@ def find_build_failure_description(
                 lineno = linenos[-1]  # For now
                 return lineno + 1, lines[lineno].rstrip('\n'), err
 
+    # TODO(jelmer): Remove this in favour of CMakeErrorMatcher above.
     if cmake:
         missing_file_pat = re.compile(
             r'\s*The imported target \"(.*)\" references the file')
