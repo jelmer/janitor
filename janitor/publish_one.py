@@ -681,6 +681,8 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
             raise DebdiffRetrievalError(e.file.read())
         else:
             raise
+    except ConnectionResetError as e:
+        raise DebdiffRetrievalError(str(e))
     except urllib.error.URLError as e:
         raise DebdiffRetrievalError(str(e))
 

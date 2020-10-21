@@ -67,6 +67,7 @@ SBUILD_FOCUS_SECTION = {
 class Problem(object):
 
     kind: str
+    is_global: bool = False
 
 
 class DpkgSourceLocalChanges(Problem):
@@ -1060,6 +1061,7 @@ def dh_with_order(m):
 class NoSpaceOnDevice(Problem):
 
     kind = 'no-space-on-device'
+    is_global = True
 
     def __eq__(self, other):
         return isinstance(other, type(self))
