@@ -1877,11 +1877,12 @@ def cmake_config_file_missing(m):
 
 
 def cmake_package_config_file_missing(m):
-    return CMakeFilesMissing(m.group(1))
+    return CMakeFilesMissing(
+        [e.strip() for e in m.group(1).splitlines()])
 
 
 def cmake_compiler_failure(m):
-    import pdb; pdb.set_trace()
+    return None
 
 
 class CMakeErrorMatcher(Matcher):
@@ -1892,7 +1893,7 @@ class CMakeErrorMatcher(Matcher):
         (r'--   Package \'(.*)\', required by \'(.*)\', not found',
          cmake_pkg_config_missing),
         (r'Could NOT find (.*) \(missing: .*\)', cmake_command_missing),
-        (r'The C++ compiler\n\n  "(.*)"\n\nis not able to compile a '
+        (r'The C\+\+ compiler\n\n  "(.*)"\n\nis not able to compile a '
          r'simple test program\.\n\nIt fails with the following output:\n\n',
          cmake_compiler_failure),
         (r'The imported target \"(.*)\" references the file\n\n\s*"(.*)"\n\n'
@@ -1900,7 +1901,7 @@ class CMakeErrorMatcher(Matcher):
         (r'Could not find a configuration file for package "(.*)".*'
          r'.*requested version "(.*)"\.', cmake_config_file_missing),
         (r'.*Could not find a package configuration file provided by "(.*)"\s'
-         r'with\sany\sof\sthe\sfollowing\snames:\n\n  (.*)$',
+         r'with\sany\sof\sthe\sfollowing\snames:\n\n(  .*\n)+\n$',
          cmake_package_config_file_missing),
     ]
 
@@ -1934,8 +1935,6 @@ class CMakeErrorMatcher(Matcher):
                 error = fn(m)
                 break
 
-        if not error:
-            import pdb; pdb.set_trace()
         return linenos, error
 
 
@@ -3370,7 +3369,7 @@ def find_cudf_output(lines):
     return yaml.safe_load('\n'.join(output))
 
 
-class UnsatisfiedDependencies(object):
+class UnsatisfiedDependencies(Problem):
 
     kind = 'unsatisfied-dependencies'
 
@@ -3388,7 +3387,7 @@ class UnsatisfiedDependencies(object):
         return "%s(%r)" % (type(self).__name__, self.relations)
 
 
-class UnsatisfiedConflicts(object):
+class UnsatisfiedConflicts(Problem):
 
     kind = 'unsatisfied-conflicts'
 
@@ -3428,7 +3427,7 @@ def error_from_dose3_report(report):
         return UnsatisfiedConflicts(conflict)
 
 
-class AptBrokenPackages(object):
+class AptBrokenPackages(Problem):
 
     kind = 'apt-broken-packages'
 
@@ -3510,7 +3509,7 @@ def find_apt_get_failure(lines):
     return ret
 
 
-class ArchitectureNotInList(object):
+class ArchitectureNotInList(Problem):
 
     kind = 'arch-not-in-list'
 
