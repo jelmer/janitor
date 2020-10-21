@@ -413,7 +413,7 @@ class DebianTarget(Target):
                     'Expected changes path %s does not exist.' % e.filename)
             except SbuildFailure as e:
                 if e.error is not None:
-                    if e.stage:
+                    if e.stage and not e.error.is_global:
                         code = '%s-%s' % (e.stage, e.error.kind)
                     else:
                         code = e.error.kind

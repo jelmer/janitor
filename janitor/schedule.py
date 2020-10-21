@@ -55,20 +55,16 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'worker-exception',
     'build-failed-stage-create-session',
     'apt-get-update-missing-release-file',
-    'build-no-space-on-device',
-    'autopkgtest-no-space-on-device',
+    'no-space-on-device',
     'worker-killed',
     'too-many-requests',
     'autopkgtest-testbed-chroot-disappeared',
     'autopkgtest-file-fetch-failure',
     'check-space-insufficient-disk-space',
     'worker-resume-branch-unavailable',
-    'explain-bd-uninstallable-no-space-on-device',
     'explain-bd-uninstallable-apt-file-fetch-failure',
     'worker-timeout',
     'result-push-failed',
-    'dist-no-space-on-device',
-    'install-deps-no-space-on-device',
 ]
 
 # In some cases, we want to ignore certain results when guessing

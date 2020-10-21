@@ -208,6 +208,7 @@ async def handle_update(request):
     # TODO: Find out latest version of each package in aptly for suite
     # TODO: Figure out which packages are outdated in aptly
     # TODO: Upload those packages to aptly
+    pass
 
 
 async def run_web_server(listen_addr, port, archive_path, incoming_dir,
