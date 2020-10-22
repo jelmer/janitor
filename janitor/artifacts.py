@@ -44,7 +44,8 @@ class ArtifactManager(object):
     async def store_artifacts(self, run_id, local_path, names=None):
         raise NotImplementedError(self.store_artifacts)
 
-    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None):
+    async def retrieve_artifacts(
+            self, run_id, local_path, filter_fn=None, timeout=None):
         raise NotImplementedError(self.retrieve_artifacts)
 
     async def iter_ids(self):
@@ -79,7 +80,8 @@ class LocalArtifactManager(ArtifactManager):
         for entry in os.scandir(self.path):
             yield entry.name
 
-    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None):
+    async def retrieve_artifacts(
+            self, run_id, local_path, filter_fn=None, timeout=None):
         run_path = os.path.join(self.path, run_id)
         if not os.path.isdir(run_path):
             raise ArtifactsMissing(run_id)
@@ -140,7 +142,8 @@ class GCSArtifactManager(ArtifactManager):
                 yield log_id
             ids.add(log_id)
 
-    async def retrieve_artifacts(self, run_id, local_path, filter_fn=None, timeout=DEFAULT_GCS_TIMEOUT):
+    async def retrieve_artifacts(
+            self, run_id, local_path, filter_fn=None, timeout=DEFAULT_GCS_TIMEOUT):
         names = await self.bucket.list_blobs(prefix=run_id+'/')
         if not names:
             raise ArtifactsMissing(run_id)
