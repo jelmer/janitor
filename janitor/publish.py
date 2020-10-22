@@ -84,6 +84,7 @@ from .vcs import (
     bzr_to_browse_url,
     )
 
+EXISTING_RUN_RETRY_INTERVAL = 30
 
 MODE_SKIP = 'skip'
 MODE_BUILD_ONLY = 'build-only'
@@ -334,7 +335,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                 continue
             # TODO(jelmer): next try in SQL query
             attempt_count = await state.get_publish_attempt_count(
-                conn, run.revision)
+                conn, run.revision, {'differ-unreachable'})
             try:
                 next_try_time = run.times[1] + (
                     2 ** attempt_count * timedelta(hours=1))
@@ -654,7 +655,7 @@ async def publish_request(request):
                  'description':
                     'Nothing to do'})
 
-        run = await state.get_last_effective_run(conn, package.name, suite)
+        run = await get_last_effective_run(conn, package.name, suite)
         if run is None:
             return web.json_response({}, status=400)
         note('Handling request to publish %s/%s', package.name, suite)
@@ -1136,12 +1137,27 @@ class NoRunForMergeProposal(Exception):
         self.revision = revision
 
 
+async def get_last_effective_run(conn, package, suite):
+    last_success = False
+    async for run in state._iter_runs(conn, package=package, suite=suite):
+        if run.result_code in ('success', 'nothing-to-do'):
+            return run
+        elif run.result_code == 'nothing-new-to-do':
+            last_success = True
+            continue
+        elif not last_success:
+            return run
+    else:
+        return None
+
+
 async def check_existing_mp(
         conn, mp, status, topic_merge_proposal, vcs_manager,
         rate_limiter, dry_run: bool, external_url: str,
         differ_url: str,
         mps_per_maintainer=None,
-        possible_transports: Optional[List[Transport]] = None) -> bool:
+        possible_transports: Optional[List[Transport]] = None,
+        check_only: bool = False) -> bool:
     async def update_proposal_status(mp, status, revision, package_name):
         if status == 'closed':
             # TODO(jelmer): Check if changes were applied manually and mark
@@ -1216,11 +1232,13 @@ async def check_existing_mp(
         mps_per_maintainer[status][maintainer_email] += 1
     if status != 'open':
         return False
+    if check_only:
+        return False
     mp_run = await state.get_merge_proposal_run(conn, mp.url)
     if mp_run is None:
         raise NoRunForMergeProposal(mp, revision)
 
-    last_run = await state.get_last_effective_run(
+    last_run = await get_last_effective_run(
         conn, mp_run.package, mp_run.suite)
     if last_run is None:
         warning('%s: Unable to find any relevant runs.', mp.url)
@@ -1275,6 +1293,7 @@ applied independently.
         return True
 
     if last_run.result_code != 'success':
+        last_run_age = datetime.now() - last_run.times[1]
         from .schedule import TRANSIENT_ERROR_RESULT_CODES
         if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
             note('%s: Last run failed with transient error (%s). '
@@ -1283,6 +1302,15 @@ applied independently.
                 conn, last_run.package, shlex.split(last_run.command),
                 last_run.suite, offset=1, refresh=False,
                 requestor='publisher (transient error)')
+        elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
+            note('%s: Last run failed (%s) a long time ago (%d days). '
+                 'Rescheduling.', mp.url, last_run.result_code,
+                 last_run_age.days)
+            await state.add_to_queue(
+                conn, last_run.package, shlex.split(last_run.command),
+                last_run.suite, offset=1, refresh=False,
+                requestor='publisher (retrying failed run after %d days)' %
+                    last_run_age.days)
         else:
             note('%s: Last run failed (%s). Not touching merge proposal.',
                  mp.url, last_run.result_code)
@@ -1337,7 +1365,11 @@ applied independently.
                     publish_id=publish_id,
                     requestor='publisher (regular refresh)')
 
-            assert not is_new, "Intended to update proposal %r" % mp_url
+            if not is_new:
+                # This can happen when the default branch changes
+                warning(
+                    "Intended to update proposal %r, but created %r", mp.url,
+                    mp_url)
         return True
     else:
         # It may take a while for the 'conflicted' bit on the proposal to
@@ -1363,13 +1395,10 @@ async def check_existing(
     status_count = {'open': 0, 'closed': 0, 'merged': 0, 'applied': 0}
 
     modified_mps = 0
+    check_only = False
 
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
-        if modify_limit and modified_mps > modify_limit:
-            warning('Already modified %d merge proposals, '
-                    'waiting with the rest.', modified_mps)
-            return
         try:
             modified = await check_existing_mp(
                 conn, mp, status, topic_merge_proposal=topic_merge_proposal,
@@ -1378,13 +1407,18 @@ async def check_existing(
                 differ_url=differ_url,
                 rate_limiter=rate_limiter,
                 possible_transports=possible_transports,
-                mps_per_maintainer=mps_per_maintainer)
+                mps_per_maintainer=mps_per_maintainer,
+                check_only=check_only)
         except NoRunForMergeProposal as e:
             warning('Unable to find local metadata for %s, skipping.', e.mp.url)
             modified = False
 
         if modified:
             modified_mps += 1
+            if modify_limit and modified_mps > modify_limit:
+                warning('Already modified %d merge proposals, '
+                        'waiting with the rest.', modified_mps)
+                check_only = True
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
