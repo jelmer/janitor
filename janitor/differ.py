@@ -23,6 +23,7 @@ import os
 import re
 import sys
 from tempfile import TemporaryDirectory
+import traceback
 
 from aiohttp import web
 
@@ -48,6 +49,7 @@ from .trace import note
 
 
 suite_check = re.compile('^[a-z0-9-]+$')
+PRECACHE_RETRIEVE_TIMEOUT = 300
 
 
 def find_binaries(path):
@@ -100,7 +102,16 @@ async def handle_debdiff(request):
                     text='Timeout retrieving artifacts')
 
             old_binaries = find_binaries(old_dir)
+            if not old_binaries:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id: %s' % old_run.id,
+                    headers={'unavailable_run_id': old_run.id})
+
             new_binaries = find_binaries(new_dir)
+            if not new_binaries:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id: %s' % new_run.id,
+                    headers={'unavailable_run_id': new_run.id})
 
             try:
                 debdiff = await run_debdiff(
@@ -224,7 +235,16 @@ async def handle_diffoscope(request):
                     text='Timeout retrieving artifacts')
 
             old_binaries = find_binaries(old_dir)
-            new_binaries = find_binaries(new_dir)
+            if not old_binaries:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id: %s' % old_run.id,
+                    headers={'unavailable_run_id': old_run.id})
+
+            new_binaries = find_binaries(old_dir)
+            if not new_binaries:
+                raise web.HTTPNotFound(
+                    text='No artifacts for run id: %s' % new_run.id,
+                    headers={'unavailable_run_id': new_run.id})
 
             try:
                 diffoscope_diff = await asyncio.wait_for(
@@ -273,12 +293,19 @@ async def precache(app, old_id, new_id):
 
         await asyncio.gather(
             app.artifact_manager.retrieve_artifacts(
-                old_id, old_dir, filter_fn=is_binary),
+                old_id, old_dir, filter_fn=is_binary,
+                timeout=PRECACHE_RETRIEVE_TIMEOUT),
             app.artifact_manager.retrieve_artifacts(
-                new_id, new_dir, filter_fn=is_binary))
+                new_id, new_dir, filter_fn=is_binary,
+                timeout=PRECACHE_RETRIEVE_TIMEOUT))
 
         old_binaries = find_binaries(old_dir)
+        if not old_binaries:
+            raise ArtifactsMissing(old_id)
+
         new_binaries = find_binaries(new_dir)
+        if not new_binaries:
+            raise ArtifactsMissing(new_id)
 
         debdiff_cache_path = app.debdiff_cache_path(
             old_id, new_id)
@@ -289,6 +316,8 @@ async def precache(app, old_id, new_id):
                 f.write(await run_debdiff(
                     [p for (n, p) in old_binaries],
                     [p for (n, p) in new_binaries]))
+            note('Precached debdiff result for %s/%s',
+                 old_id, new_id)
 
         diffoscope_cache_path = app.diffoscope_cache_path(
             old_id, new_id)
@@ -296,18 +325,21 @@ async def precache(app, old_id, new_id):
                 diffoscope_cache_path):
             try:
                 diffoscope_diff = await asyncio.wait_for(
-                        run_diffoscope(
-                            old_binaries,
-                            new_binaries,
-                            _set_limits), 60.0)
+                    run_diffoscope(old_binaries, new_binaries, _set_limits),
+                    300.0)
             except MemoryError:
                 raise web.HTTPServiceUnavailable(
                      text='diffoscope used too much memory')
             except asyncio.TimeoutError:
                 raise web.HTTPServiceUnavailable(text='diffoscope timed out')
 
-            with open(diffoscope_cache_path, 'w') as f:
-                json.dump(diffoscope_diff, f)
+            try:
+                with open(diffoscope_cache_path, 'w') as f:
+                    json.dump(diffoscope_diff, f)
+            except json.JSONDecodeError as e:
+                raise web.HTTPServerError(text=str(e))
+            note('Precached diffoscope result for %s/%s',
+                 old_id, new_id)
 
 
 async def handle_precache(request):
@@ -359,6 +391,7 @@ where
                     x.result()
                 except Exception as e:
                     note('Error precaching: %r', e)
+                    traceback.print_exc()
 
     request.loop.create_task(_precache_all())
     return web.Response(
@@ -384,6 +417,7 @@ class DifferWebApp(web.Application):
 
     def debdiff_cache_path(self, old_id, new_id):
         base_path = os.path.join(self.cache_path, 'debdiff')
+        # This can happen when the default branch changes
         if not os.path.isdir(base_path):
             os.mkdir(base_path)
         return os.path.join(base_path, '%s_%s' % (old_id, new_id))
@@ -422,11 +456,11 @@ async def listen_to_runner(runner_url, app):
             if result['code'] != 'success':
                 continue
             to_precache = []
-            if result['suite'] == 'unchanged':
-                for run_id in await conn.fetch(
+            if result['revision'] == result['main_branch_revision']:
+                for row in await conn.fetch(
                         'select id from run where result_code = \'success\' '
                         'and main_branch_revision = $1', result['revision']):
-                    to_precache.append((result['log_id'], run_id))
+                    to_precache.append((result['log_id'], row[0]))
             else:
                 unchanged_run = await state.get_unchanged_run(
                     conn, result['main_branch_revision'].encode('utf-8'))
@@ -443,6 +477,7 @@ async def listen_to_runner(runner_url, app):
                 except Exception as e:
                     note('Error precaching diff for %s: %r',
                          result['log_id'], e)
+                    traceback.print_exc()
 
 
 def main(argv=None):
@@ -485,7 +520,7 @@ def main(argv=None):
         loop.create_task(run_web_server(
             app, args.listen_address, args.port))]
 
-    if args.runner_url and not args.reviewed_only:
+    if args.runner_url:
         tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))
 
     loop.run_until_complete(asyncio.gather(*tasks))
