@@ -54,6 +54,7 @@ from breezy.errors import DivergedBranches
 from breezy.plugins.gitlab.hoster import (
     ForkingDisabled,
     GitLabConflict,
+    ProjectCreationTimeout,
     )
 from breezy.propose import (
     MergeProposalExists,
@@ -433,6 +434,11 @@ def publish(
                 description=(
                     'The source repository is not a fork of the '
                     'target repository.'))
+        except ProjectCreationTimeout as e:
+            raise PublishFailure(
+                code='project-creation-timeout',
+                description='Forking the project (to %s) timed out (%ds)' % (
+                    e.project, e.timeout))
 
 
 class Publisher(object):

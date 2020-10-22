@@ -64,7 +64,11 @@ from silver_platter.utils import (
     )
 
 from breezy.errors import PermissionDenied
-from breezy.propose import get_proposal_by_url, HosterLoginRequired, UnsupportedHoster
+from breezy.propose import (
+    get_proposal_by_url,
+    HosterLoginRequired,
+    UnsupportedHoster,
+    )
 from breezy.transport import Transport
 import breezy.plugins.gitlab  # noqa: F401
 import breezy.plugins.launchpad  # noqa: F401
