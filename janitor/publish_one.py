@@ -662,6 +662,13 @@ class DebdiffMissingRun(Exception):
         self.missing_run_id = missing_run_id
 
 
+class DifferUnavailable(Exception):
+    """The differ was unavailable."""
+
+    def __init__(self, reason):
+        self.reason = reason
+
+
 def get_debdiff(differ_url: str, log_id: str) -> bytes:
     debdiff_url = (
         urllib.parse.urljoin(
@@ -677,12 +684,13 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
             if 'unavailable_run_id' in e.headers:
                 raise DebdiffMissingRun(e.headers['unavailable_run_id'])
             raise
-        elif e.status in (502, 503, 504):
-            raise DebdiffRetrievalError(e.file.read())
+        elif e.status in (400, 502, 503, 504):
+            raise DebdiffRetrievalError(
+                e.file.read().decode('utf-8', 'replace'))
         else:
             raise
     except ConnectionResetError as e:
-        raise DebdiffRetrievalError(str(e))
+        raise DifferUnavailable(str(e))
     except urllib.error.URLError as e:
         raise DebdiffRetrievalError(str(e))
 
@@ -775,9 +783,14 @@ def publish_one(
     debdiff: Optional[bytes]
     try:
         debdiff = get_debdiff(differ_url, log_id)
-    except DebdiffRetrievalError:
+    except DebdiffRetrievalError as e:
         raise PublishFailure(
-            description='Unable to contact differ for build diff',
+            description='Error from differ for build diff: %s' % e.reason,
+            code='differ-error')
+    except DifferUnavailable as e:
+        raise PublishFailure(
+            description='Unable to contact differ for build diff: %s'
+                % e.reason,
             code='differ-unreachable')
     except DebdiffMissingRun as e:
         if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and require_binary_diff:
