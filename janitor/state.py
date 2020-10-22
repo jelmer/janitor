@@ -21,7 +21,16 @@ import json
 import shlex
 import asyncpg
 from contextlib import asynccontextmanager
-from typing import Optional, Tuple, List, Any, Union, Callable, AsyncIterable
+from typing import (
+    Optional,
+    Tuple,
+    List,
+    Any,
+    Union,
+    Callable,
+    AsyncIterable,
+    Set
+    )
 from breezy import urlutils
 
 
@@ -395,6 +404,7 @@ async def _iter_runs(conn: asyncpg.Connection,
                      package: Optional[str] = None,
                      run_id: Optional[str] = None,
                      worker: Optional[str] = None,
+                     suite: Optional[str] = None,
                      limit: Optional[int] = None):
     """Iterate over runs.
 
@@ -424,6 +434,9 @@ FROM
     if worker is not None:
         args.append(worker)
         conditions.append("worker = $%d" % len(args))
+    if suite is not None:
+        args.append(suite)
+        conditions.append("suite = $%d" % len(args))
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
     query += "ORDER BY start_time DESC"
@@ -794,46 +807,6 @@ SELECT
   worker
 FROM
   last_unabsorbed_runs
-WHERE package = $1 AND suite = $2
-ORDER BY package, command DESC, start_time DESC
-LIMIT 1
-"""
-    args = [package, suite]
-    row = await conn.fetchrow(query, *args)
-    if row is None:
-        return None
-    return Run.from_row(row)
-
-
-async def get_last_effective_run(
-        conn: asyncpg.Connection,
-        package: str, suite: str) -> Optional[Run]:
-    args = []
-    query = """
-SELECT
-  id,
-  command,
-  start_time,
-  finish_time,
-  description,
-  package,
-  build_version,
-  build_distribution,
-  result_code,
-  branch_name,
-  main_branch_revision,
-  revision,
-  context,
-  result,
-  suite,
-  instigated_context,
-  branch_url,
-  logfilenames,
-  review_status,
-  review_comment,
-  worker
-FROM
-  last_effective_runs
 WHERE package = $1 AND suite = $2
 ORDER BY package, command DESC, start_time DESC
 LIMIT 1
@@ -1554,10 +1527,12 @@ async def get_successful_push_count(
 
 
 async def get_publish_attempt_count(
-        conn: asyncpg.Connection, revision: bytes) -> int:
+        conn: asyncpg.Connection, revision: bytes,
+        transient_result_codes: Set[str]) -> int:
     return await conn.fetchval(
-        "select count(*) from publish where revision = $1",
-        revision.decode('utf-8'))
+        "select count(*) from publish where revision = $1 "
+        "and result_code != ANY($2::text[])",
+        revision.decode('utf-8'), transient_result_codes)
 
 
 async def check_worker_credentials(
