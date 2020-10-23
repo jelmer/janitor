@@ -377,6 +377,62 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
     last_publish_pending_success.set_to_current_time()
 
 
+async def handle_publish_failure(e, conn, run):
+    from .schedule import (
+        do_schedule,
+        do_schedule_control,
+        )
+    code = e.code
+    description = e.description
+    if e.code == 'merge-conflict':
+        note('Merge proposal would cause conflict; restarting.')
+        await do_schedule(
+            conn, run.package, run.suite,
+            requestor='publisher (pre-creation merge conflict)')
+    elif e.code == 'diverged-branches':
+        note('Branches have diverged; restarting.')
+        await do_schedule(
+            conn, run.package, run.suite,
+            requestor='publisher (diverged branches)')
+    elif e.code == 'missing-build-diff-self':
+        if run.result_code != 'success':
+            description = (
+                'Missing build diff; run was not actually successful?')
+        else:
+            description = 'Missing build artifacts, rescheduling'
+            await do_schedule(
+                conn, run.package, run.suite,
+                refresh=True,
+                requestor='publisher (missing build artifacts - self)')
+    elif e.code == 'missing-build-diff-control':
+        unchanged_run = await state.get_unchanged_run(
+            conn, run.main_branch_revision)
+        if unchanged_run and unchanged_run.result_code != 'success':
+            description = (
+                'Missing build diff; last control run failed (%s).' %
+                unchanged_run.result_code)
+        elif unchanged_run and unchanged_run.has_artifacts():
+            description = (
+                'Missing build diff due to control run, but successful '
+                'control run exists. Rescheduling.')
+            await do_schedule_control(
+                conn, unchanged_run.package, unchanged_run.revision,
+                refresh=True,
+                requestor='publisher (missing build artifacts - control)')
+        else:
+            description = (
+                'Missing binary diff; requesting control run.')
+            if run.main_branch_revision is not None:
+                await do_schedule_control(
+                    conn, run.package, run.main_branch_revision,
+                    requestor='publisher (missing control run for diff)')
+            else:
+                warning(
+                    'Successful run (%s) does not have main branch '
+                    'revision set', run.id)
+    return (code, description)
+
+
 async def publish_from_policy(
         conn, rate_limiter, vcs_manager, run: state.Run,
         maintainer_email: str,
@@ -432,7 +488,8 @@ async def publish_from_policy(
             except RateLimited as e:
                 proposal_rate_limited_count.labels(
                     package=run.package, suite=run.suite).inc()
-                warning('Not creating proposal for %s: %s', run.package, e)
+                warning('Not creating proposal for %s/%s: %s',
+                        run.package, run.suite, e)
                 mode = MODE_BUILD_ONLY
     if mode == MODE_ATTEMPT_PUSH and \
             "salsa.debian.org/debian/" in main_branch_url:
@@ -459,54 +516,7 @@ async def publish_from_policy(
             possible_transports=possible_transports,
             rate_limiter=rate_limiter)
     except PublishFailure as e:
-        code = e.code
-        description = e.description
-        if e.code == 'merge-conflict':
-            note('Merge proposal would cause conflict; restarting.')
-            await do_schedule(
-                conn, run.package, run.suite,
-                requestor='publisher (pre-creation merge conflict)')
-        elif e.code == 'diverged-branches':
-            note('Branches have diverged; restarting.')
-            await do_schedule(
-                conn, run.package, run.suite,
-                requestor='publisher (diverged branches)')
-        elif e.code == 'missing-build-diff-self':
-            if run.result_code != 'success':
-                description = (
-                    'Missing build diff; run was not actually successful?')
-            else:
-                description = 'Missing build artifacts, rescheduling'
-                await do_schedule(
-                    conn, run.package, run.suite,
-                    refresh=True,
-                    requestor='publisher (missing build artifacts - self)')
-        elif e.code == 'missing-build-diff-control':
-            unchanged_run = await state.get_unchanged_run(
-                conn, run.main_branch_revision)
-            if unchanged_run and unchanged_run.result_code != 'success':
-                description = (
-                    'Missing build diff; last control run failed (%s).' %
-                    unchanged_run.result_code)
-            elif unchanged_run and unchanged_run.has_artifacts():
-                description = (
-                    'Missing build diff due to control run, but successful '
-                    'control run exists. Rescheduling.')
-                await do_schedule_control(
-                    conn, unchanged_run.package, unchanged_run.revision,
-                    refresh=True,
-                    requestor='publisher (missing build artifacts - control)')
-            else:
-                description = (
-                    'Missing binary diff; requesting control run.')
-                if run.main_branch_revision is not None:
-                    await do_schedule_control(
-                        conn, run.package, run.main_branch_revision,
-                        requestor='publisher (missing control run for diff)')
-                else:
-                    warning(
-                        'Successful run (%s) does not have main branch '
-                        'revision set', run.id)
+        code, description = await handle_publish_failure(e, conn, run)
         branch_name = None
         proposal_url = None
         note('Failed(%s): %s', code, description)
@@ -666,7 +676,8 @@ async def publish_request(request):
 
     publish_id = str(uuid.uuid4())
 
-    request.loop.create_task(publish_and_store(
+    loop = asyncio.get_event_loop()
+    loop.create_task(publish_and_store(
         request.app.db, request.app.topic_publish,
         request.app.topic_merge_proposal, publish_id, run, mode,
         package.maintainer_email, package.uploader_emails,
@@ -812,7 +823,8 @@ async def dulwich_refs(request):
     handler.proto.write_pkt_line(
         b'# service=' + service.encode('ascii') + b'\n')
     handler.proto.write_pkt_line(None)
-    await request.loop.run_in_executor(None, handler.handle)
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, handler.handle)
 
     await response.write(out.getvalue())
 
@@ -855,7 +867,9 @@ async def dulwich_service(request):
         handler = handler_cls(
              DictBackend({'.': r}), ['.'], proto, stateless_rpc=True)
         handler.handle()
-    await request.loop.run_in_executor(None, handle)
+
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, handle)
 
     await response.write(outf.getvalue())
 
@@ -1044,7 +1058,8 @@ async def scan_request(request):
                 differ_url=request.app.differ_url,
                 external_url=request.app.external_url,
                 modify_limit=request.app.modify_mp_limit)
-    request.loop.create_task(scan())
+    loop = asyncio.get_event_loop()
+    loop.create_task(scan())
     return web.Response(status=202, text="Scan started.")
 
 
@@ -1076,7 +1091,8 @@ async def refresh_proposal_status_request(request):
                     external_url=request.app.external_url)
             except NoRunForMergeProposal as e:
                 warning('Unable to find local metadata for %s, skipping.', e.mp.url)
-    request.loop.create_task(scan())
+    loop = asyncio.get_event_loop()
+    loop.create_task(scan())
     return web.Response(status=202, text="Refresh of proposal started.")
 
 
@@ -1094,7 +1110,8 @@ async def autopublish_request(request):
             reviewed_only=reviewed_only, push_limit=request.app.push_limit,
             require_binary_diff=request.app.require_binary_diff)
 
-    request.loop.create_task(autopublish())
+    loop = asyncio.get_event_loop()
+    loop.create_task(autopublish())
     return web.Response(status=202, text="Autopublish started.")
 
 
@@ -1107,13 +1124,13 @@ async def process_queue_loop(
         modify_mp_limit: Optional[int] = None,
         require_binary_diff: bool = False):
     while True:
+        cycle_start = datetime.now()
         async with db.acquire() as conn:
             await check_existing(
                 conn, rate_limiter, vcs_manager, topic_merge_proposal,
                 dry_run=dry_run, external_url=external_url,
                 differ_url=differ_url,
                 modify_limit=modify_mp_limit)
-        await asyncio.sleep(interval)
         if auto_publish:
             await publish_pending_new(
                 db, rate_limiter, vcs_manager, dry_run=dry_run,
@@ -1123,6 +1140,11 @@ async def process_queue_loop(
                 topic_merge_proposal=topic_merge_proposal,
                 reviewed_only=reviewed_only, push_limit=push_limit,
                 require_binary_diff=require_binary_diff)
+        cycle_duration = datetime.now() - cycle_start
+        to_wait = max(0, interval - cycle_duration.total_seconds())
+        note('Waiting %d seconds for next cycle.' % to_wait)
+        if to_wait > 0:
+            await asyncio.sleep(to_wait)
 
 
 def is_conflicted(mp):
@@ -1225,8 +1247,8 @@ async def check_existing_mp(
                 warning('No package known for %s (%s)',
                         mp.url, target_branch_url)
             else:
-                note('Guessed package name for %s based on revision.',
-                     mp.url)
+                note('Guessed package name (%s) for %s based on revision.',
+                     package_name, mp.url)
     if old_status == 'applied' and status == 'closed':
         status = old_status
     if old_status != status or revision != old_revision:
@@ -1349,14 +1371,15 @@ applied independently.
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter)
         except PublishFailure as e:
+            code, description = await handle_publish_failure(e, conn, last_run)
             note('%s: Updating merge proposal failed: %s (%s)',
-                 mp.url, e.code, e.description)
+                 mp.url, code, description)
             if not dry_run:
                 await state.store_publish(
                     conn, last_run.package, mp_run.branch_name,
                     last_run.main_branch_revision,
-                    last_run.revision, e.mode, e.code,
-                    e.description, mp.url,
+                    last_run.revision, e.mode, code,
+                    description, mp.url,
                     publish_id=publish_id,
                     requestor='publisher (regular refresh)')
         else:
@@ -1369,7 +1392,7 @@ applied independently.
                     publish_id=publish_id,
                     requestor='publisher (regular refresh)')
 
-            if not is_new:
+            if is_new:
                 # This can happen when the default branch changes
                 warning(
                     "Intended to update proposal %r, but created %r", mp.url,
