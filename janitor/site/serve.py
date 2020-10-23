@@ -24,6 +24,7 @@ from aiohttp.web_urldispatcher import (
     URL,
     UrlMappingMatchInfo,
     )
+from aiohttp import ClientTimeout
 from aiohttp.web import middleware
 from ..config import get_suite_config
 import gpg
@@ -36,6 +37,9 @@ from . import (
     html_template,
     render_template_for_request,
     )
+
+
+FORWARD_CLIENT_TIMEOUT = 30 * 60
 
 
 class ForwardedResource(PrefixResource):
@@ -113,7 +117,9 @@ class ForwardedResource(PrefixResource):
              request.method, url, params, headers)
         async with request.app.http_client_session.request(
                 request.method, url, params=params, headers=headers,
-                data=request.content) as client_response:
+                data=request.content,
+                timeout=ClientTimeout(FORWARD_CLIENT_TIMEOUT)
+                ) as client_response:
             status = client_response.status
 
             note('Forwarding result: %d', status)
