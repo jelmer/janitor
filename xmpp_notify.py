@@ -42,6 +42,7 @@ class JanitorNotifier(slixmpp.ClientXMPP):
         self.nick = 'janitor'
         self.publisher_url = publisher_url
         self.auto_authorize = True
+        self._runner_status = None
         self.add_event_handler("session_start", self.on_start)
         self.add_event_handler("disconnected", self.on_lost)
         self.add_event_handler("message", self.on_message)
