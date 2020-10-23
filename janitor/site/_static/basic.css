@@ -582,15 +582,15 @@ div.math:hover a.headerlink {
 }
 
 /* -- result codes */
-span.result-code-failure {
+span.result-code-failure, span.publish-failure {
     color: red;
 }
 
-span.result-code-transient-failure {
+span.result-code-transient-failure, span.publish-transient {
     color: orange;
 }
 
-span.result-code-success {
+span.result-code-success, span.publish-success {
     color: green;
 }
 
@@ -598,12 +598,8 @@ span.result-code-nothing-new-to-do {
     color: lightgreen;
 }
 
-span.result-code-nothing-to-do {
+span.result-code-nothing-to-do, span.publish-missing {
     color: grey;
-}
-
-span.publish-failure {
-    color: red;
 }
 
 blockquote.result-code-explanation {
