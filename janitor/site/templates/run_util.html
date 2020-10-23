@@ -156,6 +156,14 @@ $("#{{ propose_id }}").click(function() {
 <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a>
 {% endmacro %}
 
+{% macro display_publish_result_code(code) %}
+{% if code == 'success' %}<span class="publish-success">{{ code }}</span>
+{% elif code in ('differ-unreachable') %}<span class="publish-transient">{{ code }}</span>
+{% elif code in ('missing-build-diff-control') %}<span class="publish-missing">{{ code }}</span>
+{% else %}<span class="publish-failure">{{ code }}</span>
+{% endif %}
+{% endmacro %}
+
 {% macro display_publish_result(mode, code, description, mp_url) %}
 {% if mode == 'push' %}
  {% if code == 'success' %}Successfully pushed
