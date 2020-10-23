@@ -256,7 +256,7 @@ async def handle_diffoscope(request):
                 raise web.HTTPServiceUnavailable(
                      text='diffoscope used too much memory')
             except asyncio.TimeoutError:
-                raise web.HTTPServiceUnavailable(text='diffoscope timed out')
+                raise web.HTTPGatewayTimeout(text='diffoscope timed out')
 
         if cache_path is not None:
             with open(cache_path, 'w') as f:
@@ -331,7 +331,7 @@ async def precache(app, old_id, new_id):
                 raise web.HTTPServiceUnavailable(
                      text='diffoscope used too much memory')
             except asyncio.TimeoutError:
-                raise web.HTTPServiceUnavailable(text='diffoscope timed out')
+                raise web.HTTPGatewayTimeout(text='diffoscope timed out')
 
             try:
                 with open(diffoscope_cache_path, 'w') as f:
@@ -360,7 +360,8 @@ async def handle_precache(request):
             raise web.HTTPGatewayTimeout(
                 text='Timeout retrieving artifacts')
 
-    request.loop.create_task(_precache())
+    loop = asyncio.get_event_loop()
+    loop.create_task(_precache())
 
     return web.Response(status=202, text='Precaching started')
 
@@ -393,7 +394,8 @@ where
                     note('Error precaching: %r', e)
                     traceback.print_exc()
 
-    request.loop.create_task(_precache_all())
+    loop = asyncio.get_event_loop()
+    loop.create_task(_precache_all())
     return web.Response(
         status=202, text='Precache started (todo: %d)' % len(todo))
 
