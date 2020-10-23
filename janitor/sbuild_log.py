@@ -952,6 +952,8 @@ def command_missing(m):
         return MissingConfigure()
     if command.startswith('./') or command.startswith('../'):
         return None
+    if command == 'debian/rules':
+        return None
     return MissingCommand(command)
 
 
