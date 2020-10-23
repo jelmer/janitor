@@ -3,6 +3,7 @@ export PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter:$(pwd)
 ./udd-package-metadata.py | python3 -m janitor.package_metadata --distribution=unstable "$@"
 (
    python3 ./unchanged-candidates.py
+   python3 ./scrub-obsolete-candidates.py
    python3 ./lintian-fixes-candidates.py
    python3 ./fresh-releases-candidates.py
    python3 ./fresh-snapshots-candidates.py
