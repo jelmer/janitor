@@ -377,7 +377,7 @@ FROM
     last_runs
 WHERE
     suite = 'unchanged' AND revision = $1 AND
-    build_version IS NOT NULL
+    result_code = 'success'
 ORDER BY finish_time DESC
 """
     if isinstance(main_branch_revision, bytes):
@@ -724,13 +724,6 @@ from run left join package on package.name = run.package
 where run.build_distribution = $1 and not package.removed
 order by package.name, build_version desc
 """, suite)
-
-
-async def get_published_by_suite(conn: asyncpg.Connection):
-    return await conn.fetch("""
-select suite, count(distinct package) from run where build_version is not null
-group by 1
-""")
 
 
 async def iter_previous_runs(
