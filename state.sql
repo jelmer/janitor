@@ -155,7 +155,7 @@ CREATE TABLE worker (
 );
 
 -- The last run per package/suite
-CREATE MATERIALIZED VIEW last_runs AS
+CREATE VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
   *
   FROM
@@ -262,7 +262,7 @@ CREATE TRIGGER expire_site_session_delete_old_rows_trigger
    AFTER INSERT ON site_session
    EXECUTE PROCEDURE expire_site_session_delete_old_rows();
 
-CREATE MATERIALIZED VIEW queue_positions AS SELECT
+CREATE VIEW queue_positions AS SELECT
     package,
     suite,
     row_number() OVER (ORDER BY priority ASC, id ASC) AS position,
