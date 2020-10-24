@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
    foreign key (package) references package(name),
    primary key(url)
 );
+CREATE INDEX ON merge_proposal (revision);
+CREATE INDEX ON merge_proposal (url);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected');
 CREATE TABLE IF NOT EXISTS run (
@@ -80,6 +82,8 @@ CREATE INDEX ON run (package, suite);
 CREATE INDEX ON run (suite);
 CREATE INDEX ON run (build_distribution);
 CREATE INDEX ON run (result_code);
+CREATE INDEX ON run (revision);
+CREATE INDEX ON run (main_branch_revision);
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived', 'skip');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
@@ -96,6 +100,8 @@ CREATE TABLE IF NOT EXISTS publish (
    foreign key (package) references package(name),
    foreign key (merge_proposal_url) references merge_proposal(url)
 );
+CREATE INDEX ON publish (revision);
+CREATE INDEX ON publish (merge_proposal_url);
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    package text not null,
@@ -252,3 +258,13 @@ $$;
 CREATE TRIGGER expire_site_session_delete_old_rows_trigger
    AFTER INSERT ON site_session
    EXECUTE PROCEDURE expire_site_session_delete_old_rows();
+
+CREATE MATERIALIZED VIEW queue_positions AS SELECT
+    package,
+    suite,
+    row_number() OVER (ORDER BY priority ASC, id ASC) AS position,
+    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC)
+        - coalesce(estimated_duration, interval '0') AS wait_time
+FROM
+    queue
+ORDER BY priority ASC, id ASC;
