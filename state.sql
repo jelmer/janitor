@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS run (
    description text,
    start_time timestamp,
    finish_time timestamp,
+   -- TODO: generated columsn require postgresql 12
+   -- duration interval generated always as (finish_time - start_time) stored,
    package text not null,
    -- Debian version text of the built package
    build_version debversion,
@@ -102,6 +104,7 @@ CREATE TABLE IF NOT EXISTS publish (
 );
 CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
+CREATE INDEX ON publish (timestamp);
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    package text not null,
@@ -152,7 +155,7 @@ CREATE TABLE worker (
 );
 
 -- The last run per package/suite
-CREATE OR REPLACE VIEW last_runs AS
+CREATE MATERIALIZED VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
   *
   FROM
@@ -259,6 +262,8 @@ CREATE TRIGGER expire_site_session_delete_old_rows_trigger
    AFTER INSERT ON site_session
    EXECUTE PROCEDURE expire_site_session_delete_old_rows();
 
+-- TODO: Perhaps just add row_number() and wait_time as generated columns once
+-- we migrate to psql 12 ?
 CREATE MATERIALIZED VIEW queue_positions AS SELECT
     package,
     suite,
