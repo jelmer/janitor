@@ -19,7 +19,8 @@ from email.utils import parseaddr
 from fnmatch import fnmatch
 import shlex
 from google.protobuf import text_format  # type: ignore
-from typing import List, TextIO, Tuple
+import re
+from typing import List, TextIO, Tuple, Optional
 
 from . import policy_pb2
 
@@ -28,7 +29,8 @@ def read_policy(f: TextIO) -> policy_pb2.PolicyConfig:
     return text_format.Parse(f.read(), policy_pb2.PolicyConfig())
 
 
-def matches(match, package_name, package_maintainer, package_uploaders):
+def matches(
+        match, package_name, vcs_url, package_maintainer, package_uploaders):
     package_maintainer_email = parseaddr(package_maintainer)[1]
     for maintainer in match.maintainer:
         if not fnmatch(package_maintainer_email, maintainer):
@@ -41,6 +43,9 @@ def matches(match, package_name, package_maintainer, package_uploaders):
             return False
     for source_package in match.source_package:
         if not fnmatch(package_name, source_package):
+            return False
+    for vcs_url_regex in match.vcs_url_regex:
+        if vcs_url is None or not re.fullmatch(vcs_url_regex, vcs_url):
             return False
     return True
 
@@ -55,15 +60,16 @@ def known_suites(config):
 
 def apply_policy(
         config: policy_pb2.PolicyConfig, suite: str,
-        package_name: str, maintainer: str,
+        package_name: str, vcs_url: Optional[str], maintainer: str,
         uploaders: List[str]) -> Tuple[str, str, List[str]]:
     publish_mode = policy_pb2.build_only
     update_changelog = policy_pb2.auto
     command = None
     for policy in config.policy:
         if (policy.match and
-                not any([matches(m, package_name, maintainer, uploaders)
-                         for m in policy.match])):
+                not any(
+                    [matches(m, package_name, vcs_url, maintainer, uploaders)
+                     for m in policy.match])):
             continue
         if policy.HasField('changelog') is not None:
             update_changelog = policy.changelog
@@ -110,7 +116,8 @@ async def main(args):
         for package in await state.iter_packages(conn):
             for suite in suites:
                 package_policy = apply_policy(
-                    policy, suite, package.name, package.maintainer_email,
+                    policy, suite, package.name, package.vcs_url,
+                    package.maintainer_email,
                     package.uploader_emails)
                 if current_policy.get((package.name, suite)) != package_policy:
                     print('%s/%s -> %r' % (
