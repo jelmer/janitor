@@ -377,7 +377,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
     last_publish_pending_success.set_to_current_time()
 
 
-async def handle_publish_failure(e, conn, run):
+async def handle_publish_failure(e, conn, run, unchanged_run):
     from .schedule import (
         do_schedule,
         do_schedule_control,
@@ -405,8 +405,6 @@ async def handle_publish_failure(e, conn, run):
                 refresh=True,
                 requestor='publisher (missing build artifacts - self)')
     elif e.code == 'missing-build-diff-control':
-        unchanged_run = await state.get_unchanged_run(
-            conn, run.main_branch_revision)
         if unchanged_run and unchanged_run.result_code != 'success':
             description = (
                 'Missing build diff; last control run failed (%s).' %
@@ -494,6 +492,15 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
+    unchanged_run = await state.get_unchanged_run(
+        conn, run.main_branch_revision)
+
+    # TODO(jelmer): Make this more generic
+    if (unchanged_run and
+        unchanged_run.result_code in ('debian-upstream-metadata-invalid', ) and
+            run.suite == 'lintian-fixes'):
+        require_binary_diff = False
+
     note('Publishing %s / %r (mode: %s)', run.package, run.command, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
@@ -508,7 +515,8 @@ async def publish_from_policy(
             possible_transports=possible_transports,
             rate_limiter=rate_limiter)
     except PublishFailure as e:
-        code, description = await handle_publish_failure(e, conn, run)
+        code, description = await handle_publish_failure(
+            e, conn, run, unchanged_run)
         branch_name = None
         proposal_url = None
         note('Failed(%s): %s', code, description)
@@ -1363,7 +1371,10 @@ applied independently.
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter)
         except PublishFailure as e:
-            code, description = await handle_publish_failure(e, conn, last_run)
+            unchanged_run = await state.get_unchanged_run(
+                conn, last_run.main_branch_revision)
+            code, description = await handle_publish_failure(
+                e, conn, last_run, unchanged_run)
             note('%s: Updating merge proposal failed: %s (%s)',
                  mp.url, code, description)
             if not dry_run:
