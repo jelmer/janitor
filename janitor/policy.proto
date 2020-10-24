@@ -37,6 +37,9 @@ message Match {
 
     // Source package name
     repeated string source_package = 3;
+
+    // Source package VCS URL
+    repeated string vcs_url_regex = 4;
 }
 
 message PublishPolicy {

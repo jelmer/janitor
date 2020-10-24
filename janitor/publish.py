@@ -491,14 +491,6 @@ async def publish_from_policy(
                 warning('Not creating proposal for %s/%s: %s',
                         run.package, run.suite, e)
                 mode = MODE_BUILD_ONLY
-    if mode == MODE_ATTEMPT_PUSH and \
-            "salsa.debian.org/debian/" in main_branch_url:
-        # Make sure we don't accidentally push to unsuspecting
-        # collab-maint repositories, even if debian-janitor becomes a
-        # member of "debian" in the future.
-        warning('Refusing to push directly to %s, switch back to propose.',
-                main_branch_url)
-        mode = MODE_PROPOSE
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
