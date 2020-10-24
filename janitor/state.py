@@ -594,19 +594,9 @@ async def get_queue_position(conn: asyncpg.Connection, suite, package):
 
 
 async def get_queue_positions(conn: asyncpg.Connection, suite, packages):
-    subquery = """
-SELECT
-    package,
-    suite,
-    row_number() OVER (ORDER BY priority ASC, id ASC) AS position,
-    SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC)
-        - coalesce(estimated_duration, interval '0') AS wait_time
-FROM
-    queue
-ORDER BY priority ASC, id ASC
-"""
+
     query = (
-        "SELECT package, position, wait_time FROM (" + subquery + ") AS q "
+        "SELECT package, position, wait_time FROM queue_positions "
         "WHERE package = ANY($1::text[]) AND suite = $2")
     return await conn.fetch(query, packages, suite)
 
