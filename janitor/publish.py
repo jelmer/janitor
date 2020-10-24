@@ -445,8 +445,6 @@ async def publish_from_policy(
     from .schedule import (
         full_command,
         estimate_duration,
-        do_schedule,
-        do_schedule_control,
         )
     if not command:
         warning('no command set for %s', run.id)
