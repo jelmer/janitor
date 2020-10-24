@@ -1086,9 +1086,11 @@ async def get_last_build_version(
 
 async def estimate_duration(
         conn: asyncpg.Connection, package: Optional[str] = None,
-        suite: Optional[str] = None) -> Optional[datetime.timedelta]:
+        suite: Optional[str] = None,
+        limit: Optional[int] = 1000) -> Optional[datetime.timedelta]:
     query = """
-SELECT AVG(duration) FROM run
+SELECT AVG(duration) FROM
+(select duration from run
 WHERE """
     args = []
     if package is not None:
@@ -1099,6 +1101,10 @@ WHERE """
             query += " AND"
         query += " suite = $%d" % (len(args) + 1)
         args.append(suite)
+    query += " ORDER BY finish_time DESC"
+    if limit is not None:
+        query += " LIMIT %d" % limit
+    query += ") as q"
     return await conn.fetchval(query, *args)
 
 
