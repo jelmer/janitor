@@ -325,7 +325,7 @@ async def do_schedule_control(
         conn: asyncpg.Connection, package: str,
         main_branch_revision: Optional[bytes],
         offset: Optional[int] = None, refresh: bool = False,
-        requestor: Optional[str] = None) -> Tuple[int, timedelta]:
+        requestor: Optional[str] = None) -> Tuple[int, Optional[timedelta]]:
     command = ['just-build']
     if main_branch_revision is not None:
         command.append('--revision=%s' % main_branch_revision.decode('utf-8'))
@@ -345,7 +345,7 @@ async def do_schedule(
             conn: asyncpg.Connection, package: str, suite: str,
             offset: Optional[int] = None, refresh: bool = False,
             requestor: Optional[str] = None,
-            command=None) -> Tuple[Optional[int], Optional[timedelta]]:
+            command=None) -> Tuple[int, Optional[timedelta]]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
