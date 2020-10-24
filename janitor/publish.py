@@ -1033,7 +1033,8 @@ async def check_mp_request(request):
             modified = await check_existing_mp(
                 conn, mp, status,
                 topic_merge_proposal=request.app.topic_merge_proposal,
-                vcs_manager=request.app.vcs_manager, dry_run=('dry_run' in post),
+                vcs_manager=request.app.vcs_manager,
+                dry_run=('dry_run' in post),
                 external_url=request.app.external_url,
                 differ_url=request.app.differ_url,
                 rate_limiter=request.app.rate_limiter)
@@ -1090,7 +1091,8 @@ async def refresh_proposal_status_request(request):
                     differ_url=request.app.differ_url,
                     external_url=request.app.external_url)
             except NoRunForMergeProposal as e:
-                warning('Unable to find local metadata for %s, skipping.', e.mp.url)
+                warning('Unable to find local metadata for %s, skipping.',
+                        e.mp.url)
     loop = asyncio.get_event_loop()
     loop.create_task(scan())
     return web.Response(status=202, text="Refresh of proposal started.")
@@ -1336,7 +1338,7 @@ applied independently.
                 conn, last_run.package, shlex.split(last_run.command),
                 last_run.suite, offset=1, refresh=False,
                 requestor='publisher (retrying failed run after %d days)' %
-                    last_run_age.days)
+                last_run_age.days)
         else:
             note('%s: Last run failed (%s). Not touching merge proposal.',
                  mp.url, last_run.result_code)
@@ -1440,7 +1442,8 @@ async def check_existing(
                 mps_per_maintainer=mps_per_maintainer,
                 check_only=check_only)
         except NoRunForMergeProposal as e:
-            warning('Unable to find local metadata for %s, skipping.', e.mp.url)
+            warning('Unable to find local metadata for %s, skipping.',
+                    e.mp.url)
             modified = False
 
         if modified:
