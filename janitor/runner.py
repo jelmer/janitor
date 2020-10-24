@@ -931,7 +931,9 @@ async def export_queue_length(db: state.Database) -> None:
 async def export_stats(db: state.Database) -> None:
     while True:
         async with db.acquire() as conn:
-            for suite, count in await state.get_published_by_suite(conn):
+            for suite, count in await conn.fetch("""
+select suite, count(distinct package) from run where result_code = 'success'
+group by 1"""):
                 apt_package_count.labels(suite=suite).set(count)
 
             by_suite: Dict[str, int] = {}
