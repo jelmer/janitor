@@ -2364,7 +2364,7 @@ build_failure_regexps = [
     ('(dh.*): debhelper compat level specified both in debian/compat '
      'and via build-dependency on debhelper-compat', 
      lambda m: DuplicateDHCompatLevel(m.group(1))),
-    ('(dh.*): Please specify the compatibility level in debian/compat',
+    ('(dh.*): (error: )?Please specify the compatibility level in debian/compat',
      lambda m: MissingDHCompatLevel(m.group(1))),
     ('dh_makeshlibs: The udeb (.*) does not contain any shared libraries '
      'but --add-udeb=(.*) was passed!?', None),
