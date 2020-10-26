@@ -586,6 +586,36 @@ if __name__ == '__main__':
         return {'regressions': regressions}
 
     @html_template(
+        'broken-merge-proposals.html', headers={'Cache-Control': 'max-age=600'})
+    async def handle_broken_mps(request):
+        async with request.app.database.acquire() as conn:
+            broken_mps = await conn.fetch("""\
+select
+  url,
+  last_run.suite,
+  last_run.package,
+  last_run.id,
+  last_run.result_code,
+  last_run.finish_time,
+  last_run.description
+from
+  (select
+     distinct on (url) url, run.suite, run.package, run.finish_time,
+     merge_proposal.revision as current_revision
+   from merge_proposal join run on
+     merge_proposal.revision = run.revision where status = 'open')
+   as current_run left join last_runs last_run
+on
+  current_run.suite = last_run.suite and
+  current_run.package = last_run.package
+where
+  last_run.result_code not in ('success', 'nothing-to-do', 'nothing-new-to-do')
+order by url, last_run.finish_time desc
+""")
+
+        return {'broken_mps': broken_mps}
+
+    @html_template(
         'run.html', headers={'Cache-Control': 'max-age=3600'})
     async def handle_run(request):
         from .pkg import generate_run_file
@@ -1158,6 +1188,10 @@ if __name__ == '__main__':
         '/cupboard/vcs-regressions/',
         handle_vcs_regressions,
         name='vcs-regressions')
+    app.router.add_get(
+        '/cupboard/broken-merge-proposals',
+        handle_broken_mps,
+        name='broken-mps')
     app.router.add_get(
         '/login', handle_login,
         name='login')

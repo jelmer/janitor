@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% from "run_util.html" import display_result_code %}
+{% block page_title %}Merge Proposals with Broken Runs{% endblock %}
+{% block body %}
+<div class="section" id="broken-merge-proposals">
+<h1>Merge Proposals With Broken Runs</h1>
+<p>This is an overview of all open merge proposals for which the
+last relevant run failed.</p>
+
+<table class="docutils" border="1">
+<thead valign="bottom">
+<tr class="row-odd">
+    <th class="head">Merge Proposal</th>
+    <th class="head">Package</th>
+    <th class="head">Suite</th>
+    <th class="head">Result code</th>
+    <td class="head">Finish time</th>
+    <td class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for mp_url, suite, package, run_id, result_code, finish_time, description in broken_mps %}
+<tr class="row-even">
+<td><a class="reference external" href="{{ mp_url }}">Merge Proposal</a></td>
+<td><a class="reference external" href="/cupboard/pkg/{{ package }}">{{ package }}</a></td>
+<td><a class="reference external" href="/{{ suite }}">{{ suite }}</a></td>
+<td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ run_id }}">{{ result_code }}</a></td>
+<td>{{ format_timestamp(finish_time) }}</td>
+<td>{{ description }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+{% endblock %}
