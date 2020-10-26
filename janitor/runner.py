@@ -632,12 +632,14 @@ def suite_build_env(distro_config, suite_config, apt_location):
     if distro_config.name:
         env['DISTRIBUTION'] = distro_config.name
 
+    arches = ['amd64', 'all']
     urls = []
     for component in distro_config.component:
-        urls.append('%s/dists/%s/%s/Contents-amd64.gz' % (
-            distro_config.archive_mirror_uri,
-            distro_config.name,
-            component))
+        for arch in arches:
+            urls.append('%s/dists/%s/%s/Contents-%s.gz' % (
+                distro_config.archive_mirror_uri,
+                distro_config.name,
+                component, arch))
 
     env['APT_CONTENTS_URL'] = ','.join(urls)
     env['APT_CONTENTS_LEGACY_URL'] = (
