@@ -309,19 +309,30 @@ class UpstreamMetadataFileParseError(Problem):
         return "%s is invalid" % self.path
 
 
-class DpkgSourcPackFailed(Problem):
+class DpkgSourcePackFailed(Problem):
 
     kind = 'dpkg-source-pack-failed'
 
+    def __init__(self, reason=None):
+        self.reason = reason
+
     def __eq__(self, other):
-        return isinstance(other, type(self))
+        return isinstance(other, type(self)) and other.reason == self.reason
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.reason)
 
     def __str__(self):
-        return "Packing source directory failed."
+        if self.reason:
+            return "Packing source directory failed: %s" % self.reason
+        else:
+            return "Packing source directory failed."
 
 
 def find_preamble_failure_description(lines: List[str]) -> Tuple[
         Optional[int], Optional[str], Optional[Problem]]:
+    ret: Tuple[Optional[int], Optional[str], Optional[Problem]] = (
+        None, None, None)
     OFFSET = 20
     err: Problem
     for i in range(1, OFFSET):
@@ -373,13 +384,18 @@ def find_preamble_failure_description(lines: List[str]) -> Tuple[
             err = DpkgBinaryFileChanged([m.group(1)])
             return lineno + 1, line, err
 
+        m = re.match('dpkg-source: error: (.*)', line)
+        if m:
+            err = DpkgSourcePackFailed(m.group(1))
+            ret = lineno + 1, line, err
+
         m = re.match(
             'E: Failed to package source directory (.*)', line)
         if m:
-            err = DpkgSourcPackFailed()
-            return lineno + 1, line, err
+            err = DpkgSourcePackFailed()
+            ret = lineno + 1, line, err
 
-    return None, None, None
+    return ret
 
 
 BRZ_ERRORS = [
