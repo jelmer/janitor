@@ -3560,6 +3560,10 @@ def find_apt_get_failure(lines):
             if m.group(1).endswith(': No space left on device'):
                 return lineno + 1, line, NoSpaceOnDevice()
             return lineno + 1, line, DpkgError(m.group(1))
+        m = re.match(r'dpkg: error processing package (.*) \((.*)\):', line)
+        if m:
+            return lineno + 2, lines[lineno + 1].strip(), DpkgError(
+                'processing package %s (%s)' % (m.group(1), m.group(2)))
 
     for i, line in enumerate(lines):
         m = re.match(
