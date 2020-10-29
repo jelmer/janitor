@@ -99,7 +99,8 @@ def add_dummy_changelog_entry(
             author='%s <%s>' % maintainer,
             date=format_datetime(timestamp),
             changes=['', '  * ' + message, ''])
-    tree.put_file_bytes_non_atomic(path, bytes(cl))
+    cl_str = cl._format(allow_missing_author=True)
+    tree.put_file_bytes_non_atomic(path, cl_str.encode(cl._encoding))
 
 
 def get_latest_changelog_version(local_tree, subpath=''):
