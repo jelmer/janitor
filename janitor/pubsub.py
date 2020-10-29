@@ -82,6 +82,7 @@ async def pubsub_reader(
         except (ClientResponseError, ClientConnectorError) as e:
             warning('Unable to connect: %s' % e)
         else:
+            note('Subscribed to %s', url)
             while True:
                 msg = await ws.receive()
 
