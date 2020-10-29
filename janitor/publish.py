@@ -1375,8 +1375,35 @@ applied independently.
                 conn, last_run.main_branch_revision)
             code, description = await handle_publish_failure(
                 e, conn, last_run, unchanged_run)
-            note('%s: Updating merge proposal failed: %s (%s)',
-                 mp.url, code, description)
+            if code == 'empty-merge-proposal':
+                # The changes from the merge proposal have already made it in somehow.
+                note('%s: Empty merge proposal, changes must have been merged '
+                     'some other way. Closing.', mp.url)
+                if not dry_run:
+                    await update_proposal_status(
+                        mp, 'applied', revision, package_name)
+                    try:
+                        mp.post_comment("""
+This merge proposal will be closed, since all remaining changes have been
+applied independently.
+""")
+                    except PermissionDenied as e:
+                        warning('Permission denied posting comment to %s: %s',
+                                mp.url, e)
+                    try:
+                        mp.close()
+                    except PermissionDenied as e:
+                        warning('Permission denied closing merge request %s: %s',
+                                mp.url, e)
+                        code = 'empty-failed-to-close'
+                        description = 'Permission denied closing merge request: %s' % e
+                code = 'success'
+                description = (
+                    'Closing merge request for which changes were '
+                    'applied independently')
+            if code != 'success':
+                note('%s: Updating merge proposal failed: %s (%s)',
+                     mp.url, code, description)
             if not dry_run:
                 await state.store_publish(
                     conn, last_run.package, mp_run.branch_name,
