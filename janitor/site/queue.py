@@ -128,6 +128,8 @@ async def get_queue(
             description = 'Import archive changes missing from VCS'
         elif entry.command[0] == 'cme-fix':
             description = 'Apply Configuration Model Editor (CME) fixes'
+        elif entry.command[0] == 'scrub-obsolete':
+            description = 'Remove obsolete dependencies'
         else:
             raise AssertionError('invalid command %s' % entry.command)
         if only_command is not None:
