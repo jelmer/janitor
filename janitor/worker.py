@@ -44,6 +44,12 @@ from silver_platter.debian.changer import (
     DebianChanger,
     ChangerReporter,
     )
+from silver_platter.debian.__main__ import (
+    changer_subcommands,
+    )
+from silver_platter.debian.upstream import (
+    NewUpstreamChanger as ActualNewUpstreamChanger,
+    )
 from silver_platter.proposal import Hoster
 
 from silver_platter.utils import (
@@ -140,20 +146,18 @@ class SubWorker(object):
 
 class ChangerWorker(SubWorker):
 
-    changer_cls: Type[DebianChanger]
-
-    def __init__(self, command, env):
+    def __init__(self, changer_cls, command, env):
         self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(prog=self.name)
+        subparser = argparse.ArgumentParser(prog=changer_cls.name)
         subparser.add_argument(
             '--no-update-changelog', action="store_false", default=None,
             dest="update_changelog", help="do not update the changelog")
         subparser.add_argument(
             '--update-changelog', action="store_true", dest="update_changelog",
             help="force updating of the changelog", default=None)
-        self.changer_cls.setup_parser(subparser)
+        changer_cls.setup_parser(subparser)
         self.args = subparser.parse_args(command)
-        self.changer = self.changer_cls.from_args(self.args)
+        self.changer = changer_cls.from_args(self.args)
 
     def make_changes(self, local_tree, subpath, report_context, metadata,
                      base_metadata):
@@ -170,63 +174,40 @@ class ChangerWorker(SubWorker):
         return SubWorkerResult.from_changer_result(result=result)
 
 
-class OrphanWorker(ChangerWorker):
+class NewUpstreamChanger(ActualNewUpstreamChanger):
 
-    name = 'orphan'
-    from silver_platter.debian.orphan import OrphanChanger
-    changer_cls = OrphanChanger
-
-
-class LintianBrushWorker(ChangerWorker):
-    """Janitor-specific Lintian Fixer."""
-
-    name = 'lintian-brush'
-    from silver_platter.debian.lintian import LintianBrushChanger
-    changer_cls = LintianBrushChanger
-
-
-class NewUpstreamWorker(ChangerWorker):
-
-    name = 'new-upstream'
-    from silver_platter.debian.upstream import (
-        NewUpstreamChanger,
-        )
-
-    class changer_cls(NewUpstreamChanger):
-
-        def create_dist_from_command(self, tree, package, version, target_dir):
-            from silver_platter.debian.upstream import DistCommandFailed
-            try:
-                return create_dist_schroot(
-                    tree, subdir=package, target_dir=target_dir,
-                    packaging_tree=tree, chroot=self.args.chroot)
-            except DetailedDistCommandFailed:
-                raise
-            except UnidentifiedError as e:
-                traceback.print_exc()
-                lines = [line for line in e.lines if line]
-                if e.secondary:
-                    raise DistCommandFailed(e.secondary[1])
-                elif len(lines) == 1:
-                    raise DistCommandFailed(lines[0])
-                else:
-                    raise DistCommandFailed(
-                        'command %r failed with unidentified error '
-                        '(return code %d)' % (e.argv, e.retcode))
-            except Exception as e:
-                traceback.print_exc()
-                raise DistCommandFailed(str(e))
-
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
+    def create_dist_from_command(self, tree, package, version, target_dir):
+        from silver_platter.debian.upstream import DistCommandFailed
         try:
-            return ChangerWorker.make_changes(
-                self, local_tree, subpath, report_context, metadata,
-                base_metadata)
+            return create_dist_schroot(
+                tree, subdir=package, target_dir=target_dir,
+                packaging_tree=tree, chroot=self.args.chroot)
+        except DetailedDistCommandFailed:
+            raise
+        except UnidentifiedError as e:
+            traceback.print_exc()
+            lines = [line for line in e.lines if line]
+            if e.secondary:
+                raise DistCommandFailed(e.secondary[1])
+            elif len(lines) == 1:
+                raise DistCommandFailed(lines[0])
+            else:
+                raise DistCommandFailed(
+                    'command %r failed with unidentified error '
+                    '(return code %d)' % (e.argv, e.retcode))
+        except Exception as e:
+            traceback.print_exc()
+            raise DistCommandFailed(str(e))
+
+    def make_changes(self, *args, **kwargs):
+        try:
+            return ActualNewUpstreamChanger.make_changes(*args, **kwargs)
         except DetailedDistCommandFailed as e:
             error_code = 'dist-' + e.error.kind
             error_description = str(e.error)
-            raise WorkerFailure(error_code, error_description)
+            return ChangerResult(
+                description=error_description, result_code=error_code,
+                mutator=None)
 
 
 class DummyChanger(DebianChanger):
@@ -262,40 +243,6 @@ class DummyChanger(DebianChanger):
         return ChangerResult(description='Nothing changed', mutator=None)
 
 
-class JustBuildWorker(ChangerWorker):
-
-    name = 'just-build'
-    changer_cls = DummyChanger
-
-
-class UncommittedWorker(ChangerWorker):
-
-    from silver_platter.debian.uncommitted import UncommittedChanger
-    name = 'import-upload'
-    changer_cls = UncommittedChanger
-
-
-class ScrubObsoleteWorker(ChangerWorker):
-    from silver_platter.debian.scrub_obsolete import ScrubObsoleteChanger
-
-    name = 'scrub-obsolete'
-    changer_cls = ScrubObsoleteChanger
-
-
-class CMEWorker(ChangerWorker):
-
-    from silver_platter.debian.cme import CMEChanger
-    name = 'cme-fix'
-    changer_cls = CMEChanger
-
-
-class MultiArchHintsWorker(ChangerWorker):
-
-    from silver_platter.debian.multiarch import MultiArchHintsChanger
-    name = 'apply-multiarch-hints'
-    changer_cls = MultiArchHintsChanger
-
-
 class WorkerResult(object):
 
     def __init__(
@@ -326,17 +273,9 @@ def tree_set_changelog_version(
 
 
 # TODO(jelmer): Just invoke the silver-platter subcommand
-SUBWORKERS = {
-    swc.name: swc for swc in [
-        LintianBrushWorker,
-        NewUpstreamWorker,
-        JustBuildWorker,
-        MultiArchHintsWorker,
-        OrphanWorker,
-        UncommittedWorker,
-        CMEWorker,
-        ScrubObsoleteWorker,
-        ]}
+CHANGER_SUBCOMMANDS = dict(changer_subcommands.items())
+CHANGER_SUBCOMMANDS['just-build'] = DummyChanger
+CHANGER_SUBCOMMANDS['new-upstream'] = NewUpstreamChanger
 
 
 class WorkerReporter(ChangerReporter):
@@ -448,14 +387,14 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
     metadata['command'] = command
 
-    subworker_cls: Type[SubWorker]
+    changer_cls: Type[DebianChanger]
     try:
-        subworker_cls = SUBWORKERS[command[0]]
+        changer_cls = changer_subcommands[command[0]]
     except KeyError:
         raise WorkerFailure(
             'unknown-subcommand',
             'unknown subcommand %s' % command[0])
-    subworker = subworker_cls(command[1:], env)
+    subworker = ChangerWorker(changer_cls, command[1:], env)
 
     target = DebianTarget(
         build_distribution=build_distribution,
