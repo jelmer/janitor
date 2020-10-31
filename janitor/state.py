@@ -1090,7 +1090,7 @@ async def estimate_duration(
         limit: Optional[int] = 1000) -> Optional[datetime.timedelta]:
     query = """
 SELECT AVG(duration) FROM
-(select duration from run
+(select finish_time - start_time as duration FROM run
 WHERE """
     args = []
     if package is not None:
@@ -1263,7 +1263,7 @@ async def iter_by_suite_result_code(conn: asyncpg.Connection):
 SELECT DISTINCT ON (package, suite)
   package,
   suite,
-  duration,
+  finish_time - start_time,
   result_code
 FROM
   run
