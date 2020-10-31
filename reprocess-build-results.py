@@ -61,7 +61,7 @@ async def reprocess_run(db, package, log_id, result_code, description):
         return
     failure = worker_failure_from_sbuild_log(build_logf)
     if failure.error:
-        if failure.stage:
+        if failure.stage and not failure.error.is_global:
             new_code = '%s-%s' % (failure.stage, failure.error.kind)
         else:
             new_code = failure.error.kind
@@ -92,7 +92,8 @@ WHERE
   (result_code = 'build-failed' OR
    result_code LIKE 'build-failed-stage-%' OR
    result_code LIKE 'autopkgtest-%' OR
-   result_code LIKE 'build-%')
+   result_code LIKE 'build-%' OR
+   result_code LIKE 'create-session-%')
    """
         async for package, log_id, result_code, description in (
                 conn.cursor(query)):
