@@ -35,9 +35,9 @@ Several permanently running jobs:
 * one or more *workers* which are responsible for actual generating and
   building changes.
 * an *archiver* combined with a *repository manager* (aptly) that takes
-  care of managing the apt archives and publishes them; it
-  also takes care of running e.g. debdiff or diffoscope
+  care of managing the apt archives and publishes them
 * a *site* job that renders the web site
+* the *differ* takes care of running e.g. debdiff or diffoscope between binary runs
 
 There are no requirements that these jobs run on the same machine, but they are
 expected to have secure network access to each other.
