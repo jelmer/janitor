@@ -453,7 +453,7 @@ class MissingRevision(Problem):
 
 def find_creation_session_error(lines):
     ret = None, None, None
-    for i in range(len(lines) -1 , 0, -1):
+    for i in range(len(lines) - 1, 0, -1):
         line = lines[i]
         if line.startswith('E: '):
             ret = i + 1, line, None
