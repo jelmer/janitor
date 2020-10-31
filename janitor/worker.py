@@ -69,6 +69,7 @@ from .build import (
     MissingChangesFile,
     SbuildFailure,
 )
+from .debian import tree_set_changelog_version
 from .dist import (
     create_dist_schroot,
     DetailedDistCommandFailed,
@@ -90,7 +91,6 @@ from .vcs import (
 TRUST_PACKAGE = False
 
 
-DEFAULT_DIST_COMMAND = os.path.join(os.path.dirname(__file__), '..', 'dist.py')
 DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 
@@ -260,18 +260,6 @@ class WorkerFailure(Exception):
         self.description = description
 
 
-def tree_set_changelog_version(
-        tree: WorkingTree, build_version: Version, subpath: str) -> None:
-    cl_path = osutils.pathjoin(subpath, 'debian/changelog')
-    with tree.get_file(cl_path) as f:
-        cl = Changelog(f)
-    if Version(str(cl.version) + '~') > build_version:
-        return
-    cl.version = build_version
-    with open(tree.abspath(cl_path), 'w') as f:
-        cl.write_to_open_file(f)
-
-
 # TODO(jelmer): Just invoke the silver-platter subcommand
 CHANGER_SUBCOMMANDS = dict(changer_subcommands.items())
 CHANGER_SUBCOMMANDS['just-build'] = DummyChanger
@@ -304,12 +292,15 @@ class Target(object):
     def additional_colocated_branches(self, main_branch):
         return []
 
+    def check_sensible(self, local_tree, subpath):
+        pass
+
 
 class DebianTarget(Target):
     """Debian target."""
 
     def __init__(self, build_distribution, build_command, build_suffix,
-                 last_build_version):
+                 last_build_version=None):
         self.build_distribution = build_distribution
         self.build_command = build_command
         self.build_suffix = build_suffix
@@ -317,6 +308,17 @@ class DebianTarget(Target):
 
     def additional_colocated_branches(self, main_branch):
         return pick_additional_colocated_branches(main_branch)
+
+    def check_sensible(self, local_tree, subpath):
+        if not control_file_present(local_tree, subpath):
+            if local_tree.has_filename(
+                    os.path.join(subpath, 'debian', 'debcargo.toml')):
+                # debcargo packages are fine too
+                pass
+            else:
+                raise WorkerFailure(
+                    'missing-control-file',
+                    'missing control file: debian/control')
 
     def build(self, ws, subpath, output_directory, env):
         if self.build_command:
@@ -456,15 +458,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         metadata['revision'] = metadata['main_branch_revision'] = (
             ws.main_branch.last_revision().decode())
 
-        if not control_file_present(ws.local_tree, subpath):
-            if ws.local_tree.has_filename(
-                    os.path.join(subpath, 'debian', 'debcargo.toml')):
-                # debcargo packages are fine too
-                pass
-            else:
-                raise WorkerFailure(
-                    'missing-control-file',
-                    'missing control file: debian/control')
+        target.check_sensible(ws.local_tree, subpath)
 
         try:
             run_pre_check(ws.local_tree, pre_check_command)

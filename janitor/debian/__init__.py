@@ -29,12 +29,15 @@ from aiohttp import (
     MultipartWriter,
     )
 
+from debian.changelog import Changelog, Version
 from debian.deb822 import Changes
 
 from breezy import (
+    osutils,
     urlutils,
     )
 from breezy.trace import note
+from breezy.workingtree import WorkingTree
 
 from lintian_brush.salsa import (
     guess_repository_url,
@@ -185,3 +188,15 @@ def dget(changes_location, target_dir):
     shutil.copy(
         changes_location,
         os.path.join(target_dir, os.path.basename(changes_location)))
+
+
+def tree_set_changelog_version(
+        tree: WorkingTree, build_version: Version, subpath: str) -> None:
+    cl_path = osutils.pathjoin(subpath, 'debian/changelog')
+    with tree.get_file(cl_path) as f:
+        cl = Changelog(f)
+    if Version(str(cl.version) + '~') > build_version:
+        return
+    cl.version = build_version
+    with open(tree.abspath(cl_path), 'w') as f:
+        cl.write_to_open_file(f)
