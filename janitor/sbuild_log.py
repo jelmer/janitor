@@ -451,6 +451,18 @@ class MissingRevision(Problem):
         return "Missing revision: %r" % self.revision
 
 
+def find_creation_session_error(lines):
+    ret = None, None, None
+    for i in range(len(lines) -1 , 0, -1):
+        line = lines[i]
+        if line.startswith('E: '):
+            ret = i + 1, line, None
+        if line.endswith(': No space left on device\n'):
+            return i + 1, line, NoSpaceOnDevice()
+
+    return ret
+
+
 def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
     paragraphs = {}
     for title, offsets, lines in parse_sbuild_log(f):
@@ -473,6 +485,10 @@ def worker_failure_from_sbuild_log(f: BinaryIO) -> SbuildFailure:
     context: Optional[Union[Tuple[str], Tuple[str, Optional[str]]]] = None
     error = None
     section_lines = paragraphs.get(focus_section, [])
+    if failed_stage == 'create-session':
+        offset, description, error = find_creation_session_error(section_lines)
+        if error:
+            context = ('create-session', )
     if failed_stage == 'build':
         section_lines = strip_useless_build_tail(section_lines)
         offset, description, error = find_build_failure_description(
@@ -2138,6 +2154,7 @@ build_failure_regexps = [
     (r'>> Local Npm module \"(.*)" not found. Is it installed?',
      node_module_missing),
     (r'.*: line \d+: ([^ ]+): command not found', command_missing),
+    (r'.*: line \d+: ([^ ]+): Permission denied', None),
     (r'\/bin\/sh: \d+: ([^ ]+): not found', command_missing),
     (r'sh: \d+: ([^ ]+): not found', command_missing),
     (r'.*: 1: cd: can\'t cd to (.*)', directory_not_found),
@@ -2503,6 +2520,8 @@ build_failure_regexps = [
     (r'error: No member named \$memberName', None),
     (r'(?:/usr/bin/)?install: cannot create regular file \'(.*)\': '
      r'Permission denied', None),
+    (r'(?:/usr/bin/)?install: cannot create directory .(.*).: File exists',
+     None),
     (r'/usr/bin/install: missing destination file operand after .*', None),
     # Ruby
     (r'rspec .*\.rb:[0-9]+ # (.*)', None),
@@ -2774,6 +2793,8 @@ secondary_build_failure_regexps = [
     r'-- Configuring incomplete, errors occurred\!',
     r'Error opening link script "(.*)"',
     r'cc: error: (.*)',
+    r'\[ERROR\] .*',
+    r'dh_auto_(test|build): error: (.*)',
 ]
 
 compiled_secondary_build_failure_regexps = [
