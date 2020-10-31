@@ -389,7 +389,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
     changer_cls: Type[DebianChanger]
     try:
-        changer_cls = changer_subcommands[command[0]]
+        changer_cls = CHANGER_SUBCOMMANDS[command[0]]
     except KeyError:
         raise WorkerFailure(
             'unknown-subcommand',
