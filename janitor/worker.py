@@ -201,7 +201,8 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
 
     def make_changes(self, *args, **kwargs):
         try:
-            return ActualNewUpstreamChanger.make_changes(*args, **kwargs)
+            return super(ActualNewUpstreamChanger, self).make_changes(
+                *args, **kwargs)
         except DetailedDistCommandFailed as e:
             error_code = 'dist-' + e.error.kind
             error_description = str(e.error)
