@@ -21,4 +21,4 @@
 	url = https://salsa.debian.org/jelmer/debmutate.git
 [submodule "ognibuild"]
 	path = ognibuild
-	url = https://github.com/jelmer/ognibuild
+	url = https://github.com/jelmer/ognibuild.git
