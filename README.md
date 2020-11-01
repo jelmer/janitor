@@ -34,8 +34,7 @@ Several permanently running jobs:
   each package and stores the results.
 * one or more *workers* which are responsible for actual generating and
   building changes.
-* an *archiver* combined with a *repository manager* (aptly) that takes
-  care of managing the apt archives and publishes them
+* an *archiver* that takes care of managing the apt archives and publishes them
 * a *site* job that renders the web site
 * the *differ* takes care of running e.g. debdiff or diffoscope between binary runs
 
