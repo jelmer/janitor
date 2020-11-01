@@ -47,16 +47,23 @@ Architecture: all
 Description: Worker for the Debian janitor
 
 Package: janitor-archiver
-Depends: aptly,
-         devscripts,
-         diffoscope,
-         python3-aiohttp,
+Depends: python3-aiohttp,
          python3-aionotify,
          python3-asyncpg,
          ${misc:Depends},
          ${python3:Depends}
 Architecture: all
 Description: Archiver for the Debian janitor
+
+Package: janitor-differ
+Depends: devscripts, diffoscope
+         python3-aiohttp,
+         python3-aionotify,
+         python3-asyncpg,
+         ${misc:Depends},
+         ${python3:Depends}
+Architecture: all
+Description: Differ for the Debian janitor
 
 Package: janitor-runner
 Depends: python3-aiohttp,

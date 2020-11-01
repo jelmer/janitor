@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2019 Jelmer Vernooij <jelmer@jelmer.uk>
+# Copyright (C) 2019-2020 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,322 +15,286 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, UnixConnector, ClientTimeout
+from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
-import json
+from contextlib import ExitStack
+import gpg
+from gpg.constants.sig import mode as gpg_mode
+import hashlib
+import gzip
+import bz2
 import os
-import re
+import subprocess
+import tempfile
 import sys
-import traceback
 from typing import List
-from urllib.parse import quote
 
-from aiohttp import web
-from debian.deb822 import Changes
-from debian.changelog import Changelog
-from debian.copyright import parse_multiline
+from debian.changelog import format_date
+from debian.deb822 import Release, Packages
 
-from .config import read_config, Config, Suite
+from . import state
+from .artifacts import get_artifact_manager, ArtifactsMissing
+from .config import read_config
 from .prometheus import setup_metrics
+from .pubsub import pubsub_reader
+from .trace import note, warning
 from prometheus_client import (
     Gauge,
     )
 
-from .trace import note, warning
 
-suite_check = re.compile('^[a-z0-9-]+$')
+DEFAULT_GCS_TIMEOUT = 60 * 30
 
-last_suite_publish_success = Gauge(
+
+last_publish_success = Gauge(
     'last_suite_publish_success',
     'Last time publishing a suite succeeded',
     labelnames=('suite', ))
-last_local_publish_success = Gauge(
-    'last_local_publish_success',
-    'Last time regular publishing to local succeeded')
 
 
-class UploadError(Exception):
-
-    def __init__(self, failed_files, details):
-        self.failed_files = failed_files
-        self.details = details
+# TODO(jelmer): Generate contents file
 
 
-async def handle_upload(request):
-    aptly_session = request.app.aptly_session
-    directory = request.match_info['directory']
-    container = os.path.join(request.app.incoming_dir, directory)
-    os.mkdir(container)
-    reader = await request.multipart()
-    result = {'filenames': []}
-    while True:
-        part = await reader.next()
-        if part is None:
-            break
-        path = os.path.join(container, part.filename)
-        result['filenames'].append(part.filename)
-        with open(path, 'wb') as f:
-            f.write(await part.read())
-        if path.endswith('.changes'):
-            result['changes_filename'] = os.path.basename(path)
-            with open(path, 'r') as f:
-                changes = Changes(f)
-                result['source'] = changes['Source']
-                result['version'] = changes['Version']
-                result['distribution'] = changes['Distribution']
-                result['changes'] = changes['Changes']
-    if 'changes_filename' not in result:
-        note('No changes file in uploaded directory: %r',
-             result['filenames'])
-        return web.json_response(result, status=200)
-    try:
-        report = await upload_directory(aptly_session, container)
-    except UploadError as e:
-        return web.json_response(
-            {'msg': str(e), 'failed_files': e.failed_files},
-            status=400)
-    result['report'] = report
-    note('Uploaded files: %r', result['filenames'])
-    return web.json_response(result, status=200)
+class PackageInfoProvider(object):
+
+    def __init__(self, artifact_manager):
+        self.artifact_manager = artifact_manager
+
+    async def __aenter__(self):
+        await self.artifact_manager.__aenter__()
+
+    async def __aexit__(self, exc_tp, exc_val, exc_tb):
+        await self.artifact_manager.__aexit__(exc_tp, exc_val, exc_tb)
+        return False
+
+    async def info_for_run(self, run_id, suite_name, package):
+        with tempfile.TemporaryDirectory() as td:
+            await self.artifact_manager.retrieve_artifacts(
+                run_id, td, timeout=DEFAULT_GCS_TIMEOUT)
+            p = subprocess.Popen(
+                    ['dpkg-scanpackages', td], stdout=subprocess.PIPE)
+            for para in Packages.iter_paragraphs(p.stdout):
+                para['Filename'] = os.path.join(
+                    suite_name, 'pkg', package, run_id,
+                    os.path.basename(para['Filename']))
+                yield bytes(para)
+                yield b'\n'
 
 
-class AptlyError(Exception):
+class CachingPackageInfoProvider(object):
 
-    def __init__(self, message):
-        self.message = message
+    def __init__(self, primary_info_provider, cache_directory):
+        self.primary_info_provider = primary_info_provider
+        self.cache_directory = cache_directory
 
+    async def __aenter__(self):
+        await self.primary_info_provider.__aenter__()
 
-async def aptly_call(aptly_session, method, path, json=None, params=None,
-                     timeout=None):
-    async with aptly_session.request(
-            method=method, url='http://localhost/api/' + path, json=json,
-            params=params, timeout=timeout) as resp:
-        if resp.status // 100 != 2:
-            raise AptlyError(
-                'error %d in /api/%s: %s' % (
-                    resp.status, path, await resp.read()))
-        return await resp.json()
+    async def __aexit__(self, exc_tp, exc_val, exc_tb):
+        await self.primary_info_provider.__aexit__(exc_tp, exc_val, exc_tb)
+        return False
 
-
-async def do_publish(
-        aptly_session, suite, storage, prefix, label, origin=None):
-    publish = {}
-    for p in await aptly_call(aptly_session, 'GET', 'publish'):
-        publish[(p['Storage'], p['Prefix'], p['Distribution'])] = p
-
-    note('Publishing %s to %s:%s', suite, storage, prefix)
-
-    loc = "%s:%s" % (storage, prefix)
-    if (storage, prefix, suite) in publish:
-        params = {}
+    async def info_for_run(self, run_id, suite_name, package):
+        cache_path = os.path.join(self.cache_directory, run_id)
         try:
-            await aptly_call(
-                aptly_session, 'PUT',
-                'publish/%s/%s' % (loc, suite), json=params,
-                timeout=ClientTimeout(30 * 60))
-        except asyncio.exceptions.TimeoutError:
-            raise AptlyError('timeout while publishing %s' % suite)
-    else:
-        params = {
-            'SourceKind': 'local',
-            'Sources': [{'Name': suite}],
-            'Distribution': suite,
-            'Label': label,
-            'NotAutomatic': 'yes',
-            'ButAutomaticUpgrades': 'yes',
-            }
-        if origin:
-            params['Origin'] = origin
-
-        await aptly_call(
-            aptly_session, 'POST', 'publish/%s' % loc, json=params)
-
-    last_suite_publish_success.labels(suite=suite).set_to_current_time()
+            with open(cache_path, 'rb') as f:
+                for chunk in f:
+                    yield chunk
+        except FileNotFoundError:
+            chunks = []
+            with open(cache_path, 'wb') as f:
+                async for chunk in self.primary_info_provider.info_for_run(
+                        run_id, suite_name, package):
+                    f.write(chunk)
+                    chunks.append(chunk)
+            for chunk in chunks:
+                yield chunk
 
 
-async def loop_local_publish(aptly_session, config):
-    await asyncio.sleep(15 * 60)
-    while True:
-        for suite in config.suite:
-            try:
-                await do_publish(
-                    aptly_session, suite.name,
-                    storage='', prefix='.',
-                    label=suite.archive_description,
-                    origin=config.origin)
-            except AptlyError as e:
-                warning('Error while publishing %s: %s',
-                        suite.name, e)
-        last_local_publish_success.set_to_current_time()
-        await asyncio.sleep(30 * 60)
+async def get_packages(db, info_provider, suite_name, component, arch):
+    # TODO(jelmer): Actually query component/arch
+    async with db.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT DISTINCT ON (package) package, id, build_version FROM run "
+            "WHERE suite = $1 AND result_code = 'success' "
+            "ORDER BY package, finish_time DESC", suite_name)
+
+    for package, run_id, build_verison in rows:
+        try:
+            async for chunk in info_provider.info_for_run(
+                    run_id, suite_name, package):
+                yield chunk
+        except ArtifactsMissing:
+            warning('Artifacts missing for %s (%s), skipping',
+                    package, run_id)
+            continue
+
+
+def add_file_info(r, base, p):
+    hashes = {
+        'MD5Sum': hashlib.md5(),
+        'SHA1': hashlib.sha1(),
+        'SHA256': hashlib.sha256(),
+        'SHA512': hashlib.sha512()
+    }
+    size = 0
+    with open(os.path.join(base, p), 'rb') as f:
+        for chunk in f:
+            for h in hashes.values():
+                h.update(chunk)
+            size += len(chunk)
+    for h, v in hashes.items():
+        r.setdefault(h, []).append({
+            h.lower(): v.hexdigest(),
+            'size': size,
+            'name': p})
+
+
+async def write_suite_files(
+        base_path, db, package_info_provider, suite, components, arches,
+        origin, gpg_context):
+    r = Release()
+    r['Origin'] = origin
+    r['Label'] = suite.archive_description
+    r['Codename'] = suite.name
+    r['Suite'] = suite.name
+    r['Date'] = format_date()
+    r['NotAutomatic'] = 'yes'
+    r['ButAutomaticUpgrades'] = 'yes'
+    r['Architectures'] = ' '.join(arches)
+    r['Components'] = ' '.join(components)
+    r['Description'] = 'Generated by the Debian Janitor'
+
+    for component in components:
+        component_dir = component
+        os.makedirs(os.path.join(base_path, component_dir), exist_ok=True)
+        for arch in arches:
+            arch_dir = os.path.join(component_dir, 'binary-%s' % arch)
+            os.makedirs(os.path.join(base_path, arch_dir), exist_ok=True)
+            packages_chunks = get_packages(
+                db, package_info_provider, suite.name, component, arch)
+            br = Release()
+            br['Origin'] = origin
+            br['Label'] = suite.archive_description
+            br['Archive'] = suite.name
+            br['Architecture'] = arch
+            br['Component'] = component
+            bp = os.path.join(arch_dir, 'Release')
+            with open(os.path.join(base_path, bp), 'wb') as f:
+                r.dump(f)
+            add_file_info(r, base_path, bp)
+
+            packages_path = os.path.join(
+                component, 'binary-%s' % arch, 'Packages')
+            SUFFIXES = {
+                '': open,
+                '.gz': gzip.GzipFile,
+                '.bz2': bz2.BZ2File,
+                }
+            with ExitStack() as es:
+                fs = []
+                for suffix, fn in SUFFIXES.items():
+                    fs.append(es.enter_context(
+                        fn(os.path.join(base_path, packages_path + suffix),
+                            'wb')))
+                async for chunk in packages_chunks:
+                    for f in fs:
+                        f.write(chunk)
+            for suffix in SUFFIXES:
+                add_file_info(r, base_path, packages_path + suffix)
+
+    with open(os.path.join(base_path, 'Release'), 'wb') as f:
+        r.dump(f)
+
+    data = gpg.Data(r.dump())
+    with open(os.path.join(base_path, 'Release.gpg'), 'wb') as f:
+        signature, result = gpg_context.sign(data, mode=gpg_mode.DETACH)
+        f.write(signature)
+
+    data = gpg.Data(r.dump())
+    with open(os.path.join(base_path, 'InRelease'), 'wb') as f:
+        signature, result = gpg_context.sign(data, mode=gpg_mode.CLEAR)
+        f.write(signature)
+
+
+# TODO(jelmer): Don't hardcode this
+ARCHES: List[str] = ['amd64']
 
 
 async def handle_publish(request):
     post = await request.post()
-    storage = post.get('storage', '')
-    prefix = post.get('prefix', '.')
-    suites_processed = []
-    failed_suites = []
-
-    for suite in request.app.config.suite:
-        if post.get('suite') not in (suite.name, None):
+    suite = post.get('suite')
+    for suite_config in request.app.config.suite:
+        if suite is not None and suite_config.name != suite:
             continue
-        try:
-            await asyncio.shield(do_publish(
-                request.app.aptly_session, suite.name, storage, prefix,
-                label=suite.archive_description,
-                origin=request.app.config.origin))
-        except AptlyError:
-            traceback.print_exc()
-            failed_suites.append(suite.name)
-        else:
-            suites_processed.append(suite.name)
+        await publish_suite(
+            request.app.dists_dir,
+            request.app.db,
+            request.app.package_info_provider,
+            request.app.config,
+            suite_config,
+            request.app.gpg_context)
 
-    return web.json_response(
-        {'suites-processed': suites_processed,
-         'suites-failed': failed_suites})
+    return web.json_response({})
 
 
-async def handle_pending(request):
-    try:
-        dirname = request.match_info['subdir']
-    except KeyError:
-        path = 'files'
-    else:
-        path = 'files/%s' % dirname
-    json = await aptly_call(request.app.aptly_session, 'GET', path)
-    return web.json_response(json)
-
-
-async def handle_update(request):
-    # TODO: Find the latest version of each package in db for suite
-    # TODO: Find out latest version of each package in aptly for suite
-    # TODO: Figure out which packages are outdated in aptly
-    # TODO: Upload those packages to aptly
-    pass
-
-
-async def run_web_server(listen_addr, port, archive_path, incoming_dir,
-                         aptly_session, config):
+async def run_web_server(
+        listen_addr, port, dists_dir, db, package_info_provider, config,
+        gpg_context):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
-    app.archive_path = archive_path
-    app.incoming_dir = incoming_dir
-    app.aptly_session = aptly_session
+    app.dists_dir = dists_dir
     app.config = config
+    app.db = db
+    app.package_info_provider = package_info_provider
+    app.gpg_context = gpg_context
     setup_metrics(app)
-    app.router.add_post('/upload/{directory}', handle_upload, name='upload')
-    app.router.add_static('/dists', os.path.join(archive_path, 'dists'))
-    app.router.add_static('/pool', os.path.join(archive_path, 'pool'))
-    app.router.add_post('/update', handle_update, name='update')
+    app.router.add_static('/dists', dists_dir)
     app.router.add_post('/publish', handle_publish, name='publish')
-    app.router.add_get('/pending/', handle_pending, name='pending')
-    app.router.add_get('/pending/{subdir}/', handle_pending,
-                       name='pending-subdir')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
     await site.start()
 
 
-async def upload_directory(aptly_session: ClientSession, directory: str):
-    suite = None
-    changes_filename = None
-    for entry in os.scandir(directory):
-        if not entry.name.endswith('.changes'):
-            continue
-        with open(entry.path, 'r') as f:
-            changes = Changes(f)
-            changes_filename = entry.name
-            cl = Changelog(parse_multiline(changes['Changes']))
-            suite = cl.distributions
-    if suite is None or changes_filename is None:
-        warning('No valid changes file found, skipping %s',
-                directory)
-        raise UploadError(os.listdir(directory), 'No valid changes file')
-    try:
-        result = await aptly_call(
-            aptly_session, 'POST', 'repos/%s/include/%s/%s' % (
-                    suite, quote(os.path.basename(directory)),
-                    quote(changes_filename)),
-            params={'acceptUnsigned': 1})
-    except AptlyError as e:
-        raise UploadError(os.listdir(directory), e)
-    else:
-        failed_files = result['FailedFiles']
-        report = result['Report']
-        for w in report['Warnings']:
-            warning('Aptly warning: %s', w)
-        if failed_files:
-            raise UploadError(failed_files, report['Warnings'])
-        return report
+async def listen_to_runner(runner_url, app):
+    from aiohttp.client import ClientSession
+    import urllib.parse
+    url = urllib.parse.urljoin(runner_url, 'ws/result')
+    async with ClientSession() as session:
+        async for result in pubsub_reader(session, url):
+            if result['code'] != 'success':
+                continue
+            note('TODO: update %s', result['suite'])
 
 
-async def process_incoming(aptly_session: ClientSession, incoming_dir: str):
-    for entry in os.scandir(incoming_dir):
-        if not entry.is_dir():
-            # Weird
-            continue
-        try:
-            await upload_directory(aptly_session, entry.path)
-        except UploadError as e:
-            warning('Failed to upload files (%r) to aptly: %s',
-                    e.failed_files, e.details)
+async def publish_suite(
+        dists_directory, db, package_info_provider, config, suite,
+        gpg_context):
+    note('Publishing %s', suite.name)
+    suite_path = os.path.join(dists_directory, suite.name)
+    os.makedirs(suite_path, exist_ok=True)
+    await write_suite_files(
+        suite_path, db, package_info_provider, suite,
+        components=config.distribution.component,
+        arches=ARCHES, origin=config.origin,
+        gpg_context=gpg_context)
+    last_publish_success.labels(suite=suite.name).set_to_current_time()
 
 
-async def loop_process_incoming(
-        config: Config, aptly_session: ClientSession, incoming_dir: str):
-    # Give aptly some time to start
-    await asyncio.sleep(25)
+async def loop_publish(
+        dists_dir, db, config, package_info_provider, gpg_context):
     while True:
-        await process_incoming(aptly_session, incoming_dir)
-        await asyncio.sleep(30 * 60)
+        for suite in config.suite:
+            await publish_suite(
+                dists_dir, db, package_info_provider, config, suite,
+                gpg_context)
+        # every 12 hours
+        await asyncio.sleep(60 * 60 * 12)
 
 
-async def sync_aptly_repos(session: ClientSession, suites: List[Suite]):
-    repos = {repo['Name']: repo for repo in await aptly_call(
-        session, 'GET', 'repos')}
-    for suite in suites:
-        intended_repo = {
-            'Name': suite.name,
-            'DefaulDistribution': suite.name,
-            'DefaultComponent': '',
-            'Comment': ''}
-        actual_repo = repos.get(suite.name)
-        if intended_repo == actual_repo:
-            del repos[suite.name]
-            continue
-        if not actual_repo:
-            await aptly_call(session, 'POST', 'repos', json=intended_repo)
-        else:
-            await aptly_call(
-                session, 'PUT', 'repos/%s' % intended_repo.pop('Name'),
-                json=intended_repo)
-            del repos[suite.name]
-    for suite in repos:
-        await aptly_call(session, 'DELETE', 'repos/%s' % suite)
-
-
-async def sync_aptly(aptly_session: ClientSession, suites: List[Suite]):
-    # Give aptly some time to start
-    await asyncio.sleep(15)
-    ret = await aptly_call(aptly_session, 'GET', 'version')
-    note('aptly version %s connected' % ret['Version'])
-    await sync_aptly_repos(aptly_session, suites)
-
-
-async def run_aptly(sock_path, config_path):
-    args = [
-        '/usr/bin/aptly', 'api', 'serve',
-        '-listen=unix://%s' % sock_path,
-        '-config=%s' % config_path]
-    proc = await asyncio.create_subprocess_exec(*args)
-    ret = await proc.wait()
-    raise Exception('aptly finished with exit code %r' % ret)
-
-
-def main(argv=None):
+async def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.archive')
     parser.add_argument(
@@ -343,54 +307,47 @@ def main(argv=None):
         '--config', type=str, default='janitor.conf',
         help='Path to configuration.')
     parser.add_argument(
-        '--aptly-config-path', type=str, default='~/.aptly.conf',
-        help='Path to aptly configuration')
+        '--dists-directory',
+        type=str,
+        help='Dists directory')
     parser.add_argument(
-        '--aptly-socket-path', type=str,
-        default='aptly.sock',
-        help='Path to aptly socket')
+        '--cache-directory',
+        type=str,
+        help='Cache directory')
 
     args = parser.parse_args()
+    if not args.dists_directory:
+        parser.print_usage()
+        sys.exit(1)
 
     with open(args.config, 'r') as f:
         config = read_config(f)
 
-    aptly_config_path = os.path.expanduser(args.aptly_config_path)
-    with open(aptly_config_path, 'r') as f:
-        aptly_config = json.load(f)
+    os.makedirs(args.dists_directory, exist_ok=True)
 
-    aptly_root_dir = aptly_config['rootDir']
+    db = state.Database(config.database_location)
 
-    incoming_dir = os.path.join(aptly_root_dir, 'upload')
-    if not os.path.exists(incoming_dir):
-        os.mkdir(incoming_dir)
-    archive_dir = os.path.join(aptly_root_dir, 'public')
+    artifact_manager = get_artifact_manager(config.artifact_location)
 
-    aptly_socket_path = os.path.abspath(args.aptly_socket_path)
-    if os.path.exists(aptly_socket_path):
-        os.remove(aptly_socket_path)
+    gpg_context = gpg.Context()
 
-    loop = asyncio.get_event_loop()
-    aptly_session = ClientSession(
-        connector=UnixConnector(path=aptly_socket_path))
+    package_info_provider = PackageInfoProvider(artifact_manager)
+    if args.cache_directory:
+        os.makedirs(args.cache_directory, exist_ok=True)
+        package_info_provider = CachingPackageInfoProvider(
+                package_info_provider, args.cache_directory)
 
-    for name in ['dists', 'pool']:
-        try:
-            os.makedirs(os.path.join(archive_dir, name))
-        except FileExistsError:
-            pass
+    async with package_info_provider:
+        loop = asyncio.get_event_loop()
 
-    loop.run_until_complete(asyncio.gather(
-        loop.create_task(run_aptly(aptly_socket_path, aptly_config_path)),
-        loop.create_task(sync_aptly(aptly_session, config.suite)),
-        loop.create_task(run_web_server(
-            args.listen_address, args.port, archive_dir,
-            incoming_dir, aptly_session, config)),
-        loop.create_task(loop_local_publish(aptly_session, config)),
-        loop.create_task(loop_process_incoming(
-            config, aptly_session, incoming_dir))))
-    loop.run_forever()
+        await asyncio.gather(
+            loop.create_task(run_web_server(
+                args.listen_address, args.port, args.dists_directory,
+                db, package_info_provider, config, gpg_context)),
+            loop.create_task(loop_publish(
+                args.dists_directory, db, config, package_info_provider,
+                gpg_context)))
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    sys.exit(asyncio.run(main(sys.argv)))

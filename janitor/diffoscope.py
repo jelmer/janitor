@@ -21,6 +21,8 @@ import os
 import json
 import sys
 
+from .trace import note
+
 from breezy.patches import (
     iter_hunks,
     InsertLine,
@@ -151,6 +153,7 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
     args = ['diffoscope', '--json=-', '--exclude-directory-metadata=yes']
     args.extend([old_binary, new_binary])
     stdout = BytesIO()
+    note('running %r', args)
     p = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
@@ -159,7 +162,10 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
     stdout, stderr = await p.communicate(b'')
     if p.returncode not in (0, 1):
         raise DiffoscopeError(stderr.decode(errors='replace'))
-    return json.loads(stdout.decode('utf-8'))
+    try:
+        return json.loads(stdout.decode('utf-8'))
+    except json.JSONDecodeError as e:
+        raise DiffoscopeError('Error parsing JSON: %s' % stdout.decode(errors='replace'))
 
 
 async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
