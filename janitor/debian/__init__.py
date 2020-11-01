@@ -48,9 +48,6 @@ from silver_platter.debian import (
     select_probers,
     )
 
-from .. import (
-    state,
-    )
 from ..vcs import (
     open_branch_ext,
     BranchOpenFailure,
@@ -132,6 +129,9 @@ def possible_urls_from_alioth_url(vcs_type, vcs_url):
 
 async def open_guessed_salsa_branch(
         conn, pkg, vcs_type, vcs_url, possible_transports=None):
+    # Don't do this as a top-level export, since it imports asyncpg, which
+    # isn't available on jenkins.debian.net.
+    from .. import state
     package = await state.get_package(conn, pkg)
     probers = select_probers('git')
     vcs_url, params = urlutils.split_segment_parameters_raw(vcs_url)
