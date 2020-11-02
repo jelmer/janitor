@@ -18,7 +18,7 @@
 import argparse
 from contextlib import contextmanager
 from datetime import datetime
-from debian.changelog import Changelog, Version
+from debian.changelog import Version
 import json
 import os
 import subprocess
@@ -26,7 +26,6 @@ import sys
 import traceback
 from typing import Callable, Dict, List, Optional, Any, Type, Iterator, Tuple
 
-from breezy import osutils
 from breezy.config import GlobalStack
 from breezy.transport import Transport
 from breezy.workingtree import WorkingTree
