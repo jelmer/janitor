@@ -20,6 +20,7 @@
 from aiohttp import ClientSession, ClientResponseError
 import asyncio
 
+from io import BytesIO
 import os
 import shutil
 
@@ -43,6 +44,9 @@ class ArtifactManager(object):
 
     async def store_artifacts(self, run_id, local_path, names=None):
         raise NotImplementedError(self.store_artifacts)
+
+    async def get_artifact(self, run_id, filename, timeout=None):
+        raise NotImplementedError(self.get_artifact)
 
     async def retrieve_artifacts(
             self, run_id, local_path, filter_fn=None, timeout=None):
@@ -79,6 +83,9 @@ class LocalArtifactManager(ArtifactManager):
     async def iter_ids(self):
         for entry in os.scandir(self.path):
             yield entry.name
+
+    async def get_artifact(self, run_id, filename, timeout=None):
+        return open(os.path.join(self.path, run_id, name), 'rb')
 
     async def retrieve_artifacts(
             self, run_id, local_path, filter_fn=None, timeout=None):
@@ -158,6 +165,11 @@ class GCSArtifactManager(ArtifactManager):
         await asyncio.gather(*[
             download_blob(name) for name in names
             if filter_fn is None or filter_fn(os.path.basename(name))])
+
+    async def get_artifact(self, run_id, filename, timeut=DEFAULT_GCS_TIMEOUT):
+        return BytesIO(await self.storage.download(
+            bucket=self.bucket_name, object_name='%s/%s' % (run_id, filename),
+            timeout=timeout))
 
 
 def get_artifact_manager(location):
