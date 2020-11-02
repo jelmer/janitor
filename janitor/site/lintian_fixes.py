@@ -6,7 +6,7 @@ from .common import generate_pkg_context
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
     )
-from lintian_brush import load_renamed_tags
+from lintian_brush.lintian_overrides import load_renamed_tags
 
 from . import env
 from .. import state
