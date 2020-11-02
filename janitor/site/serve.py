@@ -633,30 +633,40 @@ order by url, last_run.finish_time desc
             logfile_manager, run, request.app.publisher_url,
             is_admin=is_admin(request))
 
-    async def handle_log(request):
+    async def handle_result_file(request):
         pkg = request.match_info['pkg']
-        filename = request.match_info['log']
+        filename = request.match_info['filename']
         run_id = request.match_info['run_id']
         if not re.match('^[a-z0-9+-\\.]+$', pkg) or len(pkg) < 2:
             raise web.HTTPNotFound(
-                text='No log file %s for run %s' % (filename, run_id))
+                text='Invalid package %s for run %s' % (pkg, run_id))
         if not re.match('^[a-z0-9-]+$', run_id) or len(run_id) < 5:
             raise web.HTTPNotFound(
-                text='No log file %s for run %s' % (filename, run_id))
+                text='Invalid run run id %s' % (run_id, ))
         if not re.match('^[a-z0-9\\.]+$', filename) or len(filename) < 3:
             raise web.HTTPNotFound(
                 text='No log file %s for run %s' % (filename, run_id))
-        try:
-            logfile = await logfile_manager.get_log(pkg, run_id, filename)
-        except FileNotFoundError:
-            raise web.HTTPNotFound(
-                text='No log file %s for run %s' % (filename, run_id))
+        if filename.endswith('.log') or re.match(r'.*\.log\.[0-9]+', filename):
+            try:
+                logfile = await logfile_manager.get_log(pkg, run_id, filename)
+            except FileNotFoundError:
+                raise web.HTTPNotFound(
+                    text='No log file %s for run %s' % (filename, run_id))
+            else:
+                with logfile as f:
+                    text = f.read().decode('utf-8', 'replace')
+            return web.Response(
+                content_type='text/plain', text=text,
+                headers={'Cache-Control': 'max-age=3600'})
         else:
-            with logfile as f:
-                text = f.read().decode('utf-8', 'replace')
-        return web.Response(
-            content_type='text/plain', text=text,
-            headers={'Cache-Control': 'max-age=3600'})
+            try:
+                artifact = await request.app.artifact_manager.get_artifact(
+                    run_id, filename)
+            except FileNotFoundError:
+                raise web.HTTPNotFound(
+                    'No artifact %s for run %s' % (filename, run_id))
+            with artifact as f:
+                return web.Response(body=f.read(), headers={'Cache-Control': 'max-age=3600'})
 
     @html_template(
         'ready-list.html',
@@ -1051,14 +1061,8 @@ order by url, last_run.finish_time desc
     app.router.add_get(
         '/{suite:%s}/pkg/' % SUITE_REGEX, handle_pkg_list,
         name='suite-package-list')
-    apt_location = config.apt_location or args.archiver_url
-    if apt_location.startswith('gs://'):
-        apt_location = 'https://storage.googleapis.com/%s/' % (
-            URL(apt_location).host)
     app.router.register_resource(
-        ForwardedResource('dists', apt_location.rstrip('/') + '/dists'))
-    app.router.register_resource(
-        ForwardedResource('pool', apt_location.rstrip('/') + '/pool'))
+        ForwardedResource('dists', args.archiver_url.rstrip('/') + '/dists'))
     app.router.register_resource(
         ForwardedResource(
             'bzr', args.publisher_url.rstrip('/') + '/bzr'))
@@ -1182,7 +1186,7 @@ order by url, last_run.finish_time desc
         handle_lintian_brush_regressions,
         name='lintian-brush-regressions')
     app.router.add_get(
-        '/cupboard/pkg/{pkg}/{run_id}/{log:.*\\.log(\\.[0-9]+)?}', handle_log,
+        '/cupboard/pkg/{pkg}/{run_id}/{filename:.*}', handle_result_file,
         name='logfile')
     app.router.add_get(
         '/cupboard/vcs-regressions/',
@@ -1250,6 +1254,8 @@ order by url, last_run.finish_time desc
     app.config = config
     from janitor.site import env, is_admin
     app.jinja_env = env
+    from janitor.artifacts import get_artifact_manager
+    app.artifact_manager = get_artifact_manager(config.artifact_location)
     setup_debsso(app)
     setup_metrics(app)
     app.router.add_get(
