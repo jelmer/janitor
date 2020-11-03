@@ -19,6 +19,7 @@ from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
 from contextlib import ExitStack
+from datetime import datetime
 import gpg
 from gpg.constants.sig import mode as gpg_mode
 import hashlib
@@ -228,28 +229,18 @@ async def handle_publish(request):
     for suite_config in request.app.config.suite:
         if suite is not None and suite_config.name != suite:
             continue
-        await trigger_generator(
-            request.app.dists_dir,
-            request.app.db,
-            request.app.package_info_provider,
-            request.app.config,
-            suite_config,
-            request.app.gpg_context)
+        request.app.generator_manager.trigger(suite_config)
 
     return web.json_response({})
 
 
 async def run_web_server(
-        listen_addr, port, dists_dir, db, package_info_provider, config,
-        gpg_context, generators):
+        listen_addr, port, dists_dir, config,
+        generator_manager):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
-    app.dists_dir = dists_dir
     app.config = config
-    app.db = db
-    app.generators = generators
-    app.package_info_provider = package_info_provider
-    app.gpg_context = gpg_context
+    app.generator_manager = generator_manager
     setup_metrics(app)
     app.router.add_static('/dists', dists_dir)
     app.router.add_post('/publish', handle_publish, name='publish')
@@ -259,7 +250,7 @@ async def run_web_server(
     await site.start()
 
 
-async def listen_to_runner(runner_url, app):
+async def listen_to_runner(runner_url, generator_manager):
     from aiohttp.client import ClientSession
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')
@@ -267,19 +258,13 @@ async def listen_to_runner(runner_url, app):
         async for result in pubsub_reader(session, url):
             if result['code'] != 'success':
                 continue
-            suite_config = get_suite_config(app.config, result['suite'])
-            await trigger_generator(
-                app.dists_dir,
-                app.db,
-                app.package_info_provider,
-                app.config,
-                suite_config,
-                app.gpg_context)
+            generator_manager.trigger(result['suite'])
 
 
 async def publish_suite(
         dists_directory, db, package_info_provider, config, suite,
         gpg_context):
+    start_time = datetime.now()
     note('Publishing %s', suite.name)
     suite_path = os.path.join(dists_directory, suite.name)
     os.makedirs(suite_path, exist_ok=True)
@@ -288,32 +273,43 @@ async def publish_suite(
         components=config.distribution.component,
         arches=ARCHES, origin=config.origin,
         gpg_context=gpg_context)
+    note('Done publishing %s (took %s)', suite.name, datetime.now() - start_time)
     last_publish_success.labels(suite=suite.name).set_to_current_time()
 
 
-async def trigger_generator(
-        dists_dir, db, config, package_info_provider, gpg_context,
-        suite_config, generators):
-    try:
-        task = generators[suite_config.name]
-    except KeyError:
-        pass
-    else:
-        if not task.done():
-            return
-    loop = asyncio.get_event_loop()
-    generators[suite_config.name] = loop.create_task(publish_suite(
-        dists_dir, db, package_info_provider, config, suite_config,
-        gpg_context))
+class GeneratorManager(object):
+
+    def __init__(self, dists_dir, db, config, package_info_provider,
+                 gpg_context):
+        self.dists_dir = dists_dir
+        self.db = db
+        self.config = config
+        self.package_info_provider = package_info_provider
+        self.gpg_context = gpg_context
+        self.generators = {}
+
+    def trigger(self, suite):
+        if isinstance(suite, str):
+            suite_config = get_suite_config(self.config, suite)
+        else:
+            suite_config = suite
+        try:
+            task = self.generators[suite_config.name]
+        except KeyError:
+            pass
+        else:
+            if not task.done():
+                return
+        loop = asyncio.get_event_loop()
+        self.generators[suite_config.name] = loop.create_task(publish_suite(
+            self.dists_dir, self.db, self.package_info_provider, self.config,
+            suite_config, self.gpg_context))
 
 
-async def loop_publish(
-        dists_dir, db, config, package_info_provider, gpg_context, generators):
+async def loop_publish(config, generator_manager):
     while True:
         for suite in config.suite:
-            await trigger_generator(
-                dists_dir, db, config, package_info_provider, gpg_context,
-                generators)
+            generator_manager.trigger(suite)
         # every 12 hours
         await asyncio.sleep(60 * 60 * 12)
 
@@ -361,7 +357,9 @@ async def main(argv=None):
         package_info_provider = CachingPackageInfoProvider(
                 package_info_provider, args.cache_directory)
 
-    generators = {}
+    generator_manager = GeneratorManager(
+        args.dists_directory, db, config, package_info_provider,
+        gpg_context)
 
     async with package_info_provider:
         loop = asyncio.get_event_loop()
@@ -369,11 +367,8 @@ async def main(argv=None):
         await asyncio.gather(
             loop.create_task(run_web_server(
                 args.listen_address, args.port, args.dists_directory,
-                db, package_info_provider, config, gpg_context,
-                generators)),
-            loop.create_task(loop_publish(
-                args.dists_directory, db, config, package_info_provider,
-                gpg_context, generators)))
+                config, generator_manager)),
+            loop.create_task(loop_publish(config, generator_manager)))
 
 
 if __name__ == '__main__':
