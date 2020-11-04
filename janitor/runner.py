@@ -626,7 +626,9 @@ def suite_build_env(distro_config, suite_config, apt_location):
             'deb %s %s/ main' % (apt_location, suite)
             for suite in suite_config.extra_build_suite])}
 
-    if distro_config.chroot:
+    if suite_config.chroot:
+        env['CHROOT'] = suite_config.chroot
+    elif distro_config.chroot:
         env['CHROOT'] = distro_config.chroot
 
     if distro_config.name:
