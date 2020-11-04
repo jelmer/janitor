@@ -273,7 +273,8 @@ async def publish_suite(
         components=config.distribution.component,
         arches=ARCHES, origin=config.origin,
         gpg_context=gpg_context)
-    note('Done publishing %s (took %s)', suite.name, datetime.now() - start_time)
+    note('Done publishing %s (took %s)',
+         suite.name, datetime.now() - start_time)
     last_publish_success.labels(suite=suite.name).set_to_current_time()
 
 

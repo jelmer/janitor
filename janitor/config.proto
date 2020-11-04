@@ -75,6 +75,9 @@ message Suite {
   repeated Env sbuild_env = 8;
 
   optional string base_distribution = 9;
+
+  // Optional chroot, if different from that of base_distribution
+  optional string chroot = 10;
 }
 
 message OAuth2Provider {
