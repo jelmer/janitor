@@ -384,6 +384,15 @@ def find_preamble_failure_description(lines: List[str]) -> Tuple[
             err = DpkgBinaryFileChanged([m.group(1)])
             return lineno + 1, line, err
 
+        m = re.match(
+            r'dpkg-source: error: source package format \'(.*)\' is not '
+            r'supported: Can\'t locate (.*) in \@INC '
+            r'\(you may need to install the (.*) module\) '
+            r'\(\@INC contains: (.*)\) at \(eval [0-9]+\) line [0-9]+\.', line)
+        if m:
+            err = SourceFormatUnsupported(m.group(1))
+            return lineno + 1, line, err
+
         m = re.match('dpkg-source: error: (.*)', line)
         if m:
             err = DpkgSourcePackFailed(m.group(1))
