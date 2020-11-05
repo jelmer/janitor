@@ -45,9 +45,10 @@ from janitor.sbuild_log import (
     MissingCommand,
     NoSpaceOnDevice,
     )
-from janitor.schroot import Session
 from janitor.trace import note, warning
 from ognibuild import shebang_binary
+from ognibuild.session import Session
+from ognibuild.session.schroot import SchrootSession
 
 
 def run_apt(session: Session, args: List[str]) -> None:
@@ -414,7 +415,7 @@ def create_dist_schroot(
         subdir: Optional[str] = None) -> Optional[str]:
     if subdir is None:
         subdir = 'package'
-    with Session(chroot) as session:
+    with SchrootSession(chroot) as session:
         if packaging_tree is not None:
             satisfy_build_deps(session, packaging_tree)
         build_dir = os.path.join(session.location, 'build')

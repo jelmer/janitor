@@ -96,6 +96,8 @@ or close the merge proposal when all changes are applied through other means
 JANITOR_BLURB_MD = """
 This merge proposal was created automatically by the \
 [Janitor bot](%(external_url)s/%(suite)s).
+For more information, including instructions on how to disable
+these merge proposals, see %(external_url)s/%(suite)s.
 
 You can follow up to this merge proposal as you normally would.
 
