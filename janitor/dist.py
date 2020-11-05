@@ -19,7 +19,6 @@ import errno
 import os
 import re
 import shutil
-import stat
 import subprocess
 import sys
 import tempfile
@@ -48,13 +47,7 @@ from janitor.sbuild_log import (
     )
 from janitor.schroot import Session
 from janitor.trace import note, warning
-
-
-def has_shebang(p):
-    if not (os.stat(p).st_mode & stat.S_IEXEC):
-        return False
-    with open(p, 'rb') as f:
-        return f.read().startswith(b'#!')
+from ognibuild import shebang_binary
 
 
 def run_apt(session: Session, args: List[str]) -> None:
@@ -248,8 +241,17 @@ def run_dist_in_chroot(session):
 
         # TODO(jelmer): Install setup_requires
 
-        if has_shebang('setup.py'):
-            apt_install(session, ['python', 'python3'])
+        interpreter = shebang_binary('setup.py')
+        if interpreter is not None:
+            if interpreter == 'python3':
+                apt_install(session, ['python3'])
+            elif interpreter == 'python2':
+                apt_install(session, ['python2'])
+            elif interpreter == 'python':
+                apt_install(session, ['python'])
+            else:
+                raise ValueError('Unknown interpreter %s' % interpreter)
+            apt_install(session, ['python2', 'python3'])
             run_with_build_fixer(session, ['./setup.py', 'sdist'])
         else:
             # Just assume it's Python 3
@@ -313,18 +315,17 @@ def run_dist_in_chroot(session):
 
     if not os.path.exists('Makefile') and not os.path.exists('configure'):
         if os.path.exists('autogen.sh'):
-            if not has_shebang('autogen.sh'):
+            if shebang_binary('autogen.sh') is None:
                 run_with_build_fixer(session, ['/bin/sh', './autogen.sh'])
-            else:
-                try:
+            try:
+                run_with_build_fixer(session, ['./autogen.sh'])
+            except UnidentifiedError as e:
+                if ("Gnulib not yet bootstrapped; "
+                        "run ./bootstrap instead.\n" in e.lines):
+                    run_with_build_fixer(session, ["./bootstrap"])
                     run_with_build_fixer(session, ['./autogen.sh'])
-                except UnidentifiedError as e:
-                    if ("Gnulib not yet bootstrapped; "
-                            "run ./bootstrap instead.\n" in e.lines):
-                        run_with_build_fixer(session, ["./bootstrap"])
-                        run_with_build_fixer(session, ['./autogen.sh'])
-                    else:
-                        raise
+                else:
+                    raise
 
         elif os.path.exists('configure.ac') or os.path.exists('configure.in'):
             apt_install(session, [
