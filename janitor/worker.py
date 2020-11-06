@@ -42,9 +42,8 @@ from silver_platter.debian.changer import (
     ChangerResult,
     DebianChanger,
     ChangerReporter,
-    )
-from silver_platter.debian.__main__ import (
-    changer_subcommands,
+    changer_subcommand as _changer_subcommand,
+    changer_subcommmands,
     )
 from silver_platter.debian.upstream import (
     NewUpstreamChanger as ActualNewUpstreamChanger,
@@ -260,10 +259,18 @@ class WorkerFailure(Exception):
         self.description = description
 
 
+CUSTOM_SUBCOMMANDS = {
+    'just-build': DummyChanger,
+    'new-upstream': NewUpstreamChanger,
+}
+
+
 # TODO(jelmer): Just invoke the silver-platter subcommand
-CHANGER_SUBCOMMANDS = dict(changer_subcommands.items())
-CHANGER_SUBCOMMANDS['just-build'] = DummyChanger
-CHANGER_SUBCOMMANDS['new-upstream'] = NewUpstreamChanger
+def changer_subcommand(n):
+    try:
+        return CUSTOM_SUBCOMMANDS[n]
+    except KeyError:
+        return _changer_subcommand(n)
 
 
 class WorkerReporter(ChangerReporter):
@@ -391,7 +398,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
     changer_cls: Type[DebianChanger]
     try:
-        changer_cls = CHANGER_SUBCOMMANDS[command[0]]
+        changer_cls = _changer_subcommand(command[0])
     except KeyError:
         raise WorkerFailure(
             'unknown-subcommand',
