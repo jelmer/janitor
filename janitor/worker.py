@@ -92,37 +92,7 @@ TRUST_PACKAGE = False
 DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 
-class SubWorker(object):
-
-    name: str
-
-    def __init__(self, command: List[str], env: Dict[str, str]) -> None:
-        """Initialize a subworker.
-
-        Args:
-          command: List of command arguments
-          env: Environment dictionary
-        """
-
-    def make_changes(self, local_tree: WorkingTree, subpath: str,
-                     report_context: Callable[[str], None],
-                     metadata, base_metadata) -> ChangerResult:
-        """Make the actual changes to a tree.
-
-        Args:
-          local_tree: Tree to make changes to
-          report_context: report context
-          metadata: JSON Dictionary that can be used for storing results
-          base_metadata: Optional JSON Dictionary with results of
-            any previous runs this one is based on
-          subpath: Path in the branch where the package resides
-        Returns:
-          ChangerResult
-        """
-        raise NotImplementedError(self.make_changes)
-
-
-class ChangerWorker(SubWorker):
+class ChangerWorker(object):
 
     def __init__(self, changer_cls, command, env):
         self.committer = env.get('COMMITTER')
@@ -143,13 +113,11 @@ class ChangerWorker(SubWorker):
             metadata, base_metadata, report_context)
 
         try:
-            result = self.changer.make_changes(
+            return self.changer.make_changes(
                 local_tree, subpath=subpath, committer=self.committer,
                 update_changelog=self.args.update_changelog, reporter=reporter)
         except ChangerError as e:
             raise WorkerFailure(e.category, e.summary)
-
-        return SubWorkerResult.from_changer_result(result=result)
 
 
 class NewUpstreamChanger(ActualNewUpstreamChanger):
