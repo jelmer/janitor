@@ -92,26 +92,6 @@ TRUST_PACKAGE = False
 DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 
-class SubWorkerResult(object):
-
-    def __init__(
-            self, description: Optional[str], value: Optional[int],
-            auxiliary_branches: Optional[List[str]] = None,
-            tags: Optional[List[str]] = None):
-        self.description = description
-        self.value = value
-        self.auxiliary_branches = auxiliary_branches
-        self.tags = tags
-
-    @classmethod
-    def from_changer_result(cls, result):
-        return cls(
-            tags=result.tags,
-            auxiliary_branches=result.auxiliary_branches,
-            description=result.description,
-            value=result.value)
-
-
 class SubWorker(object):
 
     name: str
@@ -126,7 +106,7 @@ class SubWorker(object):
 
     def make_changes(self, local_tree: WorkingTree, subpath: str,
                      report_context: Callable[[str], None],
-                     metadata, base_metadata) -> SubWorkerResult:
+                     metadata, base_metadata) -> ChangerResult:
         """Make the actual changes to a tree.
 
         Args:
@@ -137,7 +117,7 @@ class SubWorker(object):
             any previous runs this one is based on
           subpath: Path in the branch where the package resides
         Returns:
-          SubWorkerResult
+          ChangerResult
         """
         raise NotImplementedError(self.make_changes)
 
@@ -483,7 +463,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             resume_subworker_result = None
 
         try:
-            subworker_result = subworker.make_changes(
+            changer_result = subworker.make_changes(
                 ws.local_tree, subpath, provide_context,
                 metadata['subworker'], resume_subworker_result)
         except WorkerFailure as e:
@@ -512,7 +492,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         target.build(ws, subpath, output_directory, env)
 
         wr = WorkerResult(
-            subworker_result.description, subworker_result.value)
+            changer_result.description, changer_result.value)
         yield ws, wr
 
 
