@@ -17,6 +17,7 @@
 
 """Serve the janitor site."""
 
+import asyncio
 import uuid
 from aiohttp.web_urldispatcher import (
     PrefixResource,
@@ -154,7 +155,11 @@ class ForwardedResource(PrefixResource):
 
             await response.prepare(request)
             while True:
-                chunk = await client_response.content.read(self._chunk_size)
+                try:
+                    chunk = await client_response.content.read(self._chunk_size)
+                except asyncio.TimeoutError:
+                    warning('Timeout reading from %s', url)
+                    raise
                 if not chunk:
                     break
                 await response.write(chunk)
@@ -643,10 +648,11 @@ order by url, last_run.finish_time desc
         if not re.match('^[a-z0-9-]+$', run_id) or len(run_id) < 5:
             raise web.HTTPNotFound(
                 text='Invalid run run id %s' % (run_id, ))
-        if not re.match('^[a-z0-9\\.]+$', filename) or len(filename) < 3:
-            raise web.HTTPNotFound(
-                text='No log file %s for run %s' % (filename, run_id))
         if filename.endswith('.log') or re.match(r'.*\.log\.[0-9]+', filename):
+            if not re.match('^[+a-z0-9\\.]+$', filename) or len(filename) < 3:
+                raise web.HTTPNotFound(
+                    text='No log file %s for run %s' % (filename, run_id))
+
             try:
                 logfile = await logfile_manager.get_log(pkg, run_id, filename)
             except FileNotFoundError:
@@ -1187,7 +1193,10 @@ order by url, last_run.finish_time desc
         name='lintian-brush-regressions')
     app.router.add_get(
         '/cupboard/pkg/{pkg}/{run_id}/{filename:.*}', handle_result_file,
-        name='logfile')
+        name='cupboard-result-file')
+    app.router.add_get(
+        '/{suite:' + SUITE_REGEX + '}/pkg/{pkg}/{run_id}/{filename:.*}', handle_result_file,
+        name='result-file')
     app.router.add_get(
         '/cupboard/vcs-regressions/',
         handle_vcs_regressions,
@@ -1256,6 +1265,11 @@ order by url, last_run.finish_time desc
     app.jinja_env = env
     from janitor.artifacts import get_artifact_manager
     app.artifact_manager = get_artifact_manager(config.artifact_location)
+
+    async def startup_artifact_manager(app):
+        await app.artifact_manager.__aenter__()
+
+    app.on_startup.append(startup_artifact_manager)
     setup_debsso(app)
     setup_metrics(app)
     app.router.add_get(
