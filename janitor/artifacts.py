@@ -166,7 +166,7 @@ class GCSArtifactManager(ArtifactManager):
             download_blob(name) for name in names
             if filter_fn is None or filter_fn(os.path.basename(name))])
 
-    async def get_artifact(self, run_id, filename, timeut=DEFAULT_GCS_TIMEOUT):
+    async def get_artifact(self, run_id, filename, timeout=DEFAULT_GCS_TIMEOUT):
         return BytesIO(await self.storage.download(
             bucket=self.bucket_name, object_name='%s/%s' % (run_id, filename),
             timeout=timeout))
