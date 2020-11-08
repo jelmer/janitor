@@ -15,19 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncio
-from contextlib import ExitStack
 import os
 import itertools
 import re
 import shutil
-
-from aiohttp import (
-    ClientSession,
-    ClientTimeout,
-    ClientConnectionError,
-    MultipartWriter,
-    )
 
 from debian.changelog import Changelog, Version
 from debian.deb822 import Changes
@@ -75,39 +66,6 @@ def find_changes(path, package):
     with open(os.path.join(path, name), 'r') as f:
         changes = Changes(f)
         return (name, changes["Version"], changes["Distribution"])
-
-
-async def upload_changes(changes_path: str, incoming_url: str):
-    """Upload changes to the archiver.
-
-    Args:
-      changes_path: Changes path
-      incoming_url: Incoming URL
-    """
-    async with ClientSession() as session:
-        with ExitStack() as es:
-            with MultipartWriter() as mpwriter:
-                f = open(changes_path, 'r')
-                es.enter_context(f)
-                dsc = Changes(f)
-                f.seek(0)
-                mpwriter.append(f)
-                for file_details in dsc['files']:
-                    name = file_details['name']
-                    path = os.path.join(os.path.dirname(changes_path), name)
-                    g = open(path, 'rb')
-                    es.enter_context(g)
-                    mpwriter.append(g)
-            try:
-                async with session.post(
-                        incoming_url, data=mpwriter,
-                        timeout=ClientTimeout(UPLOAD_TIMEOUT)) as resp:
-                    if resp.status != 200:
-                        raise UploadFailedError(resp)
-            except ClientConnectionError as e:
-                raise UploadFailedError(e)
-            except asyncio.TimeoutError as e:
-                raise UploadFailedError(e)
 
 
 def possible_salsa_urls_from_package_name(package_name, maintainer_email=None):
