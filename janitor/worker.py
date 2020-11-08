@@ -43,7 +43,7 @@ from silver_platter.debian.changer import (
     DebianChanger,
     ChangerReporter,
     changer_subcommand as _changer_subcommand,
-    changer_subcommmands,
+    changer_subcommands,
     )
 from silver_platter.debian.upstream import (
     NewUpstreamChanger as ActualNewUpstreamChanger,
@@ -346,7 +346,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
     changer_cls: Type[DebianChanger]
     try:
-        changer_cls = _changer_subcommand(command[0])
+        changer_cls = changer_subcommand(command[0])
     except KeyError:
         raise WorkerFailure(
             'unknown-subcommand',
