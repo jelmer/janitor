@@ -1076,6 +1076,11 @@ class QueueProcessor(object):
                     subworker_result=result.subworker_result, suite=item.suite,
                     logfilenames=result.logfilenames, value=result.value,
                     worker_name=active_run.worker_name)
+                if result.target_result.build_version:
+                    await state.store_debian_build(
+                        result.log_id, item.package,
+                        result.target_result.build_version,
+                        result.target_result.build_distribution)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[active_run.log_id]
