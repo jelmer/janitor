@@ -1048,7 +1048,7 @@ class QueueProcessor(object):
         duration = finish_time - active_run.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds())
-        if result.target_result.changes_filename and item.suite != 'unchanged':
+        if result.code == 'success' and item.suite != 'unchanged':
             async with self.database.acquire() as conn:
                 run = await state.get_unchanged_run(
                     conn, result.main_branch_revision)
