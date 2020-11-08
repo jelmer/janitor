@@ -271,3 +271,12 @@ CREATE VIEW queue_positions AS SELECT
 FROM
     queue
 ORDER BY priority ASC, id ASC;
+
+CREATE TABLE debian_build (
+ run_id text not null references run (id),
+ -- Debian version text of the built package
+ build_version debversion not null,
+ -- Distribution the package was built for (e.g. "lintian-fixes")
+ build_distribution text not null,
+ source text not null,
+);

@@ -67,6 +67,15 @@ async def popcon(conn: asyncpg.Connection):
         "SELECT name, popcon_inst FROM package")
 
 
+async def store_debian_build(
+        conn: asyncpg.Connection, run_id: str, source: str,
+        version: Version, distribution: str):
+    await conn.execute(
+        "INSERT INTO debian_build (run_id, source, version, distribution) "
+        "VALUES ($1, $2, $3, $4)",
+        run_id, source, str(version), distribution)
+
+
 async def store_run(
         conn: asyncpg.Connection,
         run_id: str, name: str, vcs_url: str, start_time: datetime.datetime,
