@@ -160,7 +160,9 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
         stderr=asyncio.subprocess.PIPE,
         preexec_fn=preexec_fn)
     stdout, stderr = await p.communicate(b'')
-    if p.returncode not in (0, 1):
+    if p.returncode == 0:
+        return None
+    if p.returncode != 1:
         raise DiffoscopeError(stderr.decode(errors='replace'))
     try:
         return json.loads(stdout.decode('utf-8'))
@@ -180,6 +182,8 @@ async def run_diffoscope(old_binaries, new_binaries, preexec_fn=None):
     for (old_name, old_path), (new_name, new_path) in zip(
             old_binaries, new_binaries):
         sub = await _run_diffoscope(old_path, new_path, preexec_fn=preexec_fn)
+        if sub is None:
+            continue
         sub['source1'] = old_name
         sub['source2'] = new_name
         del sub['diffoscope-json-version']
