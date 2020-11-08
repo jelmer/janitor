@@ -32,16 +32,12 @@ import sys
 import tempfile
 from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
 import uuid
-import urllib.parse
 from yarl import URL
 
 from debian.changelog import Version
 
 from breezy import debug
 from breezy.errors import PermissionDenied
-from breezy.plugins.debian.util import (
-    debsign,
-    )
 from breezy.propose import Hoster, HosterLoginRequired
 from breezy.transport import Transport
 
@@ -82,7 +78,6 @@ from .debian import (
     changes_filenames,
     open_guessed_salsa_branch,
     find_changes,
-    upload_changes,
     NoChangesFile,
     )
 from .logs import (
@@ -172,16 +167,6 @@ class DebianResult(object):
             build_version=build_version,
             build_distribution=build_distribution,
             changes_filename=changes_filename)
-
-    async def upload(self, log_id, incoming_url, debsign_keyid):
-        changes_path = os.path.join(
-            self.output_directory, self.changes_filename)
-        if debsign_keyid:
-            debsign(changes_path, debsign_keyid)
-        if incoming_url is not None:
-            run_incoming_url = urllib.parse.urljoin(
-                incoming_url, 'upload/%s' % log_id)
-            await upload_changes(changes_path, run_incoming_url)
 
     def json(self):
         return {
@@ -686,8 +671,6 @@ class ActiveLocalRun(ActiveRun):
             pre_check=None,
             post_check=None,
             dry_run: bool = False,
-            incoming_url: Optional[str] = None,
-            debsign_keyid: Optional[str] = None,
             possible_transports: Optional[List[Transport]] = None,
             possible_hosters: Optional[List[Hoster]] = None,
             use_cached_only: bool = False,
@@ -903,21 +886,12 @@ class ActiveLocalRun(ActiveRun):
                 pick_additional_colocated_branches(main_branch)))
         result.branch_name = suite_config.branch_name
 
-        if result.target_result:
-            try:
-                await result.target_result.upload(
-                    self.log_id,
-                    incoming_url=incoming_url,
-                    debsign_keyid=debsign_keyid)
-            except Exception as e:
-                warning('Unable to upload artifacts: %r', e)
-
-            if artifact_manager:
-                artifact_names = result.target_result.artifact_filenames()
-                await store_artifacts_with_backup(
-                    artifact_manager,
-                    backup_artifact_manager,
-                    self.output_directory, self.log_id, artifact_names)
+        if result.target_result and artifact_manager:
+            artifact_names = result.target_result.artifact_filenames()
+            await store_artifacts_with_backup(
+                artifact_manager,
+                backup_artifact_manager,
+                self.output_directory, self.log_id, artifact_names)
 
         return result
 
@@ -966,9 +940,8 @@ class QueueProcessor(object):
 
     def __init__(
             self, database, config, worker_kind, build_command, pre_check=None,
-            post_check=None, dry_run=False, incoming_url=None,
+            post_check=None, dry_run=False,
             logfile_manager=None, artifact_manager=None,
-            debsign_keyid: Optional[str] = None,
             vcs_manager=None, public_vcs_manager=None, concurrency=1,
             use_cached_only=False, overall_timeout=None, committer=None,
             apt_location=None, backup_artifact_manager=None,
@@ -980,7 +953,6 @@ class QueueProcessor(object):
           build_command: The command used to build packages
           pre_check: Function to run prior to modifying a package
           post_check: Function to run after modifying a package
-          incoming_url: location to upload debian packages to
         """
         self.database = database
         self.config = config
@@ -989,10 +961,8 @@ class QueueProcessor(object):
         self.pre_check = pre_check
         self.post_check = post_check
         self.dry_run = dry_run
-        self.incoming_url = incoming_url
         self.logfile_manager = logfile_manager
         self.artifact_manager = artifact_manager
-        self.debsign_keyid = debsign_keyid
         self.vcs_manager = vcs_manager
         self.public_vcs_manager = public_vcs_manager
         self.concurrency = concurrency
@@ -1025,8 +995,7 @@ class QueueProcessor(object):
                 worker_kind=self.worker_kind,
                 pre_check=self.pre_check,
                 build_command=self.build_command, post_check=self.post_check,
-                dry_run=self.dry_run, incoming_url=self.incoming_url,
-                debsign_keyid=self.debsign_keyid,
+                dry_run=self.dry_run,
                 logfile_manager=self.logfile_manager,
                 backup_logfile_manager=self.backup_logfile_manager,
                 use_cached_only=self.use_cached_only,
@@ -1078,7 +1047,7 @@ class QueueProcessor(object):
                     worker_name=active_run.worker_name)
                 if result.target_result.build_version:
                     await state.store_debian_build(
-                        result.log_id, item.package,
+                        conn, result.log_id, item.package,
                         result.target_result.build_version,
                         result.target_result.build_distribution)
                 await state.drop_queue_item(conn, item.id)
@@ -1500,12 +1469,6 @@ def main(argv=None):
         help="Create branches but don't push or propose anything.",
         action="store_true", default=False)
     parser.add_argument(
-        '--incoming-url', type=str,
-        help='URL to upload built Debian packages to.')
-    parser.add_argument(
-        '--debsign-keyid', type=str, default=None,
-        help='GPG key to sign Debian package with.')
-    parser.add_argument(
         '--worker', type=str,
         default='local',
         choices=['local', 'gcb'],
@@ -1568,10 +1531,9 @@ def main(argv=None):
         args.worker,
         args.build_command,
         args.pre_check, args.post_check,
-        args.dry_run, args.incoming_url,
+        args.dry_run,
         logfile_manager,
         artifact_manager,
-        args.debsign_keyid,
         vcs_manager,
         public_vcs_manager,
         args.concurrency,
