@@ -1370,7 +1370,7 @@ FROM publish WHERE id = $1
 
 async def update_removals(
         conn: asyncpg.Connection, distribution: str,
-        items: List[Tuple[str, Version]]) -> None:
+        items: List[Tuple[str, Optional[Version]]]) -> None:
     if not items:
         return
     query = """\
