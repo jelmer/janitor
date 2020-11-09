@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-from janitor.site import env
-
 
 async def iter_publish_history(conn, limit=None):
     query = """

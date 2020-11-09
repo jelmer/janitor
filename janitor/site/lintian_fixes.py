@@ -8,7 +8,6 @@ from silver_platter.debian.lintian import (
     )
 from lintian_brush.lintian_overrides import load_renamed_tags
 
-from . import env
 from .. import state
 
 
@@ -16,8 +15,10 @@ SUITE = 'lintian-fixes'
 
 renamed_tags = load_renamed_tags()
 
-async def generate_pkg_file(db, config, policy, client, differ_url, publisher_url,
-                            package, run_id=None):
+
+async def generate_pkg_file(
+        db, config, policy, client, differ_url, publisher_url,
+        package, run_id=None):
     kwargs = await generate_pkg_context(
         db, config, SUITE, policy, client, differ_url,
         publisher_url, package, run_id=run_id)

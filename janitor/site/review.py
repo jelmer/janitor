@@ -5,7 +5,6 @@ import urllib.parse
 
 from janitor import state
 from janitor.site import (
-    env,
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,

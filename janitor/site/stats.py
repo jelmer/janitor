@@ -78,6 +78,7 @@ async def handle_stats(request):
 
         return {'by_hoster': by_hoster, 'by_status_chart': by_status}
 
+
 @json_chart_data(max_age=60)
 async def handle_graph_merges_over_time(request, conn):
     return {
