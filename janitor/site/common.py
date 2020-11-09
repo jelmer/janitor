@@ -154,4 +154,4 @@ async def generate_candidates(db, suite):
              success_chance) in await state.iter_candidates(conn, suite=suite):
             candidates.append((package.name, value))
         candidates.sort(key=lambda x: x[1], reverse=True)
-    return {'candidates': candidates}
+    return {'candidates': candidates, 'suite': suite}
