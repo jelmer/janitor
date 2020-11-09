@@ -158,7 +158,6 @@ def run_worker(branch_url, subpath, vcs_type, env,
                post_check_command=None,
                resume_branch_url=None,
                cached_branch_url=None,
-               last_build_version=None,
                resume_subworker_result=None,
                result_branch_url=None,
                possible_transports=None):
@@ -173,7 +172,6 @@ def run_worker(branch_url, subpath, vcs_type, env,
                post_check_command=post_check_command,
                resume_branch_url=resume_branch_url,
                cached_branch_url=cached_branch_url,
-               last_build_version=last_build_version,
                resume_subworker_result=resume_subworker_result,
                possible_transports=possible_transports) as (ws, result):
             enable_tag_pushing(ws.local_tree.branch)
@@ -365,7 +363,6 @@ async def main(argv=None):
         else:
             resume_result = None
             resume_branch_url = None
-        last_build_version = assignment.get('last_build_version')
         cached_branch_url = assignment['branch'].get('cached_url')
         command = assignment['command']
         build_environment = assignment['build'].get('environment', {})
@@ -401,7 +398,6 @@ async def main(argv=None):
                     post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
                     cached_branch_url=cached_branch_url,
-                    last_build_version=last_build_version,
                     resume_subworker_result=resume_result,
                     result_branch_url=result_branch_url,
                     possible_transports=possible_transports))

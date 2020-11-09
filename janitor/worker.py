@@ -228,12 +228,11 @@ class Target(object):
 class DebianTarget(Target):
     """Debian target."""
 
-    def __init__(self, env, build_command,
-                 last_build_version=None):
+    def __init__(self, env, build_command):
         self.build_distribution = env.get('BUILD_DISTRIBUTION')
         self.build_command = build_command
         self.build_suffix = env.get('BUILD_SUFFIX')
-        self.last_build_version = last_build_version
+        self.last_build_version = env.get('LAST_BUILD_VERSION')
 
     def parse_args(self, argv):
         changer_cls: Type[DebianChanger]
@@ -338,7 +337,6 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     possible_hosters: Optional[List[Hoster]] = None,
                     resume_branch_url: Optional[str] = None,
                     cached_branch_url: Optional[str] = None,
-                    last_build_version: Optional[Version] = None,
                     resume_subworker_result: Any = None
                     ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     pkg = env['PACKAGE']
@@ -349,8 +347,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
     target = DebianTarget(
         env,
-        build_command=build_command,
-        last_build_version=last_build_version)
+        build_command=build_command)
 
     target.parse_args(command)
 
@@ -479,9 +476,6 @@ def main(argv=None):
         help=('Path to a JSON file with the results for '
               'the last run on the resumed branch.'))
     parser.add_argument(
-        '--last-build-version', type=str,
-        help='Version of the last built Debian package.')
-    parser.add_argument(
         '--cached-branch-url', type=str,
         help='URL of cached branch to start from.')
     parser.add_argument(
@@ -537,7 +531,6 @@ def main(argv=None):
                 post_check_command=args.post_check,
                 resume_branch_url=args.resume_branch_url,
                 cached_branch_url=args.cached_branch_url,
-                last_build_version=args.last_build_version,
                 resume_subworker_result=resume_subworker_result
                 ) as (ws, result):
             if args.tgz_repo:

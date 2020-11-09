@@ -317,7 +317,6 @@ async def invoke_subprocess_worker(
         build_command: Optional[str] = None,
         log_path: Optional[str] = None,
         resume_branch_result: Optional[Any] = None,
-        last_build_version: Optional[Version] = None,
         subpath: Optional[str] = None) -> int:
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
@@ -351,8 +350,6 @@ async def invoke_subprocess_worker(
         with open(resume_result_path, 'w') as f:
             json.dump(resume_branch_result, f)
         args.append('--resume-result-path=%s' % resume_result_path)
-    if last_build_version:
-        args.append('--last-build-version=%s' % last_build_version)
 
     args.extend(command)
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
@@ -773,6 +770,9 @@ class ActiveLocalRun(ActiveRun):
             last_build_version = await state.get_last_build_version(
                 conn, self.queue_item.package, self.queue_item.suite)
 
+            if last_build_version:
+                env['LAST_BUILD_VERSION'] = str(last_build_version)
+
         log_path = os.path.join(self.output_directory, 'worker.log')
         try:
             self._task = asyncio.create_task(asyncio.wait_for(
@@ -787,7 +787,6 @@ class ActiveLocalRun(ActiveRun):
                     build_command=build_command,
                     log_path=log_path,
                     resume_branch_result=resume_branch_result,
-                    last_build_version=last_build_version,
                     subpath=self.queue_item.subpath),
                 timeout=overall_timeout))
             # set_name is only available on Python 3.8
