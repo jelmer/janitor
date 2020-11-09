@@ -46,7 +46,7 @@ def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
 
 
 def filter_boring_wdiff(
-        lines: List[str], old_version: str, new_version: str) -> Optional[str]:
+        lines: List[str], old_version: str, new_version: str) -> List[str]:
     if not lines:
         return lines
     field, changes = lines[0].split(':', 1)
@@ -60,7 +60,7 @@ def filter_boring_wdiff(
         '', line) for line in lines]
     block = '\n'.join(lines)
     if (not re.findall(r'\[-.*?-\]', block) and
-            not re.findall('\{\+.*?\+\}', block)):
+            not re.findall(r'\{\+.*?\+\}', block)):
         return []
     return lines
 
@@ -98,7 +98,7 @@ def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
             package = None
             wdiff = False
         if wdiff:
-            paragraph_unfiltered = []
+            paragraph_unfiltered: List[str] = []
             for lines in _iter_fields(paragraph):
                 newlines = filter_boring_wdiff(lines, old_version, new_version)
                 paragraph_unfiltered.extend(newlines)
@@ -225,7 +225,9 @@ def htmlize_debdiff(debdiff: str) -> str:
                 for line in _iter_fields(lines):
                     if not line:
                         continue
-                    ret.extend(["<li><pre>%s</pre></li>" % highlight_wdiff('\n'.join(line))])
+                    ret.extend([
+                        "<li><pre>%s</pre></li>" %
+                        highlight_wdiff('\n'.join(line))])
                 ret.append("</ul>")
             else:
                 ret.append("<pre>")
