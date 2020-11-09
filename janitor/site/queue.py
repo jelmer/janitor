@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
 
 from janitor import state
+from janitor.worker import changer_subcommand
 
 
 def lintian_tag_link(tag: str) -> str:
@@ -118,20 +119,9 @@ async def get_queue(
                     'expecting to fix: ' +
                     ', '.join(
                         map(lintian_tag_link, entry.context.split(' '))))
-        elif entry.command[0] == 'just-build':
-            description = 'Build without changes'
-        elif entry.command[0] == 'apply-multiarch-hints':
-            description = 'Apply multi-arch hints'
-        elif entry.command[0] == 'orphan':
-            description = 'Mark as orphaned'
-        elif entry.command[0] == 'import-upload':
-            description = 'Import archive changes missing from VCS'
-        elif entry.command[0] == 'cme-fix':
-            description = 'Apply Configuration Model Editor (CME) fixes'
-        elif entry.command[0] == 'scrub-obsolete':
-            description = 'Remove obsolete dependencies'
         else:
-            raise AssertionError('invalid command %s' % entry.command)
+            cs = changer_subcommand(entry.command[0])
+            description = cs.describe_command(entry.command)
         if only_command is not None:
             description = expecting or ''
         elif expecting is not None:

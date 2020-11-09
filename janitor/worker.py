@@ -90,34 +90,6 @@ TRUST_PACKAGE = False
 DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
 
-class ChangerWorker(object):
-
-    def __init__(self, changer_cls, command, env):
-        self.committer = env.get('COMMITTER')
-        subparser = argparse.ArgumentParser(prog=changer_cls.name)
-        subparser.add_argument(
-            '--no-update-changelog', action="store_false", default=None,
-            dest="update_changelog", help="do not update the changelog")
-        subparser.add_argument(
-            '--update-changelog', action="store_true", dest="update_changelog",
-            help="force updating of the changelog", default=None)
-        changer_cls.setup_parser(subparser)
-        self.args = subparser.parse_args(command)
-        self.changer = changer_cls.from_args(self.args)
-
-    def make_changes(self, local_tree, subpath, report_context, metadata,
-                     base_metadata):
-        reporter = WorkerReporter(
-            metadata, base_metadata, report_context)
-
-        try:
-            return self.changer.make_changes(
-                local_tree, subpath=subpath, committer=self.committer,
-                update_changelog=self.args.update_changelog, reporter=reporter)
-        except ChangerError as e:
-            raise WorkerFailure(e.category, e.summary)
-
-
 class NewUpstreamChanger(ActualNewUpstreamChanger):
 
     def create_dist_from_command(self, tree, package, version, target_dir):
@@ -186,6 +158,10 @@ class DummyChanger(DebianChanger):
                 '(LarstIQ mode)')
 
         return ChangerResult(description='Nothing changed', mutator=None)
+
+    @classmethod
+    def describe_command(cls, command):
+        return 'Build without changes'
 
 
 class WorkerResult(object):
@@ -258,6 +234,35 @@ class DebianTarget(Target):
         self.build_command = build_command
         self.build_suffix = build_suffix
         self.last_build_version = last_build_version
+
+    def parse_args(self, argv):
+        changer_cls: Type[DebianChanger]
+        try:
+            changer_cls = changer_subcommand(argv[0])
+        except KeyError:
+            raise WorkerFailure(
+                'unknown-subcommand',
+                'unknown subcommand %s' % argv[0])
+
+        subparser = argparse.ArgumentParser(prog=changer_cls.name)
+        subparser.add_argument(
+            '--no-update-changelog', action="store_false", default=None,
+            dest="update_changelog", help="do not update the changelog")
+        subparser.add_argument(
+            '--update-changelog', action="store_true", dest="update_changelog",
+            help="force updating of the changelog", default=None)
+        changer_cls.setup_parser(subparser)
+        self.changer_args = subparser.parse_args(argv[1:])
+        self.changer = changer_cls.from_args(self.changer_args)
+
+    def make_changes(self, local_tree, subpath, reporter, committer=None):
+        try:
+            return self.changer.make_changes(
+                local_tree, subpath=subpath, committer=committer,
+                update_changelog=self.changer_args.update_changelog,
+                reporter=reporter)
+        except ChangerError as e:
+            raise WorkerFailure(e.category, e.summary)
 
     def additional_colocated_branches(self, main_branch):
         return pick_additional_colocated_branches(main_branch)
@@ -340,22 +345,17 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     pkg = env['PACKAGE']
 
-    metadata['command'] = command
+    committer = env.get('COMMITTER')
 
-    changer_cls: Type[DebianChanger]
-    try:
-        changer_cls = changer_subcommand(command[0])
-    except KeyError:
-        raise WorkerFailure(
-            'unknown-subcommand',
-            'unknown subcommand %s' % command[0])
-    subworker = ChangerWorker(changer_cls, command[1:], env)
+    metadata['command'] = command
 
     target = DebianTarget(
         build_distribution=build_distribution,
         build_command=build_command,
         build_suffix=build_suffix,
         last_build_version=last_build_version)
+
+    target.parse_args(command)
 
     note('Opening branch at %s', vcs_url)
     try:
@@ -428,10 +428,12 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             # don't need to pass in the subworker result.
             resume_subworker_result = None
 
+        reporter = WorkerReporter(
+            metadata['subworker'], resume_subworker_result, provide_context)
         try:
-            changer_result = subworker.make_changes(
-                ws.local_tree, subpath, provide_context,
-                metadata['subworker'], resume_subworker_result)
+            changer_result = target.make_changes(
+                ws.local_tree, subpath, reporter,
+                committer=committer)
         except WorkerFailure as e:
             if (e.code == 'nothing-to-do' and
                     resume_subworker_result is not None):
