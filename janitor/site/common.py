@@ -145,3 +145,13 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
         'changelog_policy': changelog_policy,
         'tracker_url': partial(tracker_url, config),
         }
+
+
+async def generate_candidates(db, suite):
+    candidates = []
+    async with db.acquire() as conn:
+        for (package, suite, context, value,
+             success_chance) in await state.iter_candidates(conn, suite=suite):
+            candidates.append((package.name, value))
+        candidates.sort(key=lambda x: x[1], reverse=True)
+    return {'candidates': candidates}

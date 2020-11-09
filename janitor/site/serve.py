@@ -286,8 +286,8 @@ if __name__ == '__main__':
         from .lintian_fixes import render_start
         return await render_start()
 
-    @html_template('cme-start.html')
-    async def handle_cme(request):
+    @html_template('generic-start.html')
+    async def handle_generic_start(request):
         return {}
 
     @html_template(
@@ -308,10 +308,11 @@ if __name__ == '__main__':
         return await generate_candidates(request.app.database)
 
     @html_template(
-        'cme-candidates.html', headers={'Cache-Control': 'max-age=3600'})
-    async def handle_cme_candidates(request):
-        from .cme import generate_candidates
-        return await generate_candidates(request.app.database)
+        'generic-candidates.html', headers={'Cache-Control': 'max-age=3600'})
+    async def handle_generic_candidates(request):
+        from .common import generate_candidates
+        return await generate_candidates(
+            request.app.database, suite=request.match_info['suite'])
 
     @html_template(
         'merge-proposals.html',
@@ -707,34 +708,17 @@ order by url, last_run.finish_time desc
             raise web.HTTPNotFound()
 
     @html_template(
-        'orphan-package.html', headers={'Cache-Control': 'max-age=600'})
-    async def handle_orphan_pkg(request):
-        from .orphan import generate_pkg_file
+        'generic-package.html', headers={'Cache-Control': 'max-age=600'})
+    async def handle_generic_pkg(request):
+        from .common import generate_pkg_context
         # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info['pkg']
         run_id = request.match_info.get('run_id')
         try:
-            return await generate_pkg_file(
+            return await generate_pkg_context(
                 request.app.database,
                 request.app.config,
-                request.app.policy,
-                request.app.http_client_session,
-                request.app.differ_url,
-                request.app.publisher_url, pkg, run_id)
-        except KeyError:
-            raise web.HTTPNotFound()
-
-    @html_template(
-        'cme-package.html', headers={'Cache-Control': 'max-age=600'})
-    async def handle_cme_pkg(request):
-        from .cme import generate_pkg_file
-        # TODO(jelmer): Handle Accept: text/diff
-        pkg = request.match_info['pkg']
-        run_id = request.match_info.get('run_id')
-        try:
-            return await generate_pkg_file(
-                request.app.database,
-                request.app.config,
+                request.match_info['suite'],
                 request.app.policy,
                 request.app.http_client_session,
                 request.app.differ_url,
@@ -1024,9 +1008,6 @@ order by url, last_run.finish_time desc
         '/pgp_keys{extension:(\.asc)?}', handle_pgp_keys,
         name='pgp-keys')
     app.router.add_get(
-        '/cme/', handle_cme,
-        name='cme-start')
-    app.router.add_get(
         '/lintian-fixes/', handle_lintian_fixes,
         name='lintian-fixes-start')
     app.router.add_get(
@@ -1050,12 +1031,10 @@ order by url, last_run.finish_time desc
     app.router.add_get(
         '/orphan/candidates', handle_orphan_candidates,
         name='orphan-candidates')
-    app.router.add_get(
-        '/cme/candidates', handle_cme_candidates,
-        name='cme-candidates')
     SUITE_REGEX = '|'.join(
             ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
-             'multiarch-fixes', 'orphan', 'cme', 'uncommitted'])
+             'multiarch-fixes', 'orphan', 'cme', 'uncommitted',
+             'buster-backports'])
     app.router.add_get(
         '/{suite:%s}/merge-proposals' % SUITE_REGEX,
         handle_merge_proposals,
@@ -1079,14 +1058,8 @@ order by url, last_run.finish_time desc
         ForwardedResource(
             'git', args.publisher_url.rstrip('/') + '/git'))
     app.router.add_get(
-        '/orphan/pkg/{pkg}/', handle_orphan_pkg,
-        name='orphan-package')
-    app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package')
-    app.router.add_get(
-        '/cme/pkg/{pkg}/', handle_cme_pkg,
-        name='cme-package')
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/{run_id}', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package-run')
@@ -1201,6 +1174,15 @@ order by url, last_run.finish_time desc
         '/{suite:' + SUITE_REGEX + '}/pkg/{pkg}/{run_id}/{filename:.*}',
         handle_result_file,
         name='result-file')
+    app.router.add_get(
+        '/{suite:' + SUITE_REGEX + '}/', handle_generic_start,
+        name='generic-start')
+    app.router.add_get(
+        '/{suite:' + SUITE_REGEX + '}/candidates', handle_generic_candidates,
+        name='generic-candidates')
+    app.router.add_get(
+        '/{suite:' + SUITE_REGEX + '}/pkg/{pkg}/', handle_generic_pkg,
+        name='generic-package')
     app.router.add_get(
         '/cupboard/vcs-regressions/',
         handle_vcs_regressions,

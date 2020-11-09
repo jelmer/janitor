@@ -5,7 +5,7 @@
 {% elif not suite %}
 {% include "cupboard-sidebar.html" %}
 {% else %}
-{% include suite + "-sidebar.html" %}
+{% include [suite + "-sidebar.html", "generic-sidebar.html"] %}
 {% endif %}
 {% endblock %}
 {% from "lintian-fixes-util.html" import lintian_brush_summary %}

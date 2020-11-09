@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "orphan-sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include ["orphan-sidebar.html", "generic-sidebar.html"] %}{% endblock %}
 {% block page_title %}Orphan Fixes{% endblock %}
 {% block body %}
 
