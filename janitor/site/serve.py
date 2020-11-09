@@ -288,7 +288,7 @@ if __name__ == '__main__':
 
     @html_template('generic-start.html')
     async def handle_generic_start(request):
-        return {}
+        return {'suite': request.match_info['suite']}
 
     @html_template(
         'multiarch-fixes-start.html',
@@ -1034,7 +1034,7 @@ order by url, last_run.finish_time desc
     SUITE_REGEX = '|'.join(
             ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
              'multiarch-fixes', 'orphan', 'cme', 'uncommitted',
-             'buster-backports'])
+             'buster-backports', 'scrub-obsolete'])
     app.router.add_get(
         '/{suite:%s}/merge-proposals' % SUITE_REGEX,
         handle_merge_proposals,

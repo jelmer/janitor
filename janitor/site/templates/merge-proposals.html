@@ -1,11 +1,9 @@
 {% extends "layout.html" %}
 {% block sidebar %}
-{% if suite in ('fresh-releases', 'fresh-snapshots') %}
-{% include "new-upstream-sidebar.html" %}
-{% elif not suite %}
+{% if not suite %}
 {% include "cupboard-sidebar.html" %}
 {% else %}
-{% include suite + "-sidebar.html" %}
+{% include [suite + "-sidebar.html", "generic-sidebar.html"] %}
 {% endif %}
 {% endblock %}
 {% block page_title %}Merge Proposal Status{% endblock %}
