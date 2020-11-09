@@ -798,7 +798,7 @@ def publish_one(
     except DifferUnavailable as e:
         raise PublishFailure(
             description='Unable to contact differ for build diff: %s'
-                % e.reason,
+            % e.reason,
             code='differ-unreachable')
     except DebdiffMissingRun as e:
         if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH) and require_binary_diff:

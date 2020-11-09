@@ -85,7 +85,7 @@ class LocalArtifactManager(ArtifactManager):
             yield entry.name
 
     async def get_artifact(self, run_id, filename, timeout=None):
-        return open(os.path.join(self.path, run_id, name), 'rb')
+        return open(os.path.join(self.path, run_id, filename), 'rb')
 
     async def retrieve_artifacts(
             self, run_id, local_path, filter_fn=None, timeout=None):
@@ -150,7 +150,8 @@ class GCSArtifactManager(ArtifactManager):
             ids.add(log_id)
 
     async def retrieve_artifacts(
-            self, run_id, local_path, filter_fn=None, timeout=DEFAULT_GCS_TIMEOUT):
+            self, run_id, local_path, filter_fn=None,
+            timeout=DEFAULT_GCS_TIMEOUT):
         names = await self.bucket.list_blobs(prefix=run_id+'/')
         if not names:
             raise ArtifactsMissing(run_id)
@@ -160,13 +161,15 @@ class GCSArtifactManager(ArtifactManager):
                     os.path.join(local_path, os.path.basename(name)),
                     'wb+') as f:
                 f.write(await self.storage.download(
-                    bucket=self.bucket_name, object_name=name, timeout=timeout))
+                    bucket=self.bucket_name, object_name=name,
+                    timeout=timeout))
 
         await asyncio.gather(*[
             download_blob(name) for name in names
             if filter_fn is None or filter_fn(os.path.basename(name))])
 
-    async def get_artifact(self, run_id, filename, timeout=DEFAULT_GCS_TIMEOUT):
+    async def get_artifact(
+            self, run_id, filename, timeout=DEFAULT_GCS_TIMEOUT):
         return BytesIO(await self.storage.download(
             bucket=self.bucket_name, object_name='%s/%s' % (run_id, filename),
             timeout=timeout))

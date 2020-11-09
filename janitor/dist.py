@@ -360,14 +360,14 @@ def run_dist_in_chroot(session):
                 run_with_build_fixer(session, ['./configure'])
                 run_with_build_fixer(session, ['make', 'dist'])
             elif any([re.match(
-                    'Makefile:[0-9]+: \*\*\* Missing \'Make.inc\' '
-                    'Run \'./configure \[options\]\' and retry.  Stop.\n',
+                    r'Makefile:[0-9]+: \*\*\* Missing \'Make.inc\' '
+                    r'Run \'./configure \[options\]\' and retry.  Stop.\n',
                     line) for line in e.lines]):
                 run_with_build_fixer(session, ['./configure'])
                 run_with_build_fixer(session, ['make', 'dist'])
             elif any([re.match(
-                      'Problem opening MANIFEST: No such file or directory '
-                      'at .* line [0-9]+\.', line) for line in e.lines]):
+                      r'Problem opening MANIFEST: No such file or directory '
+                      r'at .* line [0-9]+\.', line) for line in e.lines]):
                 run_with_build_fixer(session, ['make', 'manifest'])
                 run_with_build_fixer(session, ['make', 'dist'])
             else:
