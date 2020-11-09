@@ -33,6 +33,7 @@ import shutil
 import tempfile
 import time
 
+from ..trace import note, warning
 from . import (
     is_worker,
     html_template,
@@ -113,7 +114,6 @@ class ForwardedResource(PrefixResource):
             params['service'] = service
         if await is_worker(request.app.database, request):
             params['allow_writes'] = '1'
-        from janitor.trace import note, warning
         note('Forwarding: method: %s, url: %s, params: %r, headers: %r',
              request.method, url, params, headers)
         async with request.app.http_client_session.request(
@@ -156,7 +156,8 @@ class ForwardedResource(PrefixResource):
             await response.prepare(request)
             while True:
                 try:
-                    chunk = await client_response.content.read(self._chunk_size)
+                    chunk = await client_response.content.read(
+                        self._chunk_size)
                 except asyncio.TimeoutError:
                     warning('Timeout reading from %s', url)
                     raise
@@ -258,8 +259,7 @@ if __name__ == '__main__':
         '--no-external-workers', action='store_true', default=False,
         help='Disable support for external workers.')
     parser.add_argument(
-        '--external-url', type=str, default=None, 
-        help='External URL')
+        '--external-url', type=str, default=None, help='External URL')
 
     args = parser.parse_args()
 
@@ -341,7 +341,8 @@ if __name__ == '__main__':
         worker = request.query.get('worker', None)
         return {
             'count': limit,
-            'history': state.iter_runs(request.app.database, worker=worker, limit=limit)}
+            'history': state.iter_runs(
+                request.app.database, worker=worker, limit=limit)}
 
     @html_template(
         'credentials.html', headers={'Cache-Control': 'max-age=10'})
@@ -591,7 +592,8 @@ if __name__ == '__main__':
         return {'regressions': regressions}
 
     @html_template(
-        'broken-merge-proposals.html', headers={'Cache-Control': 'max-age=600'})
+        'broken-merge-proposals.html',
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_broken_mps(request):
         async with request.app.database.acquire() as conn:
             broken_mps = await conn.fetch("""\
@@ -672,7 +674,8 @@ order by url, last_run.finish_time desc
                 raise web.HTTPNotFound(
                     'No artifact %s for run %s' % (filename, run_id))
             with artifact as f:
-                return web.Response(body=f.read(), headers={'Cache-Control': 'max-age=3600'})
+                return web.Response(
+                    body=f.read(), headers={'Cache-Control': 'max-age=3600'})
 
     @html_template(
         'ready-list.html',
@@ -686,7 +689,7 @@ order by url, last_run.finish_time desc
 
     @html_template(
         'lintian-fixes-package.html',
-         headers={'Cache-Control': 'max-age=600'})
+        headers={'Cache-Control': 'max-age=600'})
     async def handle_lintian_fixes_pkg(request):
         from .lintian_fixes import generate_pkg_file
         # TODO(jelmer): Handle Accept: text/diff
@@ -919,7 +922,7 @@ order by url, last_run.finish_time desc
                 return web.Response(
                     status=500,
                     text='Expected bearer token, got %s' % resp['token_type'])
-            refresh_token = resp['refresh_token']
+            refresh_token = resp['refresh_token']  # noqa: F841
             access_token = resp['access_token']
 
         try:
@@ -1052,7 +1055,7 @@ order by url, last_run.finish_time desc
         name='cme-candidates')
     SUITE_REGEX = '|'.join(
             ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
-             'multiarch-fixes', 'orphan', 'cme'])
+             'multiarch-fixes', 'orphan', 'cme', 'uncommitted'])
     app.router.add_get(
         '/{suite:%s}/merge-proposals' % SUITE_REGEX,
         handle_merge_proposals,
@@ -1195,7 +1198,8 @@ order by url, last_run.finish_time desc
         '/cupboard/pkg/{pkg}/{run_id}/{filename:.*}', handle_result_file,
         name='cupboard-result-file')
     app.router.add_get(
-        '/{suite:' + SUITE_REGEX + '}/pkg/{pkg}/{run_id}/{filename:.*}', handle_result_file,
+        '/{suite:' + SUITE_REGEX + '}/pkg/{pkg}/{run_id}/{filename:.*}',
+        handle_result_file,
         name='result-file')
     app.router.add_get(
         '/cupboard/vcs-regressions/',
@@ -1214,7 +1218,8 @@ order by url, last_run.finish_time desc
             '/_static/%s' % entry.name,
             functools.partial(handle_static_file, entry.path))
     app.router.add_static(
-        '/_static/images/datatables', '/usr/share/javascript/jquery-datatables/images')
+        '/_static/images/datatables',
+        '/usr/share/javascript/jquery-datatables/images')
     for (name, kind, basepath) in [
             ('chart', 'js', '/usr/share/javascript/chart.js/Chart'),
             ('chart', 'css', '/usr/share/javascript/chart.js/Chart'),
