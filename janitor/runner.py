@@ -318,9 +318,7 @@ async def invoke_subprocess_worker(
         log_path: Optional[str] = None,
         resume_branch_result: Optional[Any] = None,
         last_build_version: Optional[Version] = None,
-        subpath: Optional[str] = None,
-        build_distribution: Optional[str] = None,
-        build_suffix: Optional[str] = None) -> int:
+        subpath: Optional[str] = None) -> int:
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
         if v is not None:
@@ -355,10 +353,6 @@ async def invoke_subprocess_worker(
         args.append('--resume-result-path=%s' % resume_result_path)
     if last_build_version:
         args.append('--last-build-version=%s' % last_build_version)
-    if build_distribution:
-        args.append('--build-distribution=%s' % build_distribution)
-    if build_suffix:
-        args.append('--build-suffix=%s' % build_suffix)
 
     args.extend(command)
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
@@ -634,6 +628,9 @@ def suite_build_env(distro_config, suite_config, apt_location):
             distro_config.archive_mirror_uri,
             distro_config.name))
 
+    env['BUILD_DISTRIBUTION'] = suite_config.build_distribution or ''
+    env['BUILD_SUFFIX'] = suite_config.build_suffix or ''
+
     env.update([(env.key, env.value) for env in suite_config.sbuild_env])
     return env
 
@@ -791,9 +788,7 @@ class ActiveLocalRun(ActiveRun):
                     log_path=log_path,
                     resume_branch_result=resume_branch_result,
                     last_build_version=last_build_version,
-                    subpath=self.queue_item.subpath,
-                    build_distribution=suite_config.build_distribution,
-                    build_suffix=suite_config.build_suffix),
+                    subpath=self.queue_item.subpath),
                 timeout=overall_timeout))
             # set_name is only available on Python 3.8
             if getattr(self._task, 'set_name', None):
@@ -1308,8 +1303,6 @@ async def handle_assign(request):
         'resume': resume,
         'last_build_version': last_build_version,
         'build': {
-            'distribution': suite_config.build_distribution,
-            'suffix': suite_config.build_suffix,
             'environment':
                 suite_build_env(
                     distro_config, suite_config, queue_processor.apt_location),
