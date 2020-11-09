@@ -252,7 +252,8 @@ async def add_to_queue(
 async def dep_available(
         conn: asyncpg.Connection, suite: str, name: str,
         archqual: Optional[str] = None, arch: Optional[str] = None,
-        version: Optional[Version] = None, restrictions=None) -> bool:
+        version: Optional[Tuple[str, Version]] = None,
+        restrictions=None) -> bool:
     available = await state.version_available(conn, name, suite, version)
     if available:
         return True

@@ -1376,7 +1376,8 @@ applied independently.
             code, description = await handle_publish_failure(
                 e, conn, last_run, unchanged_run)
             if code == 'empty-merge-proposal':
-                # The changes from the merge proposal have already made it in somehow.
+                # The changes from the merge proposal have already made it in
+                # somehow.
                 note('%s: Empty merge proposal, changes must have been merged '
                      'some other way. Closing.', mp.url)
                 if not dry_run:
@@ -1393,10 +1394,12 @@ applied independently.
                     try:
                         mp.close()
                     except PermissionDenied as e:
-                        warning('Permission denied closing merge request %s: %s',
-                                mp.url, e)
+                        warning(
+                            'Permission denied closing merge request %s: %s',
+                            mp.url, e)
                         code = 'empty-failed-to-close'
-                        description = 'Permission denied closing merge request: %s' % e
+                        description = (
+                            'Permission denied closing merge request: %s' % e)
                 code = 'success'
                 description = (
                     'Closing merge request for which changes were '

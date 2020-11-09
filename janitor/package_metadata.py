@@ -21,7 +21,7 @@ from __future__ import absolute_import
 
 from debian.changelog import Version
 from google.protobuf import text_format  # type: ignore
-from typing import List, Optional
+from typing import List, Tuple, Optional
 
 from breezy.git.mapping import default_mapping
 
@@ -30,7 +30,7 @@ from silver_platter.debian import (
 )
 from . import state, trace
 from .config import read_config
-from .package_metadata_pb2 import PackageList
+from .package_metadata_pb2 import PackageList, PackageMetadata, Removal
 from debmutate.vcs import (
     split_vcs_url,
     unsplit_vcs_url,
@@ -126,12 +126,13 @@ async def update_package_metadata(
         packages)
 
 
-async def mark_removed_packages(conn, distribution: str, removals):
+async def mark_removed_packages(
+        conn, distribution: str, removals: List[Removal]):
     existing_packages = {
         package.name: package
         for package in await state.iter_packages(conn)}
     trace.note('Updating removals.')
-    filtered_removals = [
+    filtered_removals: List[Tuple[str, Optional[Version]]] = [
         (removal.name, Version(removal.version) if removal.version else None)
         for removal in removals
         if removal.name in existing_packages and
@@ -139,7 +140,8 @@ async def mark_removed_packages(conn, distribution: str, removals):
     await state.update_removals(conn, distribution, filtered_removals)
 
 
-def iter_packages_from_script(stdin):
+def iter_packages_from_script(stdin) -> Tuple[
+        List[PackageMetadata], List[Removal]]:
     package_list = text_format.Parse(stdin.read(), PackageList())
     return package_list.package, package_list.removal
 
@@ -186,7 +188,8 @@ async def main():
     packages, removals = iter_packages_from_script(sys.stdin)
 
     async with db.acquire() as conn:
-        await update_package_metadata(conn, args.distribution, packages, package_overrides)
+        await update_package_metadata(
+                conn, args.distribution, packages, package_overrides)
         if removals:
             await mark_removed_packages(conn, args.distribution, removals)
 
