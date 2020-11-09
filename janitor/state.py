@@ -674,7 +674,8 @@ async def add_to_queue(conn: asyncpg.Connection,
 
 
 async def set_proposal_info(
-        conn: asyncpg.Connection, url: str, status: str, revision: Optional[bytes],
+        conn: asyncpg.Connection, url: str, status: str,
+        revision: Optional[bytes],
         package: Optional[str], merged_by: Optional[str],
         merged_at: Optional[str]) -> None:
     await conn.execute("""
@@ -688,7 +689,10 @@ DO UPDATE SET
   package = EXCLUDED.package,
   merged_by = EXCLUDED.merged_by,
   merged_at = EXCLUDED.merged_at
-""", url, status, (revision.decode('utf-8') if revision is not None else None), package, merged_by, merged_at)
+""", url, status,
+                       (revision.decode('utf-8')
+                        if revision is not None else None), package,
+                       merged_by, merged_at)
 
 
 async def queue_length(conn: asyncpg.Connection, minimum_priority=None):
@@ -1304,7 +1308,9 @@ LIMIT 1
     return None
 
 
-async def get_proposal_info(conn: asyncpg.Connection, url) -> Tuple[Optional[bytes], str, str, str]:
+async def get_proposal_info(
+        conn: asyncpg.Connection, url
+        ) -> Tuple[Optional[bytes], str, str, str]:
     row = await conn.fetchrow("""\
 SELECT
     package.maintainer_email,
@@ -1368,7 +1374,8 @@ async def update_removals(
     if not items:
         return
     query = """\
-UPDATE package SET removed = True WHERE name = $1 AND distribution = $2 AND archive_version <= $3
+UPDATE package SET removed = True
+WHERE name = $1 AND distribution = $2 AND archive_version <= $3
 """
     await conn.executemany(
         query, [(name, distribution, archive_version)
@@ -1377,7 +1384,8 @@ UPDATE package SET removed = True WHERE name = $1 AND distribution = $2 AND arch
 
 async def version_available(
         conn: asyncpg.Connection, package: str, suite: str,
-        version: Optional[Version] = None) -> List[Tuple[str, str, Version]]:
+        version: Optional[Tuple[str, Version]] = None
+        ) -> List[Tuple[str, str, Version]]:
     query = """\
 SELECT
   package,
@@ -1404,7 +1412,7 @@ WHERE name = $1 AND %(version_match2)s
         query = query % {
             'version_match1': "build_version %s $3" % (version[0], ),
             'version_match2': "archive_version %s $3" % (version[0], )}
-        args.append(version[1])
+        args.append(str(version[1]))
     else:
         query = query % {
             'version_match1': 'True',
@@ -1491,7 +1499,8 @@ async def update_publish_policy(
         (' '.join(command) if command else None))
 
 
-async def iter_publish_policy(conn: asyncpg.Connection, package: Optional[str] = None):
+async def iter_publish_policy(
+        conn: asyncpg.Connection, package: Optional[str] = None):
     query = (
         'SELECT package, suite, mode, update_changelog, command '
         'FROM publish_policy')
@@ -1576,7 +1585,7 @@ async def store_site_session(
     await conn.execute("""
 INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
 ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
-        session_id, user)
+                       session_id, user)
 
 
 async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
