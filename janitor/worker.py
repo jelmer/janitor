@@ -24,11 +24,10 @@ import os
 import subprocess
 import sys
 import traceback
-from typing import Callable, Dict, List, Optional, Any, Type, Iterator, Tuple
+from typing import Dict, List, Optional, Any, Type, Iterator, Tuple
 
 from breezy.config import GlobalStack
 from breezy.transport import Transport
-from breezy.workingtree import WorkingTree
 
 from silver_platter.debian import (
     MissingUpstreamTarball,
@@ -43,7 +42,6 @@ from silver_platter.debian.changer import (
     DebianChanger,
     ChangerReporter,
     changer_subcommand as _changer_subcommand,
-    changer_subcommands,
     )
 from silver_platter.debian.upstream import (
     NewUpstreamChanger as ActualNewUpstreamChanger,
