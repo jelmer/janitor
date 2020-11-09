@@ -29,6 +29,7 @@ from aiohttp import ClientTimeout
 from aiohttp.web import middleware
 from ..config import get_suite_config
 import gpg
+import re
 import shutil
 import tempfile
 import time
@@ -211,7 +212,6 @@ async def get_credentials(session, publisher_url):
 if __name__ == '__main__':
     import argparse
     import functools
-    from gpg import Context
     import os
     import re
     from janitor import state
@@ -1031,10 +1031,7 @@ order by url, last_run.finish_time desc
     app.router.add_get(
         '/orphan/candidates', handle_orphan_candidates,
         name='orphan-candidates')
-    SUITE_REGEX = '|'.join(
-            ['lintian-fixes', 'fresh-snapshots', 'fresh-releases',
-             'multiarch-fixes', 'orphan', 'cme', 'uncommitted',
-             'buster-backports', 'scrub-obsolete'])
+    SUITE_REGEX = '|'.join([re.escape(suite.name) for suite in config.suite])
     app.router.add_get(
         '/{suite:%s}/merge-proposals' % SUITE_REGEX,
         handle_merge_proposals,
