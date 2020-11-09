@@ -228,11 +228,11 @@ class Target(object):
 class DebianTarget(Target):
     """Debian target."""
 
-    def __init__(self, build_distribution, build_command, build_suffix,
+    def __init__(self, env, build_command,
                  last_build_version=None):
-        self.build_distribution = build_distribution
+        self.build_distribution = env.get('BUILD_DISTRIBUTION')
         self.build_command = build_command
-        self.build_suffix = build_suffix
+        self.build_suffix = env.get('BUILD_SUFFIX')
         self.last_build_version = last_build_version
 
     def parse_args(self, argv):
@@ -339,8 +339,6 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     resume_branch_url: Optional[str] = None,
                     cached_branch_url: Optional[str] = None,
                     last_build_version: Optional[Version] = None,
-                    build_distribution: Optional[str] = None,
-                    build_suffix: Optional[str] = None,
                     resume_subworker_result: Any = None
                     ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     pkg = env['PACKAGE']
@@ -350,9 +348,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
     metadata['command'] = command
 
     target = DebianTarget(
-        build_distribution=build_distribution,
+        env,
         build_command=build_command,
-        build_suffix=build_suffix,
         last_build_version=last_build_version)
 
     target.parse_args(command)
@@ -509,7 +506,6 @@ def main(argv=None):
         action='store_true')
     parser.add_argument(
         '--build-distribution', type=str, help='Build distribution.')
-    parser.add_argument('--build-suffix', type=str, help='Build suffix.')
 
     parser.add_argument('command', nargs=argparse.REMAINDER)
 
@@ -541,8 +537,6 @@ def main(argv=None):
                 post_check_command=args.post_check,
                 resume_branch_url=args.resume_branch_url,
                 cached_branch_url=args.cached_branch_url,
-                build_distribution=args.build_distribution,
-                build_suffix=args.build_suffix,
                 last_build_version=args.last_build_version,
                 resume_subworker_result=resume_subworker_result
                 ) as (ws, result):

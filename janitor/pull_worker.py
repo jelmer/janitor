@@ -158,8 +158,6 @@ def run_worker(branch_url, subpath, vcs_type, env,
                post_check_command=None,
                resume_branch_url=None,
                cached_branch_url=None,
-               build_distribution=None,
-               build_suffix=None,
                last_build_version=None,
                resume_subworker_result=None,
                result_branch_url=None,
@@ -175,8 +173,6 @@ def run_worker(branch_url, subpath, vcs_type, env,
                post_check_command=post_check_command,
                resume_branch_url=resume_branch_url,
                cached_branch_url=cached_branch_url,
-               build_distribution=build_distribution,
-               build_suffix=build_suffix,
                last_build_version=last_build_version,
                resume_subworker_result=resume_subworker_result,
                possible_transports=possible_transports) as (ws, result):
@@ -371,8 +367,6 @@ async def main(argv=None):
             resume_branch_url = None
         last_build_version = assignment.get('last_build_version')
         cached_branch_url = assignment['branch'].get('cached_url')
-        build_distribution = assignment['build']['distribution']
-        build_suffix = assignment['build']['suffix']
         command = assignment['command']
         build_environment = assignment['build'].get('environment', {})
 
@@ -407,8 +401,6 @@ async def main(argv=None):
                     post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
                     cached_branch_url=cached_branch_url,
-                    build_distribution=build_distribution,
-                    build_suffix=build_suffix,
                     last_build_version=last_build_version,
                     resume_subworker_result=resume_result,
                     result_branch_url=result_branch_url,
