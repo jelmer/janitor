@@ -11,7 +11,7 @@ async def gather_package_list(conn, suite):
 
 
 async def write_apt_repo(conn, suite):
-    return  {
+    return {
         'packages': gather_package_list(conn, suite),
         'suite': suite,
         }

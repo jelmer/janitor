@@ -2,8 +2,6 @@
 
 import operator
 
-from janitor.site import env
-
 
 async def generate_result_code_index(
         by_code, never_processed, suite, all_suites):
