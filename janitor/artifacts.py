@@ -23,10 +23,11 @@ import asyncio
 from io import BytesIO
 import os
 import shutil
+import tempfile
 
 from yarl import URL
 
-from .trace import note
+from .trace import note, warning
 
 
 DEFAULT_GCS_TIMEOUT = 60
@@ -192,6 +193,40 @@ async def list_ids(manager):
     async with manager:
         async for id in manager.iter_ids():
             print(id)
+
+
+async def upload_backup_artifacts(backup_artifact_manager, artifact_manager):
+    async with backup_artifact_manager, artifact_manager:
+        async for run_id in backup_artifact_manager.iter_ids():
+            with tempfile.TemporaryDirectory() as td:
+                await backup_artifact_manager.retrieve_artifacts(run_id, td)
+                try:
+                    await artifact_manager.store_artifacts(run_id, td)
+                except Exception as e:
+                    warning('Unable to upload backup artifacts (%r): %s',
+                            run_id, e)
+                else:
+                    await backup_artifact_manager.delete_artifactes(run_id)
+
+
+async def store_artifacts_with_backup(
+        manager, backup_manager, from_dir, run_id, names):
+    try:
+        await manager.store_artifacts(run_id, from_dir, names)
+    except Exception as e:
+        warning('Unable to upload artifacts for %r: %r',
+                run_id, e)
+        if backup_manager:
+            await backup_manager.store_artifacts(run_id, from_dir, names)
+            note('Uploading results to backup artifact '
+                 'location %r.', backup_manager)
+            return True
+        else:
+            warning('No backup artifact manager set. '
+                    'Discarding results.')
+            return False
+    else:
+        return True
 
 
 if __name__ == '__main__':
