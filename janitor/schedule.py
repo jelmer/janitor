@@ -66,6 +66,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     'worker-timeout',
     'result-push-failed',
     'dist-apt-file-fetch-failure',
+    'autopkgtest-apt-file-fetch-failure',
 ]
 
 # In some cases, we want to ignore certain results when guessing

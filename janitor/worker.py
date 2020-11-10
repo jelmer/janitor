@@ -157,7 +157,9 @@ class DummyChanger(DebianChanger):
                 'control files live in root rather than debian/ '
                 '(LarstIQ mode)')
 
-        return ChangerResult(description='Nothing changed', mutator=None)
+        return ChangerResult(
+            description='Nothing changed', mutator=None, branches=[],
+            tags=[])
 
     @classmethod
     def describe_command(cls, command):
@@ -168,9 +170,22 @@ class WorkerResult(object):
 
     def __init__(
             self, description: Optional[str],
-            value: Optional[int]) -> None:
+            value: Optional[int],
+            branches: Optional[List[Tuple[str, str, bytes]]],
+            tags: Optional[Dict[str, bytes]]) -> None:
         self.description = description
         self.value = value
+        self.branches = branches
+        self.tags = tags
+
+    def json(self):
+        return {
+            'value': self.value,
+            'description': self.description,
+            'branches': [
+                (f, n, r.decode('utf-8')) for (f, n, r) in self.branches],
+            'tags': [(f, n, r.decode('utf-8')) for (f, n, r) in self.tags],
+        }
 
 
 class WorkerFailure(Exception):
@@ -345,9 +360,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
     metadata['command'] = command
 
-    target = DebianTarget(
-        env,
-        build_command=build_command)
+    target = DebianTarget(env, build_command=build_command)
 
     target.parse_args(command)
 
@@ -454,7 +467,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         target.build(ws, subpath, output_directory, env)
 
         wr = WorkerResult(
-            changer_result.description, changer_result.value)
+            changer_result.description, changer_result.value,
+            changer_result.branches, changer_result.tags)
         yield ws, wr
 
 
@@ -551,8 +565,7 @@ def main(argv=None):
         raise
     else:
         metadata['code'] = None
-        metadata['value'] = result.value
-        metadata['description'] = result.description
+        metadata.update(result.json())
         note('%s', result.description)
         return 0
     finally:

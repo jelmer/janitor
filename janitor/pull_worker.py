@@ -415,8 +415,7 @@ async def main(argv=None):
                 raise
             else:
                 metadata['code'] = None
-                metadata['value'] = result.value
-                metadata['description'] = result.description
+                metadata.update(result.json())
                 note('%s', result.description)
 
                 return 0
