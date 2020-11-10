@@ -284,12 +284,12 @@ CREATE TABLE debian_build (
 CREATE TABLE result_branch (
  run_id text not null references run (id),
  role text,
- actual_name text not null,
+ remote_name text not null,
  basis_revision text,
  revision text
 );
 
-CREATE UNIQUE INDEX ON result_branch (run_id, actual_name);
+CREATE UNIQUE INDEX ON result_branch (run_id, remote_name);
 
 CREATE TABLE result_tag (
  run_id text not null references run (id),
