@@ -34,8 +34,6 @@ from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
 import uuid
 from yarl import URL
 
-from debian.changelog import Version
-
 from breezy import debug
 from breezy.errors import PermissionDenied
 from breezy.propose import Hoster, HosterLoginRequired
@@ -72,6 +70,8 @@ from .artifacts import (
     get_artifact_manager,
     ArtifactManager,
     LocalArtifactManager,
+    store_artifacts_with_backup,
+    upload_backup_artifacts,
     )
 from .config import read_config, get_suite_config, Config
 from .debian import (
@@ -1344,26 +1344,6 @@ async def handle_assign(request):
     return web.json_response(assignment, status=201)
 
 
-async def store_artifacts_with_backup(
-        manager, backup_manager, from_dir, run_id, names):
-    try:
-        await manager.store_artifacts(run_id, from_dir, names)
-    except Exception as e:
-        warning('Unable to upload artifacts for %r: %r',
-                run_id, e)
-        if backup_manager:
-            await backup_manager.store_artifacts(run_id, from_dir, names)
-            note('Uploading results to backup artifact '
-                 'location %r.', backup_manager)
-            return True
-        else:
-            warning('No backup artifact manager set. '
-                    'Discarding results.')
-            return False
-    else:
-        return True
-
-
 async def handle_finish(request):
     queue_processor = request.app.queue_processor
     run_id = request.match_info['run_id']
@@ -1459,20 +1439,6 @@ async def run_web_server(listen_addr, port, queue_processor):
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
     await site.start()
-
-
-async def upload_backup_artifacts(backup_artifact_manager, artifact_manager):
-    for run_id in await backup_artifact_manager.iter_ids():
-        with tempfile.TemporaryDirectory() as td:
-            await backup_artifact_manager.retrieve_artifacts(run_id, td)
-            try:
-                await artifact_manager.store_artifacts(run_id, td)
-            except Exception as e:
-                warning('Unable to upload backup artifacts (%r): %s',
-                        run_id, e)
-            else:
-                await backup_artifact_manager.delete_artifactes(run_id)
-                note('Uploaded backup artifacts for %s', run_id)
 
 
 def main(argv=None):
