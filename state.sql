@@ -278,5 +278,19 @@ CREATE TABLE debian_build (
  build_version debversion not null,
  -- Distribution the package was built for (e.g. "lintian-fixes")
  build_distribution text not null,
- source text not null,
+ source text not null
+);
+
+CREATE TABLE result_branch (
+ run_id text not null references run (id),
+ branch_function text,
+ actual_name text not null,
+ basis_revision text,
+ revision text
+);
+
+CREATE TABLE result_tag (
+ run_id text not null references run (id),
+ actual_name text,
+ revision text
 );

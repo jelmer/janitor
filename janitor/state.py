@@ -1591,3 +1591,21 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
 async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
     return await conn.fetchrow(
         "SELECT userinfo FROM site_session WHERE id = $1", session_id)
+
+
+async def store_result_branches(
+        conn: asyncpg.Connection, run_id: str,
+        branches: List[Tuple[str, str, bytes]]):
+    await conn.executemany("""\
+INSERT INTO result_branch (run_id, branch_function, actual_name, revision)
+VALUES ($1, $2, $3, $4)""", [(run_id, fn, n, r.decode('utf-8'))
+                             for (fn, n, r) in branches])
+
+
+async def store_result_tags(
+        conn: asyncpg.Connection, run_id: str,
+        branches: List[Tuple[str, bytes]]):
+    await conn.executemany("""\
+INSERT INTO result_tag (run_id, actual_name, revision)
+VALUES ($1, $2, $3)""", [(run_id, n, r.decode('utf-8'))
+                         for (n, r) in branches])
