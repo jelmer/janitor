@@ -67,6 +67,9 @@ class LocalArtifactManager(ArtifactManager):
     def __init__(self, path):
         self.path = os.path.abspath(path)
 
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.path)
+
     async def store_artifacts(self, run_id, local_path, names=None):
         run_dir = os.path.join(self.path, run_id)
         try:
@@ -83,6 +86,9 @@ class LocalArtifactManager(ArtifactManager):
     async def iter_ids(self):
         for entry in os.scandir(self.path):
             yield entry.name
+
+    async def delete_artifactes(self, run_id):
+        shutil.rmtree(os.path.join(self.path, run_id))
 
     async def get_artifact(self, run_id, filename, timeout=None):
         return open(os.path.join(self.path, run_id, filename), 'rb')
