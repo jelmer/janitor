@@ -222,7 +222,7 @@ class JanitorResult(object):
             'code': self.code,
             'target': self.target_result.kind,
             'target-details': self.target_result.json(),
-            'legacy_branch_name': self.branch_name,
+            'legacy_branch_name': self.legacy_branch_name,
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
             'value': self.value,
