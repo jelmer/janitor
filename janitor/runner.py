@@ -226,8 +226,12 @@ class JanitorResult(object):
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
             'value': self.value,
-            'branches': self.branches,
-            'tags': self.tags,
+            'branches': ([
+                (fn, n, r.decode('utf-8')) for (fn, n, r) in self.branches]
+                if self.branches is not None else None),
+            'tags': ([
+                (n, r.decode('utf-8')) for (n, r) in self.tags]
+                if self.tags is not None else None),
             'revision':
                 self.revision.decode('utf-8')
                 if self.revision else None,
@@ -285,6 +289,12 @@ class WorkerResult(object):
         revision = worker_result.get('revision')
         if revision is not None:
             revision = revision.encode('utf-8')
+        branches = worker_result.get('branches')
+        tags = worker_result.get('tags')
+        if branches:
+            branches = [(fn, n, r.encode('utf-8')) for (fn, n, r) in branches]
+        if tags:
+            tags = [(n, r.encode('utf-8')) for (fn, n, r) in tags]
         return cls(
                 worker_result.get('code'), worker_result.get('description'),
                 worker_result.get('context'), worker_result.get('subworker'),
@@ -293,8 +303,7 @@ class WorkerResult(object):
                 worker_result.get('changes_filename'),
                 worker_result.get('build_distribution'),
                 worker_result.get('build_version'),
-                worker_result.get('branches'),
-                worker_result.get('tags'))
+                branches, tags)
 
 
 async def run_subprocess(args, env, log_path=None):
