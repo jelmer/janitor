@@ -1461,6 +1461,20 @@ async def run_web_server(listen_addr, port, queue_processor):
     await site.start()
 
 
+async def upload_backup_artifacts(backup_artifact_manager, artifact_manager):
+    for run_id in await backup_artifact_manager.iter_ids():
+        with tempfile.TemporaryDirectory() as td:
+            await backup_artifact_manager.retrieve_artifacts(run_id, td)
+            try:
+                await artifact_manager.store_artifacts(run_id, td)
+            except Exception as e:
+                warning('Unable to upload backup artifacts (%r): %s',
+                        run_id, e)
+            else:
+                await backup_artifact_manager.delete_artifactes(run_id)
+                note('Uploaded backup artifacts for %s', run_id)
+
+
 def main(argv=None):
     import argparse
     parser = argparse.ArgumentParser(prog='janitor.runner')
@@ -1539,6 +1553,7 @@ def main(argv=None):
             backup_artifact_directory)
         backup_logfile_manager = FileSystemLogFileManager(
             backup_logfile_directory)
+        asyncio.run(upload_backup_artifacts(backup_artifact_manager, artifact_manager))
     else:
         backup_artifact_manager = None
         backup_logfile_manager = None
