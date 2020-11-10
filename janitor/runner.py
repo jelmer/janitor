@@ -183,13 +183,13 @@ class JanitorResult(object):
 
     def __init__(self, pkg, log_id, branch_url, description=None,
                  code=None, worker_result=None,
-                 logfilenames=None, branch_name=None):
+                 logfilenames=None, legacy_branch_name=None):
         self.package = pkg
         self.log_id = log_id
         self.description = description
         self.branch_url = branch_url
         self.code = code
-        self.branch_name = branch_name
+        self.legacy_branch_name = legacy_branch_name
         self.logfilenames = logfilenames
         if worker_result:
             self.context = worker_result.context
@@ -202,6 +202,8 @@ class JanitorResult(object):
             self.revision = worker_result.revision
             self.value = worker_result.value
             self.target_result = DebianResult.from_worker_result(worker_result)
+            self.branches = worker_result.branches
+            self.tags = worker_result.tags
         else:
             self.context = None
             self.main_branch_revision = None
@@ -209,6 +211,8 @@ class JanitorResult(object):
             self.subworker_result = None
             self.value = None
             self.target_result = DebianResult()
+            self.branches = None
+            self.tags = None
 
     def json(self):
         return {
@@ -218,10 +222,12 @@ class JanitorResult(object):
             'code': self.code,
             'target': self.target_result.kind,
             'target-details': self.target_result.json(),
-            'branch_name': self.branch_name,
+            'legacy_branch_name': self.branch_name,
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
             'value': self.value,
+            'branches': self.branches,
+            'tags': self.tags,
             'revision':
                 self.revision.decode('utf-8')
                 if self.revision else None,
@@ -250,7 +256,7 @@ class WorkerResult(object):
     def __init__(self, code, description, context=None, subworker=None,
                  main_branch_revision=None, revision=None, value=None,
                  changes_filename=None, build_distribution=None,
-                 build_version=None):
+                 build_version=None, branches=None, tags=None):
         self.code = code
         self.description = description
         self.context = context
@@ -261,6 +267,8 @@ class WorkerResult(object):
         self.changes_filename = changes_filename
         self.build_distribution = build_distribution
         self.build_version = build_version
+        self.branches = branches
+        self.tags = tags
 
     @classmethod
     def from_file(cls, path):
@@ -284,7 +292,9 @@ class WorkerResult(object):
                 revision, worker_result.get('value'),
                 worker_result.get('changes_filename'),
                 worker_result.get('build_distribution'),
-                worker_result.get('build_version'))
+                worker_result.get('build_version'),
+                worker_result.get('branches'),
+                worker_result.get('tags'))
 
 
 async def run_subprocess(args, env, log_path=None):
@@ -842,7 +852,7 @@ class ActiveLocalRun(ActiveRun):
                 self.queue_item.package, log_id=self.log_id,
                 branch_url=full_branch_url(main_branch),
                 worker_result=worker_result,
-                logfilenames=logfilenames, branch_name=(
+                logfilenames=logfilenames, legacy_branch_name=(
                     resume_branch_name
                     if worker_result.code == 'nothing-to-do' else None))
 
@@ -878,7 +888,7 @@ class ActiveLocalRun(ActiveRun):
             self.queue_item.package, suite_config.branch_name,
             additional_colocated_branches=(
                 pick_additional_colocated_branches(main_branch)))
-        result.branch_name = suite_config.branch_name
+        result.legacy_branch_name = suite_config.branch_name
 
         if result.target_result and artifact_manager:
             artifact_names = result.target_result.artifact_filenames()
@@ -1035,10 +1045,17 @@ class QueueProcessor(object):
                     result.context, result.main_branch_revision, result.code,
                     build_version=result.target_result.build_version,
                     build_distribution=result.target_result.build_distribution,
-                    branch_name=result.branch_name, revision=result.revision,
+                    branch_name=result.legacy_branch_name,
+                    revision=result.revision,
                     subworker_result=result.subworker_result, suite=item.suite,
                     logfilenames=result.logfilenames, value=result.value,
                     worker_name=active_run.worker_name)
+                if result.branches:
+                    await state.store_result_branches(
+                        conn, result.log_id, result.branches)
+                if result.tags:
+                    await state.store_result_tags(
+                        conn, result.log_id, result.tags)
                 if result.target_result.build_version:
                     await state.store_debian_build(
                         conn, result.log_id, item.package,
@@ -1384,7 +1401,7 @@ async def handle_finish(request):
                 active_run.queue_item.package, log_id=run_id,
                 branch_url=active_run.main_branch_url,
                 worker_result=worker_result,
-                logfilenames=logfilenames, branch_name=(
+                logfilenames=logfilenames, legacy_branch_name=(
                     active_run.resume_branch_name
                     if worker_result.code == 'nothing-to-do' else None))
         else:
