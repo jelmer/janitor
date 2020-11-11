@@ -341,8 +341,8 @@ class DebianTarget(Target):
                 raise WorkerFailure(code, e.description)
             note('Built %s', changes_name)
 
-        def directory_name(self):
-            return self.package
+    def directory_name(self):
+        return self.package
 
 
 class GenericBuildTarget(Target):
