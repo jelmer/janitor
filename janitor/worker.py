@@ -18,7 +18,6 @@
 import argparse
 from contextlib import contextmanager
 from datetime import datetime
-from debian.changelog import Version
 import json
 import os
 import subprocess
@@ -171,7 +170,7 @@ class WorkerResult(object):
     def __init__(
             self, description: Optional[str],
             value: Optional[int],
-            branches: Optional[List[Tuple[str, str, bytes]]],
+            branches: Optional[List[Tuple[str, str, bytes, bytes]]],
             tags: Optional[Dict[str, bytes]]) -> None:
         self.description = description
         self.value = value
@@ -240,6 +239,9 @@ class Target(object):
     def check_sensible(self, local_tree, subpath):
         pass
 
+    def directory_name(self) -> str:
+        raise NotImplementedError(self.directory_name)
+
 
 class DebianTarget(Target):
     """Debian target."""
@@ -249,6 +251,7 @@ class DebianTarget(Target):
         self.build_command = build_command
         self.build_suffix = env.get('BUILD_SUFFIX')
         self.last_build_version = env.get('LAST_BUILD_VERSION')
+        self.package = env['PACKAGE']
 
     def parse_args(self, argv):
         changer_cls: Type[DebianChanger]
@@ -338,6 +341,9 @@ class DebianTarget(Target):
                 raise WorkerFailure(code, e.description)
             note('Built %s', changes_name)
 
+        def directory_name(self):
+            return self.package
+
 
 class GenericBuildTarget(Target):
     """Generic build target."""
@@ -355,8 +361,6 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     cached_branch_url: Optional[str] = None,
                     resume_subworker_result: Any = None
                     ) -> Iterator[Tuple[Workspace, WorkerResult]]:
-    pkg = env['PACKAGE']
-
     committer = env.get('COMMITTER')
 
     metadata['command'] = command
@@ -406,7 +410,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
     with Workspace(
             main_branch, resume_branch=resume_branch,
             cached_branch=cached_branch,
-            path=os.path.join(output_directory, pkg),
+            path=os.path.join(output_directory, target.directory_name()),
             additional_colocated_branches=(
                 target.additional_colocated_branches(main_branch))) as ws:
         if ws.local_tree.has_changes():
@@ -440,8 +444,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             metadata['subworker'], resume_subworker_result, provide_context)
         try:
             changer_result = target.make_changes(
-                ws.local_tree, subpath, reporter,
-                committer=committer)
+                ws.local_tree, subpath, reporter, committer=committer)
         except WorkerFailure as e:
             if (e.code == 'nothing-to-do' and
                     resume_subworker_result is not None):
@@ -467,9 +470,17 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
         target.build(ws, subpath, output_directory, env)
 
+        branches: Optional[List[Tuple[str, str, bytes, bytes]]]
+        if changer_result.branches is not None:
+            branches = [
+                (f, n or main_branch.name, br, r)
+                for (f, n, br, r) in changer_result.branches]
+        else:
+            branches = None
+
         wr = WorkerResult(
             changer_result.description, changer_result.value,
-            changer_result.branches, changer_result.tags)
+            branches, changer_result.tags)
         yield ws, wr
 
 
