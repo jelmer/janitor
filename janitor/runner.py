@@ -227,7 +227,8 @@ class JanitorResult(object):
             'subworker': self.subworker_result,
             'value': self.value,
             'branches': ([
-                (fn, n, r.decode('utf-8')) for (fn, n, r) in self.branches]
+                (fn, n, br.decode('utf-8'), r.decode('utf-8'))
+                for (fn, n, br, r) in self.branches]
                 if self.branches is not None else None),
             'tags': ([
                 (n, r.decode('utf-8')) for (n, r) in self.tags]
@@ -292,7 +293,9 @@ class WorkerResult(object):
         branches = worker_result.get('branches')
         tags = worker_result.get('tags')
         if branches:
-            branches = [(fn, n, r.encode('utf-8')) for (fn, n, r) in branches]
+            branches = [
+                (fn, n, br.encode('utf-8'), r.encode('utf-8'))
+                for (fn, n, br, r) in branches]
         if tags:
             tags = [(n, r.encode('utf-8')) for (fn, n, r) in tags]
         return cls(

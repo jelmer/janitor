@@ -1595,11 +1595,12 @@ async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
 
 async def store_result_branches(
         conn: asyncpg.Connection, run_id: str,
-        branches: List[Tuple[str, str, bytes]]):
+        branches: List[Tuple[str, str, bytes, bytes]]):
     await conn.executemany("""\
-INSERT INTO result_branch (run_id, role, remote_name, revision)
-VALUES ($1, $2, $3, $4)""", [(run_id, fn, n, r.decode('utf-8'))
-                             for (fn, n, r) in branches])
+INSERT INTO result_branch (run_id, role, remote_name, base_revision, revision)
+VALUES ($1, $2, $3, $4)""", [(run_id, fn, n, br.decode('utf-8'),
+                              r.decode('utf-8'))
+                             for (fn, n, br, r) in branches])
 
 
 async def store_result_tags(

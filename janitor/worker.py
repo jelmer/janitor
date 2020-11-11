@@ -183,7 +183,8 @@ class WorkerResult(object):
             'value': self.value,
             'description': self.description,
             'branches': [
-                (f, n, r.decode('utf-8')) for (f, n, r) in self.branches],
+                (f, n, br.decode('utf-8'),
+                 r.decode('utf-8')) for (f, n, br, r) in self.branches],
             'tags': [(f, n, r.decode('utf-8')) for (f, n, r) in self.tags],
         }
 
