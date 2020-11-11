@@ -1598,7 +1598,7 @@ async def store_result_branches(
         branches: List[Tuple[str, str, bytes, bytes]]):
     await conn.executemany("""\
 INSERT INTO result_branch (run_id, role, remote_name, base_revision, revision)
-VALUES ($1, $2, $3, $4)""", [(run_id, fn, n, br.decode('utf-8'),
+VALUES ($1, $2, $3, $4, $5)""", [(run_id, fn, n, br.decode('utf-8'),
                               r.decode('utf-8'))
                              for (fn, n, br, r) in branches])
 
