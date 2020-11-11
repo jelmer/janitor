@@ -71,7 +71,7 @@ class LocalArtifactManager(ArtifactManager):
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.path)
 
-    async def store_artifacts(self, run_id, local_path, names=None):
+    async def store_artifacts(self, run_id, local_path, names=None, timeout=None):
         run_dir = os.path.join(self.path, run_id)
         try:
             os.mkdir(run_dir)
@@ -127,7 +127,9 @@ class GCSArtifactManager(ArtifactManager):
         return False
 
     async def store_artifacts(
-            self, run_id, local_path, names=None, timeout=DEFAULT_GCS_TIMEOUT):
+            self, run_id, local_path, names=None, timeout=None):
+        if timeout is None:
+            timeout = DEFAULT_GCS_TIMEOUT
         if names is None:
             names = os.listdir(local_path)
         if not names:
@@ -157,8 +159,9 @@ class GCSArtifactManager(ArtifactManager):
             ids.add(log_id)
 
     async def retrieve_artifacts(
-            self, run_id, local_path, filter_fn=None,
-            timeout=DEFAULT_GCS_TIMEOUT):
+            self, run_id, local_path, filter_fn=None, timeout=None):
+        if timeout is None:
+            timeout = DEFAULT_GCS_TIMEOUT
         names = await self.bucket.list_blobs(prefix=run_id+'/')
         if not names:
             raise ArtifactsMissing(run_id)
@@ -195,13 +198,13 @@ async def list_ids(manager):
             print(id)
 
 
-async def upload_backup_artifacts(backup_artifact_manager, artifact_manager):
+async def upload_backup_artifacts(backup_artifact_manager, artifact_manager, timeout=None):
     async with backup_artifact_manager, artifact_manager:
         async for run_id in backup_artifact_manager.iter_ids():
             with tempfile.TemporaryDirectory() as td:
-                await backup_artifact_manager.retrieve_artifacts(run_id, td)
+                await backup_artifact_manager.retrieve_artifacts(run_id, td, timeout=timeout)
                 try:
-                    await artifact_manager.store_artifacts(run_id, td)
+                    await artifact_manager.store_artifacts(run_id, td, timeout=timeout)
                 except Exception as e:
                     warning('Unable to upload backup artifacts (%r): %s',
                             run_id, e)

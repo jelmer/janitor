@@ -1510,6 +1510,8 @@ def main(argv=None):
         vcs_manager = public_vcs_manager
     logfile_manager = get_log_manager(config.logs_location)
     artifact_manager = get_artifact_manager(config.artifact_location)
+
+    loop = asyncio.get_event_loop()
     if args.backup_directory:
         backup_logfile_directory = os.path.join(args.backup_directory, 'logs')
         backup_artifact_directory = os.path.join(
@@ -1522,7 +1524,8 @@ def main(argv=None):
             backup_artifact_directory)
         backup_logfile_manager = FileSystemLogFileManager(
             backup_logfile_directory)
-        asyncio.run(upload_backup_artifacts(backup_artifact_manager, artifact_manager))
+        loop.run_until_complete(
+            upload_backup_artifacts(backup_artifact_manager, artifact_manager, timeout=60 * 15))
     else:
         backup_artifact_manager = None
         backup_logfile_manager = None
@@ -1545,7 +1548,6 @@ def main(argv=None):
         apt_location=config.apt_location,
         backup_artifact_manager=backup_artifact_manager,
         backup_logfile_manager=backup_logfile_manager)
-    loop = asyncio.get_event_loop()
 
     async def run():
         async with artifact_manager:
