@@ -285,11 +285,12 @@ CREATE TABLE result_branch (
  run_id text not null references run (id),
  role text,
  remote_name text not null,
- basis_revision text,
+ base_revision text,
  revision text
 );
 
 CREATE UNIQUE INDEX ON result_branch (run_id, remote_name);
+CREATE INDEX ON result_branch (revision);
 
 CREATE TABLE result_tag (
  run_id text not null references run (id),
@@ -298,3 +299,4 @@ CREATE TABLE result_tag (
 );
 
 CREATE UNIQUE INDEX ON result_tag (run_id, actual_name);
+CREATE INDEX ON result_tag (revision);
