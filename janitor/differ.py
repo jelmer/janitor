@@ -446,7 +446,12 @@ async def run_web_server(app, listen_addr, port):
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
-    await site.start()
+    try:
+        await site.start()
+        while True:
+            await asyncio.sleep(3600)
+    finally:
+        await runner.cleanup()
 
 
 async def listen_to_runner(runner_url, app):
