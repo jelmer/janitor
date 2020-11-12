@@ -34,6 +34,7 @@ from breezy.errors import (
     IncompatibleRepositories,
     InvalidHttpResponse,
     )
+from breezy.repository import InterRepository
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
@@ -263,12 +264,10 @@ def import_branches_git(
         refs = {}
         for (fn, n, br, r) in branches:
             tagname = ('refs/tags/%s/%s' % (log_id, fn)).encode('utf-8')
-            refs[tagname] = repo.lookup_bzr_revision_id(r)
-            refs[b'refs/heads/suites/%s'] = b'ref: %s' % tagname
+            refs[tagname] = (None, r)
         return refs
-    repo.controldir.send_pack(
-        get_changed_refs, local_branch.repository._git.generate_pack_data,
-        progress=sys.stderr.write)
+    inter = InterRepository.get(local_branch.repository, repo)
+    inter.fetch_refs(get_changed_refs, lossy=False)
 
 
 def import_branches_bzr(
