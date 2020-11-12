@@ -176,3 +176,7 @@ $("#{{ propose_id }}").click(function() {
 {% endif %}
 ({% if '\n' in description %}<pre>{{ description }}</pre>{% else %}{{ description }}{% endif %})
 {% endmacro %}
+
+{% macro describe_publish_policy(publish_policy) %}
+{{ publish_policy }}
+{% endmacro %}
