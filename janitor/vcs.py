@@ -232,9 +232,10 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
         raise AssertionError('unsupported vcs %s' % vcs)
 
 
-def import_branches(target_vcs_manager, main_branch, local_branch, pkg, name,
-                    additional_colocated_branches=None,
-                    possible_transports=None):
+def legacy_import_branches(
+        target_vcs_manager, main_branch, local_branch, pkg, name,
+        additional_colocated_branches=None,
+        possible_transports=None):
     """Publish resulting changes in VCS form.
 
     This creates a repository with the following branches:
