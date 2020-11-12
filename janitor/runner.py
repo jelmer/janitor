@@ -903,7 +903,8 @@ class ActiveLocalRun(ActiveRun):
 
         legacy_import_branches(
             vcs_manager,
-            main_branch, local_branch,
+            (main_branch, main_branch.last_revision()),
+            (local_branch, local_branch.last_revision()),
             self.queue_item.package, suite_config.branch_name,
             additional_colocated_branches=(
                 pick_additional_colocated_branches(main_branch)))

@@ -172,9 +172,10 @@ class MirrorFailure(Exception):
 
 
 def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
-                    branch_map: Iterable[Tuple[str, Branch]],
+                    branch_map: Iterable[Tuple[str, Branch, bytes]],
                     public_master_branch: Optional[Branch] = None) -> None:
-    vcses = set(get_vcs_abbreviation(br.repository) for name, br in branch_map)
+    vcses = set(get_vcs_abbreviation(br.repository)
+                for name, br, revid in branch_map)
     if len(vcses) == 0:
         return
     if len(vcses) > 1:
@@ -187,12 +188,12 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
         except NotBranchError:
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('git-bare')())
-        for (target_branch_name, from_branch) in branch_map:
+        for (target_branch_name, from_branch, revid) in branch_map:
             # TODO(jelmer): Set depth
             try:
                 vcs_result_controldir.push_branch(
                     from_branch, name=target_branch_name,
-                    overwrite=True)
+                    overwrite=True, revision_id=revid)
             except NoSuchRevision as e:
                 raise MirrorFailure(target_branch_name, e)
     elif vcs == 'bzr':
@@ -206,7 +207,7 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
             vcs_result_controldir.open_repository()
         except NoRepositoryPresent:
             vcs_result_controldir.create_repository(shared=True)
-        for (target_branch_name, from_branch) in branch_map:
+        for (target_branch_name, from_branch, revid) in branch_map:
             target_branch_path = vcs_manager.get_branch_url(
                 pkg, target_branch_name, vcs)
             try:
@@ -221,7 +222,9 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
                 except IncompatibleRepositories:
                     pass
             try:
-                from_branch.push(target_branch, overwrite=True)
+                from_branch.push(
+                    target_branch, overwrite=True,
+                    stop_revision=revid)
             except NoSuchRevision as e:
                 raise MirrorFailure(target_branch_name, e)
     else:
@@ -229,7 +232,7 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
 
 
 def legacy_import_branches(
-        target_vcs_manager, main_branch, local_branch, pkg, name,
+        target_vcs_manager, main_entry, local_entry, pkg, name,
         additional_colocated_branches=None,
         possible_transports=None):
     """Publish resulting changes in VCS form.
@@ -241,19 +244,21 @@ def legacy_import_branches(
      * pristine-tar the pristine tar packaging branch (optional)
     """
     branch_map = [
-        (name, local_branch),
-        ('master', main_branch),
+        (name, local_entry[0], local_entry[1]),
+        ('master', main_entry[0], main_entry[1]),
     ]
-    if get_vcs_abbreviation(local_branch.repository) == 'git':
+    if get_vcs_abbreviation(local_entry[0].repository) == 'git':
         for branch_name in (additional_colocated_branches or []):
             try:
-                from_branch = local_branch.controldir.open_branch(
+                from_branch = local_entry[0].controldir.open_branch(
                     name=branch_name)
             except NotBranchError:
                 continue
-            branch_map.append((branch_name, from_branch))
+            branch_map.append(
+                (branch_name, from_branch, from_branch.last_revision()))
     mirror_branches(
-        target_vcs_manager, pkg, branch_map, public_master_branch=main_branch)
+        target_vcs_manager, pkg, branch_map,
+        public_master_branch=main_entry[0])
 
 
 def import_branches_git(
