@@ -34,10 +34,9 @@ from breezy.errors import (
     IncompatibleRepositories,
     InvalidHttpResponse,
     )
-from breezy.repository import InterRepository
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
-from breezy.repository import Repository
+from breezy.repository import InterRepository, Repository
 from breezy.transport import Transport
 from lintian_brush.vcs import (
     determine_browser_url,
@@ -263,7 +262,15 @@ def legacy_import_branches(
 
 def import_branches_git(
         vcs_manager, local_branch, package, log_id, branches, tags):
-    repo = vcs_manager.get_repository(package, 'git')
+    repo_url = vcs_manager.get_repository_url(package, 'git')
+
+    try:
+        vcs_result_controldir = ControlDir.open(repo_url)
+    except NotBranchError:
+        vcs_result_controldir = ControlDir.create(
+            repo_url, format=format_registry.get('git-bare')())
+
+    repo = vcs_result_controldir.open_repository()
 
     def get_changed_refs(refs):
         refs = {}
