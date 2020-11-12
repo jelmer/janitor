@@ -21,8 +21,18 @@ from aiohttp.client_exceptions import ClientResponseError, ClientConnectorError
 import asyncio
 import json
 from typing import Optional, Set, AsyncIterator, Any
+from prometheus_client import Counter, Gauge
 
 from janitor.trace import note, warning
+
+
+subscription_count = Counter(
+    'subscriptions', 'Subscriptions per topic',
+    labelnames=('topic', ))
+
+subscription_active = Gauge(
+    'subscription_active', 'Whether topic is reachable',
+    labelnames=('topic', ))
 
 
 class Subscription(object):
@@ -36,9 +46,11 @@ class Subscription(object):
 
     def __enter__(self):
         self.topic.subscriptions.add(self.queue)
+        subscription_count.labels(self.topic).inc()
         return self.queue
 
     def __exit__(self, type, value, traceback):
+        subscription_count.labels(self.topic).dec()
         self.topic.subscriptions.remove(self.queue)
 
 
@@ -76,12 +88,14 @@ async def pubsub_reader(
         session: aiohttp.ClientSession,
         url: str,
         reconnect_interval: Optional[int] = 10) -> AsyncIterator[Any]:
+    subscription_active.labels(url=url).set(0)
     while True:
         try:
             ws = await session.ws_connect(url)
         except (ClientResponseError, ClientConnectorError) as e:
             warning('Unable to connect: %s' % e)
         else:
+            subscription_active.labels(url=url).set(1)
             note('Subscribed to %s', url)
             while True:
                 msg = await ws.receive()
@@ -95,6 +109,7 @@ async def pubsub_reader(
                     break
                 else:
                     warning('Ignoring ws message type %r', msg.type)
+        subscription_active.labels(url=url).set(0)
         if reconnect_interval is None:
             return
         note(
