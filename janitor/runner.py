@@ -1342,6 +1342,7 @@ async def handle_assign(request):
         'result_branch': {
             'url': result_branch_url,
         },
+        'vcs_manager': queue_processor.public_vcs_manager.base_url,
     }
 
     active_run.start_watchdog(queue_processor)
