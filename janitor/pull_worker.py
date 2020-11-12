@@ -186,8 +186,8 @@ def run_worker(branch_url, run_id, subpath, vcs_type, env,
             try:
                 legacy_import_branches(
                     vcs_manager,
-                    ws.main_branch,
-                    ws.local_tree.branch,
+                    (ws.local_tree.branch, ws.main_branch.last_revision()),
+                    (ws.local_tree.branch, ws.local_tree.last_revision()),
                     env['PACKAGE'], legacy_branch_name,
                     ws.additional_colocated_branches,
                     possible_transports=possible_transports)
