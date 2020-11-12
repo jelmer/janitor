@@ -97,6 +97,7 @@ from .vcs import (
     RemoteVcsManager,
     UnsupportedVcs,
     VcsManager,
+    import_branches,
     )
 
 apt_package_count = Gauge(
@@ -896,7 +897,8 @@ class ActiveLocalRun(ActiveRun):
 
         enable_tag_pushing(local_branch)
 
-        vcs_manager.import_branches(
+        import_branches(
+            vcs_manager,
             main_branch, local_branch,
             self.queue_item.package, suite_config.branch_name,
             additional_colocated_branches=(
