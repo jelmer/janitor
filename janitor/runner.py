@@ -615,7 +615,7 @@ async def check_resume_result(conn, suite, resume_branch):
         return (None, None, None)
 
 
-def suite_build_env(distro_config, suite_config, apt_location):
+def suite_build_env(distro_config, suite_config, apt_location, last_build_version):
     if apt_location.startswith('gs://'):
         bucket_name = URL(apt_location).host
         apt_location = 'https://storage.googleapis.com/%s/' % bucket_name
@@ -649,6 +649,9 @@ def suite_build_env(distro_config, suite_config, apt_location):
 
     env['BUILD_DISTRIBUTION'] = suite_config.build_distribution or ''
     env['BUILD_SUFFIX'] = suite_config.build_suffix or ''
+
+    if last_build_version:
+        env['LAST_BUILD_VERSION'] = str(last_build_version)
 
     env.update([(env.key, env.value) for env in suite_config.sbuild_env])
     return env
@@ -726,8 +729,6 @@ class ActiveLocalRun(ActiveRun):
         # This is simple for now, since we only support one distribution..
         distro_config = config.distribution
 
-        env.update(suite_build_env(distro_config, suite_config, apt_location))
-
         if not use_cached_only:
             async with db.acquire() as conn:
                 try:
@@ -792,8 +793,8 @@ class ActiveLocalRun(ActiveRun):
             last_build_version = await state.get_last_build_version(
                 conn, self.queue_item.package, self.queue_item.suite)
 
-            if last_build_version:
-                env['LAST_BUILD_VERSION'] = str(last_build_version)
+        env.update(suite_build_env(
+            distro_config, suite_config, apt_location, last_build_version))
 
         log_path = os.path.join(self.output_directory, 'worker.log')
         try:
@@ -1329,11 +1330,11 @@ async def handle_assign(request):
             'cached_url': cached_branch_url,
         },
         'resume': resume,
-        'last_build_version': last_build_version,
         'build': {
             'environment':
                 suite_build_env(
-                    distro_config, suite_config, queue_processor.apt_location),
+                    distro_config, suite_config, queue_processor.apt_location,
+                    last_build_version),
         },
         'env': env,
         'command': item.command,
