@@ -269,7 +269,7 @@ def import_branches_git(
         refs = {}
         for (fn, n, br, r) in branches:
             tagname = ('refs/tags/%s/%s' % (log_id, fn)).encode('utf-8')
-            refs[tagname] = (None, r)
+            refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return refs
     inter = InterRepository.get(local_branch.repository, repo)
     inter.fetch_refs(get_changed_refs, lossy=False)

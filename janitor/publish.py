@@ -797,10 +797,13 @@ async def handle_set_git_remote(request):
     post = await request.post()
     r = repo._git
     c = r.get_config()
-    section = (b'remote', remote.encode())
-    c.set(section, b'url', post['url'])
+    section = ('remote', remote)
+    c.set(section, 'url', post['url'])
     c.set(section,
-          b'fetch', b'+refs/heads/*:refs/remotes/%s/*' % remote.encode())
+          'fetch', '+refs/heads/*:refs/remotes/%s/*' % remote)
+    b = BytesIO()
+    c.write_to_file(b)
+    r._controltransport.put_bytes( 'config', b.getvalue())
 
     # TODO(jelmer): Run 'git fetch $remote'?
 
