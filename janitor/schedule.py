@@ -337,7 +337,7 @@ async def do_schedule_control(
         requestor=requestor, command=command)
 
 
-class PublishPolicyUnavailable(Exception):
+class PolicyUnavailable(Exception):
 
     def __init__(self, suite: str, package: str):
         self.suite = suite
@@ -352,10 +352,10 @@ async def do_schedule(
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
-        (unused_publish_policy, update_changelog, command) = (
-            await state.get_publish_policy(conn, package, suite))
+        (update_changelog, command) = (
+            await state.get_policy(conn, package, suite))
         if not command or not update_changelog:
-            raise PublishPolicyUnavailable(suite, package)
+            raise PolicyUnavailable(suite, package)
         command = full_command(update_changelog, command)
     estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(

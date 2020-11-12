@@ -1513,6 +1513,20 @@ async def iter_publish_policy(
                shlex.split(row[4]) if row[4] else None))
 
 
+async def get_policy(
+        conn: asyncpg.Connection, package: str, suite: str
+        ) -> Tuple[Optional[str], Optional[List[str]]]:
+    row = await conn.fetchrow(
+        'SELECT update_changelog, command '
+        'FROM publish_policy WHERE package = $1 AND suite = $2', package,
+        suite)
+    if row:
+        return (  # type: ignore
+            row[1],
+            shlex.split(row[2]) if row[2] else None)
+    return None, None
+
+
 async def get_publish_policy(
         conn: asyncpg.Connection, package: str, suite: str
         ) -> Tuple[Optional[str], Optional[str], Optional[List[str]]]:
