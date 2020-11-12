@@ -50,6 +50,7 @@ from breezy.transport import Transport
 from silver_platter.proposal import enable_tag_pushing
 
 from janitor.trace import note
+from janitor.vcs import RemoteVcsManager
 from janitor.worker import (
     WorkerFailure,
     process_package,
@@ -366,6 +367,8 @@ async def main(argv=None):
         cached_branch_url = assignment['branch'].get('cached_url')
         command = assignment['command']
         build_environment = assignment['build'].get('environment', {})
+
+        vcs_manager = RemoteVcsManager(assignment['vcs_manager'])
 
         possible_transports = []
 
