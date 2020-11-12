@@ -206,6 +206,7 @@ class JanitorResult(object):
             self.target_result = DebianResult.from_worker_result(worker_result)
             self.branches = worker_result.branches
             self.tags = worker_result.tags
+            self.remotes = worker_result.remotes
         else:
             self.context = None
             self.main_branch_revision = None
@@ -215,6 +216,7 @@ class JanitorResult(object):
             self.target_result = DebianResult()
             self.branches = None
             self.tags = None
+            self.remotes = {}
 
     def json(self):
         return {
@@ -228,6 +230,7 @@ class JanitorResult(object):
             'logfilenames': self.logfilenames,
             'subworker': self.subworker_result,
             'value': self.value,
+            'remotes': self.remotes,
             'branches': ([
                 (fn, n, br.decode('utf-8'), r.decode('utf-8'))
                 for (fn, n, br, r) in self.branches]
@@ -263,7 +266,8 @@ class WorkerResult(object):
     def __init__(self, code, description, context=None, subworker=None,
                  main_branch_revision=None, revision=None, value=None,
                  changes_filename=None, build_distribution=None,
-                 build_version=None, branches=None, tags=None):
+                 build_version=None, branches=None, tags=None,
+                 remotes=None):
         self.code = code
         self.description = description
         self.context = context
@@ -276,6 +280,7 @@ class WorkerResult(object):
         self.build_version = build_version
         self.branches = branches
         self.tags = tags
+        self.remotes = remotes
 
     @classmethod
     def from_file(cls, path):
@@ -308,7 +313,7 @@ class WorkerResult(object):
                 worker_result.get('changes_filename'),
                 worker_result.get('build_distribution'),
                 worker_result.get('build_version'),
-                branches, tags)
+                branches, tags, worker_result.get('remotes'))
 
 
 async def run_subprocess(args, env, log_path=None):

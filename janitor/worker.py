@@ -213,10 +213,15 @@ def changer_subcommand(n):
 class WorkerReporter(ChangerReporter):
 
     def __init__(
-            self, metadata_subworker, resume_result, provide_context):
+            self, metadata_subworker, resume_result, provide_context,
+            remotes):
         self.metadata_subworker = metadata_subworker
         self.resume_result = resume_result
         self.report_context = provide_context
+        self.remotes = remotes
+
+    def report_remote(self, name, url):
+        self.remotes[name] = {'url': url}
 
     def report_metadata(self, key, value):
         self.metadata_subworker[key] = value
@@ -431,6 +436,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             raise WorkerFailure('pre-check-failed', str(e))
 
         metadata['subworker'] = {}
+        metadata['remotes'] = {}
 
         def provide_context(c):
             metadata['context'] = c
@@ -441,7 +447,11 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             resume_subworker_result = None
 
         reporter = WorkerReporter(
-            metadata['subworker'], resume_subworker_result, provide_context)
+            metadata['subworker'], resume_subworker_result, provide_context,
+            metadata['remotes'])
+
+        reporter.report_remote('origin', main_branch.user_url)
+
         try:
             changer_result = target.make_changes(
                 ws.local_tree, subpath, reporter, committer=committer)
