@@ -187,15 +187,11 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
             vcs_result_controldir = ControlDir.create(
                 path, format=format_registry.get('git-bare')())
         for (target_branch_name, from_branch) in branch_map:
-            try:
-                target_branch = vcs_result_controldir.open_branch(
-                    name=target_branch_name)
-            except NotBranchError:
-                target_branch = vcs_result_controldir.create_branch(
-                    name=target_branch_name)
             # TODO(jelmer): Set depth
             try:
-                from_branch.push(target_branch, overwrite=True)
+                vcs_result_controldir.push_branch(
+                    from_branch, name=target_branch_name,
+                    overwrite=True)
             except NoSuchRevision as e:
                 raise MirrorFailure(target_branch_name, e)
     elif vcs == 'bzr':
