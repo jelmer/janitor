@@ -802,6 +802,8 @@ async def handle_set_git_remote(request):
     c.set(section,
           b'fetch', b'+refs/heads/*:refs/remotes/%s/*' % remote.encode())
 
+    # TODO(jelmer): Run 'git fetch $remote'?
+
     return web.Response()
 
 
@@ -813,6 +815,8 @@ async def handle_set_bzr_remote(request):
     local_branch = request.app.vcs_manager.get_branch(package, remote)
 
     local_branch.set_parent(post['url'])
+
+    # TODO(jelmer): Run 'bzr pull'?
 
     return web.Response()
 
