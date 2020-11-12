@@ -23,16 +23,12 @@ Names for functions:
 Roadmap
 =======
 
-* Export a branch_names dictionary in janitor.worker / janitor.pull_worker
-  + contains mapping from function to revision
+* Update publisher to use new tag names
 
-* Export a set of new tags with values in janitor.worker / janitor.pull_worker
-
-* Push funky named tags (runs/$uuid/$function) to vcs repository
+* Send requests to publisher to mirror origin/upstream repositories
+  To start off with just:
+   * name of remote ("origin", "upstream")
+   * URL of remote
 
 * Push symrefs (refs/$suite/$function => refs/tags/$uuid/$function)
-  + would the worker do this, or do we leave it up to the publisher?
-
-* Push origin and upstream repositories
-
-* Update publisher to use new tag names
+  + needs to be done by publisher

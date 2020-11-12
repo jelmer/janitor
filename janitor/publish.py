@@ -787,6 +787,36 @@ async def handle_klaus(request):
     return await wsgi_handler(request)
 
 
+async def handle_set_git_remote(request):
+    package = request.match_info['package']
+    remote = request.match_info['remote']
+
+    repo = await _git_open_repo(
+        request.app.vcs_manager, request.app.db, package)
+
+    post = await request.post()
+    r = repo._git
+    c = r.get_config()
+    section = (b'remote', remote.encode())
+    c.set(section, b'url', post['url'])
+    c.set(section,
+          b'fetch', b'+refs/heads/*:refs/remotes/%s/*' % remote.encode())
+
+    return web.Response()
+
+
+async def handle_set_bzr_remote(request):
+    package = request.match_info['package']
+    remote = request.match_info['remote']
+    post = await request.post()
+
+    local_branch = request.app.vcs_manager.get_branch(package, remote)
+
+    local_branch.set_parent(post['url'])
+
+    return web.Response()
+
+
 async def dulwich_refs(request):
     package = request.match_info['package']
 
@@ -1006,6 +1036,10 @@ async def run_web_server(listen_addr: str, port: int,
     app.router.add_post('/refresh-status', refresh_proposal_status_request)
     app.router.add_post('/autopublish', autopublish_request)
     app.router.add_get('/credentials', credentials_request)
+    app.router.add_post(
+        '/remotes/git/{package}/{remote}', handle_set_git_remote)
+    app.router.add_post(
+        '/remotes/bzr/{package}/{remote}', handle_set_bzr_remote)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
