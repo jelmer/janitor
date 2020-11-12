@@ -169,7 +169,7 @@ class MirrorFailure(Exception):
         self.reason = reason
 
 
-def mirror_branches(vcs_result_dir: str, pkg: str,
+def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
                     branch_map: Iterable[Tuple[str, Branch]],
                     public_master_branch: Optional[Branch] = None) -> None:
     vcses = set(get_vcs_abbreviation(br.repository) for name, br in branch_map)
@@ -179,7 +179,7 @@ def mirror_branches(vcs_result_dir: str, pkg: str,
         raise AssertionError('more than one VCS: %r' % branch_map)
     vcs = vcses.pop()
     if vcs == 'git':
-        path = os.path.join(vcs_result_dir, 'git', pkg)
+        path = vcs_manager.get_repository_url(pkg, vcs)
         os.makedirs(path, exist_ok=True)
         try:
             vcs_result_controldir = ControlDir.open(path)
@@ -199,7 +199,7 @@ def mirror_branches(vcs_result_dir: str, pkg: str,
             except NoSuchRevision as e:
                 raise MirrorFailure(target_branch_name, e)
     elif vcs == 'bzr':
-        path = os.path.join(vcs_result_dir, 'bzr', pkg)
+        path = vcs_manager.get_repository_url(pkg, vcs)
         os.makedirs(path, exist_ok=True)
         try:
             vcs_result_controldir = ControlDir.open(path)
@@ -211,7 +211,8 @@ def mirror_branches(vcs_result_dir: str, pkg: str,
         except NoRepositoryPresent:
             vcs_result_controldir.create_repository(shared=True)
         for (target_branch_name, from_branch) in branch_map:
-            target_branch_path = os.path.join(path, target_branch_name)
+            target_branch_path = vcs_manager.get_branch_url(
+                pkg, target_branch_name, vcs)
             try:
                 target_branch = Branch.open(target_branch_path)
             except NotBranchError:
@@ -231,17 +232,14 @@ def mirror_branches(vcs_result_dir: str, pkg: str,
         raise AssertionError('unsupported vcs %s' % vcs)
 
 
-def copy_vcs_dir(main_branch: Branch,
-                 local_branch: Branch,
-                 vcs_result_dir: str,
-                 pkg: str,
-                 name: str,
-                 additional_colocated_branches: Optional[List[str]] = None):
+def import_branches(target_vcs_manager, main_branch, local_branch, pkg, name,
+                    additional_colocated_branches=None,
+                    possible_transports=None):
     """Publish resulting changes in VCS form.
 
     This creates a repository with the following branches:
      * master - the original Debian packaging branch
-     * KIND - whatever command was run
+     * name - whatever command was run
      * upstream - the upstream branch (optional)
      * pristine-tar the pristine tar packaging branch (optional)
     """
@@ -258,14 +256,7 @@ def copy_vcs_dir(main_branch: Branch,
                 continue
             branch_map.append((branch_name, from_branch))
     mirror_branches(
-        vcs_result_dir, pkg, branch_map, public_master_branch=main_branch)
-
-
-def import_branches(target_vcs_manager, main_branch, local_branch, pkg, name,
-                    additional_colocated_branches=None):
-    copy_vcs_dir(
-        main_branch, local_branch, target_vcs_manager.base_path, pkg, name,
-        additional_colocated_branches=additional_colocated_branches)
+        target_vcs_manager, pkg, branch_map, public_master_branch=main_branch)
 
 
 class UnsupportedVcs(Exception):
@@ -408,6 +399,9 @@ class RemoteVcsManager(VcsManager):
 
     def __init__(self, base_url: str):
         self.base_url = base_url
+
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.base_url)
 
     def get_branch(self, package, branch_name, vcs_type=None):
         if vcs_type:

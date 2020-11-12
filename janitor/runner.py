@@ -488,6 +488,7 @@ class ActiveRemoteRun(ActiveRun):
     websockets: Set[web.WebSocketResponse]
 
     def __init__(self, queue_item: state.QueueItem, worker_name: str,
+                 legacy_branch_name: str,
                  jenkins_metadata: Optional[Dict[str, str]] = None):
         super(ActiveRemoteRun, self).__init__(queue_item)
         self.worker_name = worker_name
@@ -495,6 +496,7 @@ class ActiveRemoteRun(ActiveRun):
         self.main_branch_url = self.queue_item.branch_url
         self.resume_branch_name = None
         self.reset_keepalive()
+        self.legacy_branch_name = legacy_branch_name
         self._watch_dog = None
         self._jenkins_metadata = jenkins_metadata
 
@@ -616,7 +618,8 @@ async def check_resume_result(conn, suite, resume_branch):
         return (None, None, None)
 
 
-def suite_build_env(distro_config, suite_config, apt_location, last_build_version):
+def suite_build_env(
+        distro_config, suite_config, apt_location, last_build_version):
     if apt_location.startswith('gs://'):
         bucket_name = URL(apt_location).host
         apt_location = 'https://storage.googleapis.com/%s/' % bucket_name
@@ -1245,16 +1248,17 @@ async def handle_assign(request):
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
 
+    suite_config = get_suite_config(queue_processor.config, item.suite)
+
     active_run = ActiveRemoteRun(
         worker_name=worker, queue_item=item,
+        legacy_branch_name=suite_config.branch_name,
         jenkins_metadata=json.get('jenkins'))
 
     queue_processor.register_run(active_run)
 
     # This is simple for now, since we only support one distribution.
     distro_config = queue_processor.config.distribution
-
-    suite_config = get_suite_config(queue_processor.config, item.suite)
 
     async with queue_processor.database.acquire() as conn:
         last_build_version = await state.get_last_build_version(
@@ -1314,13 +1318,6 @@ async def handle_assign(request):
     if item.upstream_branch_url:
         env['UPSTREAM_BRANCH_URL'] = item.upstream_branch_url
 
-    try:
-        result_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-            item.package, suite_config.branch_name, vcs_type.lower())
-    except UnsupportedVcs:
-        # We can't store the resulting branch?
-        result_branch_url = None
-
     assignment = {
         'id': active_run.log_id,
         'description': '%s on %s' % (item.suite, item.package),
@@ -1341,9 +1338,7 @@ async def handle_assign(request):
         'env': env,
         'command': item.command,
         'suite': item.suite,
-        'result_branch': {
-            'url': result_branch_url,
-        },
+        'legacy_branch_name': active_run.legacy_branch_name,
         'vcs_manager': queue_processor.public_vcs_manager.base_url,
     }
 
@@ -1405,7 +1400,8 @@ async def handle_finish(request):
                 active_run.queue_item.package, log_id=run_id,
                 branch_url=active_run.main_branch_url,
                 code='success', worker_result=worker_result,
-                logfilenames=logfilenames)
+                logfilenames=logfilenames,
+                legacy_branch_name=active_run.legacy_branch_name)
 
             try:
                 result.target_result.from_directory(
@@ -1529,7 +1525,8 @@ def main(argv=None):
         backup_logfile_manager = FileSystemLogFileManager(
             backup_logfile_directory)
         loop.run_until_complete(
-            upload_backup_artifacts(backup_artifact_manager, artifact_manager, timeout=60 * 15))
+            upload_backup_artifacts(
+                backup_artifact_manager, artifact_manager, timeout=60 * 15))
     else:
         backup_artifact_manager = None
         backup_logfile_manager = None
