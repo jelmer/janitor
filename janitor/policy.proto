@@ -44,6 +44,8 @@ message Match {
 
 message PublishPolicy {
     optional Mode mode = 1;
+
+    optional string role = 2 [ default = "main" ];
 }
 
 message SuitePolicy {
@@ -51,7 +53,7 @@ message SuitePolicy {
 
     optional string command = 2;
 
-    optional PublishPolicy publish = 4;
+    repeated PublishPolicy publish = 4;
 };
 
 message Policy {

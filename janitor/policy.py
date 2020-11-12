@@ -78,8 +78,9 @@ def apply_policy(
                 break
         else:
             continue
-        if s.publish and s.publish.HasField('mode'):
-            publish_mode = s.publish.mode
+        for publish in s.publish:
+            if publish.role == "main":
+                publish_mode = publish.mode
         if s.command:
             command = s.command
     return (
