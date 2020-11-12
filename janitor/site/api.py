@@ -34,7 +34,7 @@ from ..policy_pb2 import PolicyConfig
 from ..schedule import (
     do_schedule,
     do_schedule_control,
-    PublishPolicyUnavailable,
+    PolicyUnavailable,
     )
 
 
@@ -159,7 +159,7 @@ async def handle_schedule(request):
             offset, estimated_duration = await do_schedule(
                 conn, package.name, suite, offset, refresh,
                 requestor=requestor)
-        except PublishPolicyUnavailable:
+        except PolicyUnavailable:
             return web.json_response(
                 {'reason': 'Publish policy not yet available.'},
                 status=503)
