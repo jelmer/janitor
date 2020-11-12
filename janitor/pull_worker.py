@@ -53,7 +53,7 @@ from janitor.trace import note
 from janitor.vcs import (
     RemoteVcsManager,
     MirrorFailure,
-    import_branches,
+    legacy_import_branches,
     )
 from janitor.worker import (
     WorkerFailure,
@@ -183,7 +183,7 @@ def run_worker(branch_url, subpath, vcs_type, env,
             note('Pushing result branch to %r', vcs_manager)
 
             try:
-                import_branches(
+                legacy_import_branches(
                     vcs_manager,
                     ws.main_branch,
                     ws.local_tree.branch,
