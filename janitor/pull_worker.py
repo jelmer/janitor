@@ -50,7 +50,11 @@ from breezy.transport import Transport
 from silver_platter.proposal import enable_tag_pushing
 
 from janitor.trace import note
-from janitor.vcs import RemoteVcsManager
+from janitor.vcs import (
+    RemoteVcsManager,
+    MirrorFailure,
+    import_branches,
+    )
 from janitor.worker import (
     WorkerFailure,
     process_package,
@@ -154,13 +158,13 @@ def push_branch(
 
 def run_worker(branch_url, subpath, vcs_type, env,
                command, output_directory, metadata,
+               vcs_manager, legacy_branch_name,
                build_command=None,
                pre_check_command=None,
                post_check_command=None,
                resume_branch_url=None,
                cached_branch_url=None,
                resume_subworker_result=None,
-               result_branch_url=None,
                possible_transports=None):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -176,15 +180,17 @@ def run_worker(branch_url, subpath, vcs_type, env,
                resume_subworker_result=resume_subworker_result,
                possible_transports=possible_transports) as (ws, result):
             enable_tag_pushing(ws.local_tree.branch)
-            note('Pushing result branch to %s', result_branch_url)
+            note('Pushing result branch to %r', vcs_manager)
 
             try:
-                push_branch(
+                import_branches(
+                    vcs_manager,
+                    ws.main_branch,
                     ws.local_tree.branch,
-                    result_branch_url, overwrite=True,
-                    vcs_type=vcs_type.lower(),
+                    env['PACKAGE'], legacy_branch_name,
+                    ws.additional_colocated_branches,
                     possible_transports=possible_transports)
-            except (InvalidHttpResponse, IncompleteRead) as e:
+            except (InvalidHttpResponse, IncompleteRead, MirrorFailure) as e:
                 # TODO(jelmer): Retry if this was a server error (5xx) of
                 # some  sort?
                 raise WorkerFailure(
@@ -354,9 +360,6 @@ async def main(argv=None):
 
         branch_url = assignment['branch']['url']
         vcs_type = assignment['branch']['vcs_type']
-        result_branch_url = assignment['result_branch']['url']
-        if result_branch_url is not None:
-            result_branch_url = result_branch_url.rstrip('/')
         subpath = assignment['branch'].get('subpath', '') or ''
         if assignment['resume']:
             resume_result = assignment['resume'].get('result')
@@ -369,10 +372,13 @@ async def main(argv=None):
         build_environment = assignment['build'].get('environment', {})
 
         vcs_manager = RemoteVcsManager(assignment['vcs_manager'])
+        legacy_branch_name = assignment['legacy_branch_name']
 
         possible_transports = []
 
-        os.environ.update(assignment['env'])
+        env = assignment['env']
+
+        os.environ.update(env)
         os.environ.update(build_environment)
 
         metadata = {}
@@ -396,13 +402,13 @@ async def main(argv=None):
                 result = await loop.run_in_executor(None, functools.partial(
                     run_worker, branch_url, subpath, vcs_type, os.environ,
                     command, output_directory, metadata,
+                    vcs_manager, legacy_branch_name,
                     build_command=args.build_command,
                     pre_check_command=args.pre_check,
                     post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
                     cached_branch_url=cached_branch_url,
                     resume_subworker_result=resume_result,
-                    result_branch_url=result_branch_url,
                     possible_transports=possible_transports))
             except WorkerFailure as e:
                 metadata['code'] = e.code
