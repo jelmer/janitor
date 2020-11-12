@@ -17,6 +17,7 @@
 
 from io import BytesIO
 import os
+import sys
 from typing import Optional, List, Tuple, Iterable
 
 import urllib.parse
@@ -180,7 +181,6 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
     vcs = vcses.pop()
     if vcs == 'git':
         path = vcs_manager.get_repository_url(pkg, vcs)
-        os.makedirs(path, exist_ok=True)
         try:
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
@@ -200,7 +200,6 @@ def mirror_branches(vcs_manager: 'VcsManager', pkg: str,
                 raise MirrorFailure(target_branch_name, e)
     elif vcs == 'bzr':
         path = vcs_manager.get_repository_url(pkg, vcs)
-        os.makedirs(path, exist_ok=True)
         try:
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
@@ -258,6 +257,58 @@ def legacy_import_branches(
             branch_map.append((branch_name, from_branch))
     mirror_branches(
         target_vcs_manager, pkg, branch_map, public_master_branch=main_branch)
+
+
+def import_branches_git(
+        vcs_manager, local_branch, package, log_id, branches, tags):
+    repo = vcs_manager.get_repository(package, 'git')
+
+    def get_changed_refs(refs):
+        refs = {}
+        for (fn, n, br, r) in branches:
+            tagname = ('refs/tags/%s/%s' % (log_id, fn)).encode('utf-8')
+            refs[tagname] = repo.lookup_bzr_revision_id(r)
+            refs[b'refs/heads/suites/%s'] = b'ref: %s' % tagname
+        return refs
+    repo.controldir.send_pack(
+        get_changed_refs, local_branch.repository._git.generate_pack_data,
+        progress=sys.stderr.write)
+
+
+def import_branches_bzr(
+        vcs_manager, local_branch, package, suite, log_id, branches, tags):
+    for fn, n, br, r in branches:
+        if n is not None:
+            raise AssertionError(
+                'unable to handle non-default branches for bzr')
+        target_branch_path = vcs_manager.get_branch_url(package, suite, 'bzr')
+        try:
+            target_branch = Branch.open(target_branch_path)
+        except NotBranchError:
+            target_branch = ControlDir.create_branch_convenience(
+                target_branch_path)
+        try:
+            local_branch.push(target_branch, overwrite=True)
+        except NoSuchRevision as e:
+            raise MirrorFailure(target_branch_path, e)
+
+        target_branch.tags.set_tag(log_id, local_branch.last_revision())
+
+        for name, revision in tags:
+            target_branch.tags.set_tag(name, revision)
+
+
+def import_branches(
+        vcs_manager, local_branch, package, log_id, branches, tags):
+    vcs_type = get_vcs_abbreviation(local_branch.repository)
+    if vcs_type == 'git':
+        import_branches_git(
+            vcs_manager, local_branch, package, log_id, branches, tags)
+    elif vcs_type == 'bzr':
+        import_branches_bzr(
+            vcs_manager, local_branch, package, log_id, branches, tags)
+    else:
+        raise ValueError(vcs_type)
 
 
 class UnsupportedVcs(Exception):

@@ -98,6 +98,7 @@ from .vcs import (
     UnsupportedVcs,
     VcsManager,
     legacy_import_branches,
+    import_branches,
     )
 
 apt_package_count = Gauge(
@@ -906,6 +907,13 @@ class ActiveLocalRun(ActiveRun):
             self.queue_item.package, suite_config.branch_name,
             additional_colocated_branches=(
                 pick_additional_colocated_branches(main_branch)))
+        import_branches(
+            vcs_manager,
+            local_branch,
+            self.queue_item.package,
+            self.log_id,
+            result.branches,
+            result.tags)
         result.legacy_branch_name = suite_config.branch_name
 
         if result.target_result and artifact_manager:

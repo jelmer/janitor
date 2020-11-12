@@ -54,6 +54,7 @@ from janitor.vcs import (
     RemoteVcsManager,
     MirrorFailure,
     legacy_import_branches,
+    import_branches,
     )
 from janitor.worker import (
     WorkerFailure,
@@ -156,7 +157,7 @@ def push_branch(
         overwrite=overwrite, name=branch_name)
 
 
-def run_worker(branch_url, subpath, vcs_type, env,
+def run_worker(branch_url, run_id, subpath, vcs_type, env,
                command, output_directory, metadata,
                vcs_manager, legacy_branch_name,
                build_command=None,
@@ -190,6 +191,13 @@ def run_worker(branch_url, subpath, vcs_type, env,
                     env['PACKAGE'], legacy_branch_name,
                     ws.additional_colocated_branches,
                     possible_transports=possible_transports)
+                import_branches(
+                    vcs_manager,
+                    ws.local_tree.branch,
+                    env['PACKAGE'],
+                    run_id,
+                    result.branches,
+                    result.tags)
             except (InvalidHttpResponse, IncompleteRead, MirrorFailure) as e:
                 # TODO(jelmer): Retry if this was a server error (5xx) of
                 # some  sort?
@@ -373,6 +381,7 @@ async def main(argv=None):
 
         vcs_manager = RemoteVcsManager(assignment['vcs_manager'])
         legacy_branch_name = assignment['legacy_branch_name']
+        run_id = assignment['id']
 
         possible_transports = []
 
@@ -400,8 +409,8 @@ async def main(argv=None):
             metadata['start_time'] = start_time.isoformat()
             try:
                 result = await loop.run_in_executor(None, functools.partial(
-                    run_worker, branch_url, subpath, vcs_type, os.environ,
-                    command, output_directory, metadata,
+                    run_worker, branch_url, run_id, subpath, vcs_type,
+                    os.environ, command, output_directory, metadata,
                     vcs_manager, legacy_branch_name,
                     build_command=args.build_command,
                     pre_check_command=args.pre_check,
