@@ -261,6 +261,13 @@ def copy_vcs_dir(main_branch: Branch,
         vcs_result_dir, pkg, branch_map, public_master_branch=main_branch)
 
 
+def import_branches(target_vcs_manager, main_branch, local_branch, pkg, name,
+                    additional_colocated_branches=None):
+    copy_vcs_dir(
+        main_branch, local_branch, target_vcs_manager.base_path, pkg, name,
+        additional_colocated_branches=additional_colocated_branches)
+
+
 class UnsupportedVcs(Exception):
     """Specified vcs type is not supported."""
 
@@ -357,12 +364,6 @@ class VcsManager(object):
                        vcs_type: str) -> Optional[str]:
         raise NotImplementedError(self.get_branch_url)
 
-    def import_branches(self,
-                        main_branch: Branch, local_branch: Branch, pkg: str,
-                        name: str,
-                        additional_colocated_branches: List[str] = None):
-        raise NotImplementedError(self.import_branches)
-
     def get_repository(self, package: str,
                        vcs_type: Optional[str] = None) -> Repository:
         raise NotImplementedError(self.get_repository)
@@ -395,12 +396,6 @@ class LocalVcsManager(VcsManager):
     def get_branch_url(self, package, branch_name, vcs_type):
         return get_local_vcs_branch_url(
             self.base_path, vcs_type, package, branch_name)
-
-    def import_branches(self, main_branch, local_branch, pkg, name,
-                        additional_colocated_branches=None):
-        copy_vcs_dir(
-            main_branch, local_branch, self.base_path, pkg, name,
-            additional_colocated_branches=additional_colocated_branches)
 
     def get_repository(self, package, vcs_type=None):
         return get_local_vcs_repo(self.base_path, package, vcs_type)
