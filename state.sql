@@ -138,14 +138,21 @@ CREATE TABLE IF NOT EXISTS candidate (
    foreign key (package) references package(name)
 );
 CREATE TYPE changelog_mode AS ENUM('auto', 'update', 'leave');
-CREATE TABLE IF NOT EXISTS publish_policy (
+CREATE TABLE IF NOT EXISTS policy (
    package text not null,
    suite suite_name not null,
-   mode publish_mode default 'build-only',
    update_changelog changelog_mode default 'auto',
    command text,
    foreign key (package) references package(name),
    unique(package, suite)
+);
+CREATE TABLE IF NOT EXISTS publish_policy (
+   package text not null,
+   suite suite_name not null,
+   role text not null,
+   mode publish_mode default 'build-only',
+   foreign key (package) references package(name),
+   unique(package, suite, text)
 );
 CREATE INDEX ON candidate (suite);
 CREATE TABLE worker (
