@@ -31,8 +31,8 @@ subscription_count = Counter(
     labelnames=('topic', ))
 
 subscription_active = Gauge(
-    'subscription_active', 'Whether topic is reachable',
-    labelnames=('topic', ))
+    'subscription_active', 'Whether url is reachable',
+    labelnames=('url', ))
 
 
 class Subscription(object):
