@@ -21,12 +21,12 @@ from aiohttp.client_exceptions import ClientResponseError, ClientConnectorError
 import asyncio
 import json
 from typing import Optional, Set, AsyncIterator, Any
-from prometheus_client import Counter, Gauge
+from prometheus_client import Gauge
 
 from janitor.trace import note, warning
 
 
-subscription_count = Counter(
+subscription_count = Gauge(
     'subscriptions', 'Subscriptions per topic',
     labelnames=('topic', ))
 
