@@ -981,14 +981,14 @@ SELECT
   package.maintainer_email,
   package.uploader_emails,
   run.branch_url,
-  publish_policy.mode,
-  publish_policy.update_changelog,
-  publish_policy.command
+  policy.mode,
+  policy.update_changelog,
+  policy.command
 FROM
   last_unabsorbed_runs AS run
 LEFT JOIN package ON package.name = run.package
-LEFT JOIN publish_policy ON
-    publish_policy.package = run.package AND publish_policy.suite = run.suite
+LEFT JOIN policy ON
+    policy.package = run.package AND policy.suite = run.suite
 WHERE
   result_code = 'success' AND result IS NOT NULL
   AND NOT package.removed
@@ -1004,12 +1004,12 @@ WHERE
             len(args),)
 
     if publishable_only:
-        query += """ AND publish_policy.mode in (
+        query += """ AND policy.mode in (
         'propose', 'attempt-push', 'push-derived', 'push') """
 
     query += """
 ORDER BY
-  publish_policy.mode in (
+  policy.mode in (
         'propose', 'attempt-push', 'push-derived', 'push') DESC,
   value DESC NULLS LAST,
   run.finish_time DESC
@@ -1194,14 +1194,14 @@ SELECT
   candidate.context,
   candidate.value,
   candidate.success_chance,
-  publish_policy.mode,
-  publish_policy.update_changelog,
-  publish_policy.command
+  policy.mode,
+  policy.update_changelog,
+  policy.command
 FROM candidate
 INNER JOIN package on package.name = candidate.package
-LEFT JOIN publish_policy ON
-    publish_policy.package = package.name AND
-    publish_policy.suite = candidate.suite
+LEFT JOIN policy ON
+    policy.package = package.name AND
+    policy.suite = candidate.suite
 WHERE NOT package.removed
 """
     args = []
@@ -1488,7 +1488,7 @@ async def update_publish_policy(
         conn: asyncpg.Connection, name: str, suite: str, publish_mode: str,
         changelog_mode: str, command: List[str]) -> None:
     await conn.execute(
-        'INSERT INTO publish_policy '
+        'INSERT INTO policy '
         '(package, suite, mode, update_changelog, command) '
         'VALUES ($1, $2, $3, $4, $5) '
         'ON CONFLICT (package, suite) DO UPDATE SET '
@@ -1497,13 +1497,20 @@ async def update_publish_policy(
         'command = EXCLUDED.command',
         name, suite, publish_mode, changelog_mode,
         (' '.join(command) if command else None))
+    await conn.execute(
+        'INSERT INTO publish_policy '
+        '(package, suite, role, mode) '
+        'VALUES ($1, $2, $3, $4) '
+        'ON CONFLICT (package, suite, role) DO UPDATE SET '
+        'mode = EXCLUDED.mode',
+        name, suite, 'main', publish_mode)
 
 
 async def iter_publish_policy(
         conn: asyncpg.Connection, package: Optional[str] = None):
     query = (
         'SELECT package, suite, mode, update_changelog, command '
-        'FROM publish_policy')
+        'FROM policy')
     args = []
     if package:
         query += ' WHERE package = $1'
@@ -1518,7 +1525,7 @@ async def get_policy(
         ) -> Tuple[Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
         'SELECT update_changelog, command '
-        'FROM publish_policy WHERE package = $1 AND suite = $2', package,
+        'FROM policy WHERE package = $1 AND suite = $2', package,
         suite)
     if row:
         return (  # type: ignore
@@ -1532,7 +1539,7 @@ async def get_publish_policy(
         ) -> Tuple[Optional[str], Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
         'SELECT mode, update_changelog, command '
-        'FROM publish_policy WHERE package = $1 AND suite = $2', package,
+        'FROM policy WHERE package = $1 AND suite = $2', package,
         suite)
     if row:
         return (  # type: ignore

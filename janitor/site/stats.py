@@ -108,11 +108,11 @@ async def handle_graph_review_status(request, conn):
     return {
         status: count for (status, count) in await conn.fetch("""\
 select review_status, count(*) from last_unabsorbed_runs
-LEFT JOIN publish_policy
-ON publish_policy.package = last_unabsorbed_runs.package
-AND publish_policy.suite = last_unabsorbed_runs.suite
+LEFT JOIN policy
+ON policy.package = last_unabsorbed_runs.package
+AND policy.suite = last_unabsorbed_runs.suite
 where result_code = \'success\' AND
-publish_policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
+policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
 group by 1""")}
 
 
