@@ -653,17 +653,15 @@ async def add_to_queue(conn: asyncpg.Connection,
                        context: Optional[str] = None,
                        estimated_duration: Optional[datetime.timedelta] = None,
                        refresh: bool = False,
-                       requestor: Optional[str] = None,
-                       requestor_relative: bool = False) -> bool:
+                       requestor: Optional[str] = None) -> bool:
     await conn.execute(
         "INSERT INTO queue "
         "(package, command, priority, bucket, context, "
         "estimated_duration, suite, refresh, requestor) "
         "VALUES "
         "($1, $2, "
-        "(SELECT COALESCE(MIN(priority), 0) FROM queue " +
-        ("WHERE requestor = $8" if requestor_relative else "") +
-        ") + $3, $4, $5, $6, $7, $8, $9) "
+        "(SELECT COALESCE(MIN(priority), 0) FROM queue)" +
+        " + $3, $4, $5, $6, $7, $8, $9) "
         "ON CONFLICT (package, suite) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "bucket = EXCLUDED.bucket, "
