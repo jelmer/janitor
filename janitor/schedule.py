@@ -294,9 +294,6 @@ async def main():
     )
 
     parser = argparse.ArgumentParser(prog='janitor.schedule')
-    parser.add_argument("--policy",
-                        help="Policy file to read.", type=str,
-                        default='policy.conf')
     parser.add_argument(
         "--dry-run",
         help="Create branches but don't push or propose anything.",
