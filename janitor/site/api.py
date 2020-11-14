@@ -129,7 +129,9 @@ async def handle_webhook(request):
                 package.name):
             if policy[0] == 'skip':
                 continue
-            await do_schedule(conn, package.name, suite, requestor=requestor)
+            await do_schedule(
+                conn, package.name, suite, requestor=requestor,
+                bucket='webhook')
         return web.json_response({})
 
 
@@ -158,7 +160,7 @@ async def handle_schedule(request):
         try:
             offset, estimated_duration = await do_schedule(
                 conn, package.name, suite, offset, refresh,
-                requestor=requestor)
+                requestor=requestor, bucket='manual')
         except PolicyUnavailable:
             return web.json_response(
                 {'reason': 'Publish policy not yet available.'},
@@ -201,7 +203,8 @@ async def handle_schedule_control(request):
         offset, estimated_duration = await do_schedule_control(
             conn, package.name, offset=offset, refresh=refresh,
             requestor=requestor,
-            main_branch_revision=run.main_branch_revision)
+            main_branch_revision=run.main_branch_revision,
+            bucket='control')
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, 'unchanged', package.name)
     response_obj = {
@@ -415,7 +418,7 @@ async def handle_run_post(request):
                 run = await state.get_run(conn, run_id)
                 await do_schedule(
                     conn, run.package, run.suite, refresh=True,
-                    requestor='reviewer')
+                    requestor='reviewer', bucket='default')
                 review_status = 'rejected'
             await state.set_run_review_status(
                 conn, run_id, review_status, review_comment)

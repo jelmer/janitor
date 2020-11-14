@@ -74,7 +74,8 @@ async def main(db, result_code, rejected, min_age=0):
             await state.add_to_queue(
                 conn2, run.package, run.command.split(' '), run.suite,
                 estimated_duration=run.duration, requestor='reschedule',
-                refresh=args.refresh, offset=args.offset)
+                refresh=args.refresh, offset=args.offset,
+                bucket='reschedule')
 
 
 db = state.Database(config.database_location)

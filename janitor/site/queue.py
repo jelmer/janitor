@@ -79,6 +79,7 @@ SELECT
   ON package.name = queue.package
   LEFT OUTER JOIN upstream ON package.name = upstream.name
   ORDER BY
+  queue.bucket ASC,
   queue.priority ASC,
   queue.id ASC
 """

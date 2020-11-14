@@ -377,7 +377,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
     last_publish_pending_success.set_to_current_time()
 
 
-async def handle_publish_failure(e, conn, run, unchanged_run):
+async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
     from .schedule import (
         do_schedule,
         do_schedule_control,
@@ -388,12 +388,14 @@ async def handle_publish_failure(e, conn, run, unchanged_run):
         note('Merge proposal would cause conflict; restarting.')
         await do_schedule(
             conn, run.package, run.suite,
-            requestor='publisher (pre-creation merge conflict)')
+            requestor='publisher (pre-creation merge conflict)',
+            bucket=bucket)
     elif e.code == 'diverged-branches':
         note('Branches have diverged; restarting.')
         await do_schedule(
             conn, run.package, run.suite,
-            requestor='publisher (diverged branches)')
+            requestor='publisher (diverged branches)',
+            bucket=bucket)
     elif e.code == 'missing-build-diff-self':
         if run.result_code != 'success':
             description = (
@@ -403,7 +405,8 @@ async def handle_publish_failure(e, conn, run, unchanged_run):
             await do_schedule(
                 conn, run.package, run.suite,
                 refresh=True,
-                requestor='publisher (missing build artifacts - self)')
+                requestor='publisher (missing build artifacts - self)',
+                bucket=bucket)
     elif e.code == 'missing-build-diff-control':
         if unchanged_run and unchanged_run.result_code != 'success':
             description = (
@@ -416,14 +419,16 @@ async def handle_publish_failure(e, conn, run, unchanged_run):
             await do_schedule_control(
                 conn, unchanged_run.package, unchanged_run.revision,
                 refresh=True,
-                requestor='publisher (missing build artifacts - control)')
+                requestor='publisher (missing build artifacts - control)',
+                bucket=bucket)
         else:
             description = (
                 'Missing binary diff; requesting control run.')
             if run.main_branch_revision is not None:
                 await do_schedule_control(
                     conn, run.package, run.main_branch_revision,
-                    requestor='publisher (missing control run for diff)')
+                    requestor='publisher (missing control run for diff)',
+                    bucket=bucket)
             else:
                 warning(
                     'Successful run (%s) does not have main branch '
@@ -458,8 +463,8 @@ async def publish_from_policy(
         estimated_duration = await estimate_duration(
             conn, run.package, run.suite)
         await state.add_to_queue(
-            conn, run.package, expected_command, run.suite, -2,
-            estimated_duration=estimated_duration, refresh=True,
+            conn, run.package, expected_command, run.suite,
+            offset=-2.0, estimated_duration=estimated_duration, refresh=True,
             requestor='publisher (changed policy)')
         return
 
@@ -514,7 +519,8 @@ async def publish_from_policy(
             rate_limiter=rate_limiter)
     except PublishFailure as e:
         code, description = await handle_publish_failure(
-            e, conn, run, unchanged_run)
+            e, conn, run, unchanged_run,
+            bucket='update-new-mp')
         branch_name = None
         proposal_url = None
         note('Failed(%s): %s', code, description)
@@ -1367,7 +1373,8 @@ applied independently.
                  'Rescheduling.', mp.url, last_run.result_code)
             await state.add_to_queue(
                 conn, last_run.package, shlex.split(last_run.command),
-                last_run.suite, offset=1, refresh=False,
+                last_run.suite, offset=1.0, bucket='update-existing-mp',
+                refresh=False,
                 requestor='publisher (transient error)')
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             note('%s: Last run failed (%s) a long time ago (%d days). '
@@ -1375,7 +1382,8 @@ applied independently.
                  last_run_age.days)
             await state.add_to_queue(
                 conn, last_run.package, shlex.split(last_run.command),
-                last_run.suite, offset=1, refresh=False,
+                last_run.suite, offset=1.0, bucket='update-existing-mp',
+                refresh=False,
                 requestor='publisher (retrying failed run after %d days)' %
                 last_run_age.days)
         else:
@@ -1415,7 +1423,8 @@ applied independently.
             unchanged_run = await state.get_unchanged_run(
                 conn, last_run.main_branch_revision)
             code, description = await handle_publish_failure(
-                e, conn, last_run, unchanged_run)
+                e, conn, last_run, unchanged_run,
+                bucket='update-existing-mp')
             if code == 'empty-merge-proposal':
                 # The changes from the merge proposal have already made it in
                 # somehow.
@@ -1481,8 +1490,8 @@ applied independently.
             if not dry_run:
                 await state.add_to_queue(
                     conn, mp_run.package, shlex.split(mp_run.command),
-                    mp_run.suite, offset=-2, refresh=True,
-                    requestor='publisher (merge conflict)')
+                    mp_run.suite, offset=-2.0, bucket='update-existing-mp',
+                    refresh=True, requestor='publisher (merge conflict)')
         return False
 
 

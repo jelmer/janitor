@@ -861,7 +861,7 @@ order by url, last_run.finish_time desc
                 from ..schedule import do_schedule
                 await do_schedule(
                     conn, run.package, run.suite,
-                    refresh=True, requestor='reviewer')
+                    refresh=True, requestor='reviewer', bucket='default')
             await state.set_run_review_status(
                 conn, post['run_id'], review_status)
             text = await generate_review(

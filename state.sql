@@ -105,8 +105,11 @@ CREATE TABLE IF NOT EXISTS publish (
 CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
 CREATE INDEX ON publish (timestamp);
+CREATE TYPE queue_bucket AS ENUM(
+    'update-existing-mp', 'webhook', 'manual', 'reschedule', 'control', 'update-new-mp', 'default');
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
+   bucket queue_bucket default 'default',
    package text not null,
    suite suite_name not null,
    command text not null,
@@ -120,6 +123,7 @@ CREATE TABLE IF NOT EXISTS queue (
    unique(package, suite)
 );
 CREATE INDEX ON queue (priority ASC, id ASC);
+CREATE INDEX ON queue (bucket ASC, priority ASC, id ASC);
 CREATE TABLE IF NOT EXISTS branch (
    url text not null primary key,
    canonical_url text,
@@ -277,7 +281,7 @@ CREATE VIEW queue_positions AS SELECT
         - coalesce(estimated_duration, interval '0') AS wait_time
 FROM
     queue
-ORDER BY priority ASC, id ASC;
+ORDER BY bucket ASC, priority ASC, id ASC;
 
 CREATE TABLE debian_build (
  run_id text not null references run (id),
