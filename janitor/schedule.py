@@ -37,6 +37,7 @@ from .config import read_config
 
 SUCCESS_WEIGHT = 20
 POPULARITY_WEIGHT = 1
+FIRST_RUN_BONUS = 100.0
 
 
 # Default estimation if there is no median for the suite or the package.
@@ -131,7 +132,7 @@ async def schedule_from_candidates(iter_candidates_with_policy):
 
 async def estimate_success_probability(
         conn: asyncpg.Connection, package: str, suite: str,
-        context: Optional[str] = None) -> float:
+        context: Optional[str] = None) -> Tuple[float, int]:
     # TODO(jelmer): Bias this towards recent runs?
     total = 0
     success = 0
@@ -164,10 +165,15 @@ async def estimate_success_probability(
         if same_context:
             same_context_multiplier = 0.1
 
+    if total == 0:
+        # If there were no previous runs, then it doesn't really matter that
+        # we don't know the context.
+        same_context_multiplier = 1.0
+
     return (
         (success * 10 + 1) /
         (total * 10 + 1) *
-        same_context_multiplier)
+        same_context_multiplier), total
 
 
 async def estimate_duration(
@@ -210,8 +216,11 @@ async def add_to_queue(
         if package in removed:
             continue
         estimated_duration = await estimate_duration(conn, package, suite)
-        estimated_probability_of_success = await estimate_success_probability(
+        (estimated_probability_of_success,
+         total_previous_runs) = await estimate_success_probability(
             conn, package, suite, context)
+        if total_previous_runs == 0:
+            value += FIRST_RUN_BONUS
         assert (estimated_probability_of_success >= 0.0 and
                 estimated_probability_of_success <= 1.0), \
             "Probability of success: %s" % estimated_probability_of_success
