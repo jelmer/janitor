@@ -617,13 +617,15 @@ async def handle_publish_id(request):
 async def handle_report(request):
     suite = request.match_info['suite']
     report = {}
-    merge_proposals = {}
+    merge_proposal = {}
     async with request.app.db.acquire() as conn:
-        async for package, url, status in await state.iter_proposals(
+        for package, url, status in await state.iter_proposals(
                 conn, suite=suite):
-            merge_proposals.setdefault(package, []).append(
-                {'url': url, 'status': status})
-        async for run in state.iter_last_unabsorbed_runs(conn, suites=[suite]):
+            if status == 'open':
+                merge_proposal[package] = url
+        async for run in state.iter_last_unabsorbed_runs(conn, suite=suite):
+            if run.result_code not in ('success', 'nothing-to-do'):
+                continue
             data = {
                 'timestamp': run.times[0].isoformat(),
             }
@@ -637,7 +639,8 @@ async def handle_report(request):
                     'old_upstream_version')
             if run.suite == 'multiarch-fixes':
                 data['applied-hints'] = run.result.get('applied-hints')
-            data['merge-proposal'] = merge_proposals.get(package, [])
+            if run.package in merge_proposal:
+                data['merge-proposal'] = merge_proposal[run.package]
             report[run.package] = data
     return web.json_response(
         report,

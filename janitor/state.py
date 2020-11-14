@@ -467,10 +467,10 @@ async def iter_proposals(conn: asyncpg.Connection, package=None, suite=None):
     query = """
 SELECT
     DISTINCT ON (merge_proposal.url)
-    merge_proposal.package, merge_proposal.url, merge_proposal.status
+    merge_proposal.package, merge_proposal.url, merge_proposal.status, run.suite
 FROM
     merge_proposal
-LEFT JOIN run ON merge_proposal.revision = run.revision
+LEFT JOIN run ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 """
     if package is not None:
         if isinstance(package, list):
@@ -486,7 +486,11 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
         args.append(suite)
         query += " WHERE run.suite = $1"
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
-    return await conn.fetch(query, *args)
+    ret = []
+    for package, url, status, mp_suite in await conn.fetch(query, *args):
+        if suite is None or mp_suite == suite:
+            ret.append((package, url, status))
+    return ret
 
 
 async def iter_proposals_with_run(
