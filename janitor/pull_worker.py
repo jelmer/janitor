@@ -160,7 +160,7 @@ def push_branch(
 def run_worker(branch_url, run_id, subpath, vcs_type, env,
                command, output_directory, metadata,
                vcs_manager, legacy_branch_name,
-               build_command=None,
+               suite, build_command=None,
                pre_check_command=None,
                post_check_command=None,
                resume_branch_url=None,
@@ -195,6 +195,7 @@ def run_worker(branch_url, run_id, subpath, vcs_type, env,
                     vcs_manager,
                     ws.local_tree.branch,
                     env['PACKAGE'],
+                    suite,
                     run_id,
                     result.branches,
                     result.tags)
@@ -366,6 +367,7 @@ async def main(argv=None):
             with open(desc_path, 'w') as f:
                 f.write(assignment['description'])
 
+        suite = assignment['suite']
         branch_url = assignment['branch']['url']
         vcs_type = assignment['branch']['vcs_type']
         subpath = assignment['branch'].get('subpath', '') or ''
@@ -411,7 +413,7 @@ async def main(argv=None):
                 result = await loop.run_in_executor(None, functools.partial(
                     run_worker, branch_url, run_id, subpath, vcs_type,
                     os.environ, command, output_directory, metadata,
-                    vcs_manager, legacy_branch_name,
+                    vcs_manager, legacy_branch_name, suite,
                     build_command=args.build_command,
                     pre_check_command=args.pre_check,
                     post_check_command=args.post_check,

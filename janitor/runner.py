@@ -920,6 +920,7 @@ class ActiveLocalRun(ActiveRun):
             vcs_manager,
             local_branch,
             self.queue_item.package,
+            suite_config.name,
             self.log_id,
             result.branches,
             result.tags)
@@ -1339,6 +1340,7 @@ async def handle_assign(request):
     assignment = {
         'id': active_run.log_id,
         'description': '%s on %s' % (item.suite, item.package),
+        'suite': suite_config.name,
         'queue_id': item.id,
         'branch': {
             'url': active_run.main_branch_url,

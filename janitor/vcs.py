@@ -261,7 +261,7 @@ def legacy_import_branches(
 
 
 def import_branches_git(
-        vcs_manager, local_branch, package, log_id, branches, tags):
+        vcs_manager, local_branch, package, suite, log_id, branches, tags):
     repo_url = vcs_manager.get_repository_url(package, 'git')
 
     try:
@@ -273,11 +273,11 @@ def import_branches_git(
     repo = vcs_result_controldir.open_repository()
 
     def get_changed_refs(refs):
-        refs = {}
+        changed_refs = {}
         for (fn, n, br, r) in branches:
             tagname = ('refs/tags/%s/%s' % (log_id, fn)).encode('utf-8')
-            refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
-        return refs
+            changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
+        return changed_refs
     inter = InterRepository.get(local_branch.repository, repo)
     inter.fetch_refs(get_changed_refs, lossy=False)
 
@@ -306,14 +306,14 @@ def import_branches_bzr(
 
 
 def import_branches(
-        vcs_manager, local_branch, package, log_id, branches, tags):
+        vcs_manager, local_branch, package, suite, log_id, branches, tags):
     vcs_type = get_vcs_abbreviation(local_branch.repository)
     if vcs_type == 'git':
         import_branches_git(
-            vcs_manager, local_branch, package, log_id, branches, tags)
+            vcs_manager, local_branch, package, suite, log_id, branches, tags)
     elif vcs_type == 'bzr':
         import_branches_bzr(
-            vcs_manager, local_branch, package, log_id, branches, tags)
+            vcs_manager, local_branch, package, suite, log_id, branches, tags)
     else:
         raise ValueError(vcs_type)
 
