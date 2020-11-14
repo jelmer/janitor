@@ -159,7 +159,7 @@ async def handle_schedule(request):
                 {'reason': 'No branch URL defined.'}, status=400)
         try:
             offset, estimated_duration = await do_schedule(
-                conn, package.name, suite, offset, refresh,
+                conn, package.name, suite, offset, refresh=refresh,
                 requestor=requestor, bucket='manual')
         except PolicyUnavailable:
             return web.json_response(

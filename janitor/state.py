@@ -1534,8 +1534,8 @@ async def get_policy(
         suite)
     if row:
         return (  # type: ignore
-            row[1],
-            shlex.split(row[2]) if row[2] else None)
+            row[0],
+            shlex.split(row[1]) if row[1] else None)
     return None, None
 
 
