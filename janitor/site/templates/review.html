@@ -15,18 +15,23 @@
 
 <script type="text/javascript">
 function loadRun(package, run_id) {
-    $('#diff').load('/api/run/' + run_id + '/diff');
-    $('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
-        undefined,
-        function(responseText, textStatus, XMLHttpRequest) {
-             if (XMLHttpRequest.status == 404) {
-                  $('#debdiff').html('<p>No debdiff generated</p>');
-             }
-        }
-    );
-    $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
-    $('#run-id').attr('value', run_id);
-    $('#package-name').attr('value', package);
+    $('.review-button').blur()
+    $('.review-button').disabled = true;
+    $.when(
+      $('#diff').load('/api/run/' + run_id + '/diff'),
+      $('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
+          undefined,
+          function(responseText, textStatus, XMLHttpRequest) {
+               if (XMLHttpRequest.status == 404) {
+                    $('#debdiff').html('<p>No debdiff generated</p>');
+               }
+          }
+    )).then(function() {
+      $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
+      $('#run-id').attr('value', run_id);
+      $('#package-name').attr('value', package);
+      $('.review-button').disabled = false;
+   });
 }
 
 var todo = {{ todo|tojson }};
@@ -71,7 +76,6 @@ function submitReview(elem, status) {
     if (status == 'rejected') {
         comment = window.prompt('Please specify a comment for the rejection');
     }
-    elem.blur();
     var run_id = $('#run-id').val();
     var package = $('#package-name').val();
     console.log("Submitting review " + status + " for run " + package + "/" + run_id);
