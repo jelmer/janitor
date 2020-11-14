@@ -700,24 +700,14 @@ DO UPDATE SET
                        merged_by, merged_at)
 
 
-async def queue_length(conn: asyncpg.Connection, minimum_priority=None):
-    args = []
-    query = 'SELECT COUNT(*) FROM queue'
-    if minimum_priority is not None:
-        query += ' WHERE priority >= $1'
-        args.append(minimum_priority)
-    return await conn.fetchval(query, *args)
+async def queue_stats(conn: asyncpg.Connection):
+    for row in await conn.fetch(
+            'SELECT bucket, MIN(priority), count(*) FROM queue '
+            'GROUP BY bucket'):
+        yield row[0], row[1], row[2]
 
 
-async def current_tick(conn: asyncpg.Connection):
-    ret = {}
-    for row in await conn.fetchval('SELECT bucket, MIN(priority) FROM queue'):
-        ret[row[0]] = row[1] or 0
-    return ret
-
-
-async def queue_duration(conn: asyncpg.Connection, minimum_priority=None):
-    args = []
+async def queue_duration(conn: asyncpg.Connection):
     query = """
 SELECT
   SUM(estimated_duration)
@@ -726,10 +716,7 @@ FROM
 WHERE
   estimated_duration IS NOT NULL
 """
-    if minimum_priority is not None:
-        query += ' AND priority >= $1'
-        args.append(minimum_priority)
-    ret = (await conn.fetchrow(query, *args))[0]
+    ret = await conn.fetchval(query)
     if ret is None:
         return datetime.timedelta()
     return ret

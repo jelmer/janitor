@@ -108,7 +108,8 @@ apt_package_count = Gauge(
 packages_processed_count = Counter(
     'package_count', 'Number of packages processed.')
 queue_length = Gauge(
-    'queue_length', 'Number of items in the queue.')
+    'queue_length', 'Number of items in the queue.',
+    labelnames=('bucket', ))
 queue_duration = Gauge(
     'queue_duration', 'Time to process all items in the queue sequentially')
 last_success_gauge = Gauge(
@@ -937,11 +938,11 @@ class ActiveLocalRun(ActiveRun):
 async def export_queue_length(db: state.Database) -> None:
     while True:
         async with db.acquire() as conn:
-            queue_length.set(await state.queue_length(conn))
             queue_duration.set(
                 (await state.queue_duration(conn)).total_seconds())
-            for bucket, tick in await state.current_tick(conn):
-                current_tick.label(bucket=bucket).set(tick)
+            for bucket, tick, length in await state.queue_stats(conn):
+                current_tick.labels(bucket=bucket).set(tick)
+                queue_length.labels(bucket=bucket).set(length)
         await asyncio.sleep(60)
 
 

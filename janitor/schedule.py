@@ -227,7 +227,7 @@ async def add_to_queue(
             estimated_popularity = 1.0
         estimated_value = (
             estimated_popularity * estimated_probability_of_success * value)
-        assert estimated_value > 0, "Estimated value: %s" % estimated_value
+        assert estimated_value > 0.0, "Estimated value: %s" % estimated_value
         offset = estimated_cost / estimated_value
         assert offset > 0.0
         offset = default_offset + offset
