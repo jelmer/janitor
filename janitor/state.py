@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#.0!/usr/bin/python
 # Copyright (C) 2018 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -630,6 +630,7 @@ FROM
 LEFT JOIN package ON package.name = queue.package
 LEFT OUTER JOIN upstream ON upstream.name = package.name
 ORDER BY
+queue.bucket ASC,
 queue.priority ASC,
 queue.id ASC
 """
@@ -647,7 +648,8 @@ async def add_to_queue(conn: asyncpg.Connection,
                        package: str,
                        command: List[str],
                        suite: str,
-                       offset: int = 0,
+                       offset: float = 0.0,
+                       bucket: str = 'default',
                        context: Optional[str] = None,
                        estimated_duration: Optional[datetime.timedelta] = None,
                        refresh: bool = False,
@@ -655,21 +657,24 @@ async def add_to_queue(conn: asyncpg.Connection,
                        requestor_relative: bool = False) -> bool:
     await conn.execute(
         "INSERT INTO queue "
-        "(package, command, priority, context, "
+        "(package, command, priority, bucket, context, "
         "estimated_duration, suite, refresh, requestor) "
         "VALUES "
         "($1, $2, "
         "(SELECT COALESCE(MIN(priority), 0) FROM queue " +
         ("WHERE requestor = $8" if requestor_relative else "") +
-        ") + $3, $4, $5, $6, $7, $8) "
+        ") + $3, $4, $5, $6, $7, $8, $9) "
         "ON CONFLICT (package, suite) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
+        "bucket = EXCLUDED.bucket, "
         "estimated_duration = EXCLUDED.estimated_duration, "
         "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
         "command = EXCLUDED.command "
-        "WHERE queue.priority >= EXCLUDED.priority",
-        package, ' '.join(command), offset, context, estimated_duration,
-        suite, refresh, requestor)
+        "WHERE queue.bucket >= EXCLUDED.bucket OR "
+        "(queue.bucket = EXCLUDED.bucket AND "
+        "queue.priority >= EXCLUDED.priority)",
+        package, ' '.join(command), offset, bucket, context,
+        estimated_duration, suite, refresh, requestor)
     return True
 
 

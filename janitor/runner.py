@@ -1066,7 +1066,7 @@ class QueueProcessor(object):
                              result.main_branch_revision
                              .decode('utf-8'))
                         ],
-                        'unchanged', offset=-10,
+                        'unchanged', offset=-1.0, bucket='control',
                         estimated_duration=duration, requestor='control')
         if not self.dry_run:
             async with self.database.acquire() as conn:

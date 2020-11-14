@@ -41,7 +41,7 @@ POPULARITY_WEIGHT = 1
 
 # Default estimation if there is no median for the suite or the package.
 DEFAULT_ESTIMATED_DURATION = 15
-DEFAULT_SCHEDULE_OFFSET = -1
+DEFAULT_SCHEDULE_OFFSET = -1.0
 
 
 TRANSIENT_ERROR_RESULT_CODES = [
@@ -193,7 +193,8 @@ async def estimate_duration(
 async def add_to_queue(
         conn: asyncpg.Connection, todo,
         dry_run: bool = False,
-        default_offset: int = 0) -> None:
+        default_offset: float = 0.0,
+        bucket: str = 'default') -> None:
     popcon = {k: (v or 0) for (k, v) in await state.popcon(conn)}
     removed = set(p.name for p in await state.iter_packages(conn)
                   if p.removed)
@@ -217,8 +218,10 @@ async def add_to_queue(
             "Probability of success: %s" % estimated_probability_of_success
         if success_chance is not None:
             success_chance *= estimated_probability_of_success
-        estimated_cost = 50 + estimated_duration.total_seconds()
-        assert estimated_cost > 0, "Estimated cost: %d" % estimated_cost
+        estimated_cost = 50.0 + (
+            1.0 * estimated_duration.total_seconds() +
+            estimated_duration.microseconds / 1000.0)
+        assert estimated_cost > 0.0, "Estimated cost: %f" % estimated_cost
         if max_inst:
             estimated_popularity = max(popcon.get(package, 0), 10) / max_inst
         else:
@@ -227,19 +230,20 @@ async def add_to_queue(
             estimated_popularity * estimated_probability_of_success * value)
         assert estimated_value > 0, "Estimated value: %s" % estimated_value
         offset = estimated_cost / estimated_value
-        assert offset > 0
+        assert offset > 0.0
         offset = default_offset + offset
         trace.note(
             'Package %s: '
             'estimated value((%.2f * %d) * (%.2f * %d) * %d = %.2f), '
-            'estimated cost (%d)',
+            'estimated cost (%f)',
             package, estimated_popularity, POPULARITY_WEIGHT,
             estimated_probability_of_success, SUCCESS_WEIGHT,
             value, estimated_value, estimated_cost)
 
         if not dry_run:
             added = await state.add_to_queue(
-                conn, package, command, suite, offset=int(offset),
+                conn, package, command, suite, offset=offset,
+                bucket=bucket,
                 estimated_duration=estimated_duration,
                 context=context, requestor='scheduler',
                 requestor_relative=True)
@@ -327,14 +331,15 @@ async def main():
 async def do_schedule_control(
         conn: asyncpg.Connection, package: str,
         main_branch_revision: Optional[bytes],
-        offset: Optional[int] = None, refresh: bool = False,
-        requestor: Optional[str] = None) -> Tuple[int, Optional[timedelta]]:
+        offset: Optional[float] = None, refresh: bool = False,
+        bucket: str = 'default',
+        requestor: Optional[str] = None) -> Tuple[float, Optional[timedelta]]:
     command = ['just-build']
     if main_branch_revision is not None:
         command.append('--revision=%s' % main_branch_revision.decode('utf-8'))
     return await do_schedule(
         conn, package, 'unchanged', offset=offset, refresh=refresh,
-        requestor=requestor, command=command)
+        bucket=bucket, requestor=requestor, command=command)
 
 
 class PolicyUnavailable(Exception):
@@ -346,9 +351,9 @@ class PolicyUnavailable(Exception):
 
 async def do_schedule(
             conn: asyncpg.Connection, package: str, suite: str,
-            offset: Optional[int] = None, refresh: bool = False,
+            offset: Optional[float] = None, refresh: bool = False,
             requestor: Optional[str] = None,
-            command=None) -> Tuple[int, Optional[timedelta]]:
+            command=None) -> Tuple[float, Optional[timedelta]]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
