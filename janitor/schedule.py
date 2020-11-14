@@ -209,8 +209,7 @@ async def add_to_queue(
         assert value > 0, "Value: %s" % value
         if package in removed:
             continue
-        estimated_duration = await estimate_duration(
-            conn, package, suite)
+        estimated_duration = await estimate_duration(conn, package, suite)
         estimated_probability_of_success = await estimate_success_probability(
             conn, package, suite, context)
         assert (estimated_probability_of_success >= 0.0 and
@@ -354,6 +353,7 @@ async def do_schedule(
             offset: Optional[float] = None,
             bucket: str = 'default', refresh: bool = False,
             requestor: Optional[str] = None,
+            estimated_duration=None,
             command=None) -> Tuple[float, Optional[timedelta]]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
@@ -363,7 +363,8 @@ async def do_schedule(
         if not command or not update_changelog:
             raise PolicyUnavailable(suite, package)
         command = full_command(update_changelog, command)
-    estimated_duration = await estimate_duration(conn, package, suite)
+    if estimated_duration is None:
+        estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(
         conn, package, command, suite, offset, bucket=bucket,
         estimated_duration=estimated_duration, refresh=refresh,

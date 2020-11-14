@@ -88,6 +88,7 @@ from .logs import (
     )
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
+from .schedule import do_schedule
 from .trace import note, warning
 from .vcs import (
     get_vcs_abbreviation,
@@ -1061,14 +1062,14 @@ class QueueProcessor(object):
                     conn, result.main_branch_revision)
                 if run is None:
                     note('Scheduling control run for %s.', item.package)
-                    await state.add_to_queue(
-                        conn, item.package, [
+                    await do_schedule(
+                        conn, item.package, 'unchanged', command=[
                             'just-build',
                             ('--revision=%s' %
                              result.main_branch_revision
                              .decode('utf-8'))
                         ],
-                        'unchanged', offset=-1.0, bucket='control',
+                        bucket='control',
                         estimated_duration=duration, requestor='control')
         if not self.dry_run:
             async with self.database.acquire() as conn:

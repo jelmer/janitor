@@ -22,6 +22,7 @@ from datetime import datetime, timedelta
 import re
 from janitor import state
 from janitor.config import read_config
+from janitor.schedule import do_schedule
 
 parser = argparse.ArgumentParser('reschedule')
 parser.add_argument('result_code', type=str)
@@ -71,8 +72,8 @@ async def main(db, result_code, rejected, min_age=0):
                     not re.match(args.description_re, run.description, re.S)):
                 continue
             print('Rescheduling %s, %s' % (run.package, run.suite))
-            await state.add_to_queue(
-                conn2, run.package, run.command.split(' '), run.suite,
+            await do_schedule(
+                conn2, run.package, run.suite, command=run.command.split(' '),
                 estimated_duration=run.duration, requestor='reschedule',
                 refresh=args.refresh, offset=args.offset,
                 bucket='reschedule')
