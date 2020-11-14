@@ -250,15 +250,14 @@ async def add_to_queue(
 
         if not dry_run:
             added = await state.add_to_queue(
-                conn, package, command, suite, offset=offset,
-                bucket=bucket,
-                estimated_duration=estimated_duration,
-                context=context, requestor='scheduler',
-                requestor_relative=True)
+                conn, package=package, suite=suite,
+                command=command, offset=offset,
+                bucket=bucket, estimated_duration=estimated_duration,
+                context=context, requestor='scheduler')
         else:
             added = True
         if added:
-            trace.note('Scheduling %s (%s) with offset %d',
+            trace.note('Scheduling %s (%s) with offset %f',
                        package, suite, offset)
 
 
