@@ -80,6 +80,11 @@ from . import (
 from .config import read_config
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader
+from .schedule import (
+    full_command,
+    do_schedule,
+    TRANSIENT_ERROR_RESULT_CODES,
+    )
 from .trace import note, warning
 from .vcs import (
     VcsManager,
@@ -447,10 +452,6 @@ async def publish_from_policy(
         possible_transports: Optional[List[Transport]] = None,
         require_binary_diff: bool = False, force: bool = False,
         requestor: Optional[str] = None):
-    from .schedule import (
-        full_command,
-        estimate_duration,
-        )
     if not command:
         warning('no command set for %s', run.id)
         return
@@ -460,12 +461,11 @@ async def publish_from_policy(
             'Not publishing %s/%s: command is different (policy changed?). '
             'Build used %r, now: %r. Rescheduling.',
             run.package, run.suite, run.command, ' '.join(expected_command))
-        estimated_duration = await estimate_duration(
-            conn, run.package, run.suite)
-        await state.add_to_queue(
-            conn, run.package, expected_command, run.suite,
-            offset=-2.0, estimated_duration=estimated_duration, refresh=True,
-            requestor='publisher (changed policy)')
+        await do_schedule(
+            conn, run.package, run.suite,
+            command=expected_command,
+            bucket='update-new-mp',
+            refresh=True, requestor='publisher (changed policy)')
         return
 
     publish_id = str(uuid.uuid4())
@@ -1367,22 +1367,23 @@ applied independently.
 
     if last_run.result_code != 'success':
         last_run_age = datetime.now() - last_run.times[1]
-        from .schedule import TRANSIENT_ERROR_RESULT_CODES
         if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
             note('%s: Last run failed with transient error (%s). '
                  'Rescheduling.', mp.url, last_run.result_code)
-            await state.add_to_queue(
-                conn, last_run.package, shlex.split(last_run.command),
-                last_run.suite, offset=1.0, bucket='update-existing-mp',
+            await do_schedule(
+                conn, last_run.package, last_run.suite,
+                command=shlex.split(last_run.command),
+                bucket='update-existing-mp',
                 refresh=False,
                 requestor='publisher (transient error)')
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             note('%s: Last run failed (%s) a long time ago (%d days). '
                  'Rescheduling.', mp.url, last_run.result_code,
                  last_run_age.days)
-            await state.add_to_queue(
-                conn, last_run.package, shlex.split(last_run.command),
-                last_run.suite, offset=1.0, bucket='update-existing-mp',
+            await do_schedule(
+                conn, last_run.package, last_run.suite,
+                command=shlex.split(last_run.command),
+                bucket='update-existing-mp',
                 refresh=False,
                 requestor='publisher (retrying failed run after %d days)' %
                 last_run_age.days)
@@ -1488,9 +1489,10 @@ applied independently.
         if is_conflicted(mp):
             note('%s is conflicted. Rescheduling.', mp.url)
             if not dry_run:
-                await state.add_to_queue(
-                    conn, mp_run.package, shlex.split(mp_run.command),
-                    mp_run.suite, offset=-2.0, bucket='update-existing-mp',
+                await do_schedule(
+                    conn, mp_run.package, mp_run.suite,
+                    command=shlex.split(mp_run.command),
+                    bucket='update-existing-mp',
                     refresh=True, requestor='publisher (merge conflict)')
         return False
 
