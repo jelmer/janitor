@@ -35,8 +35,6 @@ from . import (
     )
 from .config import read_config
 
-SUCCESS_WEIGHT = 20
-POPULARITY_WEIGHT = 1
 FIRST_RUN_BONUS = 100.0
 
 
@@ -226,12 +224,14 @@ async def add_to_queue(
             "Probability of success: %s" % estimated_probability_of_success
         if success_chance is not None:
             success_chance *= estimated_probability_of_success
-        estimated_cost = 50.0 + (
-            1.0 * estimated_duration.total_seconds() +
-            estimated_duration.microseconds / 1000.0)
-        assert estimated_cost > 0.0, "Estimated cost: %f" % estimated_cost
+        estimated_cost = 20000.0 + (
+            1.0 * estimated_duration.total_seconds() * 1000.0 +
+            estimated_duration.microseconds)
+        assert estimated_cost > 0.0, "%s: Estimated cost: %f" % (
+            package, estimated_cost)
         if max_inst:
-            estimated_popularity = max(popcon.get(package, 0), 10) / max_inst
+            estimated_popularity = max(
+                popcon.get(package, 0.0) / float(max_inst) * 5.0, 1.0)
         else:
             estimated_popularity = 1.0
         estimated_value = (
@@ -242,10 +242,11 @@ async def add_to_queue(
         offset = default_offset + offset
         trace.note(
             'Package %s: '
-            'estimated value((%.2f * %d) * (%.2f * %d) * %d = %.2f), '
-            'estimated cost (%f)',
-            package, estimated_popularity, POPULARITY_WEIGHT,
-            estimated_probability_of_success, SUCCESS_WEIGHT,
+            'estimated_popularity(%.2f) * '
+            'probability_of_success(%.2f) * value(%d) = '
+            'estimated_value(%.2f), estimated cost (%f)',
+            package, estimated_popularity,
+            estimated_probability_of_success,
             value, estimated_value, estimated_cost)
 
         if not dry_run:
