@@ -617,11 +617,13 @@ async def handle_publish_id(request):
 async def handle_report(request):
     suite = request.match_info['suite']
     report = {}
+    merge_proposals = {}
     async with request.app.db.acquire() as conn:
-        async for (run, maintainer_email, uploader_emails, branch_url,
-                   publish_mode, changelog_mode, command
-                   ) in state.iter_publish_ready(
-                       conn, suites=[suite], publishable_only=False):
+        async for package, url, status in await state.iter_proposals(
+                conn, suite=suite):
+            merge_proposals.setdefault(package, []).append(
+                {'url': url, 'status': status})
+        async for run in state.iter_last_unabsorbed_runs(conn, suites=[suite]):
             data = {
                 'timestamp': run.times[0].isoformat(),
             }
@@ -633,6 +635,9 @@ async def handle_report(request):
                 data['upstream-version'] = run.result.get('upstream_version')
                 data['old-upstream-version'] = run.result.get(
                     'old_upstream_version')
+            if run.suite == 'multiarch-fixes':
+                data['applied-hints'] = run.result.get('applied-hints')
+            data['merge-proposal'] = merge_proposals.get(package, [])
             report[run.package] = data
     return web.json_response(
         report,
