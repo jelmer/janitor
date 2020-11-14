@@ -11,4 +11,4 @@ export PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter:$(pwd)
    python3 ./orphan-candidates.py
    python3 ./uncommitted-candidates.py
 ) | python3 -m janitor.candidates "$@"
-python3 -m janitor.schedule --policy=policy.conf "$@"
+python3 -m janitor.schedule "$@"
