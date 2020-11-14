@@ -118,7 +118,8 @@ build_duration = Histogram(
     ['package', 'suite'])
 current_tick = Gauge(
     'current_tick',
-    'The current tick in the queue that\'s being processed')
+    'The current tick in the queue that\'s being processed',
+    labelnames=('bucket', ))
 run_count = Gauge(
     'run_count', 'Number of total runs.',
     labelnames=('suite', ))
@@ -938,7 +939,8 @@ async def export_queue_length(db: state.Database) -> None:
             queue_length.set(await state.queue_length(conn))
             queue_duration.set(
                 (await state.queue_duration(conn)).total_seconds())
-            current_tick.set(await state.current_tick(conn))
+            for bucket, tick in await state.current_tick(conn):
+                current_tick.label(bucket=bucket).set(tick)
         await asyncio.sleep(60)
 
 

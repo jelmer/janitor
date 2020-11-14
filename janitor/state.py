@@ -710,9 +710,9 @@ async def queue_length(conn: asyncpg.Connection, minimum_priority=None):
 
 
 async def current_tick(conn: asyncpg.Connection):
-    ret = await conn.fetchval('SELECT MIN(priority) FROM queue')
-    if ret is None:
-        ret = 0
+    ret = {}
+    for row in await conn.fetchval('SELECT bucket, MIN(priority) FROM queue'):
+        ret[row[0]] = row[1] or 0
     return ret
 
 
