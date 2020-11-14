@@ -351,7 +351,8 @@ class PolicyUnavailable(Exception):
 
 async def do_schedule(
             conn: asyncpg.Connection, package: str, suite: str,
-            offset: Optional[float] = None, refresh: bool = False,
+            offset: Optional[float] = None,
+            bucket: str = 'default', refresh: bool = False,
             requestor: Optional[str] = None,
             command=None) -> Tuple[float, Optional[timedelta]]:
     if offset is None:
@@ -364,7 +365,7 @@ async def do_schedule(
         command = full_command(update_changelog, command)
     estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(
-        conn, package, command, suite, offset,
+        conn, package, command, suite, offset, bucket=bucket,
         estimated_duration=estimated_duration, refresh=refresh,
         requestor=requestor)
     return offset, estimated_duration
