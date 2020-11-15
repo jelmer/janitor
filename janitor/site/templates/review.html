@@ -5,9 +5,11 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
+{% for role in target_branches %}
 <div id='diff'>
-{{highlight_diff(show_diff())|safe}}
+{{highlight_diff(show_diff(role))|safe}}
 </div>
+{% endfor %}
 
 <div id='debdiff'>
 {{show_debdiff()|safe}}
@@ -47,7 +49,7 @@ function loadNewJob() {
   if ((newJob = todo.shift()) !== undefined) {
     loadRun(newJob[0], newJob[1]);
   } else {
-    $('#diff').replaceWith('All done!');
+    $('.diff.main').replaceWith('All done!');
     $('#debdiff').replaceWith('');
     $('#options').remove();
     $('#full-run-link').remove();

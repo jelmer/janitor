@@ -29,7 +29,8 @@ from typing import (
     Union,
     Callable,
     AsyncIterable,
-    Set
+    Set,
+    Dict
     )
 from breezy import urlutils
 
@@ -85,7 +86,9 @@ async def store_run(
         build_version: Optional[Version],
         build_distribution: Optional[str], branch_name: str,
         revision: Optional[bytes], subworker_result: Optional[Any], suite: str,
-        logfilenames: List[str], value: Optional[int], worker_name: str):
+        logfilenames: List[str], value: Optional[int], worker_name: str,
+        result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
+        result_tags: Optional[List[Tuple[str, bytes]]] = None):
     """Store a run.
 
     Args:
@@ -109,14 +112,30 @@ async def store_run(
       logfilenames: List of log filenames
       value: Value of the run (as int)
       worker_name: Name of the worker
+      result_branches: Result branches
+      result_tags: Result tags
     """
+    if result_branches is None:
+        result_branches_updated = None
+    else:
+        result_branches_updated = [
+            (role, n, br.decode('utf-8'), r.decode('utf-8'))
+            for (role, n, br, r) in result_branches]
+
+    if result_tags is None:
+        result_tags_updated = None
+    else:
+        result_tags_updated = [
+            (n, r.decode('utf-8')) for (n, r) in result_tags]
+
     await conn.execute(
         "INSERT INTO run (id, command, description, result_code, "
         "start_time, finish_time, package, instigated_context, context, "
         "build_version, build_distribution, main_branch_revision, "
         "branch_name, revision, result, suite, branch_url, logfilenames, "
-        "value, worker) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20)",
+        "value, worker, result_branches, result_tags) VALUES "
+        "($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
         run_id, ' '.join(command), description, result_code,
         start_time, finish_time, name, instigated_context, context,
         str(build_version) if build_version else None, build_distribution,
@@ -124,7 +143,8 @@ async def store_run(
         branch_name,
         revision.decode('utf-8') if revision else None,
         subworker_result if subworker_result else None, suite,
-        vcs_url, logfilenames, value, worker_name)
+        vcs_url, logfilenames, value, worker_name,
+        result_branches_updated, result_tags_updated)
 
 
 async def store_publish(conn: asyncpg.Connection,
@@ -280,6 +300,8 @@ class Run(object):
     review_status: str
     review_comment: Optional[str]
     worker_name: Optional[str]
+    result_branches: Optional[List[Any]]
+    result_tags: Optional[List[Any]]
 
     __slots__ = [
             'id', 'times', 'command', 'description', 'package',
@@ -287,14 +309,16 @@ class Run(object):
             'build_distribution', 'result_code', 'branch_name',
             'main_branch_revision', 'revision', 'context', 'result',
             'suite', 'instigated_context', 'branch_url', 'logfilenames',
-            'review_status', 'review_comment', 'worker_name']
+            'review_status', 'review_comment', 'worker_name',
+            'result_branches', 'result_tags']
 
     def __init__(self, run_id, times, command, description, package,
                  build_version,
                  build_distribution, result_code, branch_name,
                  main_branch_revision, revision, context, result,
                  suite, instigated_context, branch_url, logfilenames,
-                 review_status, review_comment, worker_name):
+                 review_status, review_comment, worker_name,
+                 result_branches, result_tags):
         self.id = run_id
         self.times = times
         self.command = command
@@ -315,6 +339,8 @@ class Run(object):
         self.review_status = review_status
         self.review_comment = review_comment
         self.worker_name = worker_name
+        self.result_branches = result_branches
+        self.result_tags = result_tags
 
     @property
     def duration(self) -> datetime.timedelta:
@@ -342,7 +368,8 @@ class Run(object):
                    context=row[12], result=row[13], suite=row[14],
                    instigated_context=row[15], branch_url=row[16],
                    logfilenames=row[17], review_status=row[18],
-                   review_comment=row[19], worker_name=row[20])
+                   review_comment=row[19], worker_name=row[20],
+                   result_branches=row[21], result_tags=row[22])
 
     def __len__(self) -> int:
         return len(self.__slots__)
@@ -354,7 +381,8 @@ class Run(object):
                 self.revision, self.context, self.result, self.suite,
                 self.instigated_context, self.branch_url,
                 self.logfilenames, self.review_status,
-                self.review_comment, self.worker_name)
+                self.review_comment, self.worker_name,
+                self.result_branches, self.result_tags)
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Run):
@@ -381,7 +409,7 @@ SELECT
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
-    review_comment, worker
+    review_comment, worker, result_branches, result_tags
 FROM
     last_runs
 WHERE
@@ -428,7 +456,7 @@ SELECT
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
-    review_comment, worker
+    review_comment, worker, result_branches, result_tags
 FROM
     run
 """
@@ -467,10 +495,12 @@ async def iter_proposals(conn: asyncpg.Connection, package=None, suite=None):
     query = """
 SELECT
     DISTINCT ON (merge_proposal.url)
-    merge_proposal.package, merge_proposal.url, merge_proposal.status, run.suite
+    merge_proposal.package, merge_proposal.url, merge_proposal.status,
+    run.suite
 FROM
     merge_proposal
-LEFT JOIN run ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 """
     if package is not None:
         if isinstance(package, list):
@@ -522,6 +552,8 @@ SELECT
     run.review_status,
     run.review_comment,
     run.worker,
+    run.result_branches,
+    run.result_tags,
     merge_proposal.url, merge_proposal.status
 FROM
     merge_proposal
@@ -542,7 +574,7 @@ LEFT JOIN run ON merge_proposal.revision = run.revision
         query += " WHERE run.suite = $1"
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     for row in await conn.fetch(query, *args):
-        yield Run.from_row(row[:21]), row[21], row[22]
+        yield Run.from_row(row[:23]), row[23], row[24]
 
 
 class QueueItem(object):
@@ -759,7 +791,9 @@ SELECT
   logfilenames,
   review_status,
   review_comment,
-  worker
+  worker,
+  result_branches,
+  result_tags
 FROM
   run
 WHERE
@@ -795,7 +829,9 @@ SELECT
   logfilenames,
   review_status,
   review_comment,
-  worker
+  worker,
+  result_branches,
+  result_tags
 FROM
   last_unabsorbed_runs
 WHERE package = $1 AND suite = $2
@@ -833,7 +869,9 @@ SELECT DISTINCT ON (package)
   logfilenames,
   review_status,
   review_comment,
-  worker
+  worker,
+  result_branches,
+  result_tags
 FROM
   last_unabsorbed_runs
 """
@@ -898,7 +936,9 @@ SELECT
   logfilenames,
   review_status,
   review_comment,
-  worker
+  worker,
+  result_branches,
+  result_tags
 FROM last_runs
 """
     where = []
@@ -972,6 +1012,8 @@ SELECT
   run.review_status,
   run.review_comment,
   run.worker,
+  run.result_branches,
+  run.result_tags,
   package.maintainer_email,
   package.uploader_emails,
   run.branch_url,
@@ -1012,7 +1054,7 @@ ORDER BY
         query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
         yield tuple(
-            [Run.from_row(record[:21])] + list(record[21:-1]) +
+            [Run.from_row(record[:23])] + list(record[23:-1]) +
             [shlex.split(record[-1]) if record[-1] else None])  # type: ignore
 
 
@@ -1170,8 +1212,8 @@ async def iter_candidates_with_policy(
         packages: Optional[List[str]] = None,
         suite: Optional[str] = None
         ) -> List[Tuple[
-            Package, str, Optional[str], Optional[int], Optional[float], str,
-            str, List[str]]]:
+            Package, str, Optional[str], Optional[int], Optional[float],
+            Dict[str, str], str, List[str]]]:
     query = """
 SELECT
   package.name,
@@ -1188,7 +1230,7 @@ SELECT
   candidate.context,
   candidate.value,
   candidate.success_chance,
-  policy.mode,
+  policy.publish,
   policy.update_changelog,
   policy.command
 FROM candidate
@@ -1209,7 +1251,7 @@ WHERE NOT package.removed
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
     return [(Package.from_row(row), row[10], row[11], row[12], row[13],
-             (row[14], row[15],
+             (dict(row[14]), row[15],
               shlex.split(row[16]) if row[16] is not None else None)
              )   # type: ignore
             for row in await conn.fetch(query, *args)]
@@ -1290,7 +1332,8 @@ SELECT
     run.package, run.build_version, run.build_distribution, run.result_code,
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
-    run.logfilenames, run.review_status, run.review_comment, run.worker
+    run.logfilenames, run.review_status, run.review_comment, run.worker,
+    run.result_branches, run.result_tags
 FROM run inner join merge_proposal on merge_proposal.revision = run.revision
 WHERE merge_proposal.url = $1
 ORDER BY run.finish_time ASC
@@ -1478,32 +1521,28 @@ async def update_branch_url(
         'where name = $3', vcs_type, vcs_url, package)
 
 
-async def update_publish_policy(
-        conn: asyncpg.Connection, name: str, suite: str, publish_mode: str,
+async def update_policy(
+        conn: asyncpg.Connection, name: str, suite: str,
+        publish_mode: Dict[str, str],
         changelog_mode: str, command: List[str]) -> None:
     await conn.execute(
         'INSERT INTO policy '
-        '(package, suite, mode, update_changelog, command) '
-        'VALUES ($1, $2, $3, $4, $5) '
+        '(package, suite, mode, update_changelog, command, publish) '
+        'VALUES ($1, $2, $3, $4, $5, $6) '
         'ON CONFLICT (package, suite) DO UPDATE SET '
         'mode = EXCLUDED.mode, '
         'update_changelog = EXCLUDED.update_changelog, '
-        'command = EXCLUDED.command',
-        name, suite, publish_mode, changelog_mode,
-        (' '.join(command) if command else None))
-    await conn.execute(
-        'INSERT INTO publish_policy '
-        '(package, suite, role, mode) '
-        'VALUES ($1, $2, $3, $4) '
-        'ON CONFLICT (package, suite, role) DO UPDATE SET '
-        'mode = EXCLUDED.mode',
-        name, suite, 'main', publish_mode)
+        'command = EXCLUDED.command, '
+        'publish = EXCLUDED.publish',
+        name, suite, publish_mode.get('main'), changelog_mode,
+        (' '.join(command) if command else None),
+        list(publish_mode.items()))
 
 
-async def iter_publish_policy(
+async def iter_policy(
         conn: asyncpg.Connection, package: Optional[str] = None):
     query = (
-        'SELECT package, suite, mode, update_changelog, command '
+        'SELECT package, suite, publish, update_changelog, command '
         'FROM policy')
     args = []
     if package:
@@ -1606,22 +1645,3 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
 async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
     return await conn.fetchrow(
         "SELECT userinfo FROM site_session WHERE id = $1", session_id)
-
-
-async def store_result_branches(
-        conn: asyncpg.Connection, run_id: str,
-        branches: List[Tuple[str, str, bytes, bytes]]):
-    await conn.executemany("""\
-INSERT INTO result_branch (run_id, role, remote_name, base_revision, revision)
-VALUES ($1, $2, $3, $4, $5)""", [(run_id, fn, n, br.decode('utf-8'),
-                              r.decode('utf-8'))
-                             for (fn, n, br, r) in branches])
-
-
-async def store_result_tags(
-        conn: asyncpg.Connection, run_id: str,
-        branches: List[Tuple[str, bytes]]):
-    await conn.executemany("""\
-INSERT INTO result_tag (run_id, actual_name, revision)
-VALUES ($1, $2, $3)""", [(run_id, n, r.decode('utf-8'))
-                         for (n, r) in branches])

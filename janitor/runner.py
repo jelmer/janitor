@@ -1086,13 +1086,9 @@ class QueueProcessor(object):
                     revision=result.revision,
                     subworker_result=result.subworker_result, suite=item.suite,
                     logfilenames=result.logfilenames, value=result.value,
-                    worker_name=active_run.worker_name)
-                if result.branches:
-                    await state.store_result_branches(
-                        conn, result.log_id, result.branches)
-                if result.tags:
-                    await state.store_result_tags(
-                        conn, result.log_id, result.tags)
+                    worker_name=active_run.worker_name,
+                    result_branches=result.branches,
+                    result_tags=result.tags)
                 if result.target_result.build_version:
                     await state.store_debian_build(
                         conn, result.log_id, item.package,
@@ -1340,7 +1336,6 @@ async def handle_assign(request):
     assignment = {
         'id': active_run.log_id,
         'description': '%s on %s' % (item.suite, item.package),
-        'suite': suite_config.name,
         'queue_id': item.id,
         'branch': {
             'url': active_run.main_branch_url,

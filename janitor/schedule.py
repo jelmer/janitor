@@ -105,14 +105,14 @@ def full_command(update_changelog: str, command: List[str]) -> List[str]:
 
 
 async def schedule_from_candidates(iter_candidates_with_policy):
-    for package, suite, context, value, success_chance, publish_policy in (
+    for package, suite, context, value, success_chance, policy in (
             iter_candidates_with_policy):
         if package.branch_url is None:
             continue
 
-        (publish_mode, update_changelog, command) = publish_policy
+        (publish_mode, update_changelog, command) = policy
 
-        if publish_mode == 'skip':
+        if all([mode == 'skip' for mode in publish_mode]):
             trace.mutter('%s: skipping, per policy', package.name)
             continue
 
@@ -120,7 +120,8 @@ async def schedule_from_candidates(iter_candidates_with_policy):
             trace.mutter('%s: skipping, no command set', package.name)
             continue
 
-        value += PUBLISH_MODE_VALUE[publish_mode]
+        for mode in publish_mode.values():
+            value += PUBLISH_MODE_VALUE[mode]
 
         entry_command = full_command(update_changelog, command)
 
