@@ -576,11 +576,12 @@ async def publish_from_policy(
 
 async def diff_request(request):
     run_id = request.match_info['run_id']
+    role = request.match_info['role']
     async with request.app.db.acquire() as conn:
         run = await state.get_run(conn, run_id)
         if not run:
             raise web.HTTPNotFound(text='No such run: %r' % run_id)
-    diff = get_run_diff(request.app.vcs_manager, run)
+    diff = get_run_diff(request.app.vcs_manager, run, role)
     return web.Response(body=diff, content_type='text/x-diff')
 
 
@@ -1024,7 +1025,7 @@ async def run_web_server(listen_addr: str, port: int,
     app.require_binary_diff = require_binary_diff
     setup_metrics(app)
     app.router.add_post("/{suite}/{package}/publish", publish_request)
-    app.router.add_get("/diff/{run_id}", diff_request)
+    app.router.add_get("/diff/{run_id}/{role}", diff_request)
     app.router.add_post(
         "/git/{package}/{service:git-receive-pack|git-upload-pack}",
         dulwich_service)
