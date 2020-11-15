@@ -483,7 +483,7 @@ class RemoteVcsManager(VcsManager):
             self.base_url, vcs_type, package)
 
 
-def get_run_diff(vcs_manager: VcsManager, run) -> bytes:
+def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     f = BytesIO()
     try:
         repo = vcs_manager.get_repository(run.package)
@@ -492,13 +492,19 @@ def get_run_diff(vcs_manager: VcsManager, run) -> bytes:
     if repo is None:
         return b'Local VCS repository for %s temporarily inaccessible' % (
             run.package.encode('ascii'))
+    if role == 'main':
+        old_revid = run.main_branch_revision
+        new_revid = run.revision
+    else:
+        raise NotImplementedError  # TODO(jelmer): Check result_branch
+
     try:
-        old_tree = repo.revision_tree(run.main_branch_revision)
+        old_tree = repo.revision_tree(old_revid)
     except NoSuchRevision:
         return b'Old revision %s temporarily missing' % (
             run.main_branch_revision)
     try:
-        new_tree = repo.revision_tree(run.revision)
+        new_tree = repo.revision_tree(new_revid)
     except NoSuchRevision:
         return b'New revision %s temporarily missing' % (
             run.revision)
