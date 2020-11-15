@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include [suite + "-sidebar.html", "generic-sidebar.html"] %}{% endblock %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, describe_publish_policy, publish_buttons, result_code_explanation, display_result_code, display_branch_url with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, describe_publish_policy, publish_buttons, result_code_explanation, display_result_code, display_vcs_diffs, display_branch_url with context %}
 {% block page_title %}{{ suite }} Packages - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
@@ -77,11 +77,8 @@ Nothing to do for {{ package }}.
 
 </div>
 
-<h3>Diff</h3>
+{{ display_vcs_diffs(show_diff, result_branches) }}
 
-{{ highlight_diff(show_diff('main'))|safe }}
-
-{% set debdiff = show_debdiff() %}
 {% if debdiff %}
 <h3>Debdiff</h3>
 

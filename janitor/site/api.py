@@ -668,7 +668,7 @@ async def handle_publish_ready(request):
                        review_status=review_status,
                        publishable_only=publishable_only):
             ret.append(
-                (run.package, run.id, [rb.role for rb in run.result_branches]))
+                (run.package, run.id, [rb[0] for rb in run.result_branches]))
     return web.json_response(ret, status=200)
 
 

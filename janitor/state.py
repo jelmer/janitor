@@ -300,8 +300,8 @@ class Run(object):
     review_status: str
     review_comment: Optional[str]
     worker_name: Optional[str]
-    result_branches: Optional[List[Any]]
-    result_tags: Optional[List[Any]]
+    result_branches: Optional[List[Tuple[str, str, bytes, bytes]]]
+    result_tags: Optional[List[Tuple[str, bytes]]]
 
     __slots__ = [
             'id', 'times', 'command', 'description', 'package',
@@ -339,8 +339,18 @@ class Run(object):
         self.review_status = review_status
         self.review_comment = review_comment
         self.worker_name = worker_name
-        self.result_branches = result_branches
-        self.result_tags = result_tags
+        if result_branches is None:
+            self.result_branches = None
+        else:
+            self.result_branches = [
+                (role, name, br.encode('utf-8') if br else None,
+                 r.encode('utf-8') if r else None)
+                for (role, name, br, r) in result_branches]
+        if result_tags is None:
+            self.result_tags = result_tags
+        else:
+            self.result_tags = [
+                (name, r.encode('utf-8')) for (name, r) in result_tags]
 
     @property
     def duration(self) -> datetime.timedelta:

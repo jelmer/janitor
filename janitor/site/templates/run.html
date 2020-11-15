@@ -1,11 +1,13 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
 {% from "codeblock.html" import include_console_log with context %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, schedule_control_button, publish_buttons, install_commands, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url, display_publish_result with context %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, schedule_control_button, publish_buttons, install_commands, display_result_code, result_code_explanation, display_branch_url, display_upstream_branch_url, display_vcs_diffs, display_publish_result with context %}
 {% block page_title %}Run details - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ run_id }}">
 <h1>Run of {{ suite }} for {{ package }}</h1>
+
+<!-- {{ run.result_branches }} -->
 
 <ul class="metadata">
 <li>Worker: {{ run.worker_name }}</li>
@@ -110,17 +112,7 @@ Mark package as orphaned.
 {% endif %}
 
 {% if revision and result_code in ('success', 'nothing-to-do') and suite != 'unchanged' %}
-{% set diff = show_diff('main') %}
-{% if diff %}
-<h3>Diff</h3>
-
-{% if diff.split('\n')|length < 200 %}
-{{ highlight_diff(diff)|safe }}
-{% else %}
-<p>Diff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/diff">raw diff</a>.</p>
-{% endif %}
-
-{% endif %}
+{{ display_vcs_diffs(show_diff, run.result_branches) }}
 {% endif %}
 
 {% if debdiff %}

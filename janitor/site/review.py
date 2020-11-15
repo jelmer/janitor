@@ -82,7 +82,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         'suite': run.suite,
         'todo': [
             (entry[0].package, entry[0].id,
-             [rb['role'] for rb in entry[0].result_branches])
+             [rb[0] for rb in entry[0].result_branches])
             for entry in entries],
         }
     return await render_template_for_request('review.html', request, kwargs)
