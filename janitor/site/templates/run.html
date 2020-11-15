@@ -71,14 +71,14 @@ function submit_review(status) {
 {% if vcs_url %}
 {{ reschedule_button(suite, package, "Reschedule") }}
 {{ reschedule_button(suite, package, "Reschedule (from scratch)", data={'refresh': '1'}, id='reschedule-refresh') }}
-{% if branch_name %}
+{% if run.result_branches %}
 {{ publish_buttons(suite, package) }}
 {% endif %}
 {% endif %}
 
-{% if branch_name %}
+{% if run.result_branches %}
 {%  if suite != 'unchanged' %}
-{{ merge_command(package, branch_name, vcs) }}
+{{ merge_command(package, suite, run.result_branches, vcs) }}
 {%  endif %}
 {% else %}
 {%  if result_code not in ('nothing-to-do', 'nothing-new-to-do', 'missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown', 'requires-nested-tree-support', 'upstream-unsupported-vcs-svn', 'control-files-in-root', 'success') %}

@@ -38,7 +38,6 @@ async def generate_pkg_file(
             finish_time = None
             run_id = None
             result = None
-            branch_name = None
             branch_url = None
         else:
             command = run.command
@@ -49,7 +48,6 @@ async def generate_pkg_file(
             finish_time = run.times[1]
             run_id = run.id
             result = run.result
-            branch_name = run.branch_name
             branch_url = run.branch_url
         previous_runs = [
             r async for r in
@@ -77,7 +75,6 @@ async def generate_pkg_file(
         'candidate_success_chance': candidate_success_chance,
         'candidate_value': candidate_value,
         'previous_runs': previous_runs,
-        'branch_name': branch_name,
         'branch_url': branch_url,
         'run': run,
         'queue_position': queue_position,

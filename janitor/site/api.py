@@ -452,7 +452,6 @@ async def handle_run(request):
             'package': run.package,
             'build_info': build_info,
             'result_code': run.result_code,
-            'branch_name': run.branch_name,
             })
     return web.json_response(
         response_obj, headers={'Cache-Control': 'max-age=600'})

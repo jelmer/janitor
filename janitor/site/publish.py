@@ -5,9 +5,8 @@ async def iter_publish_history(conn, limit=None):
     query = """
 SELECT
     publish.timestamp, publish.package, publish.branch_name,
-    publish.main_branch_revision, publish.revision, publish.mode,
-    publish.merge_proposal_url, publish.result_code, publish.description,
-    package.vcs_browse
+    publish.mode, publish.merge_proposal_url, publish.result_code,
+    publish.description, package.vcs_browse
 FROM
     publish
 JOIN package ON publish.package = package.name
