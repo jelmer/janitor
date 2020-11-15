@@ -33,7 +33,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
                           suites=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
-                       conn, review_status=['unreviewed'], limit=1,
+                       conn, review_status=['unreviewed'], limit=10,
                        suites=suites, publishable_only=True)]
     if not entries:
         return await render_template_for_request(
@@ -80,5 +80,9 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         'run_id': run.id,
         'branches': run.result_branches,
         'suite': run.suite,
+        'todo': [
+            (entry[0].package, entry[0].id,
+             [rb['role'] for rb in entry[0].result_branches])
+            for entry in entries],
         }
     return await render_template_for_request('review.html', request, kwargs)
