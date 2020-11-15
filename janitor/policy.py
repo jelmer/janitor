@@ -123,15 +123,16 @@ async def main(args):
             current_policy[(package, suite)] = cur_pol
         for package in await state.iter_packages(conn):
             for suite in suites:
-                package_policy = apply_policy(
+                intended_policy = apply_policy(
                     policy, suite, package.name, package.vcs_url,
                     package.maintainer_email,
                     package.uploader_emails)
-                if current_policy.get((package.name, suite)) != package_policy:
+                stored_policy = current_policy.get((package.name, suite))
+                if stored_policy != intended_policy:
                     print('%s/%s -> %r' % (
-                        package.name, suite, package_policy))
+                        package.name, suite, intended_policy))
                     await state.update_policy(
-                        conn, package.name, suite, *package_policy)
+                        conn, package.name, suite, *intended_policy)
 
 
 if __name__ == '__main__':

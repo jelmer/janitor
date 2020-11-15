@@ -1549,8 +1549,9 @@ async def iter_policy(
         query += ' WHERE package = $1'
         args.append(package)
     for row in await conn.fetch(query, *args):
-        yield (row[0], row[1], (row[2], row[3],
-               shlex.split(row[4]) if row[4] else None))
+        yield (row[0], row[1], (
+            {k[0]: k[1] for k in row[2]},
+            row[3], shlex.split(row[4]) if row[4] else None))
 
 
 async def get_policy(

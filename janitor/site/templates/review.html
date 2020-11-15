@@ -40,9 +40,9 @@ function loadRun(package, run_id, roles) {
    });
 }
 
-var todo = [];
-refreshData();
+var todo = {{ todo|tojson }};
 var queued = new Set();
+todo.forEach(function(entry) { queued.add(entry[1]); });
 
 $(function() {
   loadRun('{{ package_name }}', '{{ run_id }}', [{% for entry in branches %}'entry.role'{% if not loop.last %}, %{ endif %}]);
