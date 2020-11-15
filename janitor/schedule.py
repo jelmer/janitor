@@ -215,6 +215,8 @@ async def add_to_queue(
         if package in removed:
             continue
         estimated_duration = await estimate_duration(conn, package, suite)
+        assert estimated_duration >= timedelta(0), \
+                "%s: estimated duration < 0.0: %r" % (package, estimated_duration)
         (estimated_probability_of_success,
          total_previous_runs) = await estimate_success_probability(
             conn, package, suite, context)

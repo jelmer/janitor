@@ -43,10 +43,10 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
      publish_mode, changelog_mode,
      command) = entries.pop(0)
 
-    async def show_diff():
+    async def show_diff(role):
         if not run.revision or run.revision == run.main_branch_revision:
             return ''
-        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
+        url = urllib.parse.urljoin(publisher_url, 'diff/%s/%s' % (run.id, role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:

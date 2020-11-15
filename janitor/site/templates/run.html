@@ -110,7 +110,7 @@ Mark package as orphaned.
 {% endif %}
 
 {% if revision and result_code in ('success', 'nothing-to-do') and suite != 'unchanged' %}
-{% set diff = show_diff() %}
+{% set diff = show_diff('main') %}
 {% if diff %}
 <h3>Diff</h3>
 

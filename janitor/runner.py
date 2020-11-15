@@ -941,7 +941,7 @@ async def export_queue_length(db: state.Database) -> None:
         async with db.acquire() as conn:
             queue_duration.set(
                 (await state.queue_duration(conn)).total_seconds())
-            for bucket, tick, length in await state.queue_stats(conn):
+            async for bucket, tick, length in state.queue_stats(conn):
                 current_tick.labels(bucket=bucket).set(tick)
                 queue_length.labels(bucket=bucket).set(length)
         await asyncio.sleep(60)
