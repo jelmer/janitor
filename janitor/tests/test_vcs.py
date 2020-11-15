@@ -70,7 +70,7 @@ File b
             main_branch_revision = old_revid
             revision = new_revid
 
-        lines = get_run_diff(vcs_manager, Run()).splitlines()
+        lines = get_run_diff(vcs_manager, Run(), 'main').splitlines()
         self.assertEqual(b"=== modified file 'a'", lines[0])
         self.assertEqual(b"@@ -1,1 +1,2 @@", lines[3])
         self.assertEqual(b" File a", lines[4])

@@ -305,8 +305,9 @@ async def handle_diff(request):
                 text='no unabsorbed run for %s/%s' % (package, suite),
                 status=404)
         run_id = run.id
+    role = request.match_info.get('role', 'main')
     publisher_url = request.app.publisher_url
-    url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run_id)
+    url = urllib.parse.urljoin(publisher_url, 'diff/%s/%s' % (run_id, role))
     try:
         async with request.app.http_client_session.get(url) as resp:
             if resp.status == 200:
