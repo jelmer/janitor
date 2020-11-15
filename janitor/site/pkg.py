@@ -102,7 +102,6 @@ async def generate_run_file(
     kwargs['build_distribution'] = run.build_distribution
     kwargs['result_code'] = run.result_code
     kwargs['result'] = run.result
-    kwargs['branch_name'] = run.branch_name
     kwargs['revision'] = run.revision
     kwargs['branch_url'] = run.branch_url
     kwargs['tracker_url'] = partial(tracker_url, config)
@@ -128,9 +127,14 @@ async def generate_run_file(
     kwargs['publish_history'] = publish_history
 
     async def show_diff(role):
-        if not run.revision or run.revision == run.main_branch_revision:
+        try:
+            (remote_name, base_revid, revid) = run.get_result_branch(role)
+        except KeyError:
+            return 'No branch with role %s' % role
+        if base_revid == revid:
             return ''
-        url = urllib.parse.urljoin(publisher_url, 'diff/%s/%s' % (run.id, role))
+        url = urllib.parse.urljoin(
+            publisher_url, 'diff/%s/%s' % (run.id, role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -144,7 +148,7 @@ async def generate_run_file(
     kwargs['show_diff'] = show_diff
 
     async def show_debdiff():
-        if not run.has_artifacts() or not run.main_branch_revision:
+        if not run.has_artifacts():
             return ''
         unchanged_run = kwargs.get('unchanged_run')
         if not unchanged_run or not unchanged_run.has_artifacts():

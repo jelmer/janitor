@@ -23,14 +23,18 @@ cd {{ package }}
 {% endif %}
 {% endmacro %}
 
-{% macro merge_command(package, branch_name, vcs) %}
+{% macro merge_command(package, suite, result_branches, vcs) %}
 {% set vcs = vcs_type() %}
 {% if vcs == 'git' %}
 <p>Merge these changes:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>git pull {{ vcs_manager.get_repository_url(package, 'git') }} {{ branch_name }}</pre></div></div>
+<div class="highlight-default notranslate"><div class="highlight">
+{% for role, remote_name, base_revision, revision in result_branches %}
+<pre>git pull {{ vcs_manager.get_repository_url(package, 'git') }} {{ suite }}/{{ role }}</pre>
+{% endfor %}
+</div></div>
 {% elif vcs == 'bzr' %}
 <p>Merge these changes:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ vcs_manager.get_branch_url(package, branch_name, 'bzr') }}</pre></div></div>
+<div class="highlight-default notranslate"><div class="highlight"><pre>brz merge {{ vcs_manager.get_branch_url(package, suite, 'bzr') }}</pre></div></div>
 {% else %}
 <!-- Unknown vcs: {{ vcs }} -->
 {% endif %}

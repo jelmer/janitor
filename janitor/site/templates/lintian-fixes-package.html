@@ -73,16 +73,16 @@ Nothing to do for {{ package }}.
 
 {% else %}
 
-{% if branch_name %}
+{% if run.result_branches %}
 
 <div class="section" id="ready-changes">
 <h2>Ready changes</h2>
 
-{% if branch_name %}
+{% if run.result_branches %}
 {{ publish_buttons(suite, package) }}
 {% endif %}
 
-{{ merge_command(package, branch_name, vcs) }}
+{{ merge_command(package, suite, run.result_branches, vcs) }}
 
 </div>
 

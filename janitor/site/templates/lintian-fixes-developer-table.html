@@ -22,7 +22,7 @@
       {% if candidates - fixed %}{% for tag in candidates %}{% if not run or tag not in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endif %}{% endfor %}{% endif %}</td>
     <td>
         {% if run %}
-          {% if run.revision == run.main_branch_revision and result_code == 'nothing-to-do' %}
+          {% if not run.result_branches and result_code == 'nothing-to-do' %}
             Nothing to do
           {% elif run.result_code in ('success', 'nothing-new-to-do') %}
             {% for tag in fixed %}{{ lintian_tag_link(tag) }}{% if not loop.last %} {% endif %}{% endfor %}
@@ -40,7 +40,7 @@
     </td>
     <td>
       {% if open_proposal_url %}<a href="{{ open_proposal_url }}">proposal</a>
-      {% elif run and run.branch_name %}
+      {% elif run and run.result_branches %}
       {{ publish_buttons(run.suite, run.package, id_suffix='-'+run.package) }}
       {%endif %}
     </td>

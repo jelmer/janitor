@@ -140,8 +140,7 @@ async def store_run(
         start_time, finish_time, name, instigated_context, context,
         str(build_version) if build_version else None, build_distribution,
         main_branch_revision.decode('utf-8') if main_branch_revision else None,
-        branch_name,
-        revision.decode('utf-8') if revision else None,
+        branch_name, revision.decode('utf-8') if revision else None,
         subworker_result if subworker_result else None, suite,
         vcs_url, logfilenames, value, worker_name,
         result_branches_updated, result_tags_updated)
@@ -362,6 +361,12 @@ class Run(object):
     def has_artifacts(self):
         # Reasonable proxy, for now?
         return self.result_code == 'success'
+
+    def get_result_branch(self, role):
+        for entry in self.result_branches:
+            if role == entry[0]:
+                return entry[1:]
+        raise KeyError
 
     @classmethod
     def from_row(cls, row) -> 'Run':
@@ -1335,7 +1340,8 @@ ORDER BY package, suite, start_time DESC
 
 
 async def get_merge_proposal_run(
-        conn: asyncpg.Connection, mp_url: str) -> Optional[Run]:
+        conn: asyncpg.Connection, mp_url: str
+        ) -> Tuple[Run, Tuple[str, str, bytes, bytes]]:
     query = """
 SELECT
     run.id, run.command, run.start_time, run.finish_time, run.description,
@@ -1343,16 +1349,20 @@ SELECT
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
     run.logfilenames, run.review_status, run.review_comment, run.worker,
-    run.result_branches, run.result_tags
-FROM run inner join merge_proposal on merge_proposal.revision = run.revision
+    run.result_branches, run.result_tags, rb.role, rb.remote_name,
+    rb.base_revision, rb.revision
+FROM run
+CROSS JOIN UNNEST (result_branches) rb
+inner join merge_proposal on merge_proposal.revision = rb.revision
 WHERE merge_proposal.url = $1
 ORDER BY run.finish_time ASC
 LIMIT 1
 """
     row = await conn.fetchrow(query, mp_url)
     if row:
-        return Run.from_row(row)
-    return None
+        return Run.from_row(row[:23]), (
+            row[23], row[24], row[25].encode('utf-8'), row[26].encode('utf-8'))
+    raise KeyError
 
 
 async def get_proposal_info(

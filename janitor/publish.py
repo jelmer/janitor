@@ -471,18 +471,23 @@ async def publish_from_policy(
     publish_id = str(uuid.uuid4())
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
         return
-    if run.branch_name is None:
-        warning('no branch name set for %s', run.id)
+    if run.result_branches is None:
+        warning('no result branches for %s', run.id)
         return
-    if run.revision is None:
-        warning('no revision set for %s', run.id)
+    # TODO(jelmer): Support other roles
+    for (role, remote_branch_name, base_revision,
+         revision) in run.result_branches:
+        if role == 'main':
+            break
+    else:
+        warning('unable to find main branch: %s', run.id)
         return
     if not force and await state.already_published(
-            conn, run.package, run.branch_name, run.revision, mode):
+            conn, run.package, remote_branch_name, revision, mode):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         open_mp = await state.get_open_merge_proposal(
-            conn, run.package, run.branch_name)
+            conn, run.package, remote_branch_name)
         if not open_mp:
             try:
                 rate_limiter.check_allowed(maintainer_email)
@@ -495,8 +500,7 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
-    unchanged_run = await state.get_unchanged_run(
-        conn, run.main_branch_revision)
+    unchanged_run = await state.get_unchanged_run(conn, base_revision)
 
     # TODO(jelmer): Make this more generic
     if (unchanged_run and
@@ -509,7 +513,7 @@ async def publish_from_policy(
         proposal_url, branch_name, is_new = await publish_one(
             run.suite, run.package, run.command, run.result,
             main_branch_url, mode, run.id, maintainer_email,
-            vcs_manager=vcs_manager, branch_name=run.branch_name,
+            vcs_manager=vcs_manager, branch_name=remote_branch_name,
             topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run, external_url=external_url,
             differ_url=differ_url,
@@ -535,8 +539,8 @@ async def publish_from_policy(
             mode = MODE_PUSH
 
     await state.store_publish(
-        conn, run.package, branch_name, run.main_branch_revision,
-        run.revision, mode, code, description,
+        conn, run.package, branch_name, base_revision,
+        revision, mode, code, description,
         proposal_url if proposal_url else None,
         publish_id=publish_id, requestor=requestor)
 
@@ -1308,8 +1312,11 @@ async def check_existing_mp(
         return False
     if check_only:
         return False
-    mp_run = await state.get_merge_proposal_run(conn, mp.url)
-    if mp_run is None:
+    try:
+        (mp_run,
+         (mp_role, _, mp_base_revision,
+          mp_revision)) = await state.get_merge_proposal_run(conn, mp.url)
+    except KeyError:
         raise NoRunForMergeProposal(mp, revision)
 
     last_run = await get_last_effective_run(
@@ -1317,6 +1324,9 @@ async def check_existing_mp(
     if last_run is None:
         warning('%s: Unable to find any relevant runs.', mp.url)
         return False
+
+    (last_run_remote_branch_name, last_run_base_revision,
+     last_run_revision) = last_run.get_result_branch(last_run, mp_role)
 
     package = await state.get_package(conn, mp_run.package)
     if package is None:
@@ -1393,7 +1403,7 @@ applied independently.
                  mp.url, last_run.result_code)
         return False
 
-    if last_run.branch_name is None:
+    if last_run_remote_branch_name is None:
         note('%s: Last run (%s) does not have branch name set.', mp.url,
              last_run.id)
         return False
@@ -1406,16 +1416,19 @@ applied independently.
         publish_id = str(uuid.uuid4())
         note('%s (%s) needs to be updated (%s => %s).',
              mp.url, mp_run.package, mp_run.id, last_run.id)
-        if last_run.revision == mp_run.revision:
-            warning('%s (%s): old run (%s) has same revision as new run (%s)'
-                    ': %r', mp.url, mp.package, mp_run.id, last_run.id,
-                    mp_run.revision)
+        if last_run_revision == mp_revision:
+            warning(
+                '%s (%s): old run (%s/%s) has same revision as new run (%s/%s)'
+                ': %r', mp.url, mp.package, mp_run.id, mp_role,
+                last_run.id, mp_role, mp_revision)
         try:
+            # TODO(jelmer): Make sure last_run.branch_url is correct
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite, last_run.package, last_run.command,
                 last_run.result, last_run.branch_url, MODE_PROPOSE,
                 last_run.id, maintainer_email,
-                vcs_manager=vcs_manager, branch_name=last_run.branch_name,
+                vcs_manager=vcs_manager,
+                branch_name=last_run_remote_branch_name,
                 dry_run=dry_run, external_url=external_url,
                 differ_url=differ_url, require_binary_diff=False,
                 allow_create_proposal=True,
@@ -1462,8 +1475,8 @@ applied independently.
             if not dry_run:
                 await state.store_publish(
                     conn, last_run.package, mp_run.branch_name,
-                    last_run.main_branch_revision,
-                    last_run.revision, e.mode, code,
+                    last_run_base_revision,
+                    last_run_revision, e.mode, code,
                     description, mp.url,
                     publish_id=publish_id,
                     requestor='publisher (regular refresh)')
@@ -1471,8 +1484,8 @@ applied independently.
             if not dry_run:
                 await state.store_publish(
                     conn, last_run.package, branch_name,
-                    last_run.main_branch_revision,
-                    last_run.revision, MODE_PROPOSE, 'success',
+                    last_run_base_revision,
+                    last_run_revision, MODE_PROPOSE, 'success',
                     'Succesfully updated', mp_url,
                     publish_id=publish_id,
                     requestor='publisher (regular refresh)')

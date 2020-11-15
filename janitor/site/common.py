@@ -44,7 +44,6 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
             finish_time = None
             run_id = None
             result = None
-            branch_name = None
             branch_url = None
             unchanged_run = None
         else:
@@ -56,7 +55,6 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
             finish_time = run.times[1]
             run_id = run.id
             result = run.result
-            branch_name = run.branch_name
             branch_url = run.branch_url
             if run.main_branch_revision:
                 unchanged_run = await state.get_unchanged_run(
@@ -79,7 +77,11 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
             conn, suite, package.name)
 
     async def show_diff(role):
-        if not run.revision or run.revision == run.main_branch_revision:
+        try:
+            (remote_name, base_revid, revid) = run.get_result_branch(role)
+        except KeyError:
+            return 'no result branch with role %s' % role
+        if base_revid == revid:
             return ''
         url = urllib.parse.urljoin(
                 publisher_url, 'diff/%s/%s' % (run.id, role))
@@ -94,7 +96,7 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
             return 'Unable to retrieve diff; error %s' % e
 
     async def show_debdiff():
-        if not run.build_version or not run.main_branch_revision:
+        if not run.build_version:
             return ''
         if not unchanged_run or not unchanged_run.build_version:
             return ''
@@ -133,7 +135,6 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
         'suite': suite,
         'show_diff': show_diff,
         'show_debdiff': show_debdiff,
-        'branch_name': branch_name,
         'previous_runs': previous_runs,
         'run': run,
         'candidate_context': candidate_context,

@@ -5,7 +5,7 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
-{% for role, branch_name, base_revision, revision in branches %}
+{% for role, remote_branch_name, base_revision, revision in branches %}
 <div class="diff" id='diff-{{ role }}'>
 {{highlight_diff(show_diff(role))|safe}}
 </div>

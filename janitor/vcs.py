@@ -17,7 +17,6 @@
 
 from io import BytesIO
 import os
-import sys
 from typing import Optional, List, Tuple, Iterable
 
 import urllib.parse
@@ -503,13 +502,11 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     try:
         old_tree = repo.revision_tree(old_revid)
     except NoSuchRevision:
-        return b'Old revision %s temporarily missing' % (
-            run.main_branch_revision)
+        return b'Old revision %s temporarily missing' % (old_revid, )
     try:
         new_tree = repo.revision_tree(new_revid)
     except NoSuchRevision:
-        return b'New revision %s temporarily missing' % (
-            run.revision)
+        return b'New revision %s temporarily missing' % (new_revid, )
     show_diff_trees(old_tree, new_tree, to_file=f)
     return f.getvalue()
 

@@ -75,7 +75,7 @@
 {{ reschedule_button(suite, package, "Schedule a new run") }}
 {% endif %}
 
-{% if branch_name %}
+{% if run.result_branches %}
 {{ publish_buttons(suite, package) }}
 {% endif %}
 
