@@ -95,7 +95,7 @@ Nothing to do for {{ package }}.
 
 <h3>Diff</h3>
 
-{{ highlight_diff(show_diff())|safe }}
+{{ highlight_diff(show_diff('main'))|safe }}
 
 {% set debdiff = show_debdiff() %}
 {% if debdiff %}
