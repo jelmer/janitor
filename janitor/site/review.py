@@ -33,7 +33,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
                           suites=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
-                       conn, review_status=['unreviewed'], limit=40,
+                       conn, review_status=['unreviewed'], limit=1,
                        suites=suites, publishable_only=True)]
     if not entries:
         return await render_template_for_request(
@@ -46,7 +46,8 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
     async def show_diff(role):
         if not run.revision or run.revision == run.main_branch_revision:
             return ''
-        url = urllib.parse.urljoin(publisher_url, 'diff/%s/%s' % (run.id, role))
+        url = urllib.parse.urljoin(
+            publisher_url, 'diff/%s/%s' % (run.id, role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -77,7 +78,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         'show_debdiff': show_debdiff,
         'package_name': run.package,
         'run_id': run.id,
+        'branches': run.result_branches,
         'suite': run.suite,
-        'todo': [(entry[0].package, entry[0].id) for entry in entries],
         }
     return await render_template_for_request('review.html', request, kwargs)

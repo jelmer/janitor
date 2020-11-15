@@ -78,10 +78,11 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package.name)
 
-    async def show_diff():
+    async def show_diff(role):
         if not run.revision or run.revision == run.main_branch_revision:
             return ''
-        url = urllib.parse.urljoin(publisher_url, 'diff/%s' % run.id)
+        url = urllib.parse.urljoin(
+                publisher_url, 'diff/%s/%s' % (run.id, role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
