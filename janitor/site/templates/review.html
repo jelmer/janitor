@@ -5,9 +5,9 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
-{% for entry in branches %}
-<div class="diff" id='diff.{{ entry.role }}'>
-{{highlight_diff(show_diff('main'))|safe}}
+{% for role, branch_name, base_revision, revision in branches %}
+<div class="diff" id='diff-{{ role }}'>
+{{highlight_diff(show_diff(role))|safe}}
 </div>
 {% endfor %}
 
@@ -18,10 +18,13 @@
 <script type="text/javascript">
 function loadRun(package, run_id, roles) {
     $('.review-button').blur()
-    $('.review-button').disabled = true;
+    $('.review-button').disabled = "disabled";
+    $('.diff').remove();
     var deferreds = [];
     roles.forEach(function(role) {
-      deferreds.push($('#diff').load('/api/run/' + run_id + '/diff?role=' + role));
+      var url = '/api/run/' + run_id + '/diff?role=' + role;
+      $('<div class="diff" id="diff-' + role + '">Loading <a href="' + url + '">' + url + '</a>...</div>').insertBefore('#debdiff');
+      deferreds.push($('#diff-' + role).load(url));
     });
     deferreds.push($('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
           undefined,
@@ -30,22 +33,19 @@ function loadRun(package, run_id, roles) {
                     $('#debdiff').html('<p>No debdiff generated</p>');
                }
     }));
-    $.when(
-      ...deferreds
-    ).then(function() {
+    $.when.apply($, deferreds).done(function() {
       $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
       $('#run-id').attr('value', run_id);
       $('#package-name').attr('value', package);
-      $('.review-button').disabled = false;
+      $('.review-button').disabled = "enabled";
    });
 }
 
-var todo = {{ todo|tojson }};
+var todo = {{ todo[1:]|tojson }};
 var queued = new Set();
 todo.forEach(function(entry) { queued.add(entry[1]); });
 
 $(function() {
-  loadRun('{{ package_name }}', '{{ run_id }}', [{% for entry in branches %}'entry.role'{% if not loop.last %}, %{ endif %}]);
   $('.review-button').attr('type', 'button');
 });
 
