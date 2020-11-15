@@ -5,28 +5,34 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
-<div id='diff'>
+{% for entry in branches %}
+<div class="diff" id='diff.{{ entry.role }}'>
 {{highlight_diff(show_diff('main'))|safe}}
 </div>
+{% endfor %}
 
 <div id='debdiff'>
 {{show_debdiff()|safe}}
 </div>
 
 <script type="text/javascript">
-function loadRun(package, run_id) {
+function loadRun(package, run_id, roles) {
     $('.review-button').blur()
     $('.review-button').disabled = true;
-    $.when(
-      $('#diff').load('/api/run/' + run_id + '/diff'),
-      $('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
+    var deferreds = [];
+    roles.forEach(function(role) {
+      deferreds.push($('#diff').load('/api/run/' + run_id + '/diff?role=' + role));
+    });
+    deferreds.push($('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
           undefined,
           function(responseText, textStatus, XMLHttpRequest) {
                if (XMLHttpRequest.status == 404) {
                     $('#debdiff').html('<p>No debdiff generated</p>');
                }
-          }
-    )).then(function() {
+    }));
+    $.when(
+      ...deferreds
+    ).then(function() {
       $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
       $('#run-id').attr('value', run_id);
       $('#package-name').attr('value', package);
@@ -34,20 +40,20 @@ function loadRun(package, run_id) {
    });
 }
 
-var todo = {{ todo|tojson }};
+var todo = [];
+refreshData();
 var queued = new Set();
-todo.forEach(function(entry) { queued.add(entry[1]); });
 
 $(function() {
-  loadRun('{{ package_name }}', '{{ run_id }}');
+  loadRun('{{ package_name }}', '{{ run_id }}', [{% for entry in branches %}'entry.role'{% if not loop.last %}, %{ endif %}]);
   $('.review-button').attr('type', 'button');
 });
 
 function loadNewJob() {
   if ((newJob = todo.shift()) !== undefined) {
-    loadRun(newJob[0], newJob[1]);
+    loadRun(newJob[0], newJob[1], newJob[2]);
   } else {
-    $('#diff').replaceWith('All done!');
+    $('.diff').replaceWith('All done!');
     $('#debdiff').replaceWith('');
     $('#options').remove();
     $('#full-run-link').remove();
