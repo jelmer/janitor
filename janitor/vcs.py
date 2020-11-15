@@ -492,11 +492,13 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     if repo is None:
         return b'Local VCS repository for %s temporarily inaccessible' % (
             run.package.encode('ascii'))
-    if role == 'main':
-        old_revid = run.main_branch_revision
-        new_revid = run.revision
+    for actual_role, _, base_revision, revision in run.result_branches:
+        if role == actual_role:
+            old_revid = base_revision
+            new_revid = revision
+            break
     else:
-        raise NotImplementedError  # TODO(jelmer): Check result_branch
+        return b'No branch with role %s' % role.encode()
 
     try:
         old_tree = repo.revision_tree(old_revid)
