@@ -45,7 +45,7 @@ async def handle_policy(request):
     package = request.match_info['package']
     suite_policies = {}
     async with request.app.db.acquire() as conn:
-        async for unused_package, suite, policy in state.iter_publish_policy(
+        async for unused_package, suite, policy in state.iter_policy(
                 conn, package):
             suite_policies[suite] = policy
     if not suite_policies:
@@ -125,7 +125,7 @@ async def handle_webhook(request):
         # TODO(jelmer: If nothing found, then maybe fall back to
         # urlutils.basename(body['project']['path_with_namespace'])?
         requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
-        async for package_name, suite, policy in state.iter_publish_policy(
+        async for package_name, suite, policy in state.iter_policy(
                 package.name):
             if policy[0] == 'skip':
                 continue

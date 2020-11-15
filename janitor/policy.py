@@ -20,7 +20,7 @@ from fnmatch import fnmatch
 import shlex
 from google.protobuf import text_format  # type: ignore
 import re
-from typing import List, TextIO, Tuple, Optional
+from typing import List, TextIO, Tuple, Optional, Dict
 
 from . import policy_pb2
 
@@ -58,11 +58,27 @@ def known_suites(config):
     return ret
 
 
+PUBLISH_MODE_STR = {
+    policy_pb2.propose: 'propose',
+    policy_pb2.attempt_push: 'attempt-push',
+    policy_pb2.bts: 'bts',
+    policy_pb2.push: 'push',
+    policy_pb2.build_only: 'build-only',
+    }
+
+
+POLICY_MODE_STR = {
+    policy_pb2.auto: 'auto',
+    policy_pb2.update_changelog: 'update',
+    policy_pb2.leave_changelog: 'leave',
+    }
+
+
 def apply_policy(
         config: policy_pb2.PolicyConfig, suite: str,
         package_name: str, vcs_url: Optional[str], maintainer: str,
-        uploaders: List[str]) -> Tuple[str, str, List[str]]:
-    publish_mode = policy_pb2.build_only
+        uploaders: List[str]) -> Tuple[Dict[str, str], str, List[str]]:
+    publish_mode = {}
     update_changelog = policy_pb2.auto
     command = None
     for policy in config.policy:
@@ -79,21 +95,12 @@ def apply_policy(
         else:
             continue
         for publish in s.publish:
-            if publish.role == "main":
-                publish_mode = publish.mode
+            publish_mode[publish.role] = publish.mode
         if s.command:
             command = s.command
     return (
-        {policy_pb2.propose: 'propose',
-         policy_pb2.attempt_push: 'attempt-push',
-         policy_pb2.bts: 'bts',
-         policy_pb2.push: 'push',
-         policy_pb2.build_only: 'build-only',
-         }[publish_mode],
-        {policy_pb2.auto: 'auto',
-         policy_pb2.update_changelog: 'update',
-         policy_pb2.leave_changelog: 'leave',
-         }[update_changelog],
+        {k: PUBLISH_MODE_STR[v] for (k, v) in publish_mode.items()},
+        POLICY_MODE_STR[update_changelog],
         shlex.split(command))
 
 
@@ -112,7 +119,7 @@ async def main(args):
     current_policy = {}
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
-        async for (package, suite, cur_pol) in state.iter_publish_policy(conn):
+        async for (package, suite, cur_pol) in state.iter_policy(conn):
             current_policy[(package, suite)] = cur_pol
         for package in await state.iter_packages(conn):
             for suite in suites:
@@ -123,7 +130,7 @@ async def main(args):
                 if current_policy.get((package.name, suite)) != package_policy:
                     print('%s/%s -> %r' % (
                         package.name, suite, package_policy))
-                    await state.update_publish_policy(
+                    await state.update_policy(
                         conn, package.name, suite, *package_policy)
 
 

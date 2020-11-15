@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS run (
    value integer,
    -- Name of the worker that executed this run.
    worker text not null,
+   result_branches result_branch[],
+   result_tags result_tag[],
    foreign key (package) references package(name)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
@@ -142,21 +144,19 @@ CREATE TABLE IF NOT EXISTS candidate (
    foreign key (package) references package(name)
 );
 CREATE TYPE changelog_mode AS ENUM('auto', 'update', 'leave');
+CREATE TABLE IF NOT EXISTS publish_policy (
+   role text not null,
+   mode publish_mode default 'build-only',
+   unique(role)
+);
 CREATE TABLE IF NOT EXISTS policy (
    package text not null,
    suite suite_name not null,
    update_changelog changelog_mode default 'auto',
+   publish publish_policy[],
    command text,
    foreign key (package) references package(name),
    unique(package, suite)
-);
-CREATE TABLE IF NOT EXISTS publish_policy (
-   package text not null,
-   suite suite_name not null,
-   role text not null,
-   mode publish_mode default 'build-only',
-   foreign key (package) references package(name),
-   unique(package, suite, text)
 );
 CREATE INDEX ON candidate (suite);
 CREATE TABLE worker (
@@ -293,20 +293,15 @@ CREATE TABLE debian_build (
 );
 
 CREATE TABLE result_branch (
- run_id text not null references run (id),
- role text,
+ role text not null,
  remote_name text not null,
- base_revision text,
- revision text
+ base_revision text not null,
+ revision text not null
 );
 
-CREATE UNIQUE INDEX ON result_branch (run_id, remote_name);
-CREATE INDEX ON result_branch (revision);
-
 CREATE TABLE result_tag (
- run_id text not null references run (id),
  actual_name text,
- revision text
+ revision text not null
 );
 
 CREATE UNIQUE INDEX ON result_tag (run_id, actual_name);
