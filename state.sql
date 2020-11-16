@@ -199,21 +199,14 @@ CREATE OR REPLACE VIEW last_unabsorbed_runs AS
      -- Either the last run is unabsorbed because it failed:
      result_code NOT in ('nothing-to-do', 'success')
      -- or because one of the result branch revisions has not been absorbed yet
-     OR (
-         revision is not null AND
-         revision != main_branch_revision AND
-         revision NOT IN (SELECT revision FROM absorbed_revisions));
-
-CREATE OR REPLACE VIEW merged_runs AS
-  SELECT run.*, merge_proposal.url, merge_proposal.merged_by
-  FROM run
-  INNER JOIN merge_proposal ON merge_proposal.revision = run.revision
-  WHERE result_code = 'success' and merge_proposal.status in ('merged', 'applied');
+     OR EXISTS (SELECT FROM UNNEST(result_branches) WHERE revision NOT IN (SELECT * FROM absorbed_revisions));
 
 create or replace view suites as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW absorbed_runs AS
-  SELECT * FROM run WHERE result_code = 'success' and revision in (SELECT revision FROM absorbed_revisions);
+  SELECT * FROM run WHERE result_code = 'success' and
+          array_length(result_branches, 1) > 0 and
+          not exists (select from unnest(result_branches) where revision not in (SELECT revision FROM absorbed_revisions));
 
 CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
   select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset((result->'applied')::json) as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);

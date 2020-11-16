@@ -333,7 +333,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
 
     async with db.acquire() as conn1, db.acquire() as conn:
         async for (run, maintainer_email, uploader_emails, main_branch_url,
-                   publish_mode, update_changelog,
+                   publish_policy, update_changelog,
                    command) in state.iter_publish_ready(
                        conn1, review_status=review_status,
                        publishable_only=True):
@@ -356,24 +356,33 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                      run.package, run.suite, run.id,
                      next_try_time - datetime.now())
                 continue
-            if push_limit is not None and publish_mode in (
-                    MODE_PUSH, MODE_ATTEMPT_PUSH):
+            if push_limit is not None and (
+                    MODE_PUSH in publish_policy.values() or
+                    MODE_ATTEMPT_PUSH in publish_policy.values()):
                 if push_limit == 0:
                     note('Not pushing %s / %s: push limit reached',
                          run.package, run.suite)
                     continue
-            actual_mode = await publish_from_policy(
-                    conn, rate_limiter, vcs_manager, run,
-                    maintainer_email, uploader_emails, main_branch_url,
-                    topic_publish, topic_merge_proposal,
-                    publish_mode, update_changelog, command,
-                    possible_hosters=possible_hosters,
-                    possible_transports=possible_transports, dry_run=dry_run,
-                    external_url=external_url,
-                    differ_url=differ_url,
-                    require_binary_diff=require_binary_diff,
-                    force=False, requestor='publisher (publish pending)')
-            if actual_mode == MODE_PUSH and push_limit is not None:
+            actual_modes = {}
+            for role, publish_mode in publish_policy.items():
+                try:
+                    run.get_result_branch(role)
+                except KeyError:
+                    continue
+                # TODO(jelmer): Make sure that branches that are already
+                # absorbed are skipped
+                actual_modes[role] = await publish_from_policy(
+                        conn, rate_limiter, vcs_manager, run,
+                        role, maintainer_email, uploader_emails,
+                        main_branch_url, topic_publish, topic_merge_proposal,
+                        publish_mode, update_changelog, command,
+                        possible_hosters=possible_hosters,
+                        possible_transports=possible_transports,
+                        dry_run=dry_run, external_url=external_url,
+                        differ_url=differ_url,
+                        require_binary_diff=require_binary_diff,
+                        force=False, requestor='publisher (publish pending)')
+            if MODE_PUSH in actual_modes.values() and push_limit is not None:
                 push_limit -= 1
 
     note('Done publishing pending changes; duration: %.2fs' % (
@@ -443,7 +452,7 @@ async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
 
 async def publish_from_policy(
         conn, rate_limiter, vcs_manager, run: state.Run,
-        maintainer_email: str,
+        role: str, maintainer_email: str,
         uploader_emails: List[str], main_branch_url: str,
         topic_publish, topic_merge_proposal,
         mode: str, update_changelog: str, command: List[str],
@@ -474,12 +483,10 @@ async def publish_from_policy(
     if run.result_branches is None:
         warning('no result branches for %s', run.id)
         return
-    # TODO(jelmer): Support other roles
-    for (role, remote_branch_name, base_revision,
-         revision) in run.result_branches:
-        if role == 'main':
-            break
-    else:
+    try:
+        (remote_branch_name, base_revision,
+         revision) = run.get_result_branch(role)
+    except KeyError:
         warning('unable to find main branch: %s', run.id)
         return
     if not force and await state.already_published(
@@ -1560,18 +1567,19 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                            external_url: str, differ_url: str,
                            require_binary_diff: bool = False):
     async def process_run(conn, run, package):
-        mode, update_changelog, command = (
+        publish_policy, update_changelog, command = (
             await state.get_publish_policy(
                 conn, run.package, run.suite))
-        await publish_from_policy(
-            conn, rate_limiter, vcs_manager,
-            run, package.maintainer_email, package.uploader_emails,
-            package.branch_url,
-            topic_publish, topic_merge_proposal, mode,
-            update_changelog, command, dry_run=dry_run,
-            external_url=external_url, differ_url=differ_url,
-            require_binary_diff=require_binary_diff,
-            force=True, requestor='runner')
+        for role, mode in publish_policy.items():
+            await publish_from_policy(
+                conn, rate_limiter, vcs_manager,
+                run, role, package.maintainer_email, package.uploader_emails,
+                package.branch_url,
+                topic_publish, topic_merge_proposal, mode,
+                update_changelog, command, dry_run=dry_run,
+                external_url=external_url, differ_url=differ_url,
+                require_binary_diff=require_binary_diff,
+                force=True, requestor='runner')
     from aiohttp.client import ClientSession
     import urllib.parse
     url = urllib.parse.urljoin(runner_url, 'ws/result')

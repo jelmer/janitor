@@ -1002,7 +1002,7 @@ async def iter_publish_ready(
         limit: Optional[int] = None,
         publishable_only: bool = False
         ) -> AsyncIterable[
-            Tuple[Run, str, List[str], str, str, str, List[str]]]:
+            Tuple[Run, str, List[str], str, Dict[str, str], str, List[str]]]:
     args: List[Any] = []
     query = """
 SELECT
@@ -1032,7 +1032,7 @@ SELECT
   package.maintainer_email,
   package.uploader_emails,
   run.branch_url,
-  policy.mode,
+  policy.publish,
   policy.update_changelog,
   policy.command
 FROM
@@ -1068,9 +1068,10 @@ ORDER BY
     if limit is not None:
         query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
-        yield tuple(
-            [Run.from_row(record[:23])] + list(record[23:-1]) +
-            [shlex.split(record[-1]) if record[-1] else None])  # type: ignore
+        yield tuple(  # type: ignore
+            [Run.from_row(record[:23])] + list(record[23:-3]) +
+            [{k: v for k, v in record[-3]}, record[-2],  # type: ignore
+             shlex.split(record[-1]) if record[-1] else None])  # type: ignore
 
 
 async def iter_unscanned_branches(
@@ -1590,14 +1591,15 @@ async def get_policy(
 
 async def get_publish_policy(
         conn: asyncpg.Connection, package: str, suite: str
-        ) -> Tuple[Optional[str], Optional[str], Optional[List[str]]]:
+        ) -> Tuple[Optional[Dict[str, str]],
+                   Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
-        'SELECT mode, update_changelog, command '
+        'SELECT publish, update_changelog, command '
         'FROM policy WHERE package = $1 AND suite = $2', package,
         suite)
     if row:
         return (  # type: ignore
-            row[0], row[1],
+            {k: v for k, v in row[0].items()}, row[1],
             shlex.split(row[2]) if row[2] else None)
     return None, None, None
 
