@@ -207,3 +207,34 @@ $("#{{ propose_id }}").click(function() {
 {% endif %}
 
 {% endmacro %}
+
+{% macro display_vcs_diffs(get_diff, branches, tags=None) %}
+{% if branches %}
+<h3>Diff</h3>
+
+{% for role, name, baserev, rev in branches %}
+{% if branches|length > 1 %}
+<h4>Branch: {{ role }}</h4>
+{% endif %}
+
+{% if tags %}
+{% for tagname, tagrev in tags %}
+{% if tagrev == rev %}
+Tag: {{ tagname }}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% set diff = show_diff(role) %}
+
+{% if diff.split('\n')|length < 200 %}
+{{ highlight_diff(diff)|safe }}
+{% else %}
+<p>Diff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/diff?role={{ role }}">raw diff</a>.</p>
+{% endif %}
+
+{% endfor %}
+
+{% endif %}
+
+{% endmacro %}

@@ -197,10 +197,12 @@ CREATE OR REPLACE VIEW absorbed_revisions AS
 CREATE OR REPLACE VIEW last_unabsorbed_runs AS
   SELECT * FROM last_effective_runs WHERE
      -- Either the last run is unabsorbed because it failed:
-     result_code NOT in ('nothing-to-do', 'success') OR (
-     revision is not null AND
-     revision != main_branch_revision AND
-     revision NOT IN (SELECT revision FROM absorbed_revisions));
+     result_code NOT in ('nothing-to-do', 'success')
+     -- or because one of the result branch revisions has not been absorbed yet
+     OR (
+         revision is not null AND
+         revision != main_branch_revision AND
+         revision NOT IN (SELECT revision FROM absorbed_revisions));
 
 CREATE OR REPLACE VIEW merged_runs AS
   SELECT run.*, merge_proposal.url, merge_proposal.merged_by
