@@ -660,8 +660,9 @@ async def handle_publish_ready(request):
         limit = None
     ret = []
     async with request.app.db.acquire() as conn:
-        async for (run, maintainer_email, uploader_emails, branch_url,
-                   publish_policy, changelog_mode, command
+        async for (run, maintainer_email, uploader_emails,
+                   publish_policy, changelog_mode, command,
+                   unpublished_branches
                    ) in state.iter_publish_ready(
                        conn, suites=([suite] if suite else None),
                        review_status=review_status,

@@ -13,7 +13,7 @@
  <div class="section" id="history">
 <h1>Ready to publish</h1>
 <ul>
-{% for run, maintainer_email, uploader_emails, branch_url, publish_policy, changelog_mode, command in runs %}
+{% for run, maintainer_email, uploader_emails, publish_policy, changelog_mode, command, unpublished_branches in runs %}
 <li><a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>{% if run.command.startswith('lintian-brush') %}
 {{ lintian_brush_summary(run.result['applied']) }}
 {% elif run.command.startswith('new-upstream ') or run.command == 'new-upstream' %}

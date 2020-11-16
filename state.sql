@@ -301,3 +301,54 @@ CREATE TABLE result_tag (
 
 CREATE UNIQUE INDEX ON result_tag (run_id, actual_name);
 CREATE INDEX ON result_tag (revision);
+
+CREATE TYPE result_branch_with_policy AS (
+  role text,
+  remote_name text,
+  base_revision text,
+  revision text,
+  mode publish_mode);
+
+CREATE OR REPLACE VIEW publish_ready AS
+  SELECT
+  run.id,
+  run.command,
+  run.start_time,
+  run.finish_time,
+  run.description,
+  run.package,
+  run.build_version,
+  run.build_distribution,
+  run.result_code,
+  run.branch_name,
+  run.main_branch_revision,
+  run.revision,
+  run.context,
+  run.result,
+  run.suite,
+  run.instigated_context,
+  run.branch_url,
+  run.logfilenames,
+  run.review_status,
+  run.review_comment,
+  run.worker,
+  run.result_branches,
+  run.result_tags,
+  package.maintainer_email,
+  package.uploader_emails,
+  policy.publish,
+  policy.update_changelog,
+  policy.command,
+  ARRAY(
+   SELECT row(rb.role, remote_name, base_revision, revision, mode)::result_branch_with_policy
+   FROM UNNEST(run.result_branches) rb
+    LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
+   WHERE revision NOT IN (SELECT revision FROM absorbed_revisions)
+  ) AS unpublished_branches
+FROM
+  last_unabsorbed_runs AS run
+LEFT JOIN package ON package.name = run.package
+LEFT JOIN policy ON
+    policy.package = run.package AND policy.suite = run.suite
+WHERE
+  result_code = 'success' AND NOT package.removed;

@@ -237,10 +237,10 @@ class PublishFailure(Exception):
 
 async def publish_one(
         suite: str, pkg: str, command, subworker_result, main_branch_url: str,
-        mode: str, log_id: str, maintainer_email: str, vcs_manager: VcsManager,
-        branch_name: str, topic_merge_proposal, rate_limiter: RateLimiter,
-        dry_run: bool, differ_url: str, external_url: str,
-        require_binary_diff: bool = False,
+        mode: str, role: str, log_id: str, maintainer_email: str,
+        vcs_manager: VcsManager, branch_name: str, topic_merge_proposal,
+        rate_limiter: RateLimiter, dry_run: bool, differ_url: str,
+        external_url: str, require_binary_diff: bool = False,
         possible_hosters=None,
         possible_transports: Optional[List[Transport]] = None,
         allow_create_proposal: Optional[bool] = None,
@@ -254,6 +254,8 @@ async def publish_one(
       command: Command that was run
     """
     assert mode in SUPPORTED_MODES, 'mode is %r' % mode
+    # TODOJRV: for local branch, find $uuid/$role; fall back to branch_name
+    # TODOJRV: for remote branch, open remote_branch_name if non-NULL
     local_branch = vcs_manager.get_branch(pkg, branch_name)
     if local_branch is None:
         raise PublishFailure(
@@ -270,6 +272,7 @@ async def publish_one(
         'main_branch_url': main_branch_url.rstrip('/'),
         'local_branch_url': full_branch_url(local_branch),
         'mode': mode,
+        'role': role,
         'log_id': log_id,
         'require-binary-diff': require_binary_diff,
         'allow_create_proposal': allow_create_proposal,
@@ -332,9 +335,9 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
         review_status = ['approved', 'unreviewed']
 
     async with db.acquire() as conn1, db.acquire() as conn:
-        async for (run, maintainer_email, uploader_emails, main_branch_url,
+        async for (run, maintainer_email, uploader_emails,
                    publish_policy, update_changelog,
-                   command) in state.iter_publish_ready(
+                   command, unpublished_branches) in state.iter_publish_ready(
                        conn1, review_status=review_status,
                        publishable_only=True):
             if run.revision is None:
@@ -364,17 +367,16 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                          run.package, run.suite)
                     continue
             actual_modes = {}
-            for role, publish_mode in publish_policy.items():
-                try:
-                    run.get_result_branch(role)
-                except KeyError:
+            for role, remote_name, base_revision, revision, publish_mode in (
+                    unpublished_branches):
+                if publish_mode is None:
+                    warning('%s: No publish mode for branch with role %s',
+                            run.id, role)
                     continue
-                # TODO(jelmer): Make sure that branches that are already
-                # absorbed are skipped
                 actual_modes[role] = await publish_from_policy(
                         conn, rate_limiter, vcs_manager, run,
                         role, maintainer_email, uploader_emails,
-                        main_branch_url, topic_publish, topic_merge_proposal,
+                        run.branch_url, topic_publish, topic_merge_proposal,
                         publish_mode, update_changelog, command,
                         possible_hosters=possible_hosters,
                         possible_transports=possible_transports,
@@ -519,8 +521,9 @@ async def publish_from_policy(
     try:
         proposal_url, branch_name, is_new = await publish_one(
             run.suite, run.package, run.command, run.result,
-            main_branch_url, mode, run.id, maintainer_email,
-            vcs_manager=vcs_manager, branch_name=remote_branch_name,
+            main_branch_url, mode, role,
+            run.id, maintainer_email,
+            vcs_manager=vcs_manager, branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run, external_url=external_url,
             differ_url=differ_url,
@@ -598,6 +601,7 @@ async def diff_request(request):
 
 async def publish_and_store(
         db, topic_publish, topic_merge_proposal, publish_id, run, mode,
+        role: str,
         maintainer_email, uploader_emails, vcs_manager, rate_limiter,
         dry_run, external_url: str, differ_url: str,
         allow_create_proposal: bool = True,
@@ -606,7 +610,8 @@ async def publish_and_store(
         try:
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
-                run.branch_url, mode, run.id, maintainer_email, vcs_manager,
+                run.branch_url, mode, role,
+                run.id, maintainer_email, vcs_manager,
                 run.branch_name, dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -661,6 +666,7 @@ async def publish_and_store(
              'branch_name': branch_name,
              'result_code': 'success',
              'result': run.result,
+             'role': role,
              'publish_delay': publish_delay.total_seconds(),
              'run_id': run.id})
 
@@ -671,6 +677,7 @@ async def publish_request(request):
     rate_limiter = request.app.rate_limiter
     package = request.match_info['package']
     suite = request.match_info['suite']
+    role = request.query.get('role', 'main')
     post = await request.post()
     mode = post.get('mode', MODE_PROPOSE)
     async with request.app.db.acquire() as conn:
@@ -696,7 +703,7 @@ async def publish_request(request):
     loop.create_task(publish_and_store(
         request.app.db, request.app.topic_publish,
         request.app.topic_merge_proposal, publish_id, run, mode,
-        package.maintainer_email, package.uploader_emails,
+        role, package.maintainer_email, package.uploader_emails,
         vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
         external_url=request.app.external_url,
         differ_url=request.app.differ_url, allow_create_proposal=True,
@@ -1429,13 +1436,12 @@ applied independently.
                 ': %r', mp.url, mp.package, mp_run.id, mp_role,
                 last_run.id, mp_role, mp_revision)
         try:
-            # TODO(jelmer): Make sure last_run.branch_url is correct
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite, last_run.package, last_run.command,
                 last_run.result, last_run.branch_url, MODE_PROPOSE,
-                last_run.id, maintainer_email,
+                mp_role, last_run.id, maintainer_email,
                 vcs_manager=vcs_manager,
-                branch_name=last_run_remote_branch_name,
+                branch_name=last_run.branch_name,
                 dry_run=dry_run, external_url=external_url,
                 differ_url=differ_url, require_binary_diff=False,
                 allow_create_proposal=True,
