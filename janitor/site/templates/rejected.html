@@ -6,7 +6,7 @@
 <h1>Rejected runs during review</h1>
 
 <ul>
-{% for (run, maintainer_email, uploader_emails, branch_url, publish_policy, changelog_mode, command) in entries %}
+{% for run, maintainer_email, uploader_emails, branch_url, publish_policy, changelog_mode, command, unpublished_branches in entries %}
 	<li><a href="/cupboard/pkg/{{ run.package }}/{{ run.id }}">{{ run.suite }} for {{ run.package }}</a> (<i>{{ run.review_comment }}</i>)</li>
 {% endfor %}
 </ul>

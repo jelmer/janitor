@@ -1002,76 +1002,49 @@ async def iter_publish_ready(
         limit: Optional[int] = None,
         publishable_only: bool = False
         ) -> AsyncIterable[
-            Tuple[Run, str, List[str], str, Dict[str, str], str, List[str]]]:
+            Tuple[Run, str, List[str], Dict[str, str], str, List[str],
+                  List[Tuple[str, str, bytes, bytes, Optional[str]]]]]:
     args: List[Any] = []
     query = """
-SELECT
-  run.id,
-  run.command,
-  run.start_time,
-  run.finish_time,
-  run.description,
-  run.package,
-  run.build_version,
-  run.build_distribution,
-  run.result_code,
-  run.branch_name,
-  run.main_branch_revision,
-  run.revision,
-  run.context,
-  run.result,
-  run.suite,
-  run.instigated_context,
-  run.branch_url,
-  run.logfilenames,
-  run.review_status,
-  run.review_comment,
-  run.worker,
-  run.result_branches,
-  run.result_tags,
-  package.maintainer_email,
-  package.uploader_emails,
-  run.branch_url,
-  policy.publish,
-  policy.update_changelog,
-  policy.command
-FROM
-  last_unabsorbed_runs AS run
-LEFT JOIN package ON package.name = run.package
-LEFT JOIN policy ON
-    policy.package = run.package AND policy.suite = run.suite
-WHERE
-  result_code = 'success' AND result IS NOT NULL
-  AND NOT package.removed
+SELECT * FROM publish_ready
 """
+    conditions = []
     if suites is not None:
-        query += " AND run.suite = ANY($1::text[]) "
+        conditions.append("run.suite = ANY($1::text[])")
         args.append(suites)
     if review_status is not None:
         if not isinstance(review_status, list):
             review_status = [review_status]
         args.append(review_status)
-        query += " AND review_status = ANY($%d::review_status[]) " % (
-            len(args),)
+        conditions.append(
+            "review_status = ANY($%d::review_status[])" % (len(args),))
+
+    publishable_condition = (
+        "exists (select from unnest(unpublished_branches) where "
+        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))")
+
+    order_by = []
 
     if publishable_only:
-        query += """ AND policy.mode in (
-        'propose', 'attempt-push', 'push-derived', 'push') """
+        conditions.append(publishable_condition)
+    else:
+        order_by.append(publishable_condition)
 
-    query += """
-ORDER BY
-  policy.mode in (
-        'propose', 'attempt-push', 'push-derived', 'push') DESC,
-  value DESC NULLS LAST,
-  run.finish_time DESC
-"""
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    order_by.extend(["DESC NULLS LAST", "run.finish_time DESC"])
+
+    query += " ORDER BY " + ", ".join(order_by)
+
     if limit is not None:
         query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
-            [Run.from_row(record[:23])] + list(record[23:-3]) +
-            [{k: v for k, v in record[-3]}, record[-2],  # type: ignore
-             shlex.split(record[-1]) if record[-1] else None])  # type: ignore
+            [Run.from_row(record[:23])] + list(record[23:-4]) +
+            [{k: v for k, v in record[-4]}, record[-3],  # type: ignore
+             shlex.split(record[-2]) if record[-2] else None,  # type: ignore
+             record[-1]])  # type: ignore
 
 
 async def iter_unscanned_branches(

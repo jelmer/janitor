@@ -330,7 +330,8 @@ class BranchWorkspace(object):
 
 def publish(
         suite: str, pkg: str, subrunner: 'Publisher',
-        mode: str, hoster: Hoster, main_branch: Branch, local_branch: Branch,
+        mode: str, role: str, hoster: Hoster, main_branch: Branch,
+        local_branch: Branch,
         external_url: str,
         resume_branch: Optional[Branch] = None, dry_run: bool = False,
         log_id: Optional[str] = None,
@@ -351,7 +352,7 @@ def publish(
         else:
             existing_description = None
         description = subrunner.get_proposal_description(
-            description_format, existing_description)
+            role, description_format, existing_description)
         description = add_janitor_blurb(
             description_format, description, pkg, log_id, suite,
             external_url)
@@ -373,7 +374,7 @@ def publish(
         else:
             existing_commit_message = None
         return subrunner.get_proposal_commit_message(
-            existing_commit_message)
+            role, existing_commit_message)
 
     with main_branch.lock_read(), local_branch.lock_read():
         if merge_conflicts(main_branch, local_branch):
@@ -452,7 +453,7 @@ class Publisher(object):
         raise NotImplementedError(self.branch_name)
 
     def get_proposal_description(
-            self, description_format: str,
+            self, role: str, description_format: str,
             existing_description: Optional[str]) -> str:
         raise NotImplementedError(self.get_proposal_description)
 
@@ -479,7 +480,7 @@ class LintianBrushPublisher(Publisher):
         return "lintian-fixes"
 
     def get_proposal_description(
-            self, description_format, existing_description):
+            self, role, description_format, existing_description):
         from silver_platter.debian.lintian import (
             create_mp_description,
             applied_entry_as_line,
@@ -491,7 +492,7 @@ class LintianBrushPublisher(Publisher):
                     line['summary'])
                 for line in self.applied])
 
-    def get_proposal_commit_message(self, existing_commit_message):
+    def get_proposal_commit_message(self, role, existing_commit_message):
         applied = []
         for result in self.applied:
             applied.append((result['fixed_lintian_tags'], result['summary']))
@@ -523,7 +524,7 @@ class MultiArchHintsPublisher(Publisher):
     def branch_name(self):
         return "multiarch-hints"
 
-    def get_proposal_description(self, format, existing_description):
+    def get_proposal_description(self, role, format, existing_description):
         text = 'Apply hints suggested by the multi-arch hinter.\n\n'
         for entry in self.applied:
             kind = entry['link'].split('#')[-1]
@@ -552,7 +553,7 @@ These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
 
         return text
 
-    def get_proposal_commit_message(self, existing_commit_message):
+    def get_proposal_commit_message(self, role, existing_commit_message):
         return 'Apply multi-arch hints.'
 
     def read_worker_result(self, result):
@@ -575,7 +576,7 @@ class OrphanPublisher(Publisher):
     def branch_name(self):
         return "orphan"
 
-    def get_proposal_description(self, format, existing_description):
+    def get_proposal_description(self, role, format, existing_description):
         from silver_platter.debian.orphan import move_instructions
         text = "Move orphaned package to the QA team."
         if not self.pushed and self.new_vcs_url:
@@ -584,7 +585,7 @@ class OrphanPublisher(Publisher):
                 self.old_vcs_url, self.new_vcs_url))
         return text
 
-    def get_proposal_commit_message(self, existing_commit_message):
+    def get_proposal_commit_message(self, role, existing_commit_message):
         return 'Move package to the QA team.'
 
     def read_worker_result(self, result):
@@ -613,10 +614,10 @@ class UncommittedPublisher(Publisher):
     def branch_name(self):
         return "uncommitted"
 
-    def get_proposal_description(self, format, existing_description):
+    def get_proposal_description(self, role, format, existing_description):
         return 'Import archive changes missing from the VCS.'
 
-    def get_proposal_commit_message(self, existing_commit_message):
+    def get_proposal_commit_message(self, role, existing_commit_message):
         return 'Import archive changes missing from the VCS.'
 
     def read_worker_result(self, result):
@@ -643,10 +644,19 @@ class NewUpstreamPublisher(Publisher):
     def read_worker_result(self, result):
         self._upstream_version = result['upstream_version']
 
-    def get_proposal_description(self, format, existing_description):
-        return "New upstream version %s.\n" % self._upstream_version
+    def get_proposal_description(self, role, format, existing_description):
+        if role == 'pristine-tar':
+            return "pristine-tar data for new upstream version %s.\n" % (
+                self._upstream_version)
+        elif role == 'upstream':
+            return "Import of new upstream version %s.\n" % (
+                self._upstream_version)
+        elif role == 'main':
+            return "Merge new upstream version %s.\n" % self._upstream_version
+        else:
+            raise KeyError(role)
 
-    def get_proposal_commit_message(self, existing_commit_message):
+    def get_proposal_commit_message(self, role, existing_commit_message):
         return self.get_proposal_description('text', None)
 
     def allow_create_proposal(self):
@@ -705,11 +715,15 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
 
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
-        mode, log_id, local_branch_url, differ_url: str, external_url: str,
+        mode, role, log_id, local_branch_url, differ_url: str,
+        external_url: str,
         dry_run=False, require_binary_diff=False, derived_owner=None,
         possible_hosters=None,
         possible_transports=None, allow_create_proposal=None,
         reviewers=None):
+
+    if role != 'main':
+        raise NotImplementedError('role %r unsupported' % role)
 
     subrunner: Publisher
     if command.startswith('new-upstream'):
@@ -818,8 +832,9 @@ def publish_one(
 
     try:
         publish_result = publish(
-            suite, pkg, subrunner, mode, hoster, main_branch, local_branch,
-            external_url, resume_branch, dry_run=dry_run, log_id=log_id,
+            suite, pkg, subrunner, mode, role, hoster, main_branch,
+            local_branch, external_url, resume_branch, dry_run=dry_run,
+            log_id=log_id,
             existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
             debdiff=debdiff, derived_owner=derived_owner,
@@ -853,6 +868,7 @@ if __name__ == '__main__':
             command=request['command'],
             subworker_result=request['subworker_result'],
             main_branch_url=request['main_branch_url'], mode=request['mode'],
+            role=request['role'],
             log_id=request['log_id'],
             external_url=request['external_url'].rstrip('/'),
             local_branch_url=request['local_branch_url'],

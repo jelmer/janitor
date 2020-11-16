@@ -39,9 +39,9 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         return await render_template_for_request(
             'review-done.html', request, {})
 
-    (run, maintainer_email, uploader_emails, branch_url,
+    (run, maintainer_email, uploader_emails,
      publish_mode, changelog_mode,
-     command) = entries.pop(0)
+     command, unpublished_branches) = entries.pop(0)
 
     async def show_diff(role):
         try:
