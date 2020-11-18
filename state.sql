@@ -30,7 +30,7 @@ CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
 CREATE INDEX ON package (maintainer_email);
 CREATE INDEX ON package (uploader_emails);
-CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied');
+CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text,
    url text not null,

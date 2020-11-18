@@ -1343,7 +1343,7 @@ async def check_existing_mp(
             else:
                 note('Guessed package name (%s) for %s based on revision.',
                      package_name, mp.url)
-    if old_status == 'applied' and status == 'closed':
+    if old_status in ('abandoned', 'applied') and status == 'closed':
         status = old_status
     if old_status != status or revision != old_revision:
         await update_proposal_status(mp, status, revision, package_name)
@@ -1570,9 +1570,12 @@ async def check_existing(
         dry_run: bool, external_url: str,
         differ_url: str, modify_limit=None):
     mps_per_maintainer: Dict[str, Dict[str, int]] = {
-        'open': {}, 'closed': {}, 'merged': {}, 'applied': {}}
+        'open': {}, 'closed': {}, 'merged': {}, 'applied': {},
+        'abandoned': {}}
     possible_transports: List[Transport] = []
-    status_count = {'open': 0, 'closed': 0, 'merged': 0, 'applied': 0}
+    status_count = {
+        'open': 0, 'closed': 0, 'merged': 0, 'applied': 0,
+        'abandoned': 0}
 
     modified_mps = 0
     check_only = False
