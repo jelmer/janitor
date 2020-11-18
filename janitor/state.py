@@ -435,7 +435,7 @@ SELECT
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
-    (SELECT role, remote_name, base_revision, revision FROM
+    array(SELECT role, remote_name, base_revision, revision FROM
      new_result_branch WHERE run_id = id),
     result_tags
 FROM
@@ -485,7 +485,7 @@ SELECT
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
-    (SELECT row(role, remote_name, base_revision,
+    array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id),
     result_tags
 FROM
@@ -583,7 +583,7 @@ SELECT
     run.review_status,
     run.review_comment,
     run.worker,
-    (SELECT row(role, remote_name, base_revision,
+    array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id),
     run.result_tags,
     merge_proposal.url, merge_proposal.status
@@ -824,7 +824,7 @@ SELECT
   review_status,
   review_comment,
   worker,
-  (SELECT row(role, remote_name, base_revision,
+  array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM
@@ -863,7 +863,7 @@ SELECT
   review_status,
   review_comment,
   worker,
-  (SELECT row(role, remote_name, base_revision,
+  array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM
@@ -904,7 +904,7 @@ SELECT DISTINCT ON (package)
   review_status,
   review_comment,
   worker,
-  (SELECT row(role, remote_name, base_revision,
+  array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM
@@ -972,7 +972,7 @@ SELECT
   review_status,
   review_comment,
   worker,
-  (SELECT row(role, remote_name, base_revision,
+  array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM last_runs
@@ -1054,7 +1054,7 @@ SELECT * FROM publish_ready
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
-    order_by.extend(["DESC NULLS LAST", "run.finish_time DESC"])
+    order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
 
     query += " ORDER BY " + ", ".join(order_by)
 
@@ -1344,7 +1344,7 @@ SELECT
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
     run.logfilenames, run.review_status, run.review_comment, run.worker,
-    (SELECT row(role, remote_name, base_revision, revision)
+    array(SELECT row(role, remote_name, base_revision, revision)
      FROM new_result_branch WHERE run_id = run.id), run.result_tags, rb.role,
      rb.remote_name, rb.base_revision, rb.revision
 FROM new_result_branch rb

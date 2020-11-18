@@ -1461,7 +1461,7 @@ applied independently.
         return False
 
     if last_run_remote_branch_name != mp_remote_branch_name:
-        warning('%s: Remove branch name has changed: %s => %s, ',
+        warning('%s: Remote branch name has changed: %s => %s, '
                 'skipping...', mp.url, last_run_remote_branch_name,
                 mp_remote_branch_name)
         return False
