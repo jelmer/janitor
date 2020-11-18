@@ -17,6 +17,7 @@
 
 from datetime import datetime, timedelta
 
+import shlex
 from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
 
 from janitor import state
@@ -51,20 +52,16 @@ async def iter_queue_with_last_run(
                 Tuple[state.QueueItem, Optional[str], Optional[str]]]:
     query = """
 SELECT
-      package.branch_url,
-      package.subpath,
-      queue.package,
-      queue.command,
-      queue.context,
-      queue.id,
-      queue.estimated_duration,
-      queue.suite,
-      queue.refresh,
-      queue.requestor,
-      package.vcs_type,
-      upstream.upstream_branch_url,
-      run.id,
-      run.result_code
+      queue.package AS package,
+      queue.command AS command,
+      queue.context AS context,
+      queue.id AS id,
+      queue.estimated_duration AS estimated_duration,
+      queue.suite AS suite,
+      queue.refresh AS refresh,
+      queue.requestor AS requestor,
+      run.id AS log_id,
+      run.result_code AS result_code
   FROM
       queue
   LEFT JOIN
@@ -74,10 +71,6 @@ SELECT
           SELECT id FROM run WHERE
             package = queue.package AND run.suite = queue.suite
           ORDER BY run.start_time desc LIMIT 1)
-  LEFT JOIN
-      package
-  ON package.name = queue.package
-  LEFT OUTER JOIN upstream ON package.name = upstream.name
   ORDER BY
   queue.bucket ASC,
   queue.priority ASC,
@@ -87,9 +80,7 @@ SELECT
         query += " LIMIT %d" % limit
     async with db.acquire() as conn:
         for row in await conn.fetch(query):
-            yield (
-                state.QueueItem.from_row(row[:-2]),
-                row[-2], row[-1])
+            yield row
 
 
 async def get_queue(
@@ -98,41 +89,42 @@ async def get_queue(
         limit: Optional[int] = None) -> AsyncIterator[
             Tuple[int, str, Optional[str], str, str,
                   Optional[timedelta], Optional[str], Optional[str]]]:
-    async for entry, log_id, result_code in (
+    async for row in (
             iter_queue_with_last_run(db, limit=limit)):
-        if only_command is not None and entry.command != only_command:
+        command = shlex.split(row['command'])
+        if only_command is not None and command != only_command:
             continue
         expecting = None
-        if entry.command[0] == 'new-upstream':
-            if '--snapshot' in entry.command:
+        if command[0] == 'new-upstream':
+            if '--snapshot' in command:
                 description = 'New upstream snapshot'
             else:
                 description = 'New upstream'
-                if entry.context:
+                if row['context']:
                     expecting = (
                         'expecting to merge <a href=\'https://qa.debian.org'
                         '/cgi-bin/watch?pkg=%s\'>%s</a>' % (
-                            entry.package, entry.context))
-        elif entry.command[0] == 'lintian-brush':
+                            row['package'], row['context']))
+        elif command[0] == 'lintian-brush':
             description = 'Lintian fixes'
-            if entry.context:
+            if row['context']:
                 expecting = (
                     'expecting to fix: ' +
                     ', '.join(
-                        map(lintian_tag_link, entry.context.split(' '))))
+                        map(lintian_tag_link, row['context'].split(' '))))
         else:
-            cs = changer_subcommand(entry.command[0])
-            description = cs.describe_command(entry.command)
+            cs = changer_subcommand(command[0])
+            description = cs.describe_command(command)
         if only_command is not None:
             description = expecting or ''
         elif expecting is not None:
             description += ", " + expecting
-        if entry.refresh:
+        if row['refresh']:
             description += " (from scratch)"
         yield (
-            entry.id, entry.package, entry.requestor,
-            entry.suite, description, entry.estimated_duration,
-            log_id, result_code)
+            row['id'], row['package'], row['requestor'],
+            row['suite'], description, row['estimated_duration'],
+            row['log_id'], row['result_code'])
 
 
 async def write_queue(client, db: state.Database,

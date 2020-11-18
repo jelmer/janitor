@@ -1339,9 +1339,6 @@ async def check_existing_mp(
         warning('%s: Unable to find any relevant runs.', mp.url)
         return False
 
-    (last_run_remote_branch_name, last_run_base_revision,
-     last_run_revision) = last_run.get_result_branch(last_run, mp_role)
-
     package = await state.get_package(conn, mp_run.package)
     if package is None:
         warning('%s: Unable to find package.', mp.url)
@@ -1417,13 +1414,22 @@ applied independently.
                  mp.url, last_run.result_code)
         return False
 
-    if last_run_remote_branch_name is None:
+    if last_run.branch_name is None:
         note('%s: Last run (%s) does not have branch name set.', mp.url,
              last_run.id)
         return False
 
     if maintainer_email is None:
         note('%s: No maintainer email known.', mp.url)
+        return False
+
+    try:
+        (last_run_remote_branch_name, last_run_base_revision,
+         last_run_revision) = last_run.get_result_branch(mp_role)
+    except KeyError:
+        warning('%s: Merge proposal run %s had role %s'
+                ' but it is gone now (%s)',
+                mp.url, mp_run.id, mp_role, last_run.id)
         return False
 
     if last_run != mp_run:
