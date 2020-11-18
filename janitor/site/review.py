@@ -64,7 +64,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
 
     async def show_debdiff():
         unchanged_run = await state.get_unchanged_run(
-            conn, run.main_branch_revision)
+            conn, run.package, run.main_branch_revision)
         if unchanged_run is None:
             return '<p>No control run</p>'
         try:

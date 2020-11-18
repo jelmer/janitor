@@ -108,7 +108,7 @@ async def generate_run_file(
     async with db.acquire() as conn:
         if run.main_branch_revision:
             kwargs['unchanged_run'] = await state.get_unchanged_run(
-                conn, run.main_branch_revision)
+                conn, run.package, run.main_branch_revision)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package)
         package = await state.get_package(conn, run.package)

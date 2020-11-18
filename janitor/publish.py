@@ -505,11 +505,11 @@ async def publish_from_policy(
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
 
     if not force and await state.already_published(
-            conn, run.package, remote_branch_name, revision, mode):
+            conn, run.package, run.branch_name, revision, mode):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         open_mp = await state.get_open_merge_proposal(
-            conn, run.package, remote_branch_name)
+            conn, run.package, run.branch_name)
         if not open_mp:
             try:
                 rate_limiter.check_allowed(maintainer_email)
@@ -522,7 +522,7 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
-    unchanged_run = await state.get_unchanged_run(conn, base_revision)
+    unchanged_run = await state.get_unchanged_run(conn, run.package, base_revision)
 
     # TODO(jelmer): Make this more generic
     if (unchanged_run and
@@ -617,8 +617,8 @@ async def diff_request(request):
 def role_branch_url(url, remote_branch_name):
     if remote_branch_name is None:
         return url
-    base_url, params = urlutils.split_segment_parameters(url)
-    params['branch'] = remote_branch_name
+    base_url, params = urlutils.split_segment_parameters(url.rstrip('/'))
+    params['branch'] = urlutils.escape(remote_branch_name, safe='')
     return urlutils.join_segment_parameters(base_url, params)
 
 
@@ -1490,7 +1490,7 @@ applied independently.
                 result_tags=last_run.result_tags)
         except PublishFailure as e:
             unchanged_run = await state.get_unchanged_run(
-                conn, last_run.main_branch_revision)
+                conn, last_run.package, last_run.main_branch_revision)
             code, description = await handle_publish_failure(
                 e, conn, last_run, unchanged_run,
                 bucket='update-existing-mp')
