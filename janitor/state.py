@@ -1327,8 +1327,8 @@ SELECT
     rb.base_revision, rb.revision
 FROM run
 CROSS JOIN UNNEST (result_branches) rb
-inner join merge_proposal on merge_proposal.revision = rb.revision
-WHERE merge_proposal.url = $1
+WHERE rb.revision IN (
+    SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
 ORDER BY run.finish_time ASC
 LIMIT 1
 """
@@ -1611,8 +1611,9 @@ async def guess_package_from_revision(
         ) -> Tuple[Optional[str], Optional[str]]:
     query = """\
 select distinct package, maintainer_email from run
+cross join unnest (result_branches) rb
 left join package on package.name = run.package
-where revision = $1 and run.package is not null
+where rb.revision = $1 and run.package is not null
 """
     rows = await conn.fetch(query, revision.decode('utf-8'))
     if len(rows) == 1:
