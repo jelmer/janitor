@@ -205,8 +205,8 @@ create or replace view suites as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW absorbed_runs AS
   SELECT * FROM run WHERE result_code = 'success' and
-          array_length(result_branches, 1) > 0 and
-          not exists (select from unnest(result_branches) where revision not in (SELECT revision FROM absorbed_revisions));
+  exists (select from new_result_branch WHERE run_id = run.id) and
+  not exists (select from new_result_branch WHERE run_id = run.id AND revision not in (SELECT revision FROM absorbed_revisions));
 
 CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
   select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset((result->'applied')::json) as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
@@ -343,7 +343,7 @@ CREATE OR REPLACE VIEW publishable AS
   run.review_status,
   run.review_comment,
   run.worker,
-  (SELECT ROW(role, remote_name, base_revision, revision) FROM new_result_branch WHERE run_id = run.id),
+  (SELECT ROW(role, remote_name, base_revision, revision)::result_branch FROM new_result_branch WHERE run_id = run.id),
   run.result_tags,
   run.value,
   package.maintainer_email,
@@ -353,7 +353,7 @@ CREATE OR REPLACE VIEW publishable AS
   policy.command AS policy_command,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode)::result_branch_with_policy
-   FROM new_result_branch rb
+   FROM result_branch rb
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
    WHERE run_id = run.id AND revision NOT IN (SELECT revision FROM absorbed_revisions)
   ) AS unpublished_branches
