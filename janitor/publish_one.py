@@ -17,7 +17,7 @@
 
 """Publishing VCS changes."""
 
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 
 import urllib.error
 import urllib.parse
@@ -331,15 +331,15 @@ class BranchWorkspace(object):
 def publish(
         suite: str, pkg: str, subrunner: 'Publisher',
         mode: str, role: str, hoster: Hoster, main_branch: Branch,
-        local_branch: Branch,
-        external_url: str,
+        local_branch: Branch, external_url: str,
         resume_branch: Optional[Branch] = None, dry_run: bool = False,
         log_id: Optional[str] = None,
         existing_proposal: Optional[MergeProposal] = None,
         allow_create_proposal: bool = False,
         derived_owner: Optional[str] = None,
         debdiff: Optional[bytes] = None,
-        reviewers: Optional[List[str]] = None):
+        reviewers: Optional[List[str]] = None,
+        result_tags: Optional[Dict[str, bytes]] = None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
@@ -399,7 +399,7 @@ def publish(
                 allow_create_proposal=allow_create_proposal,
                 overwrite_existing=True, derived_owner=derived_owner,
                 existing_proposal=existing_proposal,
-                labels=labels, tags=subrunner.tags(),
+                labels=labels, tags=result_tags,
                 allow_collaboration=True, reviewers=reviewers)
         except DivergedBranches:
             raise PublishFailure(
@@ -466,13 +466,6 @@ class Publisher(object):
     def push_colocated(self) -> bool:
         raise NotImplementedError(self.push_colocated)
 
-    def tags(self) -> List[str]:
-        """Tags to push.
-
-        Returns: list of tags to push
-        """
-        raise NotImplementedError(self.tags)
-
 
 class LintianBrushPublisher(Publisher):
 
@@ -514,9 +507,6 @@ class LintianBrushPublisher(Publisher):
 
     def push_colocated(self):
         return False
-
-    def tags(self):
-        return []
 
 
 class MultiArchHintsPublisher(Publisher):
@@ -565,9 +555,6 @@ These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
     def push_colocated(self):
         return False
 
-    def tags(self):
-        return []
-
 
 class OrphanPublisher(Publisher):
 
@@ -605,9 +592,6 @@ class OrphanPublisher(Publisher):
     def push_colocated(self):
         return False
 
-    def tags(self):
-        return []
-
 
 class UncommittedPublisher(Publisher):
 
@@ -628,9 +612,6 @@ class UncommittedPublisher(Publisher):
 
     def push_colocated(self):
         return False
-
-    def tags(self):
-        return [e[0] for e in self.tags]
 
 
 class NewUpstreamPublisher(Publisher):
@@ -665,12 +646,6 @@ class NewUpstreamPublisher(Publisher):
 
     def push_colocated(self):
         return True
-
-    def tags(self):
-        # TODO(jelmer): Get this information from worker_result
-        return [
-            'upstream/%s' % self._upstream_version,
-            ]
 
 
 class DebdiffMissingRun(Exception):
@@ -715,15 +690,12 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
 
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
-        mode, role, log_id, local_branch_url, differ_url: str,
+        mode, role, revision: bytes, log_id, local_branch_url, differ_url: str,
         external_url: str,
         dry_run=False, require_binary_diff=False, derived_owner=None,
         possible_hosters=None,
         possible_transports=None, allow_create_proposal=None,
-        reviewers=None):
-
-    if role != 'main':
-        raise NotImplementedError('role %r unsupported' % role)
+        reviewers=None, result_tags=None):
 
     subrunner: Publisher
     if command.startswith('new-upstream'):
@@ -834,11 +806,10 @@ def publish_one(
         publish_result = publish(
             suite, pkg, subrunner, mode, role, hoster, main_branch,
             local_branch, external_url, resume_branch, dry_run=dry_run,
-            log_id=log_id,
-            existing_proposal=existing_proposal,
+            log_id=log_id, existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
             debdiff=debdiff, derived_owner=derived_owner,
-            reviewers=reviewers)
+            reviewers=reviewers, result_tags=result_tags)
     except EmptyMergeProposal:
         raise PublishFailure(
             code='empty-merge-proposal',
@@ -878,7 +849,9 @@ if __name__ == '__main__':
             possible_hosters=None, possible_transports=None,
             allow_create_proposal=request['allow_create_proposal'],
             differ_url=request['differ_url'],
-            reviewers=request.get('reviewers'))
+            reviewers=request.get('reviewers'),
+            revision=request['revision'].encode('utf-8'),
+            result_tags=request.get('tags'))
     except PublishFailure as e:
         json.dump({'code': e.code, 'description': e.description}, sys.stdout)
         sys.exit(1)

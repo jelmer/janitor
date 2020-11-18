@@ -199,7 +199,7 @@ CREATE OR REPLACE VIEW last_unabsorbed_runs AS
      -- Either the last run is unabsorbed because it failed:
      result_code NOT in ('nothing-to-do', 'success')
      -- or because one of the result branch revisions has not been absorbed yet
-     OR EXISTS (SELECT FROM UNNEST(result_branches) WHERE revision NOT IN (SELECT * FROM absorbed_revisions));
+     OR id in (SELECT run_id from new_result_branch WHERE revision NOT IN (SELECT * FROM absorbed_revisions));
 
 create or replace view suites as select distinct suite as name from run;
 
@@ -294,6 +294,17 @@ CREATE TABLE result_branch (
  revision text not null
 );
 
+CREATE TABLE new_result_branch (
+ run_id text not null references run (id),
+ role text not null,
+ remote_name text,
+ base_revision text not null,
+ revision text not null,
+ UNIQUE(run_id, role)
+);
+
+CREATE INDEX ON new_result_branch (revision);
+
 CREATE TABLE result_tag (
  actual_name text,
  revision text not null
@@ -332,7 +343,7 @@ CREATE OR REPLACE VIEW publishable AS
   run.review_status,
   run.review_comment,
   run.worker,
-  run.result_branches,
+  (SELECT ROW(role, remote_name, base_revision, revision) FROM new_result_branch WHERE run_id = run.id),
   run.result_tags,
   run.value,
   package.maintainer_email,
@@ -342,9 +353,9 @@ CREATE OR REPLACE VIEW publishable AS
   policy.command AS policy_command,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode)::result_branch_with_policy
-   FROM UNNEST(run.result_branches) rb
+   FROM new_result_branch rb
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
-   WHERE revision NOT IN (SELECT revision FROM absorbed_revisions)
+   WHERE run_id = run.id AND revision NOT IN (SELECT revision FROM absorbed_revisions)
   ) AS unpublished_branches
 FROM
   last_effective_runs AS run

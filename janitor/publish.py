@@ -29,9 +29,10 @@ import os
 import shlex
 import sys
 import time
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 import uuid
 
+from breezy import urlutils
 from breezy.controldir import ControlDir, format_registry
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
@@ -237,15 +238,17 @@ class PublishFailure(Exception):
 
 async def publish_one(
         suite: str, pkg: str, command, subworker_result, main_branch_url: str,
-        mode: str, role: str, log_id: str, maintainer_email: str,
-        vcs_manager: VcsManager, branch_name: str, topic_merge_proposal,
+        mode: str, role: str, revision: bytes, log_id: str,
+        maintainer_email: str, vcs_manager: VcsManager,
+        legacy_local_branch_name: str, topic_merge_proposal,
         rate_limiter: RateLimiter, dry_run: bool, differ_url: str,
         external_url: str, require_binary_diff: bool = False,
         possible_hosters=None,
         possible_transports: Optional[List[Transport]] = None,
         allow_create_proposal: Optional[bool] = None,
         reviewers: Optional[List[str]] = None,
-        derived_owner: Optional[str] = None):
+        derived_owner: Optional[str] = None,
+        result_tags: Optional[List[Tuple[str, bytes]]] = None):
     """Publish a single run in some form.
 
     Args:
@@ -254,14 +257,14 @@ async def publish_one(
       command: Command that was run
     """
     assert mode in SUPPORTED_MODES, 'mode is %r' % mode
-    # TODOJRV: for local branch, find $uuid/$role; fall back to branch_name
-    # TODOJRV: for remote branch, open remote_branch_name if non-NULL
-    local_branch = vcs_manager.get_branch(pkg, branch_name)
+    local_branch = vcs_manager.get_branch(pkg, '%s/%s' % (suite, role))
     if local_branch is None:
-        raise PublishFailure(
-            mode, 'result-branch-not-found',
-            'can not find local branch for %s / %s (%s)' % (
-                pkg, branch_name, log_id))
+        local_branch = vcs_manager.get_branch(pkg, legacy_local_branch_name)
+        if local_branch is None:
+            raise PublishFailure(
+                mode, 'result-branch-not-found',
+                'can not find local branch for %s / %s (%s)' % (
+                    pkg, legacy_local_branch_name, log_id))
 
     request = {
         'dry-run': dry_run,
@@ -279,7 +282,14 @@ async def publish_one(
         'external_url': external_url,
         'differ_url': differ_url,
         'derived-owner': derived_owner,
+        'revision': revision.decode('utf-8'),
         'reviewers': reviewers}
+
+    if result_tags:
+        request['tags'] = {
+            n: r.decode('utf-8') for (n, r) in result_tags}
+    else:
+        request['tags'] = {}
 
     args = [sys.executable, '-m', 'janitor.publish_one']
 
@@ -491,6 +501,9 @@ async def publish_from_policy(
     except KeyError:
         warning('unable to find main branch: %s', run.id)
         return
+
+    main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
+
     if not force and await state.already_published(
             conn, run.package, remote_branch_name, revision, mode):
         return
@@ -521,16 +534,18 @@ async def publish_from_policy(
     try:
         proposal_url, branch_name, is_new = await publish_one(
             run.suite, run.package, run.command, run.result,
-            main_branch_url, mode, role,
+            main_branch_url, mode, role, revision,
             run.id, maintainer_email,
-            vcs_manager=vcs_manager, branch_name=run.branch_name,
+            vcs_manager=vcs_manager,
+            legacy_local_branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run, external_url=external_url,
             differ_url=differ_url,
             require_binary_diff=require_binary_diff,
             possible_hosters=possible_hosters,
             possible_transports=possible_transports,
-            rate_limiter=rate_limiter)
+            rate_limiter=rate_limiter,
+            result_tags=run.result_tags)
     except PublishFailure as e:
         code, description = await handle_publish_failure(
             e, conn, run, unchanged_run,
@@ -599,27 +614,40 @@ async def diff_request(request):
     return web.Response(body=diff, content_type='text/x-diff')
 
 
+def role_branch_url(url, remote_branch_name):
+    if remote_branch_name is None:
+        return url
+    base_url, params = urlutils.split_segment_parameters(url)
+    params['branch'] = remote_branch_name
+    return urlutils.join_segment_parameters(base_url, params)
+
+
 async def publish_and_store(
         db, topic_publish, topic_merge_proposal, publish_id, run, mode,
-        role: str,
-        maintainer_email, uploader_emails, vcs_manager, rate_limiter,
+        role: str, maintainer_email, uploader_emails, vcs_manager,
+        rate_limiter,
         dry_run, external_url: str, differ_url: str,
         allow_create_proposal: bool = True,
         require_binary_diff: bool = False, requestor: Optional[str] = None):
+    remote_branch_name, base_revision, revision = run.get_result_branch(role)
+
+    main_branch_url = role_branch_url(run.branch_url, remote_branch_name)
+
     async with db.acquire() as conn:
         try:
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
-                run.branch_url, mode, role,
+                main_branch_url, mode, role, revision,
                 run.id, maintainer_email, vcs_manager,
-                run.branch_name, dry_run=dry_run,
+                legacy_local_branch_name=run.branch_name, dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
                 require_binary_diff=require_binary_diff,
                 possible_hosters=None, possible_transports=None,
                 allow_create_proposal=allow_create_proposal,
                 topic_merge_proposal=topic_merge_proposal,
-                rate_limiter=rate_limiter)
+                rate_limiter=rate_limiter,
+                result_tags=run.result_tags)
         except PublishFailure as e:
             await state.store_publish(
                 conn, run.package, run.branch_name,
@@ -828,7 +856,7 @@ async def handle_set_git_remote(request):
           'fetch', '+refs/heads/*:refs/remotes/%s/*' % remote)
     b = BytesIO()
     c.write_to_file(b)
-    r._controltransport.put_bytes( 'config', b.getvalue())
+    r._controltransport.put_bytes('config', b.getvalue())
 
     # TODO(jelmer): Run 'git fetch $remote'?
 
@@ -1328,7 +1356,7 @@ async def check_existing_mp(
         return False
     try:
         (mp_run,
-         (mp_role, _, mp_base_revision,
+         (mp_role, mp_remote_branch_name, mp_base_revision,
           mp_revision)) = await state.get_merge_proposal_run(conn, mp.url)
     except KeyError:
         raise NoRunForMergeProposal(mp, revision)
@@ -1432,6 +1460,12 @@ applied independently.
                 mp.url, mp_run.id, mp_role, last_run.id)
         return False
 
+    if last_run_remote_branch_name != mp_remote_branch_name:
+        warning('%s: Remove branch name has changed: %s => %s, ',
+                'skipping...', mp.url, last_run_remote_branch_name,
+                mp_remote_branch_name)
+        return False
+
     if last_run != mp_run:
         publish_id = str(uuid.uuid4())
         note('%s (%s) needs to be updated (%s => %s).',
@@ -1445,14 +1479,15 @@ applied independently.
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite, last_run.package, last_run.command,
                 last_run.result, last_run.branch_url, MODE_PROPOSE,
-                mp_role, last_run.id, maintainer_email,
+                mp_role, last_run_revision, last_run.id, maintainer_email,
                 vcs_manager=vcs_manager,
-                branch_name=last_run.branch_name,
+                legacy_local_branch_name=last_run.branch_name,
                 dry_run=dry_run, external_url=external_url,
                 differ_url=differ_url, require_binary_diff=False,
                 allow_create_proposal=True,
                 topic_merge_proposal=topic_merge_proposal,
-                rate_limiter=rate_limiter)
+                rate_limiter=rate_limiter,
+                result_tags=last_run.result_tags)
         except PublishFailure as e:
             unchanged_run = await state.get_unchanged_run(
                 conn, last_run.main_branch_revision)
