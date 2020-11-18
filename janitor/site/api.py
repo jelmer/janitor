@@ -660,7 +660,7 @@ async def handle_publish_ready(request):
         limit = None
     ret = []
     async with request.app.db.acquire() as conn:
-        async for (run, maintainer_email, uploader_emails,
+        async for (run, value, maintainer_email, uploader_emails,
                    publish_policy, changelog_mode, command,
                    unpublished_branches
                    ) in state.iter_publish_ready(

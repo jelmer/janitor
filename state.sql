@@ -309,7 +309,7 @@ CREATE TYPE result_branch_with_policy AS (
   revision text,
   mode publish_mode);
 
-CREATE OR REPLACE VIEW publish_ready AS
+CREATE OR REPLACE VIEW publishable AS
   SELECT
   run.id,
   run.command,
@@ -334,11 +334,12 @@ CREATE OR REPLACE VIEW publish_ready AS
   run.worker,
   run.result_branches,
   run.result_tags,
+  run.value,
   package.maintainer_email,
   package.uploader_emails,
   policy.publish,
   policy.update_changelog,
-  policy.command,
+  policy.command AS policy_command,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode)::result_branch_with_policy
    FROM UNNEST(run.result_branches) rb
@@ -346,9 +347,11 @@ CREATE OR REPLACE VIEW publish_ready AS
    WHERE revision NOT IN (SELECT revision FROM absorbed_revisions)
   ) AS unpublished_branches
 FROM
-  last_unabsorbed_runs AS run
-LEFT JOIN package ON package.name = run.package
-LEFT JOIN policy ON
+  last_effective_runs AS run
+INNER JOIN package ON package.name = run.package
+INNER JOIN policy ON
     policy.package = run.package AND policy.suite = run.suite
 WHERE
   result_code = 'success' AND NOT package.removed;
+
+CREATE OR REPLACE VIEW publish_ready AS SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;

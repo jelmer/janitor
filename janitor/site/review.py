@@ -39,7 +39,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         return await render_template_for_request(
             'review-done.html', request, {})
 
-    (run, maintainer_email, uploader_emails,
+    (run, value, maintainer_email, uploader_emails,
      publish_mode, changelog_mode,
      command, unpublished_branches) = entries.pop(0)
 
