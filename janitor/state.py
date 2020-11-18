@@ -128,22 +128,32 @@ async def store_run(
         result_tags_updated = [
             (n, r.decode('utf-8')) for (n, r) in result_tags]
 
-    await conn.execute(
-        "INSERT INTO run (id, command, description, result_code, "
-        "start_time, finish_time, package, instigated_context, context, "
-        "build_version, build_distribution, main_branch_revision, "
-        "branch_name, revision, result, suite, branch_url, logfilenames, "
-        "value, worker, result_branches, result_tags) VALUES "
-        "($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
-        run_id, ' '.join(command), description, result_code,
-        start_time, finish_time, name, instigated_context, context,
-        str(build_version) if build_version else None, build_distribution,
-        main_branch_revision.decode('utf-8') if main_branch_revision else None,
-        branch_name, revision.decode('utf-8') if revision else None,
-        subworker_result if subworker_result else None, suite,
-        vcs_url, logfilenames, value, worker_name,
-        result_branches_updated, result_tags_updated)
+    async with conn.transaction():
+        await conn.execute(
+            "INSERT INTO run (id, command, description, result_code, "
+            "start_time, finish_time, package, instigated_context, context, "
+            "build_version, build_distribution, main_branch_revision, "
+            "branch_name, revision, result, suite, branch_url, logfilenames, "
+            "value, worker, result_branches, result_tags) VALUES "
+            "($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+            "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+            run_id, ' '.join(command), description, result_code,
+            start_time, finish_time, name, instigated_context, context,
+            str(build_version) if build_version else None, build_distribution,
+            main_branch_revision.decode('utf-8') if main_branch_revision else None,
+            branch_name, revision.decode('utf-8') if revision else None,
+            subworker_result if subworker_result else None, suite,
+            vcs_url, logfilenames, value, worker_name,
+            result_branches_updated, result_tags_updated)
+
+        if result_branches:
+            await conn.executemany(
+                'INSERT INTO new_result_branch '
+                '(run_id, role, remote_name, base_revision, revision) '
+                'VALUES ($1, $2, $3, $4, $5)', [
+                    (run_id, role, remote_name, br.decode('utf-8'),
+                        r.decode('utf-8'))
+                    for (role, remote_name, br, r) in result_branches])
 
 
 async def store_publish(conn: asyncpg.Connection,
@@ -424,7 +434,10 @@ SELECT
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
-    review_comment, worker, result_branches, result_tags
+    review_comment, worker,
+    (SELECT role, remote_name, base_revision, revision FROM
+     new_result_branch WHERE run_id = id),
+    result_tags
 FROM
     last_runs
 WHERE
@@ -471,7 +484,10 @@ SELECT
     build_version, build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
-    review_comment, worker, result_branches, result_tags
+    review_comment, worker,
+    (SELECT row(role, remote_name, base_revision,
+     revision) FROM new_result_branch WHERE run_id = id),
+    result_tags
 FROM
     run
 """
@@ -567,7 +583,8 @@ SELECT
     run.review_status,
     run.review_comment,
     run.worker,
-    run.result_branches,
+    (SELECT row(role, remote_name, base_revision,
+     revision) FROM new_result_branch WHERE run_id = id),
     run.result_tags,
     merge_proposal.url, merge_proposal.status
 FROM
@@ -807,7 +824,8 @@ SELECT
   review_status,
   review_comment,
   worker,
-  result_branches,
+  (SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM
   run
@@ -845,7 +863,8 @@ SELECT
   review_status,
   review_comment,
   worker,
-  result_branches,
+  (SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM
   last_unabsorbed_runs
@@ -885,7 +904,8 @@ SELECT DISTINCT ON (package)
   review_status,
   review_comment,
   worker,
-  result_branches,
+  (SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM
   last_unabsorbed_runs
@@ -952,7 +972,8 @@ SELECT
   review_status,
   review_comment,
   worker,
-  result_branches,
+  (SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM last_runs
 """
@@ -1323,10 +1344,11 @@ SELECT
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
     run.logfilenames, run.review_status, run.review_comment, run.worker,
-    run.result_branches, run.result_tags, rb.role, rb.remote_name,
-    rb.base_revision, rb.revision
-FROM run
-CROSS JOIN UNNEST (result_branches) rb
+    (SELECT row(role, remote_name, base_revision, revision)
+     FROM new_result_branch WHERE run_id = run.id), run.result_tags, rb.role,
+     rb.remote_name, rb.base_revision, rb.revision
+FROM new_result_branch rb
+RIGHT JOIN run ON rb.run_id = run.id
 WHERE rb.revision IN (
     SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
 ORDER BY run.finish_time ASC
@@ -1611,7 +1633,7 @@ async def guess_package_from_revision(
         ) -> Tuple[Optional[str], Optional[str]]:
     query = """\
 select distinct package, maintainer_email from run
-cross join unnest (result_branches) rb
+left join new_result_branch rb ON rb.run_id = run.id
 left join package on package.name = run.package
 where rb.revision = $1 and run.package is not null
 """

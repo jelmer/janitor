@@ -36,7 +36,7 @@ $(document).ready(function(){
 </tr>
 </thead>
 <tbody valign="top">
-{% for timestamp, package, branch_name, mode, merge_proposal_url, result_code, description, vcs_browser in history %};
+{% for timestamp, package, branch_name, mode, merge_proposal_url, result_code, description, vcs_browser in history %}
 <tr class="row-even">
 <td>{{ format_timestamp(timestamp) }}</td>
 <td><a class="reference external" href="pkg/{{ package }}">{{ package }}</a></td>
