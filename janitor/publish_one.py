@@ -332,6 +332,7 @@ def publish(
         suite: str, pkg: str, subrunner: 'Publisher',
         mode: str, role: str, hoster: Hoster, main_branch: Branch,
         local_branch: Branch, external_url: str,
+        derived_branch_name: str,
         resume_branch: Optional[Branch] = None, dry_run: bool = False,
         log_id: Optional[str] = None,
         existing_proposal: Optional[MergeProposal] = None,
@@ -391,7 +392,7 @@ def publish(
             labels = None
         try:
             return publish_changes_from_workspace(
-                ws, mode, subrunner.branch_name(),
+                ws, mode, derived_branch_name,
                 get_proposal_description=get_proposal_description,
                 get_proposal_commit_message=(
                     get_proposal_commit_message),
@@ -449,9 +450,6 @@ class Publisher(object):
     def __init__(self, args: List[str]):
         self.args = args
 
-    def branch_name(self) -> str:
-        raise NotImplementedError(self.branch_name)
-
     def get_proposal_description(
             self, role: str, description_format: str,
             existing_description: Optional[str]) -> str:
@@ -468,9 +466,6 @@ class Publisher(object):
 
 
 class LintianBrushPublisher(Publisher):
-
-    def branch_name(self):
-        return "lintian-fixes"
 
     def get_proposal_description(
             self, role, description_format, existing_description):
@@ -510,9 +505,6 @@ class LintianBrushPublisher(Publisher):
 
 
 class MultiArchHintsPublisher(Publisher):
-
-    def branch_name(self):
-        return "multiarch-hints"
 
     def get_proposal_description(self, role, format, existing_description):
         text = 'Apply hints suggested by the multi-arch hinter.\n\n'
@@ -560,9 +552,6 @@ class OrphanPublisher(Publisher):
 
     # TODO(jelmer): Check that the wnpp bug is still open.
 
-    def branch_name(self):
-        return "orphan"
-
     def get_proposal_description(self, role, format, existing_description):
         from silver_platter.debian.orphan import move_instructions
         text = "Move orphaned package to the QA team."
@@ -595,9 +584,6 @@ class OrphanPublisher(Publisher):
 
 class UncommittedPublisher(Publisher):
 
-    def branch_name(self):
-        return "uncommitted"
-
     def get_proposal_description(self, role, format, existing_description):
         return 'Import archive changes missing from the VCS.'
 
@@ -615,12 +601,6 @@ class UncommittedPublisher(Publisher):
 
 
 class NewUpstreamPublisher(Publisher):
-
-    def branch_name(self):
-        if '--snapshot' in self.args:
-            return "new-upstream-snapshot"
-        else:
-            return "new-upstream"
 
     def read_worker_result(self, result):
         self._upstream_version = result['upstream_version']
@@ -691,7 +671,7 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
 def publish_one(
         suite, pkg, command, subworker_result, main_branch_url,
         mode, role, revision: bytes, log_id, local_branch_url, differ_url: str,
-        external_url: str,
+        external_url: str, derived_branch_name: str,
         dry_run=False, require_binary_diff=False, derived_owner=None,
         possible_hosters=None,
         possible_transports=None, allow_create_proposal=None,
@@ -728,7 +708,6 @@ def publish_one(
         raise PublishFailure('branch-missing', str(e))
 
     subrunner.read_worker_result(subworker_result)
-    branch_name = subrunner.branch_name()
 
     try:
         if mode == MODE_BTS:
@@ -756,7 +735,8 @@ def publish_one(
         try:
             (resume_branch, overwrite, existing_proposal) = (
                 find_existing_proposed(
-                    main_branch, hoster, branch_name, owner=derived_owner))
+                    main_branch, hoster, derived_branch_name,
+                    owner=derived_owner))
         except NoSuchProject as e:
             if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
                 raise PublishFailure(
@@ -805,7 +785,8 @@ def publish_one(
     try:
         publish_result = publish(
             suite, pkg, subrunner, mode, role, hoster, main_branch,
-            local_branch, external_url, resume_branch, dry_run=dry_run,
+            local_branch, external_url, derived_branch_name,
+            resume_branch, dry_run=dry_run,
             log_id=log_id, existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
             debdiff=debdiff, derived_owner=derived_owner,
@@ -836,6 +817,7 @@ if __name__ == '__main__':
     try:
         publish_result, branch_name = publish_one(
             suite=request['suite'], pkg=request['package'],
+            derived_branch_name=request['derived_branch_name'],
             command=request['command'],
             subworker_result=request['subworker_result'],
             main_branch_url=request['main_branch_url'], mode=request['mode'],
