@@ -236,10 +236,18 @@ class PublishFailure(Exception):
         self.description = description
 
 
+def derived_branch_name(run, role):
+    # TODO(jelmer): Add package name if subpath != ""
+    if role == 'main':
+        return run.branch_name
+    return '%s-%s' % (run.branch_name, role)
+
+
 async def publish_one(
         suite: str, pkg: str, command, subworker_result, main_branch_url: str,
         mode: str, role: str, revision: bytes, log_id: str,
-        maintainer_email: str, vcs_manager: VcsManager,
+        derived_branch_name: str, maintainer_email: str,
+        vcs_manager: VcsManager,
         legacy_local_branch_name: str, topic_merge_proposal,
         rate_limiter: RateLimiter, dry_run: bool, differ_url: str,
         external_url: str, require_binary_diff: bool = False,
@@ -274,6 +282,7 @@ async def publish_one(
         'subworker_result': subworker_result,
         'main_branch_url': main_branch_url.rstrip('/'),
         'local_branch_url': full_branch_url(local_branch),
+        'derived_branch_name': derived_branch_name,
         'mode': mode,
         'role': role,
         'log_id': log_id,
@@ -535,7 +544,7 @@ async def publish_from_policy(
         proposal_url, branch_name, is_new = await publish_one(
             run.suite, run.package, run.command, run.result,
             main_branch_url, mode, role, revision,
-            run.id, maintainer_email,
+            run.id, derived_branch_name(run, role), maintainer_email,
             vcs_manager=vcs_manager,
             legacy_local_branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
@@ -638,7 +647,8 @@ async def publish_and_store(
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
                 main_branch_url, mode, role, revision,
-                run.id, maintainer_email, vcs_manager,
+                run.id, derived_branch_name(run, role),
+                maintainer_email, vcs_manager,
                 legacy_local_branch_name=run.branch_name, dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -1479,7 +1489,9 @@ applied independently.
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite, last_run.package, last_run.command,
                 last_run.result, last_run.branch_url, MODE_PROPOSE,
-                mp_role, last_run_revision, last_run.id, maintainer_email,
+                mp_role, last_run_revision, last_run.id,
+                derived_branch_name(last_run, mp_role),
+                maintainer_email,
                 vcs_manager=vcs_manager,
                 legacy_local_branch_name=last_run.branch_name,
                 dry_run=dry_run, external_url=external_url,
