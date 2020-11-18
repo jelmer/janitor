@@ -335,7 +335,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
         review_status = ['approved', 'unreviewed']
 
     async with db.acquire() as conn1, db.acquire() as conn:
-        async for (run, maintainer_email, uploader_emails,
+        async for (run, value, maintainer_email, uploader_emails,
                    publish_policy, update_changelog,
                    command, unpublished_branches) in state.iter_publish_ready(
                        conn1, review_status=review_status,

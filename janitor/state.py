@@ -1002,7 +1002,7 @@ async def iter_publish_ready(
         limit: Optional[int] = None,
         publishable_only: bool = False
         ) -> AsyncIterable[
-            Tuple[Run, str, List[str], Dict[str, str], str, List[str],
+            Tuple[Run, int, str, List[str], Dict[str, str], str, List[str],
                   List[Tuple[str, str, bytes, bytes, Optional[str]]]]]:
     args: List[Any] = []
     query = """
