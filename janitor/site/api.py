@@ -357,7 +357,7 @@ async def handle_archive_diff(request):
         if run is None:
             raise web.HTTPNotFound(text='No such run: %s' % run_id)
         unchanged_run = await state.get_unchanged_run(
-            conn, run.main_branch_revision)
+            conn, run.package, run.main_branch_revision)
         if unchanged_run is None:
             return web.json_response(
                 {'reason': 'No matching unchanged build for %s' % run_id,

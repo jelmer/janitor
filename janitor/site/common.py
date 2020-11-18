@@ -58,7 +58,7 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
             branch_url = run.branch_url
             if run.main_branch_revision:
                 unchanged_run = await state.get_unchanged_run(
-                    conn, run.main_branch_revision)
+                    conn, run.package, run.main_branch_revision)
             else:
                 unchanged_run = None
 

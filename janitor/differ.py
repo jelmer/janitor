@@ -152,7 +152,7 @@ async def get_run_pair(db, old_id, new_id):
         new_run = await state.get_run(conn, new_id)
         if old_id == 'BASE':
             old_run = await state.get_unchanged_run(
-                conn, new_run.main_branch_revision)
+                conn, new_run.package, new_run.main_branch_revision)
         else:
             old_run = await state.get_run(conn, old_id)
 
@@ -470,7 +470,8 @@ async def listen_to_runner(runner_url, app):
                     to_precache.append((result['log_id'], row[0]))
             else:
                 unchanged_run = await state.get_unchanged_run(
-                    conn, result['main_branch_revision'].encode('utf-8'))
+                    conn, conn['package'],
+                    result['main_branch_revision'].encode('utf-8'))
                 if unchanged_run:
                     to_precache.append((unchanged_run.id, result['log_id']))
             # This could be concurrent, but risks hitting resource constraints

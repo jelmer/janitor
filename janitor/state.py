@@ -427,7 +427,8 @@ class Run(object):
         return getattr(self, self.__slots__[i])
 
 
-async def get_unchanged_run(conn: asyncpg.Connection, main_branch_revision):
+async def get_unchanged_run(conn: asyncpg.Connection, package,
+                            main_branch_revision):
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
@@ -435,19 +436,20 @@ SELECT
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
-    array(SELECT role, remote_name, base_revision, revision FROM
+    array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id),
     result_tags
 FROM
     last_runs
 WHERE
     suite = 'unchanged' AND revision = $1 AND
+    package = $2 AND
     result_code = 'success'
 ORDER BY finish_time DESC
 """
     if isinstance(main_branch_revision, bytes):
         main_branch_revision = main_branch_revision.decode('utf-8')
-    row = await conn.fetchrow(query, main_branch_revision)
+    row = await conn.fetchrow(query, main_branch_revision, package)
     if row is not None:
         return Run.from_row(row)
     return None

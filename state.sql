@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS run (
    worker text not null,
    result_branches result_branch[],
    result_tags result_tag[],
+   subpath text,
    foreign key (package) references package(name)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
@@ -343,7 +344,7 @@ CREATE OR REPLACE VIEW publishable AS
   run.review_status,
   run.review_comment,
   run.worker,
-  (SELECT ROW(role, remote_name, base_revision, revision)::result_branch FROM new_result_branch WHERE run_id = run.id),
+  array(SELECT ROW(role, remote_name, base_revision, revision)::result_branch FROM new_result_branch WHERE new_result_branch.run_id = run.id) as result_branches,
   run.result_tags,
   run.value,
   package.maintainer_email,
@@ -353,9 +354,9 @@ CREATE OR REPLACE VIEW publishable AS
   policy.command AS policy_command,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode)::result_branch_with_policy
-   FROM result_branch rb
+   FROM new_result_branch rb
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
-   WHERE run_id = run.id AND revision NOT IN (SELECT revision FROM absorbed_revisions)
+   WHERE rb.run_id = run.id AND revision NOT IN (SELECT revision FROM absorbed_revisions)
   ) AS unpublished_branches
 FROM
   last_effective_runs AS run
