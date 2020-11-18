@@ -112,7 +112,7 @@ Mark package as orphaned.
 {% endif %}
 
 {% if revision and result_code in ('success', 'nothing-to-do') and suite != 'unchanged' %}
-{{ display_vcs_diffs(show_diff, run.result_branches) }}
+{{ display_vcs_diffs(show_diff, run.result_branches, run.result_tags) }}
 {% endif %}
 
 {% if debdiff %}

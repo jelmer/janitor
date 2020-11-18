@@ -77,7 +77,7 @@ Nothing to do for {{ package }}.
 
 </div>
 
-{{ display_vcs_diffs(show_diff, result_branches) }}
+{{ display_vcs_diffs(show_diff, run.result_branches, run.result_tags) }}
 
 {% if debdiff %}
 <h3>Debdiff</h3>
