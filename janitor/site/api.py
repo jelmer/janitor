@@ -66,7 +66,7 @@ async def handle_publish(request):
     package = request.match_info['package']
     suite = request.match_info['suite']
     post = await request.post()
-    mode = post.get('mode', 'push-derived')
+    mode = post.get('mode')
     if mode not in ('push-derived', 'push', 'propose', 'attempt-push'):
         return web.json_response(
             {'error': 'Invalid mode', 'mode': mode}, status=400)
@@ -79,9 +79,12 @@ async def handle_publish(request):
             requestor = request.user['name']
     else:
         requestor = 'user from web UI'
+    data = {'requestor': requestor}
+    if mode:
+        data['mode'] = mode
     try:
         async with request.app.http_client_session.post(
-                url, data={'mode': mode, 'requestor': requestor}) as resp:
+                url, data=data) as resp:
             if resp.status in (200, 202):
                 return web.json_response(
                     await resp.json(), status=resp.status)

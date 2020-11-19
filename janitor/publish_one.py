@@ -585,7 +585,7 @@ class NewUpstreamPublisher(Publisher):
             raise KeyError(role)
 
     def get_proposal_commit_message(self, role, existing_commit_message):
-        return self.get_proposal_description('text', None)
+        return self.get_proposal_description(role, 'text', None)
 
     def allow_create_proposal(self):
         # No upstream release too small...
