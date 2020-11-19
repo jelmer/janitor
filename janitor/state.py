@@ -1263,7 +1263,7 @@ WHERE NOT package.removed
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
     return [(Package.from_row(row), row[10], row[11], row[12], row[13],
-             (dict(row[14]), row[15],
+             (dict(row[14]) if row[14] is not None else None, row[15],
               shlex.split(row[16]) if row[16] is not None else None)
              )   # type: ignore
             for row in await conn.fetch(query, *args)]
@@ -1545,14 +1545,13 @@ async def update_policy(
         changelog_mode: str, command: List[str]) -> None:
     await conn.execute(
         'INSERT INTO policy '
-        '(package, suite, mode, update_changelog, command, publish) '
-        'VALUES ($1, $2, $3, $4, $5, $6) '
+        '(package, suite, update_changelog, command, publish) '
+        'VALUES ($1, $2, $3, $4, $5) '
         'ON CONFLICT (package, suite) DO UPDATE SET '
-        'mode = EXCLUDED.mode, '
         'update_changelog = EXCLUDED.update_changelog, '
         'command = EXCLUDED.command, '
         'publish = EXCLUDED.publish',
-        name, suite, publish_mode.get('main'), changelog_mode,
+        name, suite, changelog_mode,
         (' '.join(command) if command else None),
         list(publish_mode.items()))
 
