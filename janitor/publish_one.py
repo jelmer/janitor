@@ -766,7 +766,7 @@ def publish_one(
             code='merge-conflict',
             description='merge would conflict (upstream changes?)')
 
-    return publish_result, branch_name
+    return publish_result, derived_branch_name
 
 
 if __name__ == '__main__':
