@@ -470,7 +470,7 @@ async def listen_to_runner(runner_url, app):
                     to_precache.append((result['log_id'], row[0]))
             else:
                 unchanged_run = await state.get_unchanged_run(
-                    conn, conn['package'],
+                    conn, result['package'],
                     result['main_branch_revision'].encode('utf-8'))
                 if unchanged_run:
                     to_precache.append((unchanged_run.id, result['log_id']))
