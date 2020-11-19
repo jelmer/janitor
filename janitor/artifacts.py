@@ -67,11 +67,14 @@ class LocalArtifactManager(ArtifactManager):
 
     def __init__(self, path):
         self.path = os.path.abspath(path)
+        if not os.path.isdir(self.path):
+            os.makedirs(self.path)
 
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.path)
 
-    async def store_artifacts(self, run_id, local_path, names=None, timeout=None):
+    async def store_artifacts(self, run_id, local_path, names=None,
+                              timeout=None):
         run_dir = os.path.join(self.path, run_id)
         try:
             os.mkdir(run_dir)
