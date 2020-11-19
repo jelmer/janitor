@@ -246,9 +246,6 @@ async def derived_branch_name(conn, run, role):
 
     has_cotenants = await state.has_cotenants(
         conn, run.package, run.branch_url)
-    if has_cotenants is None:
-        warning('Unable to figure out if %s has cotenants on %s',
-                run.package, run.branch_url)
 
     if has_cotenants:
         return name + '-' + run.package
@@ -745,8 +742,8 @@ async def publish_request(request):
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy = await state.get_publish_policy(
-            conn, package.name, suite)[0]
+        publish_policy = (await state.get_publish_policy(
+            conn, package.name, suite))[0]
 
         note('Handling request to publish %s/%s', package.name, suite)
 

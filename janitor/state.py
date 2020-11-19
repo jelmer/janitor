@@ -33,6 +33,7 @@ from typing import (
     Dict
     )
 from breezy import urlutils
+from breezy.trace import warning
 
 
 class Database(object):
@@ -1673,14 +1674,18 @@ async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
 
 async def has_cotenants(
         conn: asyncpg.Connection, package: str, url: str) -> Optional[bool]:
-    url = urlutils.split_segment_parameters(url)[0]
+    url = urlutils.split_segment_parameters(url)[0].rstrip('/')
     rows = await conn.fetch(
         "SELECT name FROM package where "
-        "branch_url = $1 or branch_url like $1 || ',branch=%'", url)
+        "branch_url = $1 or "
+        "branch_url like $1 || ',branch=%' or "
+        "branch_url like $1 || '/,branch=%'", url)
     if len(rows) > 1:
         return True
     elif len(rows) == 1 and rows[0][0] == package:
         return False
     else:
         # Uhm, we actually don't really know
+        warning('Unable to figure out if %s has cotenants on %s',
+                package, url)
         return None
