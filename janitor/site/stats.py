@@ -111,9 +111,10 @@ select review_status, count(*) from last_unabsorbed_runs
 LEFT JOIN policy
 ON policy.package = last_unabsorbed_runs.package
 AND policy.suite = last_unabsorbed_runs.suite
-where result_code = \'success\' AND
-policy.mode in ('propose', 'attempt-push', 'push-derived', 'push')
-group by 1""")}
+where result_code = 'success' and exists (
+    select from unnest(policy.publish) where
+    mode in ('propose', 'attempt-push', 'push-derived', 'push')) group by 1
+""")}
 
 
 @json_chart_data(max_age=60)
