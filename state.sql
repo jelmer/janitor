@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS publish (
    branch_name text,
    main_branch_revision text,
    revision text,
+   role text,
    mode publish_mode not null,
    merge_proposal_url text,
    result_code text not null,

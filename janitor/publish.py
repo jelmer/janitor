@@ -574,7 +574,7 @@ async def publish_from_policy(
 
     await state.store_publish(
         conn, run.package, branch_name, base_revision,
-        revision, mode, code, description,
+        revision, role, mode, code, description,
         proposal_url if proposal_url else None,
         publish_id=publish_id, requestor=requestor)
 
@@ -662,7 +662,7 @@ async def publish_and_store(
             await state.store_publish(
                 conn, run.package, run.branch_name,
                 run.main_branch_revision,
-                run.revision, e.mode, e.code, e.description,
+                run.revision, role, e.mode, e.code, e.description,
                 None, publish_id=publish_id, requestor=requestor)
             topic_publish.publish({
                 'id': publish_id,
@@ -686,7 +686,7 @@ async def publish_and_store(
         await state.store_publish(
             conn, run.package, branch_name,
             run.main_branch_revision,
-            run.revision, mode, 'success', 'Success',
+            run.revision, role, mode, 'success', 'Success',
             proposal_url if proposal_url else None,
             publish_id=publish_id, requestor=requestor)
 
@@ -1562,7 +1562,7 @@ applied independently.
                 await state.store_publish(
                     conn, last_run.package, mp_run.branch_name,
                     last_run_base_revision,
-                    last_run_revision, e.mode, code,
+                    last_run_revision, mp_role, e.mode, code,
                     description, mp.url,
                     publish_id=publish_id,
                     requestor='publisher (regular refresh)')
@@ -1571,7 +1571,7 @@ applied independently.
                 await state.store_publish(
                     conn, last_run.package, branch_name,
                     last_run_base_revision,
-                    last_run_revision, MODE_PROPOSE, 'success',
+                    last_run_revision, mp_role, MODE_PROPOSE, 'success',
                     'Succesfully updated', mp_url,
                     publish_id=publish_id,
                     requestor='publisher (regular refresh)')

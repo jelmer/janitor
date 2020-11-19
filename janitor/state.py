@@ -161,7 +161,7 @@ async def store_run(
 
 async def store_publish(conn: asyncpg.Connection,
                         package, branch_name, main_branch_revision,
-                        revision, mode, result_code, description,
+                        revision, role, mode, result_code, description,
                         merge_proposal_url=None, publish_id=None,
                         requestor=None):
     if isinstance(revision, bytes):
@@ -177,11 +177,11 @@ async def store_publish(conn: asyncpg.Connection,
             merge_proposal_url, package, revision)
     await conn.execute(
         "INSERT INTO publish (package, branch_name, "
-        "main_branch_revision, revision, mode, result_code, description, "
-        "merge_proposal_url, id, requestor) "
-        "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) ",
-        package, branch_name, main_branch_revision, revision, mode,
-        result_code, description, merge_proposal_url, publish_id,
+        "main_branch_revision, revision, role, mode, result_code, "
+        "description, merge_proposal_url, id, requestor) "
+        "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ",
+        package, branch_name, main_branch_revision, revision, role,
+        mode, result_code, description, merge_proposal_url, publish_id,
         requestor)
 
 
