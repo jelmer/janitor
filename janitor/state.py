@@ -1595,7 +1595,7 @@ async def get_publish_policy(
         suite)
     if row:
         return (  # type: ignore
-            {k: v for k, v in row[0].items()}, row[1],
+            {k: v for k, v in row[0]}, row[1],
             shlex.split(row[2]) if row[2] else None)
     return None, None, None
 
