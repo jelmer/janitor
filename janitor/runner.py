@@ -446,6 +446,7 @@ class ActiveRun(object):
     log_id: str
     start_time: datetime
     worker_name: str
+    worker_link: Optional[str]
 
     def __init__(self, queue_item: state.QueueItem):
         self.queue_item = queue_item
@@ -483,6 +484,7 @@ class ActiveRun(object):
                 self.current_duration.total_seconds(),
             'start_time': self.start_time.isoformat(),
             'worker': self.worker_name,
+            'worker_link': self.worker_link,
             'logfilenames': list(self.list_log_files()),
             }
         ret.update(self._extra_json())
@@ -511,6 +513,10 @@ class ActiveRemoteRun(ActiveRun):
 
     def _extra_json(self):
         return {'jenkins': self._jenkins_metadata}
+
+    @property
+    def worker_link(self):
+        return self._jenkins_metadata['build_url']
 
     def start_watchdog(self, queue_processor):
         if self._watch_dog is not None:
@@ -677,6 +683,8 @@ class ActiveLocalRun(ActiveRun):
         super(ActiveLocalRun, self).__init__(queue_item)
         self.worker_name = socket.gethostname()
         self.output_directory = output_directory
+
+    worker_link = None
 
     def kill(self) -> None:
         self._task.cancel()
@@ -1087,6 +1095,7 @@ class QueueProcessor(object):
                     subworker_result=result.subworker_result, suite=item.suite,
                     logfilenames=result.logfilenames, value=result.value,
                     worker_name=active_run.worker_name,
+                    worker_link=active_run.worker_link,
                     result_branches=result.branches,
                     result_tags=result.tags)
                 if result.target_result.build_version:

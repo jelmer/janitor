@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS run (
    value integer,
    -- Name of the worker that executed this run.
    worker text not null,
+   -- Link to worker-specific status page
+   worker_link text,
    result_branches result_branch[],
    result_tags result_tag[],
    subpath text,
