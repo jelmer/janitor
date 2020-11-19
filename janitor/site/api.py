@@ -151,7 +151,10 @@ async def handle_schedule(request):
             return web.json_response(
                 {'reason': 'Package not found'}, status=404)
         if request.user:
-            requestor = request.user['email']
+            try:
+                 requestor = request.user['email']
+            except KeyError:
+                 requestor = request.user['name']
         else:
             requestor = 'user from web UI'
         if package.branch_url is None:
