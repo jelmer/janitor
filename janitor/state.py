@@ -1033,7 +1033,7 @@ SELECT * FROM publish_ready
 """
     conditions = []
     if suites is not None:
-        conditions.append("run.suite = ANY($1::text[])")
+        conditions.append("suite = ANY($1::text[])")
         args.append(suites)
     if review_status is not None:
         if not isinstance(review_status, list):
