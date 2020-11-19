@@ -51,7 +51,8 @@ CREATE TABLE IF NOT EXISTS run (
    description text,
    start_time timestamp,
    finish_time timestamp,
-   duration interval generated always as (finish_time - start_time) stored,
+   -- Disabled for now: requires postgresql > 12
+   -- duration interval generated always as (finish_time - start_time) stored,
    package text not null,
    -- Debian version text of the built package
    build_version debversion,
@@ -88,7 +89,6 @@ CREATE INDEX ON run (build_distribution);
 CREATE INDEX ON run (result_code);
 CREATE INDEX ON run (revision);
 CREATE INDEX ON run (main_branch_revision);
-CREATE INDEX ON run (duration);
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived', 'skip');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
@@ -282,9 +282,9 @@ ORDER BY bucket ASC, priority ASC, id ASC;
 CREATE TABLE debian_build (
  run_id text not null references run (id),
  -- Debian version text of the built package
- build_version debversion not null,
+ version debversion not null,
  -- Distribution the package was built for (e.g. "lintian-fixes")
- build_distribution text not null,
+ distribution text not null,
  source text not null
 );
 
@@ -311,7 +311,6 @@ CREATE TABLE result_tag (
  revision text not null
 );
 
-CREATE UNIQUE INDEX ON result_tag (run_id, actual_name);
 CREATE INDEX ON result_tag (revision);
 
 CREATE TYPE result_branch_with_policy AS (
