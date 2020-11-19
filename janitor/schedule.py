@@ -112,6 +112,10 @@ async def schedule_from_candidates(iter_candidates_with_policy):
 
         (publish_mode, update_changelog, command) = policy
 
+        if publish_mode is None:
+            trace.note('%s: no policy defined', package.name)
+            continue
+
         if all([mode == 'skip' for mode in publish_mode]):
             trace.mutter('%s: skipping, per policy', package.name)
             continue
