@@ -467,7 +467,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                 ws.local_tree.branch.last_revision().decode())
 
         if command[0] != 'just-build':
-            if not changer_result.result_branches:
+            if not changer_result.branches:
                 raise WorkerFailure('nothing-to-do', 'Nothing to do.')
 
             if ws.resume_branch and not ws.changes_since_resume():
