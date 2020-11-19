@@ -87,6 +87,7 @@ async def store_run(
         build_distribution: Optional[str], branch_name: str,
         revision: Optional[bytes], subworker_result: Optional[Any], suite: str,
         logfilenames: List[str], value: Optional[int], worker_name: str,
+        worker_link: Optional[str],
         result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
         result_tags: Optional[List[Tuple[str, bytes]]] = None):
     """Store a run.
@@ -112,6 +113,7 @@ async def store_run(
       logfilenames: List of log filenames
       value: Value of the run (as int)
       worker_name: Name of the worker
+      worker_link: Link to worker URL
       result_branches: Result branches
       result_tags: Result tags
     """
@@ -134,17 +136,18 @@ async def store_run(
             "start_time, finish_time, package, instigated_context, context, "
             "build_version, build_distribution, main_branch_revision, "
             "branch_name, revision, result, suite, branch_url, logfilenames, "
-            "value, worker, result_branches, result_tags) VALUES "
+            "value, worker, worker_link, result_branches, result_tags) VALUES "
             "($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-            "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+            "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)",
             run_id, ' '.join(command), description, result_code,
             start_time, finish_time, name, instigated_context, context,
             str(build_version) if build_version else None, build_distribution,
-            main_branch_revision.decode('utf-8') if main_branch_revision else None,
+            main_branch_revision.decode('utf-8')
+            if main_branch_revision else None,
             branch_name, revision.decode('utf-8') if revision else None,
             subworker_result if subworker_result else None, suite,
             vcs_url, logfilenames, value, worker_name,
-            result_branches_updated, result_tags_updated)
+            worker_link, result_branches_updated, result_tags_updated)
 
         if result_branches:
             await conn.executemany(
