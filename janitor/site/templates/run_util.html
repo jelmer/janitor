@@ -82,10 +82,23 @@ $(function() {
 {% set propose_id="propose" + id_suffix %}
 {% set fork_id="push-derived" + id_suffix  %}
 {% set push_id="push" + id_suffix  %}
-<button id="{{ propose_id }}">Create merge proposal</button> <button id="{{ fork_id }}">Create fork with changes</button>{% if is_admin %} <button id="{{ push_id }}">Push</button>{% endif %}
+{% set publish_id="publish" + id_suffix  %}
+<button id="{{ publish_id }}">Publish now</button> {% if is_admin %} <button id="{{ fork_id }}">Create fork with changes</button><button id="{{ push_id }}">Push</button> <button id="{{ propose_id }}">Create merge proposal</button>{% endif %}
 
 <script>
 $(function() {
+$("#{{ publish_id }}").click(function() {
+    $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {}, function(data) {
+    if (data) {
+        $("#{{ publish_id }}").replaceWith("<span>Publishing...</span>");
+    }
+    }, 'json')
+    .fail(function(response) {
+	$("#{{ publish_id }}").replaceWith("<span>Failed to publish: " + response.responseText + "</span>");
+    });
+  });
+
+{% if is_admin %}
 $("#{{ propose_id }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'propose'}, function(data) {
     if (data) {
@@ -106,7 +119,6 @@ $("#{{ propose_id }}").click(function() {
     });
   });
 
-{% if is_admin %}
  $("#{{ push_id }}").click(function() {
     $.post('/api/{{ suite }}/pkg/{{ package }}/publish', {'mode': 'push'}, function(data) {
         $("#{{ push_id }}").replaceWith("<span>Pushing.</span>");
@@ -182,7 +194,11 @@ $("#{{ propose_id }}").click(function() {
 {% endmacro %}
 
 {% macro describe_publish_policy(publish_policy) %}
-{{ publish_policy }}
+{% if publish_policy|length > 0 %}
+<b>{{ publish_policy['main'] }}</b>
+{% else %}
+{% for role, policy in publish_policy %}{{ role }}: <b>{{ policy }}</b>{% if not loop.last %}, {% endif %}{% endfor %}
+{% endif %}
 {% endmacro %}
 
 {% macro display_vcs_diffs(get_diff, branches, tags=None) %}

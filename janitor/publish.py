@@ -715,40 +715,60 @@ async def publish_request(request):
     rate_limiter = request.app.rate_limiter
     package = request.match_info['package']
     suite = request.match_info['suite']
-    role = request.query.get('role', 'main')
+    role = request.query.get('role')
     post = await request.post()
-    mode = post.get('mode', MODE_PROPOSE)
+    mode = post.get('mode')
     async with request.app.db.acquire() as conn:
         try:
             package = await state.get_package(conn, package)
         except IndexError:
             return web.json_response({}, status=400)
 
-        if mode in (MODE_SKIP, MODE_BUILD_ONLY):
-            return web.json_response(
-                {'code': 'done',
-                 'description':
-                    'Nothing to do'})
-
         run = await get_last_effective_run(conn, package.name, suite)
         if run is None:
             return web.json_response({}, status=400)
+
+        publish_policy = await state.get_publish_policy(
+            conn, package.name, suite)[0]
+
         note('Handling request to publish %s/%s', package.name, suite)
 
-    publish_id = str(uuid.uuid4())
+    if role is not None:
+        roles = [role]
+    else:
+        roles = [e[0] for e in run.result_branches]
 
+    if mode:
+        branches = [(r, mode) for r in roles]
+    else:
+        branches = [(r, publish_policy[r]) for r in roles]
+
+    publish_ids = {}
     loop = asyncio.get_event_loop()
-    loop.create_task(publish_and_store(
-        request.app.db, request.app.topic_publish,
-        request.app.topic_merge_proposal, publish_id, run, mode,
-        role, package.maintainer_email, package.uploader_emails,
-        vcs_manager=vcs_manager, rate_limiter=rate_limiter, dry_run=dry_run,
-        external_url=request.app.external_url,
-        differ_url=request.app.differ_url, allow_create_proposal=True,
-        require_binary_diff=False, requestor=post.get('requestor')))
+    for role, mode in branches:
+        publish_id = str(uuid.uuid4())
+        publish_ids[role] = publish_id
+
+        note('.. publishing for role %s: %s', role, mode)
+
+        if mode in (MODE_SKIP, MODE_BUILD_ONLY):
+            continue
+
+        loop.create_task(publish_and_store(
+            request.app.db, request.app.topic_publish,
+            request.app.topic_merge_proposal, publish_id, run, mode,
+            role, package.maintainer_email, package.uploader_emails,
+            vcs_manager=vcs_manager, rate_limiter=rate_limiter,
+            dry_run=dry_run, external_url=request.app.external_url,
+            differ_url=request.app.differ_url, allow_create_proposal=True,
+            require_binary_diff=False, requestor=post.get('requestor')))
+
+    if not publish_ids:
+        return web.json_response(
+            {'run_id': run.id, 'code': 'done', 'description': 'Nothing to do'})
 
     return web.json_response(
-        {'run_id': run.id, 'mode': mode, 'publish_id': publish_id},
+        {'run_id': run.id, 'mode': mode, 'publish_ids': publish_ids},
         status=202)
 
 
