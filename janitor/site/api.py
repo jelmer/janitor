@@ -73,7 +73,10 @@ async def handle_publish(request):
     url = urllib.parse.urljoin(
         publisher_url, '%s/%s/publish' % (suite, package))
     if request.user:
-        requestor = request.user['email']
+        try:
+            requestor = request.user['email']
+        except KeyError:
+            requestor = request.user['name']
     else:
         requestor = 'user from web UI'
     try:
