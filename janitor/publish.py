@@ -1472,8 +1472,28 @@ applied independently.
 
     if last_run_remote_branch_name != mp_remote_branch_name:
         warning('%s: Remote branch name has changed: %s => %s, '
-                'skipping...', mp.url, last_run_remote_branch_name,
-                mp_remote_branch_name)
+                'skipping...', mp.url, mp_remote_branch_name,
+                last_run_remote_branch_name,)
+        # Note that we require that mp_remote_branch_name is set.
+        # For some old runs it is not set because we didn't track
+        # the default branch name.
+        if not dry_run and mp_remote_branch_name is not None:
+            await update_proposal_status(
+                mp, 'abandoned', revision, package_name)
+            try:
+                mp.post_comment("""
+This merge proposal will be closed, since the branch for the role '%s'
+has changed to %s.
+""" % (mp_role, last_run_remote_branch_name))
+            except PermissionDenied as e:
+                warning('Permission denied posting comment to %s: %s',
+                        mp.url, e)
+            try:
+                mp.close()
+            except PermissionDenied as e:
+                warning('Permission denied closing merge request %s: %s',
+                        mp.url, e)
+                return False
         return False
 
     if last_run != mp_run:
