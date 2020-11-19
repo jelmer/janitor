@@ -1054,14 +1054,15 @@ SELECT * FROM publish_ready
     if publishable_only:
         conditions.append(publishable_condition)
     else:
-        order_by.append(publishable_condition)
+        order_by.append(publishable_condition + " DESC")
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
 
     order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
 
-    query += " ORDER BY " + ", ".join(order_by)
+    if order_by:
+        query += " ORDER BY " + ", ".join(order_by) + " "
 
     if limit is not None:
         query += " LIMIT %d" % limit
