@@ -1669,3 +1669,16 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
 async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
     return await conn.fetchrow(
         "SELECT userinfo FROM site_session WHERE id = $1", session_id)
+
+
+async def has_cotenants(
+        conn: asyncpg.Connection, package: str, url: str) -> Optional[bool]:
+    rows = await conn.fetch(
+        'SELECT package FROM package where branch_url = $1', url)
+    if len(rows) > 1:
+        return True
+    elif len(rows) == 1 and rows[0][0] == package:
+        return False
+    else:
+        # Uhm, we actually don't really know
+        return None

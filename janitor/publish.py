@@ -236,11 +236,24 @@ class PublishFailure(Exception):
         self.description = description
 
 
-def derived_branch_name(run, role):
-    # TODO(jelmer): Add package name if subpath != ""
+async def derived_branch_name(conn, run, role):
+    # TODO(jelmer): Add package name if there are more packages living in this
+    # repository
     if role == 'main':
-        return run.branch_name
-    return '%s-%s' % (run.branch_name, role)
+        name = run.branch_name
+    else:
+        name = '%s-%s' % (run.branch_name, role)
+
+    has_cotenants = await state.has_cotenants(
+        conn, run.package, run.branch_url)
+    if has_cotenants is None:
+        warning('Unable to figure out if %s has cotenants on %s',
+                run.package, run.branch_url)
+
+    if has_cotenants:
+        return name + '-' + run.package
+    else:
+        return name
 
 
 async def publish_one(
@@ -531,7 +544,8 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
-    unchanged_run = await state.get_unchanged_run(conn, run.package, base_revision)
+    unchanged_run = await state.get_unchanged_run(
+        conn, run.package, base_revision)
 
     # TODO(jelmer): Make this more generic
     if (unchanged_run and
@@ -544,7 +558,9 @@ async def publish_from_policy(
         proposal_url, branch_name, is_new = await publish_one(
             run.suite, run.package, run.command, run.result,
             main_branch_url, mode, role, revision,
-            run.id, derived_branch_name(run, role), maintainer_email,
+            run.id,
+            await derived_branch_name(conn, run, role),
+            maintainer_email,
             vcs_manager=vcs_manager,
             legacy_local_branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
@@ -647,7 +663,8 @@ async def publish_and_store(
             proposal_url, branch_name, is_new = await publish_one(
                 run.suite, run.package, run.command, run.result,
                 main_branch_url, mode, role, revision,
-                run.id, derived_branch_name(run, role),
+                run.id,
+                await derived_branch_name(conn, run, role),
                 maintainer_email, vcs_manager,
                 legacy_local_branch_name=run.branch_name, dry_run=dry_run,
                 external_url=external_url,
@@ -1530,7 +1547,7 @@ has changed to %s.
                 last_run.suite, last_run.package, last_run.command,
                 last_run.result, last_run.branch_url, MODE_PROPOSE,
                 mp_role, last_run_revision, last_run.id,
-                derived_branch_name(last_run, mp_role),
+                await derived_branch_name(conn, last_run, mp_role),
                 maintainer_email,
                 vcs_manager=vcs_manager,
                 legacy_local_branch_name=last_run.branch_name,
