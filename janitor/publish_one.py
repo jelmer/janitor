@@ -45,9 +45,6 @@ from silver_platter.proposal import (
     UnsupportedHoster,
     SourceNotDerivedFromTarget,
     )
-from silver_platter.debian import (
-    pick_additional_colocated_branches,
-    )
 
 from breezy.branch import Branch
 from breezy.errors import DivergedBranches
@@ -251,15 +248,11 @@ class BranchWorkspace(object):
     """Workspace-like object that doesn't use working trees.
     """
 
-    def __init__(self, main_branch, local_branch, resume_branch=None,
-                 push_colocated=None):
+    def __init__(self, main_branch, local_branch, resume_branch=None):
         self.main_branch = main_branch
         self.local_branch = local_branch
         self.resume_branch = resume_branch
         self.orig_revid = (resume_branch or main_branch).last_revision()
-        self.additional_colocated_branches = (
-            pick_additional_colocated_branches(main_branch))
-        self.push_colocated = push_colocated
 
     def __enter__(self):
         return self
@@ -288,7 +281,6 @@ class BranchWorkspace(object):
             overwrite_existing=overwrite_existing,
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
-            additional_colocated_branches=self.additional_colocated_branches,
             reviewers=reviewers, tags=tags, owner=owner,
             allow_collaboration=allow_collaboration)
 
@@ -306,14 +298,8 @@ class BranchWorkspace(object):
                     self.local_branch.last_revision()):
                 raise DivergedBranches(self.main_branch, self.local_branch)
 
-        if self.push_colocated:
-            additional_colocated_branches = self.additional_colocated_branches
-        else:
-            additional_colocated_branches = []
-
         return push_changes(
             self.local_branch, self.main_branch, hoster=hoster,
-            additional_colocated_branches=additional_colocated_branches,
             dry_run=dry_run, tags=tags)
 
     def push_derived(self, name: str, hoster: Optional[Hoster] = None,
@@ -384,8 +370,7 @@ def publish(
     labels: Optional[List[str]]
 
     with BranchWorkspace(
-            main_branch, local_branch, resume_branch=resume_branch,
-            push_colocated=subrunner.push_colocated()) as ws:
+            main_branch, local_branch, resume_branch=resume_branch) as ws:
         if hoster and hoster.supports_merge_proposal_labels:
             labels = [suite]
         else:
@@ -447,9 +432,6 @@ def publish(
 
 class Publisher(object):
 
-    def __init__(self, args: List[str]):
-        self.args = args
-
     def get_proposal_description(
             self, role: str, description_format: str,
             existing_description: Optional[str]) -> str:
@@ -460,9 +442,6 @@ class Publisher(object):
 
     def allow_create_proposal(self) -> bool:
         raise NotImplementedError(self.allow_create_proposal)
-
-    def push_colocated(self) -> bool:
-        raise NotImplementedError(self.push_colocated)
 
 
 class LintianBrushPublisher(Publisher):
@@ -499,9 +478,6 @@ class LintianBrushPublisher(Publisher):
 
     def allow_create_proposal(self):
         return self.applied and not self.add_on_only
-
-    def push_colocated(self):
-        return False
 
 
 class MultiArchHintsPublisher(Publisher):
@@ -544,9 +520,6 @@ These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
     def allow_create_proposal(self):
         return True
 
-    def push_colocated(self):
-        return False
-
 
 class OrphanPublisher(Publisher):
 
@@ -578,9 +551,6 @@ class OrphanPublisher(Publisher):
     def allow_create_proposal(self):
         return True
 
-    def push_colocated(self):
-        return False
-
 
 class UncommittedPublisher(Publisher):
 
@@ -595,9 +565,6 @@ class UncommittedPublisher(Publisher):
 
     def allow_create_proposal(self):
         return True
-
-    def push_colocated(self):
-        return False
 
 
 class NewUpstreamPublisher(Publisher):
@@ -622,9 +589,6 @@ class NewUpstreamPublisher(Publisher):
 
     def allow_create_proposal(self):
         # No upstream release too small...
-        return True
-
-    def push_colocated(self):
         return True
 
 
@@ -679,15 +643,15 @@ def publish_one(
 
     subrunner: Publisher
     if command.startswith('new-upstream'):
-        subrunner = NewUpstreamPublisher(command)
+        subrunner = NewUpstreamPublisher()
     elif command.startswith('lintian-brush'):
-        subrunner = LintianBrushPublisher(command)
+        subrunner = LintianBrushPublisher()
     elif command.startswith('apply-multiarch-hints'):
-        subrunner = MultiArchHintsPublisher(command)
+        subrunner = MultiArchHintsPublisher()
     elif command.startswith('orphan'):
-        subrunner = OrphanPublisher(command)
+        subrunner = OrphanPublisher()
     elif command.startswith('import-upload'):
-        subrunner = UncommittedPublisher(command)
+        subrunner = UncommittedPublisher()
     else:
         raise AssertionError('unknown command %r' % command)
 
