@@ -371,7 +371,7 @@ def publish(
             role, existing_commit_message)
 
     with main_branch.lock_read(), local_branch.lock_read():
-        if merge_conflicts(main_branch, local_branch):
+        if merge_conflicts(main_branch, local_branch, stop_revision):
             raise MergeConflict(main_branch, local_branch)
 
     labels: Optional[List[str]]
