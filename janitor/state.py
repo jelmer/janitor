@@ -595,7 +595,9 @@ SELECT
     merge_proposal.url, merge_proposal.status
 FROM
     merge_proposal
-LEFT JOIN run ON merge_proposal.revision = run.revision
+LEFT JOIN new_result_branch ON
+    new_result_branch.revision = merge_proposal.revision
+LEFT JOIN run ON run.id = new_result_branch.run_id
 """
     if package:
         if isinstance(package, list):
