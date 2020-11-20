@@ -591,7 +591,10 @@ def main(argv=None):
         finish_time = datetime.now()
         note('Elapsed time: %s', finish_time - start_time)
         with open(os.path.join(output_directory, 'result.json'), 'w') as f:
-            json.dump(metadata, f, indent=2)
+            try:
+                json.dump(metadata, f, indent=2)
+            except TypeError:
+                raise TypeError(metadata)
 
 
 if __name__ == '__main__':
