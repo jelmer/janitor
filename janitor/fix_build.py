@@ -212,11 +212,11 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
                     continue
                 if minimum_version:
                     control["Depends"] = ensure_minimum_version(
-                        control["Depends"],
+                        control.get("Depends", ""),
                         package, minimum_version)
                 else:
                     control["Depends"] = ensure_some_version(
-                        control["Depends"], package)
+                        control.get("Depends", ""), package)
     except FormattingUnpreservable as e:
         note('Unable to edit %s in a way that preserves formatting.',
              e.path)
