@@ -278,7 +278,7 @@ def publish(
         description = add_janitor_blurb(
             description_format, description, pkg, log_id, suite,
             external_url)
-        if debdiff is not None:
+        if debdiff is not None and role == 'main':
             description = add_debdiff_blurb(
                 description_format, description, pkg, log_id, suite,
                 debdiff.decode('utf-8', 'replace'),
