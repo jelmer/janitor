@@ -270,7 +270,8 @@ class BranchWorkspace(object):
     def propose(self, name, description, hoster=None, existing_proposal=None,
                 overwrite_existing=None, labels=None, dry_run=False,
                 commit_message=None, reviewers=None, tags=None,
-                allow_collaboration=False, owner=None):
+                allow_collaboration=False, owner=None,
+                stop_revision=None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return propose_changes(
@@ -282,36 +283,41 @@ class BranchWorkspace(object):
             labels=labels, dry_run=dry_run,
             commit_message=commit_message,
             reviewers=reviewers, tags=tags, owner=owner,
-            allow_collaboration=allow_collaboration)
+            allow_collaboration=allow_collaboration,
+            stop_revision=stop_revision)
 
     def push(self, hoster: Optional[Hoster] = None, dry_run: bool = False,
-             tags: Optional[List[str]] = None) -> None:
+             tags: Optional[List[str]] = None,
+             stop_revision: Optional[bytes] = None) -> None:
         if hoster is None:
             hoster = get_hoster(self.main_branch)
 
         # Presumably breezy would do this check too, but we want to be *really*
         # sure.
         with self.local_branch.lock_read():
+            if stop_revision is None:
+                stop_revision = self.local_branch.last_revision()
             graph = self.local_branch.repository.get_graph()
             if not graph.is_ancestor(
                     self.main_branch.last_revision(),
-                    self.local_branch.last_revision()):
+                    stop_revision):
                 raise DivergedBranches(self.main_branch, self.local_branch)
 
         return push_changes(
             self.local_branch, self.main_branch, hoster=hoster,
-            dry_run=dry_run, tags=tags)
+            dry_run=dry_run, tags=tags, stop_revision=stop_revision)
 
     def push_derived(self, name: str, hoster: Optional[Hoster] = None,
                      overwrite_existing: bool = False,
                      tags: Optional[List[str]] = None,
-                     owner: Optional[str] = None):
+                     owner: Optional[str] = None,
+                     stop_revision: Optional[bytes] = None):
         if hoster is None:
             hoster = get_hoster(self.main_branch)
         return push_derived_changes(
             self.local_branch, self.main_branch, hoster, name,
             overwrite_existing=overwrite_existing, tags=tags,
-            owner=owner)
+            owner=owner, stop_revision=stop_revision)
 
 
 def publish(
@@ -326,7 +332,8 @@ def publish(
         derived_owner: Optional[str] = None,
         debdiff: Optional[bytes] = None,
         reviewers: Optional[List[str]] = None,
-        result_tags: Optional[Dict[str, bytes]] = None):
+        result_tags: Optional[Dict[str, bytes]] = None,
+        stop_revision: Optional[bytes] = None):
     def get_proposal_description(description_format, existing_proposal):
         if existing_proposal:
             existing_description = existing_proposal.get_description()
@@ -386,7 +393,8 @@ def publish(
                 overwrite_existing=True, derived_owner=derived_owner,
                 existing_proposal=existing_proposal,
                 labels=labels, tags=result_tags,
-                allow_collaboration=True, reviewers=reviewers)
+                allow_collaboration=True, reviewers=reviewers,
+                stop_revision=stop_revision)
         except DivergedBranches:
             raise PublishFailure(
                 description='Upstream branch has diverged from local changes.',
@@ -754,7 +762,8 @@ def publish_one(
             log_id=log_id, existing_proposal=existing_proposal,
             allow_create_proposal=allow_create_proposal,
             debdiff=debdiff, derived_owner=derived_owner,
-            reviewers=reviewers, result_tags=result_tags)
+            reviewers=reviewers, result_tags=result_tags,
+            stop_revision=revision)
     except EmptyMergeProposal:
         raise PublishFailure(
             code='empty-merge-proposal',
