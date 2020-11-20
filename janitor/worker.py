@@ -470,9 +470,6 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
             if not changer_result.branches:
                 raise WorkerFailure('nothing-to-do', 'Nothing to do.')
 
-            if ws.resume_branch and not ws.changes_since_resume():
-                raise WorkerFailure('nothing-to-do', 'Nothing new to do.')
-
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
         except PostCheckFailed as e:
