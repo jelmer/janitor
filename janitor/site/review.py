@@ -11,6 +11,8 @@ from janitor.site import (
     render_template_for_request,
     )
 
+MAX_DIFF_SIZE = 200 * 1024
+
 
 async def generate_rejected(conn, suite=None):
     if suite is None:
@@ -51,7 +53,8 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         if base_revid == revid:
             return ''
         url = urllib.parse.urljoin(
-            publisher_url, 'diff/%s/%s' % (run.id, role))
+            publisher_url, 'diff/%s/%s?max_diff_size=%d' % (
+                run.id, role, MAX_DIFF_SIZE))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -84,6 +87,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         'run_id': run.id,
         'branches': run.result_branches,
         'suite': run.suite,
+        'MAX_DIFF_SIZE': MAX_DIFF_SIZE,
         'todo': [
             (entry[0].package, entry[0].id,
              [rb[0] for rb in entry[0].result_branches])
