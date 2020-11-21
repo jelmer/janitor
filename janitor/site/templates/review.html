@@ -24,12 +24,16 @@ function loadRun(package, run_id, roles) {
     roles.forEach(function(role) {
       var url = '/api/run/' + run_id + '/diff?role=' + role;
       $('<div class="diff" id="diff-' + role + '">Loading <a href="' + url + '">' + url + '</a>...</div>').insertBefore('#debdiff');
-      deferreds.push($('#diff-' + role).load(url + '&diff_size={{MAX_DIFF_SIZE}}'));
+      deferreds.push($('#diff-' + role).load(url + ';max_diff_size={{MAX_DIFF_SIZE}}', undefined, function (responseText, textStatus, req) {
+           if (req.status == 413) {
+                 $('#diff-' + role).html('<p>Diff is too large. See it at <a href="' + url + '">' + url + '</a></p>');
+           }
+      }));
     });
     deferreds.push($('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
           undefined,
-          function(responseText, textStatus, XMLHttpRequest) {
-               if (XMLHttpRequest.status == 404) {
+          function(responseText, textStatus, req) {
+               if (req.status == 404) {
                     $('#debdiff').html('<p>No debdiff generated</p>');
                }
     }));

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
-from aiohttp import ClientConnectorError
+from asyncio import TimeoutError
+from aiohttp import ClientConnectorError, ClientTimeout
 import urllib.parse
 
 from janitor import state
@@ -53,17 +54,25 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         if base_revid == revid:
             return ''
         url = urllib.parse.urljoin(
-            publisher_url, 'diff/%s/%s?max_diff_size=%d' % (
-                run.id, role, MAX_DIFF_SIZE))
+            publisher_url, 'diff/%s/%s' % (
+                run.id, role))
+        external_url = '/api/run/%s/diff?role=%s' % (run.id, role)
         try:
-            async with client.get(url) as resp:
+            async with client.get(url, timeout=ClientTimeout(30)) as resp:
                 if resp.status == 200:
-                    return (await resp.read()).decode('utf-8', 'replace')
+                    diff = (await resp.read()).decode('utf-8', 'replace')
+                    if len(diff) > MAX_DIFF_SIZE:
+                         return "Diff too large (%d). See it at %s" % (
+                               len(diff), external_url)
+                    else:
+                         return diff
                 else:
                     return (
                         'Unable to retrieve diff; error %d' % resp.status)
         except ClientConnectorError as e:
             return 'Unable to retrieve diff; error %s' % e
+        except TimeoutError:
+            return 'Timeout while retrieving diff; see it at %s' % external_url
 
     async def show_debdiff():
         unchanged_run = await state.get_unchanged_run(
