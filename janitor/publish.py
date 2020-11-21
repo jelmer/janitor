@@ -242,13 +242,13 @@ async def derived_branch_name(conn, run, role):
     if role == 'main':
         name = run.branch_name
     else:
-        name = '%s-%s' % (run.branch_name, role)
+        name = '%s/%s' % (run.branch_name, role)
 
     has_cotenants = await state.has_cotenants(
         conn, run.package, run.branch_url)
 
     if has_cotenants:
-        return name + '-' + run.package
+        return name + '/' + run.package
     else:
         return name
 
