@@ -1169,10 +1169,10 @@ order by url, last_run.finish_time desc
         handle_lintian_brush_regressions,
         name='lintian-brush-regressions')
     app.router.add_get(
-        '/cupboard/pkg/{pkg}/{run_id}/{filename:.*}', handle_result_file,
+        '/cupboard/pkg/{pkg}/{run_id}/{filename:.+}', handle_result_file,
         name='cupboard-result-file')
     app.router.add_get(
-        '/{suite:' + SUITE_REGEX + '}/pkg/{pkg}/{run_id}/{filename:.*}',
+        '/{suite:' + SUITE_REGEX + '}/pkg/{pkg}/{run_id}/{filename:.+}',
         handle_result_file,
         name='result-file')
     app.router.add_get(
