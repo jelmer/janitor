@@ -357,6 +357,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
     start = time.time()
     possible_hosters: List[Hoster] = []
     possible_transports: List[Transport] = []
+    actions = {}
 
     if reviewed_only:
         review_status = ['approved']
@@ -413,9 +414,12 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
                         differ_url=differ_url,
                         require_binary_diff=require_binary_diff,
                         force=False, requestor='publisher (publish pending)')
+                actions.setdefault(actual_modes[role], 0)
+                actions[actual_modes[role]] += 1
             if MODE_PUSH in actual_modes.values() and push_limit is not None:
                 push_limit -= 1
 
+    note('Actions performed: %r', actions)
     note('Done publishing pending changes; duration: %.2fs' % (
          time.time() - start))
 
@@ -755,7 +759,7 @@ async def publish_request(request):
     if mode:
         branches = [(r, mode) for r in roles]
     else:
-        branches = [(r, publish_policy[r]) for r in roles]
+        branches = [(r, publish_policy.get(r, MODE_SKIP)) for r in roles]
 
     publish_ids = {}
     loop = asyncio.get_event_loop()
