@@ -468,7 +468,10 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
         if command[0] != 'just-build':
             if not changer_result.branches:
-                raise WorkerFailure('nothing-to-do', 'Nothing to do.')
+                if resume_subworker_result is not None:
+                    raise WorkerFailure('nothing-new-to-do', 'Nothing new to do.')
+                else:
+                    raise WorkerFailure('nothing-to-do', 'Nothing to do.')
 
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)

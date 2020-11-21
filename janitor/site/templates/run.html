@@ -15,7 +15,7 @@
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
 {% endif %}
-{% if result and 'upstream_branch_url' in result %}
+{% if run.result and 'upstream_branch_url' in run.result %}
 <li>Upstream Branch URL: {{ display_upstream_branch_url(result) }}</li>
 {% endif %}
 <li>Start time: {{ format_timestamp(start_time) }}</li>
