@@ -315,12 +315,24 @@ async def handle_diff(request):
                 status=404)
         run_id = run.id
     role = request.query.get('role', 'main')
+    try:
+        max_diff_size = int(request.query['max_diff_size'])
+    except KeyError:
+        max_diff_size = None
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, 'diff/%s/%s' % (run_id, role))
     try:
         async with request.app.http_client_session.get(url) as resp:
             if resp.status == 200:
                 diff = await resp.read()
+                if max_diff_size is not None and len(diff) > max_diff_size:
+                    return web.Response(
+                        status=413,
+                        text='Diff too large (%d bytes). See it at %s' % (
+                            len(diff),
+                            request.app.router['api-run-diff'].url_for(
+                                run_id=run_id)))
+
                 for accept in request.headers.get('ACCEPT', '*/*').split(','):
                     if accept in ('text/x-diff', 'text/plain', '*/*'):
                         return web.Response(
