@@ -67,7 +67,7 @@ async def handle_publish(request):
     suite = request.match_info['suite']
     post = await request.post()
     mode = post.get('mode')
-    if mode not in ('push-derived', 'push', 'propose', 'attempt-push'):
+    if mode not in (None, 'push-derived', 'push', 'propose', 'attempt-push'):
         return web.json_response(
             {'error': 'Invalid mode', 'mode': mode}, status=400)
     url = urllib.parse.urljoin(
@@ -92,7 +92,7 @@ async def handle_publish(request):
                 return web.json_response(await resp.json(), status=400)
     except ContentTypeError as e:
         return web.json_response(
-            {'reason': 'publisher returned error %d' % e.code},
+            {'reason': 'publisher returned error %s' % e},
             status=400)
     except ClientConnectorError:
         return web.json_response(
