@@ -868,7 +868,9 @@ order by url, last_run.finish_time desc
                 conn, request, request.app.http_client_session,
                 request.app.differ_url, request.app.publisher_url,
                 suites=[run.suite])
-            return web.Response(content_type='text/html', text=text)
+            return web.Response(
+                content_type='text/html', text=text,
+                headers={'Cache-Control': 'no-cache'})
 
     async def handle_review(request):
         from .review import generate_review
@@ -878,7 +880,9 @@ order by url, last_run.finish_time desc
                 conn, request, request.app.http_client_session,
                 request.app.differ_url, request.app.publisher_url,
                 suites=suites)
-        return web.Response(content_type='text/html', text=text)
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'no-cache'})
 
     async def handle_oauth_callback(request):
         code = request.query.get('code')
