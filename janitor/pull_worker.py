@@ -166,6 +166,7 @@ def run_worker(branch_url, run_id, subpath, vcs_type, env,
                resume_branch_url=None,
                cached_branch_url=None,
                resume_subworker_result=None,
+               resume_branches=None,
                possible_transports=None):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -179,6 +180,9 @@ def run_worker(branch_url, run_id, subpath, vcs_type, env,
                resume_branch_url=resume_branch_url,
                cached_branch_url=cached_branch_url,
                resume_subworker_result=resume_subworker_result,
+               extra_resume_branches=[
+                  (role, name) for (role, name, base, revision)
+                  in resume_branches] if resume_branches else None,
                possible_transports=possible_transports) as (ws, result):
             enable_tag_pushing(ws.local_tree.branch)
             note('Pushing result branch to %r', vcs_manager)
@@ -374,9 +378,13 @@ async def main(argv=None):
         if assignment['resume']:
             resume_result = assignment['resume'].get('result')
             resume_branch_url = assignment['resume']['branch_url'].rstrip('/')
+            resume_branches = [
+                (role, name, base.encode('utf-8'), revision.encode('utf-8'))
+                for (role, name, base, revision) in assignment['resume']['branches']]
         else:
             resume_result = None
             resume_branch_url = None
+            resume_branches = None
         cached_branch_url = assignment['branch'].get('cached_url')
         command = assignment['command']
         build_environment = assignment['build'].get('environment', {})
@@ -418,6 +426,7 @@ async def main(argv=None):
                     pre_check_command=args.pre_check,
                     post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
+                    resume_branches=resume_branches,
                     cached_branch_url=cached_branch_url,
                     resume_subworker_result=resume_result,
                     possible_transports=possible_transports))
