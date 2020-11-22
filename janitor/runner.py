@@ -621,16 +621,17 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
 
 async def check_resume_result(conn, suite, resume_branch):
     if resume_branch is not None:
-        (resume_branch_result, resume_branch_name, resume_review_status
-         ) = await state.get_run_result_by_revision(
+        (resume_branch_result, resume_branch_name, resume_review_status,
+         resume_result_branches) = await state.get_run_result_by_revision(
             conn, suite, revision=resume_branch.last_revision())
         if resume_review_status == 'rejected':
             note('Unsetting resume branch, since last run was '
                  'rejected.')
             return (None, None, None)
-        return (resume_branch, resume_branch_name, resume_branch_result)
+        return (resume_branch, resume_branch_name, resume_branch_result,
+                resume_result_branches)
     else:
-        return (None, None, None)
+        return (None, None, None, None)
 
 
 def suite_build_env(
@@ -807,8 +808,8 @@ class ActiveLocalRun(ActiveRun):
             resume_branch = None
 
         async with db.acquire() as conn:
-            (resume_branch, resume_branch_name,
-             resume_branch_result) = await check_resume_result(
+            (resume_branch, resume_branch_name, resume_branch_result,
+             resume_result_branches) = await check_resume_result(
                 conn, self.queue_item.suite, resume_branch)
 
             last_build_version = await state.get_last_build_version(
@@ -1313,7 +1314,8 @@ async def handle_assign(request):
                 item.package, suite_config.branch_name, vcs_type)
 
         (resume_branch, active_run.resume_branch_name,
-         resume_branch_result) = await check_resume_result(
+         resume_branch_result, resume_result_branches
+         ) = await check_resume_result(
              conn, item.suite, resume_branch)
 
         if resume_branch is not None:
