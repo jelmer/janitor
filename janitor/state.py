@@ -1132,14 +1132,22 @@ async def update_branch_status(
 
 async def get_run_result_by_revision(
         conn: asyncpg.Connection, suite: str, revision: bytes
-        ) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+        ) -> Tuple[Optional[str], Optional[str], Optional[str],
+                   Optional[List[Tuple[str, str, bytes, bytes]]]]:
     row = await conn.fetchrow(
-        "SELECT result, branch_name, review_status FROM run "
+        "SELECT result, branch_name, review_status, "
+        "array(SELECT row(role, remote_name, base_revision, revision) "
+        "FROM new_result_branch WHERE run_id = run.id) "
+        "FROM run "
         "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
         suite, revision.decode('utf-8'))
     if row is not None:
-        return row[0], row[1], row[2]
-    return None, None, None
+        return row[0], row[1], row[2], [
+            (role, name,
+             base_revision.encode('utf-8') if base_revision else None,
+             revision.encode('utf-8') if revision else None)
+            for (role, name, base_revision, revision) in row[3]]
+    return None, None, None, None
 
 
 async def get_last_build_version(
