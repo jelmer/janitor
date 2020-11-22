@@ -357,7 +357,7 @@ async def publish_pending_new(db, rate_limiter, vcs_manager,
     start = time.time()
     possible_hosters: List[Hoster] = []
     possible_transports: List[Transport] = []
-    actions = {}
+    actions: Dict[str, int] = {}
 
     if reviewed_only:
         review_status = ['approved']
