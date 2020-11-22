@@ -342,13 +342,12 @@ async def invoke_subprocess_worker(
         worker_kind: str, main_branch_url: str,
         env: Dict[str, str],
         command: List[str], output_directory: str,
-        resume_branch_url: Optional[str] = None,
+        resume: Optional['ResumeInfo'] = None,
         cached_branch_url: Optional[str] = None,
         pre_check: Optional[str] = None,
         post_check: Optional[str] = None,
         build_command: Optional[str] = None,
         log_path: Optional[str] = None,
-        resume_branch_result: Optional[Any] = None,
         subpath: Optional[str] = None) -> int:
     subprocess_env = dict(os.environ.items())
     for k, v in env.items():
@@ -364,8 +363,15 @@ async def invoke_subprocess_worker(
             '--output-directory=%s' % output_directory]
     if ':' in worker_kind:
         args.append('--host=%s' % worker_kind.split(':')[1])
-    if resume_branch_url:
-        args.append('--resume-branch-url=%s' % resume_branch_url)
+    if resume:
+        args.append('--resume-branch-url=%s' % resume.resume_branch_url)
+        resume_result_path = os.path.join(
+            output_directory, 'previous_result.json')
+        with open(resume_result_path, 'w') as f:
+            json.dump(resume.result, f)
+        args.append('--resume-result-path=%s' % resume_result_path)
+        for (role, name, base, revision) in resume.resume_result_branches:
+            args.append('--extra-resume-branch=%s:%s' % (role, name))
     if cached_branch_url:
         args.append('--cached-branch-url=%s' % cached_branch_url)
     if pre_check:
@@ -376,12 +382,6 @@ async def invoke_subprocess_worker(
         args.append('--build-command=%s' % build_command)
     if subpath:
         args.append('--subpath=%s' % subpath)
-    if resume_branch_result:
-        resume_result_path = os.path.join(
-            output_directory, 'previous_result.json')
-        with open(resume_result_path, 'w') as f:
-            json.dump(resume_branch_result, f)
-        args.append('--resume-result-path=%s' % resume_result_path)
 
     args.extend(command)
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
@@ -619,7 +619,8 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
             return resume_branch
 
 
-async def check_resume_result(conn, suite, resume_branch):
+async def check_resume_result(
+        conn, suite, resume_branch) -> Optional['ResumeInfo']:
     if resume_branch is not None:
         (resume_branch_result, resume_branch_name, resume_review_status,
          resume_result_branches) = await state.get_run_result_by_revision(
@@ -627,11 +628,12 @@ async def check_resume_result(conn, suite, resume_branch):
         if resume_review_status == 'rejected':
             note('Unsetting resume branch, since last run was '
                  'rejected.')
-            return (None, None, None)
-        return (resume_branch, resume_branch_name, resume_branch_result,
-                resume_result_branches)
+            return None
+        return ResumeInfo(
+                resume_branch, resume_branch_result, resume_result_branches,
+                legacy_branch_name=resume_branch_name)
     else:
-        return (None, None, None, None)
+        return None
 
 
 def suite_build_env(
@@ -675,6 +677,27 @@ def suite_build_env(
 
     env.update([(env.key, env.value) for env in suite_config.sbuild_env])
     return env
+
+
+class ResumeInfo(object):
+
+    def __init__(self, branch, result, resume_result_branches,
+                 legacy_branch_name):
+        self.branch = branch
+        self.result = result
+        self.resume_result_branches = resume_result_branches
+        self.legacy_branch_name = legacy_branch_name
+
+    @property
+    def resume_branch_url(self):
+        return full_branch_url(self.resume_branch)
+
+    def json(self):
+        return {
+            'result': self.result,
+            'branch_url': self.resume_branch_url,
+            'branch_name': self.legacy_branch_name,
+        }
 
 
 class ActiveLocalRun(ActiveRun):
@@ -808,8 +831,7 @@ class ActiveLocalRun(ActiveRun):
             resume_branch = None
 
         async with db.acquire() as conn:
-            (resume_branch, resume_branch_name, resume_branch_result,
-             resume_result_branches) = await check_resume_result(
+            resume = await check_resume_result(
                 conn, self.queue_item.suite, resume_branch)
 
             last_build_version = await state.get_last_build_version(
@@ -824,14 +846,11 @@ class ActiveLocalRun(ActiveRun):
                 invoke_subprocess_worker(
                     worker_kind, full_branch_url(main_branch).rstrip('/'), env,
                     self.queue_item.command, self.output_directory,
-                    resume_branch_url=(
-                        full_branch_url(resume_branch)
-                        if resume_branch else None),
+                    resume=resume,
                     cached_branch_url=cached_branch_url, pre_check=pre_check,
                     post_check=post_check,
                     build_command=build_command,
                     log_path=log_path,
-                    resume_branch_result=resume_branch_result,
                     subpath=self.queue_item.subpath),
                 timeout=overall_timeout))
             # set_name is only available on Python 3.8
@@ -888,8 +907,9 @@ class ActiveLocalRun(ActiveRun):
                 branch_url=full_branch_url(main_branch),
                 worker_result=worker_result,
                 logfilenames=logfilenames, legacy_branch_name=(
-                    resume_branch_name
-                    if worker_result.code == 'nothing-to-do' else None))
+                    resume.legacy_branch_name
+                    if resume and worker_result.code == 'nothing-to-do'
+                    else None))
 
         result = JanitorResult(
             self.queue_item.package, log_id=self.log_id,
@@ -1310,25 +1330,10 @@ async def handle_assign(request):
             vcs_type = vcs_type.lower()
 
         if resume_branch is None and not item.refresh:
-            resume_branch = queue_processor.vcs_manager.get_branch(
+            resume_branch = queue_processor.public_vcs_manager.get_branch(
                 item.package, suite_config.branch_name, vcs_type)
 
-        (resume_branch, active_run.resume_branch_name,
-         resume_branch_result, resume_result_branches
-         ) = await check_resume_result(
-             conn, item.suite, resume_branch)
-
-        if resume_branch is not None:
-            resume_branch_url = (
-                queue_processor.public_vcs_manager.get_branch_url(
-                    item.package, suite_config.branch_name, vcs_type))
-            resume = {
-                'result': resume_branch_result,
-                'branch_url': resume_branch_url,
-                'branch_name': active_run.resume_branch_name,
-            }
-        else:
-            resume = None
+        resume = await check_resume_result(conn, item.suite, resume_branch)
 
     try:
         cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
@@ -1354,7 +1359,7 @@ async def handle_assign(request):
             'vcs_type': item.vcs_type,
             'cached_url': cached_branch_url,
         },
-        'resume': resume,
+        'resume': resume.json() if resume else None,
         'build': {
             'environment':
                 suite_build_env(

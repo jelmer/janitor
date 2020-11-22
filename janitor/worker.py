@@ -364,6 +364,8 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
                     possible_hosters: Optional[List[Hoster]] = None,
                     resume_branch_url: Optional[str] = None,
                     cached_branch_url: Optional[str] = None,
+                    extra_resume_branches: Optional[
+                        List[Tuple[str, str]]] = None,
                     resume_subworker_result: Any = None
                     ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     committer = env.get('COMMITTER')
@@ -399,6 +401,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
         cached_branch = None
 
     if resume_branch_url:
+        # TODO(jelmer): Use extra_resume_branches
         try:
             resume_branch = open_branch(
                 resume_branch_url,
@@ -468,10 +471,7 @@ def process_package(vcs_url: str, subpath: str, env: Dict[str, str],
 
         if command[0] != 'just-build':
             if not changer_result.branches:
-                if resume_subworker_result is not None:
-                    raise WorkerFailure('nothing-new-to-do', 'Nothing new to do.')
-                else:
-                    raise WorkerFailure('nothing-to-do', 'Nothing to do.')
+                raise WorkerFailure('nothing-to-do', 'Nothing to do.')
 
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
@@ -535,6 +535,10 @@ def main(argv=None):
         help='Whether to create a tgz of the VCS repo.',
         action='store_true')
     parser.add_argument(
+        '--extra-resume-branch',
+        help='Colocated branches to resume as well',
+        action='append', type=str)
+    parser.add_argument(
         '--build-distribution', type=str, help='Build distribution.')
 
     parser.add_argument('command', nargs=argparse.REMAINDER)
@@ -555,6 +559,9 @@ def main(argv=None):
     else:
         resume_subworker_result = None
 
+    extra_resume_branches = [
+        b.split(':', 1) for b in args.extra_resume_branches]
+
     metadata = {}
     start_time = datetime.now()
     metadata['start_time'] = start_time.isoformat()
@@ -567,6 +574,7 @@ def main(argv=None):
                 post_check_command=args.post_check,
                 resume_branch_url=args.resume_branch_url,
                 cached_branch_url=args.cached_branch_url,
+                resume_branches=extra_resume_branches,
                 resume_subworker_result=resume_subworker_result
                 ) as (ws, result):
             if args.tgz_repo:
