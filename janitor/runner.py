@@ -370,7 +370,7 @@ async def invoke_subprocess_worker(
         with open(resume_result_path, 'w') as f:
             json.dump(resume.result, f)
         args.append('--resume-result-path=%s' % resume_result_path)
-        for (role, name, base, revision) in resume.resume_result_branches:
+        for (role, name, base, revision) in resume.resume_result_branches or []:
             args.append('--extra-resume-branch=%s:%s' % (role, name))
     if cached_branch_url:
         args.append('--cached-branch-url=%s' % cached_branch_url)
@@ -516,7 +516,9 @@ class ActiveRemoteRun(ActiveRun):
 
     @property
     def worker_link(self):
-        return self._jenkins_metadata['build_url']
+        if self._jenkins_metadata is not None:
+            return self._jenkins_metadata['build_url']
+        return None
 
     def start_watchdog(self, queue_processor):
         if self._watch_dog is not None:
@@ -657,7 +659,7 @@ def suite_build_env(
     env['REPOSITORIES'] = '%s %s/ %s' % (
         distro_config.archive_mirror_uri,
         distro_config.name,
-        ' '.join(distro_config.components))
+        ' '.join(distro_config.component))
 
     env['BUILD_DISTRIBUTION'] = suite_config.build_distribution or ''
     env['BUILD_SUFFIX'] = suite_config.build_suffix or ''
@@ -680,7 +682,7 @@ class ResumeInfo(object):
 
     @property
     def resume_branch_url(self):
-        return full_branch_url(self.resume_branch)
+        return full_branch_url(self.branch)
 
     def json(self):
         return {
