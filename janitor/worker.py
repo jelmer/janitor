@@ -536,6 +536,7 @@ def main(argv=None):
         action='store_true')
     parser.add_argument(
         '--extra-resume-branch',
+        default=[],
         help='Colocated branches to resume as well',
         action='append', type=str)
     parser.add_argument(
@@ -574,7 +575,7 @@ def main(argv=None):
                 post_check_command=args.post_check,
                 resume_branch_url=args.resume_branch_url,
                 cached_branch_url=args.cached_branch_url,
-                resume_branches=extra_resume_branches,
+                extra_resume_branches=extra_resume_branches,
                 resume_subworker_result=resume_subworker_result
                 ) as (ws, result):
             if args.tgz_repo:
