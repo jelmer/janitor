@@ -654,20 +654,10 @@ def suite_build_env(
     if distro_config.name:
         env['DISTRIBUTION'] = distro_config.name
 
-    arches = ['amd64', 'all']
-    urls = []
-    for component in distro_config.component:
-        for arch in arches:
-            urls.append('%s/dists/%s/%s/Contents-%s.gz' % (
-                distro_config.archive_mirror_uri,
-                distro_config.name,
-                component, arch))
-
-    env['APT_CONTENTS_URL'] = ','.join(urls)
-    env['APT_CONTENTS_LEGACY_URL'] = (
-        '%s/dists/%s/Contents-amd64.gz' % (
-            distro_config.archive_mirror_uri,
-            distro_config.name))
+    env['REPOSITORIES'] = '%s %s/ %s' % (
+        distro_config.archive_mirror_uri,
+        distro_config.name,
+        ' '.join(distro_config.components))
 
     env['BUILD_DISTRIBUTION'] = suite_config.build_distribution or ''
     env['BUILD_SUFFIX'] = suite_config.build_suffix or ''

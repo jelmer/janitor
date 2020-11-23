@@ -28,6 +28,7 @@ from typing import Iterator, List, Callable, Type, Tuple, Set
 from debian.deb822 import (
     Deb822,
     PkgRelation,
+    Release,
     )
 
 from breezy.commit import PointlessCommit
@@ -63,7 +64,7 @@ from silver_platter.debian import (
     DEFAULT_BUILDER,
     )
 
-from .build import attempt_build
+from .build import attempt_build, get_build_architecture
 from .trace import note, warning
 from .sbuild_log import (
     Problem,
@@ -263,18 +264,15 @@ class ContentsFileNotFound(Exception):
     """The contents file was not found."""
 
 
-class ContentsAptFileSearcher(FileSearcher):
+class AptContentsFileSearcher(FileSearcher):
 
     def __init__(self):
         self._db = {}
 
     @classmethod
     def from_env(cls):
-        urls = os.environ['APT_CONTENTS_URL'].split(',')
-        try:
-            return cls.from_urls(urls)
-        except ContentsFileNotFound:
-            return cls.from_urls([os.environ['APT_CONTENTS_LEGACY_URL']])
+        sources = os.environ['REPOSITORIES'].split(':')
+        return cls.from_repositories(sources)
 
     def __setitem__(self, path, package):
         self._db[path] = package
@@ -302,12 +300,40 @@ class ContentsAptFileSearcher(FileSearcher):
             self.load_url(url)
         return self
 
-    def load_url(self, url):
+    @classmethod
+    def from_repositories(cls, sources):
+        # TODO(jelmer): Verify signatures, etc.
+        urls = []
+        arches = [get_build_architecture(), 'all']
+        for source in sources:
+            parts = source.split(' ')
+            if parts[0] != 'deb':
+                warning('Invalid line in sources: %r', source)
+                continue
+            base_url = parts[1]
+            name = parts[2]
+            components = parts[3:]
+            response = cls._get('%s/%s/Release' % (base_url, name))
+            r = Release(response)
+            desired_files = set()
+            for component in components:
+                for arch in arches:
+                    desired_files.append('%s/Contents-%s' % (component, arch))
+            for entry in r['MD5Sum']:
+                if entry['name'] in desired_files:
+                    urls.append('%s/%s/%s' % (base_url, name, entry['name']))
+        return cls.from_urls(urls)
+
+    @staticmethod
+    def _get(url):
         from urllib.request import urlopen, Request
-        from urllib.error import HTTPError
         request = Request(url, headers={'User-Agent': 'Debian Janitor'})
+        return urlopen(request)
+
+    def load_url(self, url):
+        from urllib.error import HTTPError
         try:
-            response = urlopen(request)
+            response = self._get(url)
         except HTTPError as e:
             if e.status == 404:
                 raise ContentsFileNotFound(url)
@@ -353,7 +379,7 @@ def search_apt_file(path: str, regex: bool = False) -> Iterator[FileSearcher]:
     global _apt_file_searcher
     if _apt_file_searcher is None:
         # TODO(jelmer): cache file
-        _apt_file_searcher = ContentsAptFileSearcher.from_env()
+        _apt_file_searcher = AptContentsFileSearcher.from_env()
     if _apt_file_searcher:
         yield from _apt_file_searcher.search_files(path, regex=regex)
     yield from GENERATED_FILE_SEARCHER.search_files(path, regex=regex)
