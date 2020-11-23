@@ -560,7 +560,7 @@ def main(argv=None):
         resume_subworker_result = None
 
     extra_resume_branches = [
-        b.split(':', 1) for b in args.extra_resume_branches]
+        b.split(':', 1) for b in args.extra_resume_branch]
 
     metadata = {}
     start_time = datetime.now()
