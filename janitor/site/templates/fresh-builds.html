@@ -107,8 +107,8 @@ available:</p>
 {% if (release_version and release_version > old_version) or (snapshot_version and snapshot_version > old_version) %}
 <tr class="row-even">
   <td>{{ source }}</td>
-  <td{% if release_version <= old_version %} class="old-version"{% endif %}>{% if release_version %}<a href="pkg/{{ source }}">{{ release_version.upstream_version }}</a>{% endif %}</td>
-  <td{% if snapshot_version <= old_version %} class="old-version"{% endif %}>{% if snapshot_version %}<a href="pkg/{{ source }}">{{ snapshot_version.upstream_version }}</a>{% endif %}</td>
+  <td{% if release_version <= old_version %} class="old-version"{% endif %}>{% if release_version %}<a href="/fresh-releases/pkg/{{ source }}">{{ release_version.upstream_version }}</a>{% endif %}</td>
+  <td{% if snapshot_version <= old_version %} class="old-version"{% endif %}>{% if snapshot_version %}<a href="/fresh-snapshots/pkg/{{ source }}">{{ snapshot_version.upstream_version }}</a>{% endif %}</td>
   <td><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version.upstream_version }}</a></td>
 </tr>
 {% endif %}
