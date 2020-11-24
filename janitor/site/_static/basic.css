@@ -636,6 +636,6 @@ ul.metadata {
   background-color: lightyellow;
 }
 
-tr.row-disabled {
+tr.row-disabled, td.old-version {
   color: lightgrey;
 }
