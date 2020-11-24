@@ -47,6 +47,8 @@ from prometheus_client import (
 
 DEFAULT_GCS_TIMEOUT = 60 * 30
 
+last_publish_time = {}
+
 
 last_publish_success = Gauge(
     'last_suite_publish_success',
@@ -234,6 +236,12 @@ async def handle_publish(request):
     return web.json_response({})
 
 
+async def handle_last_publish(request):
+    return web.json_response({
+        suite: dt.isoformat()
+        for (suite, dt) in last_publish_time.items()})
+
+
 async def run_web_server(
         listen_addr, port, dists_dir, config,
         generator_manager):
@@ -244,6 +252,8 @@ async def run_web_server(
     setup_metrics(app)
     app.router.add_static('/dists', dists_dir)
     app.router.add_post('/publish', handle_publish, name='publish')
+    app.router.add_get(
+        '/last-publish', handle_last_publish, name='last-publish')
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -276,6 +286,7 @@ async def publish_suite(
     note('Done publishing %s (took %s)',
          suite.name, datetime.now() - start_time)
     last_publish_success.labels(suite=suite.name).set_to_current_time()
+    last_publish_time[suite.name] = datetime.now()
 
 
 class GeneratorManager(object):
