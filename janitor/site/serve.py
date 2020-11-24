@@ -18,6 +18,7 @@
 """Serve the janitor site."""
 
 import asyncio
+from datetime import datetime
 import uuid
 from aiohttp.web_urldispatcher import (
     PrefixResource,
@@ -345,6 +346,16 @@ if __name__ == '__main__':
         suite_version = {}
         sources = set()
         SUITES = ['fresh-releases', 'fresh-snapshots']
+        url = urllib.parse.urljoin(request.app.archiver_url, 'last-publish')
+        async with request.app.http_client_session.get(url) as resp:
+            if resp.status == 200:
+                last_publish_time = {
+                    suite: datetime.fromisoformat(v)
+                    for suite, v in (await resp.json()).items()
+                }
+            else:
+                last_publish_time = {}
+
         async with request.app.database.acquire() as conn:
             for suite in SUITES:
                 for name, jv, av in await state.iter_published_packages(
@@ -359,6 +370,7 @@ if __name__ == '__main__':
                 'suite_version': suite_version,
                 'sources': sources,
                 'suites': SUITES,
+                'last_publish_time': last_publish_time,
                 }
 
     async def handle_fresh(request):

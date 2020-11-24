@@ -13,9 +13,10 @@ releases or Git snapshots.
 in apt repository that can be used on a Debian unstable or testing system.</p>
 
 <p>At the moment, packages are only built for the <i>amd64</i> architecture.
-There are <i>{{ release_version|length }}</i> source packages with new releases
-and <i>{{ snapshot_version|length }}</i> source packages with new
-snapshots.</p>
+There are <i>{{ suite_version['fresh-releases']|length }}</i> source packages with <a href="/fresh-releases">new releases</a>
+(last published <i>{{ last_publish_time['fresh-releases'] }}</i>)
+and <i>{{ suite_version['fresh-snapshots']|length }}</i> source packages with <a href="/fresh-snapshots">new
+snapshots</a> (last published <i>{{ last_publish_time['fresh-snapshots'] }}</i>).</p>
 
 <div class="admonition warning">
 <p class="first admonition-title">Warning</p>
@@ -25,7 +26,7 @@ from a human.</p>
 <div class="section" id="using-the-repository">
 <h2>Using the repository</h2>
 <p>To use the apt repository, run something like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb [arch=amd64] {{ url.join(URL('..')) }} fresh-releases main &gt; /etc/apt/sources.list.d/fresh-releases.list
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb "[arch=amd64]" {{ url.join(URL('..')) }} fresh-releases main &gt; /etc/apt/sources.list.d/fresh-releases.list
 curl {{ url.join(URL('../pgp_keys.asc')) }} | sudo apt-key add -
 apt update
 </pre></div>
@@ -71,8 +72,8 @@ href="https://people.debian.org/~mpitt/autopkgtest/README.package-tests.html">au
 tests available are required to successfully
 pass those tests before they are included in the repository.</p>
 
-<p>Note that not all tests are comprehensive, and autopkgtests are currently not
-run for any dependent packages due to resource constraints.</p>
+<p>Note that not all packages have tests, and where tests exist they may
+not be comprehensive.</p>
 
 <p>No manual testing has been done on these packages - use at your own risk</p>
 
