@@ -361,6 +361,9 @@ if __name__ == '__main__':
                 'suites': SUITES,
                 }
 
+    async def handle_fresh(request):
+        return web.HTTPPermanentRedirect('/fresh-builds')
+
     @html_template(
         'history.html', headers={'Cache-Control': 'max-age=10'})
     async def handle_history(request):
@@ -1126,6 +1129,9 @@ order by url, last_run.finish_time desc
     app.router.add_get(
         '/fresh-builds', handle_fresh_builds,
         name='fresh-builds')
+    app.router.add_get(
+        '/fresh', handle_fresh,
+        name='fresh')
     app.router.add_get(
         '/{suite:%s}/pkg/{pkg}/' % NEW_UPSTREAM_REGEX,
         handle_new_upstream_pkg,
