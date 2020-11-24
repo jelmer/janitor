@@ -343,13 +343,13 @@ if __name__ == '__main__':
     async def handle_fresh_builds(request):
         archive_version = {}
         suite_version = {}
-        packages = set()
+        sources = set()
         SUITES = ['fresh-releases', 'fresh-snapshots']
         async with request.app.database.acquire() as conn:
             for suite in SUITES:
                 for name, jv, av in await state.iter_published_packages(
                         conn, suite):
-                    packages.add(name)
+                    sources.add(name)
                     archive_version[name] = av
                     suite_version.setdefault(suite, {})[name] = jv
             return {
@@ -357,7 +357,7 @@ if __name__ == '__main__':
                     request.app.config, SUITES[0]).base_distribution,
                 'archive_version': archive_version,
                 'suite_version': suite_version,
-                'packages': packages,
+                'sources': sources,
                 'suites': SUITES,
                 }
 

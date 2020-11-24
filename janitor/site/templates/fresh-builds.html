@@ -5,16 +5,18 @@
 <div class="section" id="fresh-builds">
 <h1>Fresh Builds</h1>
 <p>The <a href="/">Debian Janitor</a> regularly updates packages from the
-Debian <i>{{ suite_config.distribution }}</i> archive to the latest upstream
+Debian <i>{{ base_distribution }}</i> archive to the latest upstream
 releases or Git snapshots.
 </p>
 
-<p>It makes these packages available as an apt repository that can be added
-to a Debian unstable or testing system.</p>
+<p>It makes the binary packages it creates as part of this process available as
+an apt repository that can be used on a Debian unstable or testing system.</p>
+
+<p>At the moment, packages are only built for the <i>amd64</i> architecture.</p>
 
 <div class="admonition warning">
 <p class="first admonition-title">Warning</p>
-<p class="last">The packages in this repository were created automatically, without review
+<p class="last"><b>USE AT YOUR OWN RISK</b>. The packages in this repository were created automatically, without review
 from a human.</p>
 </div>
 <div class="section" id="using-the-repository">
@@ -37,28 +39,43 @@ gets uploaded to the official Debian APT repository, it will replace the package
 in this archive.</p>
 </div>
 
-<div class="section" id="pinning">
-<h2>Pinning</h2>
-<p>Optionally, if you want to track a given package so upgrades happen automatically,
-add the following to <code class="docutils literal notranslate"><span class="pre">/etc/apt/preferences</span></code> (and see
-<a class="reference external" href="https://wiki.debian.org/AptPreferences">the documentation about apt preferences</a>):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>Package: cifs-utils
-Pin: release a=fresh-releases
-Pin-Priority: <span class="mi">800</span>
-</pre></div>
-</div>
+<div class="section" id="faq">
+<h2>FAQ</h2>
+<div class="contents local topic" id="contents">
+<p class="topic-title first">Contents:</p>
+<ul class="simple">
+<li><a class="reference internal" href="#requesting-new-packages">How do I request a new package to be built?</a></li>
+<li><a class="reference internal" href="#how-much-testing">How are these packages tested?</a></li>
+</ul>
 </div>
 
-<div class="section" id="status">
-<h2>Package Status</h2>
-<p>
-<form autocomplete="off" action="pkg">
-  <div class="packages" style="width:300px;">
-    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
-  </div>
-  <input type="submit" style="display: none">
-</form>
-</p></div>
+<div class="section" id="requesting-new-packages">
+<h3><a class="toc-backref" href="#id7">How do I request a new package to be built?</a></h3>
+<p>The easiest way to do this is to go to the <a
+href="/fresh-releases/">fresh-releases</a> or <a
+href="/fresh-snapshots">fresh-snapshots</a> pages, browsing to the package you
+would like to see updated and clicking the "Reschedule" button.
+</p>
+
+<p>New builds usually take anywhere from a couple of minutes to a few days to
+become available.</p>
+</div>
+
+<div class="section" id="how-much-testing">
+<h3><a class="toc-backref" href="#id7">How are these packages tested?</a></h3>
+<p>Packages that have Debian <a
+href="https://people.debian.org/~mpitt/autopkgtest/README.package-tests.html">autopkgtest</a>
+tests available are required to successfully
+pass those tests before they are included in the repository.</p>
+
+<p>Note that not all tests are comprehensive, and autopkgtests are currently not
+run for any dependent packages due to resource constraints.</p>
+
+<p>No manual testing has been done on these packages - use at your own risk</p>
+
+</div>
+
+</div>
 
 <div class="section" id="package-list">
 <h2>Package list</h2>
@@ -79,23 +96,23 @@ available:</p>
 </tr>
 </thead>
 <tbody valign="top">
-{% for package in packages|sorted %}
-{% set old_version = archive_version[package] %}
-{% set release_version = suite_version['fresh-releases'].get(package) %}
-{% set snapshot_version = suite_version['fresh-snapshots'].get(package) %}
+{% for source in sources|sort %}
+{% set old_version = archive_version[source] %}
+{% set release_version = suite_version['fresh-releases'].get(source) %}
+{% set snapshot_version = suite_version['fresh-snapshots'].get(source) %}
 {% if (release_version and release_version > old_version) or (snapshot_version and snapshot_version > old_version) %}
 <tr class="row-even">
   <td>{{ source }}</td>
-  <td{% if release_version <= old_version %} class="old-version"{% endif %}><a href="pkg/{{ source }}">{{ release_version }}</a></td>
-  <td{% if snapshot_version <= old_version %} class="old-version"{% endif %}><a href="pkg/{{ source }}">{{ snapshot_version }}</a></td>
-  <td><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version }}</a></td>
+  <td{% if release_version <= old_version %} class="old-version"{% endif %}>{% if release_version %}<a href="pkg/{{ source }}">{{ release_version.upstream_version }}</a>{% endif %}</td>
+  <td{% if snapshot_version <= old_version %} class="old-version"{% endif %}>{% if snapshot_version %}<a href="pkg/{{ source }}">{{ snapshot_version.upstream_version }}</a>{% endif %}</td>
+  <td><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version.upstream_version }}</a></td>
 </tr>
 {% endif %}
 {% endfor %}
 </tbody>
 </table>
 
-<script>$(function(){ $('#apt-package-list').DataTable({"order": [[ 1, "desc" ]], "pageLength": 200, "lengthMenu": [50, 200]}); });</script>
+<script>$(function(){ $('#apt-package-list').DataTable({"order": [[ 0, "asc" ]], "pageLength": 500, "lengthMenu": [100, 200, 500, 1000]}); });</script>
 </div>
 </div>
 
