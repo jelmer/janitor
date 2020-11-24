@@ -877,7 +877,7 @@ SELECT
 FROM
   last_unabsorbed_runs
 WHERE package = $1 AND suite = $2
-ORDER BY package, command DESC, start_time DESC
+ORDER BY package, suite DESC, start_time DESC
 LIMIT 1
 """
     args = [package, suite]
@@ -931,7 +931,7 @@ FROM
         query += "package = ANY($%d::text[])" % len(args)
 
     query += """
-ORDER BY package, command, start_time DESC
+ORDER BY package, suite, start_time DESC
 """
     for row in await conn.fetch(query, *args):
         yield Run.from_row(row)
