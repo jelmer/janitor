@@ -1,13 +1,17 @@
 {% extends "layout.html" %}
 {% from "fresh-util.html" import package_list %}
-{% block sidebar %}{% include "new-upstream-sidebar.html" %}{% endblock %}
-{% block page_title %}Fresh Releases{% endblock %}
+{% block page_title %}Daily Builds for Debian{% endblock %}
 {% block body %}
-<div class="section" id="upstream-releases">
-<h1>Upstream Releases</h1>
-<p>This repository contains packages from {{ suite_config.base_distribution }} for which it is possible
-to automatically merge in a new upstream version.</p>
-<p>These packages are currently only available for amd64.</p>
+<div class="section" id="fresh-builds">
+<h1>Fresh Builds</h1>
+<p>The <a href="/">Debian Janitor</a> regularly updates packages from the
+Debian <i>{{ suite_config.distribution }}</i> archive to the latest upstream
+releases or Git snapshots.
+</p>
+
+<p>It makes these packages available as an apt repository that can be added
+to a Debian unstable or testing system.</p>
+
 <div class="admonition warning">
 <p class="first admonition-title">Warning</p>
 <p class="last">The packages in this repository were created automatically, without review
@@ -20,6 +24,7 @@ from a human.</p>
 curl {{ url.join(URL('../pgp_keys.asc')) }} | sudo apt-key add -
 apt update
 </pre></div>
+For Git snapshots, use <i>fresh-snapshots</i> rather than <i>fresh-releases</i>.
 </div>
 <p>The repository is marked as <code class="docutils literal notranslate"><span class="pre">experimental</span></code>, meaning that apt won’t
 automatically update to packages in them unless explicitly requested to do so.
@@ -31,6 +36,7 @@ To e.g. install the version of <em>cifs-utils</em> that’s in this repository, 
 gets uploaded to the official Debian APT repository, it will replace the package
 in this archive.</p>
 </div>
+
 <div class="section" id="pinning">
 <h2>Pinning</h2>
 <p>Optionally, if you want to track a given package so upgrades happen automatically,
@@ -59,24 +65,38 @@ Pin-Priority: <span class="mi">800</span>
 <p>The following source packages with new upstream releases merged are currently
 available:</p>
 
-{{ package_list(suite_config.base_distribution, packages) }}
+<table id="apt-package-list" class="docutils display" border="1">
+<colgroup>
+<col width="48%">
+<col width="12%">
+<col width="40%">
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Package</th>
+<th class="head">Last Release Imported</th>
+<th class="head">Last Snapshot Imported</th>
+<th class="head">Version in {{ base_distribution }}</th>
+</tr>
+</thead>
+<tbody valign="top">
+{% for package in packages|sorted %}
+{% set old_version = archive_version[package] %}
+{% set release_version = suite_version['fresh-releases'].get(package) %}
+{% set snapshot_version = suite_version['fresh-snapshots'].get(package) %}
+{% if (release_version and release_version > old_version) or (snapshot_version and snapshot_version > old_version) %}
+<tr class="row-even">
+  <td>{{ source }}</td>
+  <td{% if release_version <= old_version %} class="old-version"{% endif %}><a href="pkg/{{ source }}">{{ release_version }}</a></td>
+  <td{% if snapshot_version <= old_version %} class="old-version"{% endif %}><a href="pkg/{{ source }}">{{ snapshot_version }}</a></td>
+  <td><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version }}</a></td>
+</tr>
+{% endif %}
+{% endfor %}
+</tbody>
+</table>
 
+<script>$(function(){ $('#apt-package-list').DataTable({"order": [[ 1, "desc" ]], "pageLength": 200, "lengthMenu": [50, 200]}); });</script>
 </div>
 </div>
-
-<script>
-$(document).ready(function() {
-var packages = new Bloodhound({
-  datumTokenizer: Bloodhound.tokenizers.whitespace,
-  queryTokenizer: Bloodhound.tokenizers.whitespace,
-  prefetch: '/api/pkgnames'
-});
-
-$('#package').typeahead(null, {
-  name: 'packages',
-  source: packages
-});
-});
-</script>
 
 {% endblock %}

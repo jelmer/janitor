@@ -324,16 +324,42 @@ if __name__ == '__main__':
 
     async def handle_apt_repo(request):
         suite = request.match_info['suite']
-        from .apt_repo import write_apt_repo
+        from .apt_repo import gather_package_list
         async with request.app.database.acquire() as conn:
-            vs = await write_apt_repo(conn, suite)
-            vs['suite_config'] = get_suite_config(request.app.config, suite)
+            vs = {
+                'packages': gather_package_list(conn, suite),
+                'suite': suite,
+                'suite_config': get_suite_config(request.app.config, suite),
+            }
             text = await render_template_for_request(
                 suite + '.html', request, vs)
             return web.Response(
                 content_type='text/html',
                 text=text,
                 headers={'Cache-Control': 'max-age=60'})
+
+    @html_template(
+        'fresh-builds.html', headers={'Cache-Control': 'max-age=60'})
+    async def handle_fresh_builds(request):
+        archive_version = {}
+        suite_version = {}
+        packages = set()
+        SUITES = ['fresh-releases', 'fresh-snapshots']
+        async with request.app.database.acquire() as conn:
+            for suite in SUITES:
+                for name, jv, av in await state.iter_published_packages(
+                        conn, suite):
+                    packages.add(name)
+                    archive_version[name] = av
+                    suite_version.setdefault(suite, {})[name] = jv
+            return {
+                'base_distribution': get_suite_config(
+                    request.app.config, SUITES[0]).base_distribution,
+                'archive_version': archive_version,
+                'suite_version': suite_version,
+                'packages': packages,
+                'suites': SUITES,
+                }
 
     @html_template(
         'history.html', headers={'Cache-Control': 'max-age=10'})
@@ -1097,6 +1123,9 @@ order by url, last_run.finish_time desc
     app.router.add_get(
         '/{suite:%s}/' % NEW_UPSTREAM_REGEX, handle_apt_repo,
         name='new-upstream-start')
+    app.router.add_get(
+        '/fresh-builds', handle_fresh_builds,
+        name='fresh-builds')
     app.router.add_get(
         '/{suite:%s}/pkg/{pkg}/' % NEW_UPSTREAM_REGEX,
         handle_new_upstream_pkg,

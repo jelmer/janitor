@@ -635,3 +635,7 @@ ul.metadata {
   list-style: none;
   background-color: lightyellow;
 }
+
+tr.row-disabled {
+  color: lightgrey;
+}
