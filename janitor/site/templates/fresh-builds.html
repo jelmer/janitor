@@ -9,10 +9,13 @@ Debian <i>{{ base_distribution }}</i> archive to the latest upstream
 releases or Git snapshots.
 </p>
 
-<p>It makes the binary packages it creates as part of this process available as
-an apt repository that can be used on a Debian unstable or testing system.</p>
+<p>Binary packages that are created as part of this process are made available
+in apt repository that can be used on a Debian unstable or testing system.</p>
 
-<p>At the moment, packages are only built for the <i>amd64</i> architecture.</p>
+<p>At the moment, packages are only built for the <i>amd64</i> architecture.
+There are <i>{{ release_version|length }}</i> source packages with new releases
+and <i>{{ snapshot_version|length }}</i> source packages with new
+snapshots.</p>
 
 <div class="admonition warning">
 <p class="first admonition-title">Warning</p>
