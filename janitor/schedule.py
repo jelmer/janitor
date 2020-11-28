@@ -22,12 +22,13 @@ __all__ = [
     'schedule_from_candidates',
 ]
 
-from debian.changelog import Version
 from datetime import datetime, timedelta
 from typing import Optional, List, Tuple
 
-import asyncpg
+from debian.changelog import Version
 from debian.deb822 import PkgRelation
+
+import asyncpg
 
 from . import (
     state,
@@ -91,6 +92,14 @@ PUBLISH_MODE_VALUE = {
 
 
 def full_command(update_changelog: str, command: List[str]) -> List[str]:
+    """Generate the full command to run.
+
+    Args:
+      update_changelog: changelog updating policy
+      command: Command to run (as list of arguments)
+    Returns:
+      full list of arguments
+    """
     entry_command = command
     if update_changelog == "update":
         entry_command.append("--update-changelog")
@@ -220,7 +229,7 @@ async def add_to_queue(
             continue
         estimated_duration = await estimate_duration(conn, package, suite)
         assert estimated_duration >= timedelta(0), \
-                "%s: estimated duration < 0.0: %r" % (package, estimated_duration)
+            "%s: estimated duration < 0.0: %r" % (package, estimated_duration)
         (estimated_probability_of_success,
          total_previous_runs) = await estimate_success_probability(
             conn, package, suite, context)
