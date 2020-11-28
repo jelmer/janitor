@@ -26,18 +26,28 @@ from a human.</p>
 <div class="section" id="using-the-repository">
 <h2>Using the repository</h2>
 <p>To use the apt repository, run something like:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb "[arch=amd64]" {{ url.join(URL('..')) }} fresh-releases main &gt; /etc/apt/sources.list.d/fresh-releases.list
+<div class="highlight-default notranslate"><div class="highlight"><pre>
+<!-- apt install extrepo
+extrepo enable janitor
+-->
+echo deb "[arch=amd64]" {{ url.join(URL('..')) }} fresh-snapshots main &gt; /etc/apt/sources.list.d/fresh-snapshots.list
+echo deb "[arch=amd64]" {{ url.join(URL('..')) }} fresh-releases main &gt; /etc/apt/sources.list.d/fresh-releases.list
 curl {{ url.join(URL('../pgp_keys.asc')) }} | sudo apt-key add -
 apt update
 </pre></div>
-For Git snapshots, use <i>fresh-snapshots</i> rather than <i>fresh-releases</i>.
 </div>
 <p>The repository is marked as <code class="docutils literal notranslate"><span class="pre">experimental</span></code>, meaning that apt won’t
 automatically update to packages in them unless explicitly requested to do so.
-To e.g. install the version of <em>cifs-utils</em> that’s in this repository, run:</p>
+To e.g. install the latest released version of <em>cifs-utils</em>, run:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>apt install -t fresh-releases cifs-utils
 </pre></div>
 </div>
+</p>
+
+<p>
+(Use <i>fresh-snapshots</i> for the latest Git snapshot).
+</p>
+
 <p>The packages are also versioned in such a way that if the new upstream version
 gets uploaded to the official Debian APT repository, it will replace the package
 in this archive.</p>
