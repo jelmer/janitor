@@ -554,7 +554,8 @@ async def publish_from_policy(
             run.suite == 'lintian-fixes'):
         require_binary_diff = False
 
-    note('Publishing %s / %r /%s (mode: %s)', run.package, run.command, role, mode)
+    note('Publishing %s / %r / %s (mode: %s)',
+         run.package, run.command, role, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
             run.suite, run.package, run.command, run.result,
@@ -828,6 +829,7 @@ async def handle_klaus(request):
     from klaus import views, utils, KLAUS_VERSION
     from flask import Flask
     from klaus.repo import FancyRepo
+
 
     class Klaus(Flask):
 
