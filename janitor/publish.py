@@ -1508,7 +1508,8 @@ applied independently.
                 mp.url, mp_run.id, mp_role, last_run.id)
         return False
 
-    if last_run_remote_branch_name != mp_remote_branch_name:
+    if (last_run_remote_branch_name is not None and
+            last_run_remote_branch_name != mp_remote_branch_name):
         warning('%s: Remote branch name has changed: %s => %s, '
                 'skipping...', mp.url, mp_remote_branch_name,
                 last_run_remote_branch_name,)
