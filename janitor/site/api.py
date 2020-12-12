@@ -11,6 +11,7 @@ from aiohttp import (
     WSMsgType,
     )
 from aiohttp.web_middlewares import normalize_path_middleware
+import json
 from typing import Optional
 import urllib.parse
 from yarl import URL
@@ -100,33 +101,36 @@ async def handle_publish(request):
             status=400)
 
 
-def get_branch_urls_from_gitlab_webhook(body):
-    url_keys = ['clone_url', 'url', 'git_url', 'ssh_url']
+def get_branch_urls_from_github_webhook(body):
+    url_keys = ['clone_url', 'html_url', 'git_url', 'ssh_url']
     urls = []
     for url_key in url_keys:
         url = body['repository'][url_key]
-        urls.append(
-            git_url_to_bzr_url(url, ref=body['ref'].encode()))
+        if 'ref' in body:
+            urls.append(
+                git_url_to_bzr_url(url, ref=body['ref'].encode()))
         urls.append(git_url_to_bzr_url(url))
     return urls
 
 
-def get_branch_urls_from_github_webhook(body):
+def get_branch_urls_from_gitlab_webhook(body):
+    print(body)
     vcs_url = body['project']['git_http_url']
     return [
         git_url_to_bzr_url(vcs_url, ref=body['ref'].encode()),
         git_url_to_bzr_url(vcs_url)]
 
 
-async def handle_webhook(request):
-    if request.headers.get('Content-Type') != 'application/json':
-        text = await render_template_for_request('webhook.html', request, {})
+async def process_webhook(request, db):
+    if request.content_type == 'application/json':
+        body = await request.json()
+    elif request.content_type == 'application/x-www-form-urlencoded':
+        post = await request.post()
+        body = json.loads(post['payload'])
+    else:
         return web.Response(
-            content_type='text/html', text=text,
-            headers={'Cache-Control': 'max-age=600'})
-
-    body = await request.json()
-    async with request.app.db.acquire() as conn:
+            415, status='Invalid content type %s' % request.content_type)
+    async with db.acquire() as conn:
         if 'X-Gitlab-Event' in request.headers:
             if request.headers['X-Gitlab-Event'] != 'Push Hook':
                 return web.json_response({}, status=200)
@@ -141,19 +145,43 @@ async def handle_webhook(request):
         rescheduled = {}
         for vcs_url in urls:
             package = await state.get_package_by_branch_url(conn, vcs_url)
-            if package is None:
-                continue
+            if package is not None:
+                requestor = 'Push hook for %s' % package.branch_url
+                async for package_name, suite, policy in state.iter_policy(
+                        package.name):
+                    if policy[0] == 'skip':
+                        continue
+                    await do_schedule(
+                        conn, package.name, suite, requestor=requestor,
+                        bucket='webhook')
+                    rescheduled.setdefault(package.name, []).append(suite)
 
-            requestor = 'Push hook for %s' % package.branch_url
-            async for package_name, suite, policy in state.iter_policy(
-                    package.name):
-                if policy[0] == 'skip':
-                    continue
-                await do_schedule(
-                    conn, package.name, suite, requestor=requestor,
-                    bucket='webhook')
-                rescheduled.setdefault(package.name, []).append(suite)
-        return web.json_response({'rescheduled': rescheduled})
+            package = await state.get_package_by_upstream_branch_url(
+                conn, vcs_url)
+            if package is not None:
+                requestor = 'Push hook for %s' % package.branch_url
+                async for package_name, suite, policy in state.iter_policy(
+                        package.name):
+                    if policy[0] == 'skip':
+                        continue
+                    if suite not in ('fresh-releases', 'fresh-snapshots'):
+                        continue
+                    await do_schedule(
+                        conn, package.name, suite, requestor=requestor,
+                        bucket='webhook')
+                    rescheduled.setdefault(package.name, []).append(suite)
+
+        return web.json_response({'rescheduled': rescheduled, 'urls': urls})
+
+
+async def handle_webhook(request):
+    if request.headers.get('Content-Type') != 'application/json':
+        text = await render_template_for_request('webhook.html', request, {})
+        return web.Response(
+            content_type='text/html', text=text,
+            headers={'Cache-Control': 'max-age=600'})
+    return await process_webhook(request, request.app.db)
+
 
 
 async def handle_schedule(request):

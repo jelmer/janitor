@@ -1535,7 +1535,7 @@ group by 1
     return await conn.fetch(query)
 
 
-async def iter_upstream_branch_urls(conn: asyncpg.Connection):
+async def iter_custom_upstream_branch_urls(conn: asyncpg.Connection):
     query = """
 select
   name,
@@ -1544,6 +1544,34 @@ from upstream
 where upstream_branch_url is not null
 """
     return await conn.fetch(query)
+
+
+async def get_package_by_upstream_branch_url(
+        conn: asyncpg.Connection, upstream_branch_url: str) -> Optional[Package]:
+    query = """
+SELECT
+  name,
+  maintainer_email,
+  uploader_emails,
+  branch_url,
+  vcs_type,
+  vcs_url,
+  vcs_browse,
+  removed,
+  vcswatch_status,
+  vcswatch_version
+FROM
+  package
+WHERE
+  name IN (
+    SELECT package FROM upstream_branch_urls WHERE url = $1 OR url = $2)
+"""
+    upstream_branch_url2 = urlutils.split_segment_parameters(
+        upstream_branch_url)[0]
+    row = await conn.fetchrow(query, upstream_branch_url, upstream_branch_url2)
+    if row is None:
+        return None
+    return Package.from_row(row)
 
 
 async def update_branch_url(

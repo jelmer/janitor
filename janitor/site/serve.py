@@ -1271,14 +1271,14 @@ order by url, last_run.finish_time desc
         handle_oauth_callback,
         name='oauth2-callback')
 
-    from .api import create_app as create_api_app, handle_webhook
+    from .api import create_app as create_api_app, process_webhook
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
 
     async def handle_post_root(request):
         if ('X-Gitlab-Event' in request.headers or
                 'X-GitHub-Event' in request.headers):
-            return await handle_webhook(request)
+            return await process_webhook(request, request.app.database)
         return web.HTTPMethodNotAllowed(text='Not a supported webhook')
 
     app.http_client_session = ClientSession()

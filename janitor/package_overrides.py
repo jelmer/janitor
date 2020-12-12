@@ -57,7 +57,7 @@ async def main(args):
     async with db.acquire() as conn:
         currents = {
             k: v for [k, v] in
-            await state.iter_upstream_branch_urls(conn)}
+            await state.iter_custom_upstream_branch_urls(conn)}
         for name in set(currents).union(set(overrides)):
             current = currents.get(name)
             override = overrides.get(name)
