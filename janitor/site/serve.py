@@ -1271,9 +1271,15 @@ order by url, last_run.finish_time desc
         handle_oauth_callback,
         name='oauth2-callback')
 
-    from .api import create_app as create_api_app
+    from .api import create_app as create_api_app, handle_webhook
     with open(args.policy, 'r') as f:
         policy_config = read_policy(f)
+
+    async def handle_post_root(request):
+        if ('X-Gitlab-Event' in request.headers or
+                'X-GitHub-Event' in request.headers):
+            return await handle_webhook(request)
+        return web.HTTPMethodNotAllowed(text='Not a supported webhook')
 
     app.http_client_session = ClientSession()
     app.topic_notifications = Topic()
@@ -1307,6 +1313,10 @@ order by url, last_run.finish_time desc
     app.on_startup.append(startup_artifact_manager)
     setup_debsso(app)
     setup_metrics(app)
+    app.router.add_post(
+        '/',
+        handle_post_root,
+        name='root-post')
     app.router.add_get(
         '/ws/notifications',
         functools.partial(pubsub_handler,
