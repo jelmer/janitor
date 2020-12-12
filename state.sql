@@ -369,3 +369,6 @@ WHERE
   result_code = 'success' AND NOT package.removed;
 
 CREATE OR REPLACE VIEW publish_ready AS SELECT * FROM publishable WHERE ARRAY_LENGTH(unpublished_branches, 1) > 0;
+
+CREATE VIEW upstream_branch_urls as (
+    select package, result->>'upstream_branch_url' as url from run where suite = 'fresh-snapshots' and result->>'upstream_branch_url' != '') union (select name as package, upstream_branch_url as url from upstream);
