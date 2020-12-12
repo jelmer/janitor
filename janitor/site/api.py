@@ -100,6 +100,23 @@ async def handle_publish(request):
             status=400)
 
 
+async def get_package_from_github_webhook(conn, body):
+    url_keys = ['clone_url', 'url', 'git_url', 'ssh_url']
+    urls = []
+    for url_key in url_keys:
+        url = body['repository'][url_key]
+        urls.append(
+            git_url_to_bzr_url(url, ref=body['ref'].encode()))
+        urls.append(git_url_to_bzr_url(url))
+    for vcs_url in urls:
+        package = await state.get_package_by_branch_url(conn, vcs_url)
+        if package is not None:
+            break
+    else:
+        return None
+    return package
+
+
 async def get_package_from_gitlab_webhook(conn, body):
     vcs_url = body['project']['git_http_url']
     for url in [
@@ -119,18 +136,26 @@ async def handle_webhook(request):
         return web.Response(
             content_type='text/html', text=text,
             headers={'Cache-Control': 'max-age=600'})
-    if request.headers['X-Gitlab-Event'] != 'Push Hook':
-        return web.json_response({}, status=200)
+
     body = await request.json()
     async with request.app.db.acquire() as conn:
-        package = await get_package_from_gitlab_webhook(conn, body)
-        if package is None:
-            return web.Response(
-                body=('VCS URL %s unknown' % body['project']['git_http_url']),
-                status=404)
-        # TODO(jelmer: If nothing found, then maybe fall back to
-        # urlutils.basename(body['project']['path_with_namespace'])?
-        requestor = 'GitLab Push hook for %s' % body['project']['git_http_url']
+        if 'X-Gitlab-Event' in request.headers:
+            if request.headers['X-Gitlab-Event'] != 'Push Hook':
+                return web.json_response({}, status=200)
+            package = await get_package_from_gitlab_webhook(conn, body)
+            if package is None:
+                return web.Response(
+                    body=('VCS URL %s unknown' %
+                          body['project']['git_http_url']),
+                    status=404)
+            # TODO(jelmer: If nothing found, then maybe fall back to
+            # urlutils.basename(body['project']['path_with_namespace'])?
+        elif 'X-GitHub-Event' in request.headers:
+            package = await get_package_from_github_webhook(conn, body)
+        else:
+            return web.Response(status=400, text="Unrecognized webhook")
+
+        requestor = 'Push hook for %s' % package.branch_url
         async for package_name, suite, policy in state.iter_policy(
                 package.name):
             if policy[0] == 'skip':
