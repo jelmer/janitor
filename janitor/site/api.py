@@ -100,7 +100,7 @@ async def handle_publish(request):
             status=400)
 
 
-async def get_package_from_github_webhook(conn, body):
+def get_branch_urls_from_gitlab_webhook(body):
     url_keys = ['clone_url', 'url', 'git_url', 'ssh_url']
     urls = []
     for url_key in url_keys:
@@ -108,26 +108,14 @@ async def get_package_from_github_webhook(conn, body):
         urls.append(
             git_url_to_bzr_url(url, ref=body['ref'].encode()))
         urls.append(git_url_to_bzr_url(url))
-    for vcs_url in urls:
-        package = await state.get_package_by_branch_url(conn, vcs_url)
-        if package is not None:
-            break
-    else:
-        return None
-    return package
+    return urls
 
 
-async def get_package_from_gitlab_webhook(conn, body):
+def get_branch_urls_from_github_webhook(body):
     vcs_url = body['project']['git_http_url']
-    for url in [
-            git_url_to_bzr_url(vcs_url, ref=body['ref'].encode()),
-            git_url_to_bzr_url(vcs_url)]:
-        package = await state.get_package_by_branch_url(conn, vcs_url)
-        if package is not None:
-            break
-    else:
-        return None
-    return package
+    return [
+        git_url_to_bzr_url(vcs_url, ref=body['ref'].encode()),
+        git_url_to_bzr_url(vcs_url)]
 
 
 async def handle_webhook(request):
@@ -142,28 +130,30 @@ async def handle_webhook(request):
         if 'X-Gitlab-Event' in request.headers:
             if request.headers['X-Gitlab-Event'] != 'Push Hook':
                 return web.json_response({}, status=200)
-            package = await get_package_from_gitlab_webhook(conn, body)
-            if package is None:
-                return web.Response(
-                    body=('VCS URL %s unknown' %
-                          body['project']['git_http_url']),
-                    status=404)
+            urls = get_branch_urls_from_gitlab_webhook(conn, body)
             # TODO(jelmer: If nothing found, then maybe fall back to
             # urlutils.basename(body['project']['path_with_namespace'])?
         elif 'X-GitHub-Event' in request.headers:
-            package = await get_package_from_github_webhook(conn, body)
+            urls = get_branch_urls_from_github_webhook(body)
         else:
             return web.Response(status=400, text="Unrecognized webhook")
 
-        requestor = 'Push hook for %s' % package.branch_url
-        async for package_name, suite, policy in state.iter_policy(
-                package.name):
-            if policy[0] == 'skip':
+        rescheduled = {}
+        for vcs_url in urls:
+            package = await state.get_package_by_branch_url(conn, vcs_url)
+            if package is None:
                 continue
-            await do_schedule(
-                conn, package.name, suite, requestor=requestor,
-                bucket='webhook')
-        return web.json_response({})
+
+            requestor = 'Push hook for %s' % package.branch_url
+            async for package_name, suite, policy in state.iter_policy(
+                    package.name):
+                if policy[0] == 'skip':
+                    continue
+                await do_schedule(
+                    conn, package.name, suite, requestor=requestor,
+                    bucket='webhook')
+                rescheduled.setdefault(package.name, []).append(suite)
+        return web.json_response({'rescheduled': rescheduled})
 
 
 async def handle_schedule(request):
