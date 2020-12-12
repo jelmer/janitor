@@ -689,6 +689,7 @@ class ResumeInfo(object):
             'result': self.result,
             'branch_url': self.resume_branch_url,
             'branch_name': self.legacy_branch_name,
+            'branches': self.resume_result_branches,
         }
 
 
