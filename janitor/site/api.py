@@ -138,6 +138,8 @@ async def process_webhook(request, db):
             # TODO(jelmer: If nothing found, then maybe fall back to
             # urlutils.basename(body['project']['path_with_namespace'])?
         elif 'X-GitHub-Event' in request.headers:
+            if request.headers['X-GitHub-Event'] not in ('ping', 'push'):
+                return web.json_response({}, status=200)
             urls = get_branch_urls_from_github_webhook(body)
         else:
             return web.Response(status=400, text="Unrecognized webhook")
