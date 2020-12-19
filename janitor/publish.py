@@ -1411,6 +1411,18 @@ async def check_existing_mp(
     except KeyError:
         raise NoRunForMergeProposal(mp, revision)
 
+    if mp_remote_branch_name is None:
+        target_branch_url = mp.get_target_branch_url()
+        if target_branch_url is None:
+            warning('No taret branch for %r', mp)
+        else:
+            try:
+                mp_remote_branch_name = open_branch(
+                    target_branch_url,
+                    possible_transports=possible_transports).name
+            except (BranchMissing, BranchUnavailable):
+                pass
+
     last_run = await get_last_effective_run(
         conn, mp_run.package, mp_run.suite)
     if last_run is None:
@@ -1510,8 +1522,8 @@ applied independently.
                 mp.url, mp_run.id, mp_role, last_run.id)
         return False
 
-    if (last_run_remote_branch_name is not None and
-            last_run_remote_branch_name != mp_remote_branch_name):
+    if (last_run_remote_branch_name != mp_remote_branch_name and
+            last_run_remote_branch_name is not None):
         warning('%s: Remote branch name has changed: %s => %s, '
                 'skipping...', mp.url, mp_remote_branch_name,
                 last_run_remote_branch_name,)
@@ -1519,6 +1531,10 @@ applied independently.
         # For some old runs it is not set because we didn't track
         # the default branch name.
         if not dry_run and mp_remote_branch_name is not None:
+            note('%s: Closing merge proposal, since branch for role '
+                 '\'%s\' has changed from %s to %s.',
+                 mp.url, mp_role, last_run_remote_branch_name,
+                 last_run_remote_branch_name)
             await update_proposal_status(
                 mp, 'abandoned', revision, package_name)
             try:
