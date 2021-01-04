@@ -1510,6 +1510,10 @@ async def main(argv=None):
                 if args.prometheus:
                     await push_to_gateway(
                         args.prometheus, job="janitor.worker",
+                        grouping_key={
+                            'run_id': assignment['id'],
+                            'suite': suite,
+                        },
                         registry=REGISTRY)
 
 
