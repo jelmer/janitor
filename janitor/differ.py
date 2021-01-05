@@ -240,7 +240,7 @@ async def handle_diffoscope(request):
                     text='No artifacts for run id: %s' % old_run.id,
                     headers={'unavailable_run_id': old_run.id})
 
-            new_binaries = find_binaries(old_dir)
+            new_binaries = find_binaries(new_dir)
             if not new_binaries:
                 raise web.HTTPNotFound(
                     text='No artifacts for run id: %s' % new_run.id,
