@@ -1560,7 +1560,7 @@ has changed to %s.
         if last_run_revision == mp_revision:
             warning(
                 '%s (%s): old run (%s/%s) has same revision as new run (%s/%s)'
-                ': %r', mp.url, mp.package, mp_run.id, mp_role,
+                ': %r', mp.url, mp_run.package, mp_run.id, mp_role,
                 last_run.id, mp_role, mp_revision)
         try:
             mp_url, branch_name, is_new = await publish_one(
