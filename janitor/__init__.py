@@ -17,6 +17,7 @@
 
 
 from breezy.transport import http as _mod_http
+from breezy.transport.http import urllib as _mod_urllib
 
 
 version_info = (0, 1, 0)
@@ -29,7 +30,7 @@ def user_agent() -> str:
 
 
 _mod_http.default_user_agent = user_agent
-_mod_http.AbstractHTTPHandler._default_headers['User-agent'] = user_agent()
+_mod_urllib.AbstractHTTPHandler._default_headers['User-agent'] = user_agent()
 
 
 SUITE_REGEX = '[a-z0-9-]+'
