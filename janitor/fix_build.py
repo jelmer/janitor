@@ -66,7 +66,7 @@ from silver_platter.debian import (
 
 from .build import attempt_build, get_build_architecture
 from .trace import note, warning
-from .sbuild_log import (
+from buildlog_consultant.sbuild import (
     Problem,
     MissingConfigStatusInput,
     MissingPythonModule,

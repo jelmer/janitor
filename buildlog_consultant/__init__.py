@@ -1,5 +1,6 @@
 #!/usr/bin/python
-# Copyright (C) 2019 Jelmer Vernooij <jelmer@jelmer.uk>
+# Copyright (C) 2019-2021 Jelmer Vernooij <jelmer@jelmer.uk>
+# encoding: utf-8
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,27 +15,3 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
-
-from __future__ import absolute_import
-
-import unittest
-
-
-from breezy.tests import TestCaseWithTransport  # noqa: F401
-
-
-def test_suite():
-    names = [
-        'build',
-        'debdiff',
-        'fix_build',
-        'pull_worker',
-        'runner',
-        'site',
-        'vcs',
-        'worker',
-        ]
-    module_names = [__name__ + '.test_' + name for name in names]
-    module_names.append('buildlog_consultant.tests.test_sbuild')
-    loader = unittest.TestLoader()
-    return loader.loadTestsFromNames(module_names)

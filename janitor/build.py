@@ -43,7 +43,7 @@ from silver_platter.debian import (
     DEFAULT_BUILDER,
     )
 
-from .sbuild_log import (
+from buildlog_consultant.sbuild import (
     worker_failure_from_sbuild_log,
     SbuildFailure,
     )

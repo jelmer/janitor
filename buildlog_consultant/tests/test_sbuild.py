@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (C) 2019 Jelmer Vernooij <jelmer@jelmer.uk>
+# Copyright (C) 2019-2021 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.sbuild_log import (
+from buildlog_consultant.sbuild import (
     AptFetchFailure,
     AptMissingReleaseFile,
     AutopkgtestTestbedFailure,
@@ -29,6 +29,7 @@ from janitor.sbuild_log import (
     find_build_failure_description,
     CcacheError,
     DebhelperPatternNotFound,
+    DuplicateDHCompatLevel,
     DhLinkDestinationIsDirectory,
     InconsistentSourceFormat,
     MissingConfigure,
@@ -240,7 +241,7 @@ Call Stack (most recent call first):
   /usr/lib/x86_64-linux-gnu/Qt/Qt5Config.cmake:28 (find_package)
   CMakeLists.txt:34 (find_package)
 dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
-""".splitlines(True), 4, MissingFile('/usr/lib/x86_64-linux-gnu/libEGL.so'))
+""".splitlines(True), 16, MissingFile('/usr/lib/x86_64-linux-gnu/libEGL.so'))
 
     def test_meson_missing_git(self):
         self.run_test([
@@ -278,7 +279,8 @@ dh_auto_configure: cd obj-x86_64-linux-gnu && cmake with args
     def test_dh_compat_dupe(self):
         self.run_test([
             'dh_autoreconf: debhelper compat level specified both in '
-            'debian/compat and via build-dependency on debhelper-compat'], 1)
+            'debian/compat and via build-dependency on debhelper-compat'], 1,
+            DuplicateDHCompatLevel('dh_autoreconf'))
 
     def test_dh_compat_missing(self):
         self.run_test([
@@ -1147,7 +1149,7 @@ Exiting with 16
         self.assertEqual(
             (7, 'command2',
              MissingFile('/usr/share/php/Pimple/autoload.php'),
-             'Cannot open file "/usr/share/php/Pimple/autoload.php".'),
+             'Cannot open file "/usr/share/php/Pimple/autoload.php".\n'),
             find_autopkgtest_failure_description("""\
 Removing autopkgtest-satdep (0) ...
 autopkgtest [01:30:11]: test command2: phpunit --bootstrap /usr/autoload.php
@@ -1241,8 +1243,8 @@ class ParseBrzErrorTests(unittest.TestCase):
     def test_inconsistent_source_format(self):
         self.assertEqual(
             (InconsistentSourceFormat(),
-                'Inconsistency between source format and version: version '
-                'is not native, format is native.'),
+                'Inconsistent source format between version and source '
+                'format'),
             parse_brz_error(
                 'Inconsistency between source format and version: version '
                 'is not native, format is native.'))
