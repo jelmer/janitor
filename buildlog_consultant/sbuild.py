@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright (C) 2019 Jelmer Vernooij <jelmer@jelmer.uk>
+# Copyright (C) 2019-2021 Jelmer Vernooij <jelmer@jelmer.uk>
 # encoding: utf-8
 #
 # This program is free software; you can redistribute it and/or modify
@@ -30,7 +30,7 @@ __all__ = [
     'parse_sbuild_log',
 ]
 
-from .trace import warning
+from janitor.trace import warning
 
 
 class SbuildFailure(Exception):
@@ -2855,7 +2855,7 @@ def find_build_failure_description(
             linenos, err = matcher.match(lines, lineno)
             if linenos:
                 lineno = linenos[-1]  # For now
-                return lineno + 1, lines[lineno].rstrip('\n'), err
+                return lineno + 1, lines[lineno], err
 
     # TODO(jelmer): Remove this in favour of CMakeErrorMatcher above.
     if cmake:

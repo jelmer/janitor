@@ -69,6 +69,7 @@ File b
             package = 'pkg'
             main_branch_revision = old_revid
             revision = new_revid
+            result_branches = [('main', '', old_revid, new_revid)]
 
         lines = get_run_diff(vcs_manager, Run(), 'main').splitlines()
         self.assertEqual(b"=== modified file 'a'", lines[0])

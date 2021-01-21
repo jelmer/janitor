@@ -37,7 +37,7 @@ from janitor.fix_build import (
     resolve_error,
     APT_FIXERS,
     )
-from janitor.sbuild_log import (
+from buildlog_consultant.sbuild import (
     find_apt_get_failure,
     find_build_failure_description,
     Problem,

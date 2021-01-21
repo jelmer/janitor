@@ -7,7 +7,7 @@ from typing import Optional
 import urllib.parse
 
 from janitor import state
-from janitor.sbuild_log import (
+from buildlog_consultant.sbuild import (
     parse_sbuild_log,
     find_failed_stage,
     find_build_failure_description,
