@@ -1149,7 +1149,7 @@ Exiting with 16
         self.assertEqual(
             (7, 'command2',
              MissingFile('/usr/share/php/Pimple/autoload.php'),
-             'Cannot open file "/usr/share/php/Pimple/autoload.php".\n'),
+             'Cannot open file "/usr/share/php/Pimple/autoload.php".'),
             find_autopkgtest_failure_description("""\
 Removing autopkgtest-satdep (0) ...
 autopkgtest [01:30:11]: test command2: phpunit --bootstrap /usr/autoload.php
