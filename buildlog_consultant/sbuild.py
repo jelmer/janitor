@@ -2855,7 +2855,7 @@ def find_build_failure_description(
             linenos, err = matcher.match(lines, lineno)
             if linenos:
                 lineno = linenos[-1]  # For now
-                return lineno + 1, lines[lineno], err
+                return lineno + 1, lines[lineno].rstrip('\n'), err
 
     # TODO(jelmer): Remove this in favour of CMakeErrorMatcher above.
     if cmake:
