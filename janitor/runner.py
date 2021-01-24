@@ -80,6 +80,7 @@ from .debian import (
     find_changes,
     NoChangesFile,
     )
+from .debian import state as debian_state
 from .logs import (
     get_log_manager,
     ServiceUnavailable,
@@ -829,7 +830,7 @@ class ActiveLocalRun(ActiveRun):
             resume = await check_resume_result(
                 conn, self.queue_item.suite, resume_branch)
 
-            last_build_version = await state.get_last_build_version(
+            last_build_version = await debian_state.get_last_build_version(
                 conn, self.queue_item.package, self.queue_item.suite)
 
         env.update(suite_build_env(
@@ -1115,7 +1116,7 @@ class QueueProcessor(object):
                     result_branches=result.branches,
                     result_tags=result.tags)
                 if result.target_result.build_version:
-                    await state.store_debian_build(
+                    await debian_state.store_debian_build(
                         conn, result.log_id, item.package,
                         result.target_result.build_version,
                         result.target_result.build_distribution)
@@ -1301,7 +1302,7 @@ async def handle_assign(request):
     distro_config = queue_processor.config.distribution
 
     async with queue_processor.database.acquire() as conn:
-        last_build_version = await state.get_last_build_version(
+        last_build_version = await debian_state.get_last_build_version(
             conn, item.package, item.suite)
 
         try:

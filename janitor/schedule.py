@@ -34,6 +34,7 @@ from . import (
     state,
     trace,
     )
+from .debian import state as debian_state
 from .config import read_config
 
 FIRST_RUN_BONUS = 100.0
@@ -213,8 +214,8 @@ async def add_to_queue(
         dry_run: bool = False,
         default_offset: float = 0.0,
         bucket: str = 'default') -> None:
-    popcon = {k: (v or 0) for (k, v) in await state.popcon(conn)}
-    removed = set(p.name for p in await state.iter_packages(conn)
+    popcon = {k: (v or 0) for (k, v) in await debian_state.popcon(conn)}
+    removed = set(p.name for p in await debian_state.iter_packages(conn)
                   if p.removed)
     if popcon:
         max_inst = max([(v or 0) for v in popcon.values()])
@@ -283,7 +284,8 @@ async def dep_available(
         archqual: Optional[str] = None, arch: Optional[str] = None,
         version: Optional[Tuple[str, Version]] = None,
         restrictions=None) -> bool:
-    available = await state.version_available(conn, name, suite, version)
+    available = await debian_state.version_available(
+        conn, name, suite, version)
     if available:
         return True
     return False
@@ -335,9 +337,10 @@ async def main():
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
-        iter_candidates_with_policy = await state.iter_candidates_with_policy(
-            conn, packages=(args.packages or None),
-            suite=args.suite)
+        iter_candidates_with_policy = (
+                await debian_state.iter_candidates_with_policy(
+                    conn, packages=(args.packages or None),
+                    suite=args.suite))
         todo = [x async for x in schedule_from_candidates(
             iter_candidates_with_policy)]
         await add_to_queue(conn, todo, dry_run=args.dry_run)

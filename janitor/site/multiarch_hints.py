@@ -2,6 +2,7 @@
 
 import asyncpg
 from . import state
+from .debian import state as debian_state
 from .common import generate_pkg_context
 
 
@@ -72,7 +73,8 @@ async def generate_candidates(db):
     candidates = []
     async with db.acquire() as conn:
         for (package, suite, context, value,
-             success_chance) in await state.iter_candidates(conn, suite=SUITE):
+             success_chance) in await debian_state.iter_candidates(
+                 conn, suite=SUITE):
             hints = {}
             for h in context.split(' '):
                 hints.setdefault(h, 0)

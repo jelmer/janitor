@@ -31,6 +31,7 @@ from . import (
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     )
+from ..debian import state as debian_state
 from ..policy_pb2 import PolicyConfig
 from ..schedule import (
     do_schedule,
@@ -146,7 +147,8 @@ async def process_webhook(request, db):
 
         rescheduled = {}
         for vcs_url in urls:
-            package = await state.get_package_by_branch_url(conn, vcs_url)
+            package = await debian_state.get_package_by_branch_url(
+                conn, vcs_url)
             if package is not None:
                 requestor = 'Push hook for %s' % package.branch_url
                 async for package_name, suite, policy in state.iter_policy(
@@ -158,7 +160,7 @@ async def process_webhook(request, db):
                         bucket='webhook')
                     rescheduled.setdefault(package.name, []).append(suite)
 
-            package = await state.get_package_by_upstream_branch_url(
+            package = await debian_state.get_package_by_upstream_branch_url(
                 conn, vcs_url)
             if package is not None:
                 requestor = 'Push hook for %s' % package.branch_url
@@ -197,7 +199,7 @@ async def handle_schedule(request):
         return web.json_response(
             {'error': 'invalid boolean for refresh'}, status=400)
     async with request.app.db.acquire() as conn:
-        package = await state.get_package(conn, package)
+        package = await debian_state.get_package(conn, package)
         if package is None:
             return web.json_response(
                 {'reason': 'Package not found'}, status=404)
@@ -246,7 +248,7 @@ async def handle_schedule_control(request):
         if run is None:
             return web.json_response(
                 {'reason': 'Run not found'}, status=404)
-        package = await state.get_package(conn, run.package)
+        package = await debian_state.get_package(conn, run.package)
         if request.user:
             requestor = request.user['email']
         else:
@@ -276,7 +278,7 @@ async def handle_package_list(request):
     name = request.match_info.get('package')
     response_obj = []
     async with request.app.db.acquire() as conn:
-        for package in await state.iter_packages(conn, package=name):
+        for package in await debian_state.iter_packages(conn, package=name):
             if not name and package.removed:
                 continue
             response_obj.append({
@@ -290,7 +292,7 @@ async def handle_package_list(request):
 async def handle_packagename_list(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
-        for package in await state.iter_packages(conn):
+        for package in await debian_state.iter_packages(conn):
             if package.removed:
                 continue
             response_obj.append(package.name)
