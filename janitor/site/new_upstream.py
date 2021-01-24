@@ -3,12 +3,13 @@
 from functools import partial
 from janitor import state
 from . import tracker_url
+from janitor.debian import state as debian_state
 
 
 async def generate_pkg_file(
         db, config, client, differ_url, package, suite, run_id=None):
     async with db.acquire() as conn:
-        package = await state.get_package(conn, package)
+        package = await debian_state.get_package(conn, package)
         if package is None:
             raise KeyError(package)
         if run_id is not None:
@@ -21,7 +22,7 @@ async def generate_pkg_file(
                 (url, status)
                 for (unused_package, url, status) in
                 await state.iter_proposals(conn, package.name, suite=suite)]
-        candidate = await state.get_candidate(conn, package.name, suite)
+        candidate = await debian_state.get_candidate(conn, package.name, suite)
         if candidate is not None:
             (candidate_context, candidate_value,
              candidate_success_chance) = candidate
@@ -87,6 +88,6 @@ async def generate_candidates(db, suite):
     async with db.acquire() as conn:
         candidates = [(package.name, context, value, success_chance) for
                       (package, suite, context, value, success_chance) in
-                      await state.iter_candidates(conn, suite=suite)]
+                      await debian_state.iter_candidates(conn, suite=suite)]
     candidates.sort()
     return {'candidates': candidates, 'suite': suite}

@@ -107,6 +107,7 @@ def apply_policy(
 async def main(args):
     from .config import read_config
     from . import state
+    from .debian import state as debian_state
 
     with open(args.policy, 'r') as f:
         policy = read_policy(f)
@@ -121,7 +122,7 @@ async def main(args):
     async with db.acquire() as conn:
         async for (package, suite, cur_pol) in state.iter_policy(conn):
             current_policy[(package, suite)] = cur_pol
-        for package in await state.iter_packages(conn):
+        for package in await debian_state.iter_packages(conn):
             for suite in suites:
                 intended_policy = apply_policy(
                     policy, suite, package.name, package.vcs_url,

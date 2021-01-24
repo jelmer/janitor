@@ -21,6 +21,7 @@ import asyncio
 from datetime import datetime, timedelta
 import re
 from janitor import state
+from janitor.debian import state as debian_state
 from janitor.config import read_config
 from janitor.schedule import do_schedule
 
@@ -53,7 +54,7 @@ with open(args.config, 'r') as f:
 async def main(db, result_code, rejected, min_age=0):
     packages = {}
     async with db.acquire() as conn1, db.acquire() as conn2:
-        for package in await state.iter_packages(conn1):
+        for package in await debian_state.iter_packages(conn1):
             if package.removed:
                 continue
             packages[package.name] = package

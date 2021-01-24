@@ -78,6 +78,7 @@ import breezy.plugins.github  # noqa: F401
 from . import (
     state,
     )
+from .debian import state as debian_state
 from .config import read_config
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader
@@ -739,7 +740,7 @@ async def publish_request(request):
     mode = post.get('mode')
     async with request.app.db.acquire() as conn:
         try:
-            package = await state.get_package(conn, package)
+            package = await debian_state.get_package(conn, package)
         except IndexError:
             return web.json_response({}, status=400)
 
@@ -1429,7 +1430,7 @@ async def check_existing_mp(
         warning('%s: Unable to find any relevant runs.', mp.url)
         return False
 
-    package = await state.get_package(conn, mp_run.package)
+    package = await debian_state.get_package(conn, mp_run.package)
     if package is None:
         warning('%s: Unable to find package.', mp.url)
         return False
@@ -1728,7 +1729,7 @@ async def listen_to_runner(db, rate_limiter, vcs_manager, runner_url,
                 continue
             async with db.acquire() as conn:
                 # TODO(jelmer): Fold these into a single query ?
-                package = await state.get_package(conn, result['package'])
+                package = await debian_state.get_package(conn, result['package'])
                 run = await state.get_run(conn, result['log_id'])
                 if run.suite != 'unchanged':
                     await process_run(conn, run, package)

@@ -5,6 +5,7 @@ from functools import partial
 import urllib.parse
 
 from janitor import state
+from janitor.debian import state as debian_state
 from janitor.site import (
     get_archive_diff,
     BuildDiffUnavailable,
@@ -17,7 +18,7 @@ from janitor.site import (
 async def generate_pkg_context(db, config, suite, policy, client, differ_url,
                                publisher_url, package, run_id=None):
     async with db.acquire() as conn:
-        package = await state.get_package(conn, name=package)
+        package = await debian_state.get_package(conn, name=package)
         if package is None:
             raise KeyError(package)
         if run_id is not None:
@@ -62,7 +63,7 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
             else:
                 unchanged_run = None
 
-        candidate = await state.get_candidate(conn, package.name, suite)
+        candidate = await debian_state.get_candidate(conn, package.name, suite)
         if candidate is not None:
             (candidate_context, candidate_value,
              candidate_success_chance) = candidate
@@ -153,7 +154,8 @@ async def generate_candidates(db, suite):
     candidates = []
     async with db.acquire() as conn:
         for (package, suite, context, value,
-             success_chance) in await state.iter_candidates(conn, suite=suite):
+             success_chance) in await debian_state.iter_candidates(
+                 conn, suite=suite):
             candidates.append((package.name, value))
         candidates.sort(key=lambda x: x[1], reverse=True)
     return {'candidates': candidates, 'suite': suite}

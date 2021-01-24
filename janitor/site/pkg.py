@@ -7,6 +7,7 @@ from typing import Optional
 import urllib.parse
 
 from janitor import state
+from janitor.debian import state as debian_state
 from buildlog_consultant.sbuild import (
     parse_sbuild_log,
     find_failed_stage,
@@ -111,7 +112,7 @@ async def generate_run_file(
                 conn, run.package, run.main_branch_revision)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package)
-        package = await state.get_package(conn, run.package)
+        package = await debian_state.get_package(conn, run.package)
         if run.revision and run.result_code in (
                 'success', 'nothing-new-to-do'):
             publish_history = await state.get_publish_history(
@@ -234,7 +235,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs):
         kwargs['candidates'] = {
             suite: (context, value, success_chance)
             for (package, suite, context, value, success_chance) in
-            await state.iter_candidates(conn, packages=[package.name])}
+            await debian_state.iter_candidates(conn, packages=[package.name])}
     return kwargs
 
 

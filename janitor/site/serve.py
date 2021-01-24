@@ -41,6 +41,7 @@ from . import (
     html_template,
     render_template_for_request,
     )
+from ..debian import state as debian_state
 
 
 FORWARD_CLIENT_TIMEOUT = 30 * 60
@@ -554,7 +555,7 @@ if __name__ == '__main__':
         async with request.app.database.acquire() as conn:
             packages = [
                 (item.name, item.maintainer_email)
-                for item in await state.iter_packages(conn)
+                for item in await debian_state.iter_packages(conn)
                 if not item.removed]
         return await generate_pkg_list(packages)
 
@@ -566,7 +567,7 @@ if __name__ == '__main__':
         async with request.app.database.acquire() as conn:
             packages = [
                 (item.name, item.maintainer_email)
-                for item in await state.iter_packages(conn)
+                for item in await debian_state.iter_packages(conn)
                 if not item.removed]
         return await generate_maintainer_list(packages)
 
@@ -585,7 +586,7 @@ if __name__ == '__main__':
         return {}
 
     @html_template(
-        'package-overview.html', 
+        'package-overview.html',
         headers={'Cache-Control': 'max-age=600'})
     async def handle_pkg(request):
         from .pkg import generate_pkg_file
@@ -630,7 +631,7 @@ if __name__ == '__main__':
         'vcs-regressions.html', headers={'Cache-Control': 'max-age=600'})
     async def handle_vcs_regressions(request):
         async with request.app.database.acquire() as conn:
-            regressions = await state.iter_vcs_regressions(conn)
+            regressions = await debian_state.iter_vcs_regressions(conn)
         return {'regressions': regressions}
 
     @html_template(
