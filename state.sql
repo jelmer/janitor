@@ -7,6 +7,14 @@ CREATE TABLE IF NOT EXISTS upstream (
 );
 CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
 CREATE DOMAIN package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+CREATE TABLE IF NOT EXISTS codebase (
+   name text not null primary key,
+   branch_url text,
+   subpath text,
+   vcs_last_revision text
+);
+CREATE UNIQUE INDEX ON codebase (name);
+CREATE UNIQUE INDEX ON codebase (branch_url);
 CREATE TABLE IF NOT EXISTS package (
    name package_name not null primary key,
    distribution distribution_name not null,
@@ -24,7 +32,7 @@ CREATE TABLE IF NOT EXISTS package (
    vcswatch_status vcswatch_status,
    vcswatch_version debversion,
    unique(distribution, name)
-);
+) INHERITS (codebase);
 CREATE INDEX ON package (removed);
 CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
