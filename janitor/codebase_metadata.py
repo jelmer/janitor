@@ -36,7 +36,7 @@ async def update_codebase_metadata(conn, provided_codebases):
         codebases.append(
             (codebase.name, codebase.branch_url, codebase.subpath))
     await conn.executemany(
-        "INSERT INTO codebase (name, branch_url, subpath) "
+        "INSERT INTO upstream_codebase (name, branch_url, subpath) "
         "VALUES ($1, $2, $3)"
         "ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
@@ -45,8 +45,8 @@ async def update_codebase_metadata(conn, provided_codebases):
 
 
 def iter_codebases_from_script(stdin) -> Tuple[List[CodebaseMetadata]]:
-    package_list = text_format.Parse(stdin.read(), CodebaseList())
-    return package_list.package
+    codebase_list = text_format.Parse(stdin.read(), CodebaseList())
+    return codebase_list.codebase
 
 
 async def main():
