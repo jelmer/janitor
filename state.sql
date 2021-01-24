@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS codebase (
    vcs_last_revision text
 );
 CREATE UNIQUE INDEX ON codebase (name);
-CREATE UNIQUE INDEX ON codebase (branch_url);
+CREATE INDEX ON codebase (branch_url);
 CREATE TABLE IF NOT EXISTS package (
    name package_name not null primary key,
    distribution distribution_name not null,
@@ -38,6 +38,8 @@ CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
 CREATE INDEX ON package (maintainer_email);
 CREATE INDEX ON package (uploader_emails);
+CREATE TABLE IF NOT EXISTS upstream_codebase () INHERITS (codebase);
+CREATE UNIQUE INDEX ON upstream_codebase (name);
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text,

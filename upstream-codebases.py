@@ -35,10 +35,10 @@ async def iter_upstream_codebases(
     args = []
     query = """
 select distinct on (sources.source) sources.source || '-upstream',
-vcswatch.url, ''
-from sources
-left join vcswatch on vcswatch.source = sources.source
-where sources.release = 'sid' AND vcswatch.url IS NOT NULL
+  upstream_metadata.value, ''
+  from sources
+  left join upstream_metadata on upstream_metadata.source = sources.source
+  where sources.release = 'sid' AND upstream_metadata.key = 'Repository'
 """
     if packages:
         query += " and sources.source = ANY($1::text[])"
