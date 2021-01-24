@@ -85,6 +85,15 @@ suite {
   base_distribution: "unstable"
 }
 
+suite {
+  name: "debianize"
+  archive_description: "Automatic packaging of upstreams"
+  build_distribution: "debianize"
+  branch_name: "debianize"
+  build_suffix: "jan+deb"
+  base_distribution: "unstable"
+}
+
 oauth2_provider {
   client_id: "some-client-id"
   client_secret: "totally-secret"
