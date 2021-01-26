@@ -5,17 +5,21 @@ apt_location: 'gs://debian-janitor-apt/'
 
 # Logs location; can be:
 #  + a local file path
-#  + a GCS location (https://storage.googleapis.com/...)
+#  + a GCS location (gs://BUCKET-NAME/)
 #  + a S3 location (https://...)
 logs_location: 'https://s3.nl-ams.scw.cloud'
 
-# VCS Location; most be a local path.
+# VCS Location; must be a local path.
 vcs_location: '/home/janitor/vcs'
 
-# Artifact location: used to store build results
+# Artifact location: used to store build results. Can be:
+#  + a local file path
+#  + a GCS location (gs://BUCKET-NAME/)
 artifact_location: '/home/janitor/artifacts'
 
+# Database location: must be a valid postgresql URL
 database_location: 'postgresql://janitor@example.com:5432/janitor'
+
 # Set the default committer; if unset defaults to current users' preferences
 # (i.e. ~/.gitconfig)
 committer: 'Debian Janitor <janitor@jelmer.uk>'
