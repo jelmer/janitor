@@ -97,7 +97,7 @@ async def update_package_metadata(
             package.maintainer_email if package.maintainer_email else None,
             package.uploader_email if package.uploader_email else [],
             package.archive_version if package.archive_version else None,
-            package.vcs_type if package.vcs_type else None, vcs_url,
+            package.vcs_type.lower() if package.vcs_type else None, vcs_url,
             vcs_browser,
             vcs_last_revision.decode('utf-8') if vcs_last_revision else None,
             package.vcswatch_status.lower()

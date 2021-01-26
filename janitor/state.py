@@ -1241,7 +1241,7 @@ async def update_branch_url(
         vcs_url: str) -> None:
     await conn.execute(
         'update package set vcs_type = $1, branch_url = $2 '
-        'where name = $3', vcs_type, vcs_url, package)
+        'where name = $3', vcs_type.lower(), vcs_url, package)
 
 
 async def update_policy(
