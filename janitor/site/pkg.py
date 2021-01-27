@@ -89,7 +89,7 @@ def in_line_boundaries(i, boundaries):
 
 async def generate_run_file(
         db, client, config, differ_url, logfile_manager, run,
-        publisher_url, is_admin):
+        vcs_store_url, is_admin):
     (start_time, finish_time) = run.times
     kwargs = {}
     kwargs['run'] = run
@@ -135,7 +135,7 @@ async def generate_run_file(
         if base_revid == revid:
             return ''
         url = urllib.parse.urljoin(
-            publisher_url, 'diff/%s/%s' % (run.id, role))
+            vcs_store_url, 'diff/%s/%s' % (run.id, role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -173,7 +173,7 @@ async def generate_run_file(
     kwargs['read_file'] = read_file
 
     async def vcs_type():
-        return await get_vcs_type(client, publisher_url, run.package)
+        return await get_vcs_type(client, vcs_store_url, run.package)
     kwargs['vcs_type'] = vcs_type
     kwargs['in_line_boundaries'] = in_line_boundaries
 

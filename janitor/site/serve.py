@@ -235,6 +235,10 @@ if __name__ == '__main__':
         default='http://localhost:9912/',
         help='URL for publisher.')
     parser.add_argument(
+        '--vcs-store-url', type=str,
+        default='http://localhost:9921/',
+        help='URL for VCS store.')
+    parser.add_argument(
         '--runner-url', type=str,
         default='http://localhost:9911/',
         help='URL for runner.')
@@ -680,7 +684,7 @@ order by url, last_run.finish_time desc
             request.app.http_client_session,
             request.app.config,
             request.app.differ_url,
-            logfile_manager, run, request.app.publisher_url,
+            logfile_manager, run, request.app.vcs_store_url,
             is_admin=is_admin(request))
 
     async def handle_result_file(request):
@@ -745,7 +749,7 @@ order by url, last_run.finish_time desc
                 request.app.policy,
                 request.app.http_client_session,
                 request.app.differ_url,
-                request.app.publisher_url, pkg, run_id)
+                request.app.vcs_store_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
 
@@ -764,7 +768,7 @@ order by url, last_run.finish_time desc
                 request.app.policy,
                 request.app.http_client_session,
                 request.app.differ_url,
-                request.app.publisher_url, pkg, run_id)
+                request.app.vcs_store_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
 
@@ -783,7 +787,7 @@ order by url, last_run.finish_time desc
                 request.app.policy,
                 request.app.http_client_session,
                 request.app.differ_url,
-                request.app.publisher_url, pkg, run_id)
+                request.app.vcs_store_url, pkg, run_id)
         except KeyError:
             raise web.HTTPNotFound()
 
@@ -908,7 +912,7 @@ order by url, last_run.finish_time desc
                 conn, post['run_id'], review_status)
             text = await generate_review(
                 conn, request, request.app.http_client_session,
-                request.app.differ_url, request.app.publisher_url,
+                request.app.differ_url, request.app.vcs_store_url,
                 suites=[run.suite])
             return web.Response(
                 content_type='text/html', text=text,
@@ -920,7 +924,7 @@ order by url, last_run.finish_time desc
         async with request.app.database.acquire() as conn:
             text = await generate_review(
                 conn, request, request.app.http_client_session,
-                request.app.differ_url, request.app.publisher_url,
+                request.app.differ_url, request.app.vcs_store_url,
                 suites=suites)
         return web.Response(
             content_type='text/html', text=text,
@@ -1096,10 +1100,10 @@ order by url, last_run.finish_time desc
         ForwardedResource('dists', args.archiver_url.rstrip('/') + '/dists'))
     app.router.register_resource(
         ForwardedResource(
-            'bzr', args.publisher_url.rstrip('/') + '/bzr'))
+            'bzr', args.vcs_store_url.rstrip('/') + '/bzr'))
     app.router.register_resource(
         ForwardedResource(
-            'git', args.publisher_url.rstrip('/') + '/git'))
+            'git', args.vcs_store_url.rstrip('/') + '/git'))
     app.router.add_get(
         '/multiarch-fixes/pkg/{pkg}/', handle_multiarch_fixes_pkg,
         name='multiarch-fixes-package')
@@ -1289,6 +1293,7 @@ order by url, last_run.finish_time desc
     app.differ_url = args.differ_url
     app.policy = policy_config
     app.publisher_url = args.publisher_url
+    app.vcs_store_url = args.vcs_store_url
     if config.oauth2_provider and config.oauth2_provider.base_url:
         app.on_startup.append(discover_openid_config)
     app.on_startup.append(start_pubsub_forwarder)
@@ -1326,7 +1331,8 @@ order by url, last_run.finish_time desc
     app.add_subapp(
         '/api', create_api_app(
             app.database, args.publisher_url, args.runner_url,  # type: ignore
-            args.archiver_url, args.differ_url, config, policy_config,
+            args.archiver_url, args.vcs_store_url,
+            args.differ_url, config, policy_config,
             enable_external_workers=(not args.no_external_workers),
             external_url=(
                 app.external_url.join(URL('api')

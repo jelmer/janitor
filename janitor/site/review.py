@@ -32,7 +32,7 @@ async def generate_rejected(conn, suite=None):
     return {'entries': entries, 'suite': suite}
 
 
-async def generate_review(conn, request, client, differ_url, publisher_url,
+async def generate_review(conn, request, client, differ_url, vcs_store_url,
                           suites=None):
     entries = [entry async for entry in
                state.iter_publish_ready(
@@ -54,7 +54,7 @@ async def generate_review(conn, request, client, differ_url, publisher_url,
         if base_revid == revid:
             return ''
         url = urllib.parse.urljoin(
-            publisher_url, 'diff/%s/%s' % (
+            vcs_store_url, 'diff/%s/%s' % (
                 run.id, role))
         external_url = '/api/run/%s/diff?role=%s' % (run.id, role)
         try:
