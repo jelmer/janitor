@@ -502,6 +502,21 @@ class UncommittedPublisher(Publisher):
         return True
 
 
+class ScrubObsoletePublisher(Publisher):
+
+    def get_proposal_description(self, role, format, existing_description):
+        return 'Remove unnecessary constraints.'
+
+    def get_proposal_commit_message(self, role, existing_commit_message):
+        return 'Remove unnecessary constraints.'
+
+    def read_worker_result(self, result):
+        pass
+
+    def allow_create_proposal(self):
+        return True
+
+
 class NewUpstreamPublisher(Publisher):
 
     def read_worker_result(self, result):
@@ -587,6 +602,8 @@ def publish_one(
         subrunner = OrphanPublisher()
     elif command.startswith('import-upload'):
         subrunner = UncommittedPublisher()
+    elif command.startswith('scrub-obsolete'):
+        subrunner = ScrubObsoletePublisher()
     else:
         raise AssertionError('unknown command %r' % command)
 
