@@ -30,6 +30,7 @@ Several permanently running jobs:
 
 * the *publisher* proposes or pushes changes that have been successfully
   created and built previously, and which can provide VCS diffs
+* the *vcs store* manages and stores VCS repositories (git, bzr)
 * the *runner* processes the queue, kicks off workers for
   each package and stores the results.
 * one or more *workers* which are responsible for actual generating and

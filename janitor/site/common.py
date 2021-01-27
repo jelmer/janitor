@@ -16,7 +16,7 @@ from janitor.site import (
 
 
 async def generate_pkg_context(db, config, suite, policy, client, differ_url,
-                               publisher_url, package, run_id=None):
+                               vcs_store_url, package, run_id=None):
     async with db.acquire() as conn:
         package = await debian_state.get_package(conn, name=package)
         if package is None:
@@ -85,7 +85,7 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
         if base_revid == revid:
             return ''
         url = urllib.parse.urljoin(
-                publisher_url, 'diff/%s/%s' % (run.id, role))
+                vcs_store_url, 'diff/%s/%s' % (run.id, role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -112,7 +112,7 @@ async def generate_pkg_context(db, config, suite, policy, client, differ_url,
             return 'Error retrieving debdiff: %s' % e
 
     async def vcs_type():
-        return await get_vcs_type(client, publisher_url, run.package)
+        return await get_vcs_type(client, vcs_store_url, run.package)
 
     return {
         'package': package.name,

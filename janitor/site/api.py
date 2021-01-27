@@ -366,8 +366,8 @@ async def handle_diff(request):
         max_diff_size = int(request.query['max_diff_size'])
     except KeyError:
         max_diff_size = None
-    publisher_url = request.app.publisher_url
-    url = urllib.parse.urljoin(publisher_url, 'diff/%s/%s' % (run_id, role))
+    vcs_store_url = request.app.vcs_store_url
+    url = urllib.parse.urljoin(vcs_store_url, 'diff/%s/%s' % (run_id, role))
     try:
         async with request.app.http_client_session.get(url) as resp:
             if resp.status == 200:
@@ -881,7 +881,8 @@ async def handle_get_active_run(request):
 
 def create_app(
         db, publisher_url: str, runner_url: str, archiver_url: str,
-        differ_url: str, config: Config, policy_config: PolicyConfig,
+        vcs_store_url: str, differ_url: str, config: Config,
+        policy_config: PolicyConfig,
         enable_external_workers: bool = True,
         external_url: Optional[URL] = None) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
@@ -893,6 +894,7 @@ def create_app(
     app.external_url = external_url
     app.policy_config = policy_config
     app.publisher_url = publisher_url
+    app.vcs_store_url = vcs_store_url
     app.runner_url = runner_url
     app.differ_url = differ_url
     app.archiver_url = archiver_url

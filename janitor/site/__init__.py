@@ -103,8 +103,8 @@ def format_timestamp(ts):
     return ts.isoformat(timespec='minutes')
 
 
-async def get_vcs_type(client, publisher_url, package):
-    url = urllib.parse.urljoin(publisher_url, 'vcs-type/%s' % package)
+async def get_vcs_type(client, vcs_store_url, package):
+    url = urllib.parse.urljoin(vcs_store_url, 'vcs-type/%s' % package)
     try:
         async with client.get(url) as resp:
             if resp.status == 200:
