@@ -135,7 +135,7 @@ async def process_webhook(request, db):
         if 'X-Gitlab-Event' in request.headers:
             if request.headers['X-Gitlab-Event'] != 'Push Hook':
                 return web.json_response({}, status=200)
-            urls = get_branch_urls_from_gitlab_webhook(conn, body)
+            urls = get_branch_urls_from_gitlab_webhook(body)
             # TODO(jelmer: If nothing found, then maybe fall back to
             # urlutils.basename(body['project']['path_with_namespace'])?
         elif 'X-GitHub-Event' in request.headers:
