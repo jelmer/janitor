@@ -325,7 +325,7 @@ async def get_vcs_type(request):
     return web.Response(body=vcs_type.encode('utf-8'))
 
 
-async def run_web_server(listen_addr: str, port: int,
+def run_web_server(listen_addr: str, port: int,
                          vcs_manager: VcsManager, db: state.Database):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -351,11 +351,8 @@ async def run_web_server(listen_addr: str, port: int,
         '/remotes/git/{package}/{remote}', handle_set_git_remote)
     app.router.add_post(
         '/remotes/bzr/{package}/{remote}', handle_set_bzr_remote)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, listen_addr, port)
     note('Listening on %s:%s', listen_addr, port)
-    await site.start()
+    web.run_app(app, host=listen_addr, port=port)
 
 
 def main(argv=None):
@@ -369,7 +366,7 @@ def main(argv=None):
         help='Listen address', default='localhost')
     parser.add_argument(
         '--port', type=int,
-        help='Listen port', default=9912)
+        help='Listen port', default=9923)
     parser.add_argument(
         '--config', type=str, default='janitor.conf',
         help='Path to load configuration from.')
@@ -384,10 +381,11 @@ def main(argv=None):
     loop = asyncio.get_event_loop()
     vcs_manager = LocalVcsManager(config.vcs_location)
     db = state.Database(config.database_location)
-    tasks = [
-        loop.create_task(
-            run_web_server(
-                args.listen_address, args.port,
-                vcs_manager, db))
-    ]
-    loop.run_until_complete(asyncio.gather(*tasks))
+    run_web_server(
+        args.listen_address, args.port,
+        vcs_manager, db)
+
+
+if __name__ == '__main__':
+    import sys
+    sys.exit(main(sys.argv))

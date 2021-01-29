@@ -357,4 +357,19 @@ WHERE name = $1 AND distribution = $2 AND archive_version <= $3
                 for (name, archive_version) in items])
 
 
+async def guess_package_from_revision(
+        conn: asyncpg.Connection, revision: bytes
+        ) -> Tuple[Optional[str], Optional[str]]:
+    query = """\
+select distinct package, maintainer_email from run
+left join new_result_branch rb ON rb.run_id = run.id
+left join package on package.name = run.package
+where rb.revision = $1 and run.package is not null
+"""
+    rows = await conn.fetch(query, revision.decode('utf-8'))
+    if len(rows) == 1:
+        return rows[0][0], rows[0][1]
+    return None, None
+
+
 

@@ -1055,23 +1055,33 @@ async def check_existing_mp(
         maintainer_email = None
         package_name = None
     revision = mp.get_source_revision()
+    source_branch_url = mp.get_source_branch_url()
     if revision is None:
-        source_branch_url = mp.get_source_branch_url()
         if source_branch_url is None:
             warning('No source branch for %r', mp)
             revision = None
+            source_branch_name = None
         else:
             try:
-                revision = open_branch(
+                source_branch = open_branch(
                     source_branch_url,
-                    possible_transports=possible_transports).last_revision()
+                    possible_transports=possible_transports)
             except (BranchMissing, BranchUnavailable):
                 revision = None
+                source_branch_name = None
+            else:
+                revision = source_branch.last_revision()
+                source_branch_name = source_branch.name
+    else:
+        source_branch_name = None
+    if source_branch_name is None and source_branch_url is not None:
+        source_branch_name = urlutils.split_segment_parameters(
+            source_branch_url)[1].get('branch')
     if revision is None:
         revision = old_revision
     if maintainer_email is None:
         target_branch_url = mp.get_target_branch_url()
-        package = await state.get_package_by_branch_url(
+        package = await debian_state.get_package_by_branch_url(
             conn, target_branch_url)
         if package is not None:
             maintainer_email = package.maintainer_email
@@ -1079,7 +1089,7 @@ async def check_existing_mp(
         else:
             if revision is not None:
                 package_name, maintainer_email = (
-                        await state.guess_package_from_revision(
+                        await debian_state.guess_package_from_revision(
                             conn, revision))
             if package_name is None:
                 warning('No package known for %s (%s)',
@@ -1247,6 +1257,33 @@ has changed to %s.
                 return False
         return False
 
+    if mp_run.branch_url != last_run.branch_url:
+        warning('%s: Remote branch URL appears to have have changed: '
+                '%s => %s, skipping.', mp.url, mp_run.branch_url,
+                last_run.branch_url)
+        return False
+
+        # TODO(jelmer): Don't do this if there's a redirect in place,
+        # or if one of the branches has a branch name included and the other
+        # doesn't
+        if not dry_run:
+            await update_proposal_status(
+                mp, 'abandoned', revision, package_name)
+            try:
+                mp.post_comment("""
+This merge proposal will be closed, since the branch has moved to %s.
+""" % (bzr_to_browse_url(last_run.branch_url), ))
+            except PermissionDenied as e:
+                warning('Permission denied posting comment to %s: %s',
+                        mp.url, e)
+            try:
+                mp.close()
+            except PermissionDenied as e:
+                warning('Permission denied closing merge request %s: %s',
+                        mp.url, e)
+                return False
+        return False
+
     if last_run != mp_run:
         publish_id = str(uuid.uuid4())
         note('%s (%s) needs to be updated (%s => %s).',
@@ -1256,14 +1293,17 @@ has changed to %s.
                 '%s (%s): old run (%s/%s) has same revision as new run (%s/%s)'
                 ': %r', mp.url, mp_run.package, mp_run.id, mp_role,
                 last_run.id, mp_role, mp_revision)
+        if source_branch_name is None:
+            source_branch_name = await derived_branch_name(
+                conn, last_run, mp_role)
         try:
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite, last_run.package, last_run.command,
-                last_run.result, last_run.branch_url, MODE_PROPOSE,
-                mp_role, last_run_revision, last_run.id,
-                await derived_branch_name(conn, last_run, mp_role),
-                maintainer_email,
-                vcs_manager=vcs_manager,
+                last_run.result,
+                role_branch_url(mp_run.branch_url, mp_remote_branch_name),
+                MODE_PROPOSE, mp_role, last_run_revision, last_run.id,
+                source_branch_name,
+                maintainer_email, vcs_manager=vcs_manager,
                 legacy_local_branch_name=last_run.branch_name,
                 dry_run=dry_run, external_url=external_url,
                 differ_url=differ_url, require_binary_diff=False,

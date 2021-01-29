@@ -1334,21 +1334,6 @@ async def package_exists(conn, package):
         "SELECT 1 FROM package WHERE name = $1", package))
 
 
-async def guess_package_from_revision(
-        conn: asyncpg.Connection, revision: bytes
-        ) -> Tuple[Optional[str], Optional[str]]:
-    query = """\
-select distinct package, maintainer_email from run
-left join new_result_branch rb ON rb.run_id = run.id
-left join package on package.name = run.package
-where rb.revision = $1 and run.package is not null
-"""
-    rows = await conn.fetch(query, revision.decode('utf-8'))
-    if len(rows) == 1:
-        return rows[0][0], rows[0][1]
-    return None, None
-
-
 async def get_publish_history(
         conn: asyncpg.Connection, revision: bytes) -> Tuple[
                 str, Optional[str], str, str, str, datetime.datetime]:
