@@ -596,7 +596,7 @@ if __name__ == '__main__':
         from .pkg import generate_pkg_file
         package_name = request.match_info['pkg']
         async with request.app.database.acquire() as conn:
-            package = await state.get_package(conn, package_name)
+            package = await debian_state.get_package(conn, package_name)
             if package is None:
                 raise web.HTTPNotFound(
                     text='No package with name %s' % package_name)

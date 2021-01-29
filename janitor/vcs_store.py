@@ -17,23 +17,11 @@
 
 """Manage VCS repositories."""
 
+import asyncio
 from io import BytesIO
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
-import asyncio
-from . import (
-    state,
-    )
 
-from .config import read_config
-from .prometheus import setup_metrics
-from .trace import note, warning
-from .vcs import (
-    VcsManager,
-    LocalVcsManager,
-    get_run_diff,
-    bzr_to_browse_url,
-    )
 from breezy.controldir import ControlDir, format_registry
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
@@ -41,6 +29,18 @@ from dulwich.protocol import ReceivableProtocol
 from dulwich.server import (
     DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
     DictBackend,
+    )
+from . import (
+    state,
+    )
+
+from .config import read_config
+from .prometheus import setup_metrics
+from .trace import note
+from .vcs import (
+    VcsManager,
+    LocalVcsManager,
+    get_run_diff,
     )
 
 
@@ -326,7 +326,7 @@ async def get_vcs_type(request):
 
 
 def run_web_server(listen_addr: str, port: int,
-                         vcs_manager: VcsManager, db: state.Database):
+                   vcs_manager: VcsManager, db: state.Database):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.vcs_manager = vcs_manager
@@ -378,7 +378,6 @@ def main(argv=None):
 
     state.DEFAULT_URL = config.database_location
 
-    loop = asyncio.get_event_loop()
     vcs_manager = LocalVcsManager(config.vcs_location)
     db = state.Database(config.database_location)
     run_web_server(
