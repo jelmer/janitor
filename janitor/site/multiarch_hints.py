@@ -2,7 +2,7 @@
 
 import asyncpg
 from . import state
-from .debian import state as debian_state
+from ..debian import state as debian_state
 from .common import generate_pkg_context
 
 
