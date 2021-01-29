@@ -1033,8 +1033,8 @@ class QueueProcessor(object):
         self.public_vcs_manager = public_vcs_manager
         self.concurrency = concurrency
         self.use_cached_only = use_cached_only
-        self.topic_queue = Topic(repeat_last=True)
-        self.topic_result = Topic()
+        self.topic_queue = Topic('queue', repeat_last=True)
+        self.topic_result = Topic('result')
         self.overall_timeout = overall_timeout
         self.committer = committer
         self.active_runs: Dict[str, ActiveRun] = {}

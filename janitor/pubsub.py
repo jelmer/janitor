@@ -46,18 +46,19 @@ class Subscription(object):
 
     def __enter__(self):
         self.topic.subscriptions.add(self.queue)
-        subscription_count.labels(self.topic).inc()
+        subscription_count.labels(self.topic.name).inc()
         return self.queue
 
     def __exit__(self, type, value, traceback):
-        subscription_count.labels(self.topic).dec()
+        subscription_count.labels(self.topic.name).dec()
         self.topic.subscriptions.remove(self.queue)
 
 
 class Topic(object):
     """A pubsub topic."""
 
-    def __init__(self, repeat_last: bool = False):
+    def __init__(self, name, repeat_last: bool = False):
+        self.name = name
         self.subscriptions: Set[asyncio.Queue] = set()
         self.last = None
         self.repeat_last = repeat_last

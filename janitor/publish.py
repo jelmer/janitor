@@ -1553,8 +1553,8 @@ def main(argv=None):
         sys.stderr.write('--no-auto-publish and --once are mutually exclude.')
         sys.exit(1)
 
-    topic_merge_proposal = Topic()
-    topic_publish = Topic()
+    topic_merge_proposal = Topic('merge-proposal')
+    topic_publish = Topic('publish')
     loop = asyncio.get_event_loop()
     vcs_manager = LocalVcsManager(config.vcs_location)
     db = state.Database(config.database_location)
