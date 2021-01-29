@@ -1287,7 +1287,7 @@ order by url, last_run.finish_time desc
         return web.HTTPMethodNotAllowed(text='Not a supported webhook')
 
     app.http_client_session = ClientSession()
-    app.topic_notifications = Topic()
+    app.topic_notifications = Topic('notifications')
     app.runner_url = args.runner_url
     app.archiver_url = args.archiver_url
     app.differ_url = args.differ_url
