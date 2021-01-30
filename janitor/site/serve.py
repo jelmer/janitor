@@ -19,6 +19,11 @@
 
 import asyncio
 from datetime import datetime
+import gpg
+import re
+import shutil
+import tempfile
+import time
 import uuid
 from aiohttp.web_urldispatcher import (
     PrefixResource,
@@ -29,11 +34,6 @@ from aiohttp.web_urldispatcher import (
 from aiohttp import ClientTimeout
 from aiohttp.web import middleware
 from ..config import get_suite_config
-import gpg
-import re
-import shutil
-import tempfile
-import time
 
 from ..trace import note, warning
 from . import (
@@ -1021,14 +1021,19 @@ order by url, last_run.finish_time desc
 
         app.runner_status = None
 
-        async def listen_to_runner(app):
+        async def listen_to_queue(app):
             url = urllib.parse.urljoin(app.runner_url, 'ws/queue')
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.runner_status = msg
                 app.topic_notifications.publish(['queue', msg])
 
+        async def listen_to_result(app):
+            url = urllib.parse.urljoin(app.runner_url, 'ws/result')
+            async for msg in pubsub_reader(app.http_client_session, url):
+                app.topic_notifications.publish(['result', msg])
+
         for cb in [listen_to_publisher_publish, listen_to_publisher_mp,
-                   listen_to_runner]:
+                   listen_to_queue, listen_to_result]:
             listener = app.loop.create_task(cb(app))
 
             async def stop_listener(app):
