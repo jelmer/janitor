@@ -25,12 +25,14 @@ from typing import List, Tuple, Iterator, BinaryIO, Optional, Dict, Union
 import textwrap
 import yaml
 
+import logging
+
 __all__ = [
     'SbuildFailure',
     'parse_sbuild_log',
 ]
 
-from janitor.trace import warning
+logger = logging.getLogger(__name__)
 
 
 class SbuildFailure(Exception):
@@ -2894,7 +2896,7 @@ def find_build_failure_description(
                     r'.*requested version "(.*)"\.',
                     lines[lineno+1].rstrip('\n'))
                 if not m:
-                    warning(
+                    logger.warn(
                         'expected version string in line %r', lines[lineno+1])
                     continue
                 version = m.group(1)
@@ -2945,7 +2947,7 @@ class AutopkgtestDepsUnsatisfiable(Problem):
                 arg = entry
             args.append((kind, arg))
             if kind not in ('deb', 'arg', 'dsc', None):
-                warning('unknown entry %s on badpkg line', entry)
+                logger.warn('unknown entry %s on badpkg line', entry)
         return cls(args)
 
     def __eq__(self, other):
@@ -3194,7 +3196,7 @@ def find_autopkgtest_failure_description(
                 else:
                     current_field = (content[1], content[2])
                 if current_field in test_output:
-                    warning(
+                    logger.warn(
                         'duplicate output fields for %r', current_field)
                 test_output[current_field] = []
                 test_output_offset[current_field] = i + 1
@@ -3705,67 +3707,3 @@ def find_apt_get_update_failure(paragraphs):
     offset, line, error = find_apt_get_failure(lines)
     return focus_section, offset, line, error
 
-
-def main(argv=None):
-    import argparse
-    parser = argparse.ArgumentParser('janitor.sbuild_log')
-    parser.add_argument('path', type=str)
-    args = parser.parse_args()
-
-    with open(args.path, 'rb') as f:
-        print(worker_failure_from_sbuild_log(f))
-
-    # TODO(jelmer): Return more data from worker_failure_from_sbuild_log and
-    # then use that here.
-    section_offsets = {}
-    section_lines = {}
-    with open(args.path, 'rb') as f:
-        for title, offsets, lines in parse_sbuild_log(f):
-            print('Section %s (lines %d-%d)' % (
-                title, offsets[0], offsets[1]))
-            if title is not None:
-                title = title.lower()
-            section_offsets[title] = offsets
-            section_lines[title] = lines
-
-    failed_stage = find_failed_stage(section_lines.get('summary', []))
-    focus_section = SBUILD_FOCUS_SECTION.get(failed_stage)
-    if failed_stage == 'run-post-build-commands':
-        # We used to run autopkgtest as the only post build
-        # command.
-        failed_stage = 'autopkgtest'
-    if failed_stage:
-        print('Failed stage: %s (focus section: %s)' % (
-            failed_stage, focus_section))
-    if failed_stage in ('build', 'autopkgtest'):
-        lines = section_lines.get(focus_section, [])
-        lines = strip_useless_build_tail(lines)
-        offset, line, error = find_build_failure_description(lines)
-        if offset:
-            print('Failed line: %d:' %
-                  (section_offsets[focus_section][0] + offset))
-            print(line)
-        if error:
-            print('Error: %s' % error)
-    if failed_stage == 'apt-get-update':
-        focus_section, offset, line, error = find_apt_get_update_failure(
-            section_lines)
-        if offset:
-            print('Failed line: %d:' %
-                  (section_offsets[focus_section][0] + offset))
-            print(line)
-        if error:
-            print('Error: %s' % error)
-    if failed_stage == 'install-deps':
-        (focus_section, offset, line,
-         error) = find_install_deps_failure_description(section_lines)
-        if offset:
-            print('Failed line: %d:' %
-                  (section_offsets[focus_section][0] + offset))
-        if line:
-            print(line)
-        print(error)
-
-
-if __name__ == '__main__':
-    sys.exit(main(sys.argv))
