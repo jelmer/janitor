@@ -37,7 +37,6 @@ from ..config import get_suite_config
 
 from ..trace import note, warning
 from . import (
-    is_worker,
     html_template,
     render_template_for_request,
     )
@@ -115,8 +114,6 @@ class ForwardedResource(PrefixResource):
         service = request.query.get('service')
         if service:
             params['service'] = service
-        if await is_worker(request.app.database, request):
-            params['allow_writes'] = '1'
         note('Forwarding: method: %s, url: %s, params: %r, headers: %r',
              request.method, url, params, headers)
         async with request.app.http_client_session.request(

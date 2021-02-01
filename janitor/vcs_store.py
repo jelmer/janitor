@@ -36,6 +36,7 @@ from . import (
 
 from .config import read_config
 from .prometheus import setup_metrics
+from .site import is_worker
 from .trace import note
 from .vcs import (
     VcsManager,
@@ -194,7 +195,7 @@ async def handle_set_bzr_remote(request):
 async def dulwich_refs(request):
     package = request.match_info['package']
 
-    allow_writes = request.query.get('allow_writes')
+    allow_writes = await is_worker(request.app.db, request)
 
     repo = await _git_open_repo(
         request.app.vcs_manager, request.app.db, package)
@@ -239,7 +240,7 @@ async def dulwich_service(request):
     package = request.match_info['package']
     service = request.match_info['service']
 
-    allow_writes = bool(request.query.get('allow_writes'))
+    allow_writes = await is_worker(request.app.db, request)
 
     repo = await _git_open_repo(
         request.app.vcs_manager, request.app.db, package)
@@ -284,7 +285,7 @@ async def bzr_backend(request):
     package = request.match_info['package']
     branch = request.match_info.get('branch')
     repo = vcs_manager.get_repository(package, 'bzr')
-    if request.query.get('allow_writes'):
+    if await is_worker(request.app.db, request):
         if repo is None:
             controldir = ControlDir.create(
                 vcs_manager.get_repository_url(package, 'bzr'))
