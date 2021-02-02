@@ -21,6 +21,8 @@
 {% else %}: Merge new upstream release <b>{{ run.result['upstream_version'] }}</b> {% endif %}
 {% elif run.command.startswith('apply-multiarch-hints') %}
 Apply multi-arch hints: {{ multiarch_hints_summary(run.result['applied-hints']) }}
+{% elif run.command.startswith('scrub-obsolete') %}
+Scrub obsolete dependencies and constraints.
 {% elif run.command.startswith('orphan') %}
 Move orphaned package to QA team.
 {% else %}: Unknown command {{ run.command }}
