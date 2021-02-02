@@ -1075,8 +1075,11 @@ async def check_existing_mp(
     else:
         source_branch_name = None
     if source_branch_name is None and source_branch_url is not None:
-        source_branch_name = urlutils.split_segment_parameters(
-            source_branch_url)[1].get('branch')
+        segment_params = urlutils.split_segment_parameters(
+            source_branch_url)[1]
+        source_branch_name = segment_params.get('branch')
+        if source_branch_name is not None:
+            source_branch_name = urlutils.unescape(source_branch_name)
     if revision is None:
         revision = old_revision
     if maintainer_email is None:
