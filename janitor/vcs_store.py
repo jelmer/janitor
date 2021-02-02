@@ -79,7 +79,10 @@ def _git_check_service(service: str, allow_writes: bool = False):
 
     if service == 'git-receive-pack':
         if not allow_writes:
-            raise web.HTTPUnauthorized(text='git-receive-pack requires login')
+            raise web.HTTPUnauthorized(
+                    text='git-receive-pack requires login',
+                    headers={
+                        'WWW-Authenticate': 'Basic Realm="Debian Janitor"'})
         return
 
     raise web.HTTPForbidden(text='Unsupported service %s' % service)

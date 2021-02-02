@@ -240,10 +240,17 @@ async def is_worker(db, request: web.Request) -> Optional[str]:
 async def check_worker_creds(db, request: web.Request) -> Optional[str]:
     auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
     if not auth_header:
-        raise web.HTTPUnauthorized(body='worker login required')
+        raise web.HTTPUnauthorized(
+            text='worker login required',
+            headers={
+                'WWW-Authenticate': 'Basic Realm="Debian Janitor"'})
     login = await is_worker(db, request)
     if not login:
-        raise web.HTTPUnauthorized(body='worker login required')
+        raise web.HTTPUnauthorized(
+            text='worker login required',
+            headers={
+                'WWW-Authenticate': 'Basic Realm="Debian Janitor"'})
+
     return login
 
 
