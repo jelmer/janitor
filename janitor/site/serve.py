@@ -586,6 +586,8 @@ if __name__ == '__main__':
             email = request.user.get('email')
         else:
             email = request.query.get('email')
+        if '/' in email:
+            raise web.HTTPBadRequest(text='invalid maintainer email')
         if email:
             raise web.HTTPFound(
                 request.app.router['maintainer-overview-short'].url_for(
