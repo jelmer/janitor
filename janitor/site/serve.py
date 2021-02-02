@@ -552,6 +552,11 @@ if __name__ == '__main__':
         # the right URL, not rely on query parameters here.
         pkg = request.query.get('package')
         if pkg:
+            async with request.app.database.acquire() as conn:
+                package = await debian_state.get_package(conn, pkg)
+                if package is None:
+                    raise web.HTTPNotFound(
+                        text='No package with name %s' % pkg)
             return web.HTTPFound(pkg)
         from .pkg import generate_pkg_list
         async with request.app.database.acquire() as conn:
