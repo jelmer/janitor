@@ -538,7 +538,8 @@ if __name__ == '__main__':
             'state', state, max_age=60, path=callback_path, httponly=True,
             secure=True)
         if 'url' in request.query:
-            response.set_cookie('back_url', request.query['url'])
+            response.set_cookie(
+                'back_url', str(URL(request.query['url']).relative()))
         return response
 
     async def handle_static_file(path, request):
