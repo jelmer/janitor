@@ -17,6 +17,15 @@ cd {{ package }}
 </pre>
 </div>
 </div>
+{% elif command.startswith('deb-scrub-obsolete') %}
+<p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>
+debcheckout {{ package }}
+cd {{ package }}
+{{ command }}
+</pre>
+</div>
+</div>
 {% else %}
 <p>Try this locally (using <a href="https://packages.debian.org/silver-platter">silver-platter</a>):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
@@ -29,7 +38,7 @@ cd {{ package }}
 <p>Merge these changes:</p>
 <div class="highlight-default notranslate"><div class="highlight">
 {% for role, remote_name, base_revision, revision in result_branches %}
-<pre>git pull {{ vcs_manager.get_repository_url(package, 'git') }} {{ suite }}/{{ role }}</pre>
+<pre>git pull <a href="{{ vcs_manager.get_repository_url(package, 'git') }}">{{ vcs_manager.get_repository_url(package, 'git') }}</a> {{ suite }}/{{ role }}</pre>
 {% endfor %}
 </div></div>
 {% elif vcs == 'bzr' %}
