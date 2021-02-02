@@ -47,6 +47,7 @@ from silver_platter.utils import (
     full_branch_url,
     BranchMissing,
     BranchUnavailable,
+    BranchRateLimited,
     BranchUnsupported,
     )
 
@@ -79,14 +80,18 @@ def is_alioth_url(url: str) -> bool:
 
 def _convert_branch_exception(
         vcs_url: str, e: Exception) -> Exception:
-    if isinstance(e, BranchUnavailable):
+    if isinstance(e, BranchRateLimited):
+        code = 'too-many-requests'
+    elif isinstance(e, BranchUnavailable):
         if 'http code 429: Too Many Requests' in str(e):
             code = 'too-many-requests'
         elif is_alioth_url(vcs_url):
             code = 'hosted-on-alioth'
-        elif 'Unable to handle http code 401: Unauthorized' in str(e):
+        elif ('Unable to handle http code 401: Unauthorized' in str(e) or
+              'Unexpected HTTP status 401 for ' in str(e)):
             code = '401-unauthorized'
-        elif 'Unable to handle http code 502: Bad Gateway' in str(e):
+        elif ('Unable to handle http code 502: Bad Gateway' in str(e) or
+              'Unexpected HTTP status 502 for ' in str(e)):
             code = '502-bad-gateway'
         elif str(e).startswith('Subversion branches are not yet'):
             code = 'unsupported-vcs-svn'
