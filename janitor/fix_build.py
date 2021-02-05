@@ -34,12 +34,6 @@ from debian.deb822 import (
 
 from breezy.commit import PointlessCommit
 from breezy.tree import Tree
-from lintian_brush import (
-    reset_tree,
-    )
-from lintian_brush.changelog import (
-    add_changelog_entry,
-    )
 from debmutate.control import (
     ensure_some_version,
     ensure_minimum_version,
@@ -56,6 +50,13 @@ from debmutate.reformatting import (
     FormattingUnpreservable,
     GeneratedFile,
     )
+from lintian_brush import (
+    reset_tree,
+    )
+from lintian_brush.changelog import (
+    add_changelog_entry,
+    )
+
 from lintian_brush.rules import (
     dh_invoke_add_with,
     update_rules,
@@ -175,7 +176,7 @@ def add_build_dependency(tree, package, minimum_version=None,
     except FormattingUnpreservable as e:
         logging.info(
             'Unable to edit %s in a way that preserves formatting.',
-             e.path)
+            e.path)
         return False
 
     if minimum_version:
@@ -222,7 +223,7 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
     except FormattingUnpreservable as e:
         logging.info(
             'Unable to edit %s in a way that preserves formatting.',
-             e.path)
+            e.path)
         return False
     if not updater.changed:
         return False
