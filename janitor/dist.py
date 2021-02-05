@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import errno
+import logging
 import os
 import re
 import shutil
@@ -32,7 +33,7 @@ from breezy.workingtree import WorkingTree
 
 from breezy.plugins.debian.repack_tarball import get_filetype
 
-from janitor.fix_build import (
+from .fix_build import (
     DependencyContext,
     resolve_error,
     APT_FIXERS,
@@ -45,7 +46,6 @@ from buildlog_consultant.sbuild import (
     MissingCommand,
     NoSpaceOnDevice,
     )
-from janitor.trace import note, warning
 from ognibuild import shebang_binary
 from ognibuild.session import Session
 from ognibuild.session.schroot import SchrootSession
@@ -164,7 +164,7 @@ GENERIC_INSTALL_FIXERS: List[
 
 
 def run_with_build_fixer(session: Session, args: List[str]):
-    note('Running %r', args)
+    logging.info('Running %r', args)
     fixed_errors = []
     while True:
         retcode, lines = run_with_tee(session, args)
@@ -172,22 +172,24 @@ def run_with_build_fixer(session: Session, args: List[str]):
             return
         offset, line, error = find_build_failure_description(lines)
         if error is None:
-            warning('Build failed with unidentified error. Giving up.')
+            logging.warning('Build failed with unidentified error. Giving up.')
             if line is not None:
                 raise UnidentifiedError(
                     retcode, args, lines, secondary=(offset, line))
             raise UnidentifiedError(retcode, args, lines)
 
-        note('Identified error: %r', error)
+        logging.info('Identified error: %r', error)
         if error in fixed_errors:
-            warning('Failed to resolve error %r, it persisted. Giving up.',
-                    error)
+            logging.warning(
+                'Failed to resolve error %r, it persisted. Giving up.',
+                error)
             raise DetailedDistCommandFailed(retcode, args, error)
         if not resolve_error(
                 error, SchrootDependencyContext(session),
                 fixers=(APT_FIXERS + GENERIC_INSTALL_FIXERS)):
-            warning('Failed to find resolution for error %r. Giving up.',
-                    error)
+            logging.warning(
+                'Failed to find resolution for error %r. Giving up.',
+                error)
             raise DetailedDistCommandFailed(retcode, args, error)
         fixed_errors.append(error)
 
@@ -205,7 +207,7 @@ def run_dist_in_chroot(session):
 
     if os.path.exists('package.xml'):
         apt_install(session, ['php-pear', 'php-horde-core'])
-        note('Found package.xml, assuming pear package.')
+        logging.info('Found package.xml, assuming pear package.')
         session.check_call(['pear', 'package'])
         return
 
@@ -214,15 +216,16 @@ def run_dist_in_chroot(session):
         with open('pyproject.toml', 'r') as pf:
             pyproject = toml.load(pf)
         if 'poetry' in pyproject.get('tool', []):
-            note('Found pyproject.toml with poetry section, '
-                 'assuming poetry project.')
+            logging.info(
+                'Found pyproject.toml with poetry section, '
+                'assuming poetry project.')
             apt_install(session, ['python3-venv', 'python3-pip'])
             session.check_call(['pip3', 'install', 'poetry'], user='root')
             session.check_call(['poetry', 'build', '-f', 'sdist'])
             return
 
     if os.path.exists('setup.py'):
-        note('Found setup.py, assuming python project.')
+        logging.info('Found setup.py, assuming python project.')
         apt_install(session, ['python3', 'python3-pip'])
         with open('setup.py', 'r') as f:
             setup_py_contents = f.read()
@@ -232,11 +235,11 @@ def run_dist_in_chroot(session):
         except FileNotFoundError:
             setup_cfg_contents = ''
         if 'setuptools' in setup_py_contents:
-            note('Reference to setuptools found, installing.')
+            logging.info('Reference to setuptools found, installing.')
             apt_install(session, ['python3-setuptools'])
         if ('setuptools_scm' in setup_py_contents or
                 'setuptools_scm' in setup_cfg_contents):
-            note('Reference to setuptools-scm found, installing.')
+            logging.info('Reference to setuptools-scm found, installing.')
             apt_install(
                 session, ['python3-setuptools-scm', 'git', 'mercurial'])
 
@@ -261,7 +264,7 @@ def run_dist_in_chroot(session):
         return
 
     if os.path.exists('setup.cfg'):
-        note('Found setup.cfg, assuming python project.')
+        logging.info('Found setup.cfg, assuming python project.')
         apt_install(session, ['python3-pep517', 'python3-pip'])
         session.check_call(['python3', '-m', 'pep517.build', '-s', '.'])
         return
@@ -278,8 +281,9 @@ def run_dist_in_chroot(session):
                     continue
                 if (key.strip() == b'class' and
                         value.strip().startswith(b"'Dist::Inkt")):
-                    note('Found Dist::Inkt section in dist.ini, '
-                         'assuming distinkt.')
+                    logging.info(
+                        'Found Dist::Inkt section in dist.ini, '
+                        'assuming distinkt.')
                     # TODO(jelmer): install via apt if possible
                     session.check_call(
                         ['cpan', 'install', value.decode().strip("'")],
@@ -287,7 +291,7 @@ def run_dist_in_chroot(session):
                     run_with_build_fixer(session, ['distinkt-dist'])
                     return
         # Default to invoking Dist::Zilla
-        note('Found dist.ini, assuming dist-zilla.')
+        logging.info('Found dist.ini, assuming dist-zilla.')
         apt_install(session, ['libdist-zilla-perl'])
         run_with_build_fixer(session, ['dzil', 'build', '--in', '..'])
         return
@@ -301,7 +305,7 @@ def run_dist_in_chroot(session):
     if gemfiles:
         apt_install(session, ['gem2deb'])
         if len(gemfiles) > 1:
-            warning('More than one gemfile. Trying the first?')
+            logging.warning('More than one gemfile. Trying the first?')
         run_with_build_fixer(session, ['gem2tgz', gemfiles[0]])
         return
 
@@ -442,7 +446,7 @@ def create_dist_schroot(
             session.chdir(os.path.join(reldir, subdir))
             run_dist_in_chroot(session)
         except NoBuildToolsFound:
-            note('No build tools found, falling back to simple export.')
+            logging.info('No build tools found, falling back to simple export.')
             return None
         finally:
             os.chdir(oldcwd)
@@ -452,7 +456,7 @@ def create_dist_schroot(
         diff = set([n for n in diff_files if get_filetype(n) is not None])
         if len(diff) == 1:
             fn = diff.pop()
-            note('Found tarball %s in package directory.', fn)
+            logging.info('Found tarball %s in package directory.', fn)
             shutil.copy(
                 os.path.join(export_directory, fn),
                 target_dir)
@@ -460,21 +464,22 @@ def create_dist_schroot(
         if 'dist' in diff_files:
             for entry in os.scandir(os.path.join(export_directory, 'dist')):
                 if get_filetype(entry.name) is not None:
-                    note('Found tarball %s in dist directory.', entry.name)
+                    logging.info(
+                        'Found tarball %s in dist directory.', entry.name)
                     shutil.copy(entry.path, target_dir)
                     return entry.name
-            note('No tarballs found in dist directory.')
+            logging.info('No tarballs found in dist directory.')
 
         diff = set(os.listdir(directory)) - set([subdir])
         if len(diff) == 1:
             fn = diff.pop()
-            note('Found tarball %s in parent directory.', fn)
+            logging.info('Found tarball %s in parent directory.', fn)
             shutil.copy(
                 os.path.join(directory, fn),
                 target_dir)
             return fn
 
-        note('No tarball created :(')
+        logging.info('No tarball created :(')
         return None
 
 
