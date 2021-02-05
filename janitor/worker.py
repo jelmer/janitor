@@ -58,14 +58,14 @@ from silver_platter.utils import (
     BranchUnavailable,
 )
 
-from .fix_build import build_incrementally
-from .build import (
+from ognibuild.debian.fix_build import build_incrementally
+from ognibuild.debian.build import (
     build_once,
     MissingChangesFile,
     SbuildFailure,
 )
 from .debian import tree_set_changelog_version
-from .dist import (
+from ognibuild.dist import (
     create_dist_schroot,
     DetailedDistCommandFailed,
     UnidentifiedError,
