@@ -19,6 +19,7 @@ __all__ = [
     'build_incrementally',
 ]
 
+import logging
 import os
 import re
 import subprocess
@@ -65,7 +66,6 @@ from silver_platter.debian import (
     )
 
 from .build import attempt_build, get_build_architecture
-from .trace import note, warning
 from buildlog_consultant.sbuild import (
     Problem,
     MissingConfigStatusInput,
@@ -173,7 +173,8 @@ def add_build_dependency(tree, package, minimum_version=None,
                 updater.source["Build-Depends"] = ensure_some_version(
                     updater.source.get("Build-Depends", ""), package)
     except FormattingUnpreservable as e:
-        note('Unable to edit %s in a way that preserves formatting.',
+        logging.info(
+            'Unable to edit %s in a way that preserves formatting.',
              e.path)
         return False
 
@@ -183,10 +184,10 @@ def add_build_dependency(tree, package, minimum_version=None,
         desc = package
 
     if not updater.changed:
-        note('Giving up; dependency %s was already present.', desc)
+        logging.info('Giving up; dependency %s was already present.', desc)
         return False
 
-    note("Adding build dependency: %s", desc)
+    logging.info("Adding build dependency: %s", desc)
     return commit_debian_changes(
         tree, subpath, "Add missing build dependency on %s." % desc,
         committer=committer, update_changelog=update_changelog)
@@ -219,7 +220,8 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
                     control["Depends"] = ensure_some_version(
                         control.get("Depends", ""), package)
     except FormattingUnpreservable as e:
-        note('Unable to edit %s in a way that preserves formatting.',
+        logging.info(
+            'Unable to edit %s in a way that preserves formatting.',
              e.path)
         return False
     if not updater.changed:
@@ -230,7 +232,7 @@ def add_test_dependency(tree, testname, package, minimum_version=None,
     else:
         desc = package
 
-    note("Adding dependency to test %s: %s", testname, desc)
+    logging.info("Adding dependency to test %s: %s", testname, desc)
     return commit_debian_changes(
         tree, subpath,
         "Add missing dependency for test %s on %s." % (testname, desc),
@@ -308,7 +310,7 @@ class AptContentsFileSearcher(FileSearcher):
         for source in sources:
             parts = source.split(' ')
             if parts[0] != 'deb':
-                warning('Invalid line in sources: %r', source)
+                logging.warning('Invalid line in sources: %r', source)
                 continue
             base_url = parts[1]
             name = parts[2]
@@ -318,7 +320,7 @@ class AptContentsFileSearcher(FileSearcher):
             desired_files = set()
             for component in components:
                 for arch in arches:
-                    desired_files.append('%s/Contents-%s' % (component, arch))
+                    desired_files.add('%s/Contents-%s' % (component, arch))
             for entry in r['MD5Sum']:
                 if entry['name'] in desired_files:
                     urls.append('%s/%s/%s' % (base_url, name, entry['name']))
@@ -392,11 +394,12 @@ def get_package_for_paths(paths, regex=False):
         if candidates:
             break
     if len(candidates) == 0:
-        warning('No packages found that contain %r', paths)
+        logging.warning('No packages found that contain %r', paths)
         return None
     if len(candidates) > 1:
-        warning('More than 1 packages found that contain %r: %r',
-                path, candidates)
+        logging.warning(
+            'More than 1 packages found that contain %r: %r',
+            path, candidates)
         # Euhr. Pick the one with the shortest name?
         return sorted(candidates, key=len)[0]
     else:
@@ -527,17 +530,18 @@ def fix_missing_python_distribution(error, context):
     if error.python_version == 2:
         if 'pypy' in targeted:
             if not pypy_pkg:
-                warning('no pypy package found for %s', error.module)
+                logging.warning('no pypy package found for %s', error.module)
             else:
                 extra_build_deps.append(pypy_pkg)
         if 'cpython2' in targeted or default:
             if not py2_pkg:
-                warning('no python 2 package found for %s', error.module)
+                logging.warning(
+                    'no python 2 package found for %s', error.module)
                 return False
             extra_build_deps.append(py2_pkg)
     elif error.python_version == 3:
         if not py3_pkg:
-            warning('no python 3 package found for %s', error.module)
+            logging.warning('no python 3 package found for %s', error.module)
             return False
         extra_build_deps.append(py3_pkg)
     else:
@@ -574,17 +578,19 @@ def fix_missing_python_module(error, context):
     if error.python_version == 2:
         if 'pypy' in targeted:
             if not pypy_pkg:
-                warning('no pypy package found for %s', error.module)
+                logging.warning('no pypy package found for %s', error.module)
             else:
                 extra_build_deps.append(pypy_pkg)
         if 'cpython2' in targeted or default:
             if not py2_pkg:
-                warning('no python 2 package found for %s', error.module)
+                logging.warning(
+                    'no python 2 package found for %s', error.module)
                 return False
             extra_build_deps.append(py2_pkg)
     elif error.python_version == 3:
         if not py3_pkg:
-            warning('no python 3 package found for %s', error.module)
+            logging.warning(
+                'no python 3 package found for %s', error.module)
             return False
         extra_build_deps.append(py3_pkg)
     else:
@@ -648,7 +654,7 @@ def fix_missing_command(error, context):
             for dirname in ['/usr/bin', '/bin']]
     package = get_package_for_paths(paths)
     if package is None:
-        note('No packages found that contain %r', paths)
+        logging.info('No packages found that contain %r', paths)
         return False
     return context.add_dependency(package)
 
@@ -664,7 +670,7 @@ def fix_missing_sprockets_file(error, context):
     if error.content_type == 'application/javascript':
         path = '/usr/share/.*/app/assets/javascripts/%s.js$' % error.name
     else:
-        warning('unable to handle content type %s', error.content_type)
+        logging.warning('unable to handle content type %s', error.content_type)
         return False
     package = get_package_for_paths([path], regex=True)
     if package is None:
@@ -697,11 +703,13 @@ def fix_missing_perl_file(error, context):
     package = get_package_for_paths(paths, regex=False)
     if package is None:
         if getattr(error, 'module', None):
-            warning('no perl package found for %s (%r).',
-                    error.module, error.filename)
+            logging.warning(
+                'no perl package found for %s (%r).',
+                error.module, error.filename)
         else:
-            warning('perl file %s not found (paths searched for: %r).',
-                    error.filename, paths)
+            logging.warning(
+                'perl file %s not found (paths searched for: %r).',
+                error.filename, paths)
         return False
     return context.add_dependency(package)
 
@@ -717,8 +725,9 @@ def get_package_for_node_package(node_package):
 def fix_missing_node_module(error, context):
     package = get_package_for_node_package(error.module)
     if package is None:
-        warning('no node package found for %s.',
-                error.module)
+        logging.warning(
+            'no node package found for %s.',
+            error.module)
         return False
     return context.add_dependency(package)
 
@@ -727,7 +736,7 @@ def fix_missing_dh_addon(error, context):
     paths = [os.path.join('/usr/share/perl5', error.path)]
     package = get_package_for_paths(paths)
     if package is None:
-        warning('no package for debhelper addon %s', error.name)
+        logging.warning('no package for debhelper addon %s', error.name)
         return False
     return context.add_dependency(package)
 
@@ -740,7 +749,7 @@ def fix_missing_php_class(error, context):
     path = '/usr/share/php/%s.php' % error.php_class.replace('\\', '/')
     package = get_package_for_paths([path])
     if package is None:
-        warning('no package for PHP class %s', error.php_class)
+        logging.warning('no package for PHP class %s', error.php_class)
         return False
     return context.add_dependency(package)
 
@@ -749,8 +758,9 @@ def fix_missing_jdk_file(error, context):
     path = error.jdk_path + '.*/' + error.filename
     package = get_package_for_paths([path], regex=True)
     if package is None:
-        warning('no package found for %s (JDK: %s) - regex %s',
-                error.filename, error.jdk_path, path)
+        logging.warning(
+            'no package found for %s (JDK: %s) - regex %s',
+            error.filename, error.jdk_path, path)
         return False
     return context.add_dependency(package)
 
@@ -759,8 +769,9 @@ def fix_missing_vala_package(error, context):
     path = '/usr/share/vala-[0-9.]+/vapi/%s.vapi' % error.package
     package = get_package_for_paths([path], regex=True)
     if package is None:
-        warning('no file found for package %s - regex %s',
-                error.package, path)
+        logging.warning(
+            'no file found for package %s - regex %s',
+            error.package, path)
         return False
     return context.add_dependency(package)
 
@@ -792,7 +803,7 @@ def fix_missing_library(error, context):
              os.path.join('/usr/lib/.*/lib%s.a$' % error.library)]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
-        warning('no package for library %s', error.library)
+        logging.warning('no package for library %s', error.library)
         return False
     return context.add_dependency(package)
 
@@ -803,7 +814,7 @@ def fix_missing_ruby_gem(error, context):
         'specifications/%s-.*\\.gemspec' % error.gem)]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
-        warning('no package for gem %s', error.gem)
+        logging.warning('no package for gem %s', error.gem)
         return False
     return context.add_dependency(package, minimum_version=error.version)
 
@@ -821,7 +832,7 @@ def fix_missing_ruby_file(error, context):
     if package is not None:
         return context.add_dependency(package)
 
-    warning('no package for ruby file %s', error.filename)
+    logging.warning('no package for ruby file %s', error.filename)
     return False
 
 
@@ -829,7 +840,7 @@ def fix_missing_r_package(error, context):
     paths = [os.path.join('/usr/lib/R/site-library/.*/R/%s$' % error.package)]
     package = get_package_for_paths(paths, regex=True)
     if package is None:
-        warning('no package for R package %s', error.package)
+        logging.warning('no package for R package %s', error.package)
         return False
     return context.add_dependency(
         package, minimum_version=error.minimum_version)
@@ -843,12 +854,12 @@ def fix_missing_java_class(error, context):
     classpath = [
         p for p in output.decode().strip(":").strip().split(':') if p]
     if not classpath:
-        warning('unable to find classpath for %s', error.classname)
+        logging.warning('unable to find classpath for %s', error.classname)
         return False
-    note('Classpath for %s: %r', error.classname, classpath)
+    logging.info('Classpath for %s: %r', error.classname, classpath)
     package = get_package_for_paths(classpath)
     if package is None:
-        warning('no package for files in %r', classpath)
+        logging.warning('no package for files in %r', classpath)
         return False
     return context.add_dependency(package)
 
@@ -910,7 +921,7 @@ def fix_missing_maven_artifacts(error, context):
         artifact_id, version, '%s-%s.%s' % (artifact_id, version, kind))]
     package = get_package_for_paths(paths, regex=regex)
     if package is None:
-        warning('no package for artifact %s', artifact)
+        logging.warning('no package for artifact %s', artifact)
         return False
     return context.add_dependency(package)
 
@@ -925,7 +936,7 @@ def install_gnome_common_dep(error, context):
     else:
         package = None
     if package is None:
-        warning('No debian package for package %s', error.package)
+        logging.warning('No debian package for package %s', error.package)
         return False
     return context.add_dependency(
         package=package,
@@ -938,7 +949,7 @@ def install_xfce_dep(error, context):
     else:
         package = None
     if package is None:
-        warning('No debian package for package %s', error.package)
+        logging.warning('No debian package for package %s', error.package)
         return False
     return context.add_dependency(package=package)
 
@@ -985,7 +996,7 @@ def _find_aclocal_fun(macro):
 
 
 def run_pgbuildext_updatecontrol(error, context):
-    note("Running 'pg_buildext updatecontrol'")
+    logging.info("Running 'pg_buildext updatecontrol'")
     # TODO(jelmer): run in the schroot
     pg_buildext_updatecontrol(context.tree.abspath(context.subpath))
     return commit_debian_changes(
@@ -997,11 +1008,11 @@ def fix_missing_autoconf_macro(error, context):
     try:
         path = _find_aclocal_fun(error.macro)
     except KeyError:
-        note('No local m4 file found defining %s', error.macro)
+        logging.info('No local m4 file found defining %s', error.macro)
         return False
     package = get_package_for_paths([path])
     if package is None:
-        warning('no package for macro file %s', path)
+        logging.warning('no package for macro file %s', path)
         return False
     return context.add_dependency(package)
 
@@ -1014,7 +1025,7 @@ def fix_missing_haskell_dependencies(error, context):
     path = "/var/lib/ghc/package.conf.d/%s-.*.conf" % error.deps[0][0]
     package = get_package_for_paths([path], regex=True)
     if package is None:
-        warning('no package for macro file %s', path)
+        logging.warning('no package for macro file %s', path)
         return False
     return context.add_dependency(package)
 
@@ -1069,15 +1080,16 @@ def resolve_error(error, context, fixers):
         if isinstance(error, error_cls):
             relevant_fixers.append(fixer)
     if not relevant_fixers:
-        warning('No fixer found for %r', error)
+        logging.warning('No fixer found for %r', error)
         return False
     for fixer in relevant_fixers:
-        note('Attempting to use fixer %r to address %r',
-             fixer, error)
+        logging.info(
+            'Attempting to use fixer %r to address %r',
+            fixer, error)
         try:
             made_changes = fixer(error, context)
         except GeneratedFile:
-            warning('Control file is generated, unable to edit.')
+            logging.warning('Control file is generated, unable to edit.')
             return False
         if made_changes:
             return True
@@ -1098,17 +1110,20 @@ def build_incrementally(
                 source_date_epoch=source_date_epoch)
         except SbuildFailure as e:
             if e.error is None:
-                warning('Build failed with unidentified error. Giving up.')
+                logging.warning(
+                    'Build failed with unidentified error. Giving up.')
                 raise
             if e.context is None:
-                note('No relevant context, not making any changes.')
+                logging.info('No relevant context, not making any changes.')
                 raise
             if (e.error, e.context) in fixed_errors:
-                warning('Error was still not fixed on second try. Giving up.')
+                logging.warning(
+                    'Error was still not fixed on second try. Giving up.')
                 raise
             if max_iterations is not None \
                     and len(fixed_errors) > max_iterations:
-                warning('Last fix did not address the issue. Giving up.')
+                logging.warning(
+                    'Last fix did not address the issue. Giving up.')
                 raise
             reset_tree(local_tree, local_tree.basis_tree(), subpath=subpath)
             if e.context[0] == 'build':
@@ -1121,17 +1136,19 @@ def build_incrementally(
                     local_tree, subpath=subpath, committer=committer,
                     update_changelog=update_changelog)
             else:
-                warning('unable to install for context %r', e.context)
+                logging.warning('unable to install for context %r', e.context)
                 raise
             try:
                 if not resolve_error(
                         e.error, context,
                         VERSIONED_PACKAGE_FIXERS + APT_FIXERS):
-                    warning('Failed to resolve error %r. Giving up.', e.error)
+                    logging.warning(
+                        'Failed to resolve error %r. Giving up.', e.error)
                     raise
             except CircularDependency:
-                warning('Unable to fix %r; it would introduce a circular '
-                        'dependency.', e.error)
+                logging.warning(
+                    'Unable to fix %r; it would introduce a circular '
+                    'dependency.', e.error)
                 raise e
             fixed_errors.append((e.error, e.context))
             if os.path.exists(os.path.join(output_directory, 'build.log')):
