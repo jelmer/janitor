@@ -24,6 +24,7 @@ __all__ = [
 ]
 
 from datetime import datetime
+import logging
 import os
 import re
 import subprocess
@@ -47,7 +48,6 @@ from buildlog_consultant.sbuild import (
     worker_failure_from_sbuild_log,
     SbuildFailure,
     )
-from .trace import note
 
 
 class MissingChangesFile(Exception):
@@ -123,7 +123,7 @@ def build(local_tree, outf, build_command=DEFAULT_BUILDER, result_dir=None,
         env['DISTRIBUTION'] = distribution
     if source_date_epoch is not None:
         env['SOURCE_DATE_EPOCH'] = '%d' % source_date_epoch
-    note('Building debian packages, running %r.', build_command)
+    logging.info('Building debian packages, running %r.', build_command)
     try:
         subprocess.check_call(
             args, cwd=local_tree.abspath(subpath), stdout=outf, stderr=outf,
