@@ -66,7 +66,8 @@ from silver_platter.debian import (
     DEFAULT_BUILDER,
     )
 
-from .build import attempt_build, get_build_architecture
+from breezy.plugins.debian.util import get_build_architecture
+from .build import attempt_build
 from buildlog_consultant.sbuild import (
     Problem,
     MissingConfigStatusInput,
