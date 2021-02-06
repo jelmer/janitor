@@ -69,6 +69,7 @@ from ognibuild.dist import (
     create_dist_schroot,
     DetailedDistCommandFailed,
     UnidentifiedError,
+    NoBuildToolsFound,
     )
 
 from .trace import (
@@ -97,6 +98,9 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
             return create_dist_schroot(
                 tree, subdir=package, target_dir=target_dir,
                 packaging_tree=tree, chroot=self.args.chroot)
+        except NoBuildToolsFound:
+            note('No build tools found, falling back to simple export.')
+            return None
         except DetailedDistCommandFailed:
             raise
         except UnidentifiedError as e:
