@@ -65,11 +65,17 @@ from ognibuild.debian.build import (
     SbuildFailure,
 )
 from .debian import tree_set_changelog_version
+from ognibuild import (
+    DetailedFailure,
+    )
+from ognibuild.buildsystem import (
+    NoBuildToolsFound,
+    )
+from ognibuild.apt import (
+    UnidentifiedError,
+    )
 from ognibuild.dist import (
     create_dist_schroot,
-    DetailedDistCommandFailed,
-    UnidentifiedError,
-    NoBuildToolsFound,
     )
 
 from .trace import (
