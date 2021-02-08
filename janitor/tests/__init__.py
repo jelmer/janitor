@@ -33,6 +33,5 @@ def test_suite():
         'worker',
         ]
     module_names = [__name__ + '.test_' + name for name in names]
-    module_names.append('buildlog_consultant.tests.test_sbuild')
     loader = unittest.TestLoader()
     return loader.loadTestsFromNames(module_names)

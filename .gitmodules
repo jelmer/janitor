@@ -25,3 +25,6 @@
 [submodule "upstream-ontologist"]
 	path = upstream-ontologist
 	url = https://github.com/jelmer/upstream-ontologist
+[submodule "buildlog-consultant"]
+	path = buildlog-consultant
+	url = https://github.com/jelmer/buildlog-consultant
