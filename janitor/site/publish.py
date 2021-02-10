@@ -19,6 +19,6 @@ ORDER BY timestamp DESC
 
 async def write_history(conn, limit=None):
     return {
-        'count': limit,
-        'history': await iter_publish_history(conn, limit=limit),
-        }
+        "count": limit,
+        "history": await iter_publish_history(conn, limit=limit),
+    }

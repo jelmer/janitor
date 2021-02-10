@@ -21,7 +21,7 @@ from janitor.udd import UDD
 
 from silver_platter.debian.lintian import (
     calculate_value,
-    )
+)
 
 
 async def iter_lintian_fixes_candidates(udd, packages, available_fixers):
@@ -86,12 +86,12 @@ WHERE sources.release = 'sid' AND vcs_type != ''"""
     for row in package_rows.values():
         tags = sorted(package_tags[row[0]])
         value = calculate_value(tags)
-        context = ' '.join(sorted(tags))
+        context = " ".join(sorted(tags))
         candidate = Candidate()
         candidate.package = row[0]
         candidate.context = context
         candidate.value = value
-        candidate.suite = 'lintian-fixes'
+        candidate.suite = "lintian-fixes"
         yield candidate
 
 
@@ -101,8 +101,8 @@ async def main():
         available_lintian_fixers,
     )
 
-    parser = argparse.ArgumentParser(prog='lintian-fixes-candidates')
-    parser.add_argument("packages", nargs='*', default=None)
+    parser = argparse.ArgumentParser(prog="lintian-fixes-candidates")
+    parser.add_argument("packages", nargs="*", default=None)
 
     args = parser.parse_args()
 
@@ -113,12 +113,14 @@ async def main():
 
     udd = await UDD.public_udd_mirror()
     async for candidate in iter_lintian_fixes_candidates(
-            udd, args.packages or None, tags):
+        udd, args.packages or None, tags
+    ):
         cl = CandidateList()
         cl.candidate.append(candidate)
         print(cl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

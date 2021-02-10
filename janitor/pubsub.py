@@ -27,18 +27,18 @@ from janitor.trace import note, warning
 
 
 subscription_count = Gauge(
-    'subscriptions', 'Subscriptions per topic',
-    labelnames=('topic', ))
+    "subscriptions", "Subscriptions per topic", labelnames=("topic",)
+)
 
 subscription_active = Gauge(
-    'subscription_active', 'Whether url is reachable',
-    labelnames=('url', ))
+    "subscription_active", "Whether url is reachable", labelnames=("url",)
+)
 
 
 class Subscription(object):
     """A pubsub subscription."""
 
-    def __init__(self, topic: 'Topic') -> None:
+    def __init__(self, topic: "Topic") -> None:
         self.topic = topic
         self.queue: asyncio.Queue = asyncio.Queue()
         if topic.last:
@@ -80,24 +80,23 @@ async def pubsub_handler(topic: Topic, request) -> web.WebSocketResponse:
             try:
                 await ws.send_str(json.dumps(msg))
             except TypeError:
-                raise TypeError('not jsonable: %r' % msg)
+                raise TypeError("not jsonable: %r" % msg)
 
     return ws
 
 
 async def pubsub_reader(
-        session: aiohttp.ClientSession,
-        url: str,
-        reconnect_interval: Optional[int] = 10) -> AsyncIterator[Any]:
+    session: aiohttp.ClientSession, url: str, reconnect_interval: Optional[int] = 10
+) -> AsyncIterator[Any]:
     subscription_active.labels(url=url).set(0)
     while True:
         try:
             ws = await session.ws_connect(url)
         except (ClientResponseError, ClientConnectorError) as e:
-            warning('Unable to connect: %s' % e)
+            warning("Unable to connect: %s" % e)
         else:
             subscription_active.labels(url=url).set(1)
-            note('Subscribed to %s', url)
+            note("Subscribed to %s", url)
             while True:
                 msg = await ws.receive()
 
@@ -106,13 +105,12 @@ async def pubsub_reader(
                 elif msg.type == aiohttp.WSMsgType.closed:
                     break
                 elif msg.type == aiohttp.WSMsgType.error:
-                    warning('Error on websocket: %s', ws.exception())
+                    warning("Error on websocket: %s", ws.exception())
                     break
                 else:
-                    warning('Ignoring ws message type %r', msg.type)
+                    warning("Ignoring ws message type %r", msg.type)
         subscription_active.labels(url=url).set(0)
         if reconnect_interval is None:
             return
-        note(
-            'Waiting %d seconds before reconnecting...', reconnect_interval)
+        note("Waiting %d seconds before reconnecting...", reconnect_interval)
         await asyncio.sleep(reconnect_interval)

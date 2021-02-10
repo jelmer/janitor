@@ -25,13 +25,13 @@ from breezy.tests import TestCaseWithTransport  # noqa: F401
 
 def test_suite():
     names = [
-        'debdiff',
-        'pull_worker',
-        'runner',
-        'site',
-        'vcs',
-        'worker',
-        ]
-    module_names = [__name__ + '.test_' + name for name in names]
+        "debdiff",
+        "pull_worker",
+        "runner",
+        "site",
+        "vcs",
+        "worker",
+    ]
+    module_names = [__name__ + ".test_" + name for name in names]
     loader = unittest.TestLoader()
     return loader.loadTestsFromNames(module_names)

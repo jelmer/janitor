@@ -27,13 +27,13 @@ def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
     i = 0
     while i < len(lines):
         line = lines[i]
-        if i+1 < len(lines) and lines[i+1] == (len(line) * '-'):
+        if i + 1 < len(lines) and lines[i + 1] == (len(line) * "-"):
             if title or paragraph:
                 yield title, paragraph
             title = line
             paragraph = []
             i += 1
-        elif not line.rstrip('\n'):
+        elif not line.rstrip("\n"):
             if title or paragraph:
                 yield title, paragraph
             title = None
@@ -46,21 +46,26 @@ def iter_sections(text: str) -> Iterator[Tuple[Optional[str], List[str]]]:
 
 
 def filter_boring_wdiff(
-        lines: List[str], old_version: str, new_version: str) -> List[str]:
+    lines: List[str], old_version: str, new_version: str
+) -> List[str]:
     if not lines:
         return lines
-    field, changes = lines[0].split(':', 1)
-    if field == 'Installed-Size':
+    field, changes = lines[0].split(":", 1)
+    if field == "Installed-Size":
         return []
-    if field == 'Version':
+    if field == "Version":
         return []
-    lines = [re.sub(
-        r'\[-%s(.*?)-\] \{\+%s\1\+\}' % (
-            re.escape(old_version), re.escape(new_version)),
-        '', line) for line in lines]
-    block = '\n'.join(lines)
-    if (not re.findall(r'\[-.*?-\]', block) and
-            not re.findall(r'\{\+.*?\+\}', block)):
+    lines = [
+        re.sub(
+            r"\[-%s(.*?)-\] \{\+%s\1\+\}"
+            % (re.escape(old_version), re.escape(new_version)),
+            "",
+            line,
+        )
+        for line in lines
+    ]
+    block = "\n".join(lines)
+    if not re.findall(r"\[-.*?-\]", block) and not re.findall(r"\{\+.*?\+\}", block):
         return []
     return lines
 
@@ -68,7 +73,7 @@ def filter_boring_wdiff(
 def _iter_fields(lines):
     cl = []
     for line in lines:
-        if cl and line.startswith(' '):
+        if cl and line.startswith(" "):
             cl.append(line)
         else:
             yield cl
@@ -85,13 +90,13 @@ def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
             continue
         package: Optional[str]
         m = re.match(
-                r'Control files of package (.*): lines which differ '
-                r'\(wdiff format\)',
-                title)
+            r"Control files of package (.*): lines which differ " r"\(wdiff format\)",
+            title,
+        )
         if m:
             package = m.group(1)
             wdiff = True
-        elif title == 'Control files: lines which differ (wdiff format)':
+        elif title == "Control files: lines which differ (wdiff format)":
             package = None
             wdiff = True
         else:
@@ -102,21 +107,24 @@ def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
             for lines in _iter_fields(paragraph):
                 newlines = filter_boring_wdiff(lines, old_version, new_version)
                 paragraph_unfiltered.extend(newlines)
-            paragraph = [line for line in paragraph_unfiltered
-                         if line is not None]
+            paragraph = [line for line in paragraph_unfiltered if line is not None]
             if any([line.strip() for line in paragraph]):
                 ret.append((title, paragraph))
             else:
                 if package:
-                    ret.append((
-                        None,
-                        ['No differences were encountered between the control '
-                         'files of package %s' % package]))
+                    ret.append(
+                        (
+                            None,
+                            [
+                                "No differences were encountered between the control "
+                                "files of package %s" % package
+                            ],
+                        )
+                    )
                 else:
-                    ret.append((
-                        None,
-                        ['No differences were encountered in the control files'
-                         ]))
+                    ret.append(
+                        (None, ["No differences were encountered in the control files"])
+                    )
         else:
             ret.append((title, paragraph))
 
@@ -124,43 +132,41 @@ def filter_boring(debdiff: str, old_version: str, new_version: str) -> str:
     for title, paragraph in ret:
         if title is not None:
             lines.append(title)
-            lines.append(len(title) * '-')
+            lines.append(len(title) * "-")
         lines.extend(paragraph)
-        lines.append('')
-    return '\n'.join(lines)
+        lines.append("")
+    return "\n".join(lines)
 
 
 class DebdiffError(Exception):
     """Error occurred while running debdiff."""
 
 
-async def run_debdiff(
-        old_binaries: List[str], new_binaries: List[str]) -> bytes:
-    args = (['debdiff', '--from'] +
-            old_binaries + ['--to'] + new_binaries)
+async def run_debdiff(old_binaries: List[str], new_binaries: List[str]) -> bytes:
+    args = ["debdiff", "--from"] + old_binaries + ["--to"] + new_binaries
     p = await asyncio.create_subprocess_exec(
-        *args, stdin=asyncio.subprocess.PIPE,
+        *args,
+        stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE)
-    stdout, stderr = await p.communicate(b'')
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await p.communicate(b"")
     if p.returncode not in (0, 1):
-        raise DebdiffError(stderr.decode(errors='replace'))
+        raise DebdiffError(stderr.decode(errors="replace"))
     return stdout
 
 
 def debdiff_is_empty(debdiff: str) -> bool:
-    return any(
-        [title is not None for (title, paragraph) in iter_sections(debdiff)])
+    return any([title is not None for (title, paragraph) in iter_sections(debdiff)])
 
 
 def section_is_wdiff(title: str) -> Tuple[bool, Optional[str]]:
     m = re.match(
-            r'Control files of package (.*): lines which differ '
-            r'\(wdiff format\)',
-            title)
+        r"Control files of package (.*): lines which differ " r"\(wdiff format\)", title
+    )
     if m:
         return (True, m.group(1))
-    if title == 'Control files: lines which differ (wdiff format)':
+    if title == "Control files: lines which differ (wdiff format)":
         return (True, None)
     return (False, None)
 
@@ -169,7 +175,8 @@ def markdownify_debdiff(debdiff: str) -> str:
     def fix_wdiff_md(line):
         # GitLab markdown will render links but then not show the
         # delta highlighting. This fools it into not autolinking:
-        return line.replace('://', '&#8203;://')
+        return line.replace("://", "&#8203;://")
+
     ret = []
     for title, lines in iter_sections(debdiff):
         if title:
@@ -177,19 +184,21 @@ def markdownify_debdiff(debdiff: str) -> str:
             wdiff, package = section_is_wdiff(title)
             if wdiff:
                 ret.extend(
-                    ["* %s" % fix_wdiff_md(line)
-                     for line in lines if line.strip()])
+                    ["* %s" % fix_wdiff_md(line) for line in lines if line.strip()]
+                )
             else:
                 for line in lines:
-                    ret.append('    ' + line)
+                    ret.append("    " + line)
         else:
             ret.append("")
             for line in lines:
                 if line.strip():
                     line = re.sub(
-                        '^(No differences were encountered between the '
-                        'control files of package) (.*)$',
-                        r'\1 \*\*\2\*\*', line)
+                        "^(No differences were encountered between the "
+                        "control files of package) (.*)$",
+                        r"\1 \*\*\2\*\*",
+                        line,
+                    )
                     ret.append(line)
                 else:
                     ret.append("")
@@ -201,22 +210,25 @@ def markdownify_debdiff(debdiff: str) -> str:
 def htmlize_debdiff(debdiff: str) -> str:
     def highlight_wdiff(line):
         line = re.sub(
-            r'\[-(.*?)-\]',
-            r'<span style="color:red;font-weight:bold">\1</span>', line)
+            r"\[-(.*?)-\]", r'<span style="color:red;font-weight:bold">\1</span>', line
+        )
         line = re.sub(
-            r'\{\+(.*?)\+\}',
-            r'<span style="color:green;font-weight:bold">\1</span>', line)
+            r"\{\+(.*?)\+\}",
+            r'<span style="color:green;font-weight:bold">\1</span>',
+            line,
+        )
         return line
+
     ret = []
     for title, lines in iter_sections(debdiff):
         if title:
             ret.append("<h4>%s</h4>" % title)
             if re.match(
-                    r'Control files of package .*: lines which differ '
-                    r'\(wdiff format\)',
-                    title):
+                r"Control files of package .*: lines which differ " r"\(wdiff format\)",
+                title,
+            ):
                 wdiff = True
-            elif title == 'Control files: lines which differ (wdiff format)':
+            elif title == "Control files: lines which differ (wdiff format)":
                 wdiff = True
             else:
                 wdiff = False
@@ -225,9 +237,9 @@ def htmlize_debdiff(debdiff: str) -> str:
                 for line in _iter_fields(lines):
                     if not line:
                         continue
-                    ret.extend([
-                        "<li><pre>%s</pre></li>" %
-                        highlight_wdiff('\n'.join(line))])
+                    ret.extend(
+                        ["<li><pre>%s</pre></li>" % highlight_wdiff("\n".join(line))]
+                    )
                 ret.append("</ul>")
             else:
                 ret.append("<pre>")
@@ -238,9 +250,11 @@ def htmlize_debdiff(debdiff: str) -> str:
             for line in lines:
                 if line.strip():
                     line = re.sub(
-                        '^(No differences were encountered between the '
-                        'control files of package) (.*)$',
-                        '\\1 <b>\\2</b>', line)
+                        "^(No differences were encountered between the "
+                        "control files of package) (.*)$",
+                        "\\1 <b>\\2</b>",
+                        line,
+                    )
                     ret.append(line)
                 else:
                     ret.append("</p>")

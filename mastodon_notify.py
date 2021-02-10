@@ -28,12 +28,10 @@ import sys
 from mastodon import Mastodon
 
 
-toots_posted = Counter(
-    'toots_posted', 'Number of toots posted')
+toots_posted = Counter("toots_posted", "Number of toots posted")
 
 
 class MastodonNotifier(object):
-
     def __init__(self, mastodon):
         self.mastodon = mastodon
 
@@ -43,91 +41,98 @@ class MastodonNotifier(object):
 
     async def notify_merged(self, url, package, merged_by=None):
         self.toot(
-            'Merge proposal %s (%s) merged%s.' %
-            (url, package, ((' by %s' % merged_by) if merged_by else '')))
+            "Merge proposal %s (%s) merged%s."
+            % (url, package, ((" by %s" % merged_by) if merged_by else ""))
+        )
 
     async def notify_pushed(self, url, package, suite, result):
-        msg = 'Pushed %s changes to %s (%s)' % (suite, url, package)
-        if suite == 'lintian-fixes':
+        msg = "Pushed %s changes to %s (%s)" % (suite, url, package)
+        if suite == "lintian-fixes":
             tags = set()
-            for entry in result['applied']:
-                tags.update(entry['fixed_lintian_tags'])
+            for entry in result["applied"]:
+                tags.update(entry["fixed_lintian_tags"])
             if tags:
-                msg += ', fixing: %s.' % (', '.join(tags))
+                msg += ", fixing: %s." % (", ".join(tags))
         self.toot(msg)
 
 
 async def main(args, mastodon):
-    await run_prometheus_server(
-        args.prometheus_listen_address, args.prometheus_port)
+    await run_prometheus_server(args.prometheus_listen_address, args.prometheus_port)
     notifier = MastodonNotifier(mastodon)
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
-            if msg[0] == 'merge-proposal' and msg[1]['status'] == 'merged':
+            if msg[0] == "merge-proposal" and msg[1]["status"] == "merged":
                 await notifier.notify_merged(
-                    msg[1]['url'], msg[1].get('package'),
-                    msg[1].get('merged_by'))
-            if (msg[0] == 'publish' and
-                    msg[1]['mode'] == 'push' and
-                    msg[1]['result_code'] == 'success'):
-                url = (msg[1]['main_branch_browse_url'] or
-                       msg[1]['main_branch_url'])
+                    msg[1]["url"], msg[1].get("package"), msg[1].get("merged_by")
+                )
+            if (
+                msg[0] == "publish"
+                and msg[1]["mode"] == "push"
+                and msg[1]["result_code"] == "success"
+            ):
+                url = msg[1]["main_branch_browse_url"] or msg[1]["main_branch_url"]
                 await notifier.notify_pushed(
-                    url, msg[1]['package'],
-                    msg[1]['suite'], msg[1]['result'])
+                    url, msg[1]["package"], msg[1]["suite"], msg[1]["result"]
+                )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
     import asyncio
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--publisher-url', help='Publisher URL',
-        default='http://localhost:9912/')
+        "--publisher-url", help="Publisher URL", default="http://localhost:9912/"
+    )
     parser.add_argument(
-        '--notifications-url', help='URL to retrieve notifications from',
-        default='wss://janitor.debian.net/ws/notifications')
+        "--notifications-url",
+        help="URL to retrieve notifications from",
+        default="wss://janitor.debian.net/ws/notifications",
+    )
+    parser.add_argument("--register", help="Register the app", action="store_true")
     parser.add_argument(
-        '--register', help='Register the app',
-        action='store_true')
+        "--login", type=str, help="Login to the specified user (e-mail)."
+    )
     parser.add_argument(
-        '--login', type=str,
-        help='Login to the specified user (e-mail).')
+        "--api-base-url",
+        type=str,
+        default="https://mastodon.cloud",
+        help="Mastodon API Base URL.",
+    )
     parser.add_argument(
-        '--api-base-url', type=str,
-        default='https://mastodon.cloud',
-        help='Mastodon API Base URL.')
+        "--prometheus-listen-address",
+        type=str,
+        default="localhost",
+        help="Host to provide prometheus metrics on.",
+    )
     parser.add_argument(
-        '--prometheus-listen-address', type=str,
-        default='localhost', help='Host to provide prometheus metrics on.')
-    parser.add_argument(
-        '--prometheus-port', type=int,
-        default=9919, help='Port for prometheus metrics')
+        "--prometheus-port", type=int, default=9919, help="Port for prometheus metrics"
+    )
 
     args = parser.parse_args()
     if args.register:
         Mastodon.create_app(
-            'debian-janitor-notify',
+            "debian-janitor-notify",
             api_base_url=args.api_base_url,
-            to_file='mastodon-notify-app.secret')
+            to_file="mastodon-notify-app.secret",
+        )
         sys.exit(0)
 
     if args.login:
         mastodon = Mastodon(
-            client_id='mastodon-notify-app.secret',
-            api_base_url=args.api_base_url
+            client_id="mastodon-notify-app.secret", api_base_url=args.api_base_url
         )
 
         import getpass
+
         password = getpass.getpass()
 
-        mastodon.log_in(
-            args.login, password, to_file='mastodon-notify-user.secret')
+        mastodon.log_in(args.login, password, to_file="mastodon-notify-user.secret")
 
         sys.exit(0)
 
     mastodon = Mastodon(
-        access_token='mastodon-notify-user.secret',
-        api_base_url=args.api_base_url)
+        access_token="mastodon-notify-user.secret", api_base_url=args.api_base_url
+    )
 
     asyncio.run(main(args, mastodon))

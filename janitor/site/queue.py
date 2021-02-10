@@ -25,8 +25,7 @@ from janitor.worker import changer_subcommand
 
 
 def lintian_tag_link(tag: str) -> str:
-    return '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' % (
-        tag, tag)
+    return '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' % (tag, tag)
 
 
 class RunnerProcessingUnavailable(Exception):
@@ -34,22 +33,19 @@ class RunnerProcessingUnavailable(Exception):
 
 
 def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
-    for entry in answer['processing']:
+    for entry in answer["processing"]:
         entry = dict(entry.items())
-        if entry.get('estimated_duration'):
-            entry['estimated_duration'] = timedelta(
-                seconds=entry['estimated_duration'])
-        if entry.get('start_time'):
-            entry['start_time'] = datetime.fromisoformat(entry['start_time'])
-            entry['current_duration'] = datetime.now() - entry['start_time']
+        if entry.get("estimated_duration"):
+            entry["estimated_duration"] = timedelta(seconds=entry["estimated_duration"])
+        if entry.get("start_time"):
+            entry["start_time"] = datetime.fromisoformat(entry["start_time"])
+            entry["current_duration"] = datetime.now() - entry["start_time"]
         yield entry
 
 
 async def iter_queue_with_last_run(
-        db: state.Database,
-        limit: Optional[int] = None
-        ) -> AsyncIterator[
-                Tuple[state.QueueItem, Optional[str], Optional[str]]]:
+    db: state.Database, limit: Optional[int] = None
+) -> AsyncIterator[Tuple[state.QueueItem, Optional[str], Optional[str]]]:
     query = """
 SELECT
       queue.package AS package,
@@ -84,62 +80,78 @@ SELECT
 
 
 async def get_queue(
-        db: state.Database,
-        only_command: Optional[str] = None,
-        limit: Optional[int] = None) -> AsyncIterator[
-            Tuple[int, str, Optional[str], str, str,
-                  Optional[timedelta], Optional[str], Optional[str]]]:
-    async for row in (
-            iter_queue_with_last_run(db, limit=limit)):
-        command = shlex.split(row['command'])
+    db: state.Database, only_command: Optional[str] = None, limit: Optional[int] = None
+) -> AsyncIterator[
+    Tuple[
+        int,
+        str,
+        Optional[str],
+        str,
+        str,
+        Optional[timedelta],
+        Optional[str],
+        Optional[str],
+    ]
+]:
+    async for row in (iter_queue_with_last_run(db, limit=limit)):
+        command = shlex.split(row["command"])
         if only_command is not None and command != only_command:
             continue
         expecting = None
-        if command[0] == 'new-upstream':
-            if '--snapshot' in command:
-                description = 'New upstream snapshot'
+        if command[0] == "new-upstream":
+            if "--snapshot" in command:
+                description = "New upstream snapshot"
             else:
-                description = 'New upstream'
-                if row['context']:
+                description = "New upstream"
+                if row["context"]:
                     expecting = (
-                        'expecting to merge <a href=\'https://qa.debian.org'
-                        '/cgi-bin/watch?pkg=%s\'>%s</a>' % (
-                            row['package'], row['context']))
-        elif command[0] == 'lintian-brush':
-            description = 'Lintian fixes'
-            if row['context']:
-                expecting = (
-                    'expecting to fix: ' +
-                    ', '.join(
-                        map(lintian_tag_link, row['context'].split(' '))))
+                        "expecting to merge <a href='https://qa.debian.org"
+                        "/cgi-bin/watch?pkg=%s'>%s</a>"
+                        % (row["package"], row["context"])
+                    )
+        elif command[0] == "lintian-brush":
+            description = "Lintian fixes"
+            if row["context"]:
+                expecting = "expecting to fix: " + ", ".join(
+                    map(lintian_tag_link, row["context"].split(" "))
+                )
         else:
             cs = changer_subcommand(command[0])
             description = cs.describe_command(command)
         if only_command is not None:
-            description = expecting or ''
+            description = expecting or ""
         elif expecting is not None:
             description += ", " + expecting
-        if row['refresh']:
+        if row["refresh"]:
             description += " (from scratch)"
         yield (
-            row['id'], row['package'], row['requestor'],
-            row['suite'], description, row['estimated_duration'],
-            row['log_id'], row['result_code'])
+            row["id"],
+            row["package"],
+            row["requestor"],
+            row["suite"],
+            description,
+            row["estimated_duration"],
+            row["log_id"],
+            row["result_code"],
+        )
 
 
-async def write_queue(client, db: state.Database,
-                      only_command=None, limit=None,
-                      is_admin=False,
-                      queue_status=None):
+async def write_queue(
+    client,
+    db: state.Database,
+    only_command=None,
+    limit=None,
+    is_admin=False,
+    queue_status=None,
+):
     if queue_status:
         processing = get_processing(queue_status)
-        active_queue_ids = set(
-            [p['queue_id'] for p in queue_status['processing']])
+        active_queue_ids = set([p["queue_id"] for p in queue_status["processing"]])
     else:
         processing = iter([])
         active_queue_ids = set()
     return {
-        'queue': get_queue(db, only_command, limit),
-        'active_queue_ids': active_queue_ids,
-        'processing': processing,
-        }
+        "queue": get_queue(db, only_command, limit),
+        "active_queue_ids": active_queue_ids,
+        "processing": processing,
+    }

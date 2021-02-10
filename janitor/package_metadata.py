@@ -35,17 +35,18 @@ from .package_metadata_pb2 import PackageList, PackageMetadata, Removal
 from debmutate.vcs import (
     split_vcs_url,
     unsplit_vcs_url,
-    )
+)
 from lintian_brush.vcs import (
     fixup_broken_git_url,
     canonicalize_vcs_url,
     determine_browser_url,
-    )
+)
 
 
 async def update_package_metadata(
-        conn, distribution: str, provided_packages, package_overrides):
-    trace.note('Updating package metadata.')
+    conn, distribution: str, provided_packages, package_overrides
+):
+    trace.note("Updating package metadata.")
     packages = []
     for package in provided_packages:
         try:
@@ -57,16 +58,15 @@ async def update_package_metadata(
 
         vcs_last_revision = None
 
-        if package.vcs_type and package.vcs_type.capitalize() == 'Git':
+        if package.vcs_type and package.vcs_type.capitalize() == "Git":
             new_vcs_url = fixup_broken_git_url(vcs_url)
             if new_vcs_url != vcs_url:
-                trace.note('Fixing up VCS URL: %s -> %s',
-                           vcs_url, new_vcs_url)
+                trace.note("Fixing up VCS URL: %s -> %s", vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
             if package.commit_id:
-                vcs_last_revision = (
-                    default_mapping.revision_id_foreign_to_bzr(
-                        package.commit_id.encode('ascii')))
+                vcs_last_revision = default_mapping.revision_id_foreign_to_bzr(
+                    package.commit_id.encode("ascii")
+                )
 
         if package.vcs_type:
             # Drop the subpath, we're storing it separately.
@@ -74,10 +74,9 @@ async def update_package_metadata(
             url = unsplit_vcs_url(url, branch)
             url = canonicalize_vcs_url(package.vcs_type, url)
             try:
-                branch_url = convert_debian_vcs_url(
-                    package.vcs_type.capitalize(), url)
+                branch_url = convert_debian_vcs_url(package.vcs_type.capitalize(), url)
             except ValueError as e:
-                trace.note('%s: %s', package.name, e)
+                trace.note("%s: %s", package.name, e)
                 branch_url = None
         else:
             subpath = None
@@ -91,19 +90,25 @@ async def update_package_metadata(
         if vcs_browser is None and package.vcs_browser:
             vcs_browser = package.vcs_browser
 
-        packages.append((
-            package.name, distribution, branch_url if branch_url else None,
-            subpath if subpath else None,
-            package.maintainer_email if package.maintainer_email else None,
-            package.uploader_email if package.uploader_email else [],
-            package.archive_version if package.archive_version else None,
-            package.vcs_type.lower() if package.vcs_type else None, vcs_url,
-            vcs_browser,
-            vcs_last_revision.decode('utf-8') if vcs_last_revision else None,
-            package.vcswatch_status.lower()
-            if package.vcswatch_status else None,
-            package.vcswatch_version if package.vcswatch_version else None,
-            package.insts, package.removed))
+        packages.append(
+            (
+                package.name,
+                distribution,
+                branch_url if branch_url else None,
+                subpath if subpath else None,
+                package.maintainer_email if package.maintainer_email else None,
+                package.uploader_email if package.uploader_email else [],
+                package.archive_version if package.archive_version else None,
+                package.vcs_type.lower() if package.vcs_type else None,
+                vcs_url,
+                vcs_browser,
+                vcs_last_revision.decode("utf-8") if vcs_last_revision else None,
+                package.vcswatch_status.lower() if package.vcswatch_status else None,
+                package.vcswatch_version if package.vcswatch_version else None,
+                package.insts,
+                package.removed,
+            )
+        )
     await conn.executemany(
         "INSERT INTO package "
         "(name, distribution, branch_url, subpath, maintainer_email, "
@@ -124,25 +129,25 @@ async def update_package_metadata(
         "vcswatch_version = EXCLUDED.vcswatch_version, "
         "popcon_inst = EXCLUDED.popcon_inst, "
         "removed = EXCLUDED.removed",
-        packages)
+        packages,
+    )
 
 
-async def mark_removed_packages(
-        conn, distribution: str, removals: List[Removal]):
+async def mark_removed_packages(conn, distribution: str, removals: List[Removal]):
     existing_packages = {
-        package.name: package
-        for package in await debian_state.iter_packages(conn)}
-    trace.note('Updating removals.')
+        package.name: package for package in await debian_state.iter_packages(conn)
+    }
+    trace.note("Updating removals.")
     filtered_removals: List[Tuple[str, Optional[Version]]] = [
         (removal.name, Version(removal.version) if removal.version else None)
         for removal in removals
-        if removal.name in existing_packages and
-        not existing_packages[removal.name].removed]
+        if removal.name in existing_packages
+        and not existing_packages[removal.name].removed
+    ]
     await debian_state.update_removals(conn, distribution, filtered_removals)
 
 
-def iter_packages_from_script(stdin) -> Tuple[
-        List[PackageMetadata], List[Removal]]:
+def iter_packages_from_script(stdin) -> Tuple[List[PackageMetadata], List[Removal]]:
     package_list = text_format.Parse(stdin.read(), PackageList())
     return package_list.package, package_list.removal
 
@@ -157,31 +162,38 @@ async def main():
         REGISTRY,
     )
 
-    parser = argparse.ArgumentParser(prog='package_metadata')
-    parser.add_argument('--prometheus', type=str,
-                        help='Prometheus push gateway to export to.')
+    parser = argparse.ArgumentParser(prog="package_metadata")
     parser.add_argument(
-        '--config', type=str, default='janitor.conf',
-        help='Path to configuration.')
+        "--prometheus", type=str, help="Prometheus push gateway to export to."
+    )
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
 
     parser.add_argument(
-        '--distribution', type=str, default='unstable',
-        help='Distribution to import metadata for.')
+        "--distribution",
+        type=str,
+        default="unstable",
+        help="Distribution to import metadata for.",
+    )
 
     parser.add_argument(
-        '--package-overrides', type=str, default='package_overrides.conf',
-        help='Read package overrides.')
+        "--package-overrides",
+        type=str,
+        default="package_overrides.conf",
+        help="Read package overrides.",
+    )
 
     args = parser.parse_args()
 
     last_success_gauge = Gauge(
-        'job_last_success_unixtime',
-        'Last time a batch job successfully finished')
+        "job_last_success_unixtime", "Last time a batch job successfully finished"
+    )
 
-    with open(args.config, 'r') as f:
+    with open(args.config, "r") as f:
         config = read_config(f)
 
-    with open(args.package_overrides, 'r') as f:
+    with open(args.package_overrides, "r") as f:
         package_overrides = read_package_overrides(f)
 
     db = state.Database(config.database_location)
@@ -190,17 +202,20 @@ async def main():
 
     async with db.acquire() as conn:
         await update_package_metadata(
-                conn, args.distribution, packages, package_overrides)
+            conn, args.distribution, packages, package_overrides
+        )
         if removals:
             await mark_removed_packages(conn, args.distribution, removals)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(args.prometheus, job='janitor.package_metadata',
-                        registry=REGISTRY)
+        push_to_gateway(
+            args.prometheus, job="janitor.package_metadata", registry=REGISTRY
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())

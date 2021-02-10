@@ -24,17 +24,19 @@ from prometheus_client import (
     Histogram,
     generate_latest,
     CONTENT_TYPE_LATEST,
-    )
+)
 
 request_counter = Counter(
-    'requests_total', 'Total Request Count', ['method', 'route', 'status'])
+    "requests_total", "Total Request Count", ["method", "route", "status"]
+)
 
 request_latency_hist = Histogram(
-    'request_latency_seconds', 'Request latency', ['route'])
+    "request_latency_seconds", "Request latency", ["route"]
+)
 
 requests_in_progress_gauge = Gauge(
-    'requests_in_progress_total', 'Requests currently in progress',
-    ['method', 'route'])
+    "requests_in_progress_total", "Requests currently in progress", ["method", "route"]
+)
 
 
 async def metrics(request):
@@ -53,6 +55,7 @@ async def metrics_middleware(request, handler):
     except Exception as e:
         if not isinstance(e, web.HTTPException):
             import traceback
+
             traceback.print_exc()
         raise
     resp_time = time.time() - start_time
@@ -64,7 +67,7 @@ async def metrics_middleware(request, handler):
 
 def setup_metrics(app):
     app.middlewares.insert(0, metrics_middleware)
-    app.router.add_get("/metrics", metrics, name='metrics')
+    app.router.add_get("/metrics", metrics, name="metrics")
 
 
 async def run_prometheus_server(listen_addr, port):

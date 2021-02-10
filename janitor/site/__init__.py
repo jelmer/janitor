@@ -30,33 +30,34 @@ from janitor.vcs import RemoteVcsManager
 
 def json_chart_data(max_age=None):
     if max_age is not None:
-        headers = {'Cache-Control': 'max-age=%d' % max_age}
+        headers = {"Cache-Control": "max-age=%d" % max_age}
     else:
         headers = {}
 
     def decorator(fn):
         async def handle(request):
             async with request.app.database.acquire() as conn:
-                return web.json_response(
-                    await fn(request, conn), headers=headers)
+                return web.json_response(await fn(request, conn), headers=headers)
+
         return handle
+
     return decorator
 
 
 def update_vars_from_request(vs, request):
-    vs['is_admin'] = is_admin(request)
-    vs['is_qa_reviewer'] = is_qa_reviewer(request)
-    vs['user'] = request.user
-    vs['rel_url'] = request.rel_url
-    vs['suites'] = request.app.config.suite
-    vs['site_name'] = request.app.config.instance_name or 'Debian Janitor'
-    vs['openid_configured'] = bool(getattr(request.app, 'openid_config', None))
+    vs["is_admin"] = is_admin(request)
+    vs["is_qa_reviewer"] = is_qa_reviewer(request)
+    vs["user"] = request.user
+    vs["rel_url"] = request.rel_url
+    vs["suites"] = request.app.config.suite
+    vs["site_name"] = request.app.config.instance_name or "Debian Janitor"
+    vs["openid_configured"] = bool(getattr(request.app, "openid_config", None))
     if request.app.external_url is not None:
-        vs['url'] = request.app.external_url.join(request.rel_url)
-        vs['vcs_manager'] = RemoteVcsManager(str(request.app.external_url))
+        vs["url"] = request.app.external_url.join(request.rel_url)
+        vs["vcs_manager"] = RemoteVcsManager(str(request.app.external_url))
     else:
-        vs['url'] = request.url
-        vs['vcs_manager'] = RemoteVcsManager(str(request.url.with_path('/')))
+        vs["url"] = request.url
+        vs["vcs_manager"] = RemoteVcsManager(str(request.url.with_path("/")))
 
 
 async def render_template_for_request(templatename, request, vs):
@@ -74,10 +75,10 @@ def html_template(template_name, headers={}):
                 return vs
             update_vars_from_request(vs, request)
             text = await template.render_async(**vs)
-            return web.Response(
-                content_type='text/html', text=text,
-                headers=headers)
+            return web.Response(content_type="text/html", text=text, headers=headers)
+
         return handle
+
     return decorator
 
 
@@ -100,27 +101,27 @@ def format_duration(duration):
 
 
 def format_timestamp(ts):
-    return ts.isoformat(timespec='minutes')
+    return ts.isoformat(timespec="minutes")
 
 
 async def get_vcs_type(client, vcs_store_url, package):
-    url = urllib.parse.urljoin(vcs_store_url, 'vcs-type/%s' % package)
+    url = urllib.parse.urljoin(vcs_store_url, "vcs-type/%s" % package)
     try:
         async with client.get(url) as resp:
             if resp.status == 200:
-                ret = (await resp.read()).decode('utf-8', 'replace')
+                ret = (await resp.read()).decode("utf-8", "replace")
                 if ret == "":
                     ret = None
             else:
                 ret = None
         return ret
     except ClientConnectorError as e:
-        return 'Unable to retrieve diff; error %s' % e
+        return "Unable to retrieve diff; error %s" % e
 
 
 env = Environment(
-    loader=PackageLoader('janitor.site', 'templates'),
-    autoescape=select_autoescape(['html', 'xml']),
+    loader=PackageLoader("janitor.site", "templates"),
+    autoescape=select_autoescape(["html", "xml"]),
     enable_async=True,
 )
 
@@ -129,15 +130,16 @@ def highlight_diff(diff):
     from pygments import highlight
     from pygments.lexers.diff import DiffLexer
     from pygments.formatters import HtmlFormatter
+
     return highlight(diff, DiffLexer(stripnl=False), HtmlFormatter())
 
 
 def classify_result_code(result_code):
-    if result_code in ('success', 'nothing-to-do', 'nothing-new-to-do'):
+    if result_code in ("success", "nothing-to-do", "nothing-new-to-do"):
         return result_code
     if result_code in TRANSIENT_ERROR_RESULT_CODES:
-        return 'transient-failure'
-    return 'failure'
+        return "transient-failure"
+    return "failure"
 
 
 env.globals.update(format_duration=format_duration)
@@ -159,40 +161,40 @@ class BuildDiffUnavailable(Exception):
         self.unavailable_run = unavailable_run
 
 
-async def get_archive_diff(client, differ_url, run, unchanged_run,
-                           kind, accept=None, filter_boring=False):
+async def get_archive_diff(
+    client, differ_url, run, unchanged_run, kind, accept=None, filter_boring=False
+):
     if not unchanged_run.has_artifacts():
-        raise DebdiffRetrievalError('unchanged run not successful')
+        raise DebdiffRetrievalError("unchanged run not successful")
     if not run.has_artifacts():
-        raise DebdiffRetrievalError('run not successful')
-    if kind not in ('debdiff', 'diffoscope'):
-        raise DebdiffRetrievalError('invalid diff kind %r' % kind)
+        raise DebdiffRetrievalError("run not successful")
+    if kind not in ("debdiff", "diffoscope"):
+        raise DebdiffRetrievalError("invalid diff kind %r" % kind)
     url = urllib.parse.urljoin(
-        differ_url, '%s/%s/%s' % (kind, unchanged_run.id, run.id))
+        differ_url, "%s/%s/%s" % (kind, unchanged_run.id, run.id)
+    )
     params = {
-        'jquery_url': 'https://janitor.debian.org/_static/jquery.js',
+        "jquery_url": "https://janitor.debian.org/_static/jquery.js",
     }
     # TODO(jelmer): Set css_url
     if filter_boring:
         params["filter_boring"] = "yes"
     headers = {}
     if accept:
-        headers['Accept'] = (
-            ', '.join(accept)
-            if isinstance(accept, list)
-            else accept)
+        headers["Accept"] = ", ".join(accept) if isinstance(accept, list) else accept
     try:
         async with client.get(url, params=params, headers=headers) as resp:
             if resp.status == 200:
                 return await resp.read(), resp.content_type
             elif resp.status == 404:
-                if resp.headers.get('unavailable_run_id') == unchanged_run.id:
+                if resp.headers.get("unavailable_run_id") == unchanged_run.id:
                     raise BuildDiffUnavailable(unchanged_run)
                 else:
                     raise BuildDiffUnavailable(run)
             else:
                 raise DebdiffRetrievalError(
-                    'Unable to get debdiff: %s' % await resp.text())
+                    "Unable to get debdiff: %s" % await resp.text()
+                )
     except ClientConnectorError as e:
         raise DebdiffRetrievalError(str(e))
 
@@ -203,7 +205,7 @@ def is_admin(request: web.Request) -> bool:
     admin_group = request.app.config.oauth2_provider.admin_group
     if admin_group is None:
         return True
-    return admin_group in request.user['groups']
+    return admin_group in request.user["groups"]
 
 
 def check_qa_reviewer(request: web.Request) -> None:
@@ -217,7 +219,7 @@ def is_qa_reviewer(request: web.Request) -> bool:
     qa_reviewer_group = request.app.config.oauth2_provider.qa_reviewer_group
     if qa_reviewer_group is None:
         return True
-    return qa_reviewer_group in request.user['groups']
+    return qa_reviewer_group in request.user["groups"]
 
 
 def check_admin(request: web.Request) -> None:
@@ -231,8 +233,7 @@ async def is_worker(db, request: web.Request) -> Optional[str]:
         return None
     auth = BasicAuth.decode(auth_header=auth_header)
     async with db.acquire() as conn:
-        if await state.check_worker_credentials(
-                conn, auth.login, auth.password):
+        if await state.check_worker_credentials(conn, auth.login, auth.password):
             return auth.login
     return None
 
@@ -241,20 +242,20 @@ async def check_worker_creds(db, request: web.Request) -> Optional[str]:
     auth_header = request.headers.get(aiohttp.hdrs.AUTHORIZATION)
     if not auth_header:
         raise web.HTTPUnauthorized(
-            text='worker login required',
-            headers={
-                'WWW-Authenticate': 'Basic Realm="Debian Janitor"'})
+            text="worker login required",
+            headers={"WWW-Authenticate": 'Basic Realm="Debian Janitor"'},
+        )
     login = await is_worker(db, request)
     if not login:
         raise web.HTTPUnauthorized(
-            text='worker login required',
-            headers={
-                'WWW-Authenticate': 'Basic Realm="Debian Janitor"'})
+            text="worker login required",
+            headers={"WWW-Authenticate": 'Basic Realm="Debian Janitor"'},
+        )
 
     return login
 
 
 def tracker_url(config: Config, pkg: str) -> Optional[str]:
     if config.distribution.tracker_url:
-        return '%s/%s' % (config.distribution.tracker_url.rstrip('/'), pkg)
+        return "%s/%s" % (config.distribution.tracker_url.rstrip("/"), pkg)
     return None

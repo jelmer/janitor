@@ -42,7 +42,7 @@ from .pubsub import pubsub_reader
 from .trace import note, warning
 from prometheus_client import (
     Gauge,
-    )
+)
 
 
 DEFAULT_GCS_TIMEOUT = 60 * 30
@@ -51,16 +51,16 @@ last_publish_time = {}
 
 
 last_publish_success = Gauge(
-    'last_suite_publish_success',
-    'Last time publishing a suite succeeded',
-    labelnames=('suite', ))
+    "last_suite_publish_success",
+    "Last time publishing a suite succeeded",
+    labelnames=("suite",),
+)
 
 
 # TODO(jelmer): Generate contents file
 
 
 class PackageInfoProvider(object):
-
     def __init__(self, artifact_manager):
         self.artifact_manager = artifact_manager
 
@@ -74,19 +74,22 @@ class PackageInfoProvider(object):
     async def info_for_run(self, run_id, suite_name, package):
         with tempfile.TemporaryDirectory() as td:
             await self.artifact_manager.retrieve_artifacts(
-                run_id, td, timeout=DEFAULT_GCS_TIMEOUT)
-            p = subprocess.Popen(
-                    ['dpkg-scanpackages', td], stdout=subprocess.PIPE)
+                run_id, td, timeout=DEFAULT_GCS_TIMEOUT
+            )
+            p = subprocess.Popen(["dpkg-scanpackages", td], stdout=subprocess.PIPE)
             for para in Packages.iter_paragraphs(p.stdout):
-                para['Filename'] = os.path.join(
-                    suite_name, 'pkg', package, run_id,
-                    os.path.basename(para['Filename']))
+                para["Filename"] = os.path.join(
+                    suite_name,
+                    "pkg",
+                    package,
+                    run_id,
+                    os.path.basename(para["Filename"]),
+                )
                 yield bytes(para)
-                yield b'\n'
+                yield b"\n"
 
 
 class CachingPackageInfoProvider(object):
-
     def __init__(self, primary_info_provider, cache_directory):
         self.primary_info_provider = primary_info_provider
         self.cache_directory = cache_directory
@@ -101,14 +104,15 @@ class CachingPackageInfoProvider(object):
     async def info_for_run(self, run_id, suite_name, package):
         cache_path = os.path.join(self.cache_directory, run_id)
         try:
-            with open(cache_path, 'rb') as f:
+            with open(cache_path, "rb") as f:
                 for chunk in f:
                     yield chunk
         except FileNotFoundError:
             chunks = []
-            with open(cache_path, 'wb') as f:
+            with open(cache_path, "wb") as f:
                 async for chunk in self.primary_info_provider.info_for_run(
-                        run_id, suite_name, package):
+                    run_id, suite_name, package
+                ):
                     f.write(chunk)
                     chunks.append(chunk)
             for chunk in chunks:
@@ -121,113 +125,112 @@ async def get_packages(db, info_provider, suite_name, component, arch):
         rows = await conn.fetch(
             "SELECT DISTINCT ON (package) package, id, build_version FROM run "
             "WHERE suite = $1 AND result_code = 'success' "
-            "ORDER BY package, finish_time DESC", suite_name)
+            "ORDER BY package, finish_time DESC",
+            suite_name,
+        )
 
     for package, run_id, build_verison in rows:
         try:
-            async for chunk in info_provider.info_for_run(
-                    run_id, suite_name, package):
+            async for chunk in info_provider.info_for_run(run_id, suite_name, package):
                 yield chunk
         except ArtifactsMissing:
-            warning('Artifacts missing for %s (%s), skipping',
-                    package, run_id)
+            warning("Artifacts missing for %s (%s), skipping", package, run_id)
             continue
 
 
 def add_file_info(r, base, p):
     hashes = {
-        'MD5Sum': hashlib.md5(),
-        'SHA1': hashlib.sha1(),
-        'SHA256': hashlib.sha256(),
-        'SHA512': hashlib.sha512()
+        "MD5Sum": hashlib.md5(),
+        "SHA1": hashlib.sha1(),
+        "SHA256": hashlib.sha256(),
+        "SHA512": hashlib.sha512(),
     }
     size = 0
-    with open(os.path.join(base, p), 'rb') as f:
+    with open(os.path.join(base, p), "rb") as f:
         for chunk in f:
             for h in hashes.values():
                 h.update(chunk)
             size += len(chunk)
     for h, v in hashes.items():
-        r.setdefault(h, []).append({
-            h.lower(): v.hexdigest(),
-            'size': size,
-            'name': p})
+        r.setdefault(h, []).append({h.lower(): v.hexdigest(), "size": size, "name": p})
 
 
 async def write_suite_files(
-        base_path, db, package_info_provider, suite, components, arches,
-        origin, gpg_context):
+    base_path, db, package_info_provider, suite, components, arches, origin, gpg_context
+):
     r = Release()
-    r['Origin'] = origin
-    r['Label'] = suite.archive_description
-    r['Codename'] = suite.name
-    r['Suite'] = suite.name
-    r['Date'] = format_date()
-    r['NotAutomatic'] = 'yes'
-    r['ButAutomaticUpgrades'] = 'yes'
-    r['Architectures'] = ' '.join(arches)
-    r['Components'] = ' '.join(components)
-    r['Description'] = 'Generated by the Debian Janitor'
+    r["Origin"] = origin
+    r["Label"] = suite.archive_description
+    r["Codename"] = suite.name
+    r["Suite"] = suite.name
+    r["Date"] = format_date()
+    r["NotAutomatic"] = "yes"
+    r["ButAutomaticUpgrades"] = "yes"
+    r["Architectures"] = " ".join(arches)
+    r["Components"] = " ".join(components)
+    r["Description"] = "Generated by the Debian Janitor"
 
     for component in components:
         component_dir = component
         os.makedirs(os.path.join(base_path, component_dir), exist_ok=True)
         for arch in arches:
-            arch_dir = os.path.join(component_dir, 'binary-%s' % arch)
+            arch_dir = os.path.join(component_dir, "binary-%s" % arch)
             os.makedirs(os.path.join(base_path, arch_dir), exist_ok=True)
             packages_chunks = get_packages(
-                db, package_info_provider, suite.name, component, arch)
+                db, package_info_provider, suite.name, component, arch
+            )
             br = Release()
-            br['Origin'] = origin
-            br['Label'] = suite.archive_description
-            br['Archive'] = suite.name
-            br['Architecture'] = arch
-            br['Component'] = component
-            bp = os.path.join(arch_dir, 'Release')
-            with open(os.path.join(base_path, bp), 'wb') as f:
+            br["Origin"] = origin
+            br["Label"] = suite.archive_description
+            br["Archive"] = suite.name
+            br["Architecture"] = arch
+            br["Component"] = component
+            bp = os.path.join(arch_dir, "Release")
+            with open(os.path.join(base_path, bp), "wb") as f:
                 r.dump(f)
             add_file_info(r, base_path, bp)
 
-            packages_path = os.path.join(
-                component, 'binary-%s' % arch, 'Packages')
+            packages_path = os.path.join(component, "binary-%s" % arch, "Packages")
             SUFFIXES = {
-                '': open,
-                '.gz': gzip.GzipFile,
-                '.bz2': bz2.BZ2File,
-                }
+                "": open,
+                ".gz": gzip.GzipFile,
+                ".bz2": bz2.BZ2File,
+            }
             with ExitStack() as es:
                 fs = []
                 for suffix, fn in SUFFIXES.items():
-                    fs.append(es.enter_context(
-                        fn(os.path.join(base_path, packages_path + suffix),
-                            'wb')))
+                    fs.append(
+                        es.enter_context(
+                            fn(os.path.join(base_path, packages_path + suffix), "wb")
+                        )
+                    )
                 async for chunk in packages_chunks:
                     for f in fs:
                         f.write(chunk)
             for suffix in SUFFIXES:
                 add_file_info(r, base_path, packages_path + suffix)
 
-    with open(os.path.join(base_path, 'Release'), 'wb') as f:
+    with open(os.path.join(base_path, "Release"), "wb") as f:
         r.dump(f)
 
     data = gpg.Data(r.dump())
-    with open(os.path.join(base_path, 'Release.gpg'), 'wb') as f:
+    with open(os.path.join(base_path, "Release.gpg"), "wb") as f:
         signature, result = gpg_context.sign(data, mode=gpg_mode.DETACH)
         f.write(signature)
 
     data = gpg.Data(r.dump())
-    with open(os.path.join(base_path, 'InRelease'), 'wb') as f:
+    with open(os.path.join(base_path, "InRelease"), "wb") as f:
         signature, result = gpg_context.sign(data, mode=gpg_mode.CLEAR)
         f.write(signature)
 
 
 # TODO(jelmer): Don't hardcode this
-ARCHES: List[str] = ['amd64']
+ARCHES: List[str] = ["amd64"]
 
 
 async def handle_publish(request):
     post = await request.post()
-    suite = post.get('suite')
+    suite = post.get("suite")
     for suite_config in request.app.config.suite:
         if suite is not None and suite_config.name != suite:
             continue
@@ -237,23 +240,20 @@ async def handle_publish(request):
 
 
 async def handle_last_publish(request):
-    return web.json_response({
-        suite: dt.isoformat()
-        for (suite, dt) in last_publish_time.items()})
+    return web.json_response(
+        {suite: dt.isoformat() for (suite, dt) in last_publish_time.items()}
+    )
 
 
-async def run_web_server(
-        listen_addr, port, dists_dir, config,
-        generator_manager):
+async def run_web_server(listen_addr, port, dists_dir, config, generator_manager):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.config = config
     app.generator_manager = generator_manager
     setup_metrics(app)
-    app.router.add_static('/dists', dists_dir)
-    app.router.add_post('/publish', handle_publish, name='publish')
-    app.router.add_get(
-        '/last-publish', handle_last_publish, name='last-publish')
+    app.router.add_static("/dists", dists_dir)
+    app.router.add_post("/publish", handle_publish, name="publish")
+    app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -263,36 +263,39 @@ async def run_web_server(
 async def listen_to_runner(runner_url, generator_manager):
     from aiohttp.client import ClientSession
     import urllib.parse
-    url = urllib.parse.urljoin(runner_url, 'ws/result')
+
+    url = urllib.parse.urljoin(runner_url, "ws/result")
     async with ClientSession() as session:
         async for result in pubsub_reader(session, url):
-            if result['code'] != 'success':
+            if result["code"] != "success":
                 continue
-            generator_manager.trigger(result['suite'])
+            generator_manager.trigger(result["suite"])
 
 
 async def publish_suite(
-        dists_directory, db, package_info_provider, config, suite,
-        gpg_context):
+    dists_directory, db, package_info_provider, config, suite, gpg_context
+):
     start_time = datetime.now()
-    note('Publishing %s', suite.name)
+    note("Publishing %s", suite.name)
     suite_path = os.path.join(dists_directory, suite.name)
     os.makedirs(suite_path, exist_ok=True)
     await write_suite_files(
-        suite_path, db, package_info_provider, suite,
+        suite_path,
+        db,
+        package_info_provider,
+        suite,
         components=config.distribution.component,
-        arches=ARCHES, origin=config.origin,
-        gpg_context=gpg_context)
-    note('Done publishing %s (took %s)',
-         suite.name, datetime.now() - start_time)
+        arches=ARCHES,
+        origin=config.origin,
+        gpg_context=gpg_context,
+    )
+    note("Done publishing %s (took %s)", suite.name, datetime.now() - start_time)
     last_publish_success.labels(suite=suite.name).set_to_current_time()
     last_publish_time[suite.name] = datetime.now()
 
 
 class GeneratorManager(object):
-
-    def __init__(self, dists_dir, db, config, package_info_provider,
-                 gpg_context):
+    def __init__(self, dists_dir, db, config, package_info_provider, gpg_context):
         self.dists_dir = dists_dir
         self.db = db
         self.config = config
@@ -313,9 +316,16 @@ class GeneratorManager(object):
             if not task.done():
                 return
         loop = asyncio.get_event_loop()
-        self.generators[suite_config.name] = loop.create_task(publish_suite(
-            self.dists_dir, self.db, self.package_info_provider, self.config,
-            suite_config, self.gpg_context))
+        self.generators[suite_config.name] = loop.create_task(
+            publish_suite(
+                self.dists_dir,
+                self.db,
+                self.package_info_provider,
+                self.config,
+                suite_config,
+                self.gpg_context,
+            )
+        )
 
 
 async def loop_publish(config, generator_manager):
@@ -328,31 +338,24 @@ async def loop_publish(config, generator_manager):
 
 async def main(argv=None):
     import argparse
-    parser = argparse.ArgumentParser(prog='janitor.archive')
+
+    parser = argparse.ArgumentParser(prog="janitor.archive")
     parser.add_argument(
-        '--listen-address', type=str,
-        help='Listen address', default='localhost')
+        "--listen-address", type=str, help="Listen address", default="localhost"
+    )
+    parser.add_argument("--port", type=int, help="Listen port", default=9914)
     parser.add_argument(
-        '--port', type=int,
-        help='Listen port', default=9914)
-    parser.add_argument(
-        '--config', type=str, default='janitor.conf',
-        help='Path to configuration.')
-    parser.add_argument(
-        '--dists-directory',
-        type=str,
-        help='Dists directory')
-    parser.add_argument(
-        '--cache-directory',
-        type=str,
-        help='Cache directory')
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
+    parser.add_argument("--dists-directory", type=str, help="Dists directory")
+    parser.add_argument("--cache-directory", type=str, help="Cache directory")
 
     args = parser.parse_args()
     if not args.dists_directory:
         parser.print_usage()
         sys.exit(1)
 
-    with open(args.config, 'r') as f:
+    with open(args.config, "r") as f:
         config = read_config(f)
 
     os.makedirs(args.dists_directory, exist_ok=True)
@@ -367,21 +370,29 @@ async def main(argv=None):
     if args.cache_directory:
         os.makedirs(args.cache_directory, exist_ok=True)
         package_info_provider = CachingPackageInfoProvider(
-                package_info_provider, args.cache_directory)
+            package_info_provider, args.cache_directory
+        )
 
     generator_manager = GeneratorManager(
-        args.dists_directory, db, config, package_info_provider,
-        gpg_context)
+        args.dists_directory, db, config, package_info_provider, gpg_context
+    )
 
     async with package_info_provider:
         loop = asyncio.get_event_loop()
 
         await asyncio.gather(
-            loop.create_task(run_web_server(
-                args.listen_address, args.port, args.dists_directory,
-                config, generator_manager)),
-            loop.create_task(loop_publish(config, generator_manager)))
+            loop.create_task(
+                run_web_server(
+                    args.listen_address,
+                    args.port,
+                    args.dists_directory,
+                    config,
+                    generator_manager,
+                )
+            ),
+            loop.create_task(loop_publish(config, generator_manager)),
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(asyncio.run(main(sys.argv)))

@@ -20,7 +20,7 @@ from aiohttp import (
     ClientResponseError,
     ClientTimeout,
     ServerDisconnectedError,
-    )
+)
 import gzip
 from io import BytesIO
 import os
@@ -32,7 +32,6 @@ class ServiceUnavailable(Exception):
 
 
 class LogFileManager(object):
-
     async def has_log(self, pkg, run_id, name, timeout=None):
         raise NotImplementedError(self.has_log)
 
@@ -44,16 +43,15 @@ class LogFileManager(object):
 
 
 class FileSystemLogFileManager(LogFileManager):
-
     def __init__(self, log_directory):
         self.log_directory = log_directory
 
     def _get_paths(self, pkg, run_id, name):
-        if '/' in pkg or '/' in run_id or '/' in name:
+        if "/" in pkg or "/" in run_id or "/" in name:
             return []
         return [
             os.path.join(self.log_directory, pkg, run_id, name),
-            os.path.join(self.log_directory, pkg, run_id, name) + '.gz'
+            os.path.join(self.log_directory, pkg, run_id, name) + ".gz",
         ]
 
     async def has_log(self, pkg, run_id, name):
@@ -63,19 +61,18 @@ class FileSystemLogFileManager(LogFileManager):
         for path in self._get_paths(pkg, run_id, name):
             if not os.path.exists(path):
                 continue
-            if path.endswith('.gz'):
-                return gzip.GzipFile(path, mode='rb')
+            if path.endswith(".gz"):
+                return gzip.GzipFile(path, mode="rb")
             else:
-                return open(path, 'rb')
+                return open(path, "rb")
         raise FileNotFoundError(name)
 
     async def import_log(self, pkg, run_id, orig_path, timeout=None):
         dest_dir = os.path.join(self.log_directory, pkg, run_id)
         os.makedirs(dest_dir, exist_ok=True)
-        with open(orig_path, 'rb') as inf:
-            dest_path = os.path.join(
-                dest_dir, os.path.basename(orig_path) + '.gz')
-            with gzip.GzipFile(dest_path, mode='wb') as outf:
+        with open(orig_path, "rb") as inf:
+            dest_path = os.path.join(dest_dir, os.path.basename(orig_path) + ".gz")
+            with gzip.GzipFile(dest_path, mode="wb") as outf:
                 outf.write(inf.read())
 
     async def delete_log(self, pkg, run_id, name):
@@ -91,19 +88,19 @@ class LogRetrievalError(Exception):
 
 
 class S3LogFileManager(LogFileManager):
-
-    def __init__(self, endpoint_url, bucket_name='debian-janitor'):
+    def __init__(self, endpoint_url, bucket_name="debian-janitor"):
         import boto3
-        self.base_url = endpoint_url + ('/%s/' % bucket_name)
+
+        self.base_url = endpoint_url + ("/%s/" % bucket_name)
         self.session = ClientSession()
-        self.s3 = boto3.resource('s3', endpoint_url=endpoint_url)
+        self.s3 = boto3.resource("s3", endpoint_url=endpoint_url)
         self.s3_bucket = self.s3.Bucket(bucket_name)
 
     def _get_key(self, pkg, run_id, name):
-        return 'logs/%s/%s/%s.gz' % (pkg, run_id, name)
+        return "logs/%s/%s/%s.gz" % (pkg, run_id, name)
 
     def _get_url(self, pkg, run_id, name):
-        return '%s%s' % (self.base_url, self._get_key(pkg, run_id, name))
+        return "%s%s" % (self.base_url, self._get_key(pkg, run_id, name))
 
     async def has_log(self, pkg, run_id, name):
         url = self._get_url(pkg, run_id, name)
@@ -115,8 +112,8 @@ class S3LogFileManager(LogFileManager):
             if resp.status == 403:
                 return False
             raise LogRetrievalError(
-                'Unexpected response code %d: %s' % (
-                    resp.status, await resp.text()))
+                "Unexpected response code %d: %s" % (resp.status, await resp.text())
+            )
 
     async def get_log(self, pkg, run_id, name, timeout=10):
         url = self._get_url(pkg, run_id, name)
@@ -129,32 +126,32 @@ class S3LogFileManager(LogFileManager):
             if resp.status == 403:
                 raise PermissionError(await resp.text())
             raise LogRetrievalError(
-                'Unexpected response code %d: %s' % (
-                    resp.status, await resp.text()))
+                "Unexpected response code %d: %s" % (resp.status, await resp.text())
+            )
 
     async def import_log(self, pkg, run_id, orig_path, timeout=360):
-        with open(orig_path, 'rb') as f:
+        with open(orig_path, "rb") as f:
             data = gzip.compress(f.read())
 
         key = self._get_key(pkg, run_id, os.path.basename(orig_path))
-        self.s3_bucket.put_object(Key=key, Body=data, ACL='public-read')
+        self.s3_bucket.put_object(Key=key, Body=data, ACL="public-read")
 
     async def delete_log(self, pkg, run_id, name):
         key = self._get_key(pkg, run_id, name)
-        self.s3_bucket.delete_objects(Delete={'Objects': [{'Key': key}]})
+        self.s3_bucket.delete_objects(Delete={"Objects": [{"Key": key}]})
 
 
 class GCSLogFilemanager(LogFileManager):
-
     def __init__(self, location, creds_path=None):
         from gcloud.aio.storage import Storage
+
         self.bucket_name = URL(location).host
         self.session = ClientSession()
         self.storage = Storage(service_file=creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
     def _get_object_name(self, pkg, run_id, name):
-        return '%s/%s/%s.gz' % (pkg, run_id, name)
+        return "%s/%s/%s.gz" % (pkg, run_id, name)
 
     async def has_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)
@@ -164,8 +161,8 @@ class GCSLogFilemanager(LogFileManager):
         object_name = self._get_object_name(pkg, run_id, name)
         try:
             data = await self.storage.download(
-                self.bucket_name, object_name, session=self.session,
-                timeout=timeout)
+                self.bucket_name, object_name, session=self.session, timeout=timeout
+            )
             return BytesIO(gzip.decompress(data))
         except ClientResponseError as e:
             if e.status == 404:
@@ -175,14 +172,13 @@ class GCSLogFilemanager(LogFileManager):
             raise ServiceUnavailable()
 
     async def import_log(self, pkg, run_id, orig_path, timeout=360):
-        object_name = self._get_object_name(
-            pkg, run_id, os.path.basename(orig_path))
-        with open(orig_path, 'rb') as f:
+        object_name = self._get_object_name(pkg, run_id, os.path.basename(orig_path))
+        with open(orig_path, "rb") as f:
             uploaded_data = gzip.compress(f.read())
         try:
             await self.storage.upload(
-                self.bucket_name, object_name, uploaded_data,
-                timeout=timeout)
+                self.bucket_name, object_name, uploaded_data, timeout=timeout
+            )
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable()
@@ -190,8 +186,8 @@ class GCSLogFilemanager(LogFileManager):
 
 
 def get_log_manager(location):
-    if location.startswith('gs://'):
+    if location.startswith("gs://"):
         return GCSLogFilemanager(location)
-    if location.startswith('http:') or location.startswith('https:'):
+    if location.startswith("http:") or location.startswith("https:"):
         return S3LogFileManager(location)
     return FileSystemLogFileManager(location)
