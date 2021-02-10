@@ -21,33 +21,54 @@ import unittest
 
 
 class IterSectionsTests(unittest.TestCase):
-
     def test_nothing(self):
         self.assertEqual([(None, ["foo"])], list(iter_sections("foo\n")))
 
     def test_simple(self):
         self.maxDiff = None
-        self.assertEqual([
-  (None,  # noqa
-   ['[The following lists of changes regard files as different if they have',
-    'different names, permissions or owners.]']),
-  ('Files in second .changes but not in first',  # noqa
-   ['-rw-r--r--  root/root   /usr/lib/debug/.build-id/e4/3520e0f1e.debug']),
-  ('Files in first .changes but not in second',  # noqa
-   ['-rw-r--r--  root/root   /usr/lib/debug/.build-id/28/0303571bd.debug']),
-  (  # noqa
-   'Control files of package xserver-blah: lines which differ (wdiff format)',
-   ['Installed-Size: [-174-] {+170+}',
-    'Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}']),
-  (  # noqa
-   'Control files of package xserver-dbgsym: lines which differ'
-   ' (wdiff format)',
-   ['Build-Ids: [-280303571bd7f8-] {+e43520e0f1eb+}',
-    'Depends: xserver-blah (= [-1:1.7.9-2~jan+unchanged1)-] '
-    '{+1:1.7.9-3~jan+lint1)+}',
-    'Installed-Size: [-515-] {+204+}',
-    'Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}'])],
-            list(iter_sections("""\
+        self.assertEqual(
+            [
+                (
+                    None,  # noqa
+                    [
+                        "[The following lists of changes regard files as different if they have",
+                        "different names, permissions or owners.]",
+                    ],
+                ),
+                (
+                    "Files in second .changes but not in first",  # noqa
+                    [
+                        "-rw-r--r--  root/root   /usr/lib/debug/.build-id/e4/3520e0f1e.debug"
+                    ],
+                ),
+                (
+                    "Files in first .changes but not in second",  # noqa
+                    [
+                        "-rw-r--r--  root/root   /usr/lib/debug/.build-id/28/0303571bd.debug"
+                    ],
+                ),
+                (  # noqa
+                    "Control files of package xserver-blah: lines which differ (wdiff format)",
+                    [
+                        "Installed-Size: [-174-] {+170+}",
+                        "Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}",
+                    ],
+                ),
+                (  # noqa
+                    "Control files of package xserver-dbgsym: lines which differ"
+                    " (wdiff format)",
+                    [
+                        "Build-Ids: [-280303571bd7f8-] {+e43520e0f1eb+}",
+                        "Depends: xserver-blah (= [-1:1.7.9-2~jan+unchanged1)-] "
+                        "{+1:1.7.9-3~jan+lint1)+}",
+                        "Installed-Size: [-515-] {+204+}",
+                        "Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}",
+                    ],
+                ),
+            ],
+            list(
+                iter_sections(
+                    """\
 [The following lists of changes regard files as different if they have
 different names, permissions or owners.]
 
@@ -70,11 +91,13 @@ Build-Ids: [-280303571bd7f8-] {+e43520e0f1eb+}
 Depends: xserver-blah (= [-1:1.7.9-2~jan+unchanged1)-] {+1:1.7.9-3~jan+lint1)+}
 Installed-Size: [-515-] {+204+}
 Version: [-1:1.7.9-2~jan+unchanged1-] {+1:1.7.9-3~jan+lint1+}
-""")))
+"""
+                )
+            ),
+        )
 
 
 class FilterBoringTests(unittest.TestCase):
-
     def test_just_versions(self):
         debdiff = """\
 File lists identical (after any substitutions)
@@ -97,9 +120,12 @@ Control files of package acpi-support-base: lines which differ (wdiff format)
 Version: [-0.143-4~jan+unchanged1-] {+0.143-5~jan+lint1+}
 """
         newdebdiff = filter_boring(
-            debdiff, '0.143-4~jan+unchanged1', '0.143-5~jan+lint1')
+            debdiff, "0.143-4~jan+unchanged1", "0.143-5~jan+lint1"
+        )
         self.maxDiff = None
-        self.assertEqual(newdebdiff, """\
+        self.assertEqual(
+            newdebdiff,
+            """\
 File lists identical (after any substitutions)
 
 No differences were encountered between the control files of package \
@@ -113,4 +139,5 @@ acpi-support
 
 No differences were encountered between the control files of package \
 acpi-support-base
-""")
+""",
+        )

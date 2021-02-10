@@ -16,9 +16,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 __all__ = [
-    'mutter',
-    'note',
-    'warning',
+    "mutter",
+    "note",
+    "warning",
 ]
 
 import sys
@@ -33,28 +33,29 @@ class JanitorUIFactory(NoninteractiveUIFactory):
     """UI Factory implementation for the janitor."""
 
     def note(self, msg):
-        sys.stdout.write(msg + '\n')
+        sys.stdout.write(msg + "\n")
 
     def get_username(self, prompt, **kwargs):
         return None
 
-    def get_password(self, prompt=u'', **kwargs):
+    def get_password(self, prompt=u"", **kwargs):
         return None
 
     def _make_output_stream_explicit(self, encoding, encoding_type):
         return NullOutputStream(encoding)
 
     def show_error(self, msg):
-        sys.stderr.write('error: %s\n' % msg)
+        sys.stderr.write("error: %s\n" % msg)
 
     def show_message(self, msg):
         self.note(msg)
 
     def show_warning(self, msg):
-        sys.stderr.write('warning: %s\n' % msg)
+        sys.stderr.write("warning: %s\n" % msg)
 
 
 import breezy  # noqa: E402
+
 breezy.ui.ui_factory = JanitorUIFactory()
 if not breezy._global_state:
     breezy.initialize(setup_ui=False)

@@ -20,9 +20,7 @@
 from __future__ import absolute_import
 
 from google.protobuf import text_format  # type: ignore
-from typing import List, Tuple, Optional
-
-from breezy.git.mapping import default_mapping
+from typing import List, Tuple
 
 from . import state, trace
 from .config import read_config
@@ -30,18 +28,18 @@ from .codebase_metadata_pb2 import CodebaseList, CodebaseMetadata
 
 
 async def update_codebase_metadata(conn, provided_codebases):
-    trace.note('Updating codebase metadata.')
+    trace.note("Updating codebase metadata.")
     codebases = []
     for codebase in provided_codebases:
-        codebases.append(
-            (codebase.name, codebase.branch_url, codebase.subpath))
+        codebases.append((codebase.name, codebase.branch_url, codebase.subpath))
     await conn.executemany(
         "INSERT INTO upstream_codebase (name, branch_url, subpath) "
         "VALUES ($1, $2, $3)"
         "ON CONFLICT (name) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath",
-        codebases)
+        codebases,
+    )
 
 
 def iter_codebases_from_script(stdin) -> Tuple[List[CodebaseMetadata]]:
@@ -58,20 +56,21 @@ async def main():
         REGISTRY,
     )
 
-    parser = argparse.ArgumentParser(prog='codebase_metadata')
-    parser.add_argument('--prometheus', type=str,
-                        help='Prometheus push gateway to export to.')
+    parser = argparse.ArgumentParser(prog="codebase_metadata")
     parser.add_argument(
-        '--config', type=str, default='janitor.conf',
-        help='Path to configuration.')
+        "--prometheus", type=str, help="Prometheus push gateway to export to."
+    )
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
 
     args = parser.parse_args()
 
     last_success_gauge = Gauge(
-        'job_last_success_unixtime',
-        'Last time a batch job successfully finished')
+        "job_last_success_unixtime", "Last time a batch job successfully finished"
+    )
 
-    with open(args.config, 'r') as f:
+    with open(args.config, "r") as f:
         config = read_config(f)
 
     db = state.Database(config.database_location)
@@ -83,11 +82,13 @@ async def main():
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(args.prometheus, job='janitor.codebase_metadata',
-                        registry=REGISTRY)
+        push_to_gateway(
+            args.prometheus, job="janitor.codebase_metadata", registry=REGISTRY
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())

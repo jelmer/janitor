@@ -23,10 +23,9 @@ import unittest
 
 
 class FormatDurationTests(unittest.TestCase):
-
     def test_some(self):
-        self.assertEqual('10s', format_duration(timedelta(seconds=10)))
-        self.assertEqual('1m10s', format_duration(timedelta(seconds=70)))
-        self.assertEqual('1h0m', format_duration(timedelta(hours=1)))
-        self.assertEqual('1d1h', format_duration(timedelta(days=1, hours=1)))
-        self.assertEqual('2w1d', format_duration(timedelta(weeks=2, days=1)))
+        self.assertEqual("10s", format_duration(timedelta(seconds=10)))
+        self.assertEqual("1m10s", format_duration(timedelta(seconds=70)))
+        self.assertEqual("1h0m", format_duration(timedelta(hours=1)))
+        self.assertEqual("1d1h", format_duration(timedelta(days=1, hours=1)))
+        self.assertEqual("2w1d", format_duration(timedelta(weeks=2, days=1)))

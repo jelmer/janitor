@@ -42,7 +42,6 @@ class ArtifactsMissing(Exception):
 
 
 class ArtifactManager(object):
-
     async def store_artifacts(self, run_id, local_path, names=None):
         raise NotImplementedError(self.store_artifacts)
 
@@ -50,7 +49,8 @@ class ArtifactManager(object):
         raise NotImplementedError(self.get_artifact)
 
     async def retrieve_artifacts(
-            self, run_id, local_path, filter_fn=None, timeout=None):
+        self, run_id, local_path, filter_fn=None, timeout=None
+    ):
         raise NotImplementedError(self.retrieve_artifacts)
 
     async def iter_ids(self):
@@ -64,7 +64,6 @@ class ArtifactManager(object):
 
 
 class LocalArtifactManager(ArtifactManager):
-
     def __init__(self, path):
         self.path = os.path.abspath(path)
         if not os.path.isdir(self.path):
@@ -73,8 +72,7 @@ class LocalArtifactManager(ArtifactManager):
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.path)
 
-    async def store_artifacts(self, run_id, local_path, names=None,
-                              timeout=None):
+    async def store_artifacts(self, run_id, local_path, names=None, timeout=None):
         run_dir = os.path.join(self.path, run_id)
         try:
             os.mkdir(run_dir)
@@ -83,9 +81,7 @@ class LocalArtifactManager(ArtifactManager):
         if names is None:
             names = os.listdir(local_path)
         for name in names:
-            shutil.copy(
-                os.path.join(local_path, name),
-                os.path.join(run_dir, name))
+            shutil.copy(os.path.join(local_path, name), os.path.join(run_dir, name))
 
     async def iter_ids(self):
         for entry in os.scandir(self.path):
@@ -95,10 +91,11 @@ class LocalArtifactManager(ArtifactManager):
         shutil.rmtree(os.path.join(self.path, run_id))
 
     async def get_artifact(self, run_id, filename, timeout=None):
-        return open(os.path.join(self.path, run_id, filename), 'rb')
+        return open(os.path.join(self.path, run_id, filename), "rb")
 
     async def retrieve_artifacts(
-            self, run_id, local_path, filter_fn=None, timeout=None):
+        self, run_id, local_path, filter_fn=None, timeout=None
+    ):
         run_path = os.path.join(self.path, run_id)
         if not os.path.isdir(run_path):
             raise ArtifactsMissing(run_id)
@@ -109,28 +106,26 @@ class LocalArtifactManager(ArtifactManager):
 
 
 class GCSArtifactManager(ArtifactManager):
-
     def __init__(self, location, creds_path=None):
         self.bucket_name = URL(location).host
         self.creds_path = creds_path
 
     def __repr__(self):
-        return "%s(%r)" % (type(self).__name__, 'gs://%s/' % self.bucket_name)
+        return "%s(%r)" % (type(self).__name__, "gs://%s/" % self.bucket_name)
 
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
+
         self.session = ClientSession()
         await self.session.__aenter__()
-        self.storage = Storage(
-            service_file=self.creds_path, session=self.session)
+        self.storage = Storage(service_file=self.creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
     async def __aexit__(self, exc_type, exc, tb):
         await self.session.__aexit__(exc_type, exc, tb)
         return False
 
-    async def store_artifacts(
-            self, run_id, local_path, names=None, timeout=None):
+    async def store_artifacts(self, run_id, local_path, names=None, timeout=None):
         if timeout is None:
             timeout = DEFAULT_GCS_TIMEOUT
         if names is None:
@@ -139,57 +134,69 @@ class GCSArtifactManager(ArtifactManager):
             return
         todo = []
         for name in names:
-            with open(os.path.join(local_path, name), 'rb') as f:
+            with open(os.path.join(local_path, name), "rb") as f:
                 uploaded_data = f.read()
-                todo.append(self.storage.upload(
-                    self.bucket_name, '%s/%s' % (run_id, name),
-                    uploaded_data, timeout=timeout))
+                todo.append(
+                    self.storage.upload(
+                        self.bucket_name,
+                        "%s/%s" % (run_id, name),
+                        uploaded_data,
+                        timeout=timeout,
+                    )
+                )
         try:
             await asyncio.gather(*todo)
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable()
             raise
-        note('Uploaded %r to run %s in bucket %s.',
-             names, run_id, self.bucket_name)
+        note("Uploaded %r to run %s in bucket %s.", names, run_id, self.bucket_name)
 
     async def iter_ids(self):
         ids = set()
         for name in await self.bucket.list_blobs():
-            log_id = name.split('/')[0]
+            log_id = name.split("/")[0]
             if log_id not in ids:
                 yield log_id
             ids.add(log_id)
 
     async def retrieve_artifacts(
-            self, run_id, local_path, filter_fn=None, timeout=None):
+        self, run_id, local_path, filter_fn=None, timeout=None
+    ):
         if timeout is None:
             timeout = DEFAULT_GCS_TIMEOUT
-        names = await self.bucket.list_blobs(prefix=run_id+'/')
+        names = await self.bucket.list_blobs(prefix=run_id + "/")
         if not names:
             raise ArtifactsMissing(run_id)
 
         async def download_blob(name):
-            with open(
-                    os.path.join(local_path, os.path.basename(name)),
-                    'wb+') as f:
-                f.write(await self.storage.download(
-                    bucket=self.bucket_name, object_name=name,
-                    timeout=timeout))
+            with open(os.path.join(local_path, os.path.basename(name)), "wb+") as f:
+                f.write(
+                    await self.storage.download(
+                        bucket=self.bucket_name, object_name=name, timeout=timeout
+                    )
+                )
 
-        await asyncio.gather(*[
-            download_blob(name) for name in names
-            if filter_fn is None or filter_fn(os.path.basename(name))])
+        await asyncio.gather(
+            *[
+                download_blob(name)
+                for name in names
+                if filter_fn is None or filter_fn(os.path.basename(name))
+            ]
+        )
 
-    async def get_artifact(
-            self, run_id, filename, timeout=DEFAULT_GCS_TIMEOUT):
-        return BytesIO(await self.storage.download(
-            bucket=self.bucket_name, object_name='%s/%s' % (run_id, filename),
-            timeout=timeout))
+    async def get_artifact(self, run_id, filename, timeout=DEFAULT_GCS_TIMEOUT):
+        return BytesIO(
+            await self.storage.download(
+                bucket=self.bucket_name,
+                object_name="%s/%s" % (run_id, filename),
+                timeout=timeout,
+            )
+        )
 
 
 def get_artifact_manager(location):
-    if location.startswith('gs://'):
+    if location.startswith("gs://"):
         return GCSArtifactManager(location)
     # TODO(jelmer): Support uploading to GCS
     return LocalArtifactManager(location)
@@ -201,47 +208,47 @@ async def list_ids(manager):
             print(id)
 
 
-async def upload_backup_artifacts(backup_artifact_manager, artifact_manager, timeout=None):
+async def upload_backup_artifacts(
+    backup_artifact_manager, artifact_manager, timeout=None
+):
     async with backup_artifact_manager, artifact_manager:
         async for run_id in backup_artifact_manager.iter_ids():
             with tempfile.TemporaryDirectory() as td:
-                await backup_artifact_manager.retrieve_artifacts(run_id, td, timeout=timeout)
+                await backup_artifact_manager.retrieve_artifacts(
+                    run_id, td, timeout=timeout
+                )
                 try:
                     await artifact_manager.store_artifacts(run_id, td, timeout=timeout)
                 except Exception as e:
-                    warning('Unable to upload backup artifacts (%r): %s',
-                            run_id, e)
+                    warning("Unable to upload backup artifacts (%r): %s", run_id, e)
                 else:
                     await backup_artifact_manager.delete_artifactes(run_id)
 
 
-async def store_artifacts_with_backup(
-        manager, backup_manager, from_dir, run_id, names):
+async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id, names):
     try:
         await manager.store_artifacts(run_id, from_dir, names)
     except Exception as e:
-        warning('Unable to upload artifacts for %r: %r',
-                run_id, e)
+        warning("Unable to upload artifacts for %r: %r", run_id, e)
         if backup_manager:
             await backup_manager.store_artifacts(run_id, from_dir, names)
-            note('Uploading results to backup artifact '
-                 'location %r.', backup_manager)
+            note("Uploading results to backup artifact " "location %r.", backup_manager)
             return True
         else:
-            warning('No backup artifact manager set. '
-                    'Discarding results.')
+            warning("No backup artifact manager set. " "Discarding results.")
             return False
     else:
         return True
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(dest='command')
-    list_parser = subparsers.add_parser('list')
-    list_parser.add_argument('location', type=str)
+    subparsers = parser.add_subparsers(dest="command")
+    list_parser = subparsers.add_parser("list")
+    list_parser.add_argument("location", type=str)
     args = parser.parse_args()
-    if args.command == 'list':
+    if args.command == "list":
         manager = get_artifact_manager(args.location)
         asyncio.run(list_ids(manager))

@@ -29,38 +29,33 @@ async def iter_sources(url):
     async with ClientSession() as session:
         async with session.get(url) as resp:
             if resp.status != 200:
-                raise Exception(
-                    'URL %s returned response code %d' % (
-                        url, resp.status))
+                raise Exception("URL %s returned response code %d" % (url, resp.status))
             contents = await resp.read()
-            if url.endswith('.gz'):
+            if url.endswith(".gz"):
                 contents = gzip.decompress(contents)
             for source in Sources.iter_paragraphs(contents):
                 yield source
 
 
 async def main():
-    import apt_pkg
     import argparse
     import re
-    parser = argparse.ArgumentParser(prog='apt-candidates')
-    parser.add_argument("url", nargs='*')
+
+    parser = argparse.ArgumentParser(prog="apt-candidates")
+    parser.add_argument("url", nargs="*")
     parser.add_argument(
-        '--maintainer', action='append', type=str,
-        help='Filter by maintainer email')
+        "--maintainer", action="append", type=str, help="Filter by maintainer email"
+    )
     parser.add_argument(
-        '--suite', action='append', type=str,
-        help='Suite to generate candidate for.')
+        "--suite", action="append", type=str, help="Suite to generate candidate for."
+    )
+    parser.add_argument("--value", type=int, help="Value to specify.", default=10)
     parser.add_argument(
-        '--value', type=int,
-        help='Value to specify.',
-        default=10)
+        "--version-re", type=str, help="Filter on versions matching regex."
+    )
     parser.add_argument(
-        '--version-re', type=str,
-        help='Filter on versions matching regex.')
-    parser.add_argument(
-        '--exclude-native', action='store_true',
-        help='Exclude native packages.')
+        "--exclude-native", action="store_true", help="Exclude native packages."
+    )
     args = parser.parse_args()
 
     if args.version_re:
@@ -70,25 +65,23 @@ async def main():
 
     for url in args.url:
         async for source in iter_sources(url):
-            if (version_re is not None and
-                    not version_re.search(source['Version'])):
+            if version_re is not None and not version_re.search(source["Version"]):
                 continue
-            if (args.exclude_native and
-                    not Version(source['Version']).debian_revision):
+            if args.exclude_native and not Version(source["Version"]).debian_revision:
                 continue
-            maintainer_email = parseaddr(source['Maintainer'])[1]
-            if (args.maintainer and
-                    maintainer_email not in args.maintainer):
+            maintainer_email = parseaddr(source["Maintainer"])[1]
+            if args.maintainer and maintainer_email not in args.maintainer:
                 continue
             for suite in args.suite:
                 cl = CandidateList()
                 candidate = cl.candidate.add()
                 candidate.suite = suite
-                candidate.package = source['Package']
+                candidate.package = source["Package"]
                 candidate.value = args.value
                 print(cl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

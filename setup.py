@@ -18,40 +18,40 @@
 from setuptools import setup
 
 setup(
-    name='debian-janitor',
+    name="debian-janitor",
     author="Jelmer Vernooij",
     author_email="jelmer@jelmer.uk",
     url="https://salsa.debian.org/jelmer/debian-janitor",
     description="Manager for automatic VCS changes",
-    version='0.0.1',
-    license='GNU GPL v2 or later',
+    version="0.0.1",
+    license="GNU GPL v2 or later",
     keywords="debian git bzr vcs github gitlab launchpad",
     packages=[
-        'janitor',
-        'janitor.tests',
-        'janitor.site',
+        "janitor",
+        "janitor.tests",
+        "janitor.site",
     ],
     classifiers=[
-        'Development Status :: 3 - Alpha',
-        'License :: OSI Approved :: GNU General Public License (GPL)',
-        'Programming Language :: Python :: 3.6',
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
-        'Programming Language :: Python :: Implementation :: CPython',
-        'Programming Language :: Python :: Implementation :: PyPy',
-        'Operating System :: POSIX',
-        'Topic :: Software Development :: Version Control',
+        "Development Status :: 3 - Alpha",
+        "License :: OSI Approved :: GNU General Public License (GPL)",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: Implementation :: CPython",
+        "Programming Language :: Python :: Implementation :: PyPy",
+        "Operating System :: POSIX",
+        "Topic :: Software Development :: Version Control",
     ],
     entry_points={
-        'console_scripts': [
-            'janitor-runner=janitor.run:main',
-            'janitor-worker=janitor.worker:main',
+        "console_scripts": [
+            "janitor-runner=janitor.run:main",
+            "janitor-worker=janitor.worker:main",
         ],
     },
-    test_suite='janitor.tests.test_suite',
+    test_suite="janitor.tests.test_suite",
     install_requires=[
-        'lintian-brush',
-        'breezy',
-        'jinja2',
-    ]
+        "lintian-brush",
+        "breezy",
+        "jinja2",
+    ],
 )

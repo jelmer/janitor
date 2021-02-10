@@ -21,23 +21,12 @@ import json
 import shlex
 import asyncpg
 from contextlib import asynccontextmanager
-from typing import (
-    Optional,
-    Tuple,
-    List,
-    Any,
-    Union,
-    Callable,
-    AsyncIterable,
-    Set,
-    Dict
-    )
+from typing import Optional, Tuple, List, Any, Union, Callable, AsyncIterable, Set, Dict
 from breezy import urlutils
 from breezy.trace import warning
 
 
 class Database(object):
-
     def __init__(self, url):
         self.url = url
         self.pool = None
@@ -48,35 +37,43 @@ class Database(object):
             self.pool = await asyncpg.create_pool(self.url)
         async with self.pool.acquire() as conn:
             await conn.set_type_codec(
-                        'json',
-                        encoder=json.dumps,
-                        decoder=json.loads,
-                        schema='pg_catalog'
-                    )
+                "json", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+            )
             await conn.set_type_codec(
-                        'jsonb',
-                        encoder=json.dumps,
-                        decoder=json.loads,
-                        schema='pg_catalog'
-                    )
+                "jsonb", encoder=json.dumps, decoder=json.loads, schema="pg_catalog"
+            )
             await conn.set_type_codec(
-                'debversion', format='text', encoder=str, decoder=Version)
+                "debversion", format="text", encoder=str, decoder=Version
+            )
             yield conn
 
 
 async def store_run(
-        conn: asyncpg.Connection,
-        run_id: str, name: str, vcs_url: str, start_time: datetime.datetime,
-        finish_time: datetime.datetime, command: List[str], description: str,
-        instigated_context: Optional[str], context: Optional[str],
-        main_branch_revision: Optional[bytes], result_code: str,
-        build_version: Optional[Version],
-        build_distribution: Optional[str], branch_name: str,
-        revision: Optional[bytes], subworker_result: Optional[Any], suite: str,
-        logfilenames: List[str], value: Optional[int], worker_name: str,
-        worker_link: Optional[str],
-        result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
-        result_tags: Optional[List[Tuple[str, bytes]]] = None):
+    conn: asyncpg.Connection,
+    run_id: str,
+    name: str,
+    vcs_url: str,
+    start_time: datetime.datetime,
+    finish_time: datetime.datetime,
+    command: List[str],
+    description: str,
+    instigated_context: Optional[str],
+    context: Optional[str],
+    main_branch_revision: Optional[bytes],
+    result_code: str,
+    build_version: Optional[Version],
+    build_distribution: Optional[str],
+    branch_name: str,
+    revision: Optional[bytes],
+    subworker_result: Optional[Any],
+    suite: str,
+    logfilenames: List[str],
+    value: Optional[int],
+    worker_name: str,
+    worker_link: Optional[str],
+    result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
+    result_tags: Optional[List[Tuple[str, bytes]]] = None,
+):
     """Store a run.
 
     Args:
@@ -108,14 +105,14 @@ async def store_run(
         result_branches_updated = None
     else:
         result_branches_updated = [
-            (role, n, br.decode('utf-8'), r.decode('utf-8'))
-            for (role, n, br, r) in result_branches]
+            (role, n, br.decode("utf-8"), r.decode("utf-8"))
+            for (role, n, br, r) in result_branches
+        ]
 
     if result_tags is None:
         result_tags_updated = None
     else:
-        result_tags_updated = [
-            (n, r.decode('utf-8')) for (n, r) in result_tags]
+        result_tags_updated = [(n, r.decode("utf-8")) for (n, r) in result_tags]
 
     async with conn.transaction():
         await conn.execute(
@@ -126,50 +123,88 @@ async def store_run(
             "value, worker, worker_link, result_branches, result_tags) VALUES "
             "($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
             "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)",
-            run_id, ' '.join(command), description, result_code,
-            start_time, finish_time, name, instigated_context, context,
-            str(build_version) if build_version else None, build_distribution,
-            main_branch_revision.decode('utf-8')
-            if main_branch_revision else None,
-            branch_name, revision.decode('utf-8') if revision else None,
-            subworker_result if subworker_result else None, suite,
-            vcs_url, logfilenames, value, worker_name,
-            worker_link, result_branches_updated, result_tags_updated)
+            run_id,
+            " ".join(command),
+            description,
+            result_code,
+            start_time,
+            finish_time,
+            name,
+            instigated_context,
+            context,
+            str(build_version) if build_version else None,
+            build_distribution,
+            main_branch_revision.decode("utf-8") if main_branch_revision else None,
+            branch_name,
+            revision.decode("utf-8") if revision else None,
+            subworker_result if subworker_result else None,
+            suite,
+            vcs_url,
+            logfilenames,
+            value,
+            worker_name,
+            worker_link,
+            result_branches_updated,
+            result_tags_updated,
+        )
 
         if result_branches:
             await conn.executemany(
-                'INSERT INTO new_result_branch '
-                '(run_id, role, remote_name, base_revision, revision) '
-                'VALUES ($1, $2, $3, $4, $5)', [
-                    (run_id, role, remote_name, br.decode('utf-8'),
-                        r.decode('utf-8'))
-                    for (role, remote_name, br, r) in result_branches])
+                "INSERT INTO new_result_branch "
+                "(run_id, role, remote_name, base_revision, revision) "
+                "VALUES ($1, $2, $3, $4, $5)",
+                [
+                    (run_id, role, remote_name, br.decode("utf-8"), r.decode("utf-8"))
+                    for (role, remote_name, br, r) in result_branches
+                ],
+            )
 
 
-async def store_publish(conn: asyncpg.Connection,
-                        package, branch_name, main_branch_revision,
-                        revision, role, mode, result_code, description,
-                        merge_proposal_url=None, publish_id=None,
-                        requestor=None):
+async def store_publish(
+    conn: asyncpg.Connection,
+    package,
+    branch_name,
+    main_branch_revision,
+    revision,
+    role,
+    mode,
+    result_code,
+    description,
+    merge_proposal_url=None,
+    publish_id=None,
+    requestor=None,
+):
     if isinstance(revision, bytes):
-        revision = revision.decode('utf-8')
+        revision = revision.decode("utf-8")
     if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode('utf-8')
+        main_branch_revision = main_branch_revision.decode("utf-8")
     if merge_proposal_url:
         await conn.execute(
             "INSERT INTO merge_proposal (url, package, status, "
             "revision) VALUES ($1, $2, 'open', $3) ON CONFLICT (url) "
             "DO UPDATE SET package = EXCLUDED.package, "
             "revision = EXCLUDED.revision",
-            merge_proposal_url, package, revision)
+            merge_proposal_url,
+            package,
+            revision,
+        )
     await conn.execute(
         "INSERT INTO publish (package, branch_name, "
         "main_branch_revision, revision, role, mode, result_code, "
         "description, merge_proposal_url, id, requestor) "
         "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ",
-        package, branch_name, main_branch_revision, revision, role,
-        mode, result_code, description, merge_proposal_url, publish_id,
-        requestor)
+        package,
+        branch_name,
+        main_branch_revision,
+        revision,
+        role,
+        mode,
+        result_code,
+        description,
+        merge_proposal_url,
+        publish_id,
+        requestor,
+    )
 
 
 class Codebase(object):
@@ -204,21 +239,55 @@ class Run(object):
     result_tags: Optional[List[Tuple[str, bytes]]]
 
     __slots__ = [
-            'id', 'times', 'command', 'description', 'package',
-            'build_version',
-            'build_distribution', 'result_code', 'branch_name',
-            'main_branch_revision', 'revision', 'context', 'result',
-            'suite', 'instigated_context', 'branch_url', 'logfilenames',
-            'review_status', 'review_comment', 'worker_name',
-            'result_branches', 'result_tags']
+        "id",
+        "times",
+        "command",
+        "description",
+        "package",
+        "build_version",
+        "build_distribution",
+        "result_code",
+        "branch_name",
+        "main_branch_revision",
+        "revision",
+        "context",
+        "result",
+        "suite",
+        "instigated_context",
+        "branch_url",
+        "logfilenames",
+        "review_status",
+        "review_comment",
+        "worker_name",
+        "result_branches",
+        "result_tags",
+    ]
 
-    def __init__(self, run_id, times, command, description, package,
-                 build_version,
-                 build_distribution, result_code, branch_name,
-                 main_branch_revision, revision, context, result,
-                 suite, instigated_context, branch_url, logfilenames,
-                 review_status, review_comment, worker_name,
-                 result_branches, result_tags):
+    def __init__(
+        self,
+        run_id,
+        times,
+        command,
+        description,
+        package,
+        build_version,
+        build_distribution,
+        result_code,
+        branch_name,
+        main_branch_revision,
+        revision,
+        context,
+        result,
+        suite,
+        instigated_context,
+        branch_url,
+        logfilenames,
+        review_status,
+        review_comment,
+        worker_name,
+        result_branches,
+        result_tags,
+    ):
         self.id = run_id
         self.times = times
         self.command = command
@@ -243,14 +312,18 @@ class Run(object):
             self.result_branches = None
         else:
             self.result_branches = [
-                (role, name, br.encode('utf-8') if br else None,
-                 r.encode('utf-8') if r else None)
-                for (role, name, br, r) in result_branches]
+                (
+                    role,
+                    name,
+                    br.encode("utf-8") if br else None,
+                    r.encode("utf-8") if r else None,
+                )
+                for (role, name, br, r) in result_branches
+            ]
         if result_tags is None:
             self.result_tags = result_tags
         else:
-            self.result_tags = [
-                (name, r.encode('utf-8')) for (name, r) in result_tags]
+            self.result_tags = [(name, r.encode("utf-8")) for (name, r) in result_tags]
 
     @property
     def duration(self) -> datetime.timedelta:
@@ -261,7 +334,7 @@ class Run(object):
 
     def has_artifacts(self):
         # Reasonable proxy, for now?
-        return self.result_code == 'success'
+        return self.result_code == "success"
 
     def get_result_branch(self, role):
         for entry in self.result_branches:
@@ -270,35 +343,60 @@ class Run(object):
         raise KeyError
 
     @classmethod
-    def from_row(cls, row) -> 'Run':
-        return cls(run_id=row[0],
-                   times=(row[2], row[3]),
-                   command=row[1], description=row[4], package=row[5],
-                   build_version=Version(row[6]) if row[6] else None,
-                   build_distribution=row[7],
-                   result_code=(row[8] if row[8] else None),
-                   branch_name=row[9],
-                   main_branch_revision=(
-                       row[10].encode('utf-8') if row[10] else None),
-                   revision=(row[11].encode('utf-8') if row[11] else None),
-                   context=row[12], result=row[13], suite=row[14],
-                   instigated_context=row[15], branch_url=row[16],
-                   logfilenames=row[17], review_status=row[18],
-                   review_comment=row[19], worker_name=row[20],
-                   result_branches=row[21], result_tags=row[22])
+    def from_row(cls, row) -> "Run":
+        return cls(
+            run_id=row[0],
+            times=(row[2], row[3]),
+            command=row[1],
+            description=row[4],
+            package=row[5],
+            build_version=Version(row[6]) if row[6] else None,
+            build_distribution=row[7],
+            result_code=(row[8] if row[8] else None),
+            branch_name=row[9],
+            main_branch_revision=(row[10].encode("utf-8") if row[10] else None),
+            revision=(row[11].encode("utf-8") if row[11] else None),
+            context=row[12],
+            result=row[13],
+            suite=row[14],
+            instigated_context=row[15],
+            branch_url=row[16],
+            logfilenames=row[17],
+            review_status=row[18],
+            review_comment=row[19],
+            worker_name=row[20],
+            result_branches=row[21],
+            result_tags=row[22],
+        )
 
     def __len__(self) -> int:
         return len(self.__slots__)
 
     def __tuple__(self):
-        return (self.id, self.times, self.command, self.description,
-                self.package, self.build_version, self.build_distribution,
-                self.result_code, self.branch_name, self.main_branch_revision,
-                self.revision, self.context, self.result, self.suite,
-                self.instigated_context, self.branch_url,
-                self.logfilenames, self.review_status,
-                self.review_comment, self.worker_name,
-                self.result_branches, self.result_tags)
+        return (
+            self.id,
+            self.times,
+            self.command,
+            self.description,
+            self.package,
+            self.build_version,
+            self.build_distribution,
+            self.result_code,
+            self.branch_name,
+            self.main_branch_revision,
+            self.revision,
+            self.context,
+            self.result,
+            self.suite,
+            self.instigated_context,
+            self.branch_url,
+            self.logfilenames,
+            self.review_status,
+            self.review_comment,
+            self.worker_name,
+            self.result_branches,
+            self.result_tags,
+        )
 
     def __eq__(self, other) -> bool:
         if isinstance(other, Run):
@@ -318,8 +416,7 @@ class Run(object):
         return getattr(self, self.__slots__[i])
 
 
-async def get_unchanged_run(conn: asyncpg.Connection, package,
-                            main_branch_revision):
+async def get_unchanged_run(conn: asyncpg.Connection, package, main_branch_revision):
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
@@ -339,31 +436,35 @@ WHERE
 ORDER BY finish_time DESC
 """
     if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode('utf-8')
+        main_branch_revision = main_branch_revision.decode("utf-8")
     row = await conn.fetchrow(query, main_branch_revision, package)
     if row is not None:
         return Run.from_row(row)
     return None
 
 
-async def iter_runs(db: Database,
-                    package: Optional[str] = None,
-                    run_id: Optional[str] = None,
-                    worker: Optional[str] = None,
-                    limit: Optional[int] = None):
+async def iter_runs(
+    db: Database,
+    package: Optional[str] = None,
+    run_id: Optional[str] = None,
+    worker: Optional[str] = None,
+    limit: Optional[int] = None,
+):
     async with db.acquire() as conn:
         async for run in _iter_runs(
-                conn, package=package, run_id=run_id, worker=worker,
-                limit=limit):
+            conn, package=package, run_id=run_id, worker=worker, limit=limit
+        ):
             yield run
 
 
-async def _iter_runs(conn: asyncpg.Connection,
-                     package: Optional[str] = None,
-                     run_id: Optional[str] = None,
-                     worker: Optional[str] = None,
-                     suite: Optional[str] = None,
-                     limit: Optional[int] = None):
+async def _iter_runs(
+    conn: asyncpg.Connection,
+    package: Optional[str] = None,
+    run_id: Optional[str] = None,
+    worker: Optional[str] = None,
+    suite: Optional[str] = None,
+    limit: Optional[int] = None,
+):
     """Iterate over runs.
 
     Args:
@@ -448,9 +549,8 @@ ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 
 
 async def iter_proposals_with_run(
-        conn: asyncpg.Connection,
-        package: Optional[str] = None,
-        suite: Optional[str] = None):
+    conn: asyncpg.Connection, package: Optional[str] = None, suite: Optional[str] = None
+):
     args = []
     query = """
 SELECT
@@ -506,13 +606,36 @@ LEFT JOIN run ON run.id = new_result_branch.run_id
 
 class QueueItem(object):
 
-    __slots__ = ['id', 'branch_url', 'subpath', 'package', 'context',
-                 'command', 'estimated_duration', 'suite', 'refresh',
-                 'requestor', 'vcs_type', 'upstream_branch_url']
+    __slots__ = [
+        "id",
+        "branch_url",
+        "subpath",
+        "package",
+        "context",
+        "command",
+        "estimated_duration",
+        "suite",
+        "refresh",
+        "requestor",
+        "vcs_type",
+        "upstream_branch_url",
+    ]
 
-    def __init__(self, id, branch_url, subpath, package, context, command,
-                 estimated_duration, suite, refresh, requestor, vcs_type,
-                 upstream_branch_url):
+    def __init__(
+        self,
+        id,
+        branch_url,
+        subpath,
+        package,
+        context,
+        command,
+        estimated_duration,
+        suite,
+        refresh,
+        requestor,
+        vcs_type,
+        upstream_branch_url,
+    ):
         self.id = id
         self.package = package
         self.branch_url = branch_url
@@ -527,24 +650,51 @@ class QueueItem(object):
         self.upstream_branch_url = upstream_branch_url
 
     @classmethod
-    def from_row(cls, row) -> 'QueueItem':
-        (branch_url, subpath, package,
-            command, context, queue_id, estimated_duration,
-            suite, refresh, requestor, vcs_type,
-            upstream_branch_url) = row
+    def from_row(cls, row) -> "QueueItem":
+        (
+            branch_url,
+            subpath,
+            package,
+            command,
+            context,
+            queue_id,
+            estimated_duration,
+            suite,
+            refresh,
+            requestor,
+            vcs_type,
+            upstream_branch_url,
+        ) = row
         return cls(
-                id=queue_id, branch_url=branch_url,
-                subpath=subpath, package=package, context=context,
-                command=shlex.split(command),
-                estimated_duration=estimated_duration,
-                suite=suite, refresh=refresh, requestor=requestor,
-                vcs_type=vcs_type, upstream_branch_url=upstream_branch_url)
+            id=queue_id,
+            branch_url=branch_url,
+            subpath=subpath,
+            package=package,
+            context=context,
+            command=shlex.split(command),
+            estimated_duration=estimated_duration,
+            suite=suite,
+            refresh=refresh,
+            requestor=requestor,
+            vcs_type=vcs_type,
+            upstream_branch_url=upstream_branch_url,
+        )
 
     def _tuple(self):
-        return (self.id, self.branch_url, self.subpath, self.package,
-                self.context, self.command, self.estimated_duration,
-                self.suite, self.refresh, self.requestor, self.vcs_type,
-                self.upstream_branch_url)
+        return (
+            self.id,
+            self.branch_url,
+            self.subpath,
+            self.package,
+            self.context,
+            self.command,
+            self.estimated_duration,
+            self.suite,
+            self.refresh,
+            self.requestor,
+            self.vcs_type,
+            self.upstream_branch_url,
+        )
 
     def __eq__(self, other):
         if isinstance(other, QueueItem):
@@ -569,7 +719,8 @@ async def get_queue_positions(conn: asyncpg.Connection, suite, packages):
 
     query = (
         "SELECT package, position, wait_time FROM queue_positions "
-        "WHERE package = ANY($1::text[]) AND suite = $2")
+        "WHERE package = ANY($1::text[]) AND suite = $2"
+    )
     return await conn.fetch(query, packages, suite)
 
 
@@ -607,24 +758,26 @@ async def drop_queue_item(conn: asyncpg.Connection, queue_id):
     await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
-async def add_to_queue(conn: asyncpg.Connection,
-                       package: str,
-                       command: List[str],
-                       suite: str,
-                       offset: float = 0.0,
-                       bucket: str = 'default',
-                       context: Optional[str] = None,
-                       estimated_duration: Optional[datetime.timedelta] = None,
-                       refresh: bool = False,
-                       requestor: Optional[str] = None) -> bool:
+async def add_to_queue(
+    conn: asyncpg.Connection,
+    package: str,
+    command: List[str],
+    suite: str,
+    offset: float = 0.0,
+    bucket: str = "default",
+    context: Optional[str] = None,
+    estimated_duration: Optional[datetime.timedelta] = None,
+    refresh: bool = False,
+    requestor: Optional[str] = None,
+) -> bool:
     await conn.execute(
         "INSERT INTO queue "
         "(package, command, priority, bucket, context, "
         "estimated_duration, suite, refresh, requestor) "
         "VALUES "
         "($1, $2, "
-        "(SELECT COALESCE(MIN(priority), 0) FROM queue)" +
-        " + $3, $4, $5, $6, $7, $8, $9) "
+        "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
+        + " + $3, $4, $5, $6, $7, $8, $9) "
         "ON CONFLICT (package, suite) DO UPDATE SET "
         "context = EXCLUDED.context, priority = EXCLUDED.priority, "
         "bucket = EXCLUDED.bucket, "
@@ -634,17 +787,30 @@ async def add_to_queue(conn: asyncpg.Connection,
         "WHERE queue.bucket >= EXCLUDED.bucket OR "
         "(queue.bucket = EXCLUDED.bucket AND "
         "queue.priority >= EXCLUDED.priority)",
-        package, ' '.join(command), offset, bucket, context,
-        estimated_duration, suite, refresh, requestor)
+        package,
+        " ".join(command),
+        offset,
+        bucket,
+        context,
+        estimated_duration,
+        suite,
+        refresh,
+        requestor,
+    )
     return True
 
 
 async def set_proposal_info(
-        conn: asyncpg.Connection, url: str, status: str,
-        revision: Optional[bytes],
-        package: Optional[str], merged_by: Optional[str],
-        merged_at: Optional[str]) -> None:
-    await conn.execute("""
+    conn: asyncpg.Connection,
+    url: str,
+    status: str,
+    revision: Optional[bytes],
+    package: Optional[str],
+    merged_by: Optional[str],
+    merged_at: Optional[str],
+) -> None:
+    await conn.execute(
+        """
 INSERT INTO merge_proposal (
     url, status, revision, package, merged_by, merged_at)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -655,16 +821,20 @@ DO UPDATE SET
   package = EXCLUDED.package,
   merged_by = EXCLUDED.merged_by,
   merged_at = EXCLUDED.merged_at
-""", url, status,
-                       (revision.decode('utf-8')
-                        if revision is not None else None), package,
-                       merged_by, merged_at)
+""",
+        url,
+        status,
+        (revision.decode("utf-8") if revision is not None else None),
+        package,
+        merged_by,
+        merged_at,
+    )
 
 
 async def queue_stats(conn: asyncpg.Connection):
     for row in await conn.fetch(
-            'SELECT bucket, MIN(priority), count(*) FROM queue '
-            'GROUP BY bucket'):
+        "SELECT bucket, MIN(priority), count(*) FROM queue " "GROUP BY bucket"
+    ):
         yield row[0], row[1], row[2]
 
 
@@ -684,19 +854,23 @@ WHERE
 
 
 async def iter_published_packages(conn: asyncpg.Connection, suite):
-    return await conn.fetch("""
+    return await conn.fetch(
+        """
 select distinct on (package.name) package.name, debian_build.version,
 archive_version from debian_build
 left join package on package.name = debian_build.source
 where debian_build.distribution = $1 and not package.removed
 order by package.name, debian_build.version desc
-""", suite)
+""",
+        suite,
+    )
 
 
 async def iter_previous_runs(
-        conn: asyncpg.Connection,
-        package: str, suite: str) -> AsyncIterable[Run]:
-    for row in await conn.fetch("""
+    conn: asyncpg.Connection, package: str, suite: str
+) -> AsyncIterable[Run]:
+    for row in await conn.fetch(
+        """
 SELECT
   id,
   command,
@@ -727,13 +901,16 @@ FROM
 WHERE
   package = $1 AND suite = $2
 ORDER BY start_time DESC
-""", package, suite):
+""",
+        package,
+        suite,
+    ):
         yield Run.from_row(row)
 
 
 async def get_last_unabsorbed_run(
-        conn: asyncpg.Connection,
-        package: str, suite: str) -> Optional[Run]:
+    conn: asyncpg.Connection, package: str, suite: str
+) -> Optional[Run]:
     args = []
     query = """
 SELECT
@@ -775,7 +952,8 @@ LIMIT 1
 
 
 async def iter_last_unabsorbed_runs(
-        conn: asyncpg.Connection, suite=None, packages=None):
+    conn: asyncpg.Connection, suite=None, packages=None
+):
     query = """
 SELECT DISTINCT ON (package)
   id,
@@ -839,11 +1017,11 @@ select (
 
 
 async def iter_last_runs(
-        conn: asyncpg.Connection,
-        result_code: Optional[str] = None,
-        suite: Optional[str] = None,
-        main_branch_revision: Optional[bytes] = None
-        ) -> AsyncIterable[Run]:
+    conn: asyncpg.Connection,
+    result_code: Optional[str] = None,
+    suite: Optional[str] = None,
+    main_branch_revision: Optional[bytes] = None,
+) -> AsyncIterable[Run]:
     query = """
 SELECT
   id,
@@ -876,7 +1054,7 @@ FROM last_runs
     args: List[Any] = []
     if result_code is not None:
         args.append(result_code)
-        where.append('result_code = $%d' % len(args))
+        where.append("result_code = $%d" % len(args))
     if suite:
         args.append(suite)
         where.append("suite = $%d" % len(args))
@@ -892,34 +1070,52 @@ FROM last_runs
 
 
 async def update_run_result(
-        conn: asyncpg.Connection, log_id: str, code: str, description: str
-        ) -> None:
+    conn: asyncpg.Connection, log_id: str, code: str, description: str
+) -> None:
     await conn.execute(
-        'UPDATE run SET result_code = $1, description = $2 WHERE id = $3',
-        code, description, log_id)
+        "UPDATE run SET result_code = $1, description = $2 WHERE id = $3",
+        code,
+        description,
+        log_id,
+    )
 
 
 async def already_published(
-        conn: asyncpg.Connection,
-        package: str, branch_name: str, revision: bytes, mode: str) -> bool:
-    row = await conn.fetchrow("""\
+    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, mode: str
+) -> bool:
+    row = await conn.fetchrow(
+        """\
 SELECT * FROM publish
 WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
-""", mode, revision.decode('utf-8'), package, branch_name)
+""",
+        mode,
+        revision.decode("utf-8"),
+        package,
+        branch_name,
+    )
     if row:
         return True
     return False
 
 
 async def iter_publish_ready(
-        conn: asyncpg.Connection,
-        suites: Optional[List[str]] = None,
-        review_status: Optional[Union[str, List[str]]] = None,
-        limit: Optional[int] = None,
-        publishable_only: bool = False
-        ) -> AsyncIterable[
-            Tuple[Run, int, str, List[str], Dict[str, str], str, List[str],
-                  List[Tuple[str, str, bytes, bytes, Optional[str]]]]]:
+    conn: asyncpg.Connection,
+    suites: Optional[List[str]] = None,
+    review_status: Optional[Union[str, List[str]]] = None,
+    limit: Optional[int] = None,
+    publishable_only: bool = False,
+) -> AsyncIterable[
+    Tuple[
+        Run,
+        int,
+        str,
+        List[str],
+        Dict[str, str],
+        str,
+        List[str],
+        List[Tuple[str, str, bytes, bytes, Optional[str]]],
+    ]
+]:
     args: List[Any] = []
     query = """
 SELECT * FROM publish_ready
@@ -932,12 +1128,12 @@ SELECT * FROM publish_ready
         if not isinstance(review_status, list):
             review_status = [review_status]
         args.append(review_status)
-        conditions.append(
-            "review_status = ANY($%d::review_status[])" % (len(args),))
+        conditions.append("review_status = ANY($%d::review_status[])" % (len(args),))
 
     publishable_condition = (
         "exists (select from unnest(unpublished_branches) where "
-        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))")
+        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
+    )
 
     order_by = []
 
@@ -958,16 +1154,22 @@ SELECT * FROM publish_ready
         query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
-            [Run.from_row(record[:23])] + list(record[23:-4]) +
-            [{k: v for k, v in record[-4]}, record[-3],  # type: ignore
-             shlex.split(record[-2]) if record[-2] else None,  # type: ignore
-             record[-1]])  # type: ignore
+            [Run.from_row(record[:23])]
+            + list(record[23:-4])
+            + [
+                {k: v for k, v in record[-4]},
+                record[-3],  # type: ignore
+                shlex.split(record[-2]) if record[-2] else None,  # type: ignore
+                record[-1],
+            ]
+        )  # type: ignore
 
 
 async def iter_unscanned_branches(
-        conn: asyncpg.Connection, last_scanned_minimum: datetime.datetime
-        ) -> AsyncIterable[Tuple[str, str, str, datetime.datetime]]:
-    return await conn.fetch("""
+    conn: asyncpg.Connection, last_scanned_minimum: datetime.datetime
+) -> AsyncIterable[Tuple[str, str, str, datetime.datetime]]:
+    return await conn.fetch(
+        """
 SELECT
   name,
   'master',
@@ -977,11 +1179,14 @@ FROM package
 LEFT JOIN branch ON package.branch_url = branch.url
 WHERE
   last_scanned is null or now() - last_scanned > $1
-""", last_scanned_minimum)
+""",
+        last_scanned_minimum,
+    )
 
 
 async def iter_package_branches(conn: asyncpg.Connection):
-    return await conn.fetch("""
+    return await conn.fetch(
+        """
 SELECT
   name,
   branch_url,
@@ -991,17 +1196,21 @@ SELECT
 FROM
   package
 LEFT JOIN branch ON package.branch_url = branch.url
-""")
+"""
+    )
 
 
 async def update_branch_status(
-        conn: asyncpg.Connection,
-        branch_url: str, canonical_branch_url: Optional[str],
-        last_scanned: Union[
-            datetime.datetime, Callable[[], datetime.datetime]
-            ] = datetime.datetime.now,
-        status: Optional[str] = None,
-        revision: Optional[bytes] = None, description: Optional[str] = None):
+    conn: asyncpg.Connection,
+    branch_url: str,
+    canonical_branch_url: Optional[str],
+    last_scanned: Union[
+        datetime.datetime, Callable[[], datetime.datetime]
+    ] = datetime.datetime.now,
+    status: Optional[str] = None,
+    revision: Optional[bytes] = None,
+    description: Optional[str] = None,
+):
     if callable(last_scanned):
         last_scanned = last_scanned()
     await conn.execute(
@@ -1012,35 +1221,56 @@ async def update_branch_status(
         "last_scanned = EXCLUDED.last_scanned, "
         "description = EXCLUDED.description, "
         "canonical_url = EXCLUDED.canonical_url",
-        branch_url, canonical_branch_url,
-        status, revision.decode('utf-8') if revision else None,
-        last_scanned, description)
+        branch_url,
+        canonical_branch_url,
+        status,
+        revision.decode("utf-8") if revision else None,
+        last_scanned,
+        description,
+    )
 
 
 async def get_run_result_by_revision(
-        conn: asyncpg.Connection, suite: str, revision: bytes
-        ) -> Tuple[Optional[str], Optional[str], Optional[str],
-                   Optional[List[Tuple[str, str, bytes, bytes]]]]:
+    conn: asyncpg.Connection, suite: str, revision: bytes
+) -> Tuple[
+    Optional[str],
+    Optional[str],
+    Optional[str],
+    Optional[List[Tuple[str, str, bytes, bytes]]],
+]:
     row = await conn.fetchrow(
         "SELECT result, branch_name, review_status, "
         "array(SELECT row(role, remote_name, base_revision, revision) "
         "FROM new_result_branch WHERE run_id = run.id) "
         "FROM run "
         "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
-        suite, revision.decode('utf-8'))
+        suite,
+        revision.decode("utf-8"),
+    )
     if row is not None:
-        return row[0], row[1], row[2], [
-            (role, name,
-             base_revision.encode('utf-8') if base_revision else None,
-             revision.encode('utf-8') if revision else None)
-            for (role, name, base_revision, revision) in row[3]]
+        return (
+            row[0],
+            row[1],
+            row[2],
+            [
+                (
+                    role,
+                    name,
+                    base_revision.encode("utf-8") if base_revision else None,
+                    revision.encode("utf-8") if revision else None,
+                )
+                for (role, name, base_revision, revision) in row[3]
+            ],
+        )
     return None, None, None, None
 
 
 async def estimate_duration(
-        conn: asyncpg.Connection, package: Optional[str] = None,
-        suite: Optional[str] = None,
-        limit: Optional[int] = 1000) -> Optional[datetime.timedelta]:
+    conn: asyncpg.Connection,
+    package: Optional[str] = None,
+    suite: Optional[str] = None,
+    limit: Optional[int] = 1000,
+) -> Optional[datetime.timedelta]:
     query = """
 SELECT AVG(duration) FROM
 (select finish_time - start_time as duration FROM run
@@ -1068,7 +1298,8 @@ async def store_candidates(conn: asyncpg.Connection, entries):
         "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
         "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
         "success_chance = EXCLUDED.success_chance",
-        entries)
+        entries,
+    )
 
 
 async def get_never_processed_count(conn: asyncpg.Connection, suites=None):
@@ -1118,8 +1349,8 @@ ORDER BY package, suite, start_time DESC
 
 
 async def get_merge_proposal_run(
-        conn: asyncpg.Connection, mp_url: str
-        ) -> Tuple[Run, Tuple[str, str, bytes, bytes]]:
+    conn: asyncpg.Connection, mp_url: str
+) -> Tuple[Run, Tuple[str, str, bytes, bytes]]:
     query = """
 SELECT
     run.id, run.command, run.start_time, run.finish_time, run.description,
@@ -1140,14 +1371,19 @@ LIMIT 1
     row = await conn.fetchrow(query, mp_url)
     if row:
         return Run.from_row(row[:23]), (
-            row[23], row[24], row[25].encode('utf-8'), row[26].encode('utf-8'))
+            row[23],
+            row[24],
+            row[25].encode("utf-8"),
+            row[26].encode("utf-8"),
+        )
     raise KeyError
 
 
 async def get_proposal_info(
-        conn: asyncpg.Connection, url
-        ) -> Tuple[Optional[bytes], str, str, str]:
-    row = await conn.fetchrow("""\
+    conn: asyncpg.Connection, url
+) -> Tuple[Optional[bytes], str, str, str]:
+    row = await conn.fetchrow(
+        """\
 SELECT
     package.maintainer_email,
     merge_proposal.revision,
@@ -1158,14 +1394,17 @@ FROM
 LEFT JOIN package ON merge_proposal.package = package.name
 WHERE
     merge_proposal.url = $1
-""", url)
+""",
+        url,
+    )
     if not row:
         raise KeyError
-    return (row[1].encode('utf-8') if row[1] else None, row[2], row[3], row[0])
+    return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[0])
 
 
 async def get_open_merge_proposal(
-        conn: asyncpg.Connection, package: str, branch_name: str) -> bytes:
+    conn: asyncpg.Connection, package: str, branch_name: str
+) -> bytes:
     query = """\
 SELECT
     merge_proposal.revision
@@ -1182,8 +1421,8 @@ ORDER BY timestamp DESC
 
 
 async def get_publish(
-        conn: asyncpg.Connection, publish_id: str) -> Optional[
-            Tuple[str, str, bytes, bytes, str, str, str, str]]:
+    conn: asyncpg.Connection, publish_id: str
+) -> Optional[Tuple[str, str, bytes, bytes, str, str, str, str]]:
     query = """
 SELECT
   package,
@@ -1199,17 +1438,30 @@ FROM publish WHERE id = $1
     row = await conn.fetchrow(query, publish_id)
     if row:
         return None
-    return (row[0], row[1], row[2].encode('utf-8') if row[2] else None,
-            row[3].encode('utf-8') if row[3] else None, row[4],
-            row[5], row[6], row[7])
+    return (
+        row[0],
+        row[1],
+        row[2].encode("utf-8") if row[2] else None,
+        row[3].encode("utf-8") if row[3] else None,
+        row[4],
+        row[5],
+        row[6],
+        row[7],
+    )
 
 
 async def set_run_review_status(
-        conn: asyncpg.Connection, run_id: str,
-        review_status: str, review_comment: Optional[str] = None) -> None:
+    conn: asyncpg.Connection,
+    run_id: str,
+    review_status: str,
+    review_comment: Optional[str] = None,
+) -> None:
     await conn.execute(
-        'UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3',
-        review_status, review_comment, run_id)
+        "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
+        review_status,
+        review_comment,
+        run_id,
+    )
 
 
 async def iter_review_status(conn: asyncpg.Connection):
@@ -1237,140 +1489,168 @@ where upstream_branch_url is not null
 
 
 async def update_branch_url(
-        conn: asyncpg.Connection, package: str, vcs_type: str,
-        vcs_url: str) -> None:
+    conn: asyncpg.Connection, package: str, vcs_type: str, vcs_url: str
+) -> None:
     await conn.execute(
-        'update package set vcs_type = $1, branch_url = $2 '
-        'where name = $3', vcs_type.lower(), vcs_url, package)
+        "update package set vcs_type = $1, branch_url = $2 " "where name = $3",
+        vcs_type.lower(),
+        vcs_url,
+        package,
+    )
 
 
 async def update_policy(
-        conn: asyncpg.Connection, name: str, suite: str,
-        publish_mode: Dict[str, str],
-        changelog_mode: str, command: List[str]) -> None:
+    conn: asyncpg.Connection,
+    name: str,
+    suite: str,
+    publish_mode: Dict[str, str],
+    changelog_mode: str,
+    command: List[str],
+) -> None:
     await conn.execute(
-        'INSERT INTO policy '
-        '(package, suite, update_changelog, command, publish) '
-        'VALUES ($1, $2, $3, $4, $5) '
-        'ON CONFLICT (package, suite) DO UPDATE SET '
-        'update_changelog = EXCLUDED.update_changelog, '
-        'command = EXCLUDED.command, '
-        'publish = EXCLUDED.publish',
-        name, suite, changelog_mode,
-        (' '.join(command) if command else None),
-        list(publish_mode.items()))
+        "INSERT INTO policy "
+        "(package, suite, update_changelog, command, publish) "
+        "VALUES ($1, $2, $3, $4, $5) "
+        "ON CONFLICT (package, suite) DO UPDATE SET "
+        "update_changelog = EXCLUDED.update_changelog, "
+        "command = EXCLUDED.command, "
+        "publish = EXCLUDED.publish",
+        name,
+        suite,
+        changelog_mode,
+        (" ".join(command) if command else None),
+        list(publish_mode.items()),
+    )
 
 
-async def iter_policy(
-        conn: asyncpg.Connection, package: Optional[str] = None):
-    query = (
-        'SELECT package, suite, publish, update_changelog, command '
-        'FROM policy')
+async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
+    query = "SELECT package, suite, publish, update_changelog, command " "FROM policy"
     args = []
     if package:
-        query += ' WHERE package = $1'
+        query += " WHERE package = $1"
         args.append(package)
     for row in await conn.fetch(query, *args):
-        yield (row[0], row[1], (
-            {k[0]: k[1] for k in row[2]},
-            row[3], shlex.split(row[4]) if row[4] else None))
+        yield (
+            row[0],
+            row[1],
+            (
+                {k[0]: k[1] for k in row[2]},
+                row[3],
+                shlex.split(row[4]) if row[4] else None,
+            ),
+        )
 
 
 async def get_policy(
-        conn: asyncpg.Connection, package: str, suite: str
-        ) -> Tuple[Optional[str], Optional[List[str]]]:
+    conn: asyncpg.Connection, package: str, suite: str
+) -> Tuple[Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
-        'SELECT update_changelog, command '
-        'FROM policy WHERE package = $1 AND suite = $2', package,
-        suite)
+        "SELECT update_changelog, command "
+        "FROM policy WHERE package = $1 AND suite = $2",
+        package,
+        suite,
+    )
     if row:
-        return (  # type: ignore
-            row[0],
-            shlex.split(row[1]) if row[1] else None)
+        return (row[0], shlex.split(row[1]) if row[1] else None)  # type: ignore
     return None, None
 
 
 async def get_publish_policy(
-        conn: asyncpg.Connection, package: str, suite: str
-        ) -> Tuple[Optional[Dict[str, str]],
-                   Optional[str], Optional[List[str]]]:
+    conn: asyncpg.Connection, package: str, suite: str
+) -> Tuple[Optional[Dict[str, str]], Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
-        'SELECT publish, update_changelog, command '
-        'FROM policy WHERE package = $1 AND suite = $2', package,
-        suite)
+        "SELECT publish, update_changelog, command "
+        "FROM policy WHERE package = $1 AND suite = $2",
+        package,
+        suite,
+    )
     if row:
         return (  # type: ignore
-            {k: v for k, v in row[0]}, row[1],
-            shlex.split(row[2]) if row[2] else None)
+            {k: v for k, v in row[0]},
+            row[1],
+            shlex.split(row[2]) if row[2] else None,
+        )
     return None, None, None
 
 
-async def get_successful_push_count(
-        conn: asyncpg.Connection) -> Optional[int]:
+async def get_successful_push_count(conn: asyncpg.Connection) -> Optional[int]:
     return await conn.fetchval(
         "select count(*) from publish where result_code = "
-        "'success' and mode = 'push'")
+        "'success' and mode = 'push'"
+    )
 
 
 async def get_publish_attempt_count(
-        conn: asyncpg.Connection, revision: bytes,
-        transient_result_codes: Set[str]) -> int:
+    conn: asyncpg.Connection, revision: bytes, transient_result_codes: Set[str]
+) -> int:
     return await conn.fetchval(
         "select count(*) from publish where revision = $1 "
         "and result_code != ANY($2::text[])",
-        revision.decode('utf-8'), transient_result_codes)
+        revision.decode("utf-8"),
+        transient_result_codes,
+    )
 
 
 async def check_worker_credentials(
-        conn: asyncpg.Connection, login: str, password: str) -> bool:
+    conn: asyncpg.Connection, login: str, password: str
+) -> bool:
     row = await conn.fetchrow(
-        "select 1 from worker where name = $1 "
-        "AND password = crypt($2, password)", login, password)
+        "select 1 from worker where name = $1 " "AND password = crypt($2, password)",
+        login,
+        password,
+    )
     return bool(row)
 
 
 async def package_exists(conn, package):
-    return bool(await conn.fetchrow(
-        "SELECT 1 FROM package WHERE name = $1", package))
+    return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
 
 
 async def get_publish_history(
-        conn: asyncpg.Connection, revision: bytes) -> Tuple[
-                str, Optional[str], str, str, str, datetime.datetime]:
+    conn: asyncpg.Connection, revision: bytes
+) -> Tuple[str, Optional[str], str, str, str, datetime.datetime]:
     return await conn.fetch(
         "select mode, merge_proposal_url, description, result_code, "
         "requestor, timestamp from publish where revision = $1 "
         "ORDER BY timestamp DESC",
-        revision.decode('utf-8'))
+        revision.decode("utf-8"),
+    )
 
 
 async def store_site_session(
-        conn: asyncpg.Connection, session_id: str, user: Any) -> None:
-    await conn.execute("""
+    conn: asyncpg.Connection, session_id: str, user: Any
+) -> None:
+    await conn.execute(
+        """
 INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
 ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
-                       session_id, user)
+        session_id,
+        user,
+    )
 
 
 async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
     return await conn.fetchrow(
-        "SELECT userinfo FROM site_session WHERE id = $1", session_id)
+        "SELECT userinfo FROM site_session WHERE id = $1", session_id
+    )
 
 
 async def has_cotenants(
-        conn: asyncpg.Connection, package: str, url: str) -> Optional[bool]:
-    url = urlutils.split_segment_parameters(url)[0].rstrip('/')
+    conn: asyncpg.Connection, package: str, url: str
+) -> Optional[bool]:
+    url = urlutils.split_segment_parameters(url)[0].rstrip("/")
     rows = await conn.fetch(
         "SELECT name FROM package where "
         "branch_url = $1 or "
         "branch_url like $1 || ',branch=%' or "
-        "branch_url like $1 || '/,branch=%'", url)
+        "branch_url like $1 || '/,branch=%'",
+        url,
+    )
     if len(rows) > 1:
         return True
     elif len(rows) == 1 and rows[0][0] == package:
         return False
     else:
         # Uhm, we actually don't really know
-        warning('Unable to figure out if %s has cotenants on %s',
-                package, url)
+        warning("Unable to figure out if %s has cotenants on %s", package, url)
         return None

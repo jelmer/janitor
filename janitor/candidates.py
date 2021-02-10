@@ -29,8 +29,13 @@ from .candidates_pb2 import CandidateList
 def iter_candidates_from_script(stdin):
     candidate_list = text_format.Parse(stdin.read(), CandidateList())
     for candidate in candidate_list.candidate:
-        yield (candidate.package, candidate.suite, candidate.context,
-               candidate.value, candidate.success_chance)
+        yield (
+            candidate.package,
+            candidate.suite,
+            candidate.context,
+            candidate.value,
+            candidate.success_chance,
+        )
 
 
 async def main():
@@ -41,40 +46,46 @@ async def main():
         REGISTRY,
     )
 
-    parser = argparse.ArgumentParser(prog='candidates')
-    parser.add_argument("packages", nargs='*')
-    parser.add_argument('--prometheus', type=str,
-                        help='Prometheus push gateway to export to.')
+    parser = argparse.ArgumentParser(prog="candidates")
+    parser.add_argument("packages", nargs="*")
     parser.add_argument(
-        '--config', type=str, default='janitor.conf',
-        help='Path to configuration.')
+        "--prometheus", type=str, help="Prometheus push gateway to export to."
+    )
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
 
     args = parser.parse_args()
 
     last_success_gauge = Gauge(
-        'job_last_success_unixtime',
-        'Last time a batch job successfully finished')
+        "job_last_success_unixtime", "Last time a batch job successfully finished"
+    )
 
-    with open(args.config, 'r') as f:
+    with open(args.config, "r") as f:
         config = read_config(f)
 
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
-        trace.note('Adding candidates.')
+        trace.note("Adding candidates.")
         candidates = [
             (package, suite, context, value, success_chance)
-            for (package, suite, context, value, success_chance)
-            in iter_candidates_from_script(sys.stdin)]
-        trace.note('Collected %d candidates.', len(candidates))
+            for (
+                package,
+                suite,
+                context,
+                value,
+                success_chance,
+            ) in iter_candidates_from_script(sys.stdin)
+        ]
+        trace.note("Collected %d candidates.", len(candidates))
         await state.store_candidates(conn, candidates)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(
-            args.prometheus, job='janitor.candidates', registry=REGISTRY)
+        push_to_gateway(args.prometheus, job="janitor.candidates", registry=REGISTRY)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())

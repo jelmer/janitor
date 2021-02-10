@@ -20,35 +20,42 @@
 from janitor.package_metadata_pb2 import PackageList
 from launchpadlib.launchpad import Launchpad
 from launchpadlib.uris import LPNET_SERVICE_ROOT
-from typing import List, Optional
 
 
 async def main():
-    import apt_pkg
     import argparse
-    parser = argparse.ArgumentParser(prog='ubuntu-package-metadata')
-    parser.add_argument("url", nargs='*')
+
+    parser = argparse.ArgumentParser(prog="ubuntu-package-metadata")
+    parser.add_argument("url", nargs="*")
     parser.add_argument(
-        '--distroseries', type=str, default=None,
-        help='Distribution series')
+        "--distroseries", type=str, default=None, help="Distribution series"
+    )
     parser.add_argument(
-        '--difference-type', type=str,
-        choices=['Unique to derived series', 'Different versions'],
-        default='Unique to derived series',
-        help='Only return differences of this type')
+        "--difference-type",
+        type=str,
+        choices=["Unique to derived series", "Different versions"],
+        default="Unique to derived series",
+        help="Only return differences of this type",
+    )
     parser.add_argument(
-        '--default-maintainer-email', type=str, default='unknown@ubuntu.com',
-        help='E-mail to use when maintainer e-mail is hidden.')
+        "--default-maintainer-email",
+        type=str,
+        default="unknown@ubuntu.com",
+        help="E-mail to use when maintainer e-mail is hidden.",
+    )
     parser.add_argument(
-        '--only-missing-in-parent', action='store_true',
-        help='Only include packages that are not in the parent series.')
+        "--only-missing-in-parent",
+        action="store_true",
+        help="Only include packages that are not in the parent series.",
+    )
     parser.add_argument(
-        '--distribution', type=str, default='ubuntu',
-        help='Distribution name.')
+        "--distribution", type=str, default="ubuntu", help="Distribution name."
+    )
     args = parser.parse_args()
 
     lp = Launchpad.login_with(
-        'debian-janitor', service_root=LPNET_SERVICE_ROOT, version='devel')
+        "debian-janitor", service_root=LPNET_SERVICE_ROOT, version="devel"
+    )
 
     distro = lp.distributions[args.distribution]
 
@@ -60,11 +67,13 @@ async def main():
     parentseries = distroseries.getParentSeries()[0]
 
     for sp in distro.main_archive.getPublishedSources(
-            status='Published', distro_series=distroseries):
+        status="Published", distro_series=distroseries
+    ):
         if args.distribution not in sp.source_package_version:
             continue
         ps = parentseries.main_archive.getPublishedSources(
-                source_name=sp.source_package_name, status='Published')
+            source_name=sp.source_package_name, status="Published"
+        )
         pl = PackageList()
         if len(ps) and args.only_missing_in_parent:
             removal = pl.removal.add()
@@ -75,23 +84,27 @@ async def main():
             package.name = sp.source_package_name
             if sp.package_maintainer.preferred_email_address:
                 package.maintainer_email = (
-                    sp.package_maintainer.preferred_email_address.email)
+                    sp.package_maintainer.preferred_email_address.email
+                )
             else:
                 package.maintainer_email = args.default_maintainer_email
-            package.vcs_type = 'Git'
-            package.vcs_url = (
-                'https://git.launchpad.net/%s/+source/%s -b %s/devel'
-                % (args.distribution, package.name, args.distribution))
+            package.vcs_type = "Git"
+            package.vcs_url = "https://git.launchpad.net/%s/+source/%s -b %s/devel" % (
+                args.distribution,
+                package.name,
+                args.distribution,
+            )
             package.vcs_browser = (
-                'https://code.launchpad.net/~usd-import-team/%s/+source'
-                '/%s/+git/%s/+ref/%s/devel' % (
-                    args.distribution, package.name, package.name,
-                    args.distribution))
+                "https://code.launchpad.net/~usd-import-team/%s/+source"
+                "/%s/+git/%s/+ref/%s/devel"
+                % (args.distribution, package.name, package.name, args.distribution)
+            )
             package.archive_version = sp.source_package_version
             package.removed = False
         print(pl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

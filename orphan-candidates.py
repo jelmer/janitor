@@ -24,7 +24,7 @@ sources.maintainer != 'Debian QA Group <packages@qa.debian.org>')
     for row in await udd.fetch(query, *args):
         candidate = Candidate()
         candidate.package = row[0]
-        candidate.suite = 'orphan'
+        candidate.suite = "orphan"
         candidate.context = str(row[2])
         candidate.value = DEFAULT_VALUE_ORPHAN
         yield candidate
@@ -33,19 +33,19 @@ sources.maintainer != 'Debian QA Group <packages@qa.debian.org>')
 async def main():
     import argparse
 
-    parser = argparse.ArgumentParser(prog='orphan-candidates')
-    parser.add_argument("packages", nargs='*', default=None)
+    parser = argparse.ArgumentParser(prog="orphan-candidates")
+    parser.add_argument("packages", nargs="*", default=None)
 
     args = parser.parse_args()
 
     udd = await UDD.public_udd_mirror()
-    async for candidate in iter_orphan_candidates(
-            udd, args.packages or None):
+    async for candidate in iter_orphan_candidates(udd, args.packages or None):
         cl = CandidateList()
         cl.candidate.append(candidate)
         print(cl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

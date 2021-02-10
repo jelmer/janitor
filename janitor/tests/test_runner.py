@@ -24,15 +24,12 @@ from janitor.runner import run_subprocess
 
 
 class RunSubprocessTests(TestCaseWithTransport):
-
     def test_run_simple(self):
-        self.build_tree_contents([('test', '')])
+        self.build_tree_contents([("test", "")])
 
-        asyncio.run(run_subprocess(
-            ['cat', os.path.join(self.test_dir, 'test')], {}))
+        asyncio.run(run_subprocess(["cat", os.path.join(self.test_dir, "test")], {}))
 
     def test_read_from_stdin(self):
-        self.build_tree_contents([('test', '')])
+        self.build_tree_contents([("test", "")])
 
-        asyncio.run(run_subprocess(
-            ['cat'], {}))
+        asyncio.run(run_subprocess(["cat"], {}))

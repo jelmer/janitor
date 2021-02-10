@@ -29,7 +29,6 @@ from janitor.pull_worker import bundle_results
 
 
 class AsyncBytesIO:
-
     def __init__(self):
         self._io = BytesIO()
 
@@ -46,11 +45,10 @@ class AsyncBytesIO:
         return self._io.read(size)
 
     def getvalue(self):
-        return b''.join(self.chunks)
+        return b"".join(self.chunks)
 
 
 class BundleResultsTests(asynctest.TestCase):
-
     def setUp(self):
         super(BundleResultsTests, self).setUp()
         self.test_dir = tempfile.mkdtemp()
@@ -60,35 +58,36 @@ class BundleResultsTests(asynctest.TestCase):
         self.addCleanup(shutil.rmtree, self.test_dir)
 
     async def test_simple(self):
-        with open('a', 'w') as f:
-            f.write('some data\n')
-        with bundle_results(
-                {'result_code': 'success'}, self.test_dir) as writer:
-            self.assertEqual(['Content-Type'], list(writer.headers.keys()))
+        with open("a", "w") as f:
+            f.write("some data\n")
+        with bundle_results({"result_code": "success"}, self.test_dir) as writer:
+            self.assertEqual(["Content-Type"], list(writer.headers.keys()))
             b = AsyncBytesIO()
             await writer.write(b)
             b.seek(0)
             reader = MultipartReader(writer.headers, b)
             part = await reader.next()
-            self.assertEqual(part.headers, {
-                'Content-Disposition':
-                    'attachment; filename="result.json"; '
-                    'filename*=utf-8\'\'result.json',
-                'Content-Length': '26',
-                'Content-Type': 'application/json'})
-            self.assertEqual('result.json', part.filename)
             self.assertEqual(
-                b'{"result_code": "success"}',
-                bytes(await part.read()))
+                part.headers,
+                {
+                    "Content-Disposition": 'attachment; filename="result.json"; '
+                    "filename*=utf-8''result.json",
+                    "Content-Length": "26",
+                    "Content-Type": "application/json",
+                },
+            )
+            self.assertEqual("result.json", part.filename)
+            self.assertEqual(b'{"result_code": "success"}', bytes(await part.read()))
             part = await reader.next()
-            self.assertEqual(part.headers, {
-                'Content-Disposition':
-                    'attachment; filename="a"; '
-                    'filename*=utf-8\'\'a',
-                'Content-Length': '10',
-                'Content-Type': 'application/octet-stream'})
-            self.assertEqual('a', part.filename)
             self.assertEqual(
-                b'some data\n',
-                bytes(await part.read()))
+                part.headers,
+                {
+                    "Content-Disposition": 'attachment; filename="a"; '
+                    "filename*=utf-8''a",
+                    "Content-Length": "10",
+                    "Content-Type": "application/octet-stream",
+                },
+            )
+            self.assertEqual("a", part.filename)
+            self.assertEqual(b"some data\n", bytes(await part.read()))
             self.assertTrue(part.at_eof())

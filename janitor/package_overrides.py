@@ -27,62 +27,69 @@ from . import package_overrides_pb2
 
 def read_package_overrides(f):
     ret = {}
-    config = text_format.Parse(
-        f.read(), package_overrides_pb2.OverrideConfig())
+    config = text_format.Parse(f.read(), package_overrides_pb2.OverrideConfig())
     for override in config.package:
         ret[override.name] = override
     return ret
 
 
 async def set_upstream_branch_url(
-        conn: asyncpg.Connection, package: str, url: Optional[str]) -> None:
+    conn: asyncpg.Connection, package: str, url: Optional[str]
+) -> None:
     await conn.execute(
-        'insert into upstream (name, upstream_branch_url) values ($1, $2) '
-        'on conflict (name) do update set '
-        'upstream_branch_url = EXCLUDED.upstream_branch_url',
-        package, url)
+        "insert into upstream (name, upstream_branch_url) values ($1, $2) "
+        "on conflict (name) do update set "
+        "upstream_branch_url = EXCLUDED.upstream_branch_url",
+        package,
+        url,
+    )
 
 
 async def main(args):
     from .config import read_config
     from . import state
     from .schedule import do_schedule
-    with open(args.package_overrides, 'r') as f:
+
+    with open(args.package_overrides, "r") as f:
         overrides = read_package_overrides(f)
 
-    with open(args.config, 'r') as f:
+    with open(args.config, "r") as f:
         config = read_config(f)
 
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
         currents = {
-            k: v for [k, v] in
-            await state.iter_custom_upstream_branch_urls(conn)}
+            k: v for [k, v] in await state.iter_custom_upstream_branch_urls(conn)
+        }
         for name in set(currents).union(set(overrides)):
             current = currents.get(name)
             override = overrides.get(name)
-            desired = (override.upstream_branch_url if override else None)
+            desired = override.upstream_branch_url if override else None
             if desired == current:
                 continue
             await set_upstream_branch_url(conn, name, desired)
-            print('Updating upstream branch URL for %s: %s' % (name, desired))
+            print("Updating upstream branch URL for %s: %s" % (name, desired))
             if args.reschedule:
                 await do_schedule(
-                    conn, name, 'fresh-snapshots',
-                    requestor='package overrides')
+                    conn, name, "fresh-snapshots", requestor="package overrides"
+                )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--config', type=str, default='janitor.conf',
-        help='Path to configuration.')
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
     parser.add_argument(
-        '--reschedule', action='store_true',
-        help='Reschedule when updating.')
+        "--reschedule", action="store_true", help="Reschedule when updating."
+    )
     parser.add_argument(
-        '--package-overrides', type=str,
-        help='Path to package overrides.', default='package_overrides.conf')
+        "--package-overrides",
+        type=str,
+        help="Path to package overrides.",
+        default="package_overrides.conf",
+    )
     args = parser.parse_args()
     asyncio.run(main(args))

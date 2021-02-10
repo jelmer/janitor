@@ -28,7 +28,7 @@ sources.release = 'sid'
         candidate = Candidate()
         candidate.package = row[0]
         candidate.context = row[1]
-        candidate.suite = 'fresh-releases'
+        candidate.suite = "fresh-releases"
         candidate.value = DEFAULT_VALUE_NEW_UPSTREAM
         try:
             Version(row[1])
@@ -40,19 +40,19 @@ sources.release = 'sid'
 async def main():
     import argparse
 
-    parser = argparse.ArgumentParser(prog='fresh-releases-candidates')
-    parser.add_argument("packages", nargs='*', default=None)
+    parser = argparse.ArgumentParser(prog="fresh-releases-candidates")
+    parser.add_argument("packages", nargs="*", default=None)
 
     args = parser.parse_args()
 
     udd = await UDD.public_udd_mirror()
-    async for candidate in iter_fresh_releases_candidates(
-            udd, args.packages or None):
+    async for candidate in iter_fresh_releases_candidates(udd, args.packages or None):
         cl = CandidateList()
         cl.candidate.append(candidate)
         print(cl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

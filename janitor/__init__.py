@@ -21,18 +21,19 @@ from breezy.transport.http import urllib as _mod_urllib
 
 
 version_info = (0, 1, 0)
-version_string = '.'.join(map(str, version_info))
+version_string = ".".join(map(str, version_info))
 
 
 def user_agent() -> str:
     return "Debian-Janitor/%s Bot (+https://janitor.debian.net/contact/)" % (
-        version_string)
+        version_string
+    )
 
 
 _mod_http.default_user_agent = user_agent
-_mod_urllib.AbstractHTTPHandler._default_headers['User-agent'] = user_agent()
+_mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent()
 
 
-SUITE_REGEX = '[a-z0-9-]+'
+SUITE_REGEX = "[a-z0-9-]+"
 
-DEFAULT_BUILD_ARCH = 'amd64'
+DEFAULT_BUILD_ARCH = "amd64"

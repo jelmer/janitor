@@ -39,26 +39,26 @@ sources.release = 'sid'
         candidate = Candidate()
         candidate.package = row[0]
         candidate.value = DEFAULT_VALUE_SCRUB_OBSOLETE
-        candidate.suite = 'scrub-obsolete'
+        candidate.suite = "scrub-obsolete"
         yield candidate
 
 
 async def main():
     import argparse
 
-    parser = argparse.ArgumentParser(prog='scrub-obsolete-candidates')
-    parser.add_argument("packages", nargs='*', default=None)
+    parser = argparse.ArgumentParser(prog="scrub-obsolete-candidates")
+    parser.add_argument("packages", nargs="*", default=None)
 
     args = parser.parse_args()
 
     udd = await UDD.public_udd_mirror()
-    async for candidate in iter_scrub_obsolete_candidates(
-            udd, args.packages or None):
+    async for candidate in iter_scrub_obsolete_candidates(udd, args.packages or None):
         cl = CandidateList()
         cl.candidate.append(candidate)
         print(cl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

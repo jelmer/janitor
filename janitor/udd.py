@@ -27,13 +27,13 @@ async def connect_udd_mirror() -> asyncpg.Connection:
         user="udd-mirror",
         password="udd-mirror",
         port=5432,
-        host="udd-mirror.debian.net")
+        host="udd-mirror.debian.net",
+    )
 
 
 class UDD(object):
-
     @classmethod
-    async def public_udd_mirror(cls) -> 'UDD':
+    async def public_udd_mirror(cls) -> "UDD":
         return cls(await connect_udd_mirror())
 
     def __init__(self, conn) -> None:

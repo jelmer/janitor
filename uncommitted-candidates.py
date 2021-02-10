@@ -22,10 +22,10 @@ sources.release = 'sid'
         args.append(tuple(packages))
     for row in await udd.fetch(query, *args):
         value = DEFAULT_VALUE_UNCOMMITTED
-        if 'nmu' in str(row[1]):
+        if "nmu" in str(row[1]):
             value += UNCOMMITTED_NMU_BONUS
         candidate = Candidate()
-        candidate.suite = 'uncommitted'
+        candidate.suite = "uncommitted"
         candidate.package = row[0]
         candidate.value = value
         yield candidate
@@ -34,19 +34,19 @@ sources.release = 'sid'
 async def main():
     import argparse
 
-    parser = argparse.ArgumentParser(prog='uncommitted-candidates')
-    parser.add_argument("packages", nargs='*', default=None)
+    parser = argparse.ArgumentParser(prog="uncommitted-candidates")
+    parser.add_argument("packages", nargs="*", default=None)
 
     args = parser.parse_args()
 
     udd = await UDD.public_udd_mirror()
-    async for candidate in iter_missing_commits(
-            udd, args.packages or None):
+    async for candidate in iter_missing_commits(udd, args.packages or None):
         cl = CandidateList()
         cl.candidate.append(candidate)
         print(cl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

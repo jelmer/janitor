@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import asyncpg
 import sys
-from typing import Optional
 
 from google.protobuf import text_format
 

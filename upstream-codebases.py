@@ -17,21 +17,15 @@
 
 """Exporting of upstream metadata from UDD."""
 
-import sys
+from typing import List, Optional, AsyncIterator, Tuple
 
-from debian.changelog import Version
-from debmutate.vcs import unsplit_vcs_url, split_vcs_url
-from email.utils import parseaddr
-from google.protobuf import text_format  # type: ignore
-from typing import List, Optional, Iterator, AsyncIterator, Tuple
-
-from janitor.codebase_metadata_pb2 import CodebaseList, CodebaseMetadata
+from janitor.codebase_metadata_pb2 import CodebaseList
 from janitor.udd import UDD
 
 
 async def iter_upstream_codebases(
-        udd: UDD, packages: Optional[List[str]] = None
-        ) -> AsyncIterator[Tuple[str, str, str]]:
+    udd: UDD, packages: Optional[List[str]] = None
+) -> AsyncIterator[Tuple[str, str, str]]:
     args = []
     query = """
 select distinct on (sources.source) sources.source || '-upstream',
@@ -50,14 +44,16 @@ select distinct on (sources.source) sources.source || '-upstream',
 
 async def main():
     import argparse
-    parser = argparse.ArgumentParser(prog='upstream-metadata')
-    parser.add_argument("packages", nargs='*')
+
+    parser = argparse.ArgumentParser(prog="upstream-metadata")
+    parser.add_argument("packages", nargs="*")
     args = parser.parse_args()
 
     udd = await UDD.public_udd_mirror()
 
     async for (name, branch_url, subpath) in iter_upstream_codebases(
-                    udd, args.packages):
+        udd, args.packages
+    ):
         cl = CodebaseList()
         codebase = cl.codebase.add()
         codebase.name = name
@@ -66,6 +62,7 @@ async def main():
         print(cl)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())

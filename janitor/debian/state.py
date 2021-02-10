@@ -24,8 +24,7 @@ from janitor.state import Codebase
 
 
 async def popcon(conn: asyncpg.Connection):
-    return await conn.fetch(
-        "SELECT name, popcon_inst FROM package")
+    return await conn.fetch("SELECT name, popcon_inst FROM package")
 
 
 class Package(Codebase):
@@ -43,9 +42,19 @@ class Package(Codebase):
     vcswatch_version: str
     upstream_branch_url: Optional[str]
 
-    def __init__(self, name, maintainer_email, uploader_emails, branch_url,
-                 vcs_type, vcs_url, vcs_browse, removed, vcswatch_status,
-                 vcswatch_version):
+    def __init__(
+        self,
+        name,
+        maintainer_email,
+        uploader_emails,
+        branch_url,
+        vcs_type,
+        vcs_url,
+        vcs_browse,
+        removed,
+        vcswatch_status,
+        vcswatch_version,
+    ):
         self.name = name
         self.maintainer_email = maintainer_email
         self.uploader_emails = uploader_emails
@@ -58,9 +67,19 @@ class Package(Codebase):
         self.vcswatch_version = vcswatch_version
 
     @classmethod
-    def from_row(cls, row) -> 'Package':
-        return cls(row[0], row[1], row[2], row[3], row[4], row[5], row[6],
-                   row[7], row[8], row[9])
+    def from_row(cls, row) -> "Package":
+        return cls(
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            row[6],
+            row[7],
+            row[8],
+            row[9],
+        )
 
     def __lt__(self, other) -> bool:
         if not isinstance(other, type(self)):
@@ -68,13 +87,23 @@ class Package(Codebase):
         return self.__tuple__ < other.__tuple__()
 
     def __tuple__(self):
-        return (self.name, self.maintainer_email, self.uploader_emails,
-                self.branch_url, self.vcs_type, self.vcs_url, self.vcs_browse,
-                self.removed, self.vcswatch_status, self.vcswatch_version)
+        return (
+            self.name,
+            self.maintainer_email,
+            self.uploader_emails,
+            self.branch_url,
+            self.vcs_type,
+            self.vcs_url,
+            self.vcs_browse,
+            self.removed,
+            self.vcswatch_status,
+            self.vcswatch_version,
+        )
 
 
 async def get_package_by_branch_url(
-        conn: asyncpg.Connection, branch_url: str) -> Optional[Package]:
+    conn: asyncpg.Connection, branch_url: str
+) -> Optional[Package]:
     query = """
 SELECT
   name,
@@ -124,7 +153,8 @@ and
 
 
 async def get_package_by_upstream_branch_url(
-        conn: asyncpg.Connection, upstream_branch_url: str) -> Optional[Package]:
+    conn: asyncpg.Connection, upstream_branch_url: str
+) -> Optional[Package]:
     query = """
 SELECT
   name,
@@ -143,8 +173,7 @@ WHERE
   name IN (
     SELECT package FROM upstream_branch_urls WHERE url = $1 OR url = $2)
 """
-    upstream_branch_url2 = urlutils.split_segment_parameters(
-        upstream_branch_url)[0]
+    upstream_branch_url2 = urlutils.split_segment_parameters(upstream_branch_url)[0]
     row = await conn.fetchrow(query, upstream_branch_url, upstream_branch_url2)
     if row is None:
         return None
@@ -172,8 +201,7 @@ FROM
         query += " WHERE name = $1"
         args.append(package)
     query += " ORDER BY name ASC"
-    return [
-        Package.from_row(row) for row in await conn.fetch(query, *args)]
+    return [Package.from_row(row) for row in await conn.fetch(query, *args)]
 
 
 async def get_package(conn: asyncpg.Connection, name):
@@ -184,17 +212,21 @@ async def get_package(conn: asyncpg.Connection, name):
 
 
 async def iter_packages_by_maintainer(conn: asyncpg.Connection, maintainer):
-    return [(row[0], row[1]) for row in await conn.fetch(
-        "SELECT name, removed FROM package WHERE "
-        "maintainer_email = $1 OR $1 = any(uploader_emails)",
-        maintainer)]
+    return [
+        (row[0], row[1])
+        for row in await conn.fetch(
+            "SELECT name, removed FROM package WHERE "
+            "maintainer_email = $1 OR $1 = any(uploader_emails)",
+            maintainer,
+        )
+    ]
 
 
 async def iter_candidates(
-        conn: asyncpg.Connection, packages: Optional[List[str]] = None,
-        suite: Optional[str] = None
-        ) -> List[Tuple[
-            Package, str, Optional[str], Optional[int], Optional[float]]]:
+    conn: asyncpg.Connection,
+    packages: Optional[List[str]] = None,
+    suite: Optional[str] = None,
+) -> List[Tuple[Package, str, Optional[str], Optional[int], Optional[float]]]:
     query = """
 SELECT
   package.name,
@@ -225,17 +257,28 @@ WHERE NOT package.removed
     elif packages is not None:
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
-    return [tuple([Package.from_row(row)] + list(row[10:]))  # type: ignore
-            for row in await conn.fetch(query, *args)]
+    return [
+        tuple([Package.from_row(row)] + list(row[10:]))  # type: ignore
+        for row in await conn.fetch(query, *args)
+    ]
 
 
 async def iter_candidates_with_policy(
-        conn: asyncpg.Connection,
-        packages: Optional[List[str]] = None,
-        suite: Optional[str] = None
-        ) -> List[Tuple[
-            Package, str, Optional[str], Optional[int], Optional[float],
-            Dict[str, str], str, List[str]]]:
+    conn: asyncpg.Connection,
+    packages: Optional[List[str]] = None,
+    suite: Optional[str] = None,
+) -> List[
+    Tuple[
+        Package,
+        str,
+        Optional[str],
+        Optional[int],
+        Optional[float],
+        Dict[str, str],
+        str,
+        List[str],
+    ]
+]:
     query = """
 SELECT
   package.name,
@@ -272,34 +315,50 @@ WHERE NOT package.removed
     elif packages is not None:
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
-    return [(Package.from_row(row), row[10], row[11], row[12], row[13],
-             (dict(row[14]) if row[14] is not None else None, row[15],
-              shlex.split(row[16]) if row[16] is not None else None)
-             )   # type: ignore
-            for row in await conn.fetch(query, *args)]
+    return [
+        (
+            Package.from_row(row),
+            row[10],
+            row[11],
+            row[12],
+            row[13],
+            (
+                dict(row[14]) if row[14] is not None else None,
+                row[15],
+                shlex.split(row[16]) if row[16] is not None else None,
+            ),
+        )  # type: ignore
+        for row in await conn.fetch(query, *args)
+    ]
 
 
 async def get_candidate(conn: asyncpg.Connection, package, suite):
     return await conn.fetchrow(
         "SELECT context, value, success_chance FROM candidate "
-        "WHERE package = $1 AND suite = $2", package, suite)
+        "WHERE package = $1 AND suite = $2",
+        package,
+        suite,
+    )
 
 
 async def get_last_build_version(
-        conn: asyncpg.Connection,
-        package: str,
-        suite: str) -> Optional[Version]:
+    conn: asyncpg.Connection, package: str, suite: str
+) -> Optional[Version]:
     return await conn.fetchval(
         "SELECT build_version FROM run WHERE "
         "build_version IS NOT NULL AND package = $1 AND "
         "build_distribution = $2 ORDER BY build_version DESC",
-        package, suite)
+        package,
+        suite,
+    )
 
 
 async def version_available(
-        conn: asyncpg.Connection, package: str, suite: str,
-        version: Optional[Tuple[str, Version]] = None
-        ) -> List[Tuple[str, str, Version]]:
+    conn: asyncpg.Connection,
+    package: str,
+    suite: str,
+    version: Optional[Tuple[str, Version]] = None,
+) -> List[Tuple[str, str, Version]]:
     query = """\
 SELECT
   package,
@@ -324,28 +383,37 @@ WHERE name = $1 AND %(version_match2)s
     args = [package, suite]
     if version:
         query = query % {
-            'version_match1': "build_version %s $3" % (version[0], ),
-            'version_match2': "archive_version %s $3" % (version[0], )}
+            "version_match1": "build_version %s $3" % (version[0],),
+            "version_match2": "archive_version %s $3" % (version[0],),
+        }
         args.append(str(version[1]))
     else:
-        query = query % {
-            'version_match1': 'True',
-            'version_match2': 'True'}
+        query = query % {"version_match1": "True", "version_match2": "True"}
     return await conn.fetch(query, *args)
 
 
 async def store_debian_build(
-        conn: asyncpg.Connection, run_id: str, source: str,
-        version: Version, distribution: str):
+    conn: asyncpg.Connection,
+    run_id: str,
+    source: str,
+    version: Version,
+    distribution: str,
+):
     await conn.execute(
         "INSERT INTO debian_build (run_id, source, version, distribution) "
         "VALUES ($1, $2, $3, $4)",
-        run_id, source, str(version), distribution)
+        run_id,
+        source,
+        str(version),
+        distribution,
+    )
 
 
 async def update_removals(
-        conn: asyncpg.Connection, distribution: str,
-        items: List[Tuple[str, Optional[Version]]]) -> None:
+    conn: asyncpg.Connection,
+    distribution: str,
+    items: List[Tuple[str, Optional[Version]]],
+) -> None:
     if not items:
         return
     query = """\
@@ -353,23 +421,21 @@ UPDATE package SET removed = True
 WHERE name = $1 AND distribution = $2 AND archive_version <= $3
 """
     await conn.executemany(
-        query, [(name, distribution, archive_version)
-                for (name, archive_version) in items])
+        query,
+        [(name, distribution, archive_version) for (name, archive_version) in items],
+    )
 
 
 async def guess_package_from_revision(
-        conn: asyncpg.Connection, revision: bytes
-        ) -> Tuple[Optional[str], Optional[str]]:
+    conn: asyncpg.Connection, revision: bytes
+) -> Tuple[Optional[str], Optional[str]]:
     query = """\
 select distinct package, maintainer_email from run
 left join new_result_branch rb ON rb.run_id = run.id
 left join package on package.name = run.package
 where rb.revision = $1 and run.package is not null
 """
-    rows = await conn.fetch(query, revision.decode('utf-8'))
+    rows = await conn.fetch(query, revision.decode("utf-8"))
     if len(rows) == 1:
         return rows[0][0], rows[0][1]
     return None, None
-
-
-
