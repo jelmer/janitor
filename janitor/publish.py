@@ -17,12 +17,9 @@
 
 """Publishing VCS changes."""
 
-from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp import web
 from datetime import datetime, timedelta
 import asyncio
 import functools
-import gpg
 import json
 import os
 import shlex
@@ -31,8 +28,9 @@ import time
 from typing import Dict, List, Optional, Any, Tuple
 import uuid
 
-from breezy import urlutils
 
+from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp import web
 
 from prometheus_client import (
     Counter,
@@ -41,6 +39,9 @@ from prometheus_client import (
     push_to_gateway,
     REGISTRY,
 )
+
+from breezy import urlutils
+import gpg
 
 from silver_platter.proposal import (
     iter_all_mps,
