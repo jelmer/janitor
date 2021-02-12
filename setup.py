@@ -53,5 +53,8 @@ setup(
         "lintian-brush",
         "breezy",
         "jinja2",
+        "ognibuild",
+        "buildlog-consultant",
+        "upstream-ontologist",
     ],
 )
