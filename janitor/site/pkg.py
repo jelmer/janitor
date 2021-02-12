@@ -76,9 +76,9 @@ def find_build_log_failure(logf, length):
             max(1, offsets[focus_section][0] + len(lines) - length),
             offsets[focus_section][0] + len(lines),
         )
-        offset, unused_line, unused_err = find_build_failure_description(lines)
-        if offset is not None:
-            highlight_lines = [offsets[focus_section][0] + offset]
+        match, unused_err = find_build_failure_description(lines)
+        if match is not None:
+            highlight_lines = [offsets[focus_section][0] + match.lineno]
 
     return (linecount, include_lines, highlight_lines)
 
