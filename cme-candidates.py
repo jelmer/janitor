@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Copyright (C) 2018-2020 Jelmer Vernooij <jelmer@jelmer.uk>
+# Copyright (C) 2018-2021 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,10 +21,10 @@ from janitor.candidates_pb2 import Candidate, CandidateList
 from janitor.udd import UDD
 
 
-DEFAULT_VALUE_UNCHANGED = 1
+DEFAULT_VALUE_CME = 5
 
 
-async def iter_unchanged_candidates(udd, packages=None):
+async def iter_cme_candidates(udd, packages=None):
     args = []
     query = """\
 SELECT DISTINCT ON (sources.source) \
@@ -38,21 +38,21 @@ sources.release = 'sid'
     for row in await udd.fetch(query, *args):
         candidate = Candidate()
         candidate.package = row[0]
-        candidate.value = DEFAULT_VALUE_UNCHANGED
-        candidate.suite = "unchanged"
+        candidate.value = DEFAULT_VALUE_CME
+        candidate.suite = "cme"
         yield candidate
 
 
 async def main():
     import argparse
 
-    parser = argparse.ArgumentParser(prog="unchanged-candidates")
+    parser = argparse.ArgumentParser(prog="cme-candidates")
     parser.add_argument("packages", nargs="*", default=None)
 
     args = parser.parse_args()
 
     udd = await UDD.public_udd_mirror()
-    async for candidate in iter_unchanged_candidates(udd, args.packages or None):
+    async for candidate in iter_cme_candidates(udd, args.packages or None):
         cl = CandidateList()
         cl.candidate.append(candidate)
         print(cl)
