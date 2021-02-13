@@ -246,6 +246,16 @@ async def derived_branch_name(conn, run, role):
         return name
 
 
+def branch_urls_match(url_a, url_b):
+    url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip('/'))
+    url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip('/'))
+    if url_a != url_b:
+        return False
+    if params_a != params_b:
+        return False
+    return True
+
+
 async def publish_one(
     suite: str,
     pkg: str,
@@ -1516,14 +1526,10 @@ has changed to %s.
                 return False
         return False
 
-    if mp_run.branch_url != last_run.branch_url:
-        warning(
-            "%s: Remote branch URL appears to have have changed: "
-            "%s => %s, skipping.",
-            mp.url,
-            mp_run.branch_url,
-            last_run.branch_url,
-        )
+    if not branch_urls_match(mp_run.branch_url, last_run.branch_url):
+        warning('%s: Remote branch URL appears to have have changed: '
+                '%s => %s, skipping.', mp.url, mp_run.branch_url,
+                last_run.branch_url)
         return False
 
         # TODO(jelmer): Don't do this if there's a redirect in place,
