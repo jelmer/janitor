@@ -5,6 +5,7 @@ export PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter:$(pwd)
 (
    python3 ./unchanged-candidates.py
    python3 ./scrub-obsolete-candidates.py
+   python3 ./cme-candidates.py
    python3 ./lintian-fixes-candidates.py
    python3 ./fresh-releases-candidates.py
    python3 ./fresh-snapshots-candidates.py
