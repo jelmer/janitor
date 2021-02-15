@@ -24,7 +24,7 @@
 	url = https://github.com/jelmer/ognibuild.git
 [submodule "upstream-ontologist"]
 	path = upstream-ontologist
-	url = https://github.com/jelmer/upstream-ontologist
+	url = https://github.com/jelmer/upstream-ontologist.git
 [submodule "buildlog-consultant"]
 	path = buildlog-consultant
-	url = https://github.com/jelmer/buildlog-consultant
+	url = https://github.com/jelmer/buildlog-consultant.git
