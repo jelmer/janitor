@@ -43,6 +43,7 @@ from breezy.config import (
 from breezy.errors import (
     NotBranchError,
     InvalidHttpResponse,
+    UnexpectedHttpStatus,
 )
 from breezy.controldir import ControlDir
 from breezy.transport import Transport
@@ -238,9 +239,15 @@ def run_worker(
                     result.branches,
                     result.tags,
                 )
+            except UnexpectedHttpStatus as e:
+                if e.code == 502:
+                    raise WorkerFailure(
+                        "result-push-bad-gateway",
+                        "Failed to push result branch: %s" % e)
+                raise WorkerFailure(
+                    "result-push-failed", "Failed to push result branch: %s" % e
+                )
             except (InvalidHttpResponse, IncompleteRead, MirrorFailure) as e:
-                # TODO(jelmer): Retry if this was a server error (5xx) of
-                # some  sort?
                 raise WorkerFailure(
                     "result-push-failed", "Failed to push result branch: %s" % e
                 )
