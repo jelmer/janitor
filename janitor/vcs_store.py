@@ -19,6 +19,7 @@
 
 import asyncio
 from io import BytesIO
+import logging
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 
@@ -365,6 +366,8 @@ def main(argv=None):
     )
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.DEBUG)
 
     with open(args.config, "r") as f:
         config = read_config(f)
