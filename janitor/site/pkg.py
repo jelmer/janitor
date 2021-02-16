@@ -48,11 +48,11 @@ def find_build_log_failure(logf, length):
     if focus_section not in paragraphs:
         focus_section = None
     if failed_stage == "install-deps":
-        (focus_section, offset, line, error) = find_install_deps_failure_description(
+        (focus_section, match, error) = find_install_deps_failure_description(
             paragraphs
         )
         if offset is not None:
-            abs_offset = offsets[focus_section][0] + offset
+            abs_offset = offsets[focus_section][0] + match.lineno
             include_lines = (
                 max(1, abs_offset - length // 2),
                 abs_offset + min(length // 2, len(lines)),
