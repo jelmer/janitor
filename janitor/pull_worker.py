@@ -406,9 +406,14 @@ async def main(argv=None):
         node_name = socket.gethostname()
 
     async with ClientSession(auth=auth) as session:
-        assignment = await get_assignment(
-            session, args.base_url, node_name, jenkins_metadata=jenkins_metadata
-        )
+        try:
+            assignment = await get_assignment(
+                session, args.base_url, node_name, jenkins_metadata=jenkins_metadata
+            )
+        except asyncio.TimeoutError as e:
+            logging.fatal('timeout while retrieving assignment: %s', e)
+            return 1
+
         if args.debug:
             print(assignment)
 
