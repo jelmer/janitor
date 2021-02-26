@@ -84,7 +84,7 @@ async def reprocess_run(db, package, log_id, result_code, description):
             description,
             new_code,
             failure.description,
-            failure.context,
+            failure.phase,
         )
 
 
