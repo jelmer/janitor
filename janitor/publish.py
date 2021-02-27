@@ -1987,7 +1987,8 @@ def main(argv=None):
                 )
             ),
         ]
-        if args.runner_url and not args.reviewed_only:
+        if (args.runner_url and not args.reviewed_only
+                and not args.no_auto_publish):
             tasks.append(
                 loop.create_task(
                     listen_to_runner(
