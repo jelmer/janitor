@@ -402,7 +402,8 @@ async def invoke_subprocess_worker(
             json.dump(resume.result, f)
         args.append("--resume-result-path=%s" % resume_result_path)
         for (role, name, base, revision) in resume.resume_result_branches or []:
-            args.append("--extra-resume-branch=%s:%s" % (role, name))
+            if name is not None:
+                args.append("--extra-resume-branch=%s:%s" % (role, name))
     if cached_branch_url:
         args.append("--cached-branch-url=%s" % cached_branch_url)
     if pre_check:
