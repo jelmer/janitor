@@ -71,7 +71,7 @@ from ognibuild import (
 from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
-from ognibuild.apt import (
+from ognibuild import (
     UnidentifiedError,
 )
 from ognibuild.dist import (
