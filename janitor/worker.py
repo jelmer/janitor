@@ -330,6 +330,10 @@ class DebianTarget(Target):
                 )
 
     def build(self, ws, subpath, output_directory, env):
+        from ognibuild.debian.apt import AptManager
+        from ognibuild.session.plain import PlainSession
+        # TODO(jelmer): this should use the appropriate schrootsession
+        apt = AptManager(PlainSession())
         if self.build_command:
             if self.last_build_version:
                 # Update the changelog entry with the previous build version;
@@ -355,6 +359,7 @@ class DebianTarget(Target):
                 else:
                     (changes_name, cl_version) = build_incrementally(
                         ws.local_tree,
+                        apt,
                         "~" + self.build_suffix,
                         self.build_distribution,
                         output_directory,
