@@ -383,7 +383,7 @@ if __name__ == "__main__":
 
         async with request.app.database.acquire() as conn:
             for suite in SUITES:
-                for name, jv, av in await state.iter_published_packages(conn, suite):
+                for name, jv, av in await debian_state.iter_published_packages(conn, suite):
                     sources.add(name)
                     archive_version[name] = av
                     suite_version.setdefault(suite, {})[name] = jv
