@@ -353,6 +353,8 @@ async def main():
 
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+
     last_success_gauge = Gauge(
         "job_last_success_unixtime", "Last time a batch job successfully finished"
     )
