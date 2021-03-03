@@ -247,14 +247,15 @@ async def derived_branch_name(conn, run, role):
         return name
 
 
-def branch_urls_match(url_a, url_b):
+def branches_match(url_a, url_b):
+    if url_a == url_b:
+        return True
     url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip('/'))
     url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip('/'))
+    # TODO(jelmer): Support following redirects
     if url_a.rstrip('/') != url_b.rstrip('/'):
         return False
-    if params_a != params_b:
-        return False
-    return True
+    return open_branch(url_a).name == open_branch(url_b).name
 
 
 async def publish_one(
@@ -1527,7 +1528,7 @@ has changed to %s.
                 return False
         return False
 
-    if not branch_urls_match(mp_run.branch_url, last_run.branch_url):
+    if not branches_match(mp_run.branch_url, last_run.branch_url):
         warning('%s: Remote branch URL appears to have have changed: '
                 '%s => %s, skipping.', mp.url, mp_run.branch_url,
                 last_run.branch_url)
