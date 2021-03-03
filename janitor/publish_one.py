@@ -498,7 +498,12 @@ class OrphanPublisher(Publisher):
     def get_proposal_description(self, role, format, existing_description):
         from silver_platter.debian.orphan import move_instructions
 
-        text = "Move orphaned package to the QA team.\n"
+        text = "Move orphaned package to the QA team.\n\n"
+        if self.wnpp_bug:
+            if format == 'markdown':
+                text += "For details, see the [orphan bug](https://bugs.debian.org/%d).\n\n" % self.wnpp_bug
+            else:
+                text += "For details, see the orphan bug at https://bugs.debian.org/%d.\n\n" % self.wnpp_bug
         if not self.pushed and self.new_vcs_url:
             text += "\n".join(
                 move_instructions(
@@ -514,6 +519,7 @@ class OrphanPublisher(Publisher):
         return "Move package to the QA team."
 
     def read_worker_result(self, result):
+        self.wnpp_bug = result.get("wnpp_bug")
         self.pushed = result["pushed"]
         self.old_vcs_url = result["old_vcs_url"]
         self.new_vcs_url = result["new_vcs_url"]
