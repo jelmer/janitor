@@ -19,6 +19,7 @@ from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
 from contextlib import ExitStack
 import json
+import logging
 import os
 import re
 import sys
@@ -45,7 +46,6 @@ from .diffoscope import (
 )
 from .pubsub import pubsub_reader
 from .prometheus import setup_metrics
-from .trace import note
 
 
 suite_check = re.compile("^[a-z0-9-]+$")
@@ -80,7 +80,7 @@ async def handle_debdiff(request):
         debdiff = None
 
     if debdiff is None:
-        note(
+        logging.info(
             "Generating debdiff between %s (%s/%s/%s) and %s (%s/%s/%s)",
             old_run.id,
             old_run.package,
@@ -227,7 +227,7 @@ async def handle_diffoscope(request):
         diffoscope_diff = None
 
     if diffoscope_diff is None:
-        note(
+        logging.info(
             "Generating diffoscope between %s (%s/%s/%s) and %s (%s/%s/%s)",
             old_run.id,
             old_run.package,
@@ -353,7 +353,8 @@ async def precache(app, old_id, new_id):
                         [p for (n, p) in old_binaries], [p for (n, p) in new_binaries]
                     )
                 )
-            note("Precached debdiff result for %s/%s", old_id, new_id)
+            logging.info(
+                "Precached debdiff result for %s/%s", old_id, new_id)
 
         diffoscope_cache_path = app.diffoscope_cache_path(old_id, new_id)
         if diffoscope_cache_path and not os.path.exists(diffoscope_cache_path):
@@ -371,7 +372,8 @@ async def precache(app, old_id, new_id):
                     json.dump(diffoscope_diff, f)
             except json.JSONDecodeError as e:
                 raise web.HTTPServerError(text=str(e))
-            note("Precached diffoscope result for %s/%s", old_id, new_id)
+            logging.info(
+                "Precached diffoscope result for %s/%s", old_id, new_id)
 
 
 async def handle_precache(request):
@@ -425,7 +427,7 @@ where
                 try:
                     x.result()
                 except Exception as e:
-                    note("Error precaching: %r", e)
+                    logging.info("Error precaching: %r", e)
                     traceback.print_exc()
 
     loop = asyncio.get_event_loop()
@@ -511,14 +513,15 @@ async def listen_to_runner(runner_url, app):
                 try:
                     await precache(app, old_id, new_id)
                 except ArtifactsMissing as e:
-                    note(
+                    logging.info(
                         "Artifacts missing while precaching diff for "
                         "new result %s: %r",
                         result["log_id"],
                         e,
                     )
                 except Exception as e:
-                    note("Error precaching diff for %s: %r", result["log_id"], e)
+                    logging.info(
+                        "Error precaching diff for %s: %r", result["log_id"], e)
                     traceback.print_exc()
 
 
@@ -539,6 +542,8 @@ def main(argv=None):
     )
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     with open(args.config, "r") as f:
         config = read_config(f)

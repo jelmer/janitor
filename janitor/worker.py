@@ -19,6 +19,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -78,10 +79,6 @@ from ognibuild.dist import (
     create_dist_schroot,
 )
 
-from .trace import (
-    note,
-    warning,
-)
 from .vcs import (
     BranchOpenFailure,
     open_branch_ext,
@@ -109,7 +106,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                 chroot=self.args.chroot,
             )
         except NoBuildToolsFound:
-            note("No build tools found, falling back to simple export.")
+            logging.info("No build tools found, falling back to simple export.")
             return None
         except DetailedFailure:
             raise
@@ -389,7 +386,7 @@ class DebianTarget(Target):
                 else:
                     code = "build-failed"
                 raise WorkerFailure(code, e.description)
-            note("Built %s", changes_name)
+            logging.info("Built %s", changes_name)
 
     def directory_name(self):
         return self.package
@@ -425,7 +422,7 @@ def process_package(
 
     target.parse_args(command)
 
-    note("Opening branch at %s", vcs_url)
+    logging.info("Opening branch at %s", vcs_url)
     try:
         main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
     except BranchOpenFailure as e:
@@ -437,13 +434,13 @@ def process_package(
                 cached_branch_url, possible_transports=possible_transports
             )
         except BranchMissing as e:
-            note("Cached branch URL %s missing: %s", cached_branch_url, e)
+            logging.info("Cached branch URL %s missing: %s", cached_branch_url, e)
             cached_branch = None
         except BranchUnavailable as e:
-            warning("Cached branch URL %s unavailable: %s", cached_branch_url, e)
+            logging.warning("Cached branch URL %s unavailable: %s", cached_branch_url, e)
             cached_branch = None
         else:
-            note("Using cached branch %s", full_branch_url(cached_branch))
+            logging.info("Using cached branch %s", full_branch_url(cached_branch))
     else:
         cached_branch = None
 
@@ -458,7 +455,7 @@ def process_package(
         except BranchMissing as e:
             raise WorkerFailure("worker-resume-branch-missing", str(e))
         else:
-            note("Resuming from branch %s", full_branch_url(resume_branch))
+            logging.info("Resuming from branch %s", full_branch_url(resume_branch))
     else:
         resume_branch = None
 
@@ -620,6 +617,8 @@ def main(argv=None):
         parser.print_usage()
         return 1
 
+    logging.basicConfig(level=logging.INFO)
+
     output_directory = os.path.abspath(args.output_directory)
 
     global_config = GlobalStack()
@@ -667,7 +666,7 @@ def main(argv=None):
     except WorkerFailure as e:
         metadata["code"] = e.code
         metadata["description"] = e.description
-        note("Worker failed (%s): %s", e.code, e.description)
+        logging.info("Worker failed (%s): %s", e.code, e.description)
         return 0
     except BaseException as e:
         metadata["code"] = "worker-exception"
@@ -676,11 +675,11 @@ def main(argv=None):
     else:
         metadata["code"] = None
         metadata.update(result.json())
-        note("%s", result.description)
+        logging.info("%s", result.description)
         return 0
     finally:
         finish_time = datetime.now()
-        note("Elapsed time: %s", finish_time - start_time)
+        logging.info("Elapsed time: %s", finish_time - start_time)
         with open(os.path.join(output_directory, "result.json"), "w") as f:
             try:
                 json.dump(metadata, f, indent=2)

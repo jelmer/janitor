@@ -20,15 +20,16 @@
 from __future__ import absolute_import
 
 from google.protobuf import text_format  # type: ignore
+import logging
 from typing import List, Tuple
 
-from . import state, trace
+from . import state
 from .config import read_config
 from .codebase_metadata_pb2 import CodebaseList, CodebaseMetadata
 
 
 async def update_codebase_metadata(conn, provided_codebases):
-    trace.note("Updating codebase metadata.")
+    logging.info("Updating codebase metadata.")
     codebases = []
     for codebase in provided_codebases:
         codebases.append((codebase.name, codebase.branch_url, codebase.subpath))

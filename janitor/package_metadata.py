@@ -19,16 +19,18 @@
 
 from __future__ import absolute_import
 
+import logging
+from typing import List, Tuple, Optional
+
 from debian.changelog import Version
 from google.protobuf import text_format  # type: ignore
-from typing import List, Tuple, Optional
 
 from breezy.git.mapping import default_mapping
 
 from silver_platter.debian import (
     convert_debian_vcs_url,
 )
-from . import state, trace
+from . import state
 from .debian import state as debian_state
 from .config import read_config
 from .package_metadata_pb2 import PackageList, PackageMetadata, Removal
@@ -46,7 +48,7 @@ from lintian_brush.vcs import (
 async def update_package_metadata(
     conn, distribution: str, provided_packages, package_overrides
 ):
-    trace.note("Updating package metadata.")
+    logging.info("Updating package metadata.")
     packages = []
     for package in provided_packages:
         try:
@@ -61,7 +63,8 @@ async def update_package_metadata(
         if package.vcs_type and package.vcs_type.capitalize() == "Git":
             new_vcs_url = fixup_broken_git_url(vcs_url)
             if new_vcs_url != vcs_url:
-                trace.note("Fixing up VCS URL: %s -> %s", vcs_url, new_vcs_url)
+                logging.info(
+                    "Fixing up VCS URL: %s -> %s", vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
             if package.commit_id:
                 vcs_last_revision = default_mapping.revision_id_foreign_to_bzr(
@@ -76,7 +79,7 @@ async def update_package_metadata(
             try:
                 branch_url = convert_debian_vcs_url(package.vcs_type.capitalize(), url)
             except ValueError as e:
-                trace.note("%s: %s", package.name, e)
+                logging.info("%s: %s", package.name, e)
                 branch_url = None
         else:
             subpath = None
@@ -137,7 +140,7 @@ async def mark_removed_packages(conn, distribution: str, removals: List[Removal]
     existing_packages = {
         package.name: package for package in await debian_state.iter_packages(conn)
     }
-    trace.note("Updating removals.")
+    logging.info("Updating removals.")
     filtered_removals: List[Tuple[str, Optional[Version]]] = [
         (removal.name, Version(removal.version) if removal.version else None)
         for removal in removals
@@ -185,6 +188,8 @@ async def main():
     )
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     last_success_gauge = Gauge(
         "job_last_success_unixtime", "Last time a batch job successfully finished"

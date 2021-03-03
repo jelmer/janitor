@@ -21,13 +21,12 @@ from aiohttp import ClientSession, ClientResponseError
 import asyncio
 
 from io import BytesIO
+import logging
 import os
 import shutil
 import tempfile
 
 from yarl import URL
-
-from .trace import note, warning
 
 
 DEFAULT_GCS_TIMEOUT = 60
@@ -150,7 +149,8 @@ class GCSArtifactManager(ArtifactManager):
             if e.status == 503:
                 raise ServiceUnavailable()
             raise
-        note("Uploaded %r to run %s in bucket %s.", names, run_id, self.bucket_name)
+        logging.info(
+            "Uploaded %r to run %s in bucket %s.", names, run_id, self.bucket_name)
 
     async def iter_ids(self):
         ids = set()
@@ -220,7 +220,8 @@ async def upload_backup_artifacts(
                 try:
                     await artifact_manager.store_artifacts(run_id, td, timeout=timeout)
                 except Exception as e:
-                    warning("Unable to upload backup artifacts (%r): %s", run_id, e)
+                    logging.warning(
+                        "Unable to upload backup artifacts (%r): %s", run_id, e)
                 else:
                     await backup_artifact_manager.delete_artifactes(run_id)
 
@@ -229,13 +230,14 @@ async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id,
     try:
         await manager.store_artifacts(run_id, from_dir, names)
     except Exception as e:
-        warning("Unable to upload artifacts for %r: %r", run_id, e)
+        logging.warning("Unable to upload artifacts for %r: %r", run_id, e)
         if backup_manager:
             await backup_manager.store_artifacts(run_id, from_dir, names)
-            note("Uploading results to backup artifact " "location %r.", backup_manager)
+            logging.info("Uploading results to backup artifact " "location %r.", backup_manager)
             return True
         else:
-            warning("No backup artifact manager set. " "Discarding results.")
+            logging.warning(
+                "No backup artifact manager set. " "Discarding results.")
             return False
     else:
         return True

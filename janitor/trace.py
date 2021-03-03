@@ -17,7 +17,6 @@
 
 __all__ = [
     "mutter",
-    "note",
     "warning",
 ]
 
@@ -61,4 +60,4 @@ if not breezy._global_state:
     breezy.initialize(setup_ui=False)
     import breezy.ui
 
-from breezy.trace import mutter, note, warning  # noqa: E402
+from breezy.trace import mutter, warning  # noqa: E402

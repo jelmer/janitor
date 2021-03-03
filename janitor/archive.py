@@ -15,39 +15,42 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import web
-from aiohttp.web_middlewares import normalize_path_middleware
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
-import gpg
-from gpg.constants.sig import mode as gpg_mode
 import hashlib
+import logging
 import gzip
 import bz2
 import os
 import subprocess
 import tempfile
 import sys
-from typing import List
+from typing import List, Dict
+
+from aiohttp import web
+from aiohttp.web_middlewares import normalize_path_middleware
 
 from debian.changelog import format_date
 from debian.deb822 import Release, Packages
+
+import gpg
+from gpg.constants.sig import mode as gpg_mode
+
+from prometheus_client import (
+    Gauge,
+)
 
 from . import state
 from .artifacts import get_artifact_manager, ArtifactsMissing
 from .config import read_config, get_suite_config
 from .prometheus import setup_metrics
 from .pubsub import pubsub_reader
-from .trace import note, warning
-from prometheus_client import (
-    Gauge,
-)
 
 
 DEFAULT_GCS_TIMEOUT = 60 * 30
 
-last_publish_time = {}
+last_publish_time: Dict[str, datetime] = {}
 
 
 last_publish_success = Gauge(
@@ -134,7 +137,8 @@ async def get_packages(db, info_provider, suite_name, component, arch):
             async for chunk in info_provider.info_for_run(run_id, suite_name, package):
                 yield chunk
         except ArtifactsMissing:
-            warning("Artifacts missing for %s (%s), skipping", package, run_id)
+            logging.warning(
+                "Artifacts missing for %s (%s), skipping", package, run_id)
             continue
 
 
@@ -276,7 +280,7 @@ async def publish_suite(
     dists_directory, db, package_info_provider, config, suite, gpg_context
 ):
     start_time = datetime.now()
-    note("Publishing %s", suite.name)
+    logging.info("Publishing %s", suite.name)
     suite_path = os.path.join(dists_directory, suite.name)
     os.makedirs(suite_path, exist_ok=True)
     await write_suite_files(
@@ -289,7 +293,7 @@ async def publish_suite(
         origin=config.origin,
         gpg_context=gpg_context,
     )
-    note("Done publishing %s (took %s)", suite.name, datetime.now() - start_time)
+    logging.info("Done publishing %s (took %s)", suite.name, datetime.now() - start_time)
     last_publish_success.labels(suite=suite.name).set_to_current_time()
     last_publish_time[suite.name] = datetime.now()
 
@@ -354,6 +358,8 @@ async def main(argv=None):
     if not args.dists_directory:
         parser.print_usage()
         sys.exit(1)
+
+    logging.basicConfig(level=logging.INFO)
 
     with open(args.config, "r") as f:
         config = read_config(f)

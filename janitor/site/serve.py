@@ -19,7 +19,7 @@
 
 import asyncio
 from datetime import datetime
-import gpg
+import logging
 import re
 import shutil
 import tempfile
@@ -33,9 +33,11 @@ from aiohttp.web_urldispatcher import (
 )
 from aiohttp import ClientTimeout
 from aiohttp.web import middleware
+import gpg
+
 from ..config import get_suite_config
 
-from ..trace import note, warning
+from ..trace import warning
 from . import (
     html_template,
     render_template_for_request,
@@ -113,7 +115,7 @@ class ForwardedResource(PrefixResource):
         service = request.query.get("service")
         if service:
             params["service"] = service
-        note(
+        logging.debug(
             "Forwarding: method: %s, url: %s, params: %r, headers: %r",
             request.method,
             url,
@@ -130,7 +132,7 @@ class ForwardedResource(PrefixResource):
         ) as client_response:
             status = client_response.status
 
-            note("Forwarding result: %d", status)
+            logging.debug("Forwarding result: %d", status)
 
             if status == 404:
                 raise web.HTTPNotFound()
@@ -284,6 +286,8 @@ if __name__ == "__main__":
     parser.add_argument("--external-url", type=str, default=None, help="External URL")
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     if args.debug:
         minified = ""

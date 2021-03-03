@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from io import BytesIO
+import logging
 import os
 from typing import Optional, List, Tuple, Iterable
 
@@ -50,8 +51,6 @@ from silver_platter.utils import (
     BranchRateLimited,
     BranchUnsupported,
 )
-
-from .trace import note
 
 
 SUPPORTED_VCSES = ["git", "bzr"]
@@ -374,7 +373,7 @@ def get_cached_branch(
     except InvalidHttpResponse:
         return None
     except ConnectionError as e:
-        note("Unable to reach cache server: %s", e)
+        logging.info("Unable to reach cache server: %s", e)
         return None
 
 
