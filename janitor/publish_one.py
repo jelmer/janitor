@@ -498,7 +498,7 @@ class OrphanPublisher(Publisher):
     def get_proposal_description(self, role, format, existing_description):
         from silver_platter.debian.orphan import move_instructions
 
-        text = "Move orphaned package to the QA team."
+        text = "Move orphaned package to the QA team.\n"
         if not self.pushed and self.new_vcs_url:
             text += "\n".join(
                 move_instructions(
