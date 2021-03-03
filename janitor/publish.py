@@ -249,7 +249,7 @@ async def derived_branch_name(conn, run, role):
 def branch_urls_match(url_a, url_b):
     url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip('/'))
     url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip('/'))
-    if url_a != url_b:
+    if url_a.rstrip('/') != url_b.rstrip('/'):
         return False
     if params_a != params_b:
         return False
