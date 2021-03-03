@@ -596,7 +596,7 @@ async def handle_published_packages(request):
             package,
             build_version,
             archive_version,
-        ) in await state.iter_published_packages(conn, suite):
+        ) in await debian_state.iter_published_packages(conn, suite):
             response_obj.append(
                 {
                     "package": package,
