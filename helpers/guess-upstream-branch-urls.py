@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import asyncpg
 import sys
+import traceback
 
 from google.protobuf import text_format
 
@@ -47,7 +48,11 @@ async def main(db, start=None):
                     ('aur', guess_from_aur),
                     ('lp', guess_from_launchpad),
                     ('pecl', guess_from_pecl)]:
-                metadata = dict(guesser(pkg))
+                try:
+                    metadata = dict(guesser(pkg))
+                except Exception as e:
+                    traceback.print_last()
+                    continue
                 try:
                     repo_url = metadata['Repository']
                 except KeyError:
