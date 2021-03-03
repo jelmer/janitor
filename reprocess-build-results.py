@@ -18,6 +18,7 @@
 
 import argparse
 import asyncio
+import logging
 import os
 import sys
 
@@ -28,7 +29,6 @@ from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E
 from janitor import state  # noqa: E402
 from janitor.config import read_config  # noqa: E402
 from janitor.logs import get_log_manager  # noqa: E402
-from janitor.trace import note  # noqa: E402
 
 
 loop = asyncio.get_event_loop()
@@ -47,6 +47,8 @@ parser.add_argument(
     "-r", "--run-id", type=str, action="append", help="Run id to process"
 )
 args = parser.parse_args()
+
+logging.basicConfig(level=logging.INFO)
 
 
 with open(args.config, "r") as f:
@@ -76,7 +78,7 @@ async def reprocess_run(db, package, log_id, result_code, description):
     if new_code != result_code or description != failure.description:
         async with db.acquire() as conn:
             await state.update_run_result(conn, log_id, new_code, failure.description)
-        note(
+        logging.info(
             "%s/%s: Updated %r, %r => %r, %r %r",
             package,
             log_id,

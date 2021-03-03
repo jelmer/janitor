@@ -19,9 +19,10 @@
 
 import asyncio
 from google.protobuf import text_format  # type: ignore
+import logging
 import sys
 
-from . import state, trace
+from . import state
 from .config import read_config
 from .candidates_pb2 import CandidateList
 
@@ -67,7 +68,7 @@ async def main():
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
-        trace.note("Adding candidates.")
+        logging.info("Adding candidates.")
         candidates = [
             (package, suite, context, value, success_chance)
             for (
@@ -78,7 +79,7 @@ async def main():
                 success_chance,
             ) in iter_candidates_from_script(sys.stdin)
         ]
-        trace.note("Collected %d candidates.", len(candidates))
+        logging.info("Collected %d candidates.", len(candidates))
         await state.store_candidates(conn, candidates)
 
     last_success_gauge.set_to_current_time()

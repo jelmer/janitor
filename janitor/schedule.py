@@ -23,6 +23,7 @@ __all__ = [
 ]
 
 from datetime import datetime, timedelta
+import logging
 from typing import Optional, List, Tuple
 
 from debian.changelog import Version
@@ -32,7 +33,6 @@ import asyncpg
 
 from . import (
     state,
-    trace,
 )
 from .debian import state as debian_state
 from .config import read_config
@@ -129,15 +129,15 @@ async def schedule_from_candidates(iter_candidates_with_policy):
         (publish_mode, update_changelog, command) = policy
 
         if publish_mode is None:
-            trace.note("%s: no policy defined", package.name)
+            logging.info("%s: no policy defined", package.name)
             continue
 
         if all([mode == "skip" for mode in publish_mode]):
-            trace.mutter("%s: skipping, per policy", package.name)
+            logging.debug("%s: skipping, per policy", package.name)
             continue
 
         if not command:
-            trace.mutter("%s: skipping, no command set", package.name)
+            logging.debug("%s: skipping, no command set", package.name)
             continue
 
         for mode in publish_mode.values():
@@ -225,7 +225,7 @@ async def add_to_queue(
     if popcon:
         max_inst = max([(v or 0) for v in popcon.values()])
         if max_inst:
-            trace.note("Maximum inst count: %d", max_inst)
+            logging.info("Maximum inst count: %d", max_inst)
     else:
         max_inst = None
     for package, context, command, suite, value, success_chance in todo:
@@ -270,7 +270,7 @@ async def add_to_queue(
         offset = estimated_cost / estimated_value
         assert offset > 0.0
         offset = default_offset + offset
-        trace.note(
+        logging.info(
             "Package %s: "
             "estimated_popularity(%.2f) * "
             "probability_of_success(%.2f) * value(%d) = "
@@ -298,7 +298,7 @@ async def add_to_queue(
         else:
             added = True
         if added:
-            trace.note("Scheduling %s (%s) with offset %f", package, suite, offset)
+            logging.info("Scheduling %s (%s) with offset %f", package, suite, offset)
 
 
 async def dep_available(

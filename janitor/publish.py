@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 import asyncio
 import functools
 import json
+import logging
 import os
 import shlex
 import sys
@@ -78,7 +79,7 @@ from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
 )
-from .trace import note, warning
+from .trace import warning
 from .vcs import (
     VcsManager,
     LocalVcsManager,
@@ -418,7 +419,7 @@ async def publish_pending_new(
             except OverflowError:
                 continue
             if datetime.now() < next_try_time:
-                note(
+                logging.info(
                     "Not attempting to push %s / %s (%s) due to "
                     "exponential backoff. Next try in %s.",
                     run.package,
@@ -432,7 +433,7 @@ async def publish_pending_new(
                 or MODE_ATTEMPT_PUSH in publish_policy.values()
             ):
                 if push_limit == 0:
-                    note(
+                    logging.info(
                         "Not pushing %s / %s: push limit reached",
                         run.package,
                         run.suite,
@@ -477,8 +478,8 @@ async def publish_pending_new(
             if MODE_PUSH in actual_modes.values() and push_limit is not None:
                 push_limit -= 1
 
-    note("Actions performed: %r", actions)
-    note("Done publishing pending changes; duration: %.2fs" % (time.time() - start))
+    logging.info("Actions performed: %r", actions)
+    logging.info("Done publishing pending changes; duration: %.2fs" % (time.time() - start))
 
     last_publish_pending_success.set_to_current_time()
 
@@ -492,7 +493,7 @@ async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
     code = e.code
     description = e.description
     if e.code == "merge-conflict":
-        note("Merge proposal would cause conflict; restarting.")
+        logging.info("Merge proposal would cause conflict; restarting.")
         await do_schedule(
             conn,
             run.package,
@@ -501,7 +502,7 @@ async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
             bucket=bucket,
         )
     elif e.code == "diverged-branches":
-        note("Branches have diverged; restarting.")
+        logging.info("Branches have diverged; restarting.")
         await do_schedule(
             conn,
             run.package,
@@ -652,7 +653,7 @@ async def publish_from_policy(
     ):
         require_binary_diff = False
 
-    note("Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode)
+    logging.info("Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode)
     try:
         proposal_url, branch_name, is_new = await publish_one(
             run.suite,
@@ -684,7 +685,7 @@ async def publish_from_policy(
         )
         branch_name = None
         proposal_url = None
-        note("Failed(%s): %s", code, description)
+        logging.info("Failed(%s): %s", code, description)
     else:
         code = "success"
         description = "Success"
@@ -895,7 +896,7 @@ async def publish_request(request):
 
         publish_policy = (await state.get_publish_policy(conn, package.name, suite))[0]
 
-        note("Handling request to publish %s/%s", package.name, suite)
+        logging.info("Handling request to publish %s/%s", package.name, suite)
 
     if role is not None:
         roles = [role]
@@ -913,7 +914,7 @@ async def publish_request(request):
         publish_id = str(uuid.uuid4())
         publish_ids[role] = publish_id
 
-        note(".. publishing for role %s: %s", role, mode)
+        logging.info(".. publishing for role %s: %s", role, mode)
 
         if mode in (MODE_SKIP, MODE_BUILD_ONLY):
             continue
@@ -1031,7 +1032,7 @@ async def run_web_server(
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
-    note("Listening on %s:%s", listen_addr, port)
+    logging.info("Listening on %s:%s", listen_addr, port)
     await site.start()
 
 
@@ -1098,7 +1099,7 @@ async def refresh_proposal_status_request(request):
         url = post["url"]
     except KeyError:
         raise web.HTTPBadRequest(body="missing url parameter")
-    note("Request to refresh proposal status for %s", url)
+    logging.info("Request to refresh proposal status for %s", url)
 
     async def scan():
         mp = get_proposal_by_url(url)
@@ -1197,7 +1198,7 @@ async def process_queue_loop(
             )
         cycle_duration = datetime.now() - cycle_start
         to_wait = max(0, interval - cycle_duration.total_seconds())
-        note("Waiting %d seconds for next cycle." % to_wait)
+        logging.info("Waiting %d seconds for next cycle." % to_wait)
         if to_wait > 0:
             await asyncio.sleep(to_wait)
 
@@ -1330,7 +1331,7 @@ async def check_existing_mp(
             if package_name is None:
                 warning("No package known for %s (%s)", mp.url, target_branch_url)
             else:
-                note(
+                logging.info(
                     "Guessed package name (%s) for %s based on revision.",
                     package_name,
                     mp.url,
@@ -1377,7 +1378,7 @@ async def check_existing_mp(
         return False
 
     if package.removed:
-        note(
+        logging.info(
             "%s: package has been removed from the archive, " "closing proposal.",
             mp.url,
         )
@@ -1401,7 +1402,7 @@ archive.
     if last_run.result_code == "nothing-to-do":
         # A new run happened since the last, but there was nothing to
         # do.
-        note("%s: Last run did not produce any changes, " "closing proposal.", mp.url)
+        logging.info("%s: Last run did not produce any changes, " "closing proposal.", mp.url)
         if not dry_run:
             await update_proposal_status(mp, "applied", revision, package_name)
             try:
@@ -1423,7 +1424,7 @@ applied independently.
     if last_run.result_code != "success":
         last_run_age = datetime.now() - last_run.times[1]
         if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
-            note(
+            logging.info(
                 "%s: Last run failed with transient error (%s). " "Rescheduling.",
                 mp.url,
                 last_run.result_code,
@@ -1438,7 +1439,7 @@ applied independently.
                 requestor="publisher (transient error)",
             )
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
-            note(
+            logging.info(
                 "%s: Last run failed (%s) a long time ago (%d days). " "Rescheduling.",
                 mp.url,
                 last_run.result_code,
@@ -1455,7 +1456,7 @@ applied independently.
                 % last_run_age.days,
             )
         else:
-            note(
+            logging.info(
                 "%s: Last run failed (%s). Not touching merge proposal.",
                 mp.url,
                 last_run.result_code,
@@ -1463,11 +1464,11 @@ applied independently.
         return False
 
     if last_run.branch_name is None:
-        note("%s: Last run (%s) does not have branch name set.", mp.url, last_run.id)
+        logging.info("%s: Last run (%s) does not have branch name set.", mp.url, last_run.id)
         return False
 
     if maintainer_email is None:
-        note("%s: No maintainer email known.", mp.url)
+        logging.info("%s: No maintainer email known.", mp.url)
         return False
 
     try:
@@ -1500,7 +1501,7 @@ applied independently.
         # For some old runs it is not set because we didn't track
         # the default branch name.
         if not dry_run and mp_remote_branch_name is not None:
-            note(
+            logging.info(
                 "%s: Closing merge proposal, since branch for role "
                 "'%s' has changed from %s to %s.",
                 mp.url,
@@ -1555,7 +1556,7 @@ This merge proposal will be closed, since the branch has moved to %s.
 
     if last_run != mp_run:
         publish_id = str(uuid.uuid4())
-        note(
+        logging.info(
             "%s (%s) needs to be updated (%s => %s).",
             mp.url,
             mp_run.package,
@@ -1609,7 +1610,7 @@ This merge proposal will be closed, since the branch has moved to %s.
             if code == "empty-merge-proposal":
                 # The changes from the merge proposal have already made it in
                 # somehow.
-                note(
+                logging.info(
                     "%s: Empty merge proposal, changes must have been merged "
                     "some other way. Closing.",
                     mp.url,
@@ -1641,7 +1642,7 @@ applied independently.
                     "applied independently"
                 )
             if code != "success":
-                note(
+                logging.info(
                     "%s: Updating merge proposal failed: %s (%s)",
                     mp.url,
                     code,
@@ -1690,7 +1691,7 @@ applied independently.
         # be refreshed, so only check it if we haven't made any other
         # changes.
         if is_conflicted(mp):
-            note("%s is conflicted. Rescheduling.", mp.url)
+            logging.info("%s is conflicted. Rescheduling.", mp.url)
             if not dry_run:
                 await do_schedule(
                     conn,
@@ -1910,6 +1911,8 @@ def main(argv=None):
     )
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     with open(args.config, "r") as f:
         config = read_config(f)

@@ -38,7 +38,6 @@ from . import (
 from .config import read_config
 from .prometheus import setup_metrics
 from .site import is_worker
-from .trace import note
 from .vcs import (
     VcsManager,
     LocalVcsManager,
@@ -68,7 +67,7 @@ async def _git_open_repo(vcs_manager, db, package):
             vcs_manager.get_repository_url(package, "git"),
             format=format_registry.get("git-bare")(),
         )
-        note(
+        logging.info(
             "Created missing git repository for %s at %s", package, controldir.user_url
         )
         return controldir.open_repository()
@@ -343,7 +342,7 @@ def run_web_server(
     app.router.add_get("/vcs-type/{package}", get_vcs_type)
     app.router.add_post("/remotes/git/{package}/{remote}", handle_set_git_remote)
     app.router.add_post("/remotes/bzr/{package}/{remote}", handle_set_bzr_remote)
-    note("Listening on %s:%s", listen_addr, port)
+    logging.info("Listening on %s:%s", listen_addr, port)
     web.run_app(app, host=listen_addr, port=port)
 
 

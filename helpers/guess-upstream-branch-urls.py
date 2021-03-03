@@ -11,7 +11,7 @@ from janitor import state
 from janitor.config import read_config
 from janitor import package_overrides_pb2
 
-from lintian_brush.upstream_metadata import (
+from upstream_ontologist.guess import (
     guess_from_launchpad,
     guess_from_aur,
     guess_from_pecl,

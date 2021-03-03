@@ -15,15 +15,16 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncio
+import json
+import logging
+from typing import Optional, Set, AsyncIterator, Any
+
+
 import aiohttp
 from aiohttp import web
 from aiohttp.client_exceptions import ClientResponseError, ClientConnectorError
-import asyncio
-import json
-from typing import Optional, Set, AsyncIterator, Any
 from prometheus_client import Gauge
-
-from janitor.trace import note, warning
 
 
 subscription_count = Gauge(
@@ -93,10 +94,10 @@ async def pubsub_reader(
         try:
             ws = await session.ws_connect(url)
         except (ClientResponseError, ClientConnectorError) as e:
-            warning("Unable to connect: %s" % e)
+            logging.warning("Unable to connect: %s" % e)
         else:
             subscription_active.labels(url=url).set(1)
-            note("Subscribed to %s", url)
+            logging.info("Subscribed to %s", url)
             while True:
                 msg = await ws.receive()
 
@@ -105,12 +106,12 @@ async def pubsub_reader(
                 elif msg.type == aiohttp.WSMsgType.closed:
                     break
                 elif msg.type == aiohttp.WSMsgType.error:
-                    warning("Error on websocket: %s", ws.exception())
+                    logging.warning("Error on websocket: %s", ws.exception())
                     break
                 else:
-                    warning("Ignoring ws message type %r", msg.type)
+                    logging.warning("Ignoring ws message type %r", msg.type)
         subscription_active.labels(url=url).set(0)
         if reconnect_interval is None:
             return
-        note("Waiting %d seconds before reconnecting...", reconnect_interval)
+        logging.info("Waiting %d seconds before reconnecting...", reconnect_interval)
         await asyncio.sleep(reconnect_interval)

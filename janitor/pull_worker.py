@@ -17,13 +17,13 @@
 
 import argparse
 import asyncio
-from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
 import functools
 from http.client import IncompleteRead
 from io import BytesIO
 import json
+import logging
 import os
 import socket
 import subprocess
@@ -31,6 +31,8 @@ import sys
 from tempfile import TemporaryDirectory
 from typing import Any, Optional, List, Dict
 from urllib.parse import urljoin
+
+from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout
 import yarl
 
 from breezy import urlutils
@@ -50,7 +52,6 @@ from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
 
-from janitor.trace import note
 from janitor.vcs import (
     RemoteVcsManager,
     MirrorFailure,
@@ -218,7 +219,7 @@ def run_worker(
             possible_transports=possible_transports,
         ) as (ws, result):
             enable_tag_pushing(ws.local_tree.branch)
-            note("Pushing result branch to %r", vcs_manager)
+            logging.info("Pushing result branch to %r", vcs_manager)
 
             try:
                 legacy_import_branches(
@@ -251,7 +252,7 @@ def run_worker(
                 raise WorkerFailure(
                     "result-push-failed", "Failed to push result branch: %s" % e
                 )
-            note("Pushing packaging branch cache to %s", cached_branch_url)
+            logging.info("Pushing packaging branch cache to %s", cached_branch_url)
             push_branch(
                 ws.local_tree.branch,
                 cached_branch_url,
@@ -359,6 +360,8 @@ async def main(argv=None):
     )
 
     args = parser.parse_args(argv)
+
+    logging.basicConfig(level=logging.INFO)
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
@@ -502,7 +505,7 @@ async def main(argv=None):
             except WorkerFailure as e:
                 metadata["code"] = e.code
                 metadata["description"] = e.description
-                note("Worker failed (%s): %s", e.code, e.description)
+                logging.info("Worker failed (%s): %s", e.code, e.description)
                 # This is a failure for the worker, but returning 0 will cause
                 # jenkins to mark the job having failed, which is not really
                 # true.  We're happy if we get to successfully POST to /finish
@@ -514,12 +517,12 @@ async def main(argv=None):
             else:
                 metadata["code"] = None
                 metadata.update(result.json())
-                note("%s", result.description)
+                logging.info("%s", result.description)
 
                 return 0
             finally:
                 finish_time = datetime.now()
-                note("Elapsed time: %s", finish_time - start_time)
+                logging.info("Elapsed time: %s", finish_time - start_time)
 
                 try:
                     result = await upload_results(

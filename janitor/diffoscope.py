@@ -19,9 +19,8 @@ import asyncio
 from io import BytesIO, StringIO
 import os
 import json
+import logging
 import sys
-
-from .trace import note
 
 from breezy.patches import (
     iter_hunks,
@@ -157,7 +156,7 @@ async def _run_diffoscope(old_binary, new_binary, preexec_fn=None):
     args = ["diffoscope", "--json=-", "--exclude-directory-metadata=yes"]
     args.extend([old_binary, new_binary])
     stdout = BytesIO()
-    note("running %r", args)
+    logging.debug("running %r", args)
     p = await asyncio.create_subprocess_exec(
         *args,
         stdin=asyncio.subprocess.PIPE,

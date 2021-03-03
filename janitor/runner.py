@@ -15,16 +15,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import (
-    web,
-    WSMsgType,
-)
 import asyncio
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 import functools
 import json
 from io import BytesIO
+import logging
 import os
 import signal
 import socket
@@ -32,6 +29,12 @@ import sys
 import tempfile
 from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
 import uuid
+
+from aiohttp import (
+    web,
+    WSMsgType,
+)
+
 from yarl import URL
 
 from breezy import debug
@@ -86,7 +89,6 @@ from .logs import (
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
 from .schedule import do_schedule
-from .trace import note, warning
 from .vcs import (
     get_vcs_abbreviation,
     open_branch_ext,
@@ -429,7 +431,8 @@ async def open_branch_with_fallback(
         )
     except BranchOpenFailure as e:
         if e.code == "hosted-on-alioth":
-            note("Branch %s is hosted on alioth. Trying some other options..", vcs_url)
+            logging.info(
+                "Branch %s is hosted on alioth. Trying some other options..", vcs_url)
             try:
                 branch = await open_guessed_salsa_branch(
                     conn,
@@ -467,7 +470,7 @@ async def import_logs(
             try:
                 await logfile_manager.import_log(pkg, log_id, entry.path)
             except ServiceUnavailable as e:
-                warning("Unable to upload logfile %s: %s", entry.name, e)
+                logging.warning("Unable to upload logfile %s: %s", entry.name, e)
                 if backup_logfile_manager:
                     await backup_logfile_manager.import_log(pkg, log_id, entry.path)
             logfilenames.append(entry.name)
@@ -591,7 +594,7 @@ class ActiveRemoteRun(ActiveRun):
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
             duration = datetime.now() - self.last_keepalive
             if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
-                warning(
+                logging.warning(
                     "No keepalives received from %s for %s in %d, aborting.",
                     self.worker_name,
                     self.log_id,
@@ -658,8 +661,8 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
     except UnsupportedHoster as e:
         # We can't figure out what branch to resume from when there's
         # no hoster that can tell us.
+        logging.warning("Unsupported hoster (%s)", e)
         return None
-        warning("Unsupported hoster (%s)", e)
     else:
         try:
             (
@@ -668,10 +671,10 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
                 unused_existing_proposal,
             ) = find_existing_proposed(main_branch, hoster, branch_name)
         except NoSuchProject as e:
-            warning("Project %s not found", e.project)
+            logging.warning("Project %s not found", e.project)
             return None
         except PermissionDenied as e:
-            warning("Unable to list existing proposals: %s", e)
+            logging.warning("Unable to list existing proposals: %s", e)
             return None
         else:
             return resume_branch
@@ -688,7 +691,8 @@ async def check_resume_result(conn, suite, resume_branch) -> Optional["ResumeInf
             conn, suite, revision=resume_branch.last_revision()
         )
         if resume_review_status == "rejected":
-            note("Unsetting resume branch, since last run was " "rejected.")
+            logging.info(
+                "Unsetting resume branch, since last run was " "rejected.")
             return None
         return ResumeInfo(
             resume_branch,
@@ -804,7 +808,8 @@ class ActiveLocalRun(ActiveRun):
         committer: Optional[str] = None,
         backup_artifact_manager: Optional[ArtifactManager] = None,
     ) -> JanitorResult:
-        note("Running %r on %s", self.queue_item.command, self.queue_item.package)
+        logging.info(
+            "Running %r on %s", self.queue_item.command, self.queue_item.package)
 
         if self.queue_item.branch_url is None:
             # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
@@ -879,7 +884,7 @@ class ActiveLocalRun(ActiveRun):
                 )
 
             if resume_branch is not None:
-                note("Resuming from %s", full_branch_url(resume_branch))
+                logging.info("Resuming from %s", full_branch_url(resume_branch))
 
             cached_branch_url = vcs_manager.get_branch_url(
                 self.queue_item.package,
@@ -897,14 +902,14 @@ class ActiveLocalRun(ActiveRun):
                     description="Missing cache branch for %s" % self.queue_item.package,
                     logfilenames=[],
                 )
-            note("Using cached branch %s", full_branch_url(main_branch))
+            logging.info("Using cached branch %s", full_branch_url(main_branch))
             resume_branch = vcs_manager.get_branch(
                 self.queue_item.package, suite_config.branch_name
             )
             cached_branch_url = None
 
         if self.queue_item.refresh and resume_branch:
-            note("Since refresh was requested, ignoring resume branch.")
+            logging.info("Since refresh was requested, ignoring resume branch.")
             resume_branch = None
 
         async with db.acquire() as conn:
@@ -1034,7 +1039,7 @@ class ActiveLocalRun(ActiveRun):
             )
         except NoChangesFile as e:
             # Oh, well.
-            note("No changes file found: %s", e)
+            logging.info("No changes file found: %s", e)
 
         try:
             local_branch = open_branch(
@@ -1231,7 +1236,7 @@ class QueueProcessor(object):
                     conn, result.package, result.main_branch_revision
                 )
                 if run is None:
-                    note("Scheduling control run for %s.", item.package)
+                    logging.info("Scheduling control run for %s.", item.package)
                     await do_schedule(
                         conn,
                         item.package,
@@ -1310,7 +1315,7 @@ class QueueProcessor(object):
 
         def handle_sigterm():
             self.concurrency = None
-            note("Received SIGTERM; not starting new jobs.")
+            logging.info("Received SIGTERM; not starting new jobs.")
 
         loop = asyncio.get_event_loop()
         loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
@@ -1319,7 +1324,7 @@ class QueueProcessor(object):
                 if not todo:
                     if self.concurrency is None:
                         break
-                    note("Nothing to do. Sleeping for 60s.")
+                    logging.info("Nothing to do. Sleeping for 60s.")
                     await asyncio.sleep(60)
                     done: Set[asyncio.Future[None]] = set()
                 else:
@@ -1390,7 +1395,7 @@ async def handle_progress_ws(request):
             try:
                 active_run = queue_processor.active_runs[run_id]
             except KeyError:
-                warning("No such current run: %s" % run_id)
+                logging.warning("No such current run: %s" % run_id)
                 continue
             if rest.startswith(b"log\0"):
                 (unused_kind, logname, data) = rest.split(b"\0", 2)
@@ -1401,7 +1406,7 @@ async def handle_progress_ws(request):
             elif rest == b"keepalive":
                 active_run.reset_keepalive()
             else:
-                warning("Unknown progress message %r for %s", rest, run_id)
+                logging.warning("Unknown progress message %r for %s", rest, run_id)
 
     return ws
 
@@ -1624,7 +1629,7 @@ async def handle_finish(request):
                 )
             except NoChangesFile as e:
                 # Oh, well.
-                note("No changes file found: %s", e)
+                logging.info("No changes file found: %s", e)
 
             artifact_names = result.target_result.artifact_filenames()
             await store_artifacts_with_backup(
@@ -1729,6 +1734,8 @@ def main(argv=None):
     )
 
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     debug.set_debug_flags_from_config()
 

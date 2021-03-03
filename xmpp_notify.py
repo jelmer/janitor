@@ -22,7 +22,6 @@ import slixmpp
 
 from prometheus_client import Counter
 
-from janitor.trace import note
 from janitor.pubsub import pubsub_reader
 from janitor.prometheus import run_prometheus_server
 
@@ -58,7 +57,7 @@ class JanitorNotifier(slixmpp.ClientXMPP):
         await self.send_message(mto=args.channel, mtype="groupchat", mbody="Hello")
 
     async def on_lost(self, event):
-        note("Connection lost, exiting.")
+        logging.info("Connection lost, exiting.")
         sys.exit(1)
 
     async def send_message(self, *args, **kwargs):
