@@ -51,7 +51,7 @@ async def main(db, start=None):
                 try:
                     metadata = dict(guesser(pkg))
                 except Exception as e:
-                    traceback.print_last()
+                    traceback.print_exc()
                     continue
                 try:
                     repo_url = metadata['Repository']
