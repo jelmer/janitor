@@ -527,9 +527,14 @@ class OrphanPublisher(Publisher):
             self.package_name = result["package_name"]
             self.salsa_user = result["salsa_user"]
         except KeyError:
-            self.salsa_user, self.package_name = (
-                urllib.parse.urlparse(self.new_vcs_url).path.strip("/").split("/")
-            )
+            if self.new_vcs_url is not None:
+                self.salsa_user, self.package_name = (
+                    urllib.parse.urlparse(
+                        self.new_vcs_url).path.strip("/").split("/")
+                )
+            else:
+                self.salsa_user = None
+                self.package_name = None
 
     def allow_create_proposal(self):
         return True
@@ -612,11 +617,11 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
         with urllib.request.urlopen(request) as f:
             return f.read()
     except urllib.error.HTTPError as e:
-        if e.status == 404:
+        if e.code == 404:
             if "unavailable_run_id" in e.headers:
                 raise DebdiffMissingRun(e.headers["unavailable_run_id"])
             raise
-        elif e.status in (400, 502, 503, 504):
+        elif e.code in (400, 502, 503, 504):
             raise DebdiffRetrievalError(e.file.read().decode("utf-8", "replace"))
         else:
             raise
