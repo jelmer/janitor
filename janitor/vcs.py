@@ -522,6 +522,7 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
 
 
 def bzr_to_browse_url(url: str) -> str:
+    # TODO(jelmer): Use browse_url_from_repo_url from upstream_ontologist.vcs ?
     (url, params) = urlutils.split_segment_parameters(url)
     branch = params.get("branch")
     if branch:
