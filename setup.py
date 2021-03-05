@@ -49,6 +49,9 @@ setup(
         ],
     },
     test_suite="janitor.tests.test_suite",
+    extras_require={
+        'debian': ['python_debian', 'debmutate', 'silver-platter[debian]', 'ognibuild[debian]'],
+    },
     install_requires=[
         "lintian-brush",
         "breezy",
@@ -56,5 +59,6 @@ setup(
         "ognibuild",
         "buildlog-consultant",
         "upstream-ontologist",
+        "silver-platter",
     ],
 )
