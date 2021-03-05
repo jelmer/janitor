@@ -451,6 +451,7 @@ def process_package(
                 resume_branch_url, possible_transports=possible_transports
             )
         except BranchUnavailable as e:
+            import pdb; pdb.set_trace()
             raise WorkerFailure("worker-resume-branch-unavailable", str(e))
         except BranchMissing as e:
             raise WorkerFailure("worker-resume-branch-missing", str(e))
@@ -617,7 +618,7 @@ def main(argv=None):
         parser.print_usage()
         return 1
 
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     output_directory = os.path.abspath(args.output_directory)
 
