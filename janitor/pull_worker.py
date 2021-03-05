@@ -363,9 +363,9 @@ async def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.debug:
-        logging.basicConfig(level=logging.DEBUG)
+        logging.basicConfig(level=logging.DEBUG, format='%(message)s')
     else:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.INFO, format='%(message)s')
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
