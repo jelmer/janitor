@@ -224,8 +224,8 @@ async def dulwich_refs(request):
     )
     handler.proto.write_pkt_line(b"# service=" + service.encode("ascii") + b"\n")
     handler.proto.write_pkt_line(None)
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, handler.handle)
+
+    await asyncio.to_thread(handler.handle)
 
     await response.write(out.getvalue())
 
@@ -265,8 +265,7 @@ async def dulwich_service(request):
         handler = handler_cls(DictBackend({".": r}), ["."], proto, stateless_rpc=True)
         handler.handle()
 
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, handle)
+    await asyncio.to_thread(handle)
 
     await response.write(outf.getvalue())
 
