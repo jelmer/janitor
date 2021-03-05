@@ -398,7 +398,9 @@ async def main(argv=None):
             "janitor-worker", WorkerCredentialStore, fallback=True
         )
 
-    if "JENKINS_URL" in os.environ:
+    if any(filter(
+            os.environ.__contains__,
+            ['BUILD_URL', 'EXECUTOR_NUMBER', 'BUILD_ID', 'BUILD_NUMBER'])):
         jenkins_metadata = {
             "build_url": os.environ.get("BUILD_URL"),
             "executor_number": os.environ.get("EXECUTOR_NUMBER"),
