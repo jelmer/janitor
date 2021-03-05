@@ -1417,6 +1417,11 @@ order by url, last_run.finish_time desc
         name="generic-package",
     )
     app.router.add_get(
+        "/{suite:" + SUITE_REGEX + "}/pkg/{pkg}/{run_id}",
+        handle_generic_pkg,
+        name="generic-run",
+    )
+    app.router.add_get(
         "/cupboard/vcs-regressions/", handle_vcs_regressions, name="vcs-regressions"
     )
     app.router.add_get(
