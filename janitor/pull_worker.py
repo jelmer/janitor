@@ -277,6 +277,7 @@ async def get_assignment(
     json: Any = {"node": node_name, "archs": [build_arch]}
     if jenkins_metadata:
         json["jenkins"] = jenkins_metadata
+    logging.debug('Sending assignment request: %r', json)
     async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
             raise ValueError("Unable to get assignment: %r" % await resp.text())
@@ -361,7 +362,10 @@ async def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
@@ -417,8 +421,7 @@ async def main(argv=None):
             logging.fatal('timeout while retrieving assignment: %s', e)
             return 1
 
-        if args.debug:
-            print(assignment)
+        logging.debug('Got back assignment: %r', assignment)
 
         ws_url = urljoin(args.base_url, "active-runs/%s/progress" % assignment["id"])
         ws = await session.ws_connect(ws_url)
@@ -540,7 +543,7 @@ async def main(argv=None):
                 if log_forwarder is not None:
                     log_forwarder.cancel()
                 if args.debug:
-                    print(result)
+                    logging.debug('Result: %r', result)
 
 
 if __name__ == "__main__":
