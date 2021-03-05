@@ -18,12 +18,12 @@
 import datetime
 from debian.changelog import Version
 import json
+import logging
 import shlex
 import asyncpg
 from contextlib import asynccontextmanager
 from typing import Optional, Tuple, List, Any, Union, Callable, AsyncIterable, Set, Dict
 from breezy import urlutils
-from breezy.trace import warning
 
 
 class Database(object):
@@ -1639,5 +1639,5 @@ async def has_cotenants(
         return False
     else:
         # Uhm, we actually don't really know
-        warning("Unable to figure out if %s has cotenants on %s", package, url)
+        logging.warning("Unable to figure out if %s has cotenants on %s", package, url)
         return None
