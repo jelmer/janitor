@@ -24,6 +24,8 @@ request, and writes results to standard out as JSON.
 
 from typing import Optional, List, Any, Dict
 
+import logging
+
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -63,7 +65,6 @@ from .debdiff import (
     debdiff_is_empty,
     markdownify_debdiff,
 )
-from .trace import warning
 
 
 MODE_SKIP = "skip"
@@ -711,7 +712,7 @@ def publish_one(
         resume_branch = None
         existing_proposal = None
         if mode == MODE_PUSH:
-            warning(
+            logging.warning(
                 "Unsupported hoster (%s), will attempt to push to %s",
                 e,
                 full_branch_url(main_branch),
@@ -820,6 +821,8 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     args = parser.parse_args()
+
+    logging.basicConfig(level=logging.INFO)
 
     request = json.load(sys.stdin)
 

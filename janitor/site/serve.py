@@ -37,7 +37,6 @@ import gpg
 
 from ..config import get_suite_config
 
-from ..trace import warning
 from . import (
     html_template,
     render_template_for_request,
@@ -143,7 +142,7 @@ class ForwardedResource(PrefixResource):
                 )
 
             if status == 502:
-                warning("Upstream URL %s returned 502", url)
+                logging.warning("Upstream URL %s returned 502", url)
 
             if status != 200:
                 raise web.HTTPBadGateway(text="Upstream server returned %d" % status)
@@ -167,7 +166,7 @@ class ForwardedResource(PrefixResource):
                 try:
                     chunk = await client_response.content.read(self._chunk_size)
                 except asyncio.TimeoutError:
-                    warning("Timeout reading from %s", url)
+                    logging.warning("Timeout reading from %s", url)
                     raise
                 if not chunk:
                     break
@@ -1130,7 +1129,7 @@ order by url, last_run.finish_time desc
         async with app.http_client_session.get(url) as resp:
             if resp.status != 200:
                 # TODO(jelmer): Fail? Set flag?
-                warning(
+                logging.warning(
                     "Unable to find openid configuration (%s): %s",
                     resp.status,
                     await resp.read(),

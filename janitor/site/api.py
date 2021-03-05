@@ -12,13 +12,13 @@ from aiohttp import (
 )
 from aiohttp.web_middlewares import normalize_path_middleware
 import json
+import logging
 from typing import Optional
 import urllib.parse
 from yarl import URL
 
 from janitor import state, SUITE_REGEX
 from janitor.config import Config
-from janitor.trace import warning
 from . import (
     check_admin,
     check_qa_reviewer,
@@ -786,13 +786,13 @@ async def handle_run_progress(request):
                 (kind, name, payload) = msg.data.split(b"\0", 2)
                 await run_ws.send_bytes(b"\0".join([run_id, b"log", name, payload]))
             else:
-                warning(
+                logging.warning(
                     "Unknown websocket message from worker %s: %r",
                     worker_name,
                     msg.data,
                 )
         else:
-            warning("Ignoring ws message type %r", msg.type)
+            logging.warning("Ignoring ws message type %r", msg.type)
 
     await run_ws.close()
 
@@ -832,7 +832,8 @@ async def handle_run_finish(request: web.Request) -> web.Response:
             if part is None:
                 break
             if part.filename is None:
-                warning("No filename for part with headers %r", part.headers)
+                logging.warning(
+                    "No filename for part with headers %r", part.headers)
                 return web.json_response(
                     {
                         "reason": "missing filename for part",

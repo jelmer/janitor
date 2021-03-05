@@ -79,7 +79,6 @@ from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
 )
-from .trace import warning
 from .vcs import (
     VcsManager,
     LocalVcsManager,
@@ -407,7 +406,7 @@ async def publish_pending_new(
             conn1, review_status=review_status, publishable_only=True
         ):
             if run.revision is None:
-                warning(
+                logging.warning(
                     "Run %s is publish ready, but does not have revision set.", run.id
                 )
                 continue
@@ -449,7 +448,8 @@ async def publish_pending_new(
                 publish_mode,
             ) in unpublished_branches:
                 if publish_mode is None:
-                    warning("%s: No publish mode for branch with role %s", run.id, role)
+                    logging.warning(
+                        "%s: No publish mode for branch with role %s", run.id, role)
                     continue
                 actual_modes[role] = await publish_from_policy(
                     conn,
@@ -554,7 +554,7 @@ async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
                     bucket=bucket,
                 )
             else:
-                warning(
+                logging.warning(
                     "Successful run (%s) does not have main branch " "revision set",
                     run.id,
                 )
@@ -585,11 +585,11 @@ async def publish_from_policy(
     requestor: Optional[str] = None,
 ):
     if not command:
-        warning("no command set for %s", run.id)
+        logging.warning("no command set for %s", run.id)
         return
     expected_command = full_command(update_changelog, command)
     if " ".join(expected_command) != run.command:
-        warning(
+        logging.warning(
             "Not publishing %s/%s: command is different (policy changed?). "
             "Build used %r, now: %r. Rescheduling.",
             run.package,
@@ -612,12 +612,12 @@ async def publish_from_policy(
     if mode in (None, MODE_BUILD_ONLY, MODE_SKIP):
         return
     if run.result_branches is None:
-        warning("no result branches for %s", run.id)
+        logging.warning("no result branches for %s", run.id)
         return
     try:
         (remote_branch_name, base_revision, revision) = run.get_result_branch(role)
     except KeyError:
-        warning("unable to find main branch: %s", run.id)
+        logging.warning("unable to find main branch: %s", run.id)
         return
 
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
@@ -637,7 +637,7 @@ async def publish_from_policy(
                 proposal_rate_limited_count.labels(
                     package=run.package, suite=run.suite
                 ).inc()
-                warning(
+                logging.warning(
                     "Not creating proposal for %s/%s: %s", run.package, run.suite, e
                 )
                 mode = MODE_BUILD_ONLY
@@ -1124,7 +1124,7 @@ async def refresh_proposal_status_request(request):
                     external_url=request.app.external_url,
                 )
             except NoRunForMergeProposal as e:
-                warning("Unable to find local metadata for %s, skipping.", e.mp.url)
+                logging.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
 
     loop = asyncio.get_event_loop()
     loop.create_task(scan())
@@ -1294,7 +1294,7 @@ async def check_existing_mp(
     source_branch_url = mp.get_source_branch_url()
     if revision is None:
         if source_branch_url is None:
-            warning("No source branch for %r", mp)
+            logging.warning("No source branch for %r", mp)
             revision = None
             source_branch_name = None
         else:
@@ -1330,7 +1330,7 @@ async def check_existing_mp(
                     maintainer_email,
                 ) = await debian_state.guess_package_from_revision(conn, revision)
             if package_name is None:
-                warning("No package known for %s (%s)", mp.url, target_branch_url)
+                logging.warning("No package known for %s (%s)", mp.url, target_branch_url)
             else:
                 logging.info(
                     "Guessed package name (%s) for %s based on revision.",
@@ -1359,7 +1359,7 @@ async def check_existing_mp(
     if mp_remote_branch_name is None:
         target_branch_url = mp.get_target_branch_url()
         if target_branch_url is None:
-            warning("No target branch for %r", mp)
+            logging.warning("No target branch for %r", mp)
         else:
             try:
                 mp_remote_branch_name = open_branch(
@@ -1370,12 +1370,12 @@ async def check_existing_mp(
 
     last_run = await get_last_effective_run(conn, mp_run.package, mp_run.suite)
     if last_run is None:
-        warning("%s: Unable to find any relevant runs.", mp.url)
+        logging.warning("%s: Unable to find any relevant runs.", mp.url)
         return False
 
     package = await debian_state.get_package(conn, mp_run.package)
     if package is None:
-        warning("%s: Unable to find package.", mp.url)
+        logging.warning("%s: Unable to find package.", mp.url)
         return False
 
     if package.removed:
@@ -1392,11 +1392,11 @@ archive.
 """
                 )
             except PermissionDenied as e:
-                warning("Permission denied posting comment to %s: %s", mp.url, e)
+                logging.warning("Permission denied posting comment to %s: %s", mp.url, e)
             try:
                 mp.close()
             except PermissionDenied as e:
-                warning("Permission denied closing merge request %s: %s", mp.url, e)
+                logging.warning("Permission denied closing merge request %s: %s", mp.url, e)
                 return False
             return True
 
@@ -1414,11 +1414,11 @@ applied independently.
 """
                 )
             except PermissionDenied as e:
-                warning("Permission denied posting comment to %s: %s", mp.url, e)
+                logging.warning("Permission denied posting comment to %s: %s", mp.url, e)
             try:
                 mp.close()
             except PermissionDenied as e:
-                warning("Permission denied closing merge request %s: %s", mp.url, e)
+                logging.warning("Permission denied closing merge request %s: %s", mp.url, e)
                 return False
         return True
 
@@ -1479,7 +1479,7 @@ applied independently.
             last_run_revision,
         ) = last_run.get_result_branch(mp_role)
     except KeyError:
-        warning(
+        logging.warning(
             "%s: Merge proposal run %s had role %s" " but it is gone now (%s)",
             mp.url,
             mp_run.id,
@@ -1492,7 +1492,7 @@ applied independently.
         last_run_remote_branch_name != mp_remote_branch_name
         and last_run_remote_branch_name is not None
     ):
-        warning(
+        logging.warning(
             "%s: Remote branch name has changed: %s => %s, " "skipping...",
             mp.url,
             mp_remote_branch_name,
@@ -1520,16 +1520,17 @@ has changed to %s.
                     % (mp_role, last_run_remote_branch_name)
                 )
             except PermissionDenied as e:
-                warning("Permission denied posting comment to %s: %s", mp.url, e)
+                logging.warning("Permission denied posting comment to %s: %s", mp.url, e)
             try:
                 mp.close()
             except PermissionDenied as e:
-                warning("Permission denied closing merge request %s: %s", mp.url, e)
+                logging.warning("Permission denied closing merge request %s: %s", mp.url, e)
                 return False
         return False
 
     if not branches_match(mp_run.branch_url, last_run.branch_url):
-        warning('%s: Remote branch URL appears to have have changed: '
+        logging.warning(
+                '%s: Remote branch URL appears to have have changed: '
                 '%s => %s, skipping.', mp.url, mp_run.branch_url,
                 last_run.branch_url)
         return False
@@ -1547,11 +1548,13 @@ This merge proposal will be closed, since the branch has moved to %s.
                     % (bzr_to_browse_url(last_run.branch_url),)
                 )
             except PermissionDenied as e:
-                warning("Permission denied posting comment to %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied posting comment to %s: %s", mp.url, e)
             try:
                 mp.close()
             except PermissionDenied as e:
-                warning("Permission denied closing merge request %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied closing merge request %s: %s", mp.url, e)
                 return False
         return False
 
@@ -1565,7 +1568,7 @@ This merge proposal will be closed, since the branch has moved to %s.
             last_run.id,
         )
         if last_run_revision == mp_revision:
-            warning(
+            logging.warning(
                 "%s (%s): old run (%s/%s) has same revision as new run (%s/%s)" ": %r",
                 mp.url,
                 mp_run.package,
@@ -1626,13 +1629,13 @@ applied independently.
 """
                         )
                     except PermissionDenied as e:
-                        warning(
+                        logging.warning(
                             "Permission denied posting comment to %s: %s", mp.url, e
                         )
                     try:
                         mp.close()
                     except PermissionDenied as e:
-                        warning(
+                        logging.warning(
                             "Permission denied closing merge request %s: %s", mp.url, e
                         )
                         code = "empty-failed-to-close"
@@ -1683,7 +1686,7 @@ applied independently.
 
             if is_new:
                 # This can happen when the default branch changes
-                warning(
+                logging.warning(
                     "Intended to update proposal %r, but created %r", mp.url, mp_url
                 )
         return True
@@ -1747,13 +1750,13 @@ async def check_existing(
                 check_only=check_only,
             )
         except NoRunForMergeProposal as e:
-            warning("Unable to find local metadata for %s, skipping.", e.mp.url)
+            logging.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
             modified = False
 
         if modified:
             modified_mps += 1
             if modify_limit and modified_mps > modify_limit:
-                warning(
+                logging.warning(
                     "Already modified %d merge proposals, " "waiting with the rest.",
                     modified_mps,
                 )
