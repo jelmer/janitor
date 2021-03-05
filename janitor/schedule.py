@@ -66,6 +66,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "explain-bd-uninstallable-apt-file-fetch-failure",
     "worker-timeout",
     "result-push-failed",
+    "result-push-bad-gateway",
     "dist-apt-file-fetch-failure",
     "autopkgtest-apt-file-fetch-failure",
 ]
