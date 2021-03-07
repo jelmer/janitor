@@ -353,8 +353,7 @@ async def precache(app, old_id, new_id):
                         [p for (n, p) in old_binaries], [p for (n, p) in new_binaries]
                     )
                 )
-            logging.info(
-                "Precached debdiff result for %s/%s", old_id, new_id)
+            logging.info("Precached debdiff result for %s/%s", old_id, new_id)
 
         diffoscope_cache_path = app.diffoscope_cache_path(old_id, new_id)
         if diffoscope_cache_path and not os.path.exists(diffoscope_cache_path):
@@ -372,8 +371,7 @@ async def precache(app, old_id, new_id):
                     json.dump(diffoscope_diff, f)
             except json.JSONDecodeError as e:
                 raise web.HTTPServerError(text=str(e))
-            logging.info(
-                "Precached diffoscope result for %s/%s", old_id, new_id)
+            logging.info("Precached diffoscope result for %s/%s", old_id, new_id)
 
 
 async def handle_precache(request):
@@ -521,7 +519,8 @@ async def listen_to_runner(runner_url, app):
                     )
                 except Exception as e:
                     logging.info(
-                        "Error precaching diff for %s: %r", result["log_id"], e)
+                        "Error precaching diff for %s: %r", result["log_id"], e
+                    )
                     traceback.print_exc()
 
 

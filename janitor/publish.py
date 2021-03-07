@@ -81,7 +81,7 @@ from .schedule import (
 )
 from .vcs import (
     VcsManager,
-    LocalVcsManager,
+    get_vcs_manager,
     bzr_to_browse_url,
 )
 
@@ -249,10 +249,10 @@ async def derived_branch_name(conn, run, role):
 def branches_match(url_a, url_b):
     if url_a == url_b:
         return True
-    url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip('/'))
-    url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip('/'))
+    url_a, params_a = urlutils.split_segment_parameters(url_a.rstrip("/"))
+    url_b, params_b = urlutils.split_segment_parameters(url_b.rstrip("/"))
     # TODO(jelmer): Support following redirects
-    if url_a.rstrip('/') != url_b.rstrip('/'):
+    if url_a.rstrip("/") != url_b.rstrip("/"):
         return False
     return open_branch(url_a).name == open_branch(url_b).name
 
@@ -449,7 +449,8 @@ async def publish_pending_new(
             ) in unpublished_branches:
                 if publish_mode is None:
                     logging.warning(
-                        "%s: No publish mode for branch with role %s", run.id, role)
+                        "%s: No publish mode for branch with role %s", run.id, role
+                    )
                     continue
                 actual_modes[role] = await publish_from_policy(
                     conn,
@@ -480,7 +481,9 @@ async def publish_pending_new(
                 push_limit -= 1
 
     logging.info("Actions performed: %r", actions)
-    logging.info("Done publishing pending changes; duration: %.2fs" % (time.time() - start))
+    logging.info(
+        "Done publishing pending changes; duration: %.2fs" % (time.time() - start)
+    )
 
     last_publish_pending_success.set_to_current_time()
 
@@ -654,7 +657,9 @@ async def publish_from_policy(
     ):
         require_binary_diff = False
 
-    logging.info("Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode)
+    logging.info(
+        "Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode
+    )
     try:
         proposal_url, branch_name, is_new = await publish_one(
             run.suite,
@@ -1124,7 +1129,9 @@ async def refresh_proposal_status_request(request):
                     external_url=request.app.external_url,
                 )
             except NoRunForMergeProposal as e:
-                logging.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
+                logging.warning(
+                    "Unable to find local metadata for %s, skipping.", e.mp.url
+                )
 
     loop = asyncio.get_event_loop()
     loop.create_task(scan())
@@ -1330,7 +1337,9 @@ async def check_existing_mp(
                     maintainer_email,
                 ) = await debian_state.guess_package_from_revision(conn, revision)
             if package_name is None:
-                logging.warning("No package known for %s (%s)", mp.url, target_branch_url)
+                logging.warning(
+                    "No package known for %s (%s)", mp.url, target_branch_url
+                )
             else:
                 logging.info(
                     "Guessed package name (%s) for %s based on revision.",
@@ -1392,18 +1401,24 @@ archive.
 """
                 )
             except PermissionDenied as e:
-                logging.warning("Permission denied posting comment to %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied posting comment to %s: %s", mp.url, e
+                )
             try:
                 mp.close()
             except PermissionDenied as e:
-                logging.warning("Permission denied closing merge request %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied closing merge request %s: %s", mp.url, e
+                )
                 return False
             return True
 
     if last_run.result_code == "nothing-to-do":
         # A new run happened since the last, but there was nothing to
         # do.
-        logging.info("%s: Last run did not produce any changes, " "closing proposal.", mp.url)
+        logging.info(
+            "%s: Last run did not produce any changes, " "closing proposal.", mp.url
+        )
         if not dry_run:
             await update_proposal_status(mp, "applied", revision, package_name)
             try:
@@ -1414,11 +1429,15 @@ applied independently.
 """
                 )
             except PermissionDenied as e:
-                logging.warning("Permission denied posting comment to %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied posting comment to %s: %s", mp.url, e
+                )
             try:
                 mp.close()
             except PermissionDenied as e:
-                logging.warning("Permission denied closing merge request %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied closing merge request %s: %s", mp.url, e
+                )
                 return False
         return True
 
@@ -1465,7 +1484,9 @@ applied independently.
         return False
 
     if last_run.branch_name is None:
-        logging.info("%s: Last run (%s) does not have branch name set.", mp.url, last_run.id)
+        logging.info(
+            "%s: Last run (%s) does not have branch name set.", mp.url, last_run.id
+        )
         return False
 
     if maintainer_email is None:
@@ -1520,19 +1541,26 @@ has changed to %s.
                     % (mp_role, last_run_remote_branch_name)
                 )
             except PermissionDenied as e:
-                logging.warning("Permission denied posting comment to %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied posting comment to %s: %s", mp.url, e
+                )
             try:
                 mp.close()
             except PermissionDenied as e:
-                logging.warning("Permission denied closing merge request %s: %s", mp.url, e)
+                logging.warning(
+                    "Permission denied closing merge request %s: %s", mp.url, e
+                )
                 return False
         return False
 
     if not branches_match(mp_run.branch_url, last_run.branch_url):
         logging.warning(
-                '%s: Remote branch URL appears to have have changed: '
-                '%s => %s, skipping.', mp.url, mp_run.branch_url,
-                last_run.branch_url)
+            "%s: Remote branch URL appears to have have changed: "
+            "%s => %s, skipping.",
+            mp.url,
+            mp_run.branch_url,
+            last_run.branch_url,
+        )
         return False
 
         # TODO(jelmer): Don't do this if there's a redirect in place,
@@ -1549,12 +1577,14 @@ This merge proposal will be closed, since the branch has moved to %s.
                 )
             except PermissionDenied as e:
                 logging.warning(
-                    "Permission denied posting comment to %s: %s", mp.url, e)
+                    "Permission denied posting comment to %s: %s", mp.url, e
+                )
             try:
                 mp.close()
             except PermissionDenied as e:
                 logging.warning(
-                    "Permission denied closing merge request %s: %s", mp.url, e)
+                    "Permission denied closing merge request %s: %s", mp.url, e
+                )
                 return False
         return False
 
@@ -1937,7 +1967,7 @@ def main(argv=None):
     topic_merge_proposal = Topic("merge-proposal")
     topic_publish = Topic("publish")
     loop = asyncio.get_event_loop()
-    vcs_manager = LocalVcsManager(config.vcs_location)
+    vcs_manager = get_vcs_manager(config.vcs_location)
     db = state.Database(config.database_location)
     if args.once:
         loop.run_until_complete(
@@ -1994,8 +2024,7 @@ def main(argv=None):
                 )
             ),
         ]
-        if (args.runner_url and not args.reviewed_only
-                and not args.no_auto_publish):
+        if args.runner_url and not args.reviewed_only and not args.no_auto_publish:
             tasks.append(
                 loop.create_task(
                     listen_to_runner(

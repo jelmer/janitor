@@ -501,10 +501,16 @@ class OrphanPublisher(Publisher):
 
         text = "Move orphaned package to the QA team.\n\n"
         if self.wnpp_bug:
-            if format == 'markdown':
-                text += "For details, see the [orphan bug](https://bugs.debian.org/%d).\n\n" % self.wnpp_bug
+            if format == "markdown":
+                text += (
+                    "For details, see the [orphan bug](https://bugs.debian.org/%d).\n\n"
+                    % self.wnpp_bug
+                )
             else:
-                text += "For details, see the orphan bug at https://bugs.debian.org/%d.\n\n" % self.wnpp_bug
+                text += (
+                    "For details, see the orphan bug at https://bugs.debian.org/%d.\n\n"
+                    % self.wnpp_bug
+                )
         if not self.pushed and self.new_vcs_url:
             text += "\n".join(
                 move_instructions(
@@ -530,8 +536,7 @@ class OrphanPublisher(Publisher):
         except KeyError:
             if self.new_vcs_url is not None:
                 self.salsa_user, self.package_name = (
-                    urllib.parse.urlparse(
-                        self.new_vcs_url).path.strip("/").split("/")
+                    urllib.parse.urlparse(self.new_vcs_url).path.strip("/").split("/")
                 )
             else:
                 self.salsa_user = None
