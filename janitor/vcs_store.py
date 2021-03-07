@@ -22,10 +22,12 @@ from io import BytesIO
 import logging
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
+from http.client import parse_headers  # type: ignore
 
 from breezy.controldir import ControlDir, format_registry
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
+-from dulwich.web import HTTPGitApplication
 from dulwich.protocol import ReceivableProtocol
 from dulwich.server import (
     DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
@@ -193,6 +195,83 @@ async def handle_set_bzr_remote(request):
     return web.Response()
 
 
+async def git_backend(request):
+    package = request.match_info['package']
+    subpath = request.match_info['subpath']
+
+    allow_writes = await is_worker(request.app.db, request)
+
+    repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+
+    args = ['/usr/bin/git']
+    if allow_writes:
+        args.extend(['-c', 'http.receivepack=1'])
+    args.append('http-backend')
+    local_path = repo.user_transport.local_abspath('.')
+    full_path = local_path + '/' + subpath
+    env = {
+        'GIT_HTTP_EXPORT_ALL': 'true',
+        'REQUEST_METHOD': request.method,
+        'REMOTE_ADDR': request.remote,
+        'CONTENT_TYPE': request.content_type,
+        'PATH_TRANSLATED': full_path,
+        'QUERY_STRING': request.query_string,
+        # REMOTE_USER is not set
+        }
+
+    for key, value in request.headers.items():
+        env['HTTP_' + key.replace('-', '_').upper()] = value
+
+    for name in ['HTTP_CONTENT_ENCODING', 'HTTP_CONTENT_LENGTH']:
+        try:
+            del env[name]
+        except KeyError:
+            pass
+
+    p = await asyncio.create_subprocess_exec(
+        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        env=env, stdin=asyncio.subprocess.PIPE)
+
+    stdin = await request.read()
+
+    # TODO(jelmer): Stream output, rather than reading everything into a buffer
+    # and then sending it on.
+
+    (stdout, stderr) = await p.communicate(stdin)
+    if stderr:
+        if stderr.decode().strip() == 'Service not enabled: \'receive-pack\'':
+            raise web.HTTPUnauthorized(text=stderr.decode())
+        if not stdout:
+            return web.Response(
+                status=400, reason='Bad Request', body=stderr)
+        for line in stderr.splitlines():
+            logging.warning('Git warning: %s', line.decode())
+
+    b = BytesIO(stdout)
+
+    headers = parse_headers(b)
+    status = headers.get('Status')
+    if status:
+        del headers['Status']
+        (status_code, status_reason) = status.split(' ', 1)
+        status_code = int(status_code)
+        status_reason = status_reason
+    else:
+        status_code = 200
+        status_reason = 'OK'
+
+    response = web.StreamResponse(
+        headers=headers.items(), status=status_code,
+        reason=status_reason)
+    await response.prepare(request)
+
+    await response.write(b.read())
+
+    await response.write_eof()
+
+    return response
+
+
 async def dulwich_refs(request):
     package = request.match_info["package"]
 
@@ -323,7 +402,8 @@ async def get_vcs_type(request):
 
 
 def run_web_server(
-    listen_addr: str, port: int, vcs_manager: VcsManager, db: state.Database
+    listen_addr: str, port: int, vcs_manager: VcsManager, db: state.Database,
+    dulwich_server: bool = False
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -331,10 +411,16 @@ def run_web_server(
     app.db = db
     setup_metrics(app)
     app.router.add_get("/diff/{run_id}/{role}", diff_request)
-    app.router.add_post(
-        "/git/{package}/{service:git-receive-pack|git-upload-pack}", dulwich_service
-    )
-    app.router.add_get("/git/{package}/info/refs", dulwich_refs)
+    if dulwich_server:
+        app.router.add_post(
+            "/git/{package}/{service:git-receive-pack|git-upload-pack}", dulwich_service
+        )
+        app.router.add_get("/git/{package}/info/refs", dulwich_refs)
+    else:
+        for (method, regex), fn in HTTPGitApplication.services.items():
+            app.router.add_route(
+                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend)
+
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus)
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend)
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend)
@@ -356,6 +442,8 @@ def main(argv=None):
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
     parser.add_argument("--port", type=int, help="Listen port", default=9923)
+    parser.add_argument('--dulwich-server', action='store_true',
+                        help='Use dulwich server implementation.')
     parser.add_argument(
         "--config",
         type=str,
@@ -374,7 +462,8 @@ def main(argv=None):
 
     vcs_manager = LocalVcsManager(config.vcs_location)
     db = state.Database(config.database_location)
-    run_web_server(args.listen_address, args.port, vcs_manager, db)
+    run_web_server(args.listen_address, args.port, vcs_manager, db,
+                   dulwich_server=args.dulwich_server)
 
 
 if __name__ == "__main__":
