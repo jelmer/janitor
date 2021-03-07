@@ -432,7 +432,8 @@ async def open_branch_with_fallback(
     except BranchOpenFailure as e:
         if e.code == "hosted-on-alioth":
             logging.info(
-                "Branch %s is hosted on alioth. Trying some other options..", vcs_url)
+                "Branch %s is hosted on alioth. Trying some other options..", vcs_url
+            )
             try:
                 branch = await open_guessed_salsa_branch(
                     conn,
@@ -691,8 +692,7 @@ async def check_resume_result(conn, suite, resume_branch) -> Optional["ResumeInf
             conn, suite, revision=resume_branch.last_revision()
         )
         if resume_review_status == "rejected":
-            logging.info(
-                "Unsetting resume branch, since last run was " "rejected.")
+            logging.info("Unsetting resume branch, since last run was " "rejected.")
             return None
         return ResumeInfo(
             resume_branch,
@@ -809,7 +809,8 @@ class ActiveLocalRun(ActiveRun):
         backup_artifact_manager: Optional[ArtifactManager] = None,
     ) -> JanitorResult:
         logging.info(
-            "Running %r on %s", self.queue_item.command, self.queue_item.package)
+            "Running %r on %s", self.queue_item.command, self.queue_item.package
+        )
 
         if self.queue_item.branch_url is None:
             # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name

@@ -63,8 +63,7 @@ async def update_package_metadata(
         if package.vcs_type and package.vcs_type.capitalize() == "Git":
             new_vcs_url = fixup_broken_git_url(vcs_url)
             if new_vcs_url != vcs_url:
-                logging.info(
-                    "Fixing up VCS URL: %s -> %s", vcs_url, new_vcs_url)
+                logging.info("Fixing up VCS URL: %s -> %s", vcs_url, new_vcs_url)
                 vcs_url = new_vcs_url
             if package.commit_id:
                 vcs_last_revision = default_mapping.revision_id_foreign_to_bzr(

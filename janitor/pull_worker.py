@@ -244,7 +244,8 @@ def run_worker(
                 if e.code == 502:
                     raise WorkerFailure(
                         "result-push-bad-gateway",
-                        "Failed to push result branch: %s" % e)
+                        "Failed to push result branch: %s" % e,
+                    )
                 raise WorkerFailure(
                     "result-push-failed", "Failed to push result branch: %s" % e
                 )
@@ -277,7 +278,7 @@ async def get_assignment(
     json: Any = {"node": node_name, "archs": [build_arch]}
     if jenkins_metadata:
         json["jenkins"] = jenkins_metadata
-    logging.debug('Sending assignment request: %r', json)
+    logging.debug("Sending assignment request: %r", json)
     async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
             raise ValueError("Unable to get assignment: %r" % await resp.text())
@@ -363,9 +364,9 @@ async def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.debug:
-        logging.basicConfig(level=logging.DEBUG, format='%(message)s')
+        logging.basicConfig(level=logging.DEBUG, format="%(message)s")
     else:
-        logging.basicConfig(level=logging.INFO, format='%(message)s')
+        logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
@@ -398,9 +399,12 @@ async def main(argv=None):
             "janitor-worker", WorkerCredentialStore, fallback=True
         )
 
-    if any(filter(
+    if any(
+        filter(
             os.environ.__contains__,
-            ['BUILD_URL', 'EXECUTOR_NUMBER', 'BUILD_ID', 'BUILD_NUMBER'])):
+            ["BUILD_URL", "EXECUTOR_NUMBER", "BUILD_ID", "BUILD_NUMBER"],
+        )
+    ):
         jenkins_metadata = {
             "build_url": os.environ.get("BUILD_URL"),
             "executor_number": os.environ.get("EXECUTOR_NUMBER"),
@@ -420,10 +424,10 @@ async def main(argv=None):
                 session, args.base_url, node_name, jenkins_metadata=jenkins_metadata
             )
         except asyncio.TimeoutError as e:
-            logging.fatal('timeout while retrieving assignment: %s', e)
+            logging.fatal("timeout while retrieving assignment: %s", e)
             return 1
 
-        logging.debug('Got back assignment: %r', assignment)
+        logging.debug("Got back assignment: %r", assignment)
 
         ws_url = urljoin(args.base_url, "active-runs/%s/progress" % assignment["id"])
         ws = await session.ws_connect(ws_url)
@@ -545,7 +549,7 @@ async def main(argv=None):
                 if log_forwarder is not None:
                     log_forwarder.cancel()
                 if args.debug:
-                    logging.debug('Result: %r', result)
+                    logging.debug("Result: %r", result)
 
 
 if __name__ == "__main__":

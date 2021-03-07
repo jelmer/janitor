@@ -329,6 +329,7 @@ class DebianTarget(Target):
     def build(self, ws, subpath, output_directory, env):
         from ognibuild.debian.apt import AptManager
         from ognibuild.session.plain import PlainSession
+
         # TODO(jelmer): this should use the appropriate schrootsession
         apt = AptManager(PlainSession())
         if self.build_command:
@@ -437,7 +438,9 @@ def process_package(
             logging.info("Cached branch URL %s missing: %s", cached_branch_url, e)
             cached_branch = None
         except BranchUnavailable as e:
-            logging.warning("Cached branch URL %s unavailable: %s", cached_branch_url, e)
+            logging.warning(
+                "Cached branch URL %s unavailable: %s", cached_branch_url, e
+            )
             cached_branch = None
         else:
             logging.info("Using cached branch %s", full_branch_url(cached_branch))
@@ -617,7 +620,7 @@ def main(argv=None):
         parser.print_usage()
         return 1
 
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
     output_directory = os.path.abspath(args.output_directory)
 

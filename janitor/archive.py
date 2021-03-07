@@ -137,8 +137,7 @@ async def get_packages(db, info_provider, suite_name, component, arch):
             async for chunk in info_provider.info_for_run(run_id, suite_name, package):
                 yield chunk
         except ArtifactsMissing:
-            logging.warning(
-                "Artifacts missing for %s (%s), skipping", package, run_id)
+            logging.warning("Artifacts missing for %s (%s), skipping", package, run_id)
             continue
 
 
@@ -293,7 +292,9 @@ async def publish_suite(
         origin=config.origin,
         gpg_context=gpg_context,
     )
-    logging.info("Done publishing %s (took %s)", suite.name, datetime.now() - start_time)
+    logging.info(
+        "Done publishing %s (took %s)", suite.name, datetime.now() - start_time
+    )
     last_publish_success.labels(suite=suite.name).set_to_current_time()
     last_publish_time[suite.name] = datetime.now()
 
