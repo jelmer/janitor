@@ -501,7 +501,7 @@ FROM
         conditions.append("suite = $%d" % len(args))
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
-    query += "ORDER BY start_time DESC"
+    query += "ORDER BY finish_time DESC"
     if limit:
         query += " LIMIT %d" % limit
     for row in await conn.fetch(query, *args):
