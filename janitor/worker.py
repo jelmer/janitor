@@ -454,6 +454,7 @@ def process_package(
                 resume_branch_url, possible_transports=possible_transports
             )
         except BranchUnavailable as e:
+            logging.info('Resume branch URL: %s', e.url)
             traceback.print_exc()
             raise WorkerFailure("worker-resume-branch-unavailable", str(e))
         except BranchMissing as e:
