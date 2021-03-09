@@ -74,7 +74,8 @@ vcswatch.browser, sources.vcs_browser,
 commit_id,
 status as vcswatch_status,
 sources.version,
-vcswatch.version
+vcswatch.version,
+sources.original_maintainer
 from sources left join popcon_src on sources.source = popcon_src.source
 left join vcswatch on vcswatch.source = sources.source
 where sources.release = 'sid'
@@ -137,12 +138,14 @@ async def main():
         vcswatch_status,
         sid_version,
         vcswatch_version,
+        original_maintainer
     ) in iter_packages_with_metadata(udd, args.packages):
         pl = PackageList()
         package = pl.package.add()
         package.name = name
         package.maintainer_email = maintainer_email
         package.uploader_email.extend(extract_uploader_emails(uploaders))
+        package.in_base = (original_maintainer is not None)
         if insts is not None:
             package.insts = insts
         if vcswatch_vcs_type:

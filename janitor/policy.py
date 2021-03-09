@@ -29,7 +29,7 @@ def read_policy(f: TextIO) -> policy_pb2.PolicyConfig:
     return text_format.Parse(f.read(), policy_pb2.PolicyConfig())
 
 
-def matches(match, package_name, vcs_url, package_maintainer, package_uploaders):
+def matches(match, package_name, vcs_url, package_maintainer, package_uploaders, in_base):
     package_maintainer_email = parseaddr(package_maintainer)[1]
     for maintainer in match.maintainer:
         if not fnmatch(package_maintainer_email, maintainer):
@@ -45,6 +45,9 @@ def matches(match, package_name, vcs_url, package_maintainer, package_uploaders)
             return False
     for vcs_url_regex in match.vcs_url_regex:
         if vcs_url is None or not re.fullmatch(vcs_url_regex, vcs_url):
+            return False
+    if match.in_base is not None:
+        if match.in_base != in_base:
             return False
     return True
 
@@ -80,6 +83,7 @@ def apply_policy(
     vcs_url: Optional[str],
     maintainer: str,
     uploaders: List[str],
+    in_base: bool
 ) -> Tuple[Dict[str, str], str, List[str]]:
     publish_mode = {}
     update_changelog = policy_pb2.auto
@@ -87,7 +91,7 @@ def apply_policy(
     for policy in config.policy:
         if policy.match and not any(
             [
-                matches(m, package_name, vcs_url, maintainer, uploaders)
+                matches(m, package_name, vcs_url, maintainer, uploaders, in_base)
                 for m in policy.match
             ]
         ):
@@ -137,6 +141,7 @@ async def main(args):
                     package.vcs_url,
                     package.maintainer_email,
                     package.uploader_emails,
+                    package.in_base
                 )
                 stored_policy = current_policy.get((package.name, suite))
                 if stored_policy != intended_policy:

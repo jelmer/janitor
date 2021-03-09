@@ -40,6 +40,9 @@ message Match {
 
     // Source package VCS URL
     repeated string vcs_url_regex = 4;
+
+    // Match on whether the package is present in the base distribution
+    optional bool in_base = 5;
 }
 
 message PublishPolicy {

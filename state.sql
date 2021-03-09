@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS package (
    removed boolean default false,
    vcswatch_status vcswatch_status,
    vcswatch_version debversion,
+   in_base boolean,
    unique(distribution, name)
 ) INHERITS (codebase);
 CREATE INDEX ON package (removed);
