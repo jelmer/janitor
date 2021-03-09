@@ -29,6 +29,7 @@ import socket
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+import traceback
 from typing import Any, Optional, List, Dict
 from urllib.parse import urljoin
 
@@ -198,71 +199,77 @@ def run_worker(
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     with copy_output(os.path.join(output_directory, "worker.log")):
-        with process_package(
-            branch_url,
-            subpath,
-            env,
-            command,
-            output_directory,
-            metadata,
-            build_command=build_command,
-            pre_check_command=pre_check_command,
-            post_check_command=post_check_command,
-            resume_branch_url=resume_branch_url,
-            cached_branch_url=cached_branch_url,
-            resume_subworker_result=resume_subworker_result,
-            extra_resume_branches=[
-                (role, name) for (role, name, base, revision) in resume_branches
-            ]
-            if resume_branches
-            else None,
-            possible_transports=possible_transports,
-        ) as (ws, result):
-            enable_tag_pushing(ws.local_tree.branch)
-            logging.info("Pushing result branch to %r", vcs_manager)
-
-            try:
-                legacy_import_branches(
-                    vcs_manager,
-                    (ws.local_tree.branch, ws.main_branch.last_revision()),
-                    (ws.local_tree.branch, ws.local_tree.last_revision()),
-                    env["PACKAGE"],
-                    legacy_branch_name,
-                    ws.additional_colocated_branches,
-                    possible_transports=possible_transports,
-                )
-                import_branches(
-                    vcs_manager,
-                    ws.local_tree.branch,
-                    env["PACKAGE"],
-                    suite,
-                    run_id,
-                    result.branches,
-                    result.tags,
-                )
-            except UnexpectedHttpStatus as e:
-                if e.code == 502:
-                    raise WorkerFailure(
-                        "result-push-bad-gateway",
-                        "Failed to push result branch: %s" % e,
-                    )
-                raise WorkerFailure(
-                    "result-push-failed", "Failed to push result branch: %s" % e
-                )
-            except (InvalidHttpResponse, IncompleteRead, MirrorFailure) as e:
-                raise WorkerFailure(
-                    "result-push-failed", "Failed to push result branch: %s" % e
-                )
-            logging.info("Pushing packaging branch cache to %s", cached_branch_url)
-            push_branch(
-                ws.local_tree.branch,
-                cached_branch_url,
-                vcs_type=vcs_type.lower(),
+        try:
+            with process_package(
+                branch_url,
+                subpath,
+                env,
+                command,
+                output_directory,
+                metadata,
+                build_command=build_command,
+                pre_check_command=pre_check_command,
+                post_check_command=post_check_command,
+                resume_branch_url=resume_branch_url,
+                cached_branch_url=cached_branch_url,
+                resume_subworker_result=resume_subworker_result,
+                extra_resume_branches=[
+                    (role, name) for (role, name, base, revision) in resume_branches
+                ]
+                if resume_branches
+                else None,
                 possible_transports=possible_transports,
-                stop_revision=ws.main_branch.last_revision(),
-                overwrite=True,
-            )
-            return result
+            ) as (ws, result):
+                enable_tag_pushing(ws.local_tree.branch)
+                logging.info("Pushing result branch to %r", vcs_manager)
+
+                try:
+                    legacy_import_branches(
+                        vcs_manager,
+                        (ws.local_tree.branch, ws.main_branch.last_revision()),
+                        (ws.local_tree.branch, ws.local_tree.last_revision()),
+                        env["PACKAGE"],
+                        legacy_branch_name,
+                        ws.additional_colocated_branches,
+                        possible_transports=possible_transports,
+                    )
+                    import_branches(
+                        vcs_manager,
+                        ws.local_tree.branch,
+                        env["PACKAGE"],
+                        suite,
+                        run_id,
+                        result.branches,
+                        result.tags,
+                    )
+                except UnexpectedHttpStatus as e:
+                    if e.code == 502:
+                        raise WorkerFailure(
+                            "result-push-bad-gateway",
+                            "Failed to push result branch: %s" % e,
+                        )
+                    raise WorkerFailure(
+                        "result-push-failed", "Failed to push result branch: %s" % e
+                    )
+                except (InvalidHttpResponse, IncompleteRead, MirrorFailure) as e:
+                    raise WorkerFailure(
+                        "result-push-failed", "Failed to push result branch: %s" % e
+                    )
+                logging.info("Pushing packaging branch cache to %s", cached_branch_url)
+                push_branch(
+                    ws.local_tree.branch,
+                    cached_branch_url,
+                    vcs_type=vcs_type.lower(),
+                    possible_transports=possible_transports,
+                    stop_revision=ws.main_branch.last_revision(),
+                    overwrite=True,
+                )
+                return result
+        except WorkerFailure:
+            raise
+        except BaseException:
+            traceback.print_exc()
+            raise
 
 
 async def get_assignment(
