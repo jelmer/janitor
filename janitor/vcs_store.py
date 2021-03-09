@@ -23,11 +23,13 @@ import logging
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from http.client import parse_headers  # type: ignore
+from typing import Optional
 
 from breezy.controldir import ControlDir, format_registry
+from breezy.errors import NotBranchError
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
--from dulwich.web import HTTPGitApplication
+from dulwich.web import HTTPGitApplication
 from dulwich.protocol import ReceivableProtocol
 from dulwich.server import (
     DEFAULT_HANDLERS as DULWICH_SERVICE_HANDLERS,
@@ -54,8 +56,41 @@ async def diff_request(request):
         run = await state.get_run(conn, run_id)
         if not run:
             raise web.HTTPNotFound(text="No such run: %r" % run_id)
-    diff = get_run_diff(request.app.vcs_manager, run, role)
-    return web.Response(body=diff, content_type="text/x-diff")
+    try:
+        repo = request.app.vcs_manager.get_repository(run.package)
+    except NotBranchError:
+        repo = None
+    if repo is None:
+        return b"Local VCS repository for %s temporarily inaccessible" % (
+            run.package.encode("ascii")
+        )
+    for actual_role, _, base_revision, revision in run.result_branches:
+        if role == actual_role:
+            old_revid = base_revision
+            new_revid = revision
+            break
+    else:
+        return b"No branch with role %s" % role.encode()
+
+    args = [
+        sys.executable,
+        "-m",
+        "breezy",
+        "diff",
+        "-rrevid:%s..%s" % (old_revid.decode(), new_revid.decode()),
+        repo.user_url,
+    ]
+
+    p = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE
+    )
+
+    (stdout, stderr) = await p.communicate(b"")
+
+    return web.Response(body=stdout, content_type="text/x-diff")
 
 
 async def _git_open_repo(vcs_manager, db, package):
@@ -196,41 +231,48 @@ async def handle_set_bzr_remote(request):
 
 
 async def git_backend(request):
-    package = request.match_info['package']
-    subpath = request.match_info['subpath']
+    package = request.match_info["package"]
+    subpath = request.match_info["subpath"]
 
     allow_writes = await is_worker(request.app.db, request)
+    service = request.query.get("service")
+    if service is not None:
+        _git_check_service(service, allow_writes)
 
     repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
 
-    args = ['/usr/bin/git']
+    args = ["/usr/bin/git"]
     if allow_writes:
-        args.extend(['-c', 'http.receivepack=1'])
-    args.append('http-backend')
-    local_path = repo.user_transport.local_abspath('.')
-    full_path = local_path + '/' + subpath
+        args.extend(["-c", "http.receivepack=1"])
+    args.append("http-backend")
+    local_path = repo.user_transport.local_abspath(".")
+    full_path = local_path + "/" + subpath
     env = {
-        'GIT_HTTP_EXPORT_ALL': 'true',
-        'REQUEST_METHOD': request.method,
-        'REMOTE_ADDR': request.remote,
-        'CONTENT_TYPE': request.content_type,
-        'PATH_TRANSLATED': full_path,
-        'QUERY_STRING': request.query_string,
+        "GIT_HTTP_EXPORT_ALL": "true",
+        "REQUEST_METHOD": request.method,
+        "REMOTE_ADDR": request.remote,
+        "CONTENT_TYPE": request.content_type,
+        "PATH_TRANSLATED": full_path,
+        "QUERY_STRING": request.query_string,
         # REMOTE_USER is not set
-        }
+    }
 
     for key, value in request.headers.items():
-        env['HTTP_' + key.replace('-', '_').upper()] = value
+        env["HTTP_" + key.replace("-", "_").upper()] = value
 
-    for name in ['HTTP_CONTENT_ENCODING', 'HTTP_CONTENT_LENGTH']:
+    for name in ["HTTP_CONTENT_ENCODING", "HTTP_CONTENT_LENGTH"]:
         try:
             del env[name]
         except KeyError:
             pass
 
     p = await asyncio.create_subprocess_exec(
-        *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-        env=env, stdin=asyncio.subprocess.PIPE)
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        env=env,
+        stdin=asyncio.subprocess.PIPE
+    )
 
     stdin = await request.read()
 
@@ -239,30 +281,29 @@ async def git_backend(request):
 
     (stdout, stderr) = await p.communicate(stdin)
     if stderr:
-        if stderr.decode().strip() == 'Service not enabled: \'receive-pack\'':
+        if stderr.decode().strip() == "Service not enabled: 'receive-pack'":
             raise web.HTTPUnauthorized(text=stderr.decode())
         if not stdout:
-            return web.Response(
-                status=400, reason='Bad Request', body=stderr)
+            return web.Response(status=400, reason="Bad Request", body=stderr)
         for line in stderr.splitlines():
-            logging.warning('Git warning: %s', line.decode())
+            logging.warning("Git warning: %s", line.decode())
 
     b = BytesIO(stdout)
 
     headers = parse_headers(b)
-    status = headers.get('Status')
+    status = headers.get("Status")
     if status:
-        del headers['Status']
-        (status_code, status_reason) = status.split(' ', 1)
+        del headers["Status"]
+        (status_code, status_reason) = status.split(" ", 1)
         status_code = int(status_code)
         status_reason = status_reason
     else:
         status_code = 200
-        status_reason = 'OK'
+        status_reason = "OK"
 
     response = web.StreamResponse(
-        headers=headers.items(), status=status_code,
-        reason=status_reason)
+        headers=headers.items(), status=status_code, reason=status_reason
+    )
     await response.prepare(request)
 
     await response.write(b.read())
@@ -402,11 +443,17 @@ async def get_vcs_type(request):
 
 
 def run_web_server(
-    listen_addr: str, port: int, vcs_manager: VcsManager, db: state.Database,
-    dulwich_server: bool = False
+    listen_addr: str,
+    port: int,
+    vcs_manager: VcsManager,
+    db: state.Database,
+    dulwich_server: bool = False,
+    client_max_size: Optional[int] = None,
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-    app = web.Application(middlewares=[trailing_slash_redirect])
+    app = web.Application(
+        middlewares=[trailing_slash_redirect], client_max_size=client_max_size
+    )
     app.vcs_manager = vcs_manager
     app.db = db
     setup_metrics(app)
@@ -419,7 +466,8 @@ def run_web_server(
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend)
+                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend
+            )
 
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus)
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend)
@@ -442,13 +490,22 @@ def main(argv=None):
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
     parser.add_argument("--port", type=int, help="Listen port", default=9923)
-    parser.add_argument('--dulwich-server', action='store_true',
-                        help='Use dulwich server implementation.')
+    parser.add_argument(
+        "--dulwich-server",
+        action="store_true",
+        help="Use dulwich server implementation.",
+    )
     parser.add_argument(
         "--config",
         type=str,
         default="janitor.conf",
         help="Path to load configuration from.",
+    )
+    parser.add_argument(
+        "--client-max-size",
+        type=int,
+        default=(100 * 1024 * 1024),
+        help="Maximum client body size",
     )
 
     args = parser.parse_args()
@@ -462,8 +519,14 @@ def main(argv=None):
 
     vcs_manager = LocalVcsManager(config.vcs_location)
     db = state.Database(config.database_location)
-    run_web_server(args.listen_address, args.port, vcs_manager, db,
-                   dulwich_server=args.dulwich_server)
+    run_web_server(
+        args.listen_address,
+        args.port,
+        vcs_manager,
+        db,
+        dulwich_server=args.dulwich_server,
+        client_max_size=args.client_max_size,
+    )
 
 
 if __name__ == "__main__":
