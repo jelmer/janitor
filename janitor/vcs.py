@@ -522,7 +522,7 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
 
 
 def get_vcs_manager(url: str) -> VcsManager:
-    parsed = urlutils.URL(url)
+    parsed = urlutils.URL.from_string(url)
     if parsed.scheme in ("", "file"):
         return LocalVcsManager(parsed.path)
     return RemoteVcsManager(url)
