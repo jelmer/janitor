@@ -54,6 +54,7 @@ class Package(Codebase):
         removed,
         vcswatch_status,
         vcswatch_version,
+        in_base
     ):
         self.name = name
         self.maintainer_email = maintainer_email
@@ -65,21 +66,13 @@ class Package(Codebase):
         self.removed = removed
         self.vcswatch_status = vcswatch_status
         self.vcswatch_version = vcswatch_version
+        self.in_base = in_base
+
+    field_names = ["name", "maintainer_email", "uploader_emails", "branch_url", "vcs_type", "vcs_url", "vcs_browse", "removed", "vcswatch_status", "vcswatch_version", "in_base"]
 
     @classmethod
     def from_row(cls, row) -> "Package":
-        return cls(
-            row[0],
-            row[1],
-            row[2],
-            row[3],
-            row[4],
-            row[5],
-            row[6],
-            row[7],
-            row[8],
-            row[9],
-        )
+        return cls(*row)
 
     def __lt__(self, other) -> bool:
         if not isinstance(other, type(self)):
@@ -98,6 +91,7 @@ class Package(Codebase):
             self.removed,
             self.vcswatch_status,
             self.vcswatch_version,
+            self.in_base
         )
 
 
@@ -106,16 +100,7 @@ async def get_package_by_branch_url(
 ) -> Optional[Package]:
     query = """
 SELECT
-  name,
-  maintainer_email,
-  uploader_emails,
-  branch_url,
-  vcs_type,
-  vcs_url,
-  vcs_browse,
-  removed,
-  vcswatch_status,
-  vcswatch_version
+""" + ','.join(Package.field_names) + """
 FROM
   package
 WHERE
@@ -157,16 +142,7 @@ async def get_package_by_upstream_branch_url(
 ) -> Optional[Package]:
     query = """
 SELECT
-  name,
-  maintainer_email,
-  uploader_emails,
-  branch_url,
-  vcs_type,
-  vcs_url,
-  vcs_browse,
-  removed,
-  vcswatch_status,
-  vcswatch_version
+""" + ','.join(Package.field_names) + """
 FROM
   package
 WHERE
@@ -183,16 +159,7 @@ WHERE
 async def iter_packages(conn: asyncpg.Connection, package=None):
     query = """
 SELECT
-  name,
-  maintainer_email,
-  uploader_emails,
-  branch_url,
-  vcs_type,
-  vcs_url,
-  vcs_browse,
-  removed,
-  vcswatch_status,
-  vcswatch_version
+""" + ','.join(Package.field_names) + """
 FROM
   package
 """
@@ -229,16 +196,7 @@ async def iter_candidates(
 ) -> List[Tuple[Package, str, Optional[str], Optional[int], Optional[float]]]:
     query = """
 SELECT
-  package.name,
-  package.maintainer_email,
-  package.uploader_emails,
-  package.branch_url,
-  package.vcs_type,
-  package.vcs_url,
-  package.vcs_browse,
-  package.removed,
-  package.vcswatch_status,
-  package.vcswatch_version,
+""" + ','.join(['package.%s' % field for field in Package.field_names]]) + """
   candidate.suite,
   candidate.context,
   candidate.value,
@@ -281,16 +239,7 @@ async def iter_candidates_with_policy(
 ]:
     query = """
 SELECT
-  package.name,
-  package.maintainer_email,
-  package.uploader_emails,
-  package.branch_url,
-  package.vcs_type,
-  package.vcs_url,
-  package.vcs_browse,
-  package.removed,
-  package.vcswatch_status,
-  package.vcswatch_version,
+""" + ','.join(['package.%s' % field for field in Package.field_names]) + """
   candidate.suite,
   candidate.context,
   candidate.value,
@@ -318,14 +267,14 @@ WHERE NOT package.removed
     return [
         (
             Package.from_row(row),
-            row[10],
-            row[11],
-            row[12],
-            row[13],
+            row[len(Package.field_names) + 0],
+            row[len(Package.field_names) + 1],
+            row[len(Package.field_names) + 2],
+            row[len(Package.field_names) + 3],
             (
-                dict(row[14]) if row[14] is not None else None,
-                row[15],
-                shlex.split(row[16]) if row[16] is not None else None,
+                dict(row[len(Package.field_names)+4]) if row[len(Package.field_names)+4] is not None else None,
+                row[len(Package.field_names)+5],
+                shlex.split(row[len(Package.field_names)+6]) if row[len(Package.field_names)+6] is not None else None,
             ),
         )  # type: ignore
         for row in await conn.fetch(query, *args)

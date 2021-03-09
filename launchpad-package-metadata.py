@@ -101,6 +101,7 @@ async def main():
             )
             package.archive_version = sp.source_package_version
             package.removed = False
+            # TODO(jelmer): set in_base 
         print(pl)
 
 

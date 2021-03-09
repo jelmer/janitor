@@ -21,6 +21,8 @@ message PackageMetadata {
    optional string archive_version = 11;
    optional string vcswatch_version = 12;
 
+   optional bool in_base = 14;
+
    optional bool removed = 13 [default=false];
 };
 
