@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncio
+import asyncpg
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 import functools
@@ -38,6 +39,7 @@ from aiohttp import (
 from yarl import URL
 
 from breezy import debug
+from breezy.branch import Branch
 from breezy.errors import PermissionDenied
 from breezy.propose import Hoster, HosterLoginRequired
 from breezy.transport import Transport
@@ -91,6 +93,7 @@ from .pubsub import Topic, pubsub_handler
 from .schedule import do_schedule
 from .vcs import (
     get_vcs_abbreviation,
+    is_authenticated_url,
     open_branch_ext,
     BranchOpenFailure,
     LocalVcsManager,
@@ -681,7 +684,7 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
             return resume_branch
 
 
-async def check_resume_result(conn, suite, resume_branch) -> Optional["ResumeInfo"]:
+async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branch: Branch) -> Optional["ResumeInfo"]:
     if resume_branch is not None:
         (
             resume_branch_result,
@@ -885,7 +888,8 @@ class ActiveLocalRun(ActiveRun):
                 )
 
             if resume_branch is not None:
-                logging.info("Resuming from %s", full_branch_url(resume_branch))
+                logging.info(
+                    "Resuming from %s", full_branch_url(resume_branch))
 
             cached_branch_url = vcs_manager.get_branch_url(
                 self.queue_item.package,
@@ -1509,6 +1513,10 @@ async def handle_assign(request):
             )
 
         resume = await check_resume_result(conn, item.suite, resume_branch)
+        if resume is not None:
+            if is_authenticated_url(resume.branch.user_url):
+                raise AssertionError('invalid resume branch %r' % (
+                    resume.branch))
 
     try:
         cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(

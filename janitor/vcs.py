@@ -538,6 +538,10 @@ def bzr_to_browse_url(url: str) -> str:
     return determine_browser_url(None, deb_vcs_url)
 
 
+def is_authenticated_url(url: str):
+    return (url.startswith('git+ssh://') or url.startswith('bzr+ssh://'))
+
+
 if __name__ == "__main__":
     import argparse
 
