@@ -275,41 +275,55 @@ async def git_backend(request):
         stdin=asyncio.subprocess.PIPE
     )
 
-    stdin = await request.read()
+    async def feed_stdin(stream):
+        async for chunk in request.content.iter_any():
+            stream.write(chunk)
+        stream.close()
 
-    # TODO(jelmer): Stream output, rather than reading everything into a buffer
-    # and then sending it on.
+    async def read_stderr(stream):
+        async for line in stream:
+            if line.decode().strip() == "Service not enabled: 'receive-pack'":
+                raise web.HTTPUnauthorized(text=line.decode())
+            async for line in stream:
+                logging.warning("Git warning: %s", line.decode())
 
-    (stdout, stderr) = await p.communicate(stdin)
-    if stderr:
-        if stderr.decode().strip() == "Service not enabled: 'receive-pack'":
-            raise web.HTTPUnauthorized(text=stderr.decode())
-        if not stdout:
-            return web.Response(status=400, reason="Bad Request", body=stderr)
-        for line in stderr.splitlines():
-            logging.warning("Git warning: %s", line.decode())
+    async def read_stdout(stream):
+        b = BytesIO()
+        while not stream.at_eof():
+            line = await stream.readline()
+            b.write(line)
+            if line == b'\r\n':
+                break
+        b.seek(0)
+        headers = parse_headers(b)
+        status = headers.get("Status")
+        if status:
+            del headers["Status"]
+            (status_code, status_reason) = status.split(" ", 1)
+            status_code = int(status_code)
+            status_reason = status_reason
+        else:
+            status_code = 200
+            status_reason = "OK"
 
-    b = BytesIO(stdout)
+        response = web.StreamResponse(
+            headers=headers.items(), status=status_code, reason=status_reason
+        )
 
-    headers = parse_headers(b)
-    status = headers.get("Status")
-    if status:
-        del headers["Status"]
-        (status_code, status_reason) = status.split(" ", 1)
-        status_code = int(status_code)
-        status_reason = status_reason
-    else:
-        status_code = 200
-        status_reason = "OK"
+        await response.prepare(request)
 
-    response = web.StreamResponse(
-        headers=headers.items(), status=status_code, reason=status_reason
-    )
-    await response.prepare(request)
+        while not stream.at_eof():
+            chunk = await stream.read(4096)
+            await response.write(chunk)
 
-    await response.write(b.read())
+        await response.write_eof()
 
-    await response.write_eof()
+        return response
+
+    unused_stderr, response, unused_stdin = await asyncio.gather(*[
+        read_stderr(p.stderr), read_stdout(p.stdout),
+        feed_stdin(p.stdin)
+        ])
 
     return response
 
