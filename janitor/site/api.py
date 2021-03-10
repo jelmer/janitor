@@ -144,7 +144,7 @@ async def process_webhook(request, db):
             if package is not None:
                 requestor = "Push hook for %s" % package.branch_url
                 async for package_name, suite, policy in state.iter_policy(
-                    package.name
+                        conn, package.name
                 ):
                     if policy[0] == "skip":
                         continue
@@ -159,7 +159,7 @@ async def process_webhook(request, db):
             if package is not None:
                 requestor = "Push hook for %s" % package.branch_url
                 async for package_name, suite, policy in state.iter_policy(
-                    package.name
+                    conn, package.name
                 ):
                     if policy[0] == "skip":
                         continue
@@ -627,8 +627,8 @@ async def forward_to_runner(client, runner_url, path):
             return web.json_response(await resp.json(), status=resp.status)
     except ContentTypeError as e:
         return web.json_response({"reason": "runner returned error %s" % e}, status=400)
-    except ClientConnectorError:
-        return web.json_response({"reason": "unable to contact runner"}, status=502)
+    except ClientConnectorError as e:
+        return web.json_response({"reason": "unable to contact runner", "details": repr(e)}, status=502)
 
 
 async def handle_runner_status(request):
@@ -777,24 +777,25 @@ async def handle_run_progress(request):
     progress_url = urllib.parse.urljoin(request.app.runner_url, "ws/progress")
 
     run_ws = await request.app.http_client_session.ws_connect(progress_url)
-
-    async for msg in ws:
-        if msg.type == WSMsgType.BINARY:
-            if msg.data == b"keepalive":
-                await run_ws.send_bytes(run_id + b"\0keepalive")
-            elif msg.data.startswith(b"log\0"):
-                (kind, name, payload) = msg.data.split(b"\0", 2)
-                await run_ws.send_bytes(b"\0".join([run_id, b"log", name, payload]))
+    try:
+        async for msg in ws:
+            if msg.type == WSMsgType.BINARY:
+                if msg.data == b"keepalive":
+                    logging.debug('%s is still alive', run_id.decode())
+                    await run_ws.send_bytes(run_id + b"\0keepalive")
+                elif msg.data.startswith(b"log\0"):
+                    (kind, name, payload) = msg.data.split(b"\0", 2)
+                    await run_ws.send_bytes(b"\0".join([run_id, b"log", name, payload]))
+                else:
+                    logging.warning(
+                        "Unknown websocket message from worker %s: %r",
+                        worker_name,
+                        msg.data,
+                    )
             else:
-                logging.warning(
-                    "Unknown websocket message from worker %s: %r",
-                    worker_name,
-                    msg.data,
-                )
-        else:
-            logging.warning("Ignoring ws message type %r", msg.type)
-
-    await run_ws.close()
+                logging.warning("Ignoring ws message type %r", msg.type)
+    finally:
+        await run_ws.close()
 
     return ws
 
@@ -817,8 +818,8 @@ async def handle_run_assign(request):
                 )
             assignment = await resp.json()
             return web.json_response(assignment, status=201)
-    except (ClientConnectorError, ServerDisconnectedError):
-        return web.json_response({"reason": "unable to contact runner"}, status=502)
+    except (ClientConnectorError, ServerDisconnectedError) as e:
+        return web.json_response({"reason": "unable to contact runner: %s" % e}, status=502)
 
 
 async def handle_run_finish(request: web.Request) -> web.Response:
