@@ -473,6 +473,8 @@ def process_package(
             target.additional_colocated_branches(main_branch)
         ),
     ) as ws:
+        logging.info('Workspace ready - starting.')
+
         if ws.local_tree.has_changes():
             if list(ws.local_tree.iter_references()):
                 raise WorkerFailure(
