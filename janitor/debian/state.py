@@ -196,7 +196,7 @@ async def iter_candidates(
 ) -> List[Tuple[Package, str, Optional[str], Optional[int], Optional[float]]]:
     query = """
 SELECT
-""" + ','.join(['package.%s' % field for field in Package.field_names]) + """
+""" + ','.join(['package.%s' % field for field in Package.field_names]) + """,
   candidate.suite,
   candidate.context,
   candidate.value,
@@ -239,7 +239,7 @@ async def iter_candidates_with_policy(
 ]:
     query = """
 SELECT
-""" + ','.join(['package.%s' % field for field in Package.field_names]) + """
+""" + ','.join(['package.%s' % field for field in Package.field_names]) + """,
   candidate.suite,
   candidate.context,
   candidate.value,
