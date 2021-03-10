@@ -89,7 +89,10 @@ async def diff_request(request):
     )
 
     # TODO(jelmer): Stream this
-    (stdout, stderr) = await p.communicate(b"")
+    try:
+        (stdout, stderr) = asyncio.wait_for(await p.communicate(b""), 30)
+    except asyncio.TimeoutError:
+        return web.HTTPRequestTimeout(text='diff generation timed out')
 
     return web.Response(body=stdout, content_type="text/x-diff")
 
