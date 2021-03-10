@@ -29,6 +29,7 @@ import socket
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
+from threading import Thread
 import traceback
 from typing import Any, Optional, List, Dict
 from urllib.parse import urljoin
@@ -300,14 +301,39 @@ class WatchdogPetter(object):
         self.auth = auth
         self.run_id = run_id
         self._task = None
+        self._log_cached = []
+        self.ws = None
+        self.loop = asyncio.new_event_loop()
+        self._thread = Thread(target=self._run)
+        self._thread.start()
+        self._tasks = []
+        self._log_dir_tasks = {}
 
-    def cancel(self):
-        self._task .cancel()
+    def _run(self):
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
 
-    async def start(self):
-        self._task = asyncio.create_task(self._connect())
+    def start(self):
+        for task in [self._connection(), self._send_keepalives()]:
+            self._tasks.append(task)
+            asyncio.run_coroutine_threadsafe(task, self.loop)
 
-    async def _connect(self):
+    def stop(self):
+        for task in self._tasks + list(self._log_dir_tasks.values()):
+            task.cancel()
+        self.loop.stop()
+
+    async def _send_keepalives(self):
+        try:
+            while True:
+                await asyncio.sleep(60)
+                if not await self.send_keepalive():
+                    logging.warning('failed to send keepalive')
+        except BaseException:
+            logging.exception('sending keepalives')
+            raise
+
+    async def _connection(self):
         ws_url = urljoin(
             self.base_url, "ws/active-runs/%s/progress" % self.run_id)
         async with ClientSession(auth=self.auth) as session:
@@ -319,6 +345,10 @@ class WatchdogPetter(object):
                     logging.warning("progress ws: Unable to connect: %s" % e)
                     await asyncio.sleep(5)
                     continue
+
+                for (fn, data) in self._log_cached:
+                    await self.send_log_fragment(fn, data)
+                self._log_cached = []
 
                 while True:
                     msg = await self.ws.receive()
@@ -338,45 +368,49 @@ class WatchdogPetter(object):
 
     async def send_keepalive(self):
         if self.ws is not None:
+            logging.debug('Sending keepalive')
             await self.ws.send_bytes(b"keepalive")
+            return True
+        else:
+            logging.debug('Not sending keepalive; websocket is dead')
+            return False
 
     async def send_log_fragment(self, filename, data):
-        await self.ws.send_bytes(
-            b"\0".join([b"log", filename.encode("utf-8"), data])
-        )
+        if self.ws is None:
+            self._log_cached.append((filename, data))
+        else:
+            await self.ws.send_bytes(
+                b"\0".join([b"log", filename.encode("utf-8"), data])
+            )
 
+    def track_log_directory(self, directory):
+        task = self._forward_logs(directory)
+        self._log_dir_tasks[directory] = task
+        asyncio.run_coroutine_threadsafe(
+            task, self.loop)
 
-async def send_keepalives(watchdog):
-    while True:
-        await asyncio.sleep(60)
-        await watchdog.send_keepalive()
+    def untrack_log_directory(self, directory):
+        self._log_dir_tasks[directory].cancel()
+        del self._log_dir_tasks[directory]
 
-
-async def forward_logs(watchdog, directory):
-    import aionotify
-
-    offsets = {}
-    watcher = aionotify.Watcher()
-    watcher.watch(path=directory, flags=aionotify.Flags.CREATE)
-    await watcher.setup(asyncio.get_event_loop())
-    try:
-        while True:
-            event = await watcher.get_event()
-            if event.flags & aionotify.Flags.CREATE and event.name.endswith(".log"):
-                path = os.path.join(directory, event.name)
-                watcher.watch(path, flags=aionotify.Flags.MODIFY)
-                offsets[path] = 0
-            elif event.alias.endswith(".log") and event.flags & aionotify.Flags.MODIFY:
-                path = event.alias
-            else:
-                continue
-            with open(path, "rb") as f:
-                f.seek(offsets[path])
-                data = f.read()
-            offsets[path] += len(data)
-            await watchdog.send_log_fragment(os.path.basename(path), data)
-    finally:
-        watcher.close()
+    async def _forward_logs(self, directory):
+        fs = {}
+        try:
+            while True:
+                try:
+                    for entry in os.scandir(directory):
+                        if (entry.name not in fs and
+                                entry.name.endswith('.log')):
+                            fs[entry.name] = open(entry.path, 'rb')
+                except FileNotFoundError:
+                    pass  # Uhm, okay
+                for name, f in fs.items():
+                    data = f.read()
+                    await self.send_log_fragment(name, data)
+                await asyncio.sleep(10)
+        except BaseException:
+            logging.exception('log directory forwarding')
+            raise
 
 
 async def main(argv=None):
@@ -489,10 +523,7 @@ async def main(argv=None):
         logging.debug("Got back assignment: %r", assignment)
 
         watchdog_petter = WatchdogPetter(args.base_url, auth, assignment['id'])
-        await watchdog_petter.start()
-
-        keepalive_sender_task = asyncio.create_task(
-            send_keepalives(watchdog_petter))
+        watchdog_petter.start()
 
         if "WORKSPACE" in os.environ:
             desc_path = os.path.join(os.environ["WORKSPACE"], "description.txt")
@@ -535,13 +566,7 @@ async def main(argv=None):
 
         with TemporaryDirectory() as output_directory:
             loop = asyncio.get_running_loop()
-            try:
-                import aionotify  # noqa: F401
-            except ImportError:
-                log_forwarder_task = None
-            else:
-                log_forwarder_task = asyncio.create_task(
-                    forward_logs(watchdog_petter, output_directory))
+            watchdog_petter.track_log_directory(output_directory)
 
             metadata = {}
             start_time = datetime.now()
@@ -606,10 +631,11 @@ async def main(argv=None):
                     sys.stderr.write(str(e))
                     sys.exit(1)
 
-                keepalive_sender_task.cancel()
-                if log_forwarder_task is not None:
-                    log_forwarder_task.cancel()
-                watchdog_petter.cancel()
+                logging.info('Results uploaded')
+
+                watchdog_petter.untrack_log_directory(output_directory)
+                watchdog_petter.stop()
+
                 if args.debug:
                     logging.debug("Result: %r", result)
 
