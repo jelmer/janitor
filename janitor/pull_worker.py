@@ -299,16 +299,13 @@ class WatchdogPetter(object):
         self.base_url = base_url
         self.auth = auth
         self.run_id = run_id
-        self._task_read = None
-        self._task_write = None
+        self._task = None
 
     def cancel(self):
-        self._task_read.cancel()
-        self._task_write.cancel()
+        self._task .cancel()
 
     async def start(self):
-        self._task_read = asyncio.create_task(self._connect())
-        self._task_write = asyncio.create_task(self._send_keepalives())
+        self._task = asyncio.create_task(self._connect())
 
     async def _connect(self):
         ws_url = urljoin(
@@ -339,39 +336,47 @@ class WatchdogPetter(object):
                 self.ws = None
                 await asyncio.sleep(5)
 
-    async def _send_keepalives(self):
+    async def send_keepalive(self):
+        if self.ws is not None:
+            await self.ws.send_bytes(b"keepalive")
+
+    async def send_log_fragment(self, filename, data):
+        await self.ws.send_bytes(
+            b"\0".join([b"log", filename.encode("utf-8"), data])
+        )
+
+
+async def send_keepalives(watchdog):
+    while True:
+        await asyncio.sleep(60)
+        await watchdog.send_keepalive()
+
+
+async def forward_logs(watchdog, directory):
+    import aionotify
+
+    offsets = {}
+    watcher = aionotify.Watcher()
+    watcher.watch(path=directory, flags=aionotify.Flags.CREATE)
+    await watcher.setup(asyncio.get_event_loop())
+    try:
         while True:
-            await asyncio.sleep(60)
-            if self.ws is not None:
-                await self.ws.send_bytes(b"keepalive")
-
-    async def forward_logs(self, directory):
-        import aionotify
-
-        offsets = {}
-        watcher = aionotify.Watcher()
-        watcher.watch(path=directory, flags=aionotify.Flags.CREATE)
-        await watcher.setup(asyncio.get_event_loop())
-        try:
-            while True:
-                event = await watcher.get_event()
-                if event.flags & aionotify.Flags.CREATE and event.name.endswith(".log"):
-                    path = os.path.join(directory, event.name)
-                    watcher.watch(path, flags=aionotify.Flags.MODIFY)
-                    offsets[path] = 0
-                elif event.alias.endswith(".log") and event.flags & aionotify.Flags.MODIFY:
-                    path = event.alias
-                else:
-                    continue
-                with open(path, "rb") as f:
-                    f.seek(offsets[path])
-                    data = f.read()
-                offsets[path] += len(data)
-                await self.ws.send_bytes(
-                    b"\0".join([b"log", os.path.basename(path).encode("utf-8"), data])
-                )
-        finally:
-            watcher.close()
+            event = await watcher.get_event()
+            if event.flags & aionotify.Flags.CREATE and event.name.endswith(".log"):
+                path = os.path.join(directory, event.name)
+                watcher.watch(path, flags=aionotify.Flags.MODIFY)
+                offsets[path] = 0
+            elif event.alias.endswith(".log") and event.flags & aionotify.Flags.MODIFY:
+                path = event.alias
+            else:
+                continue
+            with open(path, "rb") as f:
+                f.seek(offsets[path])
+                data = f.read()
+            offsets[path] += len(data)
+            await watchdog.send_log_fragment(os.path.basename(path), data)
+    finally:
+        watcher.close()
 
 
 async def main(argv=None):
@@ -486,6 +491,9 @@ async def main(argv=None):
         watchdog_petter = WatchdogPetter(args.base_url, auth, assignment['id'])
         await watchdog_petter.start()
 
+        keepalive_sender_task = asyncio.create_task(
+            send_keepalives(watchdog_petter))
+
         if "WORKSPACE" in os.environ:
             desc_path = os.path.join(os.environ["WORKSPACE"], "description.txt")
             with open(desc_path, "w") as f:
@@ -530,10 +538,10 @@ async def main(argv=None):
             try:
                 import aionotify  # noqa: F401
             except ImportError:
-                log_forwarder = None
+                log_forwarder_task = None
             else:
-                log_forwarder = asyncio.create_task(
-                    watchdog_petter.forward_logs(output_directory))
+                log_forwarder_task = asyncio.create_task(
+                    forward_logs(watchdog_petter, output_directory))
 
             metadata = {}
             start_time = datetime.now()
@@ -598,9 +606,10 @@ async def main(argv=None):
                     sys.stderr.write(str(e))
                     sys.exit(1)
 
+                keepalive_sender_task.cancel()
+                if log_forwarder_task is not None:
+                    log_forwarder_task.cancel()
                 watchdog_petter.cancel()
-                if log_forwarder is not None:
-                    log_forwarder.cancel()
                 if args.debug:
                     logging.debug("Result: %r", result)
 
