@@ -504,8 +504,8 @@ def main(argv=None):
     parser.add_argument(
         "--client-max-size",
         type=int,
-        default=(100 * 1024 * 1024),
-        help="Maximum client body size",
+        default=0,
+        help="Maximum client body size (0 for no limit)",
     )
 
     args = parser.parse_args()
