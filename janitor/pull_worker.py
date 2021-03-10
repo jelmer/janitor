@@ -33,7 +33,8 @@ import traceback
 from typing import Any, Optional, List, Dict
 from urllib.parse import urljoin
 
-from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout
+import aiohttp
+from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError
 import yarl
 
 from breezy import urlutils
@@ -292,39 +293,85 @@ async def get_assignment(
         return await resp.json()
 
 
-async def send_keepalives(ws):
-    while True:
-        await asyncio.sleep(60)
-        await ws.send_bytes(b"keepalive")
+class WatchdogPetter(object):
 
+    def __init__(self, base_url, auth, run_id):
+        self.base_url = base_url
+        self.auth = auth
+        self.run_id = run_id
+        self._task_read = None
+        self._task_write = None
 
-async def forward_logs(ws, directory):
-    import aionotify
+    async def cancel(self):
+        await self._task_read.cancel()
+        await self._task_write.cancel()
 
-    offsets = {}
-    watcher = aionotify.Watcher()
-    watcher.watch(path=directory, flags=aionotify.Flags.CREATE)
-    await watcher.setup(asyncio.get_event_loop())
-    try:
+    async def start(self):
+        self._task_read = asyncio.create_task(self._connect())
+        self._task_write = asyncio.create_task(self._send_keepalives())
+
+    async def _connect(self):
+        ws_url = urljoin(
+            self.base_url, "ws/active-runs/%s/progress" % self.run_id)
+        async with ClientSession(auth=self.auth) as session:
+            while True:
+                try:
+                    self.ws = await session.ws_connect(ws_url)
+                except (ClientResponseError, ClientConnectorError) as e:
+                    self.ws = None
+                    logging.warning("progress ws: Unable to connect: %s" % e)
+                    await asyncio.sleep(5)
+                    continue
+
+                while True:
+                    msg = await self.ws.receive()
+
+                    if msg.type == aiohttp.WSMsgType.text:
+                        # TODO(jelmer): Allow remote killing of job?
+                        pass
+                    elif msg.type == aiohttp.WSMsgType.closed:
+                        break
+                    elif msg.type == aiohttp.WSMsgType.error:
+                        logging.warning("Error on websocket: %s", self.ws.exception())
+                        break
+                    else:
+                        logging.warning("Ignoring ws message type %r", msg.type)
+                self.ws = None
+                await asyncio.sleep(5)
+
+    async def _send_keepalives(self):
         while True:
-            event = await watcher.get_event()
-            if event.flags & aionotify.Flags.CREATE and event.name.endswith(".log"):
-                path = os.path.join(directory, event.name)
-                watcher.watch(path, flags=aionotify.Flags.MODIFY)
-                offsets[path] = 0
-            elif event.alias.endswith(".log") and event.flags & aionotify.Flags.MODIFY:
-                path = event.alias
-            else:
-                continue
-            with open(path, "rb") as f:
-                f.seek(offsets[path])
-                data = f.read()
-            offsets[path] += len(data)
-            await ws.send_bytes(
-                b"\0".join([b"log", os.path.basename(path).encode("utf-8"), data])
-            )
-    finally:
-        watcher.close()
+            await asyncio.sleep(60)
+            if self.ws is not None:
+                await self.ws.send_bytes(b"keepalive")
+
+    async def forward_logs(self, directory):
+        import aionotify
+
+        offsets = {}
+        watcher = aionotify.Watcher()
+        watcher.watch(path=directory, flags=aionotify.Flags.CREATE)
+        await watcher.setup(asyncio.get_event_loop())
+        try:
+            while True:
+                event = await watcher.get_event()
+                if event.flags & aionotify.Flags.CREATE and event.name.endswith(".log"):
+                    path = os.path.join(directory, event.name)
+                    watcher.watch(path, flags=aionotify.Flags.MODIFY)
+                    offsets[path] = 0
+                elif event.alias.endswith(".log") and event.flags & aionotify.Flags.MODIFY:
+                    path = event.alias
+                else:
+                    continue
+                with open(path, "rb") as f:
+                    f.seek(offsets[path])
+                    data = f.read()
+                offsets[path] += len(data)
+                await self.ws.send_bytes(
+                    b"\0".join([b"log", os.path.basename(path).encode("utf-8"), data])
+                )
+        finally:
+            watcher.close()
 
 
 async def main(argv=None):
@@ -436,10 +483,8 @@ async def main(argv=None):
 
         logging.debug("Got back assignment: %r", assignment)
 
-        ws_url = urljoin(args.base_url, "ws/active-runs/%s/progress" % assignment["id"])
-        ws = await session.ws_connect(ws_url)
-
-        watchdog_petter = asyncio.create_task(send_keepalives(ws))
+        watchdog_petter = WatchdogPetter(args.base_url, auth, assignment['id'])
+        await watchdog_petter.start()
 
         if "WORKSPACE" in os.environ:
             desc_path = os.path.join(os.environ["WORKSPACE"], "description.txt")
@@ -487,7 +532,8 @@ async def main(argv=None):
             except ImportError:
                 log_forwarder = None
             else:
-                log_forwarder = asyncio.create_task(forward_logs(ws, output_directory))
+                log_forwarder = asyncio.create_task(
+                    watchdog_petter.forward_logs(output_directory))
 
             metadata = {}
             start_time = datetime.now()
@@ -552,7 +598,7 @@ async def main(argv=None):
                     sys.stderr.write(str(e))
                     sys.exit(1)
 
-                watchdog_petter.cancel()
+                await watchdog_petter.cancel()
                 if log_forwarder is not None:
                     log_forwarder.cancel()
                 if args.debug:
