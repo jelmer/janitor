@@ -61,16 +61,16 @@ async def diff_request(request):
     except NotBranchError:
         repo = None
     if repo is None:
-        return b"Local VCS repository for %s temporarily inaccessible" % (
-            run.package.encode("ascii")
-        )
+        raise web.HTTPServiceUnavailable(
+            text="Local VCS repository for %s temporarily inaccessible" %
+            run.package)
     for actual_role, _, base_revision, revision in run.result_branches:
         if role == actual_role:
             old_revid = base_revision
             new_revid = revision
             break
     else:
-        return b"No branch with role %s" % role.encode()
+        raise web.HTTPNotFound(text="No branch with role %s" % role)
 
     args = [
         sys.executable,
@@ -90,9 +90,9 @@ async def diff_request(request):
 
     # TODO(jelmer): Stream this
     try:
-        (stdout, stderr) = asyncio.wait_for(await p.communicate(b""), 30)
+        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
     except asyncio.TimeoutError:
-        return web.HTTPRequestTimeout(text='diff generation timed out')
+        raise web.HTTPRequestTimeout(text='diff generation timed out')
 
     return web.Response(body=stdout, content_type="text/x-diff")
 
@@ -522,7 +522,7 @@ def main(argv=None):
     parser.add_argument(
         "--client-max-size",
         type=int,
-        default=0,
+        default=1024 ** 3,
         help="Maximum client body size (0 for no limit)",
     )
 
