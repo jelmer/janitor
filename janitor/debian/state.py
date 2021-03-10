@@ -216,7 +216,7 @@ WHERE NOT package.removed
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
     return [
-        tuple([Package.from_row(row)] + list(row[10:]))  # type: ignore
+        tuple([Package.from_row(row[:len(Package.field_names)])] + list(row[len(Package.field_names):]))  # type: ignore
         for row in await conn.fetch(query, *args)
     ]
 
@@ -266,7 +266,7 @@ WHERE NOT package.removed
         args.append(packages)
     return [
         (
-            Package.from_row(row),
+            Package.from_row(row[:len(Package.field_names)]),
             row[len(Package.field_names) + 0],
             row[len(Package.field_names) + 1],
             row[len(Package.field_names) + 2],
