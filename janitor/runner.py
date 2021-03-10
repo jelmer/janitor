@@ -557,7 +557,11 @@ class ActiveRemoteRun(ActiveRun):
         self._jenkins_metadata = jenkins_metadata
 
     def _extra_json(self):
-        return {"jenkins": self._jenkins_metadata}
+        return {
+            "jenkins": self._jenkins_metadata,
+            "last-keepalive": self.last_keepalive.isoformat(
+                timespec='seconds'),
+            }
 
     @property
     def worker_link(self):
