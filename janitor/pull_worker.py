@@ -198,6 +198,8 @@ def run_worker(
     resume_branches=None,
     possible_transports=None,
 ):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     with copy_output(os.path.join(output_directory, "worker.log")):
         try:
             with process_package(
@@ -553,13 +555,17 @@ async def main(argv=None):
             metadata["jenkins"] = jenkins_metadata
 
         with TemporaryDirectory() as output_directory:
+            loop = asyncio.get_running_loop()
             watchdog_petter.track_log_directory(output_directory)
 
             metadata = {}
             start_time = datetime.now()
             metadata["start_time"] = start_time.isoformat()
             try:
-                result = run_worker(
+                result = await loop.run_in_executor(
+                    None,
+                    functools.partial(
+                        run_worker,
                         branch_url,
                         run_id,
                         subpath,
@@ -579,7 +585,8 @@ async def main(argv=None):
                         cached_branch_url=cached_branch_url,
                         resume_subworker_result=resume_result,
                         possible_transports=possible_transports,
-                    )
+                    ),
+                )
             except WorkerFailure as e:
                 metadata["code"] = e.code
                 metadata["description"] = e.description
