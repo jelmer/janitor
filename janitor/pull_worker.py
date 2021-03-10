@@ -304,7 +304,7 @@ class WatchdogPetter(object):
         self._log_cached = []
         self.ws = None
         self.loop = asyncio.new_event_loop()
-        self._thread = Thread(target=self._run)
+        self._thread = Thread(target=self._run, daemon=True)
         self._thread.start()
         self._tasks = []
         self._log_dir_tasks = {}
