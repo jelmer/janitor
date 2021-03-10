@@ -302,9 +302,9 @@ class WatchdogPetter(object):
         self._task_read = None
         self._task_write = None
 
-    async def cancel(self):
-        await self._task_read.cancel()
-        await self._task_write.cancel()
+    def cancel(self):
+        self._task_read.cancel()
+        self._task_write.cancel()
 
     async def start(self):
         self._task_read = asyncio.create_task(self._connect())
@@ -598,7 +598,7 @@ async def main(argv=None):
                     sys.stderr.write(str(e))
                     sys.exit(1)
 
-                await watchdog_petter.cancel()
+                watchdog_petter.cancel()
                 if log_forwarder is not None:
                     log_forwarder.cancel()
                 if args.debug:
