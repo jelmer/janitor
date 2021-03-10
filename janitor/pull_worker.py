@@ -283,7 +283,7 @@ async def get_assignment(
     assign_url = urljoin(base_url, "active-runs")
     build_arch = subprocess.check_output(
         ["dpkg-architecture", "-qDEB_BUILD_ARCH"]
-    ).decode()
+    ).decode().strip()
     json: Any = {"node": node_name, "archs": [build_arch]}
     if jenkins_metadata:
         json["jenkins"] = jenkins_metadata
@@ -317,11 +317,6 @@ class WatchdogPetter(object):
         for task in [self._connection(), self._send_keepalives()]:
             self._tasks.append(task)
             asyncio.run_coroutine_threadsafe(task, self.loop)
-
-    def stop(self):
-        for task in self._tasks + list(self._log_dir_tasks.values()):
-            task.cancel()
-        self.loop.stop()
 
     async def _send_keepalives(self):
         try:
@@ -386,12 +381,7 @@ class WatchdogPetter(object):
     def track_log_directory(self, directory):
         task = self._forward_logs(directory)
         self._log_dir_tasks[directory] = task
-        asyncio.run_coroutine_threadsafe(
-            task, self.loop)
-
-    def untrack_log_directory(self, directory):
-        self._log_dir_tasks[directory].cancel()
-        del self._log_dir_tasks[directory]
+        asyncio.run_coroutine_threadsafe(task, self.loop)
 
     async def _forward_logs(self, directory):
         fs = {}
@@ -632,9 +622,6 @@ async def main(argv=None):
                     sys.exit(1)
 
                 logging.info('Results uploaded')
-
-                watchdog_petter.untrack_log_directory(output_directory)
-                watchdog_petter.stop()
 
                 if args.debug:
                     logging.debug("Result: %r", result)
