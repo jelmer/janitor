@@ -706,7 +706,7 @@ async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branc
         return ResumeInfo(
             resume_branch,
             resume_branch_result,
-            resume_result_branches,
+            resume_result_branches or [],
             legacy_branch_name=resume_branch_name,
         )
     else:
