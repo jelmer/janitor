@@ -1049,6 +1049,6 @@ def create_app(
         "/active-runs/{run_id}/log/{filename}", handle_runner_log, name="api-run-log"
     )
     app.router.add_get(
-        "/active-runs/{run_id}/progress", handle_run_progress, name="api-run-progress"
+        "/ws/active-runs/{run_id}/progress", handle_run_progress, name="api-run-progress"
     )
     return app
