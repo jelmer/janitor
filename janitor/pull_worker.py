@@ -436,7 +436,7 @@ async def main(argv=None):
 
         logging.debug("Got back assignment: %r", assignment)
 
-        ws_url = urljoin(args.base_url, "active-runs/%s/progress" % assignment["id"])
+        ws_url = urljoin(args.base_url, "ws/active-runs/%s/progress" % assignment["id"])
         ws = await session.ws_connect(ws_url)
 
         watchdog_petter = asyncio.create_task(send_keepalives(ws))

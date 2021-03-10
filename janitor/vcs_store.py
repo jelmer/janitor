@@ -88,6 +88,7 @@ async def diff_request(request):
         stdin=asyncio.subprocess.PIPE
     )
 
+    # TODO(jelmer): Stream this
     (stdout, stderr) = await p.communicate(b"")
 
     return web.Response(body=stdout, content_type="text/x-diff")
