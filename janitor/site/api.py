@@ -885,6 +885,8 @@ async def handle_run_finish(request: web.Request) -> web.Response:
             result = await resp.json()
     except ClientConnectorError:
         return web.Response(text="unable to contact runner", status=502)
+    except ServerDisconnectedError:
+        return web.Response(text="server disconnected", status=502)
 
     result["api_url"] = str(request.app.router["api-run"].url_for(run_id=run_id))
     return web.json_response(result, status=201)
