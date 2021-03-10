@@ -673,7 +673,9 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
                 resume_branch,
                 unused_overwrite,
                 unused_existing_proposal,
-            ) = find_existing_proposed(main_branch, hoster, branch_name)
+            ) = find_existing_proposed(
+                    main_branch, hoster, branch_name,
+                    preferred_schemes=['https', 'git', 'bzr'])
         except NoSuchProject as e:
             logging.warning("Project %s not found", e.project)
             return None
