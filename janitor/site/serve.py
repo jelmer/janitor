@@ -230,6 +230,7 @@ if __name__ == "__main__":
     import urllib.parse
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--debugtoolbar", type=str, action="append", help="IP to allow debugtoolbar queries from.")
     parser.add_argument("--host", type=str, help="Host to listen on")
     parser.add_argument("--port", type=int, help="Port to listen on", default=8080)
     parser.add_argument(
@@ -1529,4 +1530,8 @@ order by url, last_run.finish_time desc
             ),
         ),
     )
+    if args.debugtoolbar:
+        import aiohttp_debugtoolbar
+        # install aiohttp_debugtoolbar
+        aiohttp_debugtoolbar.setup(app, hosts=args.debugtoolbar)
     web.run_app(app, host=args.host, port=args.port)
