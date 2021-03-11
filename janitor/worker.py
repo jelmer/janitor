@@ -392,7 +392,10 @@ class DebianTarget(Target):
                 else:
                     code = "build-failed"
                 try:
-                    details = e.json()
+                    if e.error is not None:
+                        details = e.error.json()
+                    else:
+                        details = None
                 except NotImplementedError:
                     details = None
                 raise WorkerFailure(code, e.description, details=details)
