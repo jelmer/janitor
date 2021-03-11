@@ -209,9 +209,10 @@ class WorkerResult(object):
 class WorkerFailure(Exception):
     """Worker processing failed."""
 
-    def __init__(self, code: str, description: str) -> None:
+    def __init__(self, code: str, description: str, details: Optional[Any] = None) -> None:
         self.code = code
         self.description = description
+        self.details = details
 
 
 CUSTOM_SUBCOMMANDS = {
@@ -386,7 +387,11 @@ class DebianTarget(Target):
                     code = "build-failed-stage-%s" % e.stage
                 else:
                     code = "build-failed"
-                raise WorkerFailure(code, e.description)
+                try:
+                    details = e.json()
+                except NotImplementedError:
+                    details = None
+                raise WorkerFailure(code, e.description, details=details)
             logging.info("Built %s", changes_name)
 
     def directory_name(self):
@@ -673,6 +678,7 @@ def main(argv=None):
     except WorkerFailure as e:
         metadata["code"] = e.code
         metadata["description"] = e.description
+        metadata['details'] = e.details
         logging.info("Worker failed (%s): %s", e.code, e.description)
         return 0
     except BaseException as e:
