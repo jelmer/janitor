@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS run (
    result_branches result_branch[],
    result_tags result_tag[],
    subpath text,
+   failure_details json,
    foreign key (package) references package(name)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
