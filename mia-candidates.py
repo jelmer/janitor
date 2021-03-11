@@ -8,14 +8,22 @@ DEFAULT_VALUE_MIA = 70
 
 
 async def iter_mia_candidates(udd, packages=None):
-    from silver_platter.debian.mia import get_candidates
-    for package, bug in get_candidates():
+    from silver_platter.debian.mia import MIA_EMAIL, MIA_TEAMMAINT_USERTAG
+    query = """\
+SELECT source, id from bugs
+WHERE
+  id IN (select id from bugs_usertags where email = $1 and tag = $2) AND
+  status = 'pending'
+"""
+    args = [MIA_EMAIL, MIA_TEAMMAINT_USERTAG]
+    if packages is not None:
+        query += " AND sources.source = any($3::text[])"
+        args.append(tuple(packages))
+    for row in await udd.fetch(query, *args):
         candidate = Candidate()
-        if packages is not None and package not in packages:
-            continue
-        candidate.package = package
+        candidate.package = row[0]
         candidate.suite = "mia"
-        candidate.context = str(bug)
+        candidate.context = str(row[1])
         candidate.value = DEFAULT_VALUE_MIA
         yield candidate
 
