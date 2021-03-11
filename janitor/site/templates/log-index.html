@@ -1,0 +1,12 @@
+<html>
+    <head><title>Log file index</title></head>
+    <body>
+
+<ul>
+    {% for entry in contents %}
+    <li><a href="{{ entry }}">{{ entry }}</a></li>
+    {% endfor %}
+</ul>
+
+    </body>
+</html>
