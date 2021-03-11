@@ -536,10 +536,14 @@ def main(argv=None):
         default=1024 ** 3,
         help="Maximum client body size (0 for no limit)",
     )
+    parser.add_argument("--debug", action="store_true", help="Show debug info")
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.DEBUG)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     with open(args.config, "r") as f:
         config = read_config(f)
