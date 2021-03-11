@@ -446,6 +446,9 @@ class VcsManager(object):
             return None
         return get_vcs_abbreviation(repo)
 
+    def list_repositories(self, vcs_type: str) -> Iterable[str]:
+        raise NotImplementedError(self.list_repositories)
+
 
 class LocalVcsManager(VcsManager):
     def __init__(self, base_path: str):
@@ -465,6 +468,10 @@ class LocalVcsManager(VcsManager):
 
     def get_repository_url(self, package, vcs_type):
         return get_local_vcs_repo_url(self.base_path, package, vcs_type)
+
+    def list_repositories(self, vcs_type):
+        for entry in os.scandir(os.path.join(self.basee_path, vcs_type)):
+            yield entry.name
 
 
 class RemoteVcsManager(VcsManager):
