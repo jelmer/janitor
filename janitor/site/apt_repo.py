@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from janitor.debian import state
+from janitor.debian import state as debian_state
 
 
 async def gather_package_list(conn, suite):

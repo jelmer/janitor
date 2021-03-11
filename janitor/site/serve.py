@@ -39,7 +39,6 @@ from ..config import get_suite_config
 
 from . import (
     html_template,
-    iter_accept,
     render_template_for_request,
 )
 from ..debian import state as debian_state
