@@ -221,6 +221,31 @@ WHERE NOT package.removed
     ]
 
 
+async def iter_publishable_suites(
+    conn: asyncpg.Connection,
+    package: str
+) -> List[
+    Tuple[
+        str,
+    ]
+]:
+    query = """
+SELECT
+  candidate.suite,
+  policy.publish
+FROM candidate
+INNER JOIN package on package.name = candidate.package
+LEFT JOIN policy ON
+    policy.package = package.name AND
+    policy.suite = candidate.suite
+WHERE NOT package.removed AND policy.publish != 'skip' AND
+package.name = $1
+"""
+    return [
+        row[1] for row in await conn.fetch(query, (package, ))
+    ]
+
+
 async def iter_candidates_with_policy(
     conn: asyncpg.Connection,
     packages: Optional[List[str]] = None,
