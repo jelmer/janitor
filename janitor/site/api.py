@@ -639,9 +639,28 @@ async def handle_runner_status(request):
 
 async def handle_runner_log_index(request):
     run_id = request.match_info["run_id"]
-    return await forward_to_runner(
-        request.app.http_client_session, request.app.runner_url, "log/%s" % run_id
-    )
+    url = request.app.runner_url, "log/%s" % run_id
+    try:
+        async with request.app.http_client_session.get(url) as resp:
+            ret = await resp.json()
+    except ContentTypeError as e:
+        return web.json_response({"reason": "runner returned error %s" % e}, status=400)
+    except ClientConnectorError as e:
+        return web.json_response({"reason": "unable to contact runner", "details": repr(e)}, status=502)
+
+    for accept in request.headers.get("ACCEPT", "*/*").split(","):
+        if accept in ('application/json', ):
+            return web.json_response(ret)
+        elif accept in ('text/plain', ):
+            return web.Response(
+                text=''.join([line + '\n' for line in ret]),
+                content_type='text/plain')
+        elif accept in ('text/html', ):
+            text = await render_template_for_request(
+                "log-index.html", request, {'contents': ret})
+            return web.Response(text=text, content_type="text/html")
+
+    return web.json_response(ret)
 
 
 async def handle_runner_kill(request):
