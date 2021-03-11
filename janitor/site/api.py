@@ -639,7 +639,7 @@ async def handle_runner_status(request):
 
 async def handle_runner_log_index(request):
     run_id = request.match_info["run_id"]
-    url = request.app.runner_url, "log/%s" % run_id
+    url = urllib.parse.urljoin(request.app.runner_url, "log/%s" % run_id)
     try:
         async with request.app.http_client_session.get(url) as resp:
             ret = await resp.json()
@@ -1065,7 +1065,7 @@ def create_app(
         "/active-runs/{run_id}/kill", handle_runner_kill, name="api-run-kill"
     )
     app.router.add_get(
-        "/active-runs/{run_id}/log", handle_runner_log_index, name="api-run-log-list"
+        "/active-runs/{run_id}/log/", handle_runner_log_index, name="api-run-log-list"
     )
     app.router.add_get(
         "/active-runs/{run_id}/log/{filename}", handle_runner_log, name="api-run-log"
