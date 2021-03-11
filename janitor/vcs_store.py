@@ -43,11 +43,10 @@ from . import (
 
 from .config import read_config
 from .prometheus import setup_metrics
-from .site import is_worker, iter_accept, render_template_for_request, env as site_env
+from .site import is_worker, iter_accept, env as site_env
 from .vcs import (
     VcsManager,
     LocalVcsManager,
-    get_run_diff,
 )
 
 
