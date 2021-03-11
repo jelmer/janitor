@@ -241,7 +241,7 @@ LEFT JOIN policy ON
 WHERE NOT package.removed AND package.name = $1
 """
     return [
-        row[1] for row in await conn.fetch(query, (package, ))
+        row[1] for row in await conn.fetch(query, package)
     ]
 
 
