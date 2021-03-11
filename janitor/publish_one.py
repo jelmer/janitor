@@ -549,8 +549,6 @@ class OrphanPublisher(Publisher):
 class MIAPublisher(Publisher):
 
     def get_proposal_description(self, role, format, existing_description):
-        from silver_platter.debian.orphan import move_instructions
-
         text = "Remove MIA uploaders:\n\n"
         for uploader in self.uploaders:
             text += " * %s\n" % uploader

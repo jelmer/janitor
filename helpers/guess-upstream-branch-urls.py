@@ -50,7 +50,7 @@ async def main(db, start=None):
                     ('pecl', guess_from_pecl)]:
                 try:
                     metadata = dict(guesser(pkg))
-                except Exception as e:
+                except Exception:
                     traceback.print_exc()
                     continue
                 try:

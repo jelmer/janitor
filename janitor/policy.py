@@ -121,7 +121,7 @@ def apply_policy(
 
 async def read_release_stages(urls):
     from aiohttp import ClientSession
-    from datetime import date, datetime
+    from datetime import datetime
     import yaml
     ret = {}
     if not urls:
