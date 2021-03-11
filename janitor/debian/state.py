@@ -230,9 +230,7 @@ async def iter_publishable_suites(
     ]
 ]:
     query = """
-SELECT
-  candidate.suite,
-  policy.publish
+SELECT DISTINCT candidate.suite
 FROM candidate
 INNER JOIN package on package.name = candidate.package
 LEFT JOIN policy ON
@@ -241,7 +239,7 @@ LEFT JOIN policy ON
 WHERE NOT package.removed AND package.name = $1
 """
     return [
-        row[1] for row in await conn.fetch(query, package)
+        row[0] for row in await conn.fetch(query, package)
     ]
 
 
