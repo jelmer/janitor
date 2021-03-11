@@ -11,6 +11,7 @@ export PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter:$(pwd)
    python3 ./fresh-snapshots-candidates.py
    python3 ./multi-arch-candidates.py
    python3 ./orphan-candidates.py
+   python3 ./mia-candidates.py
    python3 ./uncommitted-candidates.py
    python3 ./debianize-candidates.py
 ) | python3 -m janitor.candidates "$@"
