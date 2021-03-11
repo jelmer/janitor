@@ -259,3 +259,7 @@ def tracker_url(config: Config, pkg: str) -> Optional[str]:
     if config.distribution.tracker_url:
         return "%s/%s" % (config.distribution.tracker_url.rstrip("/"), pkg)
     return None
+
+
+def iter_accept(request):
+    return [h.strip() for h in request.headers.get("Accept", "*/*").split(",")]
