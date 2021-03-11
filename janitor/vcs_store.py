@@ -276,6 +276,7 @@ async def git_backend(request):
         except KeyError:
             pass
 
+    env['GIT_TRACE'] = "2"
     p = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.PIPE,
@@ -294,7 +295,7 @@ async def git_backend(request):
     async def read_stderr(stream):
         line = await stream.readline()
         while line:
-            logging.warning("Git warning: %s", line.decode())
+            logging.warning("git: %s", line.decode().rstrip('\n'))
             line = await stream.readline()
 
     async def read_stdout(stream):
