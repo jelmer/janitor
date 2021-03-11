@@ -73,6 +73,7 @@ async def store_run(
     worker_link: Optional[str],
     result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
+    failure_details: Optional[Any] = None
 ):
     """Store a run.
 
@@ -100,6 +101,7 @@ async def store_run(
       worker_link: Link to worker URL
       result_branches: Result branches
       result_tags: Result tags
+      failure_details: Result failure details
     """
     if result_branches is None:
         result_branches_updated = None
@@ -120,9 +122,9 @@ async def store_run(
             "start_time, finish_time, package, instigated_context, context, "
             "build_version, build_distribution, main_branch_revision, "
             "branch_name, revision, result, suite, branch_url, logfilenames, "
-            "value, worker, worker_link, result_branches, result_tags) VALUES "
-            "($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-            "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)",
+            "value, worker, worker_link, result_branches, result_tags, "
+            "failure_details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+            "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)",
             run_id,
             " ".join(command),
             description,
@@ -146,6 +148,7 @@ async def store_run(
             worker_link,
             result_branches_updated,
             result_tags_updated,
+            failure_details,
         )
 
         if result_branches:

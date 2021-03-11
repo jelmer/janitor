@@ -217,6 +217,7 @@ class JanitorResult(object):
             self.branches = worker_result.branches
             self.tags = worker_result.tags
             self.remotes = worker_result.remotes
+            self.failure_details = worker_result.details
         else:
             self.context = None
             self.main_branch_revision = None
@@ -226,6 +227,7 @@ class JanitorResult(object):
             self.target_result = DebianResult()
             self.branches = None
             self.tags = None
+            self.failure_details = None
             self.remotes = {}
 
     def json(self):
@@ -234,6 +236,7 @@ class JanitorResult(object):
             "log_id": self.log_id,
             "description": self.description,
             "code": self.code,
+            "failure_details": self.failure_details,
             "target": self.target_result.kind,
             "target-details": self.target_result.json(),
             "legacy_branch_name": self.legacy_branch_name,
@@ -292,6 +295,7 @@ class WorkerResult(object):
         branches=None,
         tags=None,
         remotes=None,
+        details=None,
     ):
         self.code = code
         self.description = description
@@ -306,6 +310,7 @@ class WorkerResult(object):
         self.branches = branches
         self.tags = tags
         self.remotes = remotes
+        self.details = details
 
     @classmethod
     def from_file(cls, path):
@@ -345,6 +350,7 @@ class WorkerResult(object):
             branches,
             tags,
             worker_result.get("remotes"),
+            worker_result.get("details"),
         )
 
 
@@ -1290,6 +1296,7 @@ class QueueProcessor(object):
                     worker_link=active_run.worker_link,
                     result_branches=result.branches,
                     result_tags=result.tags,
+                    failure_details=result.failure_details,
                 )
                 if result.target_result.build_version:
                     await debian_state.store_debian_build(
