@@ -202,13 +202,18 @@ async def main():
 
     db = state.Database(config.database_location)
 
+    logging.info('Reading data')
     packages, removals = iter_packages_from_script(sys.stdin)
 
     async with db.acquire() as conn:
+        logging.info(
+            'Updating package data for %d packages',
+            len(packages))
         await update_package_metadata(
             conn, args.distribution, packages, package_overrides
         )
         if removals:
+            logging.info('Removing %d packages', len(removals))
             await mark_removed_packages(conn, args.distribution, removals)
 
     last_success_gauge.set_to_current_time()

@@ -360,16 +360,20 @@ async def main():
         "job_last_success_unixtime", "Last time a batch job successfully finished"
     )
 
+    logging.info('Reading configuration')
     with open(args.config, "r") as f:
         config = read_config(f)
 
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
+        logging.info('Finding candidates with policy')
         iter_candidates_with_policy = await debian_state.iter_candidates_with_policy(
             conn, packages=(args.packages or None), suite=args.suite
         )
+        logging.info('Determining schedule for candidates')
         todo = [x async for x in schedule_from_candidates(iter_candidates_with_policy)]
+        logging.info('Adding to queue')
         await add_to_queue(conn, todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()
