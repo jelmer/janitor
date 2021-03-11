@@ -18,6 +18,7 @@
 import argparse
 from contextlib import contextmanager
 from datetime import datetime
+import errno
 import json
 import logging
 import os
@@ -688,6 +689,14 @@ def main(argv=None):
         metadata['details'] = e.details
         logging.info("Worker failed (%s): %s", e.code, e.description)
         return 0
+    except OSError as e:
+        if e.errno == errno.ENOSPC:
+            metadata["code"] = "no-space-on-device"
+            metadata["description"] = str(e)
+        else:
+            metadata["code"] = "worker-exception"
+            metadata["description"] = str(e)
+            raise
     except BaseException as e:
         metadata["code"] = "worker-exception"
         metadata["description"] = str(e)
