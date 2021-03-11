@@ -261,6 +261,12 @@ async def git_backend(request):
         # REMOTE_USER is not set
     }
 
+    if request.content_length is not None:
+        env['CONTENT_LENGTH'] = str(request.content_length)
+
+    if request.content_type is not None:
+        env['CONTENT_TYPE'] = request.content_type
+
     for key, value in request.headers.items():
         env["HTTP_" + key.replace("-", "_").upper()] = value
 
@@ -275,28 +281,28 @@ async def git_backend(request):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=env,
-        stdin=asyncio.subprocess.PIPE
+        stdin=asyncio.subprocess.PIPE,
     )
 
     async def feed_stdin(stream):
         async for chunk in request.content.iter_any():
             stream.write(chunk)
+            await stream.drain()
         stream.close()
+        await stream.wait_closed()
 
     async def read_stderr(stream):
-        async for line in stream:
-            if line.decode().strip() == "Service not enabled: 'receive-pack'":
-                raise web.HTTPUnauthorized(text=line.decode())
-            async for line in stream:
-                logging.warning("Git warning: %s", line.decode())
+        line = await stream.readline()
+        while line:
+            logging.warning("Git warning: %s", line.decode())
+            line = await stream.readline()
 
     async def read_stdout(stream):
         b = BytesIO()
-        while not stream.at_eof():
-            line = await stream.readline()
+        line = await stream.readline()
+        while line != b'\r\n':
             b.write(line)
-            if line == b'\r\n':
-                break
+            line = await stream.readline()
         b.seek(0)
         headers = parse_headers(b)
         status = headers.get("Status")
@@ -310,23 +316,28 @@ async def git_backend(request):
             status_reason = "OK"
 
         response = web.StreamResponse(
-            headers=headers.items(), status=status_code, reason=status_reason
+            headers=headers,
+            status=status_code, reason=status_reason
         )
-
-        await response.prepare(request)
-
-        while not stream.at_eof():
-            chunk = await stream.read(4096)
-            await response.write(chunk)
-
-        await response.write_eof()
 
         return response
 
     unused_stderr, response, unused_stdin = await asyncio.gather(*[
         read_stderr(p.stderr), read_stdout(p.stdout),
         feed_stdin(p.stdin)
-        ])
+        ], return_exceptions=True)
+
+    await response.prepare(request)
+    response.enable_chunked_encoding()
+
+    CHUNK_SIZE = 4096
+
+    chunk = await p.stdout.read(CHUNK_SIZE)
+    while chunk:
+        await response.write(chunk)
+        chunk = await p.stdout.read(CHUNK_SIZE)
+
+    await response.write_eof()
 
     return response
 
