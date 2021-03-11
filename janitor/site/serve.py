@@ -648,9 +648,12 @@ if __name__ == "__main__":
                 conn, package=package.name
             ):
                 merge_proposals.append((url, status, run))
+            available_suites = await debian_state.iter_publishable_suites(
+                conn, package_name)
         runs = state.iter_runs(request.app.database, package=package.name)
         return await generate_pkg_file(
-            request.app.database, request.app.config, package, merge_proposals, runs
+            request.app.database, request.app.config, package, merge_proposals, runs,
+            available_suites
         )
 
     @html_template(

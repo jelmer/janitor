@@ -27,7 +27,7 @@
 <div class="section" id="suites">
 <h2>Per-suite pages</h2>
 <ul>
-{% for suite in suites %}
+{% for suite in available_suites %}
 <li><a href="/{{ suite.name }}/pkg/{{ package }}">{{ suite.name }}</a></li>
 {% endfor %}
 </ul>

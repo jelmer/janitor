@@ -235,7 +235,7 @@ async def generate_run_file(
     return kwargs
 
 
-async def generate_pkg_file(db, config, package, merge_proposals, runs):
+async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites):
     kwargs = {}
     kwargs["package"] = package.name
     kwargs["vcswatch_status"] = package.vcswatch_status
@@ -246,6 +246,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs):
     kwargs["runs"] = [run async for run in runs]
     kwargs["removed"] = package.removed
     kwargs["tracker_url"] = partial(tracker_url, config)
+    kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:
         kwargs["candidates"] = {
             suite: (context, value, success_chance)
