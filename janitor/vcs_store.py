@@ -20,10 +20,12 @@
 import asyncio
 from io import BytesIO
 import logging
+import os
+from typing import Optional
+
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 from http.client import parse_headers  # type: ignore
-from typing import Optional
 
 from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
@@ -250,7 +252,7 @@ async def git_backend(request):
         args.extend(["-c", "http.receivepack=1"])
     args.append("http-backend")
     local_path = repo.user_transport.local_abspath(".")
-    full_path = local_path + "/" + subpath
+    full_path = os.path.join(local_path, subpath)
     env = {
         "GIT_HTTP_EXPORT_ALL": "true",
         "REQUEST_METHOD": request.method,
@@ -276,7 +278,6 @@ async def git_backend(request):
         except KeyError:
             pass
 
-    env['GIT_TRACE'] = "2"
     p = await asyncio.create_subprocess_exec(
         *args,
         stdout=asyncio.subprocess.PIPE,
@@ -321,24 +322,24 @@ async def git_backend(request):
             status=status_code, reason=status_reason
         )
 
+        await response.prepare(request)
+        response.enable_chunked_encoding()
+
+        CHUNK_SIZE = 4096
+
+        chunk = await p.stdout.read(CHUNK_SIZE)
+        while chunk:
+            await response.write(chunk)
+            chunk = await p.stdout.read(CHUNK_SIZE)
+
+        await response.write_eof()
+
         return response
 
     unused_stderr, response, unused_stdin = await asyncio.gather(*[
         read_stderr(p.stderr), read_stdout(p.stdout),
         feed_stdin(p.stdin)
         ], return_exceptions=True)
-
-    await response.prepare(request)
-    response.enable_chunked_encoding()
-
-    CHUNK_SIZE = 4096
-
-    chunk = await p.stdout.read(CHUNK_SIZE)
-    while chunk:
-        await response.write(chunk)
-        chunk = await p.stdout.read(CHUNK_SIZE)
-
-    await response.write_eof()
 
     return response
 
