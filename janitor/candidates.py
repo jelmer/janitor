@@ -68,8 +68,13 @@ async def main():
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
+        known_packages = set()
+        async with conn.transaction():
+            async for record in conn.cursor('SELECT name FROM codebase'):
+                known_packages.add(record[0])
+
         logging.info("Adding candidates.")
-        candidates = [
+        proposed_candidates = [
             (package, suite, context, value, success_chance)
             for (
                 package,
@@ -79,7 +84,16 @@ async def main():
                 success_chance,
             ) in iter_candidates_from_script(sys.stdin)
         ]
-        logging.info("Collected %d candidates.", len(candidates))
+        logging.info("Collected %d candidates.", len(proposed_candidates))
+        candidates = []
+        for entry in proposed_candidates:
+            package = entry[0]
+            if package not in known_packages:
+                logging.warning(
+                    'ignoring candidate %s/%s; package unknown',
+                    package, entry[1])
+                continue
+            candidates.append(entry)
         await state.store_candidates(conn, candidates)
 
     last_success_gauge.set_to_current_time()
