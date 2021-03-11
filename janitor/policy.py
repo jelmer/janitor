@@ -124,6 +124,8 @@ async def read_release_stages(urls):
     from datetime import date, datetime
     import yaml
     ret = {}
+    if not urls:
+        return ret
     async with ClientSession() as session:
         for url in urls:
             async with session.get(url) as resp:
