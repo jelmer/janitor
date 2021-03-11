@@ -470,7 +470,7 @@ class LocalVcsManager(VcsManager):
         return get_local_vcs_repo_url(self.base_path, package, vcs_type)
 
     def list_repositories(self, vcs_type):
-        for entry in os.scandir(os.path.join(self.basee_path, vcs_type)):
+        for entry in os.scandir(os.path.join(self.base_path, vcs_type)):
             yield entry.name
 
 

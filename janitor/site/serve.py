@@ -39,6 +39,7 @@ from ..config import get_suite_config
 
 from . import (
     html_template,
+    iter_accept,
     render_template_for_request,
 )
 from ..debian import state as debian_state
@@ -201,10 +202,6 @@ async def openid_middleware(request, handler):
 
 def setup_debsso(app):
     app.middlewares.insert(0, openid_middleware)
-
-
-def iter_accept(request):
-    return [h.strip() for h in request.headers.get("Accept", "*/*").split(",")]
 
 
 async def get_credentials(session, publisher_url):

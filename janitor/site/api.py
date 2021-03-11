@@ -27,6 +27,7 @@ from . import (
     highlight_diff,
     html_template,
     get_archive_diff,
+    iter_accept,
     render_template_for_request,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
@@ -381,7 +382,7 @@ async def handle_diff(request):
                         ),
                     )
 
-                for accept in request.headers.get("ACCEPT", "*/*").split(","):
+                for accept in iter_accept(request):
                     if accept in ("text/x-diff", "text/plain", "*/*"):
                         return web.Response(
                             body=diff,
@@ -648,7 +649,7 @@ async def handle_runner_log_index(request):
     except ClientConnectorError as e:
         return web.json_response({"reason": "unable to contact runner", "details": repr(e)}, status=502)
 
-    for accept in request.headers.get("ACCEPT", "*/*").split(","):
+    for accept in iter_accept(request):
         if accept in ('application/json', ):
             return web.json_response(ret)
         elif accept in ('text/plain', ):

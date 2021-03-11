@@ -41,7 +41,7 @@ from . import (
 
 from .config import read_config
 from .prometheus import setup_metrics
-from .site import is_worker
+from .site import is_worker, iter_accept, render_template_for_request, env as site_env
 from .vcs import (
     VcsManager,
     LocalVcsManager,
@@ -474,8 +474,19 @@ async def get_vcs_type(request):
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
     names = list(request.app.vcs_manager.list_repositories(vcs))
+    names.sort()
+    for accept in iter_accept(request):
+        if accept in ('application/json', ):
+            return web.json_response(names)
+        elif accept in ('text/plain', ):
+            return web.Response(
+                text=''.join([line + '\n' for line in names]),
+                content_type='text/plain')
+        elif accept in ('text/html', ):
+            template = site_env.get_template('repo-list.html')
+            text = await template.render_async(vcs=vcs, repositories=names)
+            return web.Response(text=text, content_type='text/html')
     return web.json_response(names)
-
 
 def run_web_server(
     listen_addr: str,
@@ -504,7 +515,7 @@ def run_web_server(
                 method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend
             )
 
-    app.router.add_get("/{vcs:git|bzr}", handle_repo_list)
+    app.router.add_get("/{vcs:git|bzr}/", handle_repo_list)
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus)
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend)
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend)
