@@ -1052,6 +1052,14 @@ order by url, last_run.finish_time desc
             content_type="text/html", text=text, headers={"Cache-Control": "no-cache"}
         )
 
+    @html_template("repo-list.html")
+    async def handle_repo_list(request):
+        vcs = request.match_info["vcs"]
+        vcs_store_url = request.app.vcs_store_url
+        url = urllib.parse.urljoin(vcs_store_url, vcs)
+        async with request.app.http_client_session.get(url) as resp:
+            return {"vcs": vcs, "repositories": await resp.json()}
+
     async def handle_oauth_callback(request):
         code = request.query.get("code")
         state_code = request.query.get("state")
@@ -1252,6 +1260,8 @@ order by url, last_run.finish_time desc
     app.router.register_resource(
         ForwardedResource("git", args.vcs_store_url.rstrip("/") + "/git")
     )
+    app.router.add_get(
+        "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
     app.router.add_get(
         "/multiarch-fixes/pkg/{pkg}/",
         handle_multiarch_fixes_pkg,
