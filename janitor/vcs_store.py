@@ -51,6 +51,10 @@ from .vcs import (
 )
 
 
+GIT_BACKEND_CHUNK_SIZE = 4096
+GIT_BACKEND_TIMEOUT = 60.0 * 60.0
+
+
 async def diff_request(request):
     run_id = request.match_info["run_id"]
     role = request.match_info["role"]
@@ -325,21 +329,19 @@ async def git_backend(request):
         await response.prepare(request)
         response.enable_chunked_encoding()
 
-        CHUNK_SIZE = 4096
-
-        chunk = await p.stdout.read(CHUNK_SIZE)
+        chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
         while chunk:
             await response.write(chunk)
-            chunk = await p.stdout.read(CHUNK_SIZE)
+            chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
 
         await response.write_eof()
 
         return response
 
-    unused_stderr, response, unused_stdin = await asyncio.gather(*[
+    unused_stderr, response, unused_stdin = await asyncio.wait_for(asyncio.gather(*[
         read_stderr(p.stderr), read_stdout(p.stdout),
         feed_stdin(p.stdin)
-        ], return_exceptions=True)
+        ], return_exceptions=True), GIT_BACKEND_TIMEOUT)
 
     return response
 
