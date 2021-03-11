@@ -546,6 +546,26 @@ class OrphanPublisher(Publisher):
         return True
 
 
+class MIAPublisher(Publisher):
+
+    def get_proposal_description(self, role, format, existing_description):
+        from silver_platter.debian.orphan import move_instructions
+
+        text = "Remove MIA uploaders:\n\n"
+        for uploader in self.uploaders:
+            text += " * %s\n" % uploader
+        return text
+
+    def get_proposal_commit_message(self, role, existing_commit_message):
+        return "Remove MIA uploaders."
+
+    def read_worker_result(self, result):
+        self.uploaders = result.get("removed_uploaders")
+
+    def allow_create_proposal(self):
+        return True
+
+
 class UncommittedPublisher(Publisher):
     def get_proposal_description(self, role, format, existing_description):
         return "Import archive changes missing from the VCS."
@@ -674,6 +694,8 @@ def publish_one(
         subrunner = UncommittedPublisher()
     elif command.startswith("scrub-obsolete"):
         subrunner = ScrubObsoletePublisher()
+    elif command.startswith("mia"):
+        subrunner = MIAPublisher()
     else:
         raise AssertionError("unknown command %r" % command)
 
