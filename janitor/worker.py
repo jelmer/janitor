@@ -283,6 +283,10 @@ class DebianTarget(Target):
 
         subparser = argparse.ArgumentParser(prog=changer_cls.name)
         subparser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Dry run.')
+        subparser.add_argument(
             "--no-update-changelog",
             action="store_false",
             default=None,
