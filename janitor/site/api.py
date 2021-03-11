@@ -144,11 +144,9 @@ async def process_webhook(request, db):
             package = await debian_state.get_package_by_branch_url(conn, vcs_url)
             if package is not None:
                 requestor = "Push hook for %s" % package.branch_url
-                async for package_name, suite, policy in state.iter_policy(
+                async for suite in debian_state.iter_publishable_suites(
                         conn, package.name
                 ):
-                    if policy[0] == "skip":
-                        continue
                     await do_schedule(
                         conn, package.name, suite, requestor=requestor, bucket="webhook"
                     )
@@ -159,11 +157,9 @@ async def process_webhook(request, db):
             )
             if package is not None:
                 requestor = "Push hook for %s" % package.branch_url
-                async for package_name, suite, policy in state.iter_policy(
+                async for suite in debian_state.iter_publishable_suites(
                     conn, package.name
                 ):
-                    if policy[0] == "skip":
-                        continue
                     if suite not in ("fresh-releases", "fresh-snapshots"):
                         continue
                     await do_schedule(
