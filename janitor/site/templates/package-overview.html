@@ -28,7 +28,9 @@
 <h2>Per-suite pages</h2>
 <ul>
 {% for suite in available_suites %}
-<li><a href="/{{ suite.name }}/pkg/{{ package }}">{{ suite.name }}</a></li>
+{% if suite != 'unchanged' %}
+<li><a href="/{{ suite }}/pkg/{{ package }}">{{ suite }}</a></li>
+{% endif %}
 {% endfor %}
 </ul>
 </div>
