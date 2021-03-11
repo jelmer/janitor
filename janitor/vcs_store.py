@@ -471,6 +471,12 @@ async def get_vcs_type(request):
     return web.Response(body=vcs_type.encode("utf-8"))
 
 
+async def handle_repo_list(request):
+    vcs = request.match_info["vcs"]
+    names = list(request.app.vcs_manager.list_repositories(vcs))
+    return web.json_response(names)
+
+
 def run_web_server(
     listen_addr: str,
     port: int,
@@ -498,6 +504,7 @@ def run_web_server(
                 method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend
             )
 
+    app.router.add_get("/{vcs:git|bzr}", handle_repo_list)
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus)
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend)
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend)
