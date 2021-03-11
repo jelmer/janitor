@@ -238,8 +238,7 @@ INNER JOIN package on package.name = candidate.package
 LEFT JOIN policy ON
     policy.package = package.name AND
     policy.suite = candidate.suite
-WHERE NOT package.removed AND policy.publish != 'skip' AND
-package.name = $1
+WHERE NOT package.removed AND package.name = $1
 """
     return [
         row[1] for row in await conn.fetch(query, (package, ))
