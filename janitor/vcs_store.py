@@ -82,7 +82,7 @@ async def diff_request(request):
         "-m",
         "breezy",
         "diff",
-        "-rrevid:%s..%s" % (old_revid.decode(), new_revid.decode()),
+        "-rrevid:%s..revid:%s" % (old_revid.decode(), new_revid.decode()),
         repo.user_url,
     ]
 
