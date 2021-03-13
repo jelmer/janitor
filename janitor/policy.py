@@ -197,7 +197,7 @@ async def main(argv):
                 )
                 stored_policy = current_policy.get((package.name, suite))
                 if stored_policy != intended_policy:
-                    print("%s/%s -> %r" % (package.name, suite, intended_policy))
+                    logging.debug("%s/%s -> %r" % (package.name, suite, intended_policy))
                     await state.update_policy(
                         conn, package.name, suite, *intended_policy
                     )
