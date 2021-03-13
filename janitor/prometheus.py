@@ -38,6 +38,10 @@ requests_in_progress_gauge = Gauge(
     "requests_in_progress_total", "Requests currently in progress", ["method", "route"]
 )
 
+request_exceptions = Counter(
+    "request_exceptions_total", "Total Number of Exceptions during Requests",
+    ["method", "route"])
+
 
 async def metrics(request):
     resp = web.Response(body=generate_latest())
@@ -54,13 +58,14 @@ async def metrics_middleware(request, handler):
         response = await handler(request)
     except Exception as e:
         if not isinstance(e, web.HTTPException):
+            request_exceptions.labels(request.method, route).inc()
             import traceback
-
             traceback.print_exc()
         raise
-    resp_time = time.time() - start_time
-    request_latency_hist.labels(route).observe(resp_time)
-    requests_in_progress_gauge.labels(request.method, route).dec()
+    finally:
+        resp_time = time.time() - start_time
+        request_latency_hist.labels(route).observe(resp_time)
+        requests_in_progress_gauge.labels(request.method, route).dec()
     request_counter.labels(request.method, route, response.status).inc()
     return response
 
