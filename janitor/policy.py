@@ -18,9 +18,10 @@
 from email.utils import parseaddr
 from fnmatch import fnmatch
 import shlex
+import logging
 from google.protobuf import text_format  # type: ignore
 import re
-from typing import List, TextIO, Tuple, Optional, Dict
+from typing import List, TextIO, Tuple, Optional, Dict, Set
 
 from . import policy_pb2
 
@@ -49,9 +50,11 @@ def matches(match, package_name, vcs_url, package_maintainer, package_uploaders,
     if match.in_base is not None:
         if match.in_base != in_base:
             return False
-    if match.stage is not None:
-        if match.stage.before in release_stages_passed.get(
-                match.stage.codename, []):
+    if match.before_stage is not None:
+        if release_stages_passed is None:
+            raise ValueError(
+                'no release stages passed in, unable to match on before_stage')
+        if match.before_stage in release_stages_passed:
             return False
     return True
 
@@ -88,7 +91,7 @@ def apply_policy(
     maintainer: str,
     uploaders: List[str],
     in_base: bool,
-    release_stages_passed: Dict[str, List[str]]
+    release_stages_passed: Set[str]
 ) -> Tuple[Dict[str, str], str, List[str]]:
     publish_mode = {}
     update_changelog = policy_pb2.auto
@@ -119,37 +122,56 @@ def apply_policy(
     )
 
 
-async def read_release_stages(urls):
+async def read_release_stages(url: str) -> Set[str]:
     from aiohttp import ClientSession
     from datetime import datetime
     import yaml
-    ret = {}
-    if not urls:
-        return ret
+    ret: Set[str] = set()
     async with ClientSession() as session:
-        for url in urls:
-            async with session.get(url) as resp:
-                body = await resp.read()
-                y = yaml.safe_load(body)
-                codename = y['codename']
-                for stage, data in y['stages'].items():
-                    if data['starts'] == 'TBA':
-                        continue
-                    starts = datetime.fromisoformat(data['starts'][:-1])
-                    if datetime.now() > starts:
-                        ret.setdefault(codename, []).append(stage)
+        async with session.get(url) as resp:
+            body = await resp.read()
+            y = yaml.safe_load(body)
+            for stage, data in y['stages'].items():
+                if data['starts'] == 'TBA':
+                    continue
+                starts = datetime.fromisoformat(data['starts'][:-1])
+                if datetime.now() > starts:
+                    ret.add(stage)
     return ret
 
 
-async def main(args):
+async def main(argv):
+    import argparse
     from .config import read_config
     from . import state
     from .debian import state as debian_state
 
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
+    parser.add_argument(
+        "--policy",
+        type=str,
+        default="policy.conf",
+        help="Path to policy configuration.",
+    )
+    parser.add_argument('--debug', action='store_true')
+    args = parser.parse_args(argv[1:])
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     with open(args.policy, "r") as f:
         policy = read_policy(f)
 
-    release_stages_passed = await read_release_stages(args.freeze_dates)
+    if policy.freeze_dates_url:
+        release_stages_passed = await read_release_stages(policy.freeze_dates_url)
+        logging.info('Release stages passed: %r', release_stages_passed)
+    else:
+        release_stages_passed = None
 
     suites = known_suites(policy)
 
@@ -182,21 +204,6 @@ async def main(args):
 
 
 if __name__ == "__main__":
-    import argparse
     import asyncio
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
-    )
-    parser.add_argument(
-        "--freeze-dates", action="append",
-        type=str, help="Read freeze dates from URL.")
-    parser.add_argument(
-        "--policy",
-        type=str,
-        default="policy.conf",
-        help="Path to policy configuration.",
-    )
-    args = parser.parse_args()
-    asyncio.run(main(args))
+    import sys
+    asyncio.run(main(sys.argv))
