@@ -25,6 +25,8 @@ Apply multi-arch hints: {{ multiarch_hints_summary(run.result['applied-hints']) 
 Scrub obsolete dependencies and constraints.
 {% elif run.command.startswith('orphan') %}
 Move orphaned package to QA team.
+{% elif run.command.startswith('mia') %}
+Remove MIA uploaders.
 {% else %}: Unknown command {{ run.command }}
 {% endif %}
 </li>
