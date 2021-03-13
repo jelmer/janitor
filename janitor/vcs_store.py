@@ -77,9 +77,10 @@ async def diff_request(request):
     else:
         raise web.HTTPNotFound(text="No branch with role %s" % role)
 
-    if (getattr(repo, '_git', None) and
+    if (hasattr(repo, '_git') and
             old_revid.startswith(b'git-v1:') and
             new_revid.startswith(b'git-v1:')):
+
         args = [
             "git",
             "diff",
@@ -103,6 +104,7 @@ async def diff_request(request):
 
         if p.returncode == 0:
             return web.Response(body=stdout, content_type="text/x-diff")
+        logging.warning('git diff failed: %s', stderr.decode())
         raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
     else:
         # Fall back to breezy
@@ -133,6 +135,7 @@ async def diff_request(request):
 
         if p.returncode != 3:
             return web.Response(body=stdout, content_type="text/x-diff")
+        logging.warning('bzr diff failed: %s', stderr.decode())
         raise web.HTTPInternalServerError(text='bzr diff failed: %s' % stderr)
 
 
