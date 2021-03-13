@@ -77,29 +77,63 @@ async def diff_request(request):
     else:
         raise web.HTTPNotFound(text="No branch with role %s" % role)
 
-    args = [
-        sys.executable,
-        "-m",
-        "breezy",
-        "diff",
-        "-rrevid:%s..revid:%s" % (old_revid.decode(), new_revid.decode()),
-        repo.user_url,
-    ]
+    if (getattr(repo, '_git', None) and
+            old_revid.startswith(b'git-v1:') and
+            new_revid.startswith(b'git-v1:')):
+        args = [
+            "git",
+            "diff",
+            old_revid.decode()[len('git-v1:'):],
+            new_revid.decode()[len('git-v1:'):],
+        ]
 
-    p = await asyncio.create_subprocess_exec(
-        *args,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        stdin=asyncio.subprocess.PIPE
-    )
+        p = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+            cwd=repo.user_transport.local_abspath('.'),
+        )
 
-    # TODO(jelmer): Stream this
-    try:
-        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-    except asyncio.TimeoutError:
-        raise web.HTTPRequestTimeout(text='diff generation timed out')
+        # TODO(jelmer): Stream this
+        try:
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        except asyncio.TimeoutError:
+            raise web.HTTPRequestTimeout(text='diff generation timed out')
 
-    return web.Response(body=stdout, content_type="text/x-diff")
+        if p.returncode == 0:
+            return web.Response(body=stdout, content_type="text/x-diff")
+        raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
+    else:
+        # Fall back to breezy
+        args = [
+            sys.executable,
+            '-m',
+            'breezy',
+            "diff",
+            '-rrevid:%s..revid:%s' % (
+                old_revid.decode(),
+                new_revid.decode(),
+            ),
+            repo.user_url
+        ]
+
+        p = await asyncio.create_subprocess_exec(
+            *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            stdin=asyncio.subprocess.PIPE,
+        )
+
+        # TODO(jelmer): Stream this
+        try:
+            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+        except asyncio.TimeoutError:
+            raise web.HTTPRequestTimeout(text='diff generation timed out')
+
+        if p.returncode != 3:
+            return web.Response(body=stdout, content_type="text/x-diff")
+        raise web.HTTPInternalServerError(text='bzr diff failed: %s' % stderr)
 
 
 async def _git_open_repo(vcs_manager, db, package):
@@ -255,7 +289,7 @@ async def git_backend(request):
         args.extend(["-c", "http.receivepack=1"])
     args.append("http-backend")
     local_path = repo.user_transport.local_abspath(".")
-    full_path = os.path.join(local_path, subpath)
+    full_path = os.path.join(local_path, subpath.lstrip('/'))
     env = {
         "GIT_HTTP_EXPORT_ALL": "true",
         "REQUEST_METHOD": request.method,
@@ -326,7 +360,6 @@ async def git_backend(request):
         )
 
         await response.prepare(request)
-        response.enable_chunked_encoding()
 
         chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
         while chunk:
