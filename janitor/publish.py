@@ -691,7 +691,10 @@ async def publish_from_policy(
         )
         branch_name = None
         proposal_url = None
-        logging.info("Failed(%s): %s", code, description)
+        if e.code == "nothing-to-do":
+            logging.info('Nothing to do.')
+        else:
+            logging.info("Failed(%s): %s", code, description)
     else:
         code = "success"
         description = "Success"
