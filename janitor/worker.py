@@ -280,7 +280,9 @@ class DebianTarget(Target):
         try:
             changer_cls = changer_subcommand(argv[0])
         except KeyError:
-            raise WorkerFailure("unknown-subcommand", "unknown subcommand %s" % argv[0])
+            raise WorkerFailure(
+                "unknown-subcommand", "unknown subcommand %s" % argv[0],
+                details={"subcommand": argv[0]})
 
         subparser = argparse.ArgumentParser(prog=changer_cls.name)
         subparser.add_argument(
@@ -315,7 +317,7 @@ class DebianTarget(Target):
                 reporter=reporter,
             )
         except ChangerError as e:
-            raise WorkerFailure(e.category, e.summary)
+            raise WorkerFailure(e.category, e.summary, details=e.details)
 
     def additional_colocated_branches(self, main_branch):
         return pick_additional_colocated_branches(main_branch)
@@ -329,7 +331,8 @@ class DebianTarget(Target):
                 pass
             else:
                 raise WorkerFailure(
-                    "missing-control-file", "missing control file: debian/control"
+                    "missing-control-file",
+                    "missing control file: debian/control"
                 )
 
     def build(self, ws, subpath, output_directory, env):
@@ -381,6 +384,7 @@ class DebianTarget(Target):
                 raise WorkerFailure(
                     "build-missing-changes",
                     "Expected changes path %s does not exist." % e.filename,
+                    details={'filename': e.filename}
                 )
             except SbuildFailure as e:
                 if e.error is not None:
@@ -440,7 +444,8 @@ def process_package(
     try:
         main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
     except BranchOpenFailure as e:
-        raise WorkerFailure("worker-%s" % e.code, e.description)
+        raise WorkerFailure(
+            "worker-%s" % e.code, e.description, details={'url': vcs_url})
 
     if cached_branch_url:
         try:
@@ -469,9 +474,13 @@ def process_package(
         except BranchUnavailable as e:
             logging.info('Resume branch URL: %s', e.url)
             traceback.print_exc()
-            raise WorkerFailure("worker-resume-branch-unavailable", str(e))
+            raise WorkerFailure(
+                "worker-resume-branch-unavailable", str(e),
+                details={'url': e.url})
         except BranchMissing as e:
-            raise WorkerFailure("worker-resume-branch-missing", str(e))
+            raise WorkerFailure(
+                "worker-resume-branch-missing", str(e),
+                details={'url': e.url})
         else:
             logging.info("Resuming from branch %s", full_branch_url(resume_branch))
     else:
@@ -505,7 +514,8 @@ def process_package(
         try:
             run_pre_check(ws.local_tree, pre_check_command)
         except PreCheckFailed as e:
-            raise WorkerFailure("pre-check-failed", str(e))
+            raise WorkerFailure(
+                "pre-check-failed", str(e), details={'command': pre_check_command})
 
         metadata["subworker"] = {}
         metadata["remotes"] = {}
@@ -547,7 +557,8 @@ def process_package(
         try:
             run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
         except PostCheckFailed as e:
-            raise WorkerFailure("post-check-failed", str(e))
+            raise WorkerFailure("post-check-failed", str(e), details={
+                'command': post_check_command})
 
         target.build(ws, subpath, output_directory, env)
 
