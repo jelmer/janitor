@@ -48,6 +48,7 @@ from silver_platter.publish import (
     UnsupportedHoster,
     SourceNotDerivedFromTarget,
     publish_changes,
+    InsufficientChangesForNewProposal,
 )
 
 from breezy.branch import Branch
@@ -176,6 +177,11 @@ or unfiltered at %(external_url)s/api/run/%(log_id)s/diffoscope.
 class PublishFailure(Exception):
     def __init__(self, code, description):
         self.code = code
+        self.description = description
+
+
+class PublishNothingToDo(Exception):
+    def __init__(self, description):
         self.description = description
 
 
@@ -388,6 +394,8 @@ def publish(
             description="Forking the project (to %s) timed out (%ds)"
             % (e.project, e.timeout),
         )
+    except InsufficientChangesForNewProposal as e:
+        raise PublishNothingToDo('not enough changes for a new merge proposal')
 
 
 class Publisher(object):
@@ -877,6 +885,9 @@ if __name__ == "__main__":
         )
     except PublishFailure as e:
         json.dump({"code": e.code, "description": e.description}, sys.stdout)
+        sys.exit(1)
+    except InsufficientChangesForNewProposal as e:
+        json.dump({"code": "nothing-to-do", "description": e.description}, sys.stdout)
         sys.exit(1)
 
     result = {}

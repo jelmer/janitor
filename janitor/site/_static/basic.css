@@ -594,7 +594,7 @@ span.result-code-success, span.publish-success {
     color: green;
 }
 
-span.result-code-nothing-new-to-do {
+span.result-code-nothing-new-to-do, span.publish-nothing-to-do {
     color: lightgreen;
 }
 
