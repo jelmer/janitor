@@ -333,6 +333,16 @@ async def git_backend(request):
         stream.close()
         await stream.wait_closed()
 
+    async def feed_stdin_chunked(stream):
+        async for chunk in request.content.iter_any():
+            stream.write(
+                f'{len(chunk):X}\r\n'.encode('ascii') + chunk + b'\r\n')
+            await stream.drain()
+        stream.write(b'0\r\n')
+        await stream.drain()
+        stream.close()
+        await stream.wait_closed()
+
     async def read_stderr(stream):
         line = await stream.readline()
         while line:
@@ -362,6 +372,8 @@ async def git_backend(request):
             status=status_code, reason=status_reason
         )
 
+        assert 'Transfer-Encoding' not in headers
+
         await response.prepare(request)
 
         chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
@@ -373,9 +385,14 @@ async def git_backend(request):
 
         return response
 
+    if request.headers.get('Transfer-Encoding') == 'chunked':
+        stdin_feeder = feed_stdin_chunked(p.stdin)
+    else:
+        stdin_feeder = feed_stdin(p.stdin)
+
     unused_stderr, response, unused_stdin = await asyncio.wait_for(asyncio.gather(*[
         read_stderr(p.stderr), read_stdout(p.stdout),
-        feed_stdin(p.stdin)
+        stdin_feeder,
         ], return_exceptions=True), GIT_BACKEND_TIMEOUT)
 
     return response

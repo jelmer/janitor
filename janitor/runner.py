@@ -1110,6 +1110,7 @@ class ActiveLocalRun(ActiveRun):
 
 
 async def export_queue_length(db: state.Database) -> None:
+    # TODO(jelmer): Move to a different process?
     while True:
         async with db.acquire() as conn:
             queue_duration.set((await state.queue_duration(conn)).total_seconds())
@@ -1120,6 +1121,7 @@ async def export_queue_length(db: state.Database) -> None:
 
 
 async def export_stats(db: state.Database) -> None:
+    # TODO(jelmer): Move to a different process?
     while True:
         async with db.acquire() as conn:
             for suite, count in await conn.fetch(
