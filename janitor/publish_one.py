@@ -394,7 +394,7 @@ def publish(
             description="Forking the project (to %s) timed out (%ds)"
             % (e.project, e.timeout),
         )
-    except InsufficientChangesForNewProposal as e:
+    except InsufficientChangesForNewProposal:
         raise PublishNothingToDo('not enough changes for a new merge proposal')
 
 
