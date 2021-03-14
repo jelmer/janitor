@@ -886,7 +886,7 @@ if __name__ == "__main__":
     except PublishFailure as e:
         json.dump({"code": e.code, "description": e.description}, sys.stdout)
         sys.exit(1)
-    except InsufficientChangesForNewProposal as e:
+    except PublishNothingToDo as e:
         json.dump({"code": "nothing-to-do", "description": e.description}, sys.stdout)
         sys.exit(1)
 
