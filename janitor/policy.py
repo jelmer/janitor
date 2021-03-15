@@ -47,10 +47,10 @@ def matches(match, package_name, vcs_url, package_maintainer, package_uploaders,
     for vcs_url_regex in match.vcs_url_regex:
         if vcs_url is None or not re.fullmatch(vcs_url_regex, vcs_url):
             return False
-    if match.in_base is not None:
+    if match.HasField("in_base") is not None:
         if match.in_base != in_base:
             return False
-    if match.before_stage is not None:
+    if match.before_stage:
         if release_stages_passed is None:
             raise ValueError(
                 'no release stages passed in, unable to match on before_stage')

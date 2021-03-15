@@ -156,7 +156,7 @@ WHERE
     return Package.from_row(row)
 
 
-async def iter_packages(conn: asyncpg.Connection, package=None):
+async def iter_packages(conn: asyncpg.Connection, package: Optional[str] = None):
     query = """
 SELECT
 """ + ','.join(Package.field_names) + """
