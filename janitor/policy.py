@@ -158,6 +158,7 @@ async def main(argv):
         help="Path to policy configuration.",
     )
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('package', type=str, nargs='?')
     args = parser.parse_args(argv[1:])
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
@@ -181,9 +182,9 @@ async def main(argv):
     current_policy = {}
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
-        async for (package, suite, cur_pol) in state.iter_policy(conn):
+        async for (package, suite, cur_pol) in state.iter_policy(conn, package=args.package):
             current_policy[(package, suite)] = cur_pol
-        for package in await debian_state.iter_packages(conn):
+        for package in await debian_state.iter_packages(conn, package=args.package):
             for suite in suites:
                 intended_policy = apply_policy(
                     policy,
