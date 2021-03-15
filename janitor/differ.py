@@ -183,11 +183,14 @@ async def get_run_pair(db, old_id, new_id):
     return old_run, new_run
 
 
-def _set_limits():
+def _set_limits(limit_mb):
+    if limit_mb is None:
+        return
     import resource
 
-    # Limit to 2Gb
-    resource.setrlimit(resource.RLIMIT_AS, (1800 * 1024 * 1024, 2000 * 1024 * 1024))
+    limit = limit_mb * (1024 ** 3)
+    # Limit to 1Gb
+    resource.setrlimit(resource.RLIMIT_AS, (int(1.8 * limit), limit))
 
 
 async def handle_diffoscope(request):
@@ -275,7 +278,10 @@ async def handle_diffoscope(request):
 
             try:
                 diffoscope_diff = await asyncio.wait_for(
-                    run_diffoscope(old_binaries, new_binaries, _set_limits), 60.0
+                    run_diffoscope(
+                        old_binaries, new_binaries,
+                        lambda: _set_limits(request.app.task_memory_limit)),
+                    request.app.task_timeout
                 )
             except MemoryError:
                 raise web.HTTPServiceUnavailable(text="diffoscope used too much memory")
@@ -359,7 +365,9 @@ async def precache(app, old_id, new_id):
         if diffoscope_cache_path and not os.path.exists(diffoscope_cache_path):
             try:
                 diffoscope_diff = await asyncio.wait_for(
-                    run_diffoscope(old_binaries, new_binaries, _set_limits), 300.0
+                    run_diffoscope(
+                        old_binaries, new_binaries,
+                        lambda: _set_limits(app.task_memory_limit)), app.task_timeout
                 )
             except MemoryError:
                 raise web.HTTPServiceUnavailable(text="diffoscope used too much memory")
@@ -434,13 +442,15 @@ where
 
 
 class DifferWebApp(web.Application):
-    def __init__(self, db, config, cache_path, artifact_manager):
+    def __init__(self, db, config, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
         trailing_slash_redirect = normalize_path_middleware(append_slash=True)
         super(DifferWebApp, self).__init__(middlewares=[trailing_slash_redirect])
         self.db = db
         self.config = config
         self.cache_path = cache_path
         self.artifact_manager = artifact_manager
+        self.task_memory_limit = task_memory_limit
+        self.task_timeout = task_timeout
 
     def diffoscope_cache_path(self, old_id, new_id):
         base_path = os.path.join(self.cache_path, "diffoscope")
@@ -539,6 +549,12 @@ def main(argv=None):
     parser.add_argument(
         "--runner-url", type=str, default=None, help="URL to reach runner at."
     )
+    parser.add_argument(
+        '--task-memory-limit', help='Task memory limit (in MB)',
+        type=int, default=1500)
+    parser.add_argument(
+        '--task-timeout', help='Task timeout (in seconds)',
+        type=int, default=60)
 
     args = parser.parse_args()
 
@@ -560,6 +576,8 @@ def main(argv=None):
         config=config,
         cache_path=args.cache_path,
         artifact_manager=artifact_manager,
+        task_memory_limit=args.task_memory_limit,
+        task_timeout=args.task_timeout,
     )
 
     tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port))]
