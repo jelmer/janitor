@@ -53,6 +53,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "build-failed-stage-apt-get-dist-upgrade",
     "build-failed-stage-explain-bd-uninstallable",
     "502-bad-gateway",
+    "worker-502-bad-gateway",
     "worker-exception",
     "build-failed-stage-create-session",
     "apt-get-update-missing-release-file",
