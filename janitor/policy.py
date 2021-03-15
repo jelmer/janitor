@@ -47,7 +47,7 @@ def matches(match, package_name, vcs_url, package_maintainer, package_uploaders,
     for vcs_url_regex in match.vcs_url_regex:
         if vcs_url is None or not re.fullmatch(vcs_url_regex, vcs_url):
             return False
-    if match.HasField("in_base") is not None:
+    if match.HasField("in_base"):
         if match.in_base != in_base:
             return False
     if match.before_stage:
@@ -104,7 +104,7 @@ def apply_policy(
             ]
         ):
             continue
-        if policy.HasField("changelog") is not None:
+        if policy.HasField("changelog"):
             update_changelog = policy.changelog
         for s in policy.suite:
             if s.name == suite:
