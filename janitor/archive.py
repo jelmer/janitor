@@ -163,7 +163,7 @@ async def write_suite_files(
 ):
     r = Release()
     r["Origin"] = origin
-    r["Label"] = suite.archive_description
+    r["Label"] = suite.debian_build.archive_description
     r["Codename"] = suite.name
     r["Suite"] = suite.name
     r["Date"] = format_date()
@@ -184,7 +184,7 @@ async def write_suite_files(
             )
             br = Release()
             br["Origin"] = origin
-            br["Label"] = suite.archive_description
+            br["Label"] = suite.debian_build.archive_description
             br["Archive"] = suite.name
             br["Architecture"] = arch
             br["Component"] = component
@@ -278,6 +278,9 @@ async def listen_to_runner(runner_url, generator_manager):
 async def publish_suite(
     dists_directory, db, package_info_provider, config, suite, gpg_context
 ):
+    if not suite.debian_build:
+        logging.info("%s is not a Debian suite", suite.name)
+        return
     start_time = datetime.now()
     logging.info("Publishing %s", suite.name)
     suite_path = os.path.join(dists_directory, suite.name)

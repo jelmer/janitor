@@ -153,13 +153,13 @@ class DebianBuilder(Builder):
             "EXTRA_REPOSITORIES": ":".join(
                 [
                     "deb %s %s/ main" % (apt_location, suite)
-                    for suite in suite_config.extra_build_suite
+                    for suite in suite_config.debian_build.extra_build_suite
                 ]
             )
         }
 
-        if suite_config.chroot:
-            env["CHROOT"] = suite_config.chroot
+        if suite_config.debian_build.chroot:
+            env["CHROOT"] = suite_config.debian_build.chroot
         elif self.distro_config.chroot:
             env["CHROOT"] = self.distro_config.chroot
 
@@ -172,8 +172,8 @@ class DebianBuilder(Builder):
             " ".join(self.distro_config.component),
         )
 
-        env["BUILD_DISTRIBUTION"] = suite_config.build_distribution or ""
-        env["BUILD_SUFFIX"] = suite_config.build_suffix or ""
+        env["BUILD_DISTRIBUTION"] = suite_config.debian_build.build_distribution or ""
+        env["BUILD_SUFFIX"] = suite_config.debian_build.build_suffix or ""
 
         last_build_version = await debian_state.get_last_build_version(
             conn, queue_item.package, queue_item.suite
@@ -182,7 +182,7 @@ class DebianBuilder(Builder):
         if last_build_version:
             env["LAST_BUILD_VERSION"] = str(last_build_version)
 
-        env.update([(env.key, env.value) for env in suite_config.sbuild_env])
+        env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
         return env
 
 
