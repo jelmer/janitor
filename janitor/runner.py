@@ -827,6 +827,14 @@ class ResumeInfo(object):
         }
 
 
+def queue_item_env(queue_item):
+    env = {}
+    env["PACKAGE"] = queue_item.package
+    if queue_item.upstream_branch_url:
+        env["UPSTREAM_BRANCH_URL"] = queue_item.upstream_branch_url
+    return env
+
+
 class ActiveLocalRun(ActiveRun):
     def __init__(self, queue_item: state.QueueItem, output_directory: str):
         super(ActiveLocalRun, self).__init__(queue_item)
@@ -885,11 +893,9 @@ class ActiveLocalRun(ActiveRun):
             )
 
         env = {}
-        env["PACKAGE"] = self.queue_item.package
+        env.update(queue_item_env(self.queue_item))
         if committer:
             env.update(committer_env(committer))
-        if self.queue_item.upstream_branch_url:
-            env["UPSTREAM_BRANCH_URL"] = self.queue_item.upstream_branch_url
 
         try:
             suite_config = get_suite_config(config, self.queue_item.suite)
@@ -1552,13 +1558,10 @@ async def handle_assign(request):
     except UnsupportedVcs:
         cached_branch_url = None
 
-    env = {
-        "PACKAGE": item.package,
-    }
+    env = {}
+    env.update(queue_item_env(item))
     if queue_processor.committer:
         env.update(committer_env(queue_processor.committer))
-    if item.upstream_branch_url:
-        env["UPSTREAM_BRANCH_URL"] = item.upstream_branch_url
 
     assignment = {
         "id": active_run.log_id,
