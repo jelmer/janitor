@@ -349,8 +349,13 @@ class WatchdogPetter(object):
                     msg = await self.ws.receive()
 
                     if msg.type == aiohttp.WSMsgType.text:
-                        # TODO(jelmer): Allow remote killing of job?
-                        pass
+                        logging.warning("Unknown websocket message: %r", msg.data)
+                    elif msg.type == aiohttp.WSMsgType.BINARY:
+                        if msg.data == b'kill':
+                            logging.info('Received kill over websocket, exiting..')
+                            # TODO(jelmer): Actually exit
+                        else:
+                            logging.warning("Unknown websocket message: %r", msg.data)
                     elif msg.type == aiohttp.WSMsgType.closed:
                         break
                     elif msg.type == aiohttp.WSMsgType.error:
