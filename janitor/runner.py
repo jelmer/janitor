@@ -135,7 +135,75 @@ review_status_count = Gauge(
 )
 
 
-class DebianResult(object):
+class Builder(object):
+    """Abstract builder class."""
+
+
+class DebianBuilder(Builder):
+
+    def __init__(self, distro_config, apt_location):
+        self.distro_config = distro_config
+        self.apt_location = apt_location
+
+    async def build_env(self, conn, suite_config, queue_item):
+        if self.apt_location.startswith("gs://"):
+            bucket_name = URL(self.apt_location).host
+            apt_location = "https://storage.googleapis.com/%s/" % bucket_name
+        env = {
+            "EXTRA_REPOSITORIES": ":".join(
+                [
+                    "deb %s %s/ main" % (apt_location, suite)
+                    for suite in suite_config.extra_build_suite
+                ]
+            )
+        }
+
+        if suite_config.chroot:
+            env["CHROOT"] = suite_config.chroot
+        elif self.distro_config.chroot:
+            env["CHROOT"] = self.distro_config.chroot
+
+        if self.distro_config.name:
+            env["DISTRIBUTION"] = self.distro_config.name
+
+        env["REPOSITORIES"] = "%s %s/ %s" % (
+            self.distro_config.archive_mirror_uri,
+            self.distro_config.name,
+            " ".join(self.distro_config.component),
+        )
+
+        env["BUILD_DISTRIBUTION"] = suite_config.build_distribution or ""
+        env["BUILD_SUFFIX"] = suite_config.build_suffix or ""
+
+        last_build_version = await debian_state.get_last_build_version(
+            conn, queue_item.package, queue_item.suite
+        )
+
+        if last_build_version:
+            env["LAST_BUILD_VERSION"] = str(last_build_version)
+
+        env.update([(env.key, env.value) for env in suite_config.sbuild_env])
+        return env
+
+
+class BuilderResult(object):
+
+    kind: str
+
+    def from_directory(self, path, codebase):
+        raise NotImplementedError(self.from_directory)
+
+    async def store(self, conn, run_id, package):
+        raise NotImplementedError(self.store)
+
+    def json(self):
+        raise NotImplementedError(self.json)
+
+    def artifact_filenames(self):
+        raise NotImplementedError(self.artifact_filenames)
+
+
+class DebianResult(BuilderResult):
 
     kind = "debian"
 
@@ -172,6 +240,16 @@ class DebianResult(object):
             build_distribution=build_distribution,
             changes_filename=changes_filename,
         )
+
+    async def store(self, conn, run_id, package):
+        if self.build_version:
+            await debian_state.store_debian_build(
+                conn,
+                run_id,
+                package,
+                self.build_version,
+                self.build_distribution,
+            )
 
     def json(self):
         return {
@@ -213,7 +291,7 @@ class JanitorResult(object):
             self.subworker_result = worker_result.subworker
             self.revision = worker_result.revision
             self.value = worker_result.value
-            self.target_result = DebianResult.from_worker_result(worker_result)
+            self.builder_result = DebianResult.from_worker_result(worker_result)
             self.branches = worker_result.branches
             self.tags = worker_result.tags
             self.remotes = worker_result.remotes
@@ -224,7 +302,7 @@ class JanitorResult(object):
             self.revision = None
             self.subworker_result = None
             self.value = None
-            self.target_result = DebianResult()
+            self.builder_result = DebianResult()
             self.branches = None
             self.tags = None
             self.failure_details = None
@@ -237,8 +315,8 @@ class JanitorResult(object):
             "description": self.description,
             "code": self.code,
             "failure_details": self.failure_details,
-            "target": self.target_result.kind,
-            "target-details": self.target_result.json(),
+            "target": self.builder_result.kind,
+            "target-details": self.builder_result.json(),
             "legacy_branch_name": self.legacy_branch_name,
             "logfilenames": self.logfilenames,
             "subworker": self.subworker_result,
@@ -395,7 +473,6 @@ async def invoke_subprocess_worker(
     worker_module = {
         "local": "janitor.worker",
         "gcb": "janitor.gcb_worker",
-        "ssh": "janitor.ssh_worker",
     }[worker_kind.split(":")[0]]
     args = [
         sys.executable,
@@ -719,43 +796,6 @@ async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branc
         return None
 
 
-def suite_build_env(distro_config, suite_config, apt_location, last_build_version):
-    if apt_location.startswith("gs://"):
-        bucket_name = URL(apt_location).host
-        apt_location = "https://storage.googleapis.com/%s/" % bucket_name
-    env = {
-        "EXTRA_REPOSITORIES": ":".join(
-            [
-                "deb %s %s/ main" % (apt_location, suite)
-                for suite in suite_config.extra_build_suite
-            ]
-        )
-    }
-
-    if suite_config.chroot:
-        env["CHROOT"] = suite_config.chroot
-    elif distro_config.chroot:
-        env["CHROOT"] = distro_config.chroot
-
-    if distro_config.name:
-        env["DISTRIBUTION"] = distro_config.name
-
-    env["REPOSITORIES"] = "%s %s/ %s" % (
-        distro_config.archive_mirror_uri,
-        distro_config.name,
-        " ".join(distro_config.component),
-    )
-
-    env["BUILD_DISTRIBUTION"] = suite_config.build_distribution or ""
-    env["BUILD_SUFFIX"] = suite_config.build_suffix or ""
-
-    if last_build_version:
-        env["LAST_BUILD_VERSION"] = str(last_build_version)
-
-    env.update([(env.key, env.value) for env in suite_config.sbuild_env])
-    return env
-
-
 class ResumeInfo(object):
     def __init__(self, branch, result, resume_result_branches, legacy_branch_name):
         self.branch = branch
@@ -858,7 +898,7 @@ class ActiveLocalRun(ActiveRun):
             )
 
         # This is simple for now, since we only support one distribution..
-        distro_config = config.distribution
+        builder = DebianBuilder(config.distribution, apt_location)
 
         if not use_cached_only:
             async with db.acquire() as conn:
@@ -934,15 +974,9 @@ class ActiveLocalRun(ActiveRun):
                 conn, self.queue_item.suite, resume_branch
             )
 
-            last_build_version = await debian_state.get_last_build_version(
-                conn, self.queue_item.package, self.queue_item.suite
+            env.update(
+                await builder.build_env(conn, suite_config, self.queue_item)
             )
-
-        env.update(
-            suite_build_env(
-                distro_config, suite_config, apt_location, last_build_version
-            )
-        )
 
         log_path = os.path.join(self.output_directory, "worker.log")
         try:
@@ -1051,7 +1085,7 @@ class ActiveLocalRun(ActiveRun):
         )
 
         try:
-            result.target_result.from_directory(
+            result.builder_result.from_directory(
                 self.output_directory, self.queue_item.package
             )
         except NoChangesFile as e:
@@ -1096,8 +1130,8 @@ class ActiveLocalRun(ActiveRun):
         )
         result.legacy_branch_name = suite_config.branch_name
 
-        if result.target_result and artifact_manager:
-            artifact_names = result.target_result.artifact_filenames()
+        if result.builder_result and artifact_manager:
+            artifact_names = result.builder_result.artifact_filenames()
             await store_artifacts_with_backup(
                 artifact_manager,
                 backup_artifact_manager,
@@ -1286,8 +1320,8 @@ class QueueProcessor(object):
                     result.context,
                     result.main_branch_revision,
                     result.code,
-                    build_version=result.target_result.build_version,
-                    build_distribution=result.target_result.build_distribution,
+                    build_version=result.builder_result.build_version,
+                    build_distribution=result.builder_result.build_distribution,
                     branch_name=result.legacy_branch_name,
                     revision=result.revision,
                     subworker_result=result.subworker_result,
@@ -1300,14 +1334,7 @@ class QueueProcessor(object):
                     result_tags=result.tags,
                     failure_details=result.failure_details,
                 )
-                if result.target_result.build_version:
-                    await debian_state.store_debian_build(
-                        conn,
-                        result.log_id,
-                        item.package,
-                        result.target_result.build_version,
-                        result.target_result.build_distribution,
-                    )
+                await result.builder_result.store(conn, result.log_id, item.package)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[active_run.log_id]
@@ -1493,12 +1520,13 @@ async def handle_assign(request):
     queue_processor.register_run(active_run)
 
     # This is simple for now, since we only support one distribution.
-    distro_config = queue_processor.config.distribution
+    builder = DebianBuilder(
+        queue_processor.config.distribution,
+        queue_processor.apt_location
+        )
 
     async with queue_processor.database.acquire() as conn:
-        last_build_version = await debian_state.get_last_build_version(
-            conn, item.package, item.suite
-        )
+        build_env = await builder.build_env(conn, suite_config, item)
 
         try:
             main_branch = await open_canonical_main_branch(
@@ -1559,14 +1587,7 @@ async def handle_assign(request):
             "cached_url": cached_branch_url,
         },
         "resume": resume.json() if resume else None,
-        "build": {
-            "environment": suite_build_env(
-                distro_config,
-                suite_config,
-                queue_processor.apt_location,
-                last_build_version,
-            ),
-        },
+        "build": {"environment": build_env},
         "env": env,
         "command": item.command,
         "suite": item.suite,
@@ -1648,14 +1669,14 @@ async def handle_finish(request):
             )
 
             try:
-                result.target_result.from_directory(
+                result.builder_result.from_directory(
                     output_directory, active_run.queue_item.package
                 )
             except NoChangesFile as e:
                 # Oh, well.
                 logging.info("No changes file found: %s", e)
 
-            artifact_names = result.target_result.artifact_filenames()
+            artifact_names = result.builder_result.artifact_filenames()
             await store_artifacts_with_backup(
                 queue_processor.artifact_manager,
                 queue_processor.backup_artifact_manager,
