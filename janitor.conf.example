@@ -37,56 +37,68 @@ distribution {
 
 suite {
   name: "lintian-fixes"
-  archive_description: "Builds of lintian fixes"
-  build_distribution: "lintian-fixes"
   branch_name: "lintian-fixes"
-  build_suffix: "jan+lint"
-  base_distribution: "unstable"
+  debian_build {
+    archive_description: "Builds of lintian fixes"
+    build_distribution: "lintian-fixes"
+    build_suffix: "jan+lint"
+    base_distribution: "unstable"
+  }
 }
 
 suite {
   name: "unchanged"
-  archive_description: "Builds without any changes"
-  build_distribution: "unchanged"
   branch_name: "master"
-  build_suffix: "jan+unchanged"
-  base_distribution: "unstable"
+  debian_build {
+    archive_description: "Builds without any changes"
+    build_distribution: "unchanged"
+    build_suffix: "jan+unchanged"
+    base_distribution: "unstable"
+  }
 }
 
 suite {
   name: "fresh-releases"
-  archive_description: "Builds with new upstream versions merged"
-  build_distribution: "fresh-releases"
   branch_name: "new-upstream"
-  build_suffix: "jan+nur"
-  base_distribution: "unstable"
+  debian_build {
+    archive_description: "Builds with new upstream versions merged"
+    build_distribution: "fresh-releases"
+    build_suffix: "jan+nur"
+    base_distribution: "unstable"
+  }
 }
 
 suite {
   name: "fresh-snapshots"
-  archive_description: "Builds with new upstream snapshots merged"
-  build_distribution: "fresh-snapshots"
   branch_name: "new-upstream-snapshot"
-  build_suffix: "jan+nus"
-  base_distribution: "unstable"
+  debian_build {
+    archive_description: "Builds with new upstream snapshots merged"
+    build_distribution: "fresh-snapshots"
+    build_suffix: "jan+nus"
+    base_distribution: "unstable"
+  }
 }
 
 suite {
   name: "multiarch-fixes"
-  archive_description: "Build of multi arch fixes"
-  build_distribution: "multiarch-fixes"
   branch_name: "multiarch-fixes"
-  build_suffix: "jan+maf"
-  base_distribution: "unstable"
+  debian_build {
+    archive_description: "Build of multi arch fixes"
+    build_distribution: "multiarch-fixes"
+    build_suffix: "jan+maf"
+    base_distribution: "unstable"
+  }
 }
 
 suite {
   name: "uncommitted"
-  archive_description: "Builds of packages missing in VCS"
-  build_distribution: "uncommitted"
   branch_name: "uncommitted"
-  build_suffix: "jan+unc"
-  base_distribution: "unstable"
+  debian_build {
+    archive_description: "Builds of packages missing in VCS"
+    build_distribution: "uncommitted"
+    build_suffix: "jan+unc"
+    base_distribution: "unstable"
+  }
 }
 
 suite {

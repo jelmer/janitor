@@ -21,9 +21,11 @@ In janitor.conf, add a section for the suite. E.g.:
 ```
 suite {
   name: "some-name"
-  archive_description: "Description for use in apt"
   branch_name: "some-name"
-  build_suffix: "suf"
+  debian_build {
+    archive_description: "Description for use in apt"
+    build_suffix: "suf"
+  }
 }
 ```
 
