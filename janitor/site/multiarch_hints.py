@@ -58,7 +58,6 @@ select distinct on (package) * from (
 select
   package,
   command,
-  build_version,
   result_code,
   context,
   start_time,
@@ -68,7 +67,7 @@ select
 from
   run
 where
-  build_distribution  = 'multiarch-fixes' and
+  suite = 'multiarch-fixes' and
   result_code = 'success'
 ) as package where hint like $1 order by package, start_time desc
 """,
