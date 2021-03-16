@@ -177,7 +177,7 @@ class MirrorFailure(Exception):
 
 def mirror_branches(
     vcs_manager: "VcsManager",
-    pkg: str,
+    codebase: str,
     branch_map: Iterable[Tuple[str, Branch, bytes]],
     public_master_branch: Optional[Branch] = None,
 ) -> None:
@@ -188,7 +188,7 @@ def mirror_branches(
         raise AssertionError("more than one VCS: %r" % branch_map)
     vcs = vcses.pop()
     if vcs == "git":
-        path = vcs_manager.get_repository_url(pkg, vcs)
+        path = vcs_manager.get_repository_url(codebase, vcs)
         try:
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
@@ -207,7 +207,7 @@ def mirror_branches(
             except NoSuchRevision as e:
                 raise MirrorFailure(target_branch_name, e)
     elif vcs == "bzr":
-        path = vcs_manager.get_repository_url(pkg, vcs)
+        path = vcs_manager.get_repository_url(codebase, vcs)
         try:
             vcs_result_controldir = ControlDir.open(path)
         except NotBranchError:
@@ -220,7 +220,7 @@ def mirror_branches(
             vcs_result_controldir.create_repository(shared=True)
         for (target_branch_name, from_branch, revid) in branch_map:
             target_branch_path = vcs_manager.get_branch_url(
-                pkg, target_branch_name, vcs
+                codebase, target_branch_name, vcs
             )
             try:
                 target_branch = Branch.open(target_branch_path)
@@ -378,26 +378,26 @@ def get_cached_branch(
 
 
 def get_local_vcs_branch_url(
-    vcs_directory: str, vcs: str, pkg: str, branch_name: str
+    vcs_directory: str, vcs: str, codebase: str, branch_name: str
 ) -> Optional[str]:
     if vcs == "git":
         return "file:%s,branch=%s" % (
-            os.path.join(vcs_directory, "git", pkg),
+            os.path.join(vcs_directory, "git", codebase),
             branch_name,
         )
     elif vcs == "bzr":
-        return os.path.join(vcs_directory, "bzr", pkg, branch_name)
+        return os.path.join(vcs_directory, "bzr", codebase, branch_name)
     else:
         raise AssertionError("unknown vcs type %r" % vcs)
 
 
-def get_local_vcs_branch(vcs_directory: str, pkg: str, branch_name: str) -> Branch:
+def get_local_vcs_branch(vcs_directory: str, codebase: str, branch_name: str) -> Branch:
     for vcs in SUPPORTED_VCSES:
-        if os.path.exists(os.path.join(vcs_directory, vcs, pkg)):
+        if os.path.exists(os.path.join(vcs_directory, vcs, codebase)):
             break
     else:
         return None
-    url = get_local_vcs_branch_url(vcs_directory, vcs, pkg, branch_name)
+    url = get_local_vcs_branch_url(vcs_directory, vcs, codebase, branch_name)
     if url is None:
         return None
     return open_branch(url)
@@ -420,26 +420,26 @@ def get_local_vcs_repo(
 
 class VcsManager(object):
     def get_branch(
-        self, package: str, branch_name: str, vcs_type: Optional[str] = None
+        self, codebase: str, branch_name: str, vcs_type: Optional[str] = None
     ) -> Branch:
         raise NotImplementedError(self.get_branch)
 
     def get_branch_url(
-        self, package: str, branch_name: str, vcs_type: str
+        self, codebase: str, branch_name: str, vcs_type: str
     ) -> Optional[str]:
         raise NotImplementedError(self.get_branch_url)
 
     def get_repository(
-        self, package: str, vcs_type: Optional[str] = None
+        self, codebase: str, vcs_type: Optional[str] = None
     ) -> Repository:
         raise NotImplementedError(self.get_repository)
 
-    def get_repository_url(self, package: str, vcs_type: str) -> str:
+    def get_repository_url(self, codebase: str, vcs_type: str) -> str:
         raise NotImplementedError(self.get_repository_url)
 
-    def get_vcs_type(self, package: str) -> Optional[str]:
+    def get_vcs_type(self, codebase: str) -> Optional[str]:
         try:
-            repo = self.get_repository(package)
+            repo = self.get_repository(codebase)
         except NotBranchError:
             return None
         if repo is None:
@@ -454,20 +454,20 @@ class LocalVcsManager(VcsManager):
     def __init__(self, base_path: str):
         self.base_path = base_path
 
-    def get_branch(self, package, branch_name, vcs_type=None):
+    def get_branch(self, codebase, branch_name, vcs_type=None):
         try:
-            return get_local_vcs_branch(self.base_path, package, branch_name)
+            return get_local_vcs_branch(self.base_path, codebase, branch_name)
         except (BranchUnavailable, BranchMissing):
             return None
 
-    def get_branch_url(self, package, branch_name, vcs_type):
-        return get_local_vcs_branch_url(self.base_path, vcs_type, package, branch_name)
+    def get_branch_url(self, codebase, branch_name, vcs_type):
+        return get_local_vcs_branch_url(self.base_path, vcs_type, codebase, branch_name)
 
-    def get_repository(self, package, vcs_type=None):
-        return get_local_vcs_repo(self.base_path, package, vcs_type)
+    def get_repository(self, codebase, vcs_type=None):
+        return get_local_vcs_repo(self.base_path, codebase, vcs_type)
 
-    def get_repository_url(self, package, vcs_type):
-        return get_local_vcs_repo_url(self.base_path, package, vcs_type)
+    def get_repository_url(self, codebase, vcs_type):
+        return get_local_vcs_repo_url(self.base_path, codebase, vcs_type)
 
     def list_repositories(self, vcs_type):
         for entry in os.scandir(os.path.join(self.base_path, vcs_type)):
@@ -481,21 +481,21 @@ class RemoteVcsManager(VcsManager):
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, self.base_url)
 
-    def get_branch(self, package, branch_name, vcs_type=None):
+    def get_branch(self, codebase, branch_name, vcs_type=None):
         if vcs_type:
-            return get_cached_branch(self.base_url, package, branch_name, vcs_type)
+            return get_cached_branch(self.base_url, codebase, branch_name, vcs_type)
         for vcs_type in SUPPORTED_VCSES:
-            branch = get_cached_branch(self.base_url, package, branch_name, vcs_type)
+            branch = get_cached_branch(self.base_url, codebase, branch_name, vcs_type)
             if branch:
                 return branch
         else:
             return None
 
-    def get_branch_url(self, package, branch_name, vcs_type):
-        return get_cached_branch_url(self.base_url, vcs_type, package, branch_name)
+    def get_branch_url(self, codebase, branch_name, vcs_type):
+        return get_cached_branch_url(self.base_url, vcs_type, codebase, branch_name)
 
-    def get_repository_url(self, package: str, vcs_type: str) -> str:
-        return get_cached_repository_url(self.base_url, vcs_type, package)
+    def get_repository_url(self, codebase: str, vcs_type: str) -> str:
+        return get_cached_repository_url(self.base_url, vcs_type, codebase)
 
 
 def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
