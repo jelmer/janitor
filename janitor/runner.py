@@ -138,52 +138,7 @@ review_status_count = Gauge(
 class Builder(object):
     """Abstract builder class."""
 
-
-class DebianBuilder(Builder):
-
-    def __init__(self, distro_config, apt_location):
-        self.distro_config = distro_config
-        self.apt_location = apt_location
-
-    async def build_env(self, conn, suite_config, queue_item):
-        if self.apt_location.startswith("gs://"):
-            bucket_name = URL(self.apt_location).host
-            apt_location = "https://storage.googleapis.com/%s/" % bucket_name
-        env = {
-            "EXTRA_REPOSITORIES": ":".join(
-                [
-                    "deb %s %s/ main" % (apt_location, suite)
-                    for suite in suite_config.debian_build.extra_build_suite
-                ]
-            )
-        }
-
-        if suite_config.debian_build.chroot:
-            env["CHROOT"] = suite_config.debian_build.chroot
-        elif self.distro_config.chroot:
-            env["CHROOT"] = self.distro_config.chroot
-
-        if self.distro_config.name:
-            env["DISTRIBUTION"] = self.distro_config.name
-
-        env["REPOSITORIES"] = "%s %s/ %s" % (
-            self.distro_config.archive_mirror_uri,
-            self.distro_config.name,
-            " ".join(self.distro_config.component),
-        )
-
-        env["BUILD_DISTRIBUTION"] = suite_config.debian_build.build_distribution or ""
-        env["BUILD_SUFFIX"] = suite_config.debian_build.build_suffix or ""
-
-        last_build_version = await debian_state.get_last_build_version(
-            conn, queue_item.package, queue_item.suite
-        )
-
-        if last_build_version:
-            env["LAST_BUILD_VERSION"] = str(last_build_version)
-
-        env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
-        return env
+    result_cls = None
 
 
 class BuilderResult(object):
@@ -260,6 +215,55 @@ class DebianResult(BuilderResult):
 
     def __bool__(self):
         return self.changes_filename is not None
+
+
+class DebianBuilder(Builder):
+
+    result_cls = DebianResult
+
+    def __init__(self, distro_config, apt_location):
+        self.distro_config = distro_config
+        self.apt_location = apt_location
+
+    async def build_env(self, conn, suite_config, queue_item):
+        if self.apt_location.startswith("gs://"):
+            bucket_name = URL(self.apt_location).host
+            apt_location = "https://storage.googleapis.com/%s/" % bucket_name
+        env = {
+            "EXTRA_REPOSITORIES": ":".join(
+                [
+                    "deb %s %s/ main" % (apt_location, suite)
+                    for suite in suite_config.debian_build.extra_build_suite
+                ]
+            )
+        }
+
+        if suite_config.debian_build.chroot:
+            env["CHROOT"] = suite_config.debian_build.chroot
+        elif self.distro_config.chroot:
+            env["CHROOT"] = self.distro_config.chroot
+
+        if self.distro_config.name:
+            env["DISTRIBUTION"] = self.distro_config.name
+
+        env["REPOSITORIES"] = "%s %s/ %s" % (
+            self.distro_config.archive_mirror_uri,
+            self.distro_config.name,
+            " ".join(self.distro_config.component),
+        )
+
+        env["BUILD_DISTRIBUTION"] = suite_config.debian_build.build_distribution or ""
+        env["BUILD_SUFFIX"] = suite_config.debian_build.build_suffix or ""
+
+        last_build_version = await debian_state.get_last_build_version(
+            conn, queue_item.package, queue_item.suite
+        )
+
+        if last_build_version:
+            env["LAST_BUILD_VERSION"] = str(last_build_version)
+
+        env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
+        return env
 
 
 class JanitorResult(object):
@@ -595,6 +599,10 @@ class ActiveRun(object):
     def _extra_json(self):
         return {}
 
+    def create_result(self, **kwargs):
+        return JanitorResult(
+            pkg=self.queue_item.package, log_id=self.log_id, **kwargs)
+
     def json(self) -> Any:
         """Return a JSON representation."""
         ret = {
@@ -691,9 +699,7 @@ class ActiveRemoteRun(ActiveRun):
                     self.log_id,
                     duration.total_seconds(),
                 )
-                result = JanitorResult(
-                    self.queue_item.package,
-                    log_id=self.log_id,
+                result = self.create_result(
                     branch_url=self.queue_item.branch_url,
                     description=("No keepalives received in %s." % duration),
                     code="worker-timeout",
@@ -869,9 +875,7 @@ class ActiveLocalRun(ActiveRun):
 
         if self.queue_item.branch_url is None:
             # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
-            return JanitorResult(
-                self.queue_item.package,
-                log_id=self.log_id,
+            return self.create_result(
                 branch_url=self.queue_item.branch_url,
                 description="No VCS URL known for package.",
                 code="not-in-vcs",
@@ -888,9 +892,7 @@ class ActiveLocalRun(ActiveRun):
         try:
             suite_config = get_suite_config(config, self.queue_item.suite)
         except KeyError:
-            return JanitorResult(
-                self.queue_item.package,
-                log_id=self.log_id,
+            return self.create_result(
                 code="unknown-suite",
                 description="Suite %s not in configuration" % self.queue_item.suite,
                 logfilenames=[],
@@ -907,9 +909,7 @@ class ActiveLocalRun(ActiveRun):
                         conn, self.queue_item, possible_transports=possible_transports
                     )
                 except BranchOpenFailure as e:
-                    return JanitorResult(
-                        self.queue_item.package,
-                        log_id=self.log_id,
+                    return self.create_result(
                         branch_url=self.queue_item.branch_url,
                         description=e.description,
                         code=e.code,
@@ -923,9 +923,7 @@ class ActiveLocalRun(ActiveRun):
                     possible_hosters=possible_hosters,
                 )
             except HosterLoginRequired as e:
-                return JanitorResult(
-                    self.queue_item.package,
-                    log_id=self.log_id,
+                return self.create_result(
                     branch_url=self.queue_item.branch_url,
                     description=str(e),
                     code="hoster-login-required",
@@ -951,9 +949,7 @@ class ActiveLocalRun(ActiveRun):
         else:
             main_branch = vcs_manager.get_branch(self.queue_item.package, "master")
             if main_branch is None:
-                return JanitorResult(
-                    self.queue_item.package,
-                    log_id=self.log_id,
+                return self.create_result(
                     branch_url=self.queue_item.branch_url,
                     code="cached-branch-missing",
                     description="Missing cache branch for %s" % self.queue_item.package,
@@ -1004,18 +1000,14 @@ class ActiveLocalRun(ActiveRun):
                 self._task.set_name(self.log_id)
             retcode = await self._task
         except asyncio.CancelledError:
-            return JanitorResult(
-                self.queue_item.package,
-                log_id=self.log_id,
+            return self.create_result(
                 branch_url=full_branch_url(main_branch),
                 code="cancelled",
                 description="Job cancelled",
                 logfilenames=[],
             )
         except asyncio.TimeoutError:
-            return JanitorResult(
-                self.queue_item.package,
-                log_id=self.log_id,
+            return self.create_result(
                 branch_url=full_branch_url(main_branch),
                 code="timeout",
                 description="Run timed out after %d seconds"
@@ -1043,9 +1035,7 @@ class ActiveLocalRun(ActiveRun):
                 except FileNotFoundError:
                     description = "Worker exited with return code %d" % retcode
 
-            return JanitorResult(
-                self.queue_item.package,
-                log_id=self.log_id,
+            return self.create_result(
                 branch_url=full_branch_url(main_branch),
                 code=code,
                 description=description,
@@ -1062,9 +1052,7 @@ class ActiveLocalRun(ActiveRun):
             )
 
         if worker_result.code is not None:
-            return JanitorResult(
-                self.queue_item.package,
-                log_id=self.log_id,
+            return self.create_result(
                 branch_url=full_branch_url(main_branch),
                 worker_result=worker_result,
                 logfilenames=logfilenames,
@@ -1075,9 +1063,7 @@ class ActiveLocalRun(ActiveRun):
                 ),
             )
 
-        result = JanitorResult(
-            self.queue_item.package,
-            log_id=self.log_id,
+        result = self.create_result(
             branch_url=full_branch_url(main_branch),
             code="success",
             worker_result=worker_result,
@@ -1097,10 +1083,8 @@ class ActiveLocalRun(ActiveRun):
                 os.path.join(self.output_directory, self.queue_item.package)
             )
         except (BranchMissing, BranchUnavailable) as e:
-            return JanitorResult(
-                self.queue_item.package,
-                self.log_id,
-                full_branch_url(main_branch),
+            return self.create_result(
+                branch_url=full_branch_url(main_branch),
                 description="result branch unavailable: %s" % e,
                 code="result-branch-unavailable",
                 worker_result=worker_result,
@@ -1494,9 +1478,7 @@ async def handle_assign(request):
     possible_hosters = []
 
     async def abort(active_run, code, description):
-        result = JanitorResult(
-            active_run.queue_item.package,
-            log_id=active_run.log_id,
+        result = active_run.create_result(
             branch_url=active_run.main_branch_url,
             code=code,
             description=description,
@@ -1645,9 +1627,7 @@ async def handle_finish(request):
         )
 
         if worker_result.code is not None:
-            result = JanitorResult(
-                active_run.queue_item.package,
-                log_id=run_id,
+            result = active_run.create_result(
                 branch_url=active_run.main_branch_url,
                 worker_result=worker_result,
                 logfilenames=logfilenames,
@@ -1658,9 +1638,7 @@ async def handle_finish(request):
                 ),
             )
         else:
-            result = JanitorResult(
-                active_run.queue_item.package,
-                log_id=run_id,
+            result = active_run.create_result(
                 branch_url=active_run.main_branch_url,
                 code="success",
                 worker_result=worker_result,
