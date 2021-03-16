@@ -135,12 +135,6 @@ review_status_count = Gauge(
 )
 
 
-class Builder(object):
-    """Abstract builder class."""
-
-    result_cls = None
-
-
 class BuilderResult(object):
 
     kind: str
@@ -156,6 +150,12 @@ class BuilderResult(object):
 
     def artifact_filenames(self):
         raise NotImplementedError(self.artifact_filenames)
+
+
+class Builder(object):
+    """Abstract builder class."""
+
+    result_cls = BuilderResult
 
 
 class DebianResult(BuilderResult):
@@ -275,6 +275,7 @@ class JanitorResult(object):
         description=None,
         code=None,
         worker_result=None,
+        worker_cls=None,
         logfilenames=None,
         legacy_branch_name=None,
     ):
@@ -295,6 +296,7 @@ class JanitorResult(object):
             self.subworker_result = worker_result.subworker
             self.revision = worker_result.revision
             self.value = worker_result.value
+            # TODO(jelmer): use Builder.worker_cls here rather than DebianResult
             self.builder_result = DebianResult.from_worker_result(worker_result)
             self.branches = worker_result.branches
             self.tags = worker_result.tags
