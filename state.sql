@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS codebase (
    branch_url text,
    subpath text,
    vcs_last_revision text,
-   vcs_type vcs_type
+   vcs_type vcs_type,
+   removed boolean default false
 );
 CREATE UNIQUE INDEX ON codebase (name);
 CREATE INDEX ON codebase (branch_url);
