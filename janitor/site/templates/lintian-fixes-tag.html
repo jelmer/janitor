@@ -13,7 +13,7 @@
 {% endif %}
 
 <ul>
-{% for package, command, build_version, result_code, context, start_time, id, tag in packages %}
+{% for package, command, result_code, context, start_time, id, tag in packages %}
 	<li><a href="../pkg/{{ package }}">{{ package }}</a></li>
 {% endfor %}
 </ul>

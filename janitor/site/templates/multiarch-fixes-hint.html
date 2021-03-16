@@ -8,7 +8,7 @@
 <p>Description: <a href="https://wiki.debian.org/MultiArch/Hints#{{ hint }}">on wiki</a></p>
 
 <ul>
-{% for package, command, build_version, result_code, context, start_time, id, hint in packages %}
+{% for package, command, result_code, context, start_time, id, hint in packages %}
 	<li><a href="../pkg/{{ package }}">{{ package }}</a></li>
 {% endfor %}
 </ul>

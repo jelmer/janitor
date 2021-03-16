@@ -62,7 +62,7 @@ select tag, count(tag) from (
     from
       last_runs
     where
-      build_distribution = 'lintian-fixes'
+      suite = 'lintian-fixes'
    ) as bypackage group by 1 order by 2
  desc
 """
@@ -90,7 +90,6 @@ select distinct on (package) * from (
 select
   package,
   command,
-  build_version,
   result_code,
   context,
   start_time,
@@ -101,7 +100,7 @@ select
 from
   run
 where
-  build_distribution  = 'lintian-fixes' and
+  suite = 'lintian-fixes' and
   result_code = 'success'
 ) as package where tag = ANY($1::text[]) order by package, start_time desc
 """,
