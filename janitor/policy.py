@@ -181,10 +181,12 @@ async def main(argv):
 
     current_policy = {}
     db = state.Database(config.database_location)
+    num_updated = 0
     async with db.acquire() as conn:
         async for (package, suite, cur_pol) in state.iter_policy(conn, package=args.package):
             current_policy[(package, suite)] = cur_pol
         for package in await debian_state.iter_packages(conn, package=args.package):
+            updated = False
             for suite in suites:
                 intended_policy = apply_policy(
                     policy,
@@ -202,6 +204,10 @@ async def main(argv):
                     await state.update_policy(
                         conn, package.name, suite, *intended_policy
                     )
+                    updated = True
+            if updated:
+                num_updated += 1
+    logging.info('Updated policy for %d packages.', num_updated)
 
 
 if __name__ == "__main__":
