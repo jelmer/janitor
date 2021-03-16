@@ -652,6 +652,10 @@ class QueueItem(object):
         self.vcs_type = vcs_type
         self.upstream_branch_url = upstream_branch_url
 
+    @property
+    def codebase(self):
+        return self.codebase
+
     @classmethod
     def from_row(cls, row) -> "QueueItem":
         (
