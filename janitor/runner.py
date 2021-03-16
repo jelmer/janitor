@@ -1508,7 +1508,7 @@ async def handle_assign(request):
             resume_branch = None
             vcs_type = item.vcs_type
         else:
-            active_run.main_branch_url = full_branch_url(main_branch)
+            active_run.main_branch_url = full_branch_url(main_branch).rstrip('/')
             vcs_type = get_vcs_abbreviation(main_branch.repository)
             if not item.refresh:
                 resume_branch = await open_resume_branch(
