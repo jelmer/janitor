@@ -423,3 +423,26 @@ order by package.name, debian_build.version desc
 """,
         suite,
     )
+
+
+async def get_proposal_info(
+    conn: asyncpg.Connection, url
+) -> Tuple[Optional[bytes], str, str, str]:
+    row = await conn.fetchrow(
+        """\
+SELECT
+    package.maintainer_email,
+    merge_proposal.revision,
+    merge_proposal.status,
+    package.name
+FROM
+    merge_proposal
+LEFT JOIN package ON merge_proposal.package = package.name
+WHERE
+    merge_proposal.url = $1
+""",
+        url,
+    )
+    if not row:
+        raise KeyError
+    return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[0])
