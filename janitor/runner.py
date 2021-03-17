@@ -139,7 +139,7 @@ class BuilderResult(object):
 
     kind: str
 
-    def from_directory(self, path, codebase):
+    def from_directory(self, path, package):
         raise NotImplementedError(self.from_directory)
 
     async def store(self, conn, run_id, package):

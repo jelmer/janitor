@@ -6,44 +6,45 @@ CREATE TABLE IF NOT EXISTS upstream (
    primary key(name)
 );
 CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unrel');
-CREATE DOMAIN package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
+CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE vcs_type AS ENUM('bzr', 'git', 'svn', 'mtn', 'hg', 'arch', 'cvs', 'darcs');
 CREATE TABLE IF NOT EXISTS codebase (
    name text not null primary key,
    branch_url text,
    subpath text,
    vcs_last_revision text,
-   vcs_type vcs_type,
-   removed boolean default false
+   vcs_type vcs_type
 );
 CREATE UNIQUE INDEX ON codebase (name);
 CREATE INDEX ON codebase (branch_url);
 CREATE TABLE IF NOT EXISTS package (
-   name package_name not null primary key,
+   name debian_package_name not null primary key,
    distribution distribution_name not null,
+
+   -- TODO(jelmer): Move these to codebase 
+   -- codebase text references codebase(name)
+   vcs_type vcs_type,
    branch_url text,
    subpath text,
+   vcs_last_revision text,
+
    maintainer_email text not null,
    uploader_emails text[] not null,
    archive_version debversion,
-   vcs_type vcs_type,
    vcs_url text,
    vcs_browse text,
-   vcs_last_revision text,
    popcon_inst integer,
    removed boolean default false,
    vcswatch_status vcswatch_status,
    vcswatch_version debversion,
    in_base boolean,
    unique(distribution, name)
-) INHERITS (codebase);
+);
 CREATE INDEX ON package (removed);
 CREATE INDEX ON package (vcs_url);
 CREATE INDEX ON package (branch_url);
 CREATE INDEX ON package (maintainer_email);
 CREATE INDEX ON package (uploader_emails);
-CREATE TABLE IF NOT EXISTS upstream_codebase () INHERITS (codebase);
-CREATE UNIQUE INDEX ON upstream_codebase (name);
 CREATE TYPE merge_proposal_status AS ENUM ('open', 'closed', 'merged', 'applied', 'abandoned');
 CREATE TABLE IF NOT EXISTS merge_proposal (
    package text,

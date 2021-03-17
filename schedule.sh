@@ -1,6 +1,6 @@
 #!/bin/bash
 export PYTHONPATH="$PYTHONPATH:$(pwd)/lintian-brush:$(pwd)/silver-platter:$(pwd)/breezy"
-./upstream-codebases.py | python3 -m janitor.codebase_metadata "$@"
+./upstream-codebases.py | python3 -m janitor.package_metadata --distribution=upstream "$@" 
 ./udd-package-metadata.py | python3 -m janitor.package_metadata --distribution=unstable "$@"
 (
    python3 ./unchanged-candidates.py

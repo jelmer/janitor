@@ -7,7 +7,7 @@ from janitor import state
 
 async def iter_debianize_candidates(db, packages=None):
     async with db.acquire() as conn:
-        for (source,) in await conn.fetch("SELECT name FROM upstream_codebase"):
+        for (source,) in await conn.fetch("SELECT name FROM package WHERE name LIKE '%-upstream'"):
             if packages is not None and source not in packages:
                 continue
             candidate = Candidate()

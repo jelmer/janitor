@@ -19,8 +19,9 @@
 
 from typing import List, Optional, AsyncIterator, Tuple
 
-from janitor.codebase_metadata_pb2 import CodebaseList
+from janitor.package_metadata_pb2 import PackageList
 from janitor.udd import UDD
+from janitor.vcs import unsplit_vcs_url
 
 
 async def iter_upstream_codebases(
@@ -54,12 +55,12 @@ async def main():
     async for (name, branch_url, subpath) in iter_upstream_codebases(
         udd, args.packages
     ):
-        cl = CodebaseList()
-        codebase = cl.codebase.add()
-        codebase.name = name
-        codebase.branch_url = branch_url
-        codebase.subpath = subpath
-        print(cl)
+        pl = PackageList()
+        package = pl.package.add()
+        package.name = name
+        package.vcs_url = unsplit_vcs_url(branch_url, None, subpath)
+        package.maintainer_email = "dummy@example.com"
+        print(pl)
 
 
 if __name__ == "__main__":
