@@ -58,6 +58,9 @@ async def main():
         pl = PackageList()
         package = pl.package.add()
         package.name = name
+        # TODO(jelmer): Detect this somehow, or leave something further
+        # down to figure it out.
+        package.vcs_type = 'Git'
         package.vcs_url = unsplit_vcs_url(branch_url, None, subpath)
         package.maintainer_email = "dummy@example.com"
         print(pl)
