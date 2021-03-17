@@ -330,71 +330,72 @@ class DebianTarget(Target):
             session = SchrootSession(self.chroot)
         else:
             session = PlainSession()
-        apt = AptManager(session)
-        if self.build_command:
-            if self.last_build_version:
-                # Update the changelog entry with the previous build version;
-                # This allows us to upload incremented versions for subsequent
-                # runs.
-                tree_set_changelog_version(
-                    ws.local_tree, self.last_build_version, subpath
-                )
+        with session:
+            apt = AptManager(session)
+            if self.build_command:
+                if self.last_build_version:
+                    # Update the changelog entry with the previous build version;
+                    # This allows us to upload incremented versions for subsequent
+                    # runs.
+                    tree_set_changelog_version(
+                        ws.local_tree, self.last_build_version, subpath
+                    )
 
-            source_date_epoch = ws.local_tree.branch.repository.get_revision(
-                ws.main_branch.last_revision()
-            ).timestamp
-            try:
-                if not self.build_suffix:
-                    (changes_name, cl_version) = build_once(
-                        ws.local_tree,
-                        self.build_distribution,
-                        output_directory,
-                        self.build_command,
-                        subpath=subpath,
-                        source_date_epoch=source_date_epoch,
-                    )
-                else:
-                    (changes_name, cl_version) = build_incrementally(
-                        ws.local_tree,
-                        apt,
-                        "~" + self.build_suffix,
-                        self.build_distribution,
-                        output_directory,
-                        build_command=self.build_command,
-                        build_changelog_entry="Build for debian-janitor apt repository.",
-                        committer=env.get("COMMITTER"),
-                        subpath=subpath,
-                        source_date_epoch=source_date_epoch,
-                    )
-            except MissingUpstreamTarball:
-                raise WorkerFailure(
-                    "build-missing-upstream-source", "unable to find upstream source"
-                )
-            except MissingChangesFile as e:
-                raise WorkerFailure(
-                    "build-missing-changes",
-                    "Expected changes path %s does not exist." % e.filename,
-                    details={'filename': e.filename}
-                )
-            except SbuildFailure as e:
-                if e.error is not None:
-                    if e.stage and not e.error.is_global:
-                        code = "%s-%s" % (e.stage, e.error.kind)
-                    else:
-                        code = e.error.kind
-                elif e.stage is not None:
-                    code = "build-failed-stage-%s" % e.stage
-                else:
-                    code = "build-failed"
+                source_date_epoch = ws.local_tree.branch.repository.get_revision(
+                    ws.main_branch.last_revision()
+                ).timestamp
                 try:
-                    if e.error is not None:
-                        details = e.error.json()
+                    if not self.build_suffix:
+                        (changes_name, cl_version) = build_once(
+                            ws.local_tree,
+                            self.build_distribution,
+                            output_directory,
+                            self.build_command,
+                            subpath=subpath,
+                            source_date_epoch=source_date_epoch,
+                        )
                     else:
+                        (changes_name, cl_version) = build_incrementally(
+                            ws.local_tree,
+                            apt,
+                            "~" + self.build_suffix,
+                            self.build_distribution,
+                            output_directory,
+                            build_command=self.build_command,
+                            build_changelog_entry="Build for debian-janitor apt repository.",
+                            committer=env.get("COMMITTER"),
+                            subpath=subpath,
+                            source_date_epoch=source_date_epoch,
+                        )
+                except MissingUpstreamTarball:
+                    raise WorkerFailure(
+                        "build-missing-upstream-source", "unable to find upstream source"
+                    )
+                except MissingChangesFile as e:
+                    raise WorkerFailure(
+                        "build-missing-changes",
+                        "Expected changes path %s does not exist." % e.filename,
+                        details={'filename': e.filename}
+                    )
+                except SbuildFailure as e:
+                    if e.error is not None:
+                        if e.stage and not e.error.is_global:
+                            code = "%s-%s" % (e.stage, e.error.kind)
+                        else:
+                            code = e.error.kind
+                    elif e.stage is not None:
+                        code = "build-failed-stage-%s" % e.stage
+                    else:
+                        code = "build-failed"
+                    try:
+                        if e.error is not None:
+                            details = e.error.json()
+                        else:
+                            details = None
+                    except NotImplementedError:
                         details = None
-                except NotImplementedError:
-                    details = None
-                raise WorkerFailure(code, e.description, details=details)
-            logging.info("Built %s", changes_name)
+                    raise WorkerFailure(code, e.description, details=details)
+                logging.info("Built %s", changes_name)
 
     def directory_name(self):
         return self.package
