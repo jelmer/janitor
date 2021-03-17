@@ -13,17 +13,16 @@ message PackageMetadata {
 
    optional string vcs_type = 5;
    optional string vcs_url = 6;
-   // 7 was vcs_branch
-   optional string vcs_browser = 8;
+   optional string vcs_browser = 7;
 
-   optional string commit_id = 9;
-   optional string vcswatch_status = 10;
-   optional string archive_version = 11;
-   optional string vcswatch_version = 12;
+   optional string commit_id = 8;
+   optional string vcswatch_status = 9;
+   optional string archive_version = 10;
+   optional string vcswatch_version = 11;
 
-   optional bool in_base = 14;
+   optional bool in_base = 13;
 
-   optional bool removed = 13 [default=false];
+   optional bool removed = 12 [default=false];
 };
 
 message Removal {
