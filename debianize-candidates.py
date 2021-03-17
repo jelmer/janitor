@@ -5,6 +5,9 @@ from janitor.config import read_config
 from janitor import state
 
 
+DEFAULT_VALUE_DEBIANIZE = 25
+
+
 async def iter_debianize_candidates(db, packages=None):
     async with db.acquire() as conn:
         for (source,) in await conn.fetch("SELECT name FROM package WHERE name LIKE '%-upstream'"):
@@ -39,6 +42,7 @@ async def main():
     async for candidate in iter_debianize_candidates(db, args.packages or None):
         cl = CandidateList()
         cl.candidate.append(candidate)
+        cl.value = DEFAULT_VALUE_DEBIANIZE
         print(cl)
 
 
