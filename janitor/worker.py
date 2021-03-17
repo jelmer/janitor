@@ -271,6 +271,7 @@ class DebianTarget(Target):
         self.build_suffix = env.get("BUILD_SUFFIX")
         self.last_build_version = env.get("LAST_BUILD_VERSION")
         self.package = env["PACKAGE"]
+        self.chroot = env.get("CHROOT")
 
     def parse_args(self, argv):
         changer_cls: Type[DebianChanger]
@@ -322,9 +323,14 @@ class DebianTarget(Target):
     def build(self, ws, subpath, output_directory, env):
         from ognibuild.debian.apt import AptManager
         from ognibuild.session.plain import PlainSession
+        from ognibuild.session.schroot import SchrootSession
 
         # TODO(jelmer): this should use the appropriate schrootsession
-        apt = AptManager(PlainSession())
+        if self.chroot:
+            session = SchrootSession(self.chroot)
+        else:
+            session = PlainSession()
+        apt = AptManager(session)
         if self.build_command:
             if self.last_build_version:
                 # Update the changelog entry with the previous build version;
