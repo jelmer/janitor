@@ -20,15 +20,16 @@ from debian.changelog import Version
 import shlex
 from typing import Optional, Dict, List, Tuple
 from breezy import urlutils
-from janitor.state import Codebase
 
 
 async def popcon(conn: asyncpg.Connection):
     return await conn.fetch("SELECT name, popcon_inst FROM package")
 
 
-class Package(Codebase):
+class Package(object):
 
+    name: str
+    branch_url: str
     maintainer_email: str
     uploader_emails: List[str]
     subpath: Optional[str]

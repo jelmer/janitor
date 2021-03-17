@@ -70,7 +70,7 @@ async def main():
     async with db.acquire() as conn:
         known_packages = set()
         async with conn.transaction():
-            async for record in conn.cursor('SELECT name FROM codebase'):
+            async for record in conn.cursor('SELECT name FROM package'):
                 known_packages.add(record[0])
 
         logging.info("Adding candidates.")
