@@ -258,9 +258,6 @@ class Target(object):
     def additional_colocated_branches(self, main_branch):
         return []
 
-    def check_sensible(self, local_tree, subpath):
-        pass
-
     def directory_name(self) -> str:
         raise NotImplementedError(self.directory_name)
 
@@ -321,19 +318,6 @@ class DebianTarget(Target):
 
     def additional_colocated_branches(self, main_branch):
         return pick_additional_colocated_branches(main_branch)
-
-    def check_sensible(self, local_tree, subpath):
-        if not control_file_present(local_tree, subpath):
-            if local_tree.has_filename(
-                os.path.join(subpath, "debian", "debcargo.toml")
-            ):
-                # debcargo packages are fine too
-                pass
-            else:
-                raise WorkerFailure(
-                    "missing-control-file",
-                    "missing control file: debian/control"
-                )
 
     def build(self, ws, subpath, output_directory, env):
         from ognibuild.debian.apt import AptManager
@@ -508,8 +492,6 @@ def process_package(
         metadata["revision"] = metadata[
             "main_branch_revision"
         ] = ws.main_branch.last_revision().decode()
-
-        target.check_sensible(ws.local_tree, subpath)
 
         try:
             run_pre_check(ws.local_tree, pre_check_command)
