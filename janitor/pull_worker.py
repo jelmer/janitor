@@ -259,10 +259,9 @@ def run_worker(
                         "result-push-failed", "Failed to push result branch: %s" % e
                     )
                 except RemoteGitError as e:
-                    if e.msg == 'missing necessary objects':
+                    if str(e) == 'missing necessary objects':
                         raise WorkerFailure(
-                            'git-missing-necessary-objects',
-                            e.msg)
+                            'git-missing-necessary-objects', str(e))
                     else:
                         raise
 
