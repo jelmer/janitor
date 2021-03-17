@@ -50,6 +50,7 @@ from breezy.errors import (
     InvalidHttpResponse,
     UnexpectedHttpStatus,
 )
+from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir
 from breezy.transport import Transport
 
@@ -257,6 +258,14 @@ def run_worker(
                     raise WorkerFailure(
                         "result-push-failed", "Failed to push result branch: %s" % e
                     )
+                except RemoteGitError as e:
+                    if e.msg == 'missing necessary objects':
+                        raise WorkerFailure(
+                            'git-missing-necessary-objects',
+                            e.msg)
+                    else:
+                        raise
+
                 logging.info("Pushing packaging branch cache to %s", cached_branch_url)
                 push_branch(
                     ws.local_tree.branch,
