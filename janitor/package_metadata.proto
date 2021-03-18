@@ -25,12 +25,12 @@ message PackageMetadata {
    optional bool removed = 12 [default=false];
 };
 
-message Removal {
+message PackageRemoval {
    optional string name = 1;
    optional string version = 2;
 };
 
 message PackageList {
     repeated PackageMetadata package = 1;
-    repeated Removal removal = 2;
+    repeated PackageRemoval removal = 2;
 };
