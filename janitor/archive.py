@@ -126,9 +126,9 @@ async def get_packages(db, info_provider, suite_name, component, arch):
     # TODO(jelmer): Actually query component/arch
     async with db.acquire() as conn:
         rows = await conn.fetch(
-            "SELECT DISTINCT ON (package) package, id, build_version FROM run "
-            "WHERE suite = $1 AND result_code = 'success' "
-            "ORDER BY package, finish_time DESC",
+            "SELECT DISTINCT ON (source) source, id, debian_build.version FROM run "
+            "WHERE distribution = $1 "
+            "ORDER BY source, version DESC",
             suite_name,
         )
 

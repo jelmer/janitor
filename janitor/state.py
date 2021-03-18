@@ -417,7 +417,8 @@ async def get_unchanged_run(conn: asyncpg.Connection, package, main_branch_revis
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
-    build_version, build_distribution, result_code,
+    debian_build.version AS build_version,
+    debian_build.distribution AS build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
@@ -426,6 +427,8 @@ SELECT
     result_tags
 FROM
     last_runs
+LEFT JOIN
+    debian_build ON debian_build.run_id = last_runs.id
 WHERE
     suite = 'unchanged' AND revision = $1 AND
     package = $2 AND
@@ -472,7 +475,8 @@ async def _iter_runs(
     query = """
 SELECT
     id, command, start_time, finish_time, description, package,
-    build_version, build_distribution, result_code,
+    debian_build.version AS build_version,
+    debian_build.distribution AS build_distribution, result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
@@ -481,6 +485,8 @@ SELECT
     result_tags
 FROM
     run
+LEFT JOIN
+    debian_build ON debian_build.run_id = run.id
 """
     conditions = []
     args = []
@@ -558,8 +564,8 @@ SELECT
     run.finish_time,
     run.description,
     run.package,
-    run.build_version,
-    run.build_distribution,
+    debian_build.version AS build_version,
+    debian_build.distribution AS build_distribution,
     run.result_code,
     run.branch_name,
     run.main_branch_revision,
@@ -582,6 +588,7 @@ FROM
 LEFT JOIN new_result_branch ON
     new_result_branch.revision = merge_proposal.revision
 LEFT JOIN run ON run.id = new_result_branch.run_id
+LEFT JOIN debian_build ON run.id = debian_build.run_id
 """
     if package:
         if isinstance(package, list):
@@ -862,8 +869,8 @@ SELECT
   finish_time,
   description,
   package,
-  build_version,
-  build_distribution,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
   result_code,
   branch_name,
   main_branch_revision,
@@ -882,6 +889,7 @@ SELECT
   result_tags
 FROM
   run
+LEFT JOIN debian_build ON run.id = debian_build.run_id
 WHERE
   package = $1 AND suite = $2
 ORDER BY start_time DESC
@@ -904,8 +912,8 @@ SELECT
   finish_time,
   description,
   package,
-  build_version,
-  build_distribution,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
   result_code,
   branch_name,
   main_branch_revision,
@@ -924,6 +932,7 @@ SELECT
   result_tags
 FROM
   last_unabsorbed_runs
+LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
 WHERE package = $1 AND suite = $2
 ORDER BY package, suite DESC, start_time DESC
 LIMIT 1
@@ -946,8 +955,8 @@ SELECT DISTINCT ON (package)
   finish_time,
   description,
   package,
-  build_version,
-  build_distribution,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
   result_code,
   branch_name,
   main_branch_revision,
@@ -966,6 +975,7 @@ SELECT DISTINCT ON (package)
   result_tags
 FROM
   last_unabsorbed_runs
+LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
 """
     args = []
     if suite is not None or packages is not None:
@@ -1014,8 +1024,8 @@ SELECT
   finish_time,
   description,
   package,
-  build_version,
-  build_distribution,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
   result_code,
   branch_name,
   main_branch_revision,
@@ -1033,6 +1043,7 @@ SELECT
    revision) FROM new_result_branch WHERE run_id = id),
   result_tags
 FROM last_runs
+LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
 """
     where = []
     args: List[Any] = []
@@ -1338,7 +1349,7 @@ async def get_merge_proposal_run(
     query = """
 SELECT
     run.id, run.command, run.start_time, run.finish_time, run.description,
-    run.package, run.build_version, run.build_distribution, run.result_code,
+    run.package, debian_build.version, debian_build.distribution, run.result_code,
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
     run.logfilenames, run.review_status, run.review_comment, run.worker,
@@ -1347,6 +1358,7 @@ SELECT
      rb.remote_name, rb.base_revision, rb.revision
 FROM new_result_branch rb
 RIGHT JOIN run ON rb.run_id = run.id
+LEFT JOIN debian_build ON run.id = debian_build.run_id
 WHERE rb.revision IN (
     SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
 ORDER BY run.finish_time ASC
