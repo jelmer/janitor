@@ -382,10 +382,10 @@ class JanitorResult(object):
             "description": self.description,
             "code": self.code,
             "failure_details": self.failure_details,
-            "target": {
+            "target": ({
                 "name": self.builder_result.kind,
                 "details": self.builder_result.json(),
-            },
+            } if self.builder_result else {}),
             "legacy_branch_name": self.legacy_branch_name,
             "logfilenames": self.logfilenames,
             "subworker": self.subworker_result,
@@ -1387,7 +1387,8 @@ class QueueProcessor(object):
                     result_tags=result.tags,
                     failure_details=result.failure_details,
                 )
-                await result.builder_result.store(conn, result.log_id, item.package)
+                if result.builder_result:
+                    await result.builder_result.store(conn, result.log_id, item.package)
                 await state.drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[active_run.log_id]
