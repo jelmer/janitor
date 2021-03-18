@@ -438,6 +438,7 @@ def process_package(
     env: Dict[str, str],
     command: List[str],
     output_directory: str,
+    target: str,
     metadata: Any,
     build_command: Optional[str] = None,
     pre_check_command: Optional[str] = None,
@@ -453,9 +454,13 @@ def process_package(
 
     metadata["command"] = command
 
-    target = DebianTarget(env, build_command=build_command)
+    if target == "debian":
+        build_target = DebianTarget(env, build_command=build_command)
+    else:
+        raise WorkerFailure(
+            'target-unsupported', 'The target %r is not supported' % target)
 
-    target.parse_args(command)
+    build_target.parse_args(command)
 
     logging.info("Opening branch at %s", vcs_url)
     try:
@@ -507,9 +512,9 @@ def process_package(
         main_branch,
         resume_branch=resume_branch,
         cached_branch=cached_branch,
-        path=os.path.join(output_directory, target.directory_name()),
+        path=os.path.join(output_directory, build_target.directory_name()),
         additional_colocated_branches=(
-            target.additional_colocated_branches(main_branch)
+            build_target.additional_colocated_branches(main_branch)
         ),
     ) as ws:
         logging.info('Workspace ready - starting.')
@@ -553,7 +558,7 @@ def process_package(
         reporter.report_remote("origin", main_branch.user_url)
 
         try:
-            changer_result = target.make_changes(
+            changer_result = build_target.make_changes(
                 ws.local_tree, subpath, reporter, committer=committer
             )
         except WorkerFailure as e:
@@ -575,7 +580,8 @@ def process_package(
             raise WorkerFailure("post-check-failed", str(e), details={
                 'command': post_check_command})
 
-        target_details = target.build(ws, subpath, output_directory, env)
+        build_target_details = build_target.build(
+            ws, subpath, output_directory, env)
 
         branches: Optional[List[Tuple[str, str, bytes, bytes]]]
         if changer_result.branches is not None:
@@ -591,7 +597,7 @@ def process_package(
             changer_result.value,
             branches,
             changer_result.tags,
-            target.name, target_details,
+            build_target.name, build_target_details,
         )
         yield ws, wr
 
@@ -655,6 +661,10 @@ def main(argv=None):
         action="append",
         type=str,
     )
+    parser.add_argument(
+        "--target",
+        type=str,
+        help="Build target")
     parser.add_argument("--build-distribution", type=str, help="Build distribution.")
 
     parser.add_argument("command", nargs=argparse.REMAINDER)
@@ -689,7 +699,8 @@ def main(argv=None):
             os.environ,
             args.command,
             output_directory,
-            metadata,
+            metadata=metadata,
+            target=args.target,
             build_command=args.build_command,
             pre_check_command=args.pre_check,
             post_check_command=args.post_check,

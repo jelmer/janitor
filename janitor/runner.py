@@ -464,6 +464,7 @@ async def invoke_subprocess_worker(
     env: Dict[str, str],
     command: List[str],
     output_directory: str,
+    target: str,
     resume: Optional["ResumeInfo"] = None,
     cached_branch_url: Optional[str] = None,
     pre_check: Optional[str] = None,
@@ -486,6 +487,7 @@ async def invoke_subprocess_worker(
         worker_module,
         "--branch-url=%s" % main_branch_url,
         "--output-directory=%s" % output_directory,
+        "--target=%s" % target,
     ]
     if ":" in worker_kind:
         args.append("--host=%s" % worker_kind.split(":")[1])
@@ -999,6 +1001,7 @@ class ActiveLocalRun(ActiveRun):
                         build_command=build_command,
                         log_path=log_path,
                         subpath=self.queue_item.subpath,
+                        target="debian"
                     ),
                     timeout=overall_timeout,
                 )
@@ -1574,7 +1577,7 @@ async def handle_assign(request):
             "cached_url": cached_branch_url,
         },
         "resume": resume.json() if resume else None,
-        "build": {"environment": build_env},
+        "build": {"target": "debian", "environment": build_env},
         "env": env,
         "command": item.command,
         "suite": item.suite,

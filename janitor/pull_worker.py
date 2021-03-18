@@ -190,6 +190,7 @@ def run_worker(
     vcs_manager,
     legacy_branch_name,
     suite,
+    target,
     build_command=None,
     pre_check_command=None,
     post_check_command=None,
@@ -209,7 +210,8 @@ def run_worker(
                 env,
                 command,
                 output_directory,
-                metadata,
+                metadata=metadata,
+                target=target,
                 build_command=build_command,
                 pre_check_command=pre_check_command,
                 post_check_command=post_check_command,
@@ -550,6 +552,7 @@ async def main(argv=None):
             resume_branches = None
         cached_branch_url = assignment["branch"].get("cached_url")
         command = assignment["command"]
+        target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 
         vcs_manager = RemoteVcsManager(assignment["vcs_manager"])
@@ -590,6 +593,7 @@ async def main(argv=None):
                         vcs_manager,
                         legacy_branch_name,
                         suite,
+                        target=target,
                         build_command=args.build_command,
                         pre_check_command=args.pre_check,
                         post_check_command=args.post_check,
