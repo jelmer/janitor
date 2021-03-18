@@ -542,12 +542,15 @@ class GenericTarget(Target):
 
         if self.chroot:
             session = SchrootSession(self.chroot)
+            logging.info('Using schroot %s', self.chroot)
         else:
             session = PlainSession()
         with session:
             resolver = auto_resolver(session)
             fixers = [InstallFixer(resolver)]
-            bss = list(detect_buildsystems(ws.local_tree.abspath(subpath)))
+            external_dir, internal_dir = session.setup_from_vcs(ws.local_tree)
+            bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
+            session.chdir(os.path.join(internal_dir, subpath))
             run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
         return {}
 
