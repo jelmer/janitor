@@ -1317,8 +1317,6 @@ class QueueProcessor(object):
                     result.context,
                     result.main_branch_revision,
                     result.code,
-                    build_version=result.builder_result.build_version,
-                    build_distribution=result.builder_result.build_distribution,
                     branch_name=result.legacy_branch_name,
                     revision=result.revision,
                     subworker_result=result.subworker_result,
