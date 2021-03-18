@@ -69,10 +69,6 @@ CREATE TABLE IF NOT EXISTS run (
    -- Disabled for now: requires postgresql > 12
    -- duration interval generated always as (finish_time - start_time) stored,
    package text not null,
-   -- Debian version text of the built package
-   build_version debversion,
-   -- Distribution the package was built for (e.g. "lintian-fixes")
-   build_distribution text,
    result_code text not null,
    instigated_context text,
    -- Some subworker-specific indication of what we attempted to do
