@@ -20,6 +20,7 @@ async def iter_debianize_candidates(db, packages=None):
             # TODO(jelmer): Set value
             # candidate.value = None
             candidate.suite = "debianize"
+            candidate.value = DEFAULT_VALUE_DEBIANIZE
             yield candidate
 
 
@@ -42,7 +43,6 @@ async def main():
     async for candidate in iter_debianize_candidates(db, args.packages or None):
         cl = CandidateList()
         cl.candidate.append(candidate)
-        cl.value = DEFAULT_VALUE_DEBIANIZE
         print(cl)
 
 
