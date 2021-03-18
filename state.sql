@@ -88,7 +88,6 @@ CREATE TABLE IF NOT EXISTS run (
    worker text not null,
    -- Link to worker-specific status page
    worker_link text,
-   result_branches result_branch[],
    result_tags result_tag[],
    subpath text,
    failure_details json,
