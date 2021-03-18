@@ -115,7 +115,9 @@ suite {
 suite {
   name: "upstream-unchanged"
   branch_name: "upstream-unchanged"
-  chroot: "unstable-amd64-sbuild"
+  generic_build {
+    chroot: "unstable-amd64-sbuild"
+  }
 }
 
 oauth2_provider {
