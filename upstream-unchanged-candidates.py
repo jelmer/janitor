@@ -17,7 +17,7 @@ async def iter_debianize_candidates(db, packages=None):
             candidate.package = source
             # TODO(jelmer): Set context
             # candidate.context = None
-            candidate.suite = "debianize"
+            candidate.suite = "upstream-unchanged"
             candidate.value = DEFAULT_VALUE_DEBIANIZE
             yield candidate
 
@@ -25,7 +25,7 @@ async def iter_debianize_candidates(db, packages=None):
 async def main():
     import argparse
 
-    parser = argparse.ArgumentParser(prog="debianize-candidates")
+    parser = argparse.ArgumentParser(prog="upstream-unchanged-candidates")
     parser.add_argument("packages", nargs="*", default=None)
 
     parser.add_argument(

@@ -99,14 +99,6 @@ async def store_run(
       result_tags: Result tags
       failure_details: Result failure details
     """
-    if result_branches is None:
-        result_branches_updated = None
-    else:
-        result_branches_updated = [
-            (role, n, br.decode("utf-8"), r.decode("utf-8"))
-            for (role, n, br, r) in result_branches
-        ]
-
     if result_tags is None:
         result_tags_updated = None
     else:
@@ -118,9 +110,9 @@ async def store_run(
             "start_time, finish_time, package, instigated_context, context, "
             "main_branch_revision, "
             "branch_name, revision, result, suite, branch_url, logfilenames, "
-            "value, worker, worker_link, result_branches, result_tags, "
+            "value, worker, worker_link, result_tags, "
             "failure_details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-            "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+            "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
             run_id,
             " ".join(command),
             description,
@@ -140,7 +132,6 @@ async def store_run(
             value,
             worker_name,
             worker_link,
-            result_branches_updated,
             result_tags_updated,
             failure_details,
         )

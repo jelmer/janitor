@@ -33,7 +33,7 @@ from silver_platter.debian import (
 from . import state
 from .debian import state as debian_state
 from .config import read_config
-from .package_metadata_pb2 import PackageList, PackageMetadata, Removal
+from .package_metadata_pb2 import PackageList, PackageMetadata, PackageRemoval
 from debmutate.vcs import (
     split_vcs_url,
     unsplit_vcs_url,
@@ -135,7 +135,7 @@ async def update_package_metadata(
     )
 
 
-async def mark_removed_packages(conn, distribution: str, removals: List[Removal]):
+async def mark_removed_packages(conn, distribution: str, removals: List[PackageRemoval]):
     existing_packages = {
         package.name: package for package in await debian_state.iter_packages(conn)
     }
@@ -149,7 +149,7 @@ async def mark_removed_packages(conn, distribution: str, removals: List[Removal]
     await debian_state.update_removals(conn, distribution, filtered_removals)
 
 
-def iter_packages_from_script(stdin) -> Tuple[List[PackageMetadata], List[Removal]]:
+def iter_packages_from_script(stdin) -> Tuple[List[PackageMetadata], List[PackageRemoval]]:
     package_list = text_format.Parse(stdin.read(), PackageList())
     return package_list.package, package_list.removal
 
