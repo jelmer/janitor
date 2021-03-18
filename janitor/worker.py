@@ -189,11 +189,15 @@ class WorkerResult(object):
         value: Optional[int],
         branches: Optional[List[Tuple[str, str, bytes, bytes]]],
         tags: Optional[Dict[str, bytes]],
+        target: str,
+        target_details: Optional[Any],
     ) -> None:
         self.description = description
         self.value = value
         self.branches = branches
         self.tags = tags
+        self.target = target
+        self.target_details = target_details
 
     def json(self):
         return {
@@ -204,6 +208,10 @@ class WorkerResult(object):
                 for (f, n, br, r) in self.branches
             ],
             "tags": [(f, n, r.decode("utf-8")) for (f, n, r) in self.tags],
+            "target": {
+                "name": self.target,
+                "details": self.target_details,
+            },
         }
 
 
@@ -252,6 +260,8 @@ class WorkerReporter(ChangerReporter):
 class Target(object):
     """A build target."""
 
+    name: str
+
     def build(self, ws, subpath, output_directory, env):
         raise NotImplementedError(self.build)
 
@@ -264,6 +274,8 @@ class Target(object):
 
 class DebianTarget(Target):
     """Debian target."""
+
+    name: str
 
     def __init__(self, env, build_command):
         self.build_distribution = env.get("BUILD_DISTRIBUTION")
@@ -325,7 +337,6 @@ class DebianTarget(Target):
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
 
-        # TODO(jelmer): this should use the appropriate schrootsession
         if self.chroot:
             session = SchrootSession(self.chroot)
         else:
@@ -396,6 +407,19 @@ class DebianTarget(Target):
                         details = None
                     raise WorkerFailure(code, e.description, details=details)
                 logging.info("Built %s", changes_name)
+        lintian_result = self._run_lintian(output_directory, changes_name)
+        return {'lintian': lintian_result}
+
+    def _run_lintian(self, output_directory, changes_name):
+        try:
+            lintian_output = subprocess.check_output(
+                ['lintian', '--exp-output=format=json',
+                 os.path.join(output_directory, changes_name)])
+        except subprocess.CalledProcessError:
+            logging.warning('lintian failed to run.')
+            return None
+        else:
+            return json.loads(lintian_output)
 
     def directory_name(self):
         return self.package
@@ -403,6 +427,8 @@ class DebianTarget(Target):
 
 class GenericBuildTarget(Target):
     """Generic build target."""
+
+    name = "generic"
 
 
 @contextmanager
@@ -549,7 +575,7 @@ def process_package(
             raise WorkerFailure("post-check-failed", str(e), details={
                 'command': post_check_command})
 
-        target.build(ws, subpath, output_directory, env)
+        target_details = target.build(ws, subpath, output_directory, env)
 
         branches: Optional[List[Tuple[str, str, bytes, bytes]]]
         if changer_result.branches is not None:
@@ -565,6 +591,7 @@ def process_package(
             changer_result.value,
             branches,
             changer_result.tags,
+            target.name, target_details,
         )
         yield ws, wr
 
