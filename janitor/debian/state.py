@@ -316,14 +316,15 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
 
 
 async def get_last_build_version(
-    conn: asyncpg.Connection, package: str, suite: str
+    conn: asyncpg.Connection, package: str, distribution: str
 ) -> Optional[Version]:
     return await conn.fetchval(
-        "SELECT build_version FROM run WHERE "
-        "build_version IS NOT NULL AND package = $1 AND "
-        "build_distribution = $2 ORDER BY build_version DESC",
+        "SELECT version FROM run"
+        "WHERE "
+        "version IS NOT NULL AND source = $1 AND "
+        "distribution = $2 ORDER BY version DESC",
         package,
-        suite,
+        distribution,
     )
 
 
@@ -337,9 +338,10 @@ async def version_available(
 SELECT
   package,
   suite,
-  build_version
+  debian_build.version
 FROM
   run
+LEFT JOIN debian_build ON run.id = debian_build.run_id
 WHERE
   package = $1 AND (suite = $2 OR suite = 'unchanged')
   AND %(version_match1)s
@@ -357,7 +359,7 @@ WHERE name = $1 AND %(version_match2)s
     args = [package, suite]
     if version:
         query = query % {
-            "version_match1": "build_version %s $3" % (version[0],),
+            "version_match1": "debian_build.version %s $3" % (version[0],),
             "version_match2": "archive_version %s $3" % (version[0],),
         }
         args.append(str(version[1]))

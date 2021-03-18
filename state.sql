@@ -348,8 +348,8 @@ CREATE OR REPLACE VIEW publishable AS
   run.finish_time,
   run.description,
   run.package,
-  run.build_version,
-  run.build_distribution,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
   run.result_code,
   run.branch_name,
   run.main_branch_revision,
@@ -382,6 +382,7 @@ FROM
 INNER JOIN package ON package.name = run.package
 INNER JOIN policy ON
     policy.package = run.package AND policy.suite = run.suite
+LEFT JOIN debian_build ON run.id = debian_build.run_id
 WHERE
   result_code = 'success' AND NOT package.removed;
 
