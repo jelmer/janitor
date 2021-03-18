@@ -155,6 +155,8 @@ class BuilderResult(object):
 class Builder(object):
     """Abstract builder class."""
 
+    kind: str
+
     result_cls = BuilderResult
 
 
@@ -163,11 +165,12 @@ class DebianResult(BuilderResult):
     kind = "debian"
 
     def __init__(
-        self, build_version=None, build_distribution=None, changes_filename=None
+        self, build_version=None, build_distribution=None, changes_filename=None, lintian_result=None
     ):
         self.build_version = build_version
         self.build_distribution = build_distribution
         self.changes_filename = changes_filename
+        self.lintian_result = lintian_result
 
     def from_directory(self, path, package):
         self.output_directory = path
@@ -186,15 +189,8 @@ class DebianResult(BuilderResult):
         ]
 
     @classmethod
-    def from_worker_result(cls, worker_result):
-        build_version = worker_result.build_version if worker_result else None
-        build_distribution = worker_result.build_distribution if worker_result else None
-        changes_filename = worker_result.changes_filename if worker_result else None
-        return cls(
-            build_version=build_version,
-            build_distribution=build_distribution,
-            changes_filename=changes_filename,
-        )
+    def from_json(cls, target_details):
+        return cls(lintian_result=target_details.get('lintian'))
 
     async def store(self, conn, run_id, package):
         if self.build_version:
@@ -204,6 +200,7 @@ class DebianResult(BuilderResult):
                 package,
                 self.build_version,
                 self.build_distribution,
+                self.lintian_result,
             )
 
     def json(self):
@@ -211,6 +208,7 @@ class DebianResult(BuilderResult):
             "build_distribution": self.build_distribution,
             "build_version": self.build_version,
             "changes_filename": self.changes_filename,
+            "lintian": self.lintian_result,
         }
 
     def __bool__(self):
@@ -218,6 +216,8 @@ class DebianResult(BuilderResult):
 
 
 class DebianBuilder(Builder):
+
+    kind = "debian"
 
     result_cls = DebianResult
 
@@ -296,8 +296,7 @@ class JanitorResult(object):
             self.subworker_result = worker_result.subworker
             self.revision = worker_result.revision
             self.value = worker_result.value
-            # TODO(jelmer): use Builder.worker_cls here rather than DebianResult
-            self.builder_result = DebianResult.from_worker_result(worker_result)
+            self.builder_result = worker_result.builder_result
             self.branches = worker_result.branches
             self.tags = worker_result.tags
             self.remotes = worker_result.remotes
@@ -308,7 +307,7 @@ class JanitorResult(object):
             self.revision = None
             self.subworker_result = None
             self.value = None
-            self.builder_result = DebianResult()
+            self.builder_result = None
             self.branches = None
             self.tags = None
             self.failure_details = None
@@ -321,8 +320,10 @@ class JanitorResult(object):
             "description": self.description,
             "code": self.code,
             "failure_details": self.failure_details,
-            "target": self.builder_result.kind,
-            "target-details": self.builder_result.json(),
+            "target": {
+                "name": self.builder_result.kind,
+                "details": self.builder_result.json(),
+            },
             "legacy_branch_name": self.legacy_branch_name,
             "logfilenames": self.logfilenames,
             "subworker": self.subworker_result,
@@ -373,13 +374,11 @@ class WorkerResult(object):
         main_branch_revision=None,
         revision=None,
         value=None,
-        changes_filename=None,
-        build_distribution=None,
-        build_version=None,
         branches=None,
         tags=None,
         remotes=None,
         details=None,
+        builder_result=None,
     ):
         self.code = code
         self.description = description
@@ -388,13 +387,11 @@ class WorkerResult(object):
         self.main_branch_revision = main_branch_revision
         self.revision = revision
         self.value = value
-        self.changes_filename = changes_filename
-        self.build_distribution = build_distribution
-        self.build_version = build_version
         self.branches = branches
         self.tags = tags
         self.remotes = remotes
         self.details = details
+        self.builder_result = builder_result
 
     @classmethod
     def from_file(cls, path):
@@ -420,6 +417,13 @@ class WorkerResult(object):
             ]
         if tags:
             tags = [(n, r.encode("utf-8")) for (fn, n, r) in tags]
+        target_kind = worker_result.get("target", {}).get("name")
+        if target_kind == DebianResult.kind:
+            builder_result = DebianResult.from_json(worker_result)
+        elif target_kind is None:
+            builder_result = None
+        else:
+            raise NotImplementedError('unsupported build target %r' % target_kind)
         return cls(
             worker_result.get("code"),
             worker_result.get("description"),
@@ -428,13 +432,11 @@ class WorkerResult(object):
             main_branch_revision,
             revision,
             worker_result.get("value"),
-            worker_result.get("changes_filename"),
-            worker_result.get("build_distribution"),
-            worker_result.get("build_version"),
             branches,
             tags,
             worker_result.get("remotes"),
             worker_result.get("details"),
+            builder_result,
         )
 
 
@@ -1001,7 +1003,7 @@ class ActiveLocalRun(ActiveRun):
                         build_command=build_command,
                         log_path=log_path,
                         subpath=self.queue_item.subpath,
-                        target="debian"
+                        target=builder.kind,
                     ),
                     timeout=overall_timeout,
                 )
@@ -1577,7 +1579,7 @@ async def handle_assign(request):
             "cached_url": cached_branch_url,
         },
         "resume": resume.json() if resume else None,
-        "build": {"target": "debian", "environment": build_env},
+        "build": {"target": builder.kind, "environment": build_env},
         "env": env,
         "command": item.command,
         "suite": item.suite,
