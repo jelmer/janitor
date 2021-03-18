@@ -61,7 +61,14 @@ message Suite {
   // VCS branch name to use
   optional string branch_name = 2;
 
-  optional DebianBuild debian_build = 3;
+  oneof build {
+    DebianBuild debian_build = 3;
+    GenericBuild generic_build = 4;
+  }
+}
+
+message GenericBuild {
+  optional string chroot = 1;
 }
 
 message DebianBuild {
