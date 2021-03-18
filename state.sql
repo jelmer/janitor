@@ -304,7 +304,8 @@ CREATE TABLE debian_build (
  version debversion not null,
  -- Distribution the package was built for (e.g. "lintian-fixes")
  distribution text not null,
- source text not null
+ source text not null,
+ lintian_result json
 );
 
 CREATE TABLE result_branch (

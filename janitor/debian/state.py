@@ -15,11 +15,13 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import asyncpg
-from debian.changelog import Version
 import shlex
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Tuple, Any
+
+
+import asyncpg
 from breezy import urlutils
+from debian.changelog import Version
 
 
 async def popcon(conn: asyncpg.Connection):
@@ -370,14 +372,16 @@ async def store_debian_build(
     source: str,
     version: Version,
     distribution: str,
+    lintian_result: Any
 ):
     await conn.execute(
-        "INSERT INTO debian_build (run_id, source, version, distribution) "
-        "VALUES ($1, $2, $3, $4)",
+        "INSERT INTO debian_build (run_id, source, version, distribution, lintian_result) "
+        "VALUES ($1, $2, $3, $4, $5)",
         run_id,
         source,
         str(version),
         distribution,
+        lintian_result,
     )
 
 
