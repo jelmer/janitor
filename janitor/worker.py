@@ -94,18 +94,32 @@ TRUST_PACKAGE = False
 DEFAULT_BUILD_COMMAND = "sbuild -A -s -v"
 
 
+@contextmanager
+def redirect_output(to_file):
+    old_stdout = os.dup(sys.stdout.fileno())
+    old_stderr = os.dup(sys.stderr.fileno())
+    os.dup2(to_file.fileno(), sys.stdout.fileno())  # type: ignore
+    os.dup2(to_file.fileno(), sys.stderr.fileno())  # type: ignore
+    yield
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os.dup2(old_stdout, sys.stdout.fileno())
+    os.dup2(old_stderr, sys.stderr.fileno())
+
+
 class NewUpstreamChanger(ActualNewUpstreamChanger):
     def create_dist_from_command(self, tree, package, version, target_dir):
         from silver_platter.debian.upstream import DistCommandFailed
 
         try:
-            return create_dist_schroot(
-                tree,
-                subdir=package,
-                target_dir=target_dir,
-                packaging_tree=tree,
-                chroot=self.args.chroot,
-            )
+            with open('dist.log', 'wb') as distf, redirect_output(distf):
+                return create_dist_schroot(
+                    tree,
+                    subdir=package,
+                    target_dir=target_dir,
+                    packaging_tree=tree,
+                    chroot=self.args.chroot,
+                )
         except NoBuildToolsFound:
             logging.info("No build tools found, falling back to simple export.")
             return None
