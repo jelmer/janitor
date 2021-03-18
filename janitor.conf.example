@@ -103,11 +103,19 @@ suite {
 
 suite {
   name: "debianize"
-  archive_description: "Automatic packaging of upstream branches"
-  build_distribution: "debianize"
   branch_name: "debianize"
-  build_suffix: "jan+deb"
-  base_distribution: "unstable"
+  debian_build {
+    archive_description: "Automatic packaging of upstream branches"
+    build_distribution: "debianize"
+    build_suffix: "jan+deb"
+    base_distribution: "unstable"
+  }
+}
+
+suite {
+  name: "upstream-unchanged"
+  branch_name: "upstream-unchanged"
+  chroot: "unstable-amd64-sbuild"
 }
 
 oauth2_provider {

@@ -28,7 +28,7 @@ import signal
 import socket
 import sys
 import tempfile
-from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set
+from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set, Type
 import uuid
 
 from aiohttp import (
@@ -157,7 +157,57 @@ class Builder(object):
 
     kind: str
 
-    result_cls = BuilderResult
+    result_cls: Type[BuilderResult] = BuilderResult
+
+    def json(self):
+        return {}
+
+    @classmethod
+    def from_json(cls, target_details):
+        return cls()
+
+    def from_directory(self, path, package):
+        pass
+
+    def artifact_filenames(self):
+        return []
+
+    async def store(self, conn, run_id, package):
+        pass
+
+
+class GenericResult(BuilderResult):
+    """Generic build result."""
+
+    kind = "generic"
+
+
+class GenericBuilder(Builder):
+    """Generic builder."""
+
+    kind = "generic"
+
+    result_cls = GenericResult
+
+    def __init__(self, distro_config):
+        self.distro_config = distro_config
+
+    async def build_env(self, conn, suite_config, queue_item):
+        env = {}
+        if suite_config.generic_build.chroot:
+            env["CHROOT"] = suite_config.generic_build.chroot
+        elif self.distro_config.chroot:
+            env["CHROOT"] = self.distro_config.chroot
+
+        if self.distro_config.name:
+            env["DISTRIBUTION"] = self.distro_config.name
+
+        env["REPOSITORIES"] = "%s %s/ %s" % (
+            self.distro_config.archive_mirror_uri,
+            self.distro_config.name,
+            " ".join(self.distro_config.component),
+        )
+        return env
 
 
 class DebianResult(BuilderResult):
@@ -264,6 +314,18 @@ class DebianBuilder(Builder):
 
         env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
         return env
+
+
+def get_builder(config, suite_config):
+    if suite_config.HasField('debian_build'):
+        return DebianBuilder(
+            config.distribution,
+            config.apt_location
+            )
+    elif suite_config.HasField('generic_build'):
+        return GenericBuilder(config.distribution)
+    else:
+        raise NotImplementedError('no supported build type')
 
 
 class JanitorResult(object):
@@ -872,7 +934,6 @@ class ActiveLocalRun(ActiveRun):
         artifact_manager: Optional[ArtifactManager],
         worker_kind: str,
         build_command: Optional[str],
-        apt_location: str,
         pre_check=None,
         post_check=None,
         dry_run: bool = False,
@@ -912,7 +973,7 @@ class ActiveLocalRun(ActiveRun):
             )
 
         # This is simple for now, since we only support one distribution..
-        builder = DebianBuilder(config.distribution, apt_location)
+        builder = get_builder(config, suite_config)
 
         if not use_cached_only:
             async with db.acquire() as conn:
@@ -1202,7 +1263,6 @@ class QueueProcessor(object):
         use_cached_only=False,
         overall_timeout=None,
         committer=None,
-        apt_location=None,
         backup_artifact_manager=None,
         backup_logfile_manager=None,
     ):
@@ -1232,7 +1292,6 @@ class QueueProcessor(object):
         self.overall_timeout = overall_timeout
         self.committer = committer
         self.active_runs: Dict[str, ActiveRun] = {}
-        self.apt_location = apt_location
         self.backup_artifact_manager = backup_artifact_manager
         self.backup_logfile_manager = backup_logfile_manager
 
@@ -1253,7 +1312,6 @@ class QueueProcessor(object):
                 config=self.config,
                 vcs_manager=self.vcs_manager,
                 artifact_manager=self.artifact_manager,
-                apt_location=self.apt_location,
                 worker_kind=self.worker_kind,
                 pre_check=self.pre_check,
                 build_command=self.build_command,
@@ -1513,10 +1571,7 @@ async def handle_assign(request):
     queue_processor.register_run(active_run)
 
     # This is simple for now, since we only support one distribution.
-    builder = DebianBuilder(
-        queue_processor.config.distribution,
-        queue_processor.apt_location
-        )
+    builder = get_builder(queue_processor.config, suite_config)
 
     async with queue_processor.database.acquire() as conn:
         build_env = await builder.build_env(conn, suite_config, item)
@@ -1817,7 +1872,6 @@ def main(argv=None):
         args.use_cached_only,
         overall_timeout=args.overall_timeout,
         committer=config.committer,
-        apt_location=config.apt_location,
         backup_artifact_manager=backup_artifact_manager,
         backup_logfile_manager=backup_logfile_manager,
     )

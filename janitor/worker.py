@@ -30,19 +30,24 @@ from typing import Dict, List, Optional, Any, Type, Iterator, Tuple
 from breezy.config import GlobalStack
 from breezy.transport import Transport
 
+from silver_platter.workspace import Workspace
+
 from silver_platter.debian import (
     MissingUpstreamTarball,
-    Workspace,
     pick_additional_colocated_branches,
     control_files_in_root,
     control_file_present,
 )
-from silver_platter.debian.changer import (
+from silver_platter.changer import (
     ChangerError,
     ChangerResult,
-    DebianChanger,
     ChangerReporter,
-    changer_subcommand as _changer_subcommand,
+    GenericChanger,
+    changer_subcommand as _generic_changer_subcommand,
+    )
+from silver_platter.debian.changer import (
+    DebianChanger,
+    changer_subcommand as _debian_changer_subcommand,
 )
 from silver_platter.debian.upstream import (
     NewUpstreamChanger as ActualNewUpstreamChanger,
@@ -152,7 +157,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
             )
 
 
-class DummyChanger(DebianChanger):
+class DummyDebianChanger(DebianChanger):
 
     name = "just-build"
 
@@ -187,6 +192,43 @@ class DummyChanger(DebianChanger):
                 "control files live in root rather than debian/ " "(LarstIQ mode)",
             )
 
+        return ChangerResult(
+            description="Nothing changed", mutator=None, branches=[], tags=[]
+        )
+
+    @classmethod
+    def describe_command(cls, command):
+        return "Build without changes"
+
+
+class DummyGenericChanger(DebianChanger):
+
+    name = "just-build"
+
+    @classmethod
+    def setup_parser(cls, parser):
+        parser.add_argument("--revision", type=str, help="Specific revision to build.")
+
+    @classmethod
+    def from_args(cls, args):
+        return cls(revision=args.revision)
+
+    def __init__(self, revision=None):
+        self.revision = revision
+
+    def suggest_branch_name(self):
+        return "unchanged"
+
+    def make_changes(
+        self,
+        local_tree,
+        subpath,
+        reporter,
+        committer,
+        base_proposal=None,
+    ):
+        if self.revision:
+            local_tree.update(revision=self.revision.encode("utf-8"))
         return ChangerResult(
             description="Nothing changed", mutator=None, branches=[], tags=[]
         )
@@ -238,18 +280,29 @@ class WorkerFailure(Exception):
         self.details = details
 
 
-CUSTOM_SUBCOMMANDS = {
-    "just-build": DummyChanger,
+CUSTOM_DEBIAN_SUBCOMMANDS = {
+    "just-build": DummyDebianChanger,
     "new-upstream": NewUpstreamChanger,
 }
 
 
 # TODO(jelmer): Just invoke the silver-platter subcommand
-def changer_subcommand(n):
+def debian_changer_subcommand(n):
     try:
-        return CUSTOM_SUBCOMMANDS[n]
+        return CUSTOM_DEBIAN_SUBCOMMANDS[n]
     except KeyError:
-        return _changer_subcommand(n)
+        return _debian_changer_subcommand(n)
+
+
+CUSTOM_GENERIC_SUBCOMMANDS = {
+    "just-build": DummyGenericChanger,
+}
+
+def generic_changer_subcommand(n):
+    try:
+        return CUSTOM_GENERIC_SUBCOMMANDS[n]
+    except KeyError:
+        return _generic_changer_subcommand(n)
 
 
 class WorkerReporter(ChangerReporter):
@@ -289,7 +342,7 @@ class Target(object):
 class DebianTarget(Target):
     """Debian target."""
 
-    name: str
+    name = "debian"
 
     def __init__(self, env, build_command):
         self.build_distribution = env.get("BUILD_DISTRIBUTION")
@@ -302,7 +355,7 @@ class DebianTarget(Target):
     def parse_args(self, argv):
         changer_cls: Type[DebianChanger]
         try:
-            changer_cls = changer_subcommand(argv[0])
+            changer_cls = debian_changer_subcommand(argv[0])
         except KeyError:
             raise WorkerFailure(
                 "unknown-subcommand", "unknown subcommand %s" % argv[0],
@@ -439,10 +492,67 @@ class DebianTarget(Target):
         return self.package
 
 
-class GenericBuildTarget(Target):
+class GenericTarget(Target):
     """Generic build target."""
 
     name = "generic"
+
+    def __init__(self, env, build_command):
+        self.chroot = env.get("CHROOT")
+
+    def parse_args(self, argv):
+        changer_cls: Type[GenericChanger]
+        try:
+            changer_cls = generic_changer_subcommand(argv[0])
+        except KeyError:
+            raise WorkerFailure(
+                "unknown-subcommand", "unknown subcommand %s" % argv[0],
+                details={"subcommand": argv[0]})
+
+        subparser = argparse.ArgumentParser(prog=changer_cls.name)
+        subparser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Dry run.')
+        changer_cls.setup_parser(subparser)
+        self.changer_args = subparser.parse_args(argv[1:])
+        self.changer = changer_cls.from_args(self.changer_args)
+
+    def make_changes(self, local_tree, subpath, reporter, committer=None):
+        try:
+            return self.changer.make_changes(
+                local_tree,
+                subpath=subpath,
+                committer=committer,
+                reporter=reporter,
+            )
+        except ChangerError as e:
+            raise WorkerFailure(e.category, e.summary, details=e.details)
+
+    def additional_colocated_branches(self, main_branch):
+        return []
+
+    def build(self, ws, subpath, output_directory, env):
+        from ognibuild.build import run_build
+        from ognibuild.buildlog import InstallFixer
+        from ognibuild.session.plain import PlainSession
+        from ognibuild.session.schroot import SchrootSession
+        from ognibuild.buildsystem import NoBuildToolsFound, detect_buildsystems
+        from ognibuild.resolver import auto_resolver
+
+        if self.chroot:
+            session = SchrootSession(self.chroot)
+        else:
+            session = PlainSession()
+        with session:
+            resolver = auto_resolver(session)
+            fixers = [InstallFixer(resolver)]
+            bss = list(detect_buildsystems(ws.local_tree.abspath(subpath)))
+            run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+        return {}
+
+    def directory_name(self):
+        return "package"
 
 
 @contextmanager
@@ -470,6 +580,8 @@ def process_package(
 
     if target == "debian":
         build_target = DebianTarget(env, build_command=build_command)
+    elif target == "generic":
+        build_target = GenericTarget(env)
     else:
         raise WorkerFailure(
             'target-unsupported', 'The target %r is not supported' % target)
