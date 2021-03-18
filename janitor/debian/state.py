@@ -319,8 +319,7 @@ async def get_last_build_version(
     conn: asyncpg.Connection, package: str, distribution: str
 ) -> Optional[Version]:
     return await conn.fetchval(
-        "SELECT version FROM run"
-        "WHERE "
+        "SELECT version FROM debian_build WHERE "
         "version IS NOT NULL AND source = $1 AND "
         "distribution = $2 ORDER BY version DESC",
         package,
