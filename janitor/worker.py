@@ -99,6 +99,9 @@ TRUST_PACKAGE = False
 DEFAULT_BUILD_COMMAND = "sbuild -A -s -v"
 
 
+logger = logging.getLogger(__name__)
+
+
 @contextmanager
 def redirect_output(to_file):
     old_stdout = os.dup(sys.stdout.fileno())
@@ -126,7 +129,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                     chroot=self.args.chroot,
                 )
         except NoBuildToolsFound:
-            logging.info("No build tools found, falling back to simple export.")
+            logger.info("No build tools found, falling back to simple export.")
             return None
         except DetailedFailure:
             raise
@@ -473,17 +476,18 @@ class DebianTarget(Target):
                     except NotImplementedError:
                         details = None
                     raise WorkerFailure(code, e.description, details=details)
-                logging.info("Built %s", changes_name)
+                logger.info("Built %s", changes_name)
         lintian_result = self._run_lintian(output_directory, changes_name)
         return {'lintian': lintian_result}
 
     def _run_lintian(self, output_directory, changes_name):
+        logger.info('Running lintian')
         try:
             lintian_output = subprocess.check_output(
                 ['lintian', '--exp-output=format=json',
                  os.path.join(output_directory, changes_name)])
         except subprocess.CalledProcessError:
-            logging.warning('lintian failed to run.')
+            logger.warning('lintian failed to run.')
             return None
         else:
             return json.loads(lintian_output)
@@ -542,7 +546,7 @@ class GenericTarget(Target):
 
         if self.chroot:
             session = SchrootSession(self.chroot)
-            logging.info('Using schroot %s', self.chroot)
+            logger.info('Using schroot %s', self.chroot)
         else:
             session = PlainSession()
         with session:
@@ -591,7 +595,7 @@ def process_package(
 
     build_target.parse_args(command)
 
-    logging.info("Opening branch at %s", vcs_url)
+    logger.info("Opening branch at %s", vcs_url)
     try:
         main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
     except BranchOpenFailure as e:
@@ -604,15 +608,15 @@ def process_package(
                 cached_branch_url, possible_transports=possible_transports
             )
         except BranchMissing as e:
-            logging.info("Cached branch URL %s missing: %s", cached_branch_url, e)
+            logger.info("Cached branch URL %s missing: %s", cached_branch_url, e)
             cached_branch = None
         except BranchUnavailable as e:
-            logging.warning(
+            logger.warning(
                 "Cached branch URL %s unavailable: %s", cached_branch_url, e
             )
             cached_branch = None
         else:
-            logging.info("Using cached branch %s", full_branch_url(cached_branch))
+            logger.info("Using cached branch %s", full_branch_url(cached_branch))
     else:
         cached_branch = None
 
@@ -623,7 +627,7 @@ def process_package(
                 resume_branch_url, possible_transports=possible_transports
             )
         except BranchUnavailable as e:
-            logging.info('Resume branch URL: %s', e.url)
+            logger.info('Resume branch URL: %s', e.url)
             traceback.print_exc()
             raise WorkerFailure(
                 "worker-resume-branch-unavailable", str(e),
@@ -633,7 +637,7 @@ def process_package(
                 "worker-resume-branch-missing", str(e),
                 details={'url': e.url})
         else:
-            logging.info("Resuming from branch %s", full_branch_url(resume_branch))
+            logger.info("Resuming from branch %s", full_branch_url(resume_branch))
     else:
         resume_branch = None
 
@@ -646,7 +650,7 @@ def process_package(
             build_target.additional_colocated_branches(main_branch)
         ),
     ) as ws:
-        logging.info('Workspace ready - starting.')
+        logger.info('Workspace ready - starting.')
 
         if ws.local_tree.has_changes():
             if list(ws.local_tree.iter_references()):
@@ -854,7 +858,7 @@ def main(argv=None):
         metadata["code"] = e.code
         metadata["description"] = e.description
         metadata['details'] = e.details
-        logging.info("Worker failed (%s): %s", e.code, e.description)
+        logger.info("Worker failed (%s): %s", e.code, e.description)
         return 0
     except OSError as e:
         if e.errno == errno.ENOSPC:
@@ -871,11 +875,11 @@ def main(argv=None):
     else:
         metadata["code"] = None
         metadata.update(result.json())
-        logging.info("%s", result.description)
+        logger.info("%s", result.description)
         return 0
     finally:
         finish_time = datetime.now()
-        logging.info("Elapsed time: %s", finish_time - start_time)
+        logger.info("Elapsed time: %s", finish_time - start_time)
         with open(os.path.join(output_directory, "result.json"), "w") as f:
             try:
                 json.dump(metadata, f, indent=2)
