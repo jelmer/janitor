@@ -164,8 +164,8 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
         except DetailedFailure as e:
             error_code = "dist-" + e.error.kind
             error_description = str(e.error)
-            return ChangerResult(
-                description=error_description, result_code=error_code, mutator=None
+            raise ChangerError(
+                summary=error_description, category=error_code, original=e
             )
 
 
@@ -212,8 +212,8 @@ class DebianizeChanger(ActualDebianizeChanger):
         except DetailedFailure as e:
             error_code = "dist-" + e.error.kind
             error_description = str(e.error)
-            return ChangerResult(
-                description=error_description, result_code=error_code, mutator=None
+            raise ChangerError(
+                description=error_description, category=error_code, original=e
             )
 
 
