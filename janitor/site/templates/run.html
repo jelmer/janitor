@@ -148,7 +148,7 @@ Mark package as orphaned.
 
 {% endif %}
 
-<p>{% if build_log_name %}<a class="reference external" href="{{ build_log_name }}">Full build log</a>{% if earlier_build_log_names %} ({% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}{% if not loop.last %}, {% endif %}</a>{% endfor %}){% endif %} {% endif %}{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}{% if dist_log_name %}<a class="reference external" href="{{ dist_log_name }}">Full dist log</a>{% endif %}</p>
+<p>{% if worker_log_name %}<a class="reference external" href="{{ worker_log_name }}">Full worker log</a>{% endif %}{% if build_log_name %} <a class="reference external" href="{{ build_log_name }}">Full build log</a>{% if earlier_build_log_names %} ({% for i, name in earlier_build_log_names %}<a href="{{ name }}">{{ i }}{% if not loop.last %}, {% endif %}</a>{% endfor %}){% endif %} {% endif %}{% if dist_log_name %} <a class="reference external" href="{{ dist_log_name }}">Full dist log</a>{% endif %}</p>
 
 </div>
 {% endblock %}
