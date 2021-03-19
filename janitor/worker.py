@@ -122,11 +122,12 @@ def redirect_output(to_file):
 
 
 class NewUpstreamChanger(ActualNewUpstreamChanger):
+
     def create_dist(self, tree, package, version, target_dir):
         from silver_platter.debian.upstream import DistCommandFailed
 
         try:
-            with open('dist.log', 'wb') as distf, redirect_output(distf):
+            with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
                 return create_dist_schroot(
                     tree,
                     subdir=package,
@@ -175,7 +176,7 @@ class DebianizeChanger(ActualDebianizeChanger):
         from silver_platter.debian.upstream import DistCommandFailed
 
         try:
-            with open('dist.log', 'wb') as distf, redirect_output(distf):
+            with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
                 return create_dist_schroot(
                     tree,
                     subdir=package,
@@ -444,7 +445,8 @@ class DebianTarget(Target):
         self.changer_args = subparser.parse_args(argv[1:])
         self.changer = changer_cls.from_args(self.changer_args)
 
-    def make_changes(self, local_tree, subpath, reporter, committer=None):
+    def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
+        self.changer.log_directory = log_directory
         try:
             return self.changer.make_changes(
                 local_tree,
@@ -579,7 +581,8 @@ class GenericTarget(Target):
         self.changer_args = subparser.parse_args(argv[1:])
         self.changer = changer_cls.from_args(self.changer_args)
 
-    def make_changes(self, local_tree, subpath, reporter, committer=None):
+    def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
+        self.changer.log_directory = log_directory
         try:
             return self.changer.make_changes(
                 local_tree,
@@ -749,7 +752,8 @@ def process_package(
 
         try:
             changer_result = build_target.make_changes(
-                ws.local_tree, subpath, reporter, committer=committer
+                ws.local_tree, subpath, reporter, output_directory,
+                committer=committer
             )
         except WorkerFailure as e:
             if e.code == "nothing-to-do" and resume_subworker_result is not None:
