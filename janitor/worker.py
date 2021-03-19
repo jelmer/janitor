@@ -198,6 +198,7 @@ class DebianizeChanger(ActualDebianizeChanger):
                 )
         except Exception as e:
             traceback.print_exc()
+            raise DistCommandFailed(str(e))
 
     def make_changes(self, *args, **kwargs):
         try:
@@ -336,6 +337,7 @@ class WorkerFailure(Exception):
 CUSTOM_DEBIAN_SUBCOMMANDS = {
     "just-build": DummyDebianChanger,
     "new-upstream": NewUpstreamChanger,
+    "debianize": DebianizeChanger,
 }
 
 
