@@ -615,7 +615,13 @@ class GenericTarget(Target):
             external_dir, internal_dir = session.setup_from_vcs(ws.local_tree)
             bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
             session.chdir(os.path.join(internal_dir, subpath))
-            run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+            try:
+                run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+            except DetailedFailure as f:
+                raise WorkerFailure(f.error.kind, f.error.description, details={'command': e.argv})
+            except UnidentifiedError as e:
+                raise WorkerFailure('build-failed', str(e))
+
         return {}
 
     def directory_name(self):
