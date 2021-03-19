@@ -108,6 +108,8 @@ logger = logging.getLogger(__name__)
 
 @contextmanager
 def redirect_output(to_file):
+    sys.stdout.flush()
+    sys.stderr.flush()
     old_stdout = os.dup(sys.stdout.fileno())
     old_stderr = os.dup(sys.stderr.fileno())
     os.dup2(to_file.fileno(), sys.stdout.fileno())  # type: ignore
