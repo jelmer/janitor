@@ -1,5 +1,5 @@
 #!/bin/bash
-DEPS="lintian-brush silver-platter breezy dulwich breezy-debian python-debian debmutate ognibuild upstream-ontologist"
+DEPS="lintian-brush silver-platter breezy dulwich breezy-debian python-debian debmutate ognibuild upstream-ontologist buildlog-consultant"
 for NAME in $DEPS
 do
     pushd $NAME
