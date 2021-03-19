@@ -613,7 +613,7 @@ async def main(argv=None):
                 # true.  We're happy if we get to successfully POST to /finish
                 return 0
             except BaseException as e:
-                metadata["code"] = "worker-exception"
+                metadata["code"] = "worker-failure"
                 metadata["description"] = str(e)
                 raise
             else:
