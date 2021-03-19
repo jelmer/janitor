@@ -49,6 +49,10 @@ from silver_platter.debian.changer import (
     DebianChanger,
     changer_subcommand as _debian_changer_subcommand,
 )
+from silver_platter.debian.debianize import (
+    DebianizeChanger as ActualDebianizeChanger,
+)
+
 from silver_platter.debian.upstream import (
     NewUpstreamChanger as ActualNewUpstreamChanger,
 )
@@ -116,7 +120,7 @@ def redirect_output(to_file):
 
 
 class NewUpstreamChanger(ActualNewUpstreamChanger):
-    def create_dist_from_command(self, tree, package, version, target_dir):
+    def create_dist(self, tree, package, version, target_dir):
         from silver_platter.debian.upstream import DistCommandFailed
 
         try:
@@ -126,7 +130,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                     subdir=package,
                     target_dir=target_dir,
                     packaging_tree=tree,
-                    chroot=self.args.chroot,
+                    chroot=self.schroot,
                 )
         except NoBuildToolsFound:
             logger.info("No build tools found, falling back to simple export.")
@@ -152,6 +156,52 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
     def make_changes(self, *args, **kwargs):
         try:
             return super(NewUpstreamChanger, self).make_changes(*args, **kwargs)
+        except DetailedFailure as e:
+            error_code = "dist-" + e.error.kind
+            error_description = str(e.error)
+            return ChangerResult(
+                description=error_description, result_code=error_code, mutator=None
+            )
+
+
+
+class DebianizeChanger(ActualDebianizeChanger):
+
+    def create_dist(self, tree, package, version, target_dir):
+        from silver_platter.debian.upstream import DistCommandFailed
+
+        try:
+            with open('dist.log', 'wb') as distf, redirect_output(distf):
+                return create_dist_schroot(
+                    tree,
+                    subdir=package,
+                    target_dir=target_dir,
+                    packaging_tree=tree,
+                    chroot=self.schroot,
+                )
+        except NoBuildToolsFound:
+            logger.info("No build tools found, falling back to simple export.")
+            return None
+        except DetailedFailure:
+            raise
+        except UnidentifiedError as e:
+            traceback.print_exc()
+            lines = [line for line in e.lines if line]
+            if e.secondary:
+                raise DistCommandFailed(e.secondary[1])
+            elif len(lines) == 1:
+                raise DistCommandFailed(lines[0])
+            else:
+                raise DistCommandFailed(
+                    "command %r failed with unidentified error "
+                    "(return code %d)" % (e.argv, e.retcode)
+                )
+        except Exception as e:
+            traceback.print_exc()
+
+    def make_changes(self, *args, **kwargs):
+        try:
+            return super(DebianizeChanger, self).make_changes(*args, **kwargs)
         except DetailedFailure as e:
             error_code = "dist-" + e.error.kind
             error_description = str(e.error)
