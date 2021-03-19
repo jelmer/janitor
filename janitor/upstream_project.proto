@@ -1,0 +1,16 @@
+syntax = "proto2";
+
+package janitor;
+
+message UpstreamProject {
+   optional string name = 1;
+
+   optional string vcs_type = 2;
+   optional string vcs_url = 3;
+
+   optional string subpath = 4;
+};
+
+message ExtraUpstreamProjects {
+    repeated UpstreamProject upstream_project = 1;
+};

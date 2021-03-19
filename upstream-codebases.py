@@ -19,7 +19,10 @@
 
 from typing import List, Optional, AsyncIterator, Tuple
 
+from google.protobuf import text_format  # type: ignore
+
 from janitor.package_metadata_pb2 import PackageList
+from janitor.upstream_project_pb2 import ExtraUpstreamProjects
 from janitor.udd import UDD
 from janitor.vcs import unsplit_vcs_url
 
@@ -43,10 +46,24 @@ select distinct on (sources.source) sources.source || '-upstream',
         yield row
 
 
+def create_package(pl, name, vcs_type, branch_url, subpath):
+    package = pl.package.add()
+    package.name = name
+    # TODO(jelmer): Detect this somehow, or leave something further
+    # down to figure it out.
+    package.vcs_type = 'Git'
+    package.vcs_url = unsplit_vcs_url(branch_url, None, subpath)
+    package.maintainer_email = "dummy@example.com"
+    return package
+
+
 async def main():
     import argparse
 
     parser = argparse.ArgumentParser(prog="upstream-metadata")
+    parser.add_argument(
+        '--extra-upstream-projects', type=str,
+        help='Path to extra_upstream_projects.conf')
     parser.add_argument("packages", nargs="*")
     args = parser.parse_args()
 
@@ -56,14 +73,18 @@ async def main():
         udd, args.packages
     ):
         pl = PackageList()
-        package = pl.package.add()
-        package.name = name
-        # TODO(jelmer): Detect this somehow, or leave something further
-        # down to figure it out.
-        package.vcs_type = 'Git'
-        package.vcs_url = unsplit_vcs_url(branch_url, None, subpath)
-        package.maintainer_email = "dummy@example.com"
+        create_package(pl, name, 'Git', branch_url, subpath)
         print(pl)
+
+    if args.extra_upstream_projects:
+        with open(args.extra_upstream_projects, 'r') as f:
+            extra_upstream_config = text_format.Parse(f.read(), ExtraUpstreamProjects())
+        for upstream_project in extra_upstream_config.upstream_project:
+            pl = PackageList()
+            create_package(
+                pl, upstream_project.name + '-upstream', upstream_project.vcs_type,
+                upstream_project.vcs_url, upstream_project.subpath)
+            print(pl)
 
 
 if __name__ == "__main__":
