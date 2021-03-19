@@ -481,7 +481,7 @@ class WorkerResult(object):
             tags = [(n, r.encode("utf-8")) for (fn, n, r) in tags]
         target_kind = worker_result.get("target", {}).get("name")
         if target_kind == DebianResult.kind:
-            builder_result = DebianResult.from_json(worker_result)
+            builder_result = DebianResult.from_json(worker_result["target"]["details"])
         elif target_kind is None:
             builder_result = None
         else:
