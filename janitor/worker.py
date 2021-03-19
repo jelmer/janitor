@@ -497,7 +497,7 @@ class GenericTarget(Target):
 
     name = "generic"
 
-    def __init__(self, env, build_command):
+    def __init__(self, env):
         self.chroot = env.get("CHROOT")
 
     def parse_args(self, argv):
