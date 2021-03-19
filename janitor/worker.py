@@ -134,6 +134,8 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                     packaging_tree=tree,
                     chroot=self.schroot,
                 )
+        except NotImplementedError:
+            return None
         except NoBuildToolsFound:
             logger.info("No build tools found, falling back to simple export.")
             return None
@@ -178,9 +180,10 @@ class DebianizeChanger(ActualDebianizeChanger):
                     tree,
                     subdir=package,
                     target_dir=target_dir,
-                    packaging_tree=tree,
                     chroot=self.schroot,
                 )
+        except NotImplementedError:
+            return None
         except NoBuildToolsFound:
             logger.info("No build tools found, falling back to simple export.")
             return None
