@@ -29,6 +29,7 @@ FAIL_BUILD_LOG_LEN = 15
 
 BUILD_LOG_NAME = "build.log"
 WORKER_LOG_NAME = "worker.log"
+DIST_LOG_NAME = "dist.log"
 
 
 def find_build_log_failure(logf, length):
@@ -231,6 +232,9 @@ async def generate_run_file(
 
     if has_log(WORKER_LOG_NAME):
         kwargs["worker_log_name"] = WORKER_LOG_NAME
+
+    if has_log(DIST_LOG_NAME):
+        kwargs["dist_log_name"] = DIST_LOG_NAME
 
     return kwargs
 
