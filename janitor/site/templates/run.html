@@ -87,10 +87,10 @@ function submit_review(status) {
 {{     include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
 {%    endwith %}
 {%   elif primary_log == 'dist' %}
-{%    with f = get_log(build_log_name) %}
+{%    with f = get_log(dist_log_name) %}
 {{     include_console_log(f, dist_log_include_lines or (max(1, dist_log_line_count), None), dist_log_highlight_lines) }}
 {%    endwith %}
-{%   else %}
+{%   elif primary_log == 'worker' %}
 {%    with f = get_log(worker_log_name) %}
 {{     include_console_log(f) }}
 {%    endwith %}
