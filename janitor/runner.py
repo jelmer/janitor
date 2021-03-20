@@ -181,6 +181,10 @@ class GenericResult(BuilderResult):
 
     kind = "generic"
 
+    @classmethod
+    def from_json(cls, target_details):
+        return cls()
+
 
 class GenericBuilder(Builder):
     """Generic builder."""
@@ -482,6 +486,8 @@ class WorkerResult(object):
         target_kind = worker_result.get("target", {}).get("name")
         if target_kind == DebianResult.kind:
             builder_result = DebianResult.from_json(worker_result["target"]["details"])
+        elif target_kind == GenericResult.kind:
+            builder_result = GenericResult.from_json(worker_result["target"]["details"])
         elif target_kind is None:
             builder_result = None
         else:
