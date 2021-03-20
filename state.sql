@@ -9,11 +9,11 @@ CREATE TYPE vcswatch_status AS ENUM('ok', 'error', 'old', 'new', 'commits', 'unr
 CREATE DOMAIN debian_package_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE vcs_type AS ENUM('bzr', 'git', 'svn', 'mtn', 'hg', 'arch', 'cvs', 'darcs');
 CREATE TABLE IF NOT EXISTS codebase (
-   name text not null primary key,
-   branch_url text,
+   branch_url text not null,
    subpath text,
    vcs_last_revision text,
    vcs_type vcs_type
+   unique(branch_url, subpath)
 );
 CREATE UNIQUE INDEX ON codebase (name);
 CREATE INDEX ON codebase (branch_url);
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS package (
    name debian_package_name not null primary key,
    distribution distribution_name not null,
 
-   -- TODO(jelmer): Move these to codebase 
+   -- TODO(jelmer): Move these to codebase
    -- codebase text references codebase(name)
    vcs_type vcs_type,
    branch_url text,
