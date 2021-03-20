@@ -618,7 +618,7 @@ class GenericTarget(Target):
             try:
                 run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
             except DetailedFailure as f:
-                raise WorkerFailure(f.error.kind, str(f.error), details={'command': e.argv})
+                raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
             except UnidentifiedError as e:
                 raise WorkerFailure('build-failed', str(e))
 
