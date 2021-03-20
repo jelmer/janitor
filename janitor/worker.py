@@ -536,7 +536,11 @@ class DebianTarget(Target):
                         details = None
                     raise WorkerFailure(code, e.description, details=details)
                 logger.info("Built %s", changes_name)
-        lintian_result = self._run_lintian(output_directory, changes_name)
+        try:
+            lintian_result = self._run_lintian(output_directory, changes_name)
+        except json.decoder.JSONDecodeError:
+            logging.warning('Error parsing lintian output: %r', lintian_result)
+            lintian_result = None
         return {'lintian': lintian_result}
 
     def _run_lintian(self, output_directory, changes_name):
