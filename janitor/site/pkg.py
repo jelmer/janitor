@@ -84,6 +84,19 @@ def find_build_log_failure(logf, length):
     return (linecount, include_lines, highlight_lines)
 
 
+def find_dist_log_failure(logf, length):
+    lines = [line.decode('utf-8', 'replace') for line in logf.readlines()]
+    match, unused_err = find_build_failure_description(lines)
+    if match is not None:
+        highlight_lines = [match.lineno]
+    else:
+        highlight_lines = None
+
+    include_lines = (max(1, len(lines) - length), len(lines),)
+
+    return (len(lines), include_lines, highlight_lines)
+
+
 def in_line_boundaries(i, boundaries):
     if boundaries is None:
         return True
@@ -212,9 +225,17 @@ async def generate_run_file(
             return BytesIO(b"Log file missing or inaccessible.")
         return BytesIO(cached_logs[name])
 
-    kwargs["get_log"] = get_log
     if has_log(BUILD_LOG_NAME):
         kwargs["build_log_name"] = BUILD_LOG_NAME
+
+    if has_log(WORKER_LOG_NAME):
+        kwargs["worker_log_name"] = WORKER_LOG_NAME
+
+    if has_log(DIST_LOG_NAME):
+        kwargs["dist_log_name"] = DIST_LOG_NAME
+
+    kwargs["get_log"] = get_log
+    if has_log(BUILD_LOG_NAME):
         kwargs["earlier_build_log_names"] = []
         i = 1
         while has_log(BUILD_LOG_NAME + ".%d" % i):
@@ -229,12 +250,18 @@ async def generate_run_file(
         kwargs["build_log_line_count"] = line_count
         kwargs["build_log_include_lines"] = include_lines
         kwargs["build_log_highlight_lines"] = highlight_lines
-
-    if has_log(WORKER_LOG_NAME):
-        kwargs["worker_log_name"] = WORKER_LOG_NAME
-
-    if has_log(DIST_LOG_NAME):
-        kwargs["dist_log_name"] = DIST_LOG_NAME
+        kwargs["primary_log"] = "build"
+    elif has_log(DIST_LOG_NAME):
+        kwargs["primary_log"] = "dist"
+        logf = await get_log(DIST_LOG_NAME)
+        line_count, include_lines, highlight_lines = find_dist_log_failure(
+            logf, FAIL_BUILD_LOG_LEN
+        )
+        kwargs["dist_log_line_count"] = line_count
+        kwargs["dist_log_include_lines"] = include_lines
+        kwargs["dist_log_highlight_lines"] = highlight_lines
+    else:
+        kwargs["primary_log"] = "worker"
 
     return kwargs
 

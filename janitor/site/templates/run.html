@@ -82,11 +82,15 @@ function submit_review(status) {
 {%  endif %}
 {% else %}
 {%  if result_code not in ('nothing-to-do', 'nothing-new-to-do', 'missing-control-file', 'unparseable-changelog', 'inconsistent-source-format', 'upstream-branch-unknown', 'requires-nested-tree-support', 'upstream-unsupported-vcs-svn', 'control-files-in-root', 'success') %}
-{%   if build_log_name %}
+{%   if primary_log == 'build' %}
 {%    with f = get_log(build_log_name) %}
 {{     include_console_log(f, build_log_include_lines or (max(1, build_log_line_count), None), build_log_highlight_lines) }}
 {%    endwith %}
-{%   elif worker_log_name %}
+{%   elif primary_log == 'dist' %}
+{%    with f = get_log(build_log_name) %}
+{{     include_console_log(f, dist_log_include_lines or (max(1, dist_log_line_count), None), dist_log_highlight_lines) }}
+{%    endwith %}
+{%   else %}
 {%    with f = get_log(worker_log_name) %}
 {{     include_console_log(f) }}
 {%    endwith %}
