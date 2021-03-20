@@ -213,7 +213,7 @@ class DebianizeChanger(ActualDebianizeChanger):
             error_code = "dist-" + e.error.kind
             error_description = str(e.error)
             raise ChangerError(
-                description=error_description, category=error_code, original=e
+                summary=error_description, category=error_code, original=e
             )
 
 
