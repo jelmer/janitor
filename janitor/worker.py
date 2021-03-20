@@ -598,6 +598,7 @@ class GenericTarget(Target):
 
     def build(self, ws, subpath, output_directory, env):
         from ognibuild.build import run_build
+        from ognibuild.test import run_test
         from ognibuild.buildlog import InstallFixer
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
@@ -617,6 +618,7 @@ class GenericTarget(Target):
             session.chdir(os.path.join(internal_dir, subpath))
             try:
                 run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
             except DetailedFailure as f:
                 raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
             except UnidentifiedError as e:
