@@ -146,7 +146,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
             traceback.print_exc()
             lines = [line for line in e.lines if line]
             if e.secondary:
-                raise DistCommandFailed(e.secondary[1])
+                raise DistCommandFailed(e.secondary.line)
             elif len(lines) == 1:
                 raise DistCommandFailed(lines[0])
             else:
@@ -194,7 +194,7 @@ class DebianizeChanger(ActualDebianizeChanger):
             traceback.print_exc()
             lines = [line for line in e.lines if line]
             if e.secondary:
-                raise DistCommandFailed(e.secondary[1])
+                raise DistCommandFailed(e.secondary.line)
             elif len(lines) == 1:
                 raise DistCommandFailed(lines[0])
             else:
