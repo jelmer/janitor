@@ -506,6 +506,7 @@ class DebianTarget(Target):
                             committer=env.get("COMMITTER"),
                             subpath=subpath,
                             source_date_epoch=source_date_epoch,
+                            update_changelog=self.changer_args.update_changelog,
                         )
                 except MissingUpstreamTarball:
                     raise WorkerFailure(
