@@ -33,6 +33,7 @@ distribution {
   tracker_url: "https://tracker.debian.org/pkg/"
   component: "main"
   chroot: "unstable-amd64-sbuild"
+  lintian_profile: "debian"
 }
 
 suite {
