@@ -146,12 +146,14 @@ def copy_output(output_log: str):
     p = subprocess.Popen(["tee", output_log], stdin=subprocess.PIPE)
     os.dup2(p.stdin.fileno(), sys.stdout.fileno())  # type: ignore
     os.dup2(p.stdin.fileno(), sys.stderr.fileno())  # type: ignore
-    yield
-    sys.stdout.flush()
-    sys.stderr.flush()
-    os.dup2(old_stdout, sys.stdout.fileno())
-    os.dup2(old_stderr, sys.stderr.fileno())
-    p.stdin.close()  # type: ignore
+    try:
+        yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(old_stdout, sys.stdout.fileno())
+        os.dup2(old_stderr, sys.stderr.fileno())
+        p.stdin.close()  # type: ignore
 
 
 def push_branch(
