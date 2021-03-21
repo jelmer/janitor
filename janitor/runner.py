@@ -316,6 +316,8 @@ class DebianBuilder(Builder):
         if last_build_version:
             env["LAST_BUILD_VERSION"] = str(last_build_version)
 
+        env['LINTIAN_PROFILE'] = self.distro_config.lintian_profile
+
         env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
         return env
 

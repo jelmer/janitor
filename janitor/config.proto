@@ -14,6 +14,8 @@ message Distribution {
   optional string chroot = 5;
 
   repeated string component = 4;
+
+  optional string lintian_profile = 6;
 }
 
 message Config {

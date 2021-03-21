@@ -412,6 +412,7 @@ class DebianTarget(Target):
         self.last_build_version = env.get("LAST_BUILD_VERSION")
         self.package = env["PACKAGE"]
         self.chroot = env.get("CHROOT")
+        self.lintian_profile = env.get("LINTIAN_PROFILE")
 
     def parse_args(self, argv):
         changer_cls: Type[DebianChanger]
@@ -542,10 +543,14 @@ class DebianTarget(Target):
 
     def _run_lintian(self, output_directory, changes_name):
         logger.info('Running lintian')
+        args = [
+            '--exp-output=format=json',
+            '--suppress-tags=bad-distribution-in-changes-file']
+        if self.lintian_profile:
+            args.append('--profile=%s' % self.lintian_profile)
         try:
             lintian_output = subprocess.check_output(
-                ['lintian', '--exp-output=format=json',
-                 os.path.join(output_directory, changes_name)])
+                ['lintian'] + args + [os.path.join(output_directory, changes_name)])
         except subprocess.CalledProcessError:
             logger.warning('lintian failed to run.')
             return None
