@@ -251,7 +251,7 @@ async def generate_run_file(
         kwargs["build_log_include_lines"] = include_lines
         kwargs["build_log_highlight_lines"] = highlight_lines
         kwargs["primary_log"] = "build"
-    elif has_log(DIST_LOG_NAME):
+    elif has_log(DIST_LOG_NAME) and run.result_code.startswith('dist-'):
         kwargs["primary_log"] = "dist"
         logf = await get_log(DIST_LOG_NAME)
         line_count, include_lines, highlight_lines = find_dist_log_failure(
