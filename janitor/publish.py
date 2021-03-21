@@ -53,6 +53,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    BranchRateLimited,
     full_branch_url,
 )
 
@@ -127,7 +128,7 @@ publish_latency = Histogram(
 )
 
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('janitor.publish')
 
 
 class RateLimited(Exception):
@@ -1767,9 +1768,12 @@ async def check_existing(
 
     modified_mps = 0
     check_only = False
+    hoster_ratelimited = {}
 
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
+        if hoster in hoster_ratelimited:
+            continue
         try:
             modified = await check_existing_mp(
                 conn,
@@ -1788,6 +1792,12 @@ async def check_existing(
         except NoRunForMergeProposal as e:
             logger.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
             modified = False
+        except BranchRateLimited:
+            logger.warning(
+                "Rate-limited accessing %s. Skipping %r for this cycle.",
+                e.mp.url, hoster)
+            hoster_ratelimited.add(hoster)
+            continue
 
         if modified:
             modified_mps += 1
@@ -1797,6 +1807,10 @@ async def check_existing(
                     modified_mps,
                 )
                 check_only = True
+
+    if hoster_ratelimited:
+        logging.info('Rate-Limited for hosters %r. Not updating stats', hoster_ratelimited)
+        return
 
     for status, count in status_count.items():
         merge_proposal_count.labels(status=status).set(count)
@@ -1952,7 +1966,7 @@ def main(argv=None):
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logger.info)
+    logging.basicConfig(level=logging.INFO)
 
     with open(args.config, "r") as f:
         config = read_config(f)
