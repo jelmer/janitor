@@ -114,11 +114,13 @@ def redirect_output(to_file):
     old_stderr = os.dup(sys.stderr.fileno())
     os.dup2(to_file.fileno(), sys.stdout.fileno())  # type: ignore
     os.dup2(to_file.fileno(), sys.stderr.fileno())  # type: ignore
-    yield
-    sys.stdout.flush()
-    sys.stderr.flush()
-    os.dup2(old_stdout, sys.stdout.fileno())
-    os.dup2(old_stderr, sys.stderr.fileno())
+    try:
+        yield
+    finally:
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os.dup2(old_stdout, sys.stdout.fileno())
+        os.dup2(old_stderr, sys.stderr.fileno())
 
 
 class NewUpstreamChanger(ActualNewUpstreamChanger):
