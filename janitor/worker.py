@@ -419,6 +419,7 @@ class DebianTarget(Target):
         self.package = env["PACKAGE"]
         self.chroot = env.get("CHROOT")
         self.lintian_profile = env.get("LINTIAN_PROFILE")
+        self.committer = env.get("COMMITTER")
 
     def parse_args(self, argv):
         changer_cls: Type[DebianChanger]
@@ -510,7 +511,7 @@ class DebianTarget(Target):
                             output_directory,
                             build_command=self.build_command,
                             build_changelog_entry="Build for debian-janitor apt repository.",
-                            committer=env.get("COMMITTER"),
+                            committer=self.committer,
                             subpath=subpath,
                             source_date_epoch=source_date_epoch,
                             update_changelog=self.changer_args.update_changelog,
