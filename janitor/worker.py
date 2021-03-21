@@ -128,6 +128,8 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
     def create_dist(self, tree, package, version, target_dir):
         from silver_platter.debian.upstream import DistCommandFailed
 
+        os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version.upstream_version
+
         try:
             with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
                 return create_dist_schroot(
