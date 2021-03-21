@@ -320,6 +320,7 @@ class WatchdogPetter(object):
         self._thread.start()
         self._tasks = []
         self._log_dir_tasks = {}
+        self.kill = None
 
     def _run(self):
         asyncio.set_event_loop(self.loop)
@@ -365,7 +366,8 @@ class WatchdogPetter(object):
                     elif msg.type == aiohttp.WSMsgType.BINARY:
                         if msg.data == b'kill':
                             logging.info('Received kill over websocket, exiting..')
-                            # TODO(jelmer): Actually exit
+                            if self.kill:
+                                self.kill()
                         else:
                             logging.warning("Unknown websocket message: %r", msg.data)
                     elif msg.type == aiohttp.WSMsgType.closed:
@@ -578,34 +580,36 @@ async def main(argv=None):
 
             metadata = {}
             start_time = datetime.now()
+            main_task = loop.run_in_executor(
+                None,
+                functools.partial(
+                    run_worker,
+                    branch_url,
+                    run_id,
+                    subpath,
+                    vcs_type,
+                    os.environ,
+                    command,
+                    output_directory,
+                    metadata,
+                    vcs_manager,
+                    legacy_branch_name,
+                    suite,
+                    target=target,
+                    build_command=args.build_command,
+                    pre_check_command=args.pre_check,
+                    post_check_command=args.post_check,
+                    resume_branch_url=resume_branch_url,
+                    resume_branches=resume_branches,
+                    cached_branch_url=cached_branch_url,
+                    resume_subworker_result=resume_result,
+                    possible_transports=possible_transports,
+                ),
+            )
+            watchdog_petter.kill = main_task.cancel
             metadata["start_time"] = start_time.isoformat()
             try:
-                result = await loop.run_in_executor(
-                    None,
-                    functools.partial(
-                        run_worker,
-                        branch_url,
-                        run_id,
-                        subpath,
-                        vcs_type,
-                        os.environ,
-                        command,
-                        output_directory,
-                        metadata,
-                        vcs_manager,
-                        legacy_branch_name,
-                        suite,
-                        target=target,
-                        build_command=args.build_command,
-                        pre_check_command=args.pre_check,
-                        post_check_command=args.post_check,
-                        resume_branch_url=resume_branch_url,
-                        resume_branches=resume_branches,
-                        cached_branch_url=cached_branch_url,
-                        resume_subworker_result=resume_result,
-                        possible_transports=possible_transports,
-                    ),
-                )
+                result = await main_task
             except WorkerFailure as e:
                 metadata["code"] = e.code
                 metadata["description"] = e.description
