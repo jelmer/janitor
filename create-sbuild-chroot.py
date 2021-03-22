@@ -65,5 +65,5 @@ create_chroot(config.distribution, sbuild_path, config.suite, sbuild_arch, args.
 if args.user:
     subprocess.check_call(
         ['schroot', '-c', '%s-%s-sbuild' % (config.suite.name, sbuild_arch),
-         'install', '--owner=%s' % args.user,
+         '--directory', '/', '--', 'install', '-d', '--owner=%s' % args.user,
          pwd.getpwnam(args.user).pw_dir])
