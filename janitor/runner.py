@@ -285,7 +285,7 @@ class DebianBuilder(Builder):
             bucket_name = URL(self.apt_location).host
             apt_location = "https://storage.googleapis.com/%s/" % bucket_name
         else:
-            apt_location = apt_location
+            apt_location = self.apt_location
         env = {
             "EXTRA_REPOSITORIES": ":".join(
                 [
