@@ -1535,7 +1535,7 @@ order by url, last_run.finish_time desc
             policy_config,
             enable_external_workers=(not args.no_external_workers),
             external_url=(
-                app.external_url.join(URL("api") if app.external_url else None)
+                app.external_url.join(URL("api")) if app.external_url else None
             ),
         ),
     )
