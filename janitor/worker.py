@@ -425,6 +425,7 @@ class DebianTarget(Target):
         self.committer = env.get("COMMITTER")
 
     def parse_args(self, argv):
+        logging.info('Running %r', argv)
         changer_cls: Type[DebianChanger]
         try:
             changer_cls = debian_changer_subcommand(argv[0])
