@@ -414,6 +414,12 @@ class DebianTarget(Target):
 
     name = "debian"
 
+    SUPPRESS_LINTIAN_TAGS = [
+        'bad-distribution-in-changes-file',
+        'no-nmu-in-changelog',
+        'source-nmu-has-incorrect-version-number'
+        ]
+
     def __init__(self, env, build_command):
         self.build_distribution = env.get("BUILD_DISTRIBUTION")
         self.build_command = build_command
@@ -556,7 +562,7 @@ class DebianTarget(Target):
         logger.info('Running lintian')
         args = [
             '--exp-output=format=json',
-            '--suppress-tags=bad-distribution-in-changes-file']
+            '--suppress-tags=%s' % ','.join(self.SUPPRESS_LINTIAN_TAGS)]
         if self.lintian_profile:
             args.append('--profile=%s' % self.lintian_profile)
         try:
