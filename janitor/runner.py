@@ -24,6 +24,7 @@ import json
 from io import BytesIO
 import logging
 import os
+import re
 import signal
 import socket
 import sys
@@ -925,7 +926,7 @@ class ActiveLocalRun(ActiveRun):
             n
             for n in os.listdir(self.output_directory)
             if os.path.isfile(os.path.join(self.output_directory, n))
-            and n.endswith(".log")
+            and (n.endswith(".log") or re.match(r".*\.log\.[0-9]+", n))
         ]
 
     def get_log_file(self, name):
