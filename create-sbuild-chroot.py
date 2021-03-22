@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import pwd
 import shutil
 import subprocess
 
@@ -27,6 +28,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--remove-old', action='store_true')
 parser.add_argument('--include', type=str, action='append', help='Include package.')
 parser.add_argument('--base-directory', type=str, help='Base directory for chroots')
+parser.add_argument('--user', type=str, help='User to create home directory for')
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
@@ -59,3 +61,9 @@ if args.remove_old:
             os.unlink(entry.path)
 
 create_chroot(config.distribution, sbuild_path, config.suite, sbuild_arch, args.include)
+
+if args.user:
+    subprocess.check_call(
+        ['schroot', '-c', '%s-%s-sbuild' % (config.suite.name, sbuild_arch),
+         'install', '--owner=%s' % args.user,
+         pwd.getpwnam(args.user).pw_dir])
