@@ -130,8 +130,8 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
 
         os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
 
-        try:
-            with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
+        with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
+            try:
                 return create_dist_schroot(
                     tree,
                     subdir=package,
@@ -139,28 +139,28 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                     packaging_tree=tree,
                     chroot=self.schroot,
                 )
-        except NotImplementedError:
-            return None
-        except NoBuildToolsFound:
-            logger.info("No build tools found, falling back to simple export.")
-            return None
-        except DetailedFailure:
-            raise
-        except UnidentifiedError as e:
-            traceback.print_exc()
-            lines = [line for line in e.lines if line]
-            if e.secondary:
-                raise DistCommandFailed(e.secondary.line)
-            elif len(lines) == 1:
-                raise DistCommandFailed(lines[0])
-            else:
-                raise DistCommandFailed(
-                    "command %r failed with unidentified error "
-                    "(return code %d)" % (e.argv, e.retcode)
-                )
-        except Exception as e:
-            traceback.print_exc()
-            raise DistCommandFailed(str(e))
+            except NotImplementedError:
+                return None
+            except NoBuildToolsFound:
+                logger.info("No build tools found, falling back to simple export.")
+                return None
+            except DetailedFailure:
+                raise
+            except UnidentifiedError as e:
+                traceback.print_exc()
+                lines = [line for line in e.lines if line]
+                if e.secondary:
+                    raise DistCommandFailed(e.secondary.line)
+                elif len(lines) == 1:
+                    raise DistCommandFailed(lines[0])
+                else:
+                    raise DistCommandFailed(
+                        "command %r failed with unidentified error "
+                        "(return code %d)" % (e.argv, e.retcode)
+                    )
+            except Exception as e:
+                traceback.print_exc()
+                raise DistCommandFailed(str(e))
 
     def make_changes(self, *args, **kwargs):
         try:
@@ -181,36 +181,36 @@ class DebianizeChanger(ActualDebianizeChanger):
 
         os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
 
-        try:
-            with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
+        with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
+            try:
                 return create_dist_schroot(
                     tree,
                     subdir=package,
                     target_dir=target_dir,
                     chroot=self.schroot,
                 )
-        except NotImplementedError:
-            return None
-        except NoBuildToolsFound:
-            logger.info("No build tools found, falling back to simple export.")
-            return None
-        except DetailedFailure:
-            raise
-        except UnidentifiedError as e:
-            traceback.print_exc()
-            lines = [line for line in e.lines if line]
-            if e.secondary:
-                raise DistCommandFailed(e.secondary.line)
-            elif len(lines) == 1:
-                raise DistCommandFailed(lines[0])
-            else:
-                raise DistCommandFailed(
-                    "command %r failed with unidentified error "
-                    "(return code %d)" % (e.argv, e.retcode)
-                )
-        except Exception as e:
-            traceback.print_exc()
-            raise DistCommandFailed(str(e))
+            except NotImplementedError:
+                return None
+            except NoBuildToolsFound:
+                logger.info("No build tools found, falling back to simple export.")
+                return None
+            except DetailedFailure:
+                raise
+            except UnidentifiedError as e:
+                traceback.print_exc()
+                lines = [line for line in e.lines if line]
+                if e.secondary:
+                    raise DistCommandFailed(e.secondary.line)
+                elif len(lines) == 1:
+                    raise DistCommandFailed(lines[0])
+                else:
+                    raise DistCommandFailed(
+                        "command %r failed with unidentified error "
+                        "(return code %d)" % (e.argv, e.retcode)
+                    )
+            except Exception as e:
+                traceback.print_exc()
+                raise DistCommandFailed(str(e))
 
     def make_changes(self, *args, **kwargs):
         try:
