@@ -235,7 +235,9 @@ async def generate_run_file(
         kwargs["dist_log_name"] = DIST_LOG_NAME
 
     kwargs["get_log"] = get_log
-    if has_log(BUILD_LOG_NAME):
+    if run.result_code.startswith('worker-'):
+        kwargs["primary_log"] = "worker"
+    elif has_log(BUILD_LOG_NAME):
         kwargs["earlier_build_log_names"] = []
         i = 1
         while has_log(BUILD_LOG_NAME + ".%d" % i):

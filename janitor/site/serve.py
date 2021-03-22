@@ -390,7 +390,7 @@ if __name__ == "__main__":
             return {
                 "base_distribution": get_suite_config(
                     request.app.config, SUITES[0]
-                ).base_distribution,
+                ).debian_build.base_distribution,
                 "archive_version": archive_version,
                 "suite_version": suite_version,
                 "sources": sources,
