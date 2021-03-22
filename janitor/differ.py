@@ -188,9 +188,9 @@ def _set_limits(limit_mb):
         return
     import resource
 
-    limit = limit_mb * (1024 ** 3)
+    limit = limit_mb * (1024 ** 2)
     # Limit to 1Gb
-    resource.setrlimit(resource.RLIMIT_AS, (int(1.8 * limit), limit))
+    resource.setrlimit(resource.RLIMIT_AS, (int(0.8 * limit), limit))
 
 
 async def handle_diffoscope(request):
