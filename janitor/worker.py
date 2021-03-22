@@ -136,7 +136,8 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                     tree,
                     subdir=package,
                     target_dir=target_dir,
-                    packaging_tree=tree,
+                    packaging_tree=self.packaging_tree,
+                    packaging_subpath=self.packaging_subpath,
                     chroot=self.schroot,
                 )
             except NotImplementedError:
@@ -162,9 +163,11 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                 traceback.print_exc()
                 raise DistCommandFailed(str(e))
 
-    def make_changes(self, *args, **kwargs):
+    def make_changes(self, local_tree, subpath, *args, **kwargs):
+        self.packaging_tree = local_tree
+        self.packaging_subpath = subpath
         try:
-            return super(NewUpstreamChanger, self).make_changes(*args, **kwargs)
+            return super(NewUpstreamChanger, self).make_changes(local_tree, subpath, *args, **kwargs)
         except DetailedFailure as e:
             error_code = "dist-" + e.error.kind
             error_description = str(e.error)
