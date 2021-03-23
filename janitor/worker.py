@@ -155,7 +155,6 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
             except DistNoTarball as e:
                 raise ChangerError('dist-no-tarball', str(e))
             except UnidentifiedError as e:
-                traceback.print_exc()
                 lines = [line for line in e.lines if line]
                 if e.secondary:
                     raise DistCommandFailed(e.secondary.line)
@@ -202,7 +201,6 @@ class DebianizeChanger(ActualDebianizeChanger):
             except DistNoTarball as e:
                 raise ChangerError('dist-no-tarball', str(e))
             except UnidentifiedError as e:
-                traceback.print_exc()
                 lines = [line for line in e.lines if line]
                 if e.secondary:
                     raise DistCommandFailed(e.secondary.line)
