@@ -418,6 +418,8 @@ class DebianTarget(Target):
         'bad-distribution-in-changes-file',
         'no-nmu-in-changelog',
         'source-nmu-has-incorrect-version-number'
+        'changelog-distribution-does-not-match-changes-file',
+        'distribution-and-changes-mismatch',
         ]
 
     def __init__(self, env, build_command):
