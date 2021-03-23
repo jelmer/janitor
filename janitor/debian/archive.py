@@ -60,6 +60,8 @@ last_publish_success = Gauge(
 )
 
 
+logger = logging.getLogger('janitor.debian.archive')
+
 # TODO(jelmer): Generate contents file
 
 
@@ -137,7 +139,7 @@ async def get_packages(db, info_provider, suite_name, component, arch):
             async for chunk in info_provider.info_for_run(run_id, suite_name, package):
                 yield chunk
         except ArtifactsMissing:
-            logging.warning("Artifacts missing for %s (%s), skipping", package, run_id)
+            logger.warning("Artifacts missing for %s (%s), skipping", package, run_id)
             continue
 
 
@@ -213,14 +215,17 @@ async def write_suite_files(
             for suffix in SUFFIXES:
                 add_file_info(r, base_path, packages_path + suffix)
 
+    logger.debug('Writing Release file for %s', suite)
     with open(os.path.join(base_path, "Release"), "wb") as f:
         r.dump(f)
 
+    logger.debug('Writing Release.gpg file for %s', suite)
     data = gpg.Data(r.dump())
     with open(os.path.join(base_path, "Release.gpg"), "wb") as f:
         signature, result = gpg_context.sign(data, mode=gpg_mode.DETACH)
         f.write(signature)
 
+    logger.debug('Writing InRelease file for %s', suite)
     data = gpg.Data(r.dump())
     with open(os.path.join(base_path, "InRelease"), "wb") as f:
         signature, result = gpg_context.sign(data, mode=gpg_mode.CLEAR)
@@ -280,11 +285,11 @@ async def listen_to_runner(runner_url, generator_manager):
 async def publish_suite(
     dists_directory, db, package_info_provider, config, suite, gpg_context
 ):
-    if not suite.debian_build:
-        logging.info("%s is not a Debian suite", suite.name)
+    if not suite.HasField('debian_build'):
+        logger.info("%s is not a Debian suite", suite.name)
         return
     start_time = datetime.now()
-    logging.info("Publishing %s", suite.name)
+    logger.info("Publishing %s", suite.name)
     suite_path = os.path.join(dists_directory, suite.name)
     os.makedirs(suite_path, exist_ok=True)
     await write_suite_files(
@@ -297,7 +302,7 @@ async def publish_suite(
         origin=config.origin,
         gpg_context=gpg_context,
     )
-    logging.info(
+    logger.info(
         "Done publishing %s (took %s)", suite.name, datetime.now() - start_time
     )
     last_publish_success.labels(suite=suite.name).set_to_current_time()
@@ -361,13 +366,17 @@ async def main(argv=None):
     )
     parser.add_argument("--dists-directory", type=str, help="Dists directory")
     parser.add_argument("--cache-directory", type=str, help="Cache directory")
+    parser.add_argument("--verbose", action='store_true')
 
     args = parser.parse_args()
     if not args.dists_directory:
         parser.print_usage()
         sys.exit(1)
 
-    logging.basicConfig(level=logging.INFO)
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     with open(args.config, "r") as f:
         config = read_config(f)
