@@ -93,8 +93,12 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
         lines = [line.decode('utf-8', 'replace') for line in logf]
         problem = find_build_failure_description(lines)[1]
         if problem is None:
-            new_code = 'dist-command-failed'
-            new_description = description
+            if result_code == 'dist-no-tarball':
+                new_code = result_code
+                new_description = description
+            else:
+                new_code = 'dist-command-failed'
+                new_description = description
         else:
             new_code = 'dist-' + problem.kind
             new_description = str(problem)
