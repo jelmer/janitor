@@ -367,6 +367,9 @@ async def main(argv=None):
     parser.add_argument("--dists-directory", type=str, help="Dists directory")
     parser.add_argument("--cache-directory", type=str, help="Cache directory")
     parser.add_argument("--verbose", action='store_true')
+    parser.add_argument(
+        "--runner-url", type=str, default=None, help="URL to reach runner at."
+    )
 
     args = parser.parse_args()
     if not args.dists_directory:
@@ -400,21 +403,28 @@ async def main(argv=None):
         args.dists_directory, db, config, package_info_provider, gpg_context
     )
 
-    async with package_info_provider:
-        loop = asyncio.get_event_loop()
+    loop = asyncio.get_event_loop()
+    tasks = [
+        loop.create_task(
+            run_web_server(
+                args.listen_address,
+                args.port,
+                args.dists_directory,
+                config,
+                generator_manager,
+            )
+        ),
+        loop.create_task(loop_publish(config, generator_manager)),
+        ]
 
-        await asyncio.gather(
-            loop.create_task(
-                run_web_server(
-                    args.listen_address,
-                    args.port,
-                    args.dists_directory,
-                    config,
-                    generator_manager,
-                )
-            ),
-            loop.create_task(loop_publish(config, generator_manager)),
-        )
+    if args.runner_url:
+        tasks.append(loop.create_task(
+            listen_to_runner(
+                args.runner_url,
+                generator_manager)))
+
+    async with package_info_provider:
+        await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
