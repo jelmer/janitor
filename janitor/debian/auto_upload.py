@@ -20,6 +20,7 @@ import os
 import logging
 import sys
 import tempfile
+from typing import Optional
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
@@ -44,7 +45,47 @@ async def run_web_server(listen_addr, port, config):
     await site.start()
 
 
-async def upload_build_result(result, artifact_manager, dput_host):
+class DebsignFailure(Exception):
+    """Debsign failed to run."""
+
+    def __init__(self, returncode, reason):
+        self.returncode = returncode
+        self.reason = reason
+
+
+async def debsign(directory, changes_filename, debsign_keyid: Optional[str] = None):
+    if debsign_keyid:
+        args = ['-k%s' % debsign_keyid]
+    else:
+        args = []
+    p = await asyncio.create_subprocess_exec(
+        ['debsign'] + args + [changes_filename], cwd=directory,
+        stderr=asyncio.subprocess.PIPE)
+    (stdout, stderr) = await p.communicate()
+    if p.returncode == 0:
+        return
+    raise DebsignFailure(p.returncode, stderr.decode())
+
+
+class DputFailure(Exception):
+
+    def __init__(self, returncode, reason):
+        self.returncode = returncode
+        self.reason = reason
+
+
+async def dput(directory, changes_filename, dput_host):
+    p = await asyncio.create_subprocess_exec(
+        ['dput', dput_host, changes_filename], cwd=directory,
+        stderr=asyncio.subprocess.PIPE)
+    (stdout, stderr) = await p.communicate()
+    if p.returncode == 0:
+        return
+
+    raise DputFailure(p.returncode, stderr.decode())
+
+
+async def upload_build_result(result, artifact_manager, dput_host, debsign_keyid: Optional[str] = None):
     logging.info('Uploading results for %s', result['log_id'])
     with tempfile.TemporaryDirectory() as td:
         try:
@@ -62,21 +103,35 @@ async def upload_build_result(result, artifact_manager, dput_host):
         else:
             logging.error('no changes filename in build artifacts')
             return
-        logging.debug('Running dput.')
-        p = await asyncio.create_subprocess_exec(
-            ['dput', dput_host, changes_filename], cwd=td.name,
-            stderr=asyncio.subprocess.PIPE)
-        (stdout, stderr) = await p.communicate()
-        if p.returncode == 0:
-            logging.info('Successfully uploaded run %s', result['log_id'])
-        else:
+
+        logging.info('Running debsign')
+        try:
+            await debsign(td, changes_filename, debsign_keyid)
+        except DebsignFailure as e:
             logging.error(
-                'Error (exit code %d) uploading %s for %s: %s', 
-                p.returncode, changes_filename,
-                result['log_id'], stderr.decode())
+                'Error (exit code %d) signing %s for %s: %s',
+                e.returncode, changes_filename,
+                result['log_id'], e.reason)
+        else:
+            logging.info(
+                'Successfully signed %s for %s',
+                changes_filename, result['log_id'])
+
+        logging.debug('Running dput.')
+        try:
+            await dput(td, changes_filename, dput_host)
+        except DputFailure as e:
+            logging.error(
+                'Error (exit code %d) uploading %s for %s: %s',
+                e.returncode, changes_filename,
+                result['log_id'], e.reason)
+        else:
+            logging.info('Successfully uploaded run %s', result['log_id'])
 
 
-async def listen_to_runner(runner_url, artifact_manager, dput_host):
+async def listen_to_runner(
+        runner_url, artifact_manager, dput_host,
+        debsign_keyid: Optional[str] = None):
     from aiohttp.client import ClientSession
     import urllib.parse
 
@@ -85,7 +140,7 @@ async def listen_to_runner(runner_url, artifact_manager, dput_host):
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
-            await upload_build_result(result, artifact_manager, dput_host)
+            await upload_build_result(result, artifact_manager, dput_host, debsign_keyid)
 
 
 async def main(argv=None):
@@ -101,6 +156,7 @@ async def main(argv=None):
     )
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--dput-host", type=str, help="dput host to upload to.")
+    parser.add_argument("--debsign-keyid", type=str, help="key id to use for signing")
 
     args = parser.parse_args()
     if not args.dists_directory:
@@ -128,7 +184,7 @@ async def main(argv=None):
                 config,
             )
         ),
-        loop.create_task(listen_to_runner(args.runner_url, artifact_manager, args.dput_host))
+        loop.create_task(listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid))
     )
 
 
