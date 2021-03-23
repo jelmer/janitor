@@ -114,6 +114,8 @@ class CachingPackageInfoProvider(object):
                     yield chunk
         except FileNotFoundError:
             chunks = []
+            logger.debug('Retrieving artifacts for %s/%s (%s)',
+                         suite_name, package, run_id)
             with open(cache_path, "wb") as f:
                 async for chunk in self.primary_info_provider.info_for_run(
                     run_id, suite_name, package
@@ -134,6 +136,8 @@ async def get_packages(db, info_provider, suite_name, component, arch):
             suite_name,
         )
 
+    logger.debug('Need to process %d rows for %s/%s/%s',
+                 len(rows), suite_name, component, archive)
     for package, run_id, build_verison in rows:
         try:
             async for chunk in info_provider.info_for_run(run_id, suite_name, package):
