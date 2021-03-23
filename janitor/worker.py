@@ -166,9 +166,6 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                         "command %r failed with unidentified error "
                         "(return code %d)" % (e.argv, e.retcode)
                     )
-            except Exception as e:
-                traceback.print_exc()
-                raise DistCommandFailed(str(e))
 
     def make_changes(self, local_tree, subpath, *args, **kwargs):
         self.packaging_tree = local_tree
@@ -216,9 +213,6 @@ class DebianizeChanger(ActualDebianizeChanger):
                         "command %r failed with unidentified error "
                         "(return code %d)" % (e.argv, e.retcode)
                     )
-            except Exception as e:
-                traceback.print_exc()
-                raise DistCommandFailed(str(e))
 
 
 class DummyDebianChanger(DebianChanger):
