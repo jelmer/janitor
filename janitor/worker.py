@@ -87,6 +87,7 @@ from ognibuild import (
 )
 from ognibuild.dist import (
     create_dist_schroot,
+    DistNoTarball,
 )
 
 from .vcs import (
@@ -145,7 +146,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
             except NoBuildToolsFound:
                 logger.info("No build tools found, falling back to simple export.")
                 return None
-            except DetailedFailure:
+            except (DetailedFailure, DistNoTarball):
                 raise
             except UnidentifiedError as e:
                 traceback.print_exc()
