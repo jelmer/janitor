@@ -402,7 +402,6 @@ async def publish_pending_new(
             value,
             maintainer_email,
             uploader_emails,
-            publish_policy,
             update_changelog,
             command,
             unpublished_branches,
@@ -432,10 +431,9 @@ async def publish_pending_new(
                     next_try_time - datetime.now(),
                 )
                 continue
+            ms = [b[4] for b in unpublished_branches]
             if push_limit is not None and (
-                MODE_PUSH in publish_policy.values()
-                or MODE_ATTEMPT_PUSH in publish_policy.values()
-            ):
+                    MODE_PUSH in ms or MODE_ATTEMPT_PUSH in ms):
                 if push_limit == 0:
                     logger.info(
                         "Not pushing %s / %s: push limit reached",
@@ -450,6 +448,7 @@ async def publish_pending_new(
                 base_revision,
                 revision,
                 publish_mode,
+                max_frequency_days
             ) in unpublished_branches:
                 if publish_mode is None:
                     logger.warning(
@@ -468,6 +467,7 @@ async def publish_pending_new(
                     topic_publish,
                     topic_merge_proposal,
                     publish_mode,
+                    max_frequency_days,
                     update_changelog,
                     command,
                     possible_hosters=possible_hosters,
@@ -580,6 +580,7 @@ async def publish_from_policy(
     topic_publish,
     topic_merge_proposal,
     mode: str,
+    max_frequency_days: Optional[int],
     update_changelog: str,
     command: List[str],
     dry_run: bool,
@@ -648,6 +649,7 @@ async def publish_from_policy(
                     "Not creating proposal for %s/%s: %s", run.package, run.suite, e
                 )
                 mode = MODE_BUILD_ONLY
+            # TODO(jelmer): Check max_frequency_days
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
@@ -917,9 +919,9 @@ async def publish_request(request):
         roles = [e[0] for e in run.result_branches]
 
     if mode:
-        branches = [(r, mode) for r in roles]
+        branches = [(r, (mode, None)) for r in roles]
     else:
-        branches = [(r, publish_policy.get(r, MODE_SKIP)) for r in roles]
+        branches = [(r, publish_policy.get(r, (MODE_SKIP, None))) for r in roles]
 
     publish_ids = {}
     loop = asyncio.get_event_loop()
@@ -1836,7 +1838,7 @@ async def listen_to_runner(
         publish_policy, update_changelog, command = await state.get_publish_policy(
             conn, run.package, run.suite
         )
-        for role, mode in publish_policy.items():
+        for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
                 conn,
                 rate_limiter,
@@ -1849,6 +1851,7 @@ async def listen_to_runner(
                 topic_publish,
                 topic_merge_proposal,
                 mode,
+                max_frequency_days,
                 update_changelog,
                 command,
                 dry_run=dry_run,

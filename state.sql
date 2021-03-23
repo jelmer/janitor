@@ -162,6 +162,7 @@ CREATE TYPE changelog_mode AS ENUM('auto', 'update', 'leave');
 CREATE TABLE IF NOT EXISTS publish_policy (
    role text not null,
    mode publish_mode default 'build-only',
+   frequency_days int,
    unique(role)
 );
 CREATE TABLE IF NOT EXISTS policy (

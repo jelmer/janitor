@@ -1090,10 +1090,9 @@ async def iter_publish_ready(
         int,
         str,
         List[str],
-        Dict[str, str],
         str,
         List[str],
-        List[Tuple[str, str, bytes, bytes, Optional[str]]],
+        List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int]]],
     ]
 ]:
     args: List[Any] = []
@@ -1135,9 +1134,8 @@ SELECT * FROM publish_ready
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
             [Run.from_row(record[:23])]
-            + list(record[23:-4])
+            + list(record[23:-3])
             + [
-                {k: v for k, v in record[-4]},
                 record[-3],  # type: ignore
                 shlex.split(record[-2]) if record[-2] else None,  # type: ignore
                 record[-1],
@@ -1461,7 +1459,7 @@ async def update_policy(
     conn: asyncpg.Connection,
     name: str,
     suite: str,
-    publish_mode: Dict[str, str],
+    publish_mode: Dict[str, Tuple[str, Optional[int]]],
     changelog_mode: str,
     command: List[str],
 ) -> None:
@@ -1477,7 +1475,7 @@ async def update_policy(
         suite,
         changelog_mode,
         (" ".join(command) if command else None),
-        list(publish_mode.items()),
+        [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
     )
 
 
@@ -1492,7 +1490,7 @@ async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
             row[0],
             row[1],
             (
-                {k[0]: k[1] for k in row[2]},
+                {k[0]: (k[1], k[2]) for k in row[2]},
                 row[3],
                 shlex.split(row[4]) if row[4] else None,
             ),
@@ -1524,7 +1522,7 @@ async def get_publish_policy(
     )
     if row:
         return (  # type: ignore
-            {k: v for k, v in row[0]},
+            {k: (v, f) for k, v, f in row[0]},
             row[1],
             shlex.split(row[2]) if row[2] else None,
         )

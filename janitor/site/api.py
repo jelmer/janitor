@@ -768,7 +768,6 @@ async def handle_publish_ready(request):
             value,
             maintainer_email,
             uploader_emails,
-            publish_policy,
             changelog_mode,
             command,
             unpublished_branches,
