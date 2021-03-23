@@ -59,7 +59,7 @@ async def debsign(directory, changes_filename, debsign_keyid: Optional[str] = No
     else:
         args = []
     p = await asyncio.create_subprocess_exec(
-        ['debsign'] + args + [changes_filename], cwd=directory,
+        'debsign', *args, changes_filename, cwd=directory,
         stderr=asyncio.subprocess.PIPE)
     (stdout, stderr) = await p.communicate()
     if p.returncode == 0:
@@ -76,7 +76,7 @@ class DputFailure(Exception):
 
 async def dput(directory, changes_filename, dput_host):
     p = await asyncio.create_subprocess_exec(
-        ['dput', dput_host, changes_filename], cwd=directory,
+        'dput', dput_host, changes_filename, cwd=directory,
         stderr=asyncio.subprocess.PIPE)
     (stdout, stderr) = await p.communicate()
     if p.returncode == 0:
