@@ -17,12 +17,12 @@ cd {{ package }}
 </pre>
 </div>
 </div>
-{% elif command.startswith('deb-scrub-obsolete') %}
+{% elif command.startswith('scrub-obsolete') %}
 <p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 debcheckout {{ package }}
 cd {{ package }}
-{{ command }}
+deb-scrub-obsolete
 </pre>
 </div>
 </div>
