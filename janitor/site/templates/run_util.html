@@ -205,7 +205,7 @@ $("#{{ propose_id }}").click(function() {
 
 {% macro describe_publish_policy(publish_policy) %}
 {% if publish_policy|length > 0 %}
-<b>{{ publish_policy['main'] }}</b>
+<b>{{ publish_policy['main'][0] }}{% if publish_policy['main'][1] %} (every {{ publish_policy['main'][1] }} days){% endif %}</b>
 {% else %}
 {% for role, policy in publish_policy %}{{ role }}: <b>{{ policy }}</b>{% if not loop.last %}, {% endif %}{% endfor %}
 {% endif %}
