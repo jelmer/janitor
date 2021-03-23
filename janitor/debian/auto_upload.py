@@ -159,9 +159,6 @@ async def main(argv=None):
     parser.add_argument("--debsign-keyid", type=str, help="key id to use for signing")
 
     args = parser.parse_args()
-    if not args.dists_directory:
-        parser.print_usage()
-        sys.exit(1)
 
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
@@ -170,8 +167,6 @@ async def main(argv=None):
 
     with open(args.config, "r") as f:
         config = read_config(f)
-
-    os.makedirs(args.dists_directory, exist_ok=True)
 
     artifact_manager = get_artifact_manager(config.artifact_location)
 
