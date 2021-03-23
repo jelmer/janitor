@@ -41,11 +41,11 @@ from prometheus_client import (
     Gauge,
 )
 
-from . import state
-from .artifacts import get_artifact_manager, ArtifactsMissing
-from .config import read_config, get_suite_config
-from .prometheus import setup_metrics
-from .pubsub import pubsub_reader
+from .. import state
+from ..artifacts import get_artifact_manager, ArtifactsMissing
+from ..config import read_config, get_suite_config
+from ..prometheus import setup_metrics
+from ..pubsub import pubsub_reader
 
 
 DEFAULT_GCS_TIMEOUT = 60 * 30
@@ -237,6 +237,8 @@ async def handle_publish(request):
     for suite_config in request.app.config.suite:
         if suite is not None and suite_config.name != suite:
             continue
+        if not suite_config.HasField('debian_build'):
+            continue
         request.app.generator_manager.trigger(suite_config)
 
     return web.json_response({})
@@ -316,6 +318,8 @@ class GeneratorManager(object):
             suite_config = get_suite_config(self.config, suite)
         else:
             suite_config = suite
+        if not suite_config.HasField('debian_build'):
+            return
         try:
             task = self.generators[suite_config.name]
         except KeyError:
@@ -347,7 +351,7 @@ async def loop_publish(config, generator_manager):
 async def main(argv=None):
     import argparse
 
-    parser = argparse.ArgumentParser(prog="janitor.archive")
+    parser = argparse.ArgumentParser(prog="janitor.debian.archive")
     parser.add_argument(
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
