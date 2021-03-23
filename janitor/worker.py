@@ -146,8 +146,14 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
             except NoBuildToolsFound:
                 logger.info("No build tools found, falling back to simple export.")
                 return None
-            except (DetailedFailure, DistNoTarball):
-                raise
+            except DetailedFailure as e:
+                error_code = "dist-" + e.error.kind
+                error_description = str(e.error)
+                raise ChangerError(
+                    summary=error_description, category=error_code, original=e
+                )
+            except DistNoTarball as e:
+                raise ChangerError('dist-no-tarball', str(e))
             except UnidentifiedError as e:
                 traceback.print_exc()
                 lines = [line for line in e.lines if line]
@@ -167,15 +173,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
     def make_changes(self, local_tree, subpath, *args, **kwargs):
         self.packaging_tree = local_tree
         self.packaging_debian_path = os.path.join(subpath, 'debian')
-        try:
-            return super(NewUpstreamChanger, self).make_changes(local_tree, subpath, *args, **kwargs)
-        except DetailedFailure as e:
-            error_code = "dist-" + e.error.kind
-            error_description = str(e.error)
-            raise ChangerError(
-                summary=error_description, category=error_code, original=e
-            )
-
+        return super(NewUpstreamChanger, self).make_changes(local_tree, subpath, *args, **kwargs)
 
 
 class DebianizeChanger(ActualDebianizeChanger):
@@ -198,8 +196,14 @@ class DebianizeChanger(ActualDebianizeChanger):
             except NoBuildToolsFound:
                 logger.info("No build tools found, falling back to simple export.")
                 return None
-            except DetailedFailure:
-                raise
+            except DetailedFailure as e:
+                error_code = "dist-" + e.error.kind
+                error_description = str(e.error)
+                raise ChangerError(
+                    summary=error_description, category=error_code, original=e
+                )
+            except DistNoTarball as e:
+                raise ChangerError('dist-no-tarball', str(e))
             except UnidentifiedError as e:
                 traceback.print_exc()
                 lines = [line for line in e.lines if line]
@@ -215,16 +219,6 @@ class DebianizeChanger(ActualDebianizeChanger):
             except Exception as e:
                 traceback.print_exc()
                 raise DistCommandFailed(str(e))
-
-    def make_changes(self, *args, **kwargs):
-        try:
-            return super(DebianizeChanger, self).make_changes(*args, **kwargs)
-        except DetailedFailure as e:
-            error_code = "dist-" + e.error.kind
-            error_description = str(e.error)
-            raise ChangerError(
-                summary=error_description, category=error_code, original=e
-            )
 
 
 class DummyDebianChanger(DebianChanger):
