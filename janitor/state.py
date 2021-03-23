@@ -1610,3 +1610,12 @@ async def has_cotenants(
         # Uhm, we actually don't really know
         logging.warning("Unable to figure out if %s has cotenants on %s", package, url)
         return None
+
+
+async def last_published(
+        conn: asyncpg.Connection, suite: str, package: str) -> Optional[datetime.datetime]:
+    return await conn.fetchval("""
+SELECT timestamp from publish left join run on run.revision = publish.revision
+WHERE run.suite = $1 and run.package = $2 AND publish.result_code = 'success'
+order by timestamp desc limit 1
+""", suite, package)
