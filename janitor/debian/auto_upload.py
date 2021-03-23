@@ -157,6 +157,10 @@ async def main(argv=None):
     parser.add_argument("--verbose", action='store_true')
     parser.add_argument("--dput-host", type=str, help="dput host to upload to.")
     parser.add_argument("--debsign-keyid", type=str, help="key id to use for signing")
+    parser.add_argument(
+        "--runner-url", type=str, default=None, help="URL to reach runner at."
+    )
+
 
     args = parser.parse_args()
 
