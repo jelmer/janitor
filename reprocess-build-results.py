@@ -30,6 +30,7 @@ from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E
 from janitor import state  # noqa: E402
 from janitor.config import read_config  # noqa: E402
 from janitor.logs import get_log_manager  # noqa: E402
+from janitor.schedule import do_schedule  # noqa: E402
 
 
 loop = asyncio.get_event_loop()
@@ -47,6 +48,9 @@ parser.add_argument(
 parser.add_argument(
     "-r", "--run-id", type=str, action="append", help="Run id to process"
 )
+parser.add_argument(
+    '--reschedule', action='store_true',
+    help='Schedule rebuilds for runs for which result code has changed.')
 parser.add_argument('--dry-run', action='store_true')
 args = parser.parse_args()
 
@@ -60,7 +64,7 @@ with open(args.config, "r") as f:
 logfile_manager = get_log_manager(config.logs_location)
 
 
-async def reprocess_run(db, package, log_id, result_code, description, dry_run=False):
+async def reprocess_run(db, package, suite, log_id, command, duration, result_code, description, dry_run=False, reschedule=False):
     if result_code.startswith('dist-'):
         logname = 'dist.log'
     else:
@@ -97,9 +101,6 @@ async def reprocess_run(db, package, log_id, result_code, description, dry_run=F
         new_phase = None
 
     if new_code != result_code or description != new_description:
-        if not dry_run:
-            async with db.acquire() as conn:
-                await state.update_run_result(conn, log_id, new_code, new_description)
         logging.info(
             "%s/%s: Updated %r, %r => %r, %r %r",
             package,
@@ -110,15 +111,31 @@ async def reprocess_run(db, package, log_id, result_code, description, dry_run=F
             new_description,
             new_phase
         )
+        if not dry_run:
+            async with db.acquire() as conn:
+                await state.update_run_result(conn, log_id, new_code, new_description)
+            if reschedule and new_code != result_code:
+                await do_schedule(
+                    conn,
+                    package,
+                    suite,
+                    command=command.split(" "),
+                    estimated_duration=duration,
+                    requestor="reprocess-build-results",
+                    bucket="reschedule",
+                )
 
 
-async def process_all_build_failures(db, dry_run=False):
+async def process_all_build_failures(db, dry_run=False, reschedule=False):
     todo = []
     async with db.acquire() as conn, conn.transaction():
         query = """
 SELECT
   package,
+  suite,
   id,
+  command,
+  finish_time - start_time,
   result_code,
   description
 FROM run
@@ -130,35 +147,38 @@ WHERE
    result_code LIKE 'dist-%' OR
    result_code LIKE 'create-session-%')
    """
-        async for package, log_id, result_code, description in (conn.cursor(query)):
-            todo.append(reprocess_run(db, package, log_id, result_code, description, dry_run=dry_run))
+        async for package, suite, log_id, command, duration, result_code, description in (conn.cursor(query)):
+            todo.append(reprocess_run(db, package, suite, log_id, command, duration, result_code, description, dry_run=dry_run, reschedule=reschedule))
     for i in range(0, len(todo), 100):
         await asyncio.wait(set(todo[i : i + 100]))
 
 
-async def process_builds(db, run_ids, dry_run=False):
+async def process_builds(db, run_ids, dry_run=False, reschedule=False):
     todo = []
     async with db.acquire() as conn:
         query = """
 SELECT
   package,
+  suite,
   id,
+  command,
+  finish_time - start_time,
   result_code,
   description
 FROM run
 WHERE
   id = ANY($1::text[])
 """
-        for package, log_id, result_code, description in await conn.fetch(
+        for package, suite, log_id, command, duration, result_code, description in await conn.fetch(
             query, run_ids
         ):
-            todo.append(reprocess_run(db, package, log_id, result_code, description, dry_run=dry_run))
+            todo.append(reprocess_run(db, package, suite, log_id, command, duration, result_code, description, dry_run=dry_run, reschedule=reschedule))
     if todo:
         await asyncio.wait(todo)
 
 
 db = state.Database(config.database_location)
 if args.run_id:
-    loop.run_until_complete(process_builds(db, args.run_id, dry_run=args.dry_run))
+    loop.run_until_complete(process_builds(db, args.run_id, dry_run=args.dry_run, reschedule=args.reschedule))
 else:
-    loop.run_until_complete(process_all_build_failures(db, dry_run=args.dry_run))
+    loop.run_until_complete(process_all_build_failures(db, dry_run=args.dry_run, reschedule=args.reschedule))
