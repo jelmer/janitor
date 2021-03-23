@@ -51,6 +51,8 @@ message Match {
 message PublishPolicy {
     optional Mode mode = 1;
 
+    optional int32 max_frequency_days = 3;
+
     optional string role = 2 [ default = "main" ];
 }
 

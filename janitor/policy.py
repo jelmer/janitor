@@ -92,7 +92,7 @@ def apply_policy(
     uploaders: List[str],
     in_base: bool,
     release_stages_passed: Set[str]
-) -> Tuple[Dict[str, str], str, List[str]]:
+) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, List[str]]:
     publish_mode = {}
     update_changelog = policy_pb2.auto
     command = None
@@ -112,11 +112,11 @@ def apply_policy(
         else:
             continue
         for publish in s.publish:
-            publish_mode[publish.role] = publish.mode
+            publish_mode[publish.role] = (publish.mode, publish.max_frequency_days)
         if s.command:
             command = s.command
     return (
-        {k: PUBLISH_MODE_STR[v] for (k, v) in publish_mode.items()},
+        {k: (PUBLISH_MODE_STR[v[0]], v[1]) for (k, v) in publish_mode.items()},
         POLICY_MODE_STR[update_changelog],
         shlex.split(command),
     )
