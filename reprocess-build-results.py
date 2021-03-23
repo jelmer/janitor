@@ -25,6 +25,7 @@ import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 import silver_platter  # noqa: E402, F401
+from buildlog_consultant.common import find_build_failure_description  # noqa: E402
 from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E402
 from janitor import state  # noqa: E402
 from janitor.config import read_config  # noqa: E402
@@ -46,9 +47,10 @@ parser.add_argument(
 parser.add_argument(
     "-r", "--run-id", type=str, action="append", help="Run id to process"
 )
+parser.add_argument('--dry-run', action='store_true')
 args = parser.parse_args()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
 with open(args.config, "r") as f:
@@ -58,26 +60,46 @@ with open(args.config, "r") as f:
 logfile_manager = get_log_manager(config.logs_location)
 
 
-async def reprocess_run(db, package, log_id, result_code, description):
+async def reprocess_run(db, package, log_id, result_code, description, dry_run=False):
+    if result_code.startswith('dist-'):
+        logname = 'dist.log'
+    else:
+        logname = 'build.log'
     try:
-        build_logf = await logfile_manager.get_log(
-            package, log_id, "build.log", timeout=args.log_timeout
+        logf = await logfile_manager.get_log(
+            package, log_id, logname, timeout=args.log_timeout
         )
     except FileNotFoundError:
         return
-    failure = worker_failure_from_sbuild_log(build_logf)
-    if failure.error:
-        if failure.stage and not failure.error.is_global:
-            new_code = "%s-%s" % (failure.stage, failure.error.kind)
+
+    if logname == 'build.log':
+        failure = worker_failure_from_sbuild_log(logf)
+        if failure.error:
+            if failure.stage and not failure.error.is_global:
+                new_code = "%s-%s" % (failure.stage, failure.error.kind)
+            else:
+                new_code = failure.error.kind
+        elif failure.stage:
+            new_code = "build-failed-stage-%s" % failure.stage
         else:
-            new_code = failure.error.kind
-    elif failure.stage:
-        new_code = "build-failed-stage-%s" % failure.stage
-    else:
-        new_code = "build-failed"
-    if new_code != result_code or description != failure.description:
-        async with db.acquire() as conn:
-            await state.update_run_result(conn, log_id, new_code, failure.description)
+            new_code = "build-failed"
+        new_description = failure.description
+        new_phase = failure.phase,
+    elif logname == 'dist.log':
+        lines = [line.decode('utf-8', 'replace') for line in logf]
+        problem = find_build_failure_description(lines)[1]
+        if problem is None:
+            new_code = 'dist-command-failed'
+            new_description = description
+        else:
+            new_code = 'dist-' + problem.kind
+            new_description = str(problem)
+        new_phase = None
+
+    if new_code != result_code or description != new_description:
+        if not dry_run:
+            async with db.acquire() as conn:
+                await state.update_run_result(conn, log_id, new_code, new_description)
         logging.info(
             "%s/%s: Updated %r, %r => %r, %r %r",
             package,
@@ -85,12 +107,12 @@ async def reprocess_run(db, package, log_id, result_code, description):
             result_code,
             description,
             new_code,
-            failure.description,
-            failure.phase,
+            new_description,
+            new_phase
         )
 
 
-async def process_all_build_failures(db):
+async def process_all_build_failures(db, dry_run=False):
     todo = []
     async with db.acquire() as conn, conn.transaction():
         query = """
@@ -105,15 +127,16 @@ WHERE
    result_code LIKE 'build-failed-stage-%' OR
    result_code LIKE 'autopkgtest-%' OR
    result_code LIKE 'build-%' OR
+   result_code LIKE 'dist-%' OR
    result_code LIKE 'create-session-%')
    """
         async for package, log_id, result_code, description in (conn.cursor(query)):
-            todo.append(reprocess_run(db, package, log_id, result_code, description))
+            todo.append(reprocess_run(db, package, log_id, result_code, description, dry_run=dry_run))
     for i in range(0, len(todo), 100):
         await asyncio.wait(set(todo[i : i + 100]))
 
 
-async def process_builds(db, run_ids):
+async def process_builds(db, run_ids, dry_run=False):
     todo = []
     async with db.acquire() as conn:
         query = """
@@ -129,13 +152,13 @@ WHERE
         for package, log_id, result_code, description in await conn.fetch(
             query, run_ids
         ):
-            todo.append(reprocess_run(db, package, log_id, result_code, description))
+            todo.append(reprocess_run(db, package, log_id, result_code, description, dry_run=dry_run))
     if todo:
         await asyncio.wait(todo)
 
 
 db = state.Database(config.database_location)
 if args.run_id:
-    loop.run_until_complete(process_builds(db, args.run_id))
+    loop.run_until_complete(process_builds(db, args.run_id, dry_run=args.dry_run))
 else:
-    loop.run_until_complete(process_all_build_failures(db))
+    loop.run_until_complete(process_all_build_failures(db, dry_run=args.dry_run))
