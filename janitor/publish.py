@@ -649,7 +649,16 @@ async def publish_from_policy(
                     "Not creating proposal for %s/%s: %s", run.package, run.suite, e
                 )
                 mode = MODE_BUILD_ONLY
-            # TODO(jelmer): Check max_frequency_days
+            if max_frequency_days is not None:
+                last_published = await state.last_published(
+                    conn, run.suite, run.package, max_frequency_days)
+                if last_published is not None and \
+                        (datetime.now()-last_published).days < max_frequency_days:
+                    logger.warning(
+                        'Not creating proposal for %s/%s: '
+                        'was published already in last %d days (at %s)',
+                        run.package, run.suite, max_frequency_days, last_published)
+                    mode = MODE_BUILD_ONLY
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
