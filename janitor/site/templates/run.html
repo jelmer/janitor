@@ -100,6 +100,13 @@ function submit_review(status) {
 {%  endif %}
 {% endif %}
 
+{% if result_code != 'success' %}
+<a href="https://salsa.debian.org/jelmer/debian-janitor/-/issues/new?issue[issue_type]=issue&issue[title]={{ description|urlencode }}&issue[description]={% filter urlencode %}
+See run [{{ run_id }}]({{ url })
+
+{% endfilter %}">File a bug related to this run</a>
+{% endif %}
+
 {% if result %}
 <h3>Summary</h3>
 {% if suite == 'lintian-fixes' %}
