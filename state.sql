@@ -98,7 +98,6 @@ CREATE INDEX ON run (start_time);
 CREATE INDEX ON run (suite, start_time);
 CREATE INDEX ON run (package, suite);
 CREATE INDEX ON run (suite);
-CREATE INDEX ON run (build_distribution);
 CREATE INDEX ON run (result_code);
 CREATE INDEX ON run (revision);
 CREATE INDEX ON run (main_branch_revision);
@@ -303,6 +302,8 @@ CREATE TABLE debian_build (
  source text not null,
  lintian_result json
 );
+CREATE INDEX ON debian_build (run_id);
+CREATE INDEX ON debian_build (distribution, source, version);
 
 CREATE TABLE result_branch (
  role text not null,
@@ -334,7 +335,8 @@ CREATE TYPE result_branch_with_policy AS (
   remote_name text,
   base_revision text,
   revision text,
-  mode publish_mode);
+  mode publish_mode,
+  frequency_days integer);
 
 CREATE OR REPLACE VIEW publishable AS
   SELECT
@@ -367,7 +369,7 @@ CREATE OR REPLACE VIEW publishable AS
   policy.update_changelog,
   policy.command AS policy_command,
   ARRAY(
-   SELECT row(rb.role, remote_name, base_revision, revision, mode)::result_branch_with_policy
+   SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
    FROM new_result_branch rb
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
    WHERE rb.run_id = run.id AND revision NOT IN (SELECT revision FROM absorbed_revisions)
