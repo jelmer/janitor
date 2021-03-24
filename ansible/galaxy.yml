@@ -8,3 +8,8 @@ authors:
 homepage: https://salsa.debian.org/jelmer/debian-janitor
 license_file: ../LICENSE
 repository: https://salsa.debian.org/jelmer/debian-janitor#/ansible/
+dependencies:
+  "cloudalchemy.alertmanager_irc_relay": "*"
+  "cloudalchemy.pushgateway": "*"
+  "cloudalchemy.prometheus": "*"
+  "jelmer.postgresl": "*"
