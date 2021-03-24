@@ -1,7 +1,6 @@
 dependencies:
  - role: base
- # TODO(jelmer): Ideally we'd use upstream (geerlingguy.postgresql) but that doesn't support Debian testing/unstable
- - role: jelmer.postgresql
+ - role: geerlingguy.postgresql
    postgresql_service_state: started
    postgresql_service_enabled: true
    postgresql_users:
