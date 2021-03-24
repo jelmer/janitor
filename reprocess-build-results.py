@@ -64,7 +64,7 @@ with open(args.config, "r") as f:
 logfile_manager = get_log_manager(config.logs_location)
 
 
-async def reprocess_run(db, package, suite, log_id, command, duration, result_code, description, dry_run=False, reschedule=False):
+async def reprocess_run(db, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=False, reschedule=False):
     if result_code.startswith('dist-'):
         logname = 'dist.log'
     else:
@@ -83,10 +83,16 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
                 new_code = "%s-%s" % (failure.stage, failure.error.kind)
             else:
                 new_code = failure.error.kind
+            try:
+                new_failure_details = failure.error.json()
+            except NotImplementedError:
+                new_failure_details = None
         elif failure.stage:
             new_code = "build-failed-stage-%s" % failure.stage
+            new_failure_details = None
         else:
             new_code = "build-failed"
+            new_failure_details = None
         new_description = failure.description
         new_phase = failure.phase,
     elif logname == 'dist.log':
@@ -96,15 +102,21 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
             if result_code == 'dist-no-tarball':
                 new_code = result_code
                 new_description = description
+                new_failure_details = failure_details
             else:
                 new_code = 'dist-command-failed'
                 new_description = description
+                new_failure_details = None
         else:
             new_code = 'dist-' + problem.kind
             new_description = str(problem)
+            try:
+                new_failure_details = problem.json()
+            except NotImplementedError:
+                new_failure_details = None
         new_phase = None
 
-    if new_code != result_code or description != new_description:
+    if new_code != result_code or description != new_description or failure_details != new_failure_details:
         logging.info(
             "%s/%s: Updated %r, %r => %r, %r %r",
             package,
@@ -117,7 +129,7 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
         )
         if not dry_run:
             async with db.acquire() as conn:
-                await state.update_run_result(conn, log_id, new_code, new_description)
+                await state.update_run_result(conn, log_id, new_code, new_description, new_failure_details)
                 if reschedule and new_code != result_code:
                     await do_schedule(
                         conn,
@@ -141,7 +153,8 @@ SELECT
   command,
   finish_time - start_time,
   result_code,
-  description
+  description,
+  failure_details
 FROM run
 WHERE
   (result_code = 'build-failed' OR
@@ -149,10 +162,11 @@ WHERE
    result_code LIKE 'autopkgtest-%' OR
    result_code LIKE 'build-%' OR
    result_code LIKE 'dist-%' OR
+   result_code LIKE 'unpack-%s' OR
    result_code LIKE 'create-session-%')
    """
-        async for package, suite, log_id, command, duration, result_code, description in (conn.cursor(query)):
-            todo.append(reprocess_run(db, package, suite, log_id, command, duration, result_code, description, dry_run=dry_run, reschedule=reschedule))
+        async for package, suite, log_id, command, duration, result_code, description, failure_details in (conn.cursor(query)):
+            todo.append(reprocess_run(db, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=dry_run, reschedule=reschedule))
     for i in range(0, len(todo), 100):
         await asyncio.wait(set(todo[i : i + 100]))
 
@@ -168,15 +182,16 @@ SELECT
   command,
   finish_time - start_time,
   result_code,
-  description
+  description,
+  failure_details
 FROM run
 WHERE
   id = ANY($1::text[])
 """
-        for package, suite, log_id, command, duration, result_code, description in await conn.fetch(
+        for package, suite, log_id, command, duration, result_code, description, failure_details in await conn.fetch(
             query, run_ids
         ):
-            todo.append(reprocess_run(db, package, suite, log_id, command, duration, result_code, description, dry_run=dry_run, reschedule=reschedule))
+            todo.append(reprocess_run(db, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=dry_run, reschedule=reschedule))
     if todo:
         await asyncio.wait(todo)
 

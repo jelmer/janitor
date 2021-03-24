@@ -1050,12 +1050,13 @@ LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
 
 
 async def update_run_result(
-    conn: asyncpg.Connection, log_id: str, code: str, description: str
+    conn: asyncpg.Connection, log_id: str, code: str, description: str, failure_details: Any
 ) -> None:
     await conn.execute(
-        "UPDATE run SET result_code = $1, description = $2 WHERE id = $3",
+        "UPDATE run SET result_code = $1, description = $2, failure_details = $3 WHERE id = $4",
         code,
         description,
+        failure_details,
         log_id,
     )
 
