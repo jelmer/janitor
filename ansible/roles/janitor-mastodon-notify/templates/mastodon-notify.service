@@ -1,0 +1,14 @@
+[Unit]
+Description=Mastodon Notification for the Janitor
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 {{ janitor_code_path }}/mastodon_notify.py --publisher-url={{ janitor_publish_url }} --prometheus-listen-address={{ janitor_mastodon_notify_address }} --prometheus-port={{ janitor_mastodon_notify_port }} --notifications-url="{{ janitor_notifications_url }}"
+WorkingDirectory={{ janitor_home }}
+Restart=on-failure
+RestartSec=90s
+
+[Install]
+WantedBy=default.target

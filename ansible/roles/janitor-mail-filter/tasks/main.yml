@@ -1,0 +1,22 @@
+- name: Install sieve extprogram support
+  apt: name=dovecot-sieve state=present
+- name: sieve extprograms configuration
+  template:
+    src: "{{ item }}.conf"
+    dest: "/etc/dovecot/conf.d/90-{{ item }}.conf"
+  with_items:
+    - sieve
+    - sieve-extprograms
+- name: Sieve pipe directory
+  file:
+    path: /usr/lib/dovecot/sieve-pipe/
+    state: directory
+- name: sieve base directory
+  file:
+    path: "{{ janitor_home }}/.sieve"
+    state: directory
+- name: janitor sieve configuration
+  copy:
+    remote_src: yes
+    src: "{{ janitor_code_path }}/sieve/janitor.sieve"
+    dest: "{{ janitor_home }}/.sieve/janitor.sieve"

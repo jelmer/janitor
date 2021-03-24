@@ -1,0 +1,1 @@
+{{ janitor_db_host }}:{{ janitor_db_port }}:{{ janitor_db_name }}:{{ janitor_db_user }}:{{ janitor_db_password }}

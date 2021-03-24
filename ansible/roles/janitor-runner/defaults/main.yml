@@ -1,0 +1,6 @@
+---
+janitor_runner_port: 9911
+janitor_runner_address: '::1'
+janitor_runner_concurrency: 2
+janitor_runner_overall_timeout: 172800
+janitor_runner_backup_directory: '{{ janitor_home }}/run-backup'

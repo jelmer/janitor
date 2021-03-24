@@ -1,0 +1,10 @@
+- name: Install systemd file for janitor auto upload
+  template:
+    src: auto-upload.service
+    dest: /etc/systemd/system/janitor-auto-upload.service
+- name: Enable systemd file for janitor auto uploader
+  systemd:
+    name: janitor-auto-upload.service
+    state: started
+    enabled: yes
+  when: janitor_auto_upload_dput_host is defined

@@ -1,0 +1,10 @@
+---
+dependencies:
+ - role: cloudalchemy.alertmanager_irc_relay
+   alertmanager_irc_relay_http_host: '{{ janitor_irc_alerts_address }}'
+   alertmanager_irc_relay_http_port: '{{ janitor_irc_alerts_port }}'
+   alertmanager_irc_relay_channels:
+     - '{{ janitor_irc_alerts_channel }}'
+   alertmanager_irc_relay_irc_host: '{{ janitor_irc_server }}'
+   alertmanager_irc_relay_irc_port: '{{ janitor_irc_port }}'
+   alertmanager_irc_relay_irc_nickname: '{{ janitor_irc_alerts_nick }}'

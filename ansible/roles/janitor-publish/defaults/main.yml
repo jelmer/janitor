@@ -1,0 +1,17 @@
+---
+janitor_publish_port: 9912
+janitor_publish_address: "::1"
+janitor_vcs_store_port: 9923
+janitor_vcs_store_address: "::1"
+# Maximum number of open merge proposals per maintainer (0 to disable)
+janitor_publish_max_mps_per_maintainer: 0
+# Seconds to wait in between background publish cycles.
+janitor_publish_interval: 3600
+# Maximum number of push operations per publish cycle.
+janitor_publish_push_limit: 15
+# Gradually increase number of open MPs per maintainer.
+janitor_publish_slowstart: true
+# Only sent out merge requests for changes that have been reviewed.
+janitor_publish_reviewed_only: true
+# Require inclusion of binary diff for merge requests.
+janitor_publish_require_binary_diff: true

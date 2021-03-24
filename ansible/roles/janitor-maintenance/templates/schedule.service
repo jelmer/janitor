@@ -1,0 +1,12 @@
+[Unit]
+Description=Schedule
+
+[Service]
+User={{ janitor_user }}
+Type=oneshot
+WorkingDirectory={{ janitor_code_path }}
+EnvironmentFile={{ janitor_home }}/env
+ExecStart={{ janitor_home }}/schedule.sh
+
+[Install]
+WantedBy=default.target

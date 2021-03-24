@@ -1,0 +1,14 @@
+- name: Install systemd file for janitor archiver
+  template:
+    src: archive.service
+    dest: /etc/systemd/system/janitor-archive.service
+- name: Enable systemd file for janitor archiver
+  systemd:
+    name: janitor-archive.service
+    state: started
+    enabled: yes
+- name: Archive directory
+  file:
+    state: directory
+    path: "{{ janitor_apt_path }}"
+    owner: "{{ janitor_user }}"

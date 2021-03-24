@@ -1,0 +1,20 @@
+[Unit]
+Description=VCS Store
+
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+WorkingDirectory={{ janitor_code_path }}
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 -m janitor.vcs_store --listen-address={{ janitor_vcs_store_address }} --port={{ janitor_vcs_store_port }} --config={{ janitor_conf_path }} 
+LimitNOFILE=500000
+LimitNPROC=500000
+
+Restart=on-failure
+RestartSec=600s
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,10 @@
+%echo Generating a default key
+%no-ask-passphrase
+%no-protection
+Key-Type: default
+Subkey-Type: default
+Name-Real: {{ janitor_fullname }}
+Name-Email: {{ janitor_email }}
+Expire-Date: 0
+%commit
+%echo done

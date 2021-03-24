@@ -1,0 +1,22 @@
+- name: Dependencies of differ
+  apt:
+    package:
+      # should be >= 1.4.0
+      - diffoscope
+      # for debdiff
+      - devscripts
+    state: latest
+- name: Install systemd file for janitor differ
+  template:
+    src: differ.service
+    dest: /etc/systemd/system/janitor-differ.service
+- name: Enable systemd file for janitor differ
+  systemd:
+    name: janitor-differ.service
+    state: started
+    enabled: yes
+- name: Diff cache directory
+  file:
+    state: directory
+    path: "{{ janitor_differ_cache_path }}"
+    owner: "{{ janitor_user }}"

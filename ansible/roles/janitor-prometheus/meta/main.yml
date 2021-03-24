@@ -1,0 +1,35 @@
+---
+dependencies:
+ - role: cloudalchemy.pushgateway
+   pushgateway_web_listen_address: 'localhost:9091'
+ - role: cloudalchemy.prometheus
+   prometheus_web_listen_address: "{{ janitor_prometheus_address }}:{{ janitor_prometheus_port }}"
+   prometheus_scrape_configs:
+     - job_name: "pushgateway"
+       static_configs:
+       - targets:
+          - localhost:9091
+     - job_name: "janitor.runner"
+       static_configs:
+       - targets:
+         - "{{ janitor_runner_address }}:{{ janitor_runner_port }}"
+     - job_name: "janitor.publisher"
+       static_configs:
+       - targets:
+         - "{{ janitor_publish_address }}:{{ janitor_publish_port }}"
+     - job_name: "janitor.archiver"
+       static_configs:
+       - targets:
+         - "{{ janitor_archive_address }}:{{ janitor_archive_port }}"
+     - job_name: "janitor.differ"
+       static_configs:
+       - targets:
+         - "{{ janitor_differ_address }}:{{ janitor_differ_port }}"
+     - job_name: "janitor.site"
+       static_configs:
+       - targets:
+         - "{{ janitor_site_address }}:{{ janitor_site_port }}"
+     - job_name: "janitor.irc_notify"
+       static_configs:
+       - targets:
+         - "{{ janitor_irc_notify_address }}:{{ janitor_irc_notify_port }}"

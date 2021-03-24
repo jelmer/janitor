@@ -1,0 +1,18 @@
+[Unit]
+Description=Publish
+
+StartLimitIntervalSec=3600
+StartLimitBurst=3
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+WorkingDirectory={{ janitor_code_path }}
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 -m janitor.publish {% if janitor_publish_require_binary_diff %}--require-binary-diff {% endif %}--runner-url={{ janitor_runner_url }} --listen-address={{ janitor_publish_address }} --port={{ janitor_publish_port }} --config={{ janitor_conf_path }} --external-url={{ janitor_site_external_url }} --differ-url={{ janitor_differ_url }} --max-mps-per-maintainer={{ janitor_publish_max_mps_per_maintainer }} --interval={{ janitor_publish_interval }} --push-limit={{ janitor_publish_push_limit }} {% if janitor_publish_reviewed_only %} --reviewed-only{% endif %} {% if janitor_publish_slowstart %} --slowstart{% endif %}
+
+Restart=on-failure
+RestartSec=600s
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Iterate
+RefuseManualStart=false
+RefuseManualStop=false
+
+[Timer]
+Persistent=true
+OnCalendar=hourly
+Unit=janitor-package-overrides.service
+
+[Install]
+WantedBy=timers.target

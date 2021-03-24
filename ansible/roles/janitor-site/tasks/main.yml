@@ -1,0 +1,20 @@
+- name: Dependencies for site
+  apt:
+   package:
+    - python3-jinja2
+    - libjs-chart.js
+    - libjs-jquery
+    - libjs-moment
+    - libjs-jquery-datatables
+    - diffoscope
+    - python3-pygments
+   state: present
+- name: Install systemd file for janitor site
+  template:
+    src: site.service
+    dest: /etc/systemd/system/janitor-site.service
+- name: Enable systemd file for janitor site
+  systemd:
+    name: janitor-site.service
+    state: started
+    enabled: yes

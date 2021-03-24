@@ -1,0 +1,15 @@
+[Unit]
+Description=Package Overrides
+
+[Service]
+User={{ janitor_user }}
+Type=oneshot
+WorkingDirectory={{ janitor_code_path }}
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 -m janitor.package_overrides \
+	--config={{ janitor_conf_path}} \
+	--reschedule \
+	--package-overrides={% if janitor_package_overrides is defined %}{{ janitor_home }}/package_overrides.conf{% else %}{{ janitor_code_path }}/package_overrides.conf{% endif %} "$@"
+
+[Install]
+WantedBy=default.target
