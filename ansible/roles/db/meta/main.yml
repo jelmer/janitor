@@ -1,5 +1,5 @@
 dependencies:
- - role: janitor-base
+ - role: base
  # TODO(jelmer): Ideally we'd use upstream (geerlingguy.postgresql) but that doesn't support Debian testing/unstable
  - role: jelmer.postgresql
    postgresql_service_state: started
