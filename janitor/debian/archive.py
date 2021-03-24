@@ -23,6 +23,7 @@ import logging
 import gzip
 import bz2
 import os
+import shutil
 import subprocess
 import tempfile
 import sys
@@ -299,17 +300,26 @@ async def publish_suite(
         start_time = datetime.now()
         logger.info("Publishing %s", suite.name)
         suite_path = os.path.join(dists_directory, suite.name)
-        os.makedirs(suite_path, exist_ok=True)
-        await write_suite_files(
-            suite_path,
-            db,
-            package_info_provider,
-            suite,
-            components=config.distribution.component,
-            arches=ARCHES,
-            origin=config.origin,
-            gpg_context=gpg_context,
-        )
+        with tempfile.TemporaryDirectory(dir=dists_directory) as td:
+            await write_suite_files(
+                td,
+                db,
+                package_info_provider,
+                suite,
+                components=config.distribution.component,
+                arches=ARCHES,
+                origin=config.origin,
+                gpg_context=gpg_context,
+            )
+            old_suite_path = suite_path + '.old'
+            if os.path.exists(old_suite_path):
+                shutil.rmtree(suite_path + '.old')
+            if os.path.exists(suite_path):
+                os.rename(suite_path, suite_path + '.old')
+            os.rename(td, suite_path)
+        if os.path.exists(old_suite_path):
+            shutil.rmtree(suite_path + '.old')
+
         logger.info(
             "Done publishing %s (took %s)", suite.name, datetime.now() - start_time
         )
