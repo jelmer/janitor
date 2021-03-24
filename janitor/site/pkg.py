@@ -141,6 +141,7 @@ async def generate_run_file(
             publish_history = []
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
+    kwargs["vcs_type"] = package.vcs_type
     kwargs["vcs_url"] = package.vcs_url
     kwargs["vcs_browse"] = package.vcs_browse
     kwargs["vcswatch_version"] = package.vcswatch_version
@@ -273,6 +274,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     kwargs["package"] = package.name
     kwargs["vcswatch_status"] = package.vcswatch_status
     kwargs["maintainer_email"] = package.maintainer_email
+    kwargs["vcs_type"] = package.vcs_type
     kwargs["vcs_url"] = package.vcs_url
     kwargs["vcs_browse"] = package.vcs_browse
     kwargs["merge_proposals"] = merge_proposals

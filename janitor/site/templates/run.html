@@ -66,7 +66,7 @@ function submit_review(status) {
 <li style="display: none">Build Version: {{ run.build_version }}</li>
 </ul>
 
-{{ local_command(command, package, vcs, vcs_url) }}
+{{ local_command(command, package, vcs_type, vcs_url) }}
 
 {% if vcs_url %}
 {{ reschedule_button(suite, package, "Reschedule") }}
