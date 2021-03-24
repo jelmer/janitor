@@ -382,6 +382,20 @@ async def precache(app, old_id, new_id):
             logging.info("Precached diffoscope result for %s/%s", old_id, new_id)
 
 
+def create_background_task(fn, title):
+    loop = asyncio.get_event_loop()
+    task = loop.create_task(fn)
+
+    def log_result(future):
+        try:
+            future.result()
+        except BaseException:
+            logging.exception('%s failed', title)
+        else:
+            logging.debug('%s succeeded', title)
+    task.add_done_callback(log_result)
+
+
 async def handle_precache(request):
 
     old_id = request.match_info["old_id"]
@@ -400,8 +414,7 @@ async def handle_precache(request):
         except asyncio.TimeoutError:
             raise web.HTTPGatewayTimeout(text="Timeout retrieving artifacts")
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(_precache())
+    create_background_task(_precache(), 'precaching')
 
     return web.Response(status=202, text="Precaching started")
 
@@ -436,8 +449,7 @@ where
                     logging.info("Error precaching: %r", e)
                     traceback.print_exc()
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(_precache_all())
+    create_background_task(_precache_all(), 'precache all')
     return web.Response(status=202, text="Precache started (todo: %d)" % len(todo))
 
 

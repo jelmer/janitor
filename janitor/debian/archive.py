@@ -329,6 +329,21 @@ async def publish_suite(
         traceback.print_exc()
 
 
+def create_background_task(fn, title):
+    loop = asyncio.get_event_loop()
+    task = loop.create_task(fn)
+
+    def log_result(future):
+        try:
+            future.result()
+        except BaseException:
+            logging.exception('%s failed', title)
+        else:
+            logging.debug('%s succeeded', title)
+    task.add_done_callback(log_result)
+    return task
+
+
 class GeneratorManager(object):
     def __init__(self, dists_dir, db, config, package_info_provider, gpg_context):
         self.dists_dir = dists_dir
@@ -352,8 +367,7 @@ class GeneratorManager(object):
         else:
             if not task.done():
                 return
-        loop = asyncio.get_event_loop()
-        self.generators[suite_config.name] = loop.create_task(
+        self.generators[suite_config.name] = create_background_task(
             publish_suite(
                 self.dists_dir,
                 self.db,
@@ -361,7 +375,7 @@ class GeneratorManager(object):
                 self.config,
                 suite_config,
                 self.gpg_context,
-            )
+            ), 'publish %s' % suite
         )
 
 
