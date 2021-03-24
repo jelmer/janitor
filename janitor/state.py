@@ -1513,7 +1513,7 @@ async def get_policy(
 
 async def get_publish_policy(
     conn: asyncpg.Connection, package: str, suite: str
-) -> Tuple[Optional[Dict[str, str]], Optional[str], Optional[List[str]]]:
+) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
         "SELECT publish, update_changelog, command "
         "FROM policy WHERE package = $1 AND suite = $2",
