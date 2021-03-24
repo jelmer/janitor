@@ -42,7 +42,7 @@ debianize
 {% endmacro %}
 
 {% macro clone_command(vcs, vcs_url, package) %}{% set vcs = vcs_type() -%}
-{%- if vcs is None or vcs.lower() == 'git' %}git clone {{ vcs_url }} {{ package }}
+{%- if not vcs or vcs.lower() == 'git' %}git clone {{ vcs_url }} {{ package }}
 {%- elif vcs.lower() == 'bzr' %}bzr clone {{ vcs_url }} {{ package }}
 {%- else %}# unsupported vcs {{ vcs }}{% endif %}
 {%- endmacro %}
