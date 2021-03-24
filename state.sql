@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS codebase (
    branch_url text not null,
    subpath text,
    vcs_last_revision text,
-   vcs_type vcs_type
+   vcs_type vcs_type,
    unique(branch_url, subpath)
 );
 CREATE UNIQUE INDEX ON codebase (name);
@@ -364,7 +364,6 @@ CREATE OR REPLACE VIEW publishable AS
   run.value,
   package.maintainer_email,
   package.uploader_emails,
-  policy.publish,
   policy.update_changelog,
   policy.command AS policy_command,
   ARRAY(
