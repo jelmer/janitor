@@ -55,7 +55,6 @@ async def generate_review(
         value,
         maintainer_email,
         uploader_emails,
-        publish_mode,
         changelog_mode,
         command,
         unpublished_branches,
