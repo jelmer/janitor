@@ -144,7 +144,7 @@ async def _git_open_repo(vcs_manager, db, package):
 
     if repo is None:
         async with db.acquire() as conn:
-            if not await state.package_exists(conn, package):
+            if not await package_exists(conn, package):
                 raise web.HTTPNotFound()
         controldir = ControlDir.create(
             vcs_manager.get_repository_url(package, "git"),
@@ -478,9 +478,13 @@ async def dulwich_service(request):
     return response
 
 
+async def package_exists(conn, package):
+    return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
+
+
 async def _bzr_open_repo(vcs_manager, db, package):
     async with db.acquire() as conn:
-        if not await state.package_exists(conn, package):
+        if not await package_exists(conn, package):
             raise web.HTTPNotFound()
     repo = vcs_manager.get_repository(package, "bzr")
     if repo is None:

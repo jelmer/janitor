@@ -327,9 +327,9 @@ class Run(object):
     @classmethod
     def from_row(cls, row) -> "Run":
         return cls(
-            run_id=row[0],
-            times=(row[2], row[3]),
-            command=row[1],
+            run_id=row['run_id'],
+            times=(row['start_time'], row['finish_time']),
+            command=row['command'],
             description=row[4],
             package=row[5],
             build_version=Version(row[6]) if row[6] else None,
@@ -543,12 +543,12 @@ async def iter_proposals_with_run(
     query = """
 SELECT
     DISTINCT ON (merge_proposal.url)
-    run.id,
-    run.command,
-    run.start_time,
-    run.finish_time,
-    run.description,
-    run.package,
+    run.id AS id,
+    run.command AS command,
+    run.start_time AS start_time,
+    run.finish_time As finish_time,
+    run.description AS description,
+    run.package AS package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution,
     run.result_code,
@@ -743,10 +743,6 @@ queue.id ASC
         yield QueueItem.from_row(row)
 
 
-async def drop_queue_item(conn: asyncpg.Connection, queue_id):
-    await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
-
-
 async def add_to_queue(
     conn: asyncpg.Connection,
     package: str,
@@ -787,59 +783,6 @@ async def add_to_queue(
         requestor,
     )
     return True
-
-
-async def set_proposal_info(
-    conn: asyncpg.Connection,
-    url: str,
-    status: str,
-    revision: Optional[bytes],
-    package: Optional[str],
-    merged_by: Optional[str],
-    merged_at: Optional[str],
-) -> None:
-    await conn.execute(
-        """
-INSERT INTO merge_proposal (
-    url, status, revision, package, merged_by, merged_at)
-VALUES ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (url)
-DO UPDATE SET
-  status = EXCLUDED.status,
-  revision = EXCLUDED.revision,
-  package = EXCLUDED.package,
-  merged_by = EXCLUDED.merged_by,
-  merged_at = EXCLUDED.merged_at
-""",
-        url,
-        status,
-        (revision.decode("utf-8") if revision is not None else None),
-        package,
-        merged_by,
-        merged_at,
-    )
-
-
-async def queue_stats(conn: asyncpg.Connection):
-    for row in await conn.fetch(
-        "SELECT bucket, MIN(priority), count(*) FROM queue " "GROUP BY bucket"
-    ):
-        yield row[0], row[1], row[2]
-
-
-async def queue_duration(conn: asyncpg.Connection):
-    query = """
-SELECT
-  SUM(estimated_duration)
-FROM
-  queue
-WHERE
-  estimated_duration IS NOT NULL
-"""
-    ret = await conn.fetchval(query)
-    if ret is None:
-        return datetime.timedelta()
-    return ret
 
 
 async def iter_previous_runs(
@@ -981,20 +924,6 @@ ORDER BY package, suite, start_time DESC
         yield Run.from_row(row)
 
 
-async def stats_by_result_codes(conn: asyncpg.Connection, suite=None):
-    query = """\
-select (
-    case when result_code = 'nothing-new-to-do' then 'success'
-    else result_code end), count(result_code) from last_runs
-"""
-    args = []
-    if suite:
-        args.append(suite)
-        query += " WHERE suite = $1"
-    query += " group by 1 order by 2 desc"
-    return await conn.fetch(query, *args)
-
-
 async def iter_last_runs(
     conn: asyncpg.Connection,
     result_code: Optional[str] = None,
@@ -1047,36 +976,6 @@ LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
     async with conn.transaction():
         async for row in conn.cursor(query, *args):
             yield Run.from_row(row)
-
-
-async def update_run_result(
-    conn: asyncpg.Connection, log_id: str, code: str, description: str, failure_details: Any
-) -> None:
-    await conn.execute(
-        "UPDATE run SET result_code = $1, description = $2, failure_details = $3 WHERE id = $4",
-        code,
-        description,
-        failure_details,
-        log_id,
-    )
-
-
-async def already_published(
-    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, mode: str
-) -> bool:
-    row = await conn.fetchrow(
-        """\
-SELECT * FROM publish
-WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
-""",
-        mode,
-        revision.decode("utf-8"),
-        package,
-        branch_name,
-    )
-    if row:
-        return True
-    return False
 
 
 async def iter_publish_ready(
@@ -1144,143 +1043,6 @@ SELECT * FROM publish_ready
         )  # type: ignore
 
 
-async def iter_unscanned_branches(
-    conn: asyncpg.Connection, last_scanned_minimum: datetime.datetime
-) -> AsyncIterable[Tuple[str, str, str, datetime.datetime]]:
-    return await conn.fetch(
-        """
-SELECT
-  name,
-  'master',
-  branch_url,
-  last_scanned
-FROM package
-LEFT JOIN branch ON package.branch_url = branch.url
-WHERE
-  last_scanned is null or now() - last_scanned > $1
-""",
-        last_scanned_minimum,
-    )
-
-
-async def iter_package_branches(conn: asyncpg.Connection):
-    return await conn.fetch(
-        """
-SELECT
-  name,
-  branch_url,
-  revision,
-  last_scanned,
-  description
-FROM
-  package
-LEFT JOIN branch ON package.branch_url = branch.url
-"""
-    )
-
-
-async def update_branch_status(
-    conn: asyncpg.Connection,
-    branch_url: str,
-    canonical_branch_url: Optional[str],
-    last_scanned: Union[
-        datetime.datetime, Callable[[], datetime.datetime]
-    ] = datetime.datetime.now,
-    status: Optional[str] = None,
-    revision: Optional[bytes] = None,
-    description: Optional[str] = None,
-):
-    if callable(last_scanned):
-        last_scanned = last_scanned()
-    await conn.execute(
-        "INSERT INTO branch (url, canonical_url, status, revision, "
-        "last_scanned, description) VALUES ($1, $2, $3, $4, $5, $6) "
-        "ON CONFLICT (url) DO UPDATE SET "
-        "status = EXCLUDED.status, revision = EXCLUDED.revision, "
-        "last_scanned = EXCLUDED.last_scanned, "
-        "description = EXCLUDED.description, "
-        "canonical_url = EXCLUDED.canonical_url",
-        branch_url,
-        canonical_branch_url,
-        status,
-        revision.decode("utf-8") if revision else None,
-        last_scanned,
-        description,
-    )
-
-
-async def get_run_result_by_revision(
-    conn: asyncpg.Connection, suite: str, revision: bytes
-) -> Tuple[
-    Optional[str],
-    Optional[str],
-    Optional[str],
-    Optional[List[Tuple[str, str, bytes, bytes]]],
-]:
-    row = await conn.fetchrow(
-        "SELECT result, branch_name, review_status, "
-        "array(SELECT row(role, remote_name, base_revision, revision) "
-        "FROM new_result_branch WHERE run_id = run.id) "
-        "FROM run "
-        "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
-        suite,
-        revision.decode("utf-8"),
-    )
-    if row is not None:
-        return (
-            row[0],
-            row[1],
-            row[2],
-            [
-                (
-                    role,
-                    name,
-                    base_revision.encode("utf-8") if base_revision else None,
-                    revision.encode("utf-8") if revision else None,
-                )
-                for (role, name, base_revision, revision) in row[3]
-            ],
-        )
-    return None, None, None, None
-
-
-async def estimate_duration(
-    conn: asyncpg.Connection,
-    package: Optional[str] = None,
-    suite: Optional[str] = None,
-    limit: Optional[int] = 1000,
-) -> Optional[datetime.timedelta]:
-    query = """
-SELECT AVG(duration) FROM
-(select finish_time - start_time as duration FROM run
-WHERE """
-    args = []
-    if package is not None:
-        query += " package = $1"
-        args.append(package)
-    if suite is not None:
-        if package:
-            query += " AND"
-        query += " suite = $%d" % (len(args) + 1)
-        args.append(suite)
-    query += " ORDER BY finish_time DESC"
-    if limit is not None:
-        query += " LIMIT %d" % limit
-    query += ") as q"
-    return await conn.fetchval(query, *args)
-
-
-async def store_candidates(conn: asyncpg.Connection, entries):
-    await conn.executemany(
-        "INSERT INTO candidate "
-        "(package, suite, context, value, success_chance) "
-        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
-        "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
-        "success_chance = EXCLUDED.success_chance",
-        entries,
-    )
-
-
 async def get_never_processed_count(conn: asyncpg.Connection, suites=None):
     query = """\
 select suite, count(*) from candidate c
@@ -1311,28 +1073,14 @@ where not exists (
     return await conn.fetch(query, *args)
 
 
-async def iter_by_suite_result_code(conn: asyncpg.Connection):
-    query = """
-SELECT DISTINCT ON (package, suite)
-  package,
-  suite,
-  finish_time - start_time,
-  result_code
-FROM
-  run
-ORDER BY package, suite, start_time DESC
-"""
-    async with conn.transaction():
-        async for record in conn.cursor(query):
-            yield record
-
-
 async def get_merge_proposal_run(
     conn: asyncpg.Connection, mp_url: str
 ) -> Tuple[Run, Tuple[str, str, bytes, bytes]]:
     query = """
 SELECT
-    run.id, run.command, run.start_time, run.finish_time, run.description,
+    run.id AS id, run.command AS command,
+    run.start_time AS start_time,
+    run.finish_time AS finish_time, run.description,
     run.package, debian_build.version, debian_build.distribution, run.result_code,
     run.branch_name, run.main_branch_revision, run.revision, run.context,
     run.result, run.suite, run.instigated_context, run.branch_url,
@@ -1357,24 +1105,6 @@ LIMIT 1
             row[26].encode("utf-8"),
         )
     raise KeyError
-
-
-async def get_open_merge_proposal(
-    conn: asyncpg.Connection, package: str, branch_name: str
-) -> bytes:
-    query = """\
-SELECT
-    merge_proposal.revision
-FROM
-    merge_proposal
-INNER JOIN publish ON merge_proposal.url = publish.merge_proposal_url
-WHERE
-    merge_proposal.status = 'open' AND
-    merge_proposal.package = $1 AND
-    publish.branch_name = $2
-ORDER BY timestamp DESC
-"""
-    return await conn.fetchrow(query, package, branch_name)
 
 
 async def get_publish(
@@ -1421,65 +1151,6 @@ async def set_run_review_status(
     )
 
 
-async def iter_review_status(conn: asyncpg.Connection):
-    query = """\
-select
-  review_status,
-  count(review_status)
-from
-  last_runs
-where result_code = 'success'
-group by 1
-"""
-    return await conn.fetch(query)
-
-
-async def iter_custom_upstream_branch_urls(conn: asyncpg.Connection):
-    query = """
-select
-  name,
-  upstream_branch_url
-from upstream
-where upstream_branch_url is not null
-"""
-    return await conn.fetch(query)
-
-
-async def update_branch_url(
-    conn: asyncpg.Connection, package: str, vcs_type: str, vcs_url: str
-) -> None:
-    await conn.execute(
-        "update package set vcs_type = $1, branch_url = $2 " "where name = $3",
-        vcs_type.lower(),
-        vcs_url,
-        package,
-    )
-
-
-async def update_policy(
-    conn: asyncpg.Connection,
-    name: str,
-    suite: str,
-    publish_mode: Dict[str, Tuple[str, Optional[int]]],
-    changelog_mode: str,
-    command: List[str],
-) -> None:
-    await conn.execute(
-        "INSERT INTO policy "
-        "(package, suite, update_changelog, command, publish) "
-        "VALUES ($1, $2, $3, $4, $5) "
-        "ON CONFLICT (package, suite) DO UPDATE SET "
-        "update_changelog = EXCLUDED.update_changelog, "
-        "command = EXCLUDED.command, "
-        "publish = EXCLUDED.publish",
-        name,
-        suite,
-        changelog_mode,
-        (" ".join(command) if command else None),
-        [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
-    )
-
-
 async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
     query = "SELECT package, suite, publish, update_changelog, command " "FROM policy"
     args = []
@@ -1496,20 +1167,6 @@ async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
                 shlex.split(row[4]) if row[4] else None,
             ),
         )
-
-
-async def get_policy(
-    conn: asyncpg.Connection, package: str, suite: str
-) -> Tuple[Optional[str], Optional[List[str]]]:
-    row = await conn.fetchrow(
-        "SELECT update_changelog, command "
-        "FROM policy WHERE package = $1 AND suite = $2",
-        package,
-        suite,
-    )
-    if row:
-        return (row[0], shlex.split(row[1]) if row[1] else None)  # type: ignore
-    return None, None
 
 
 async def get_publish_policy(
@@ -1530,50 +1187,6 @@ async def get_publish_policy(
     return None, None, None
 
 
-async def get_successful_push_count(conn: asyncpg.Connection) -> Optional[int]:
-    return await conn.fetchval(
-        "select count(*) from publish where result_code = "
-        "'success' and mode = 'push'"
-    )
-
-
-async def get_publish_attempt_count(
-    conn: asyncpg.Connection, revision: bytes, transient_result_codes: Set[str]
-) -> int:
-    return await conn.fetchval(
-        "select count(*) from publish where revision = $1 "
-        "and result_code != ANY($2::text[])",
-        revision.decode("utf-8"),
-        transient_result_codes,
-    )
-
-
-async def check_worker_credentials(
-    conn: asyncpg.Connection, login: str, password: str
-) -> bool:
-    row = await conn.fetchrow(
-        "select 1 from worker where name = $1 " "AND password = crypt($2, password)",
-        login,
-        password,
-    )
-    return bool(row)
-
-
-async def package_exists(conn, package):
-    return bool(await conn.fetchrow("SELECT 1 FROM package WHERE name = $1", package))
-
-
-async def get_publish_history(
-    conn: asyncpg.Connection, revision: bytes
-) -> Tuple[str, Optional[str], str, str, str, datetime.datetime]:
-    return await conn.fetch(
-        "select mode, merge_proposal_url, description, result_code, "
-        "requestor, timestamp from publish where revision = $1 "
-        "ORDER BY timestamp DESC",
-        revision.decode("utf-8"),
-    )
-
-
 async def store_site_session(
     conn: asyncpg.Connection, session_id: str, user: Any
 ) -> None:
@@ -1583,12 +1196,6 @@ INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
 ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
         session_id,
         user,
-    )
-
-
-async def get_site_session(conn: asyncpg.Connection, session_id: str) -> Any:
-    return await conn.fetchrow(
-        "SELECT userinfo FROM site_session WHERE id = $1", session_id
     )
 
 
@@ -1613,10 +1220,4 @@ async def has_cotenants(
         return None
 
 
-async def last_published(
-        conn: asyncpg.Connection, suite: str, package: str) -> Optional[datetime.datetime]:
-    return await conn.fetchval("""
-SELECT timestamp from publish left join run on run.revision = publish.revision
-WHERE run.suite = $1 and run.package = $2 AND publish.result_code = 'success'
-order by timestamp desc limit 1
-""", suite, package)
+

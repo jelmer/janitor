@@ -18,6 +18,7 @@
 """Import candidates."""
 
 import asyncio
+import asyncpg
 import logging
 import sys
 
@@ -38,6 +39,17 @@ def iter_candidates_from_script(stdin):
             candidate.value,
             candidate.success_chance,
         )
+
+
+async def store_candidates(conn: asyncpg.Connection, entries):
+    await conn.executemany(
+        "INSERT INTO candidate "
+        "(package, suite, context, value, success_chance) "
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT (package, suite) "
+        "DO UPDATE SET context = EXCLUDED.context, value = EXCLUDED.value, "
+        "success_chance = EXCLUDED.success_chance",
+        entries,
+    )
 
 
 async def main():
@@ -95,7 +107,7 @@ async def main():
                     package, entry[1])
                 continue
             candidates.append(entry)
-        await state.store_candidates(conn, candidates)
+        await store_candidates(conn, candidates)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:

@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import asyncpg
 from email.utils import parseaddr
 from fnmatch import fnmatch
 import shlex
@@ -140,6 +141,30 @@ async def read_release_stages(url: str) -> Set[str]:
     return ret
 
 
+async def update_policy(
+    conn: asyncpg.Connection,
+    name: str,
+    suite: str,
+    publish_mode: Dict[str, Tuple[str, Optional[int]]],
+    changelog_mode: str,
+    command: List[str],
+) -> None:
+    await conn.execute(
+        "INSERT INTO policy "
+        "(package, suite, update_changelog, command, publish) "
+        "VALUES ($1, $2, $3, $4, $5) "
+        "ON CONFLICT (package, suite) DO UPDATE SET "
+        "update_changelog = EXCLUDED.update_changelog, "
+        "command = EXCLUDED.command, "
+        "publish = EXCLUDED.publish",
+        name,
+        suite,
+        changelog_mode,
+        (" ".join(command) if command else None),
+        [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
+    )
+
+
 async def main(argv):
     import argparse
     from .config import read_config
@@ -201,7 +226,7 @@ async def main(argv):
                 stored_policy = current_policy.get((package.name, suite))
                 if stored_policy != intended_policy:
                     logging.debug("%s/%s -> %r" % (package.name, suite, intended_policy))
-                    await state.update_policy(
+                    await update_policy(
                         conn, package.name, suite, *intended_policy
                     )
                     updated = True

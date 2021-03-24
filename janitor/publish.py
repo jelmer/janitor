@@ -26,12 +26,13 @@ import os
 import shlex
 import sys
 import time
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Set
 import uuid
 
 
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
+import asyncpg
 
 from prometheus_client import (
     Counter,
@@ -414,7 +415,7 @@ async def publish_pending_new(
                 )
                 continue
             # TODO(jelmer): next try in SQL query
-            attempt_count = await state.get_publish_attempt_count(
+            attempt_count = await get_publish_attempt_count(
                 conn, run.revision, {"differ-unreachable"}
             )
             try:
@@ -568,6 +569,51 @@ async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
     return (code, description)
 
 
+async def already_published(
+    conn: asyncpg.Connection, package: str, branch_name: str, revision: bytes, mode: str
+) -> bool:
+    row = await conn.fetchrow(
+        """\
+SELECT * FROM publish
+WHERE mode = $1 AND revision = $2 AND package = $3 AND branch_name = $4
+""",
+        mode,
+        revision.decode("utf-8"),
+        package,
+        branch_name,
+    )
+    if row:
+        return True
+    return False
+
+
+async def get_open_merge_proposal(
+    conn: asyncpg.Connection, package: str, branch_name: str
+) -> bytes:
+    query = """\
+SELECT
+    merge_proposal.revision
+FROM
+    merge_proposal
+INNER JOIN publish ON merge_proposal.url = publish.merge_proposal_url
+WHERE
+    merge_proposal.status = 'open' AND
+    merge_proposal.package = $1 AND
+    publish.branch_name = $2
+ORDER BY timestamp DESC
+"""
+    return await conn.fetchrow(query, package, branch_name)
+
+
+async def check_last_published(
+        conn: asyncpg.Connection, suite: str, package: str) -> Optional[datetime.datetime]:
+    return await conn.fetchval("""
+SELECT timestamp from publish left join run on run.revision = publish.revision
+WHERE run.suite = $1 and run.package = $2 AND publish.result_code = 'success'
+order by timestamp desc limit 1
+""", suite, package)
+
+
 async def publish_from_policy(
     conn,
     rate_limiter,
@@ -630,12 +676,12 @@ async def publish_from_policy(
 
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
 
-    if not force and await state.already_published(
+    if not force and await already_published(
         conn, run.package, run.branch_name, revision, mode
     ):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
-        open_mp = await state.get_open_merge_proposal(
+        open_mp = await get_open_merge_proposal(
             conn, run.package, run.branch_name
         )
         if not open_mp:
@@ -650,7 +696,7 @@ async def publish_from_policy(
                 )
                 mode = MODE_BUILD_ONLY
             if max_frequency_days is not None:
-                last_published = await state.last_published(
+                last_published = await check_last_published(
                     conn, run.suite, run.package, max_frequency_days)
                 if last_published is not None and \
                         (datetime.now()-last_published).days < max_frequency_days:
@@ -912,6 +958,17 @@ def create_background_task(fn, title):
     task.add_done_callback(log_result)
 
 
+async def get_publish_attempt_count(
+    conn: asyncpg.Connection, revision: bytes, transient_result_codes: Set[str]
+) -> int:
+    return await conn.fetchval(
+        "select count(*) from publish where revision = $1 "
+        "and result_code != ANY($2::text[])",
+        revision.decode("utf-8"),
+        transient_result_codes,
+    )
+
+
 async def publish_request(request):
     dry_run = request.app.dry_run
     vcs_manager = request.app.vcs_manager
@@ -931,7 +988,7 @@ async def publish_request(request):
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy = (await state.get_publish_policy(conn, package.name, suite))[0]
+        publish_policy = (await get_publish_policy(conn, package.name, suite))[0]
 
         logger.info("Handling request to publish %s/%s", package.name, suite)
 
@@ -1295,9 +1352,21 @@ async def check_existing_mp(
             merged_by = None
             merged_at = None
         if not dry_run:
-            await state.set_proposal_info(
-                conn, mp.url, status, revision, package_name, merged_by, merged_at
-            )
+            await conn.execute("""
+            INSERT INTO merge_proposal (
+                url, status, revision, package, merged_by, merged_at)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (url)
+            DO UPDATE SET
+              status = EXCLUDED.status,
+              revision = EXCLUDED.revision,
+              package = EXCLUDED.package,
+              merged_by = EXCLUDED.merged_by,
+              merged_at = EXCLUDED.merged_at
+            """, mp.url, status,
+            (revision.decode("utf-8") if revision is not None else None),
+            package_name, merged_by, merged_at)
+
             topic_merge_proposal.publish(
                 {
                     "url": mp.url,

@@ -140,14 +140,6 @@ CREATE TABLE IF NOT EXISTS queue (
 );
 CREATE INDEX ON queue (priority ASC, id ASC);
 CREATE INDEX ON queue (bucket ASC, priority ASC, id ASC);
-CREATE TABLE IF NOT EXISTS branch (
-   url text not null primary key,
-   canonical_url text,
-   revision text,
-   last_scanned timestamp,
-   status text,
-   description text
-);
 CREATE TABLE IF NOT EXISTS candidate (
    package text not null,
    suite suite_name not null,
@@ -387,3 +379,33 @@ CREATE OR REPLACE VIEW publish_ready AS SELECT * FROM publishable WHERE ARRAY_LE
 
 CREATE VIEW upstream_branch_urls as (
     select package, result->>'upstream_branch_url' as url from run where suite = 'fresh-snapshots' and result->>'upstream_branch_url' != '') union (select name as package, upstream_branch_url as url from upstream);
+
+CREATE OR REPLACE VIEW debian_run AS
+SELECT
+    id,
+    command,
+    start_time,
+    finish_time,
+    description,
+    package,
+    debian_build.version AS build_version,
+    debian_build.distribution AS build_distribution,
+    debian_build.lintian_result AS lintian_result,
+    result_code,
+    branch_name,
+    main_branch_revision,
+    revision,
+    context,
+    result,
+    suite,
+    instigated_context,
+    branch_url,
+    logfilenames,
+    review_status,
+    review_comment,
+    worker,
+    result_tags
+FROM
+    run
+LEFT JOIN
+    debian_build ON debian_build.run_id = run.id;

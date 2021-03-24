@@ -186,7 +186,9 @@ async def openid_middleware(request, handler):
     session_id = request.cookies.get("session_id")
     if session_id is not None:
         async with request.app.database.acquire() as conn:
-            row = await state.get_site_session(conn, session_id)
+            row = await conn.fetchrow(
+                "SELECT userinfo FROM site_session WHERE id = $1",
+                session_id)
             if row is not None:
                 (userinfo,) = row
             else:
@@ -515,7 +517,10 @@ if __name__ == "__main__":
             return {"never_processed": never_processed}
 
     async def handle_result_codes(request):
-        from .result_codes import generate_result_code_index
+        from .result_codes import (
+            generate_result_code_index,
+            stats_by_result_codes,
+            )
 
         suite = request.query.get("suite")
         if suite is not None and suite.lower() == "_all":
@@ -524,7 +529,7 @@ if __name__ == "__main__":
         all_suites = [s.name for s in config.suite]
         async with request.app.database.acquire() as conn:
             if not code:
-                stats = await state.stats_by_result_codes(conn, suite=suite)
+                stats = await stats_by_result_codes(conn, suite=suite)
                 if suite:
                     suites = [suite]
                 else:

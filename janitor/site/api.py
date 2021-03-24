@@ -566,20 +566,24 @@ async def handle_publish_autopublish(request):
 async def handle_package_branch(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
-        for (
-            name,
-            branch_url,
-            revision,
-            last_scanned,
-            description,
-        ) in await state.iter_package_branches(conn):
+        for row in await conn.fetch("""
+SELECT
+  name,
+  branch_url,
+  revision,
+  last_scanned,
+  description
+FROM
+  package
+LEFT JOIN branch ON package.branch_url = branch.url
+"""):
             response_obj.append(
                 {
-                    "name": name,
-                    "branch_url": branch_url,
-                    "revision": revision,
-                    "last_scanned": last_scanned.isoformat() if last_scanned else None,
-                    "description": description,
+                    "name": row['name'],
+                    "branch_url": row['branch_url'],
+                    "revision": row['revision'],
+                    "last_scanned": row['last_scanned'].isoformat() if row['last_scanned'] else None,
+                    "description": row['description'],
                 }
             )
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=60"})

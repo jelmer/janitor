@@ -590,6 +590,17 @@ async def invoke_subprocess_worker(
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
+async def update_branch_url(
+    conn: asyncpg.Connection, package: str, vcs_type: str, vcs_url: str
+) -> None:
+    await conn.execute(
+        "update package set vcs_type = $1, branch_url = $2 " "where name = $3",
+        vcs_type.lower(),
+        vcs_url,
+        package,
+    )
+
+
 async def open_branch_with_fallback(
     conn, pkg, vcs_type, vcs_url, possible_transports=None
 ):
@@ -615,7 +626,7 @@ async def open_branch_with_fallback(
                 raise e
             else:
                 if branch:
-                    await state.update_branch_url(
+                    await update_branch_url(
                         conn, pkg, "Git", full_branch_url(branch).rstrip("/")
                     )
                     return branch
@@ -801,34 +812,13 @@ class ActiveRemoteRun(ActiveRun):
 
 
 async def open_canonical_main_branch(conn, queue_item, possible_transports=None):
-    try:
-        main_branch = await open_branch_with_fallback(
-            conn,
-            queue_item.package,
-            queue_item.vcs_type,
-            queue_item.branch_url,
-            possible_transports=possible_transports,
-        )
-    except BranchOpenFailure as e:
-        await state.update_branch_status(
-            conn,
-            queue_item.branch_url,
-            None,
-            status=e.code,
-            description=e.description,
-            revision=None,
-        )
-        raise
-    else:
-        branch_url = full_branch_url(main_branch)
-        await state.update_branch_status(
-            conn,
-            queue_item.branch_url,
-            branch_url,
-            status="success",
-            revision=main_branch.last_revision(),
-        )
-        return main_branch
+    return await open_branch_with_fallback(
+        conn,
+        queue_item.package,
+        queue_item.vcs_type,
+        queue_item.branch_url,
+        possible_transports=possible_transports,
+    )
 
 
 async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
@@ -860,14 +850,29 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
 
 async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branch: Branch) -> Optional["ResumeInfo"]:
     if resume_branch is not None:
-        (
-            resume_branch_result,
-            resume_branch_name,
-            resume_review_status,
-            resume_result_branches,
-        ) = await state.get_run_result_by_revision(
-            conn, suite, revision=resume_branch.last_revision()
+        row = await conn.fetchrow(
+            "SELECT result, branch_name, review_status, "
+            "array(SELECT row(role, remote_name, base_revision, revision) "
+            "FROM new_result_branch WHERE run_id = run.id) AS result_branches "
+            "FROM run "
+            "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
+            suite,
+            resume_branch.last_revision().decode("utf-8"),
         )
+        if row is not None:
+            resume_branch_result = row['result']
+            resume_branch_name = row['branch_name']
+            resume_review_status = row['review_status']
+            resume_result_branches = [
+                (role, name,
+                 base_revision.encode("utf-8") if base_revision else None,
+                 revision.encode("utf-8") if revision else None)
+                for (role, name, base_revision, revision) in row['result_branches']]
+        else:
+            logging.warning(
+                'Unable to find resume branch %r in database',
+                resume_branch)
+            return None
         if resume_review_status == "rejected":
             logging.info("Unsetting resume branch, since last run was " "rejected.")
             return None
@@ -1216,8 +1221,15 @@ async def export_queue_length(db: state.Database) -> None:
     # TODO(jelmer): Move to a different process?
     while True:
         async with db.acquire() as conn:
-            queue_duration.set((await state.queue_duration(conn)).total_seconds())
-            async for bucket, tick, length in state.queue_stats(conn):
+            query = """\
+            SELECT SUM(estimated_duration) FROM queue
+            WHERE estimated_duration IS NOT NULL"""
+            total_duration = await conn.fetchval(query)
+            if total_duration is not None:
+                queue_duration.set(total_duration.total_seconds())
+            for bucket, tick, length in await conn.fetch(
+                    "SELECT bucket, MIN(priority), count(*) FROM queue "
+                    "GROUP BY bucket"):
                 current_tick.labels(bucket=bucket).set(tick)
                 queue_length.labels(bucket=bucket).set(length)
         await asyncio.sleep(60)
@@ -1236,24 +1248,39 @@ group by 1"""
 
             by_suite: Dict[str, int] = {}
             by_suite_result: Dict[Tuple[str, str], int] = {}
-            async for package_name, suite, run_duration, result_code in (
-                state.iter_by_suite_result_code(conn)
-            ):
-                by_suite.setdefault(suite, 0)
-                by_suite[suite] += 1
-                by_suite_result.setdefault((suite, result_code), 0)
-                by_suite_result[(suite, result_code)] += 1
+            for row in await conn.fetch("""
+SELECT DISTINCT ON (package, suite)
+  package, suite, result_code
+FROM run
+ORDER BY package, suite, start_time DESC
+"""):
+                by_suite.setdefault(row['suite'], 0)
+                by_suite[row['suite']] += 1
+                by_suite_result.setdefault((row['suite'], row['result_code']), 0)
+                by_suite_result[(row['suite'], row['result_code'])] += 1
             for suite, count in by_suite.items():
                 run_count.labels(suite=suite).set(count)
             for (suite, result_code), count in by_suite_result.items():
                 run_result_count.labels(suite=suite, result_code=result_code).set(count)
             for suite, count in await state.get_never_processed_count(conn):
                 never_processed_count.labels(suite).set(count)
-            for review_status, count in await state.iter_review_status(conn):
-                review_status_count.labels(review_status).set(count)
+            for row in await conn.fetch("""\
+select
+  review_status,
+  count(review_status) AS cnt
+from
+  last_runs
+where result_code = 'success'
+group by 1
+"""):
+                review_status_count.labels(row['review_status']).set(row['cnt'])
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
+
+
+async def drop_queue_item(conn: asyncpg.Connection, queue_id):
+    await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
 
 
 class QueueProcessor(object):
@@ -1400,7 +1427,7 @@ class QueueProcessor(object):
                 )
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id, item.package)
-                await state.drop_queue_item(conn, item.id)
+                await drop_queue_item(conn, item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[active_run.log_id]
         self.topic_queue.publish(self.status_json())
@@ -1566,7 +1593,7 @@ async def handle_assign(request):
         )
         async with queue_processor.database.acquire() as conn:
             await queue_processor.finish_run(active_run, result)
-            await state.drop_queue_item(conn, active_run.queue_item.id)
+            await drop_queue_item(conn, active_run.queue_item.id)
 
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)

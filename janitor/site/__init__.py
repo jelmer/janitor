@@ -233,7 +233,11 @@ async def is_worker(db, request: web.Request) -> Optional[str]:
         return None
     auth = BasicAuth.decode(auth_header=auth_header)
     async with db.acquire() as conn:
-        if await state.check_worker_credentials(conn, auth.login, auth.password):
+        val = await conn.fetchval(
+            "select 1 from worker where name = $1 " "AND password = crypt($2, password)",
+            auth.login, auth.password,
+        )
+        if val:
             return auth.login
     return None
 

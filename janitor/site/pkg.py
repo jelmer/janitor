@@ -1,10 +1,13 @@
 #!/usr/bin/python3
 
 from aiohttp import ClientConnectorError
+from datetime import datetime
 from functools import partial
 from io import BytesIO
-from typing import Optional
+from typing import Optional, Tuple
 import urllib.parse
+
+import asyncpg
 
 from janitor import state
 from janitor.debian import state as debian_state
@@ -107,6 +110,17 @@ def in_line_boundaries(i, boundaries):
     return True
 
 
+async def get_publish_history(
+    conn: asyncpg.Connection, revision: bytes
+) -> Tuple[str, Optional[str], str, str, str, datetime.datetime]:
+    return await conn.fetch(
+        "select mode, merge_proposal_url, description, result_code, "
+        "requestor, timestamp from publish where revision = $1 "
+        "ORDER BY timestamp DESC",
+        revision.decode("utf-8"),
+    )
+
+
 async def generate_run_file(
     db, client, config, differ_url, logfile_manager, run, vcs_store_url, is_admin
 ):
@@ -136,7 +150,7 @@ async def generate_run_file(
         )
         package = await debian_state.get_package(conn, run.package)
         if run.revision and run.result_code in ("success", "nothing-new-to-do"):
-            publish_history = await state.get_publish_history(conn, run.revision)
+            publish_history = await get_publish_history(conn, run.revision)
         else:
             publish_history = []
     kwargs["queue_wait_time"] = queue_wait_time
