@@ -159,7 +159,6 @@ def add_file_info(r, base, p):
         "SHA512": hashlib.sha512(),
     }
     size = 0
-    logger.debug('Writing %s', p)
     with open(os.path.join(base, p), "rb") as f:
         for chunk in f:
             for h in hashes.values():

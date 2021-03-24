@@ -478,21 +478,27 @@ async def dulwich_service(request):
     return response
 
 
+async def _bzr_open_repo(vcs_manager, db, package):
+    async with db.acquire() as conn:
+        if not await state.package_exists(conn, package):
+            raise web.HTTPNotFound()
+    repo = vcs_manager.get_repository(package, "bzr")
+    if repo is None:
+        controldir = ControlDir.create(
+            vcs_manager.get_repository_url(package, "bzr")
+        )
+        repo = controldir.create_repository(shared=True)
+    return repo
+
+
 async def bzr_backend(request):
     vcs_manager = request.app.vcs_manager
     package = request.match_info["package"]
     branch = request.match_info.get("branch")
-    repo = vcs_manager.get_repository(package, "bzr")
+    repo = await _bzr_open_repo(vcs_manager, request.app.db, package)
     if await is_worker(request.app.db, request):
-        if repo is None:
-            controldir = ControlDir.create(
-                vcs_manager.get_repository_url(package, "bzr")
-            )
-            repo = controldir.create_repository(shared=True)
         backing_transport = repo.user_transport
     else:
-        if repo is None:
-            raise web.HTTPNotFound()
         backing_transport = get_transport_from_url("readonly+" + repo.user_url)
     transport = backing_transport.clone(branch)
     out_buffer = BytesIO()
@@ -501,6 +507,7 @@ async def bzr_backend(request):
     protocol_factory, unused_bytes = medium._get_protocol_factory_for_bytes(
         request_data_bytes
     )
+
     smart_protocol_request = protocol_factory(
         transport, out_buffer.write, ".", backing_transport
     )
@@ -513,10 +520,17 @@ async def bzr_backend(request):
         response_data = b"error\x01incomplete request\n"
     else:
         response_data = out_buffer.getvalue()
-    # TODO(jelmer): Use StreamResponse
-    return web.Response(
-        status=200, body=response_data, content_type="application/octet-stream"
-    )
+
+    response = web.StreamResponse(status=200)
+    response.content_type = "application/octet-stream"
+
+    await response.prepare(request)
+
+    await response.write(response_data)
+
+    await response.write_eof()
+
+    return response
 
 
 async def get_vcs_type(request):
