@@ -63,6 +63,17 @@ debianize
 {% endif %}
 {% endmacro %}
 
+{% macro file_bug_button(run_id) %}
+<form action="https://salsa.debian.org/jelmer/debian-janitor/-/issues/new" method="GET">
+<input type="hidden" name="issue[issue_type]" value="{{ description|escape }}"/>
+<input type="hidden" name="issue[description]" value="{% filter escape %}
+See run [{{ run_id }}]({{ url }}
+
+{% endfilter %}"/>
+<button>File a Bug</button>
+</form>
+{% endmacro %}
+
 {% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}) %}
 <button id="{{ id }}">{{ title }}</button>
 
