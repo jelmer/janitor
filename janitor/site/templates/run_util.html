@@ -64,7 +64,7 @@ debianize
 {% endmacro %}
 
 {% macro file_bug_button(run_id) %}
-<form action="https://salsa.debian.org/jelmer/debian-janitor/-/issues/new" method="GET">
+<form action="https://salsa.debian.org/jelmer/debian-janitor/-/issues/new" method="GET" style="display: contents;">
 <input type="hidden" name="issue[issue_type]" value="{{ description|escape }}"/>
 <input type="hidden" name="issue[description]" value="{% filter escape %}
 See run [{{ run_id }}]({{ url }}
