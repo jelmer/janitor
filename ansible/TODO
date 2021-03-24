@@ -1,0 +1,6 @@
+- Allow different users for different components
+ + In particular, run the site as a different user with only read-only
+   database permissions.
+- Support external workers
+- Support authentication
+- Support uploading SSH key/GPG key details to hosters
