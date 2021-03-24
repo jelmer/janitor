@@ -41,13 +41,10 @@ debianize
 {% endif %}
 {% endmacro %}
 
-{% macro clone_command(vcs, vcs_url, package) %}
-{% if vcs == 'git' %}
-git clone {{ vcs_url }} {{ package }}
-{% elif vcs == 'bzr' %}
-bzr clone {{ vcs_url }} {{ package }}
-{% endif %}
-{% endmacro %}
+{% macro clone_command(vcs, vcs_url, package) %}{% set vcs = vcs_type() -%}
+{%- if vcs == 'git' %}git clone {{ vcs_url }} {{ package }}
+{%- elif vcs == 'bzr' %}bzr clone {{ vcs_url }} {{ package }}{% endif %}
+{%- endmacro %}
 
 {% macro merge_command(package, suite, result_branches, vcs) %}
 {% set vcs = vcs_type() %}
