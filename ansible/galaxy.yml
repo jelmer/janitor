@@ -1,0 +1,10 @@
+---
+name: "debian-janitor"
+namespace: "jelmer"
+version: "0.0.1"
+readme: "README.md"
+authors:
+  - "Jelmer Vernooĳ <jelmer@jelmer.uk>"
+homepage: https://salsa.debian.org/jelmer/debian-janitor
+license_file: ../LICENSE
+repository: https://salsa.debian.org/jelmer/debian-janitor#/ansible/
