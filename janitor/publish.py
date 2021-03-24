@@ -899,6 +899,19 @@ async def publish_and_store(
         )
 
 
+def create_background_task(fn, title):
+    loop = asyncio.get_event_loop()
+    task = loop.create_task(fn)
+    def log_result(future):
+        try:
+            future.result()
+        except BaseException:
+            logger.exception('%s failed', title)
+        else:
+            logger.debug('%s succeeded', title)
+    task.add_done_callback(log_result)
+
+
 async def publish_request(request):
     dry_run = request.app.dry_run
     vcs_manager = request.app.vcs_manager
@@ -933,7 +946,6 @@ async def publish_request(request):
         branches = [(r, publish_policy.get(r, (MODE_SKIP, None))) for r in roles]
 
     publish_ids = {}
-    loop = asyncio.get_event_loop()
     for role, mode in branches:
         publish_id = str(uuid.uuid4())
         publish_ids[role] = publish_id
@@ -943,7 +955,7 @@ async def publish_request(request):
         if mode in (MODE_SKIP, MODE_BUILD_ONLY):
             continue
 
-        loop.create_task(
+        create_background_task(
             publish_and_store(
                 request.app.db,
                 request.app.topic_publish,
@@ -962,7 +974,7 @@ async def publish_request(request):
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
-            )
+            ), 'publish of %s/%s, role %s' % (package, suite, role)
         )
 
     if not publish_ids:
@@ -1112,8 +1124,7 @@ async def scan_request(request):
                 modify_limit=request.app.modify_mp_limit,
             )
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(scan())
+    create_background_task(scan(), 'merge proposal refresh scan')
     return web.Response(status=202, text="Scan started.")
 
 
@@ -1150,9 +1161,7 @@ async def refresh_proposal_status_request(request):
                 logger.warning(
                     "Unable to find local metadata for %s, skipping.", e.mp.url
                 )
-
-    loop = asyncio.get_event_loop()
-    loop.create_task(scan())
+    create_background_task(scan(), 'Refresh of proposal %s' % url)
     return web.Response(status=202, text="Refresh of proposal started.")
 
 
@@ -1174,8 +1183,7 @@ async def autopublish_request(request):
             require_binary_diff=request.app.require_binary_diff,
         )
 
-    loop = asyncio.get_event_loop()
-    loop.create_task(autopublish())
+    create_background_task(autopublish(), 'autopublish')
     return web.Response(status=202, text="Autopublish started.")
 
 
