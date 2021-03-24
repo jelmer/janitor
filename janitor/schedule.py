@@ -193,21 +193,47 @@ async def estimate_success_probability(
     return ((success * 10 + 1) / (total * 10 + 1) * same_context_multiplier), total
 
 
+async def _estimate_duration(
+    conn: asyncpg.Connection,
+    package: Optional[str] = None,
+    suite: Optional[str] = None,
+    limit: Optional[int] = 1000,
+) -> Optional[timedelta]:
+    query = """
+SELECT AVG(duration) FROM
+(select finish_time - start_time as duration FROM run
+WHERE """
+    args = []
+    if package is not None:
+        query += " package = $1"
+        args.append(package)
+    if suite is not None:
+        if package:
+            query += " AND"
+        query += " suite = $%d" % (len(args) + 1)
+        args.append(suite)
+    query += " ORDER BY finish_time DESC"
+    if limit is not None:
+        query += " LIMIT %d" % limit
+    query += ") as q"
+    return await conn.fetchval(query, *args)
+
+
 async def estimate_duration(
     conn: asyncpg.Connection, package: str, suite: str
 ) -> timedelta:
     """Estimate the duration of a package build for a certain suite."""
-    estimated_duration = await state.estimate_duration(
+    estimated_duration = await _estimate_duration(
         conn, package=package, suite=suite
     )
     if estimated_duration is not None:
         return estimated_duration
 
-    estimated_duration = await state.estimate_duration(conn, package=package)
+    estimated_duration = await _estimate_duration(conn, package=package)
     if estimated_duration is not None:
         return estimated_duration
 
-    estimated_duration = await state.estimate_duration(conn, suite=suite)
+    estimated_duration = await _estimate_duration(conn, suite=suite)
     if estimated_duration is not None:
         return estimated_duration
 
@@ -425,10 +451,13 @@ async def do_schedule(
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
-        (update_changelog, command) = await state.get_policy(conn, package, suite)
-        if not command or not update_changelog:
+        policy = await conn.fetchrow(
+            "SELECT update_changelog, command "
+            "FROM policy WHERE package = $1 AND suite = $2",
+            package, suite)
+        if not policy:
             raise PolicyUnavailable(suite, package)
-        command = full_command(update_changelog, command)
+        command = full_command(policy['update_changelog'], policy['command'])
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, suite)
     await state.add_to_queue(

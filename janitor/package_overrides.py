@@ -59,8 +59,14 @@ async def main(args):
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
         currents = {
-            k: v for [k, v] in await state.iter_custom_upstream_branch_urls(conn)
-        }
+            row['name']: row['upstream_branch_url']
+            for row in conn.fetch("""
+select
+  name,
+  upstream_branch_url
+from upstream
+where upstream_branch_url is not null
+""")}
         for name in set(currents).union(set(overrides)):
             current = currents.get(name)
             override = overrides.get(name)

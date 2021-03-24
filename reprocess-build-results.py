@@ -129,7 +129,13 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
         )
         if not dry_run:
             async with db.acquire() as conn:
-                await state.update_run_result(conn, log_id, new_code, new_description, new_failure_details)
+                await conn.execute(
+                    "UPDATE run SET result_code = $1, description = $2, failure_details = $3 WHERE id = $4",
+                    new_code,
+                    new_description,
+                    new_failure_details,
+                    log_id,
+                )
                 if reschedule and new_code != result_code:
                     await do_schedule(
                         conn,
