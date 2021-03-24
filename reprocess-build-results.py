@@ -118,16 +118,16 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
         if not dry_run:
             async with db.acquire() as conn:
                 await state.update_run_result(conn, log_id, new_code, new_description)
-            if reschedule and new_code != result_code:
-                await do_schedule(
-                    conn,
-                    package,
-                    suite,
-                    command=command.split(" "),
-                    estimated_duration=duration,
-                    requestor="reprocess-build-results",
-                    bucket="reschedule",
-                )
+                if reschedule and new_code != result_code:
+                    await do_schedule(
+                        conn,
+                        package,
+                        suite,
+                        command=command.split(" "),
+                        estimated_duration=duration,
+                        requestor="reprocess-build-results",
+                        bucket="reschedule",
+                    )
 
 
 async def process_all_build_failures(db, dry_run=False, reschedule=False):
