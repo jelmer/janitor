@@ -63,15 +63,27 @@ debianize
 {% endif %}
 {% endmacro %}
 
-{% macro file_bug_button(run_id) %}
-<form action="https://salsa.debian.org/jelmer/debian-janitor/-/issues/new" method="GET" style="display: contents;">
-<input type="hidden" name="issue[issue_type]" value="{{ description|escape }}"/>
-<input type="hidden" name="issue[description]" value="{% filter escape %}
+{% macro file_bug_button(run_id, verbatim_id=None) %}
+<form id="bugform" action="https://salsa.debian.org/jelmer/debian-janitor/-/issues/new" method="GET" style="display: contents;">
+<input type="hidden" name="issue[issue_type]" value="issue"/>
+<input type="hidden" name="issue[title]" value="{{ description|escape }}"/>
+<input type="hidden" id="issue_description" name="issue[description]" value="{% filter escape %}
 See run [{{ run_id }}]({{ url }}
 
 {% endfilter %}"/>
-<button>File a Bug</button>
+<button id="filebug">File a Bug</button>
 </form>
+
+{% if verbatim_id %}
+<script>
+$("#filebug").click(function(e){
+    e.preventDefault();
+    $("#issue_description").value += "```\n" + $(verbatim_id).text + "\n```\n";
+    $("#bugform").submit();
+});
+</script>
+{% endif %}
+
 {% endmacro %}
 
 {% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}) %}
