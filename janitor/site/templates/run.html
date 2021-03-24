@@ -74,7 +74,7 @@ function submit_review(status) {
 {% if run.result_branches %}
 {{ publish_buttons(suite, package) }}
 {% endif %}
-{{ file_bug_button(run_id, verbatim_id="#log") }}
+{{ file_bug_button(run_id, result_code, verbatim_id="#log") }}
 {% endif %}
 
 {% if run.result_branches %}
