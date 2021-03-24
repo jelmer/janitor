@@ -1,0 +1,17 @@
+[Unit]
+Description=Archive Management for the Janitor
+
+StartLimitIntervalSec=90
+StartLimitBurst=3
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+WorkingDirectory={{ janitor_home }}
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 -m janitor.debian.archive --listen-address {{ janitor_archive_address }} --port={{ janitor_archive_port }} --config={{ janitor_conf_path }} --cache-directory={{ janitor_home }}/cache-archive --dists-directory={{ janitor_home }}/dists --runner-url {{ janitor_runner_url }}
+Restart=on-failure
+RestartSec=90s
+
+[Install]
+WantedBy=default.target

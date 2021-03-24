@@ -1,0 +1,80 @@
+groups:
+- name: janitor.rules
+  rules:
+  - alert: JanitorRunnerDown
+    expr: up{job="janitor.runner"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor runner is down
+  - alert: JanitorPublisherDown
+    expr: up{job="janitor.publisher"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor publisher is down
+  - alert: JanitorSiteDown
+    expr: up{job="janitor.site"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor site is down
+  - alert: JanitorArchiverDown
+    expr: up{job="janitor.archiver"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor archiver is down
+  - alert: JanitorArchiverDown
+    expr: up{job="janitor.archiver"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor archiver is down
+  - alert: JanitorScheduleNotRunning
+    expr: ((time() - job_last_success_unixtime{exported_job="janitor.schedule"}) / 3600) > 48
+    for: 1h
+    annotations:
+      summary: janitor.schedule not running
+  - alert: JanitorIrcRelayDown
+    expr: up{job="irc_relay"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Prometheus IRC relay is down
+  - alert: JanitorIrcNotifyDown
+    expr: up{job="irc_notify"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor IRC notifier is down
+  - alert: JanitorMastodonNotifyDown
+    expr: up{job="mastodon_notify"} == 0
+    for: 1h
+    labels:
+      severity: critical
+      project: debian-janitor
+    annotations:
+      description: Job {{ $labels.job }} instance {{ $labels.instance }} is down.
+      summary: Janitor Mastodon notifier is down

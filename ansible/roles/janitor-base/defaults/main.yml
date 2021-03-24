@@ -1,0 +1,18 @@
+---
+janitor_instance_name: 'Debian Janitor'
+janitor_db_user: janitor
+janitor_db_host: brangwain.vpn.jelmer.uk
+janitor_db_port: 5432
+janitor_db_name: janitor
+janitor_home: /home/janitor
+janitor_code_path: "/opt/debian-janitor"
+janitor_conf_path: "{{ janitor_home }}/janitor.conf"
+janitor_vcs_path: "{{ janitor_home }}/vcs"
+janitor_apt_path: "{{ janitor_home }}/apt"
+janitor_artifact_path: "{{ janitor_home }}/artifacts"
+janitor_logs_path: "{{ janitor_home }}/logs"
+janitor_archive_origin: ''
+janitor_email: janitor@jelmer.uk
+janitor_fullname: Janitor
+janitor_committer: "{{ janitor_fullname }} <{{ janitor_email }}>"
+janitor_openid:

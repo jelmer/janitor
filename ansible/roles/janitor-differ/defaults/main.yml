@@ -1,0 +1,4 @@
+---
+janitor_differ_port: 9920
+janitor_differ_address: ::1
+janitor_differ_cache_path: "{{ janitor_home }}/diff-cache"

@@ -1,0 +1,57 @@
+- name: Install klaus
+  apt:
+    package: python3-klaus
+    state: present
+- name: Check if aiohttp-wsgi is packaged
+  shell: '[ $(apt-cache showpkg python3-aiohttp-wsgi ) ]'
+  ignore_errors: True
+  register: aiohttp_wsgi_packaged
+- name: Install python3-aiohttp-wsgi from apt
+  apt: name=python3-aiohttp-wsgi state=present
+  when: 'aiohttp_wsgi_packaged.rc == 0'
+- name: Install aiohttp-wsgi from pip
+  pip:
+    name: aiohttp-wsgi
+  when: 'aiohttp_wsgi_packaged.rc != 0'
+- name: System file for Janitor publisher
+  template:
+    src: publish.service
+    dest: /etc/systemd/system/janitor-publish.service
+- name: Enable systemd for Janitor publisher
+  systemd:
+    name: janitor-publish.service
+    state: started
+    enabled: yes
+- name: System file for Janitor VCS store
+  template:
+    src: vcs-store.service
+    dest: /etc/systemd/system/janitor-vcs-store.service
+- name: Enable systemd for Janitor VCS Store
+  systemd:
+    name: janitor-vcs-store.service
+    state: started
+    enabled: yes
+- name: VCS directory
+  file:
+    state: directory
+    path: "{{ janitor_vcs_path }}"
+    owner: "{{ janitor_user }}"
+- name: Check if GPG key is present
+  shell: '[ "$(gpg -K)" = "" ]'
+  ignore_errors: True
+  register: gpg_key_present
+  become_user: "{{ janitor_user }}"
+  become: yes
+- name: Create GPG key
+  import_tasks: gpg.yml
+  notify:
+    - restart publisher
+  when: 'gpg_key_present.rc == 0'
+- name: SSH Configuration
+  template:
+    src: ssh_config
+    dest: "{{ janitor_home }}/.ssh/config"
+  notify:
+    - restart publisher
+- name: Import credentials
+  include_tasks: creds.yml

@@ -1,0 +1,8 @@
+---
+janitor_irc_alerts_port: 9938
+janitor_irc_alerts_address: '::1'
+janitor_irc_fullname: "Kali Janitor Bot Notifications"
+janitor_irc_server: irc.oftc.net
+janitor_irc_port: 6667
+janitor_irc_channel: "#debian-janitor"
+janitor_irc_alerts_nick: janitor-alerts

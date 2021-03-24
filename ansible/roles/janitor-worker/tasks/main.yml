@@ -1,0 +1,42 @@
+- name: Install sbuild
+  apt: package=sbuild state=present
+- name: Install lintian-brush dependencies
+  apt:
+    package:
+      - python3-ruamel.yaml
+      - python3-iniparse
+      - python3-toml
+      - devscripts
+      - quilt
+      - gnome-pkg-tools
+      - schroot
+      - python3-bs4
+    state: present
+- stat:
+    path: "{{ item['sbuild_path'] }}"
+  register: sbuild
+  with_items: "{{ janitor_distributions }}"
+- name: Create schroot
+  command: "{{ janitor_code_path }}/create-sbuild-chroot.py --user={{ janitor_user }} {% if 'include' in item.item %} --include={% for include in item.item['include'] %}{{ include }}{{ ',' if not loop.last }}{% endfor %}{% endif %} {{ item.item['sbuild_path'] }}"
+  when: not item.stat.exists
+  with_items: "{{ sbuild.results }}"
+- name: Update schroot
+  command: sbuild-update -udcar "{{ item.item['chroot'] }}"
+  with_items: "{{ sbuild.results }}"
+  when: item.stat.exists
+- name: Update schroot from cron job
+  cron:
+    name: "update schroot for {{ item['name'] }}"
+    special_time: daily
+    job: sbuild-update -udcar "{{ item['chroot'] }}"
+  with_items: "{{ janitor_distributions }}"
+- name: janitor in sbuild group
+  user:
+    name: '{{ janitor_user }}'
+    groups: sbuild
+    append: yes
+- name: sbuild configuration
+  file:
+    state: link
+    src: "{{ janitor_code_path }}/sbuildrc"
+    dest: "{{ janitor_home }}/.sbuildrc"

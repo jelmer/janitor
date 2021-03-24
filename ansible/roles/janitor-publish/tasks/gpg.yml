@@ -1,0 +1,9 @@
+---
+- name: Template for GPG key generation
+  template:
+    src: gpg-key-script
+    dest: "{{ janitor_home }}/gpg-key-script"
+- name: Generate GPG key
+  command: gpg --batch --gen-key "{{ janitor_home}}/gpg-key-script"
+  become_user: "{{ janitor_user }}"
+  become: yes

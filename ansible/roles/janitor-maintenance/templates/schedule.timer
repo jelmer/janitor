@@ -1,0 +1,12 @@
+[Unit]
+Description=Iterate
+RefuseManualStart=false
+RefuseManualStop=false
+
+[Timer]
+Persistent=true
+OnCalendar=daily
+Unit=janitor-schedule.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,62 @@
+- name: Install sudo
+  apt: package=sudo state=present
+- name: Install postgresl debversion
+  apt: package=postgresql-{{ __postgresql_version }}-debversion state=present
+- name: Check janitor database already exists
+  become: yes
+  become_user: postgres
+  shell: psql -l | grep janitor
+  ignore_errors: true
+  register: janitor_db_existence
+- name: Create database
+  become: yes
+  become_user: postgres
+  postgresql_db:
+    name: "{{ janitor_db_name }}"
+    state: present
+  when: janitor_db_existence.rc == 1
+- name: Load database
+  become: yes
+  become_user: postgres
+  postgresql_db:
+    name: "{{ janitor_db_name }}"
+    state: restore
+    target: "{{ janitor_code_path }}/state.sql"
+  when: janitor_db_existence.rc == 1
+- name: Set privileges on tables
+  become: yes
+  become_user: postgres
+  postgresql_privs:
+    db: "{{ janitor_db_name }}"
+    type: table
+    privs: INSERT,UPDATE,SELECT,DELETE
+    objs: ALL_IN_SCHEMA
+    roles: "{{ janitor_db_user }}"
+- name: Set privileges on sequences
+  become: yes
+  become_user: postgres
+  postgresql_privs:
+    db: "{{ janitor_db_name }}"
+    type: sequence
+    privs: USAGE
+    objs: ALL_IN_SCHEMA
+    roles: "{{ janitor_db_user }}"
+- name: postgresql exporter installed
+  apt: name=prometheus-postgres-exporter state=present
+- name: postgresql exporter configuration
+  lineinfile:
+    path: /etc/default/prometheus-postgres-exporter
+    regexp: '^ARGS='
+    line: "ARGS='--web.listen-address=[{{ janitor_db_prometheus_address }}]:{{ janitor_db_prometheus_port }}'"
+  notify:
+    - restart prometheus-postgres-exporter
+- name: postgres exporter local override directory
+  file:
+    path: /etc/systemd/system/prometheus-postgres-exporter/
+    state: directory
+- name: postgres exporter username override
+  template:
+    src: prometheus-postgres-exporter.service
+    dest: /etc/systemd/system/prometheus-postgres-exporter/local.conf
+  notify:
+    - restart prometheus-postgres-exporter

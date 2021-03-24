@@ -1,0 +1,15 @@
+{% for creds in janitor_hoster_credentials %}
+{% if creds.kind == 'launchpad' %}
+Host *.launchpad.net
+  User {{ creds.username }}
+  StrictHostKeyChecking accept-new
+{% elif creds.kind == 'github' %}
+Host github.com
+  User git
+  StrictHostKeyChecking accept-new
+{% elif creds.kind == 'gitlab' %}
+Host {{ creds.url.replace('https://', '').rstrip('/') }}
+  User git
+  StrictHostKeyChecking accept-new
+{% endif %}
+{% endfor %}

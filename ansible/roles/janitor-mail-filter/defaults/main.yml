@@ -1,0 +1,2 @@
+---
+dovecot_sieve_execute_bin_dir: /usr/lib/dovecot/sieve-pipe

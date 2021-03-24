@@ -1,0 +1,16 @@
+- name: Install dependencies for Mastodon notify
+  apt:
+    package:
+     - python3-mastodon
+     - python3-prometheus-client
+    state: present
+- name: Mastodon notify systemd file
+  template:
+    src: mastodon-notify.service
+    dest: /etc/systemd/system/janitor-mastodon-notify.service
+- name: Enable Mastodon notify systemd
+  systemd:
+    name: janitor-mastodon-notify.service
+    state: started
+    enabled: yes
+    daemon_reload: yes

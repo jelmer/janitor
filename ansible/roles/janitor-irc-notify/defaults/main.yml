@@ -1,0 +1,7 @@
+---
+janitor_irc_notify_port: 9918
+janitor_irc_notify_address: '::1'
+janitor_irc_fullname: "Janitor Bot Notifications"
+janitor_irc_server: irc.oftc.net
+janitor_irc_channel: "#debian-janitor"
+janitor_irc_nick: janitor-notify

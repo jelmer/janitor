@@ -1,0 +1,80 @@
+- name: Install required dependencies
+  apt:
+    state: present
+    name:
+     - sudo
+     - git
+     - make
+     - python3-aiohttp
+     - python3-configobj
+     - python3-debian
+     - python3-protobuf
+     - python3-iso8601
+     - protobuf-compiler
+     - python3-gpg
+     - gnupg2
+     - python3-pip
+     - python3-yaml
+     - python3-launchpadlib
+     - python3-keyrings.alt
+     - python3-distro-info
+     - python3-patiencediff
+     - java-propose-classpath
+     - cython3
+     - python3-all-dev
+     - python3-asyncpg
+- name: Install mypy-protobuf
+  pip:
+    name: mypy-protobuf
+- name: Create janitor user
+  user:
+    name: "{{ janitor_user }}"
+    generate_ssh_key: yes
+    create_home: yes
+    system: yes
+    home: "{{ janitor_home }}"
+- name: Update janitor git repository
+  git:
+    repo: https://salsa.debian.org/jelmer/debian-janitor
+    dest: "{{ janitor_code_path }}"
+    force: yes
+- name: Build protobuf
+  make:
+    chdir: "{{ janitor_code_path }}"
+- name: Build C extensions for Breezy
+  make:
+    chdir: "{{ janitor_code_path }}/breezy"
+- name: Build C extensions for Dulwich
+  make:
+    chdir: "{{ janitor_code_path }}/dulwich"
+- name: janitor.conf configuration
+  template:
+    src: janitor.conf
+    dest: "{{ janitor_conf_path }}"
+- name: env file
+  template:
+    src: env
+    dest: "{{ janitor_home }}/env"
+- name: postgresql credentials
+  template:
+    src: pgpass
+    dest: "{{ janitor_home }}/.pgpass"
+    mode: '0600'
+    owner: janitor
+- name: configuration directory for Breezy
+  file:
+    state: directory
+    path: "{{ janitor_home }}/{{ item }}"
+    owner: "{{ janitor_user }}"
+  with_items:
+    - .config
+    - .config/breezy
+    - .config/breezy/plugins
+- name: Breezy Debian installation
+  file:
+    src: "{{ janitor_code_path }}/breezy-debian"
+    dest: "{{ janitor_home }}/.config/breezy/plugins/debian"
+    owner: "{{ janitor_user }}"
+    state: link
+- name: Breezy Identity
+  command: "{{ janitor_code_path }}/breezy/brz whoami '{{ janitor_fullname }} <{{ janitor_email }}>'"

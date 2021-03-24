@@ -1,0 +1,4 @@
+---
+dependencies:
+  - role: janitor-base
+  - role: janitor-worker

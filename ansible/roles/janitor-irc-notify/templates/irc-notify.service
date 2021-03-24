@@ -1,0 +1,13 @@
+[Unit]
+Description=IRC Notification for the Debian janitor
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 {{ janitor_code_path }}/irc_notify.py --publisher-url={{ janitor_publish_url }} --prometheus-listen-address {{ janitor_irc_notify_address }} --prometheus-port={{ janitor_irc_notify_port }} --fullname="{{ janitor_irc_fullname }}" --server="{{ janitor_irc_server }}" --nick="{{ janitor_irc_nick }}" --channel="{{ janitor_irc_channel }}" --notifications-url="{{ janitor_notifications_url }}"
+Restart=on-failure
+RestartSec=90s
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=The Janitor Site
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 -m janitor.site.serve --host {{ janitor_site_address }} --port {{ janitor_site_port }} --publisher-url {{ janitor_publish_url }} --runner-url {{ janitor_runner_url }} --config {{ janitor_conf_path }} --differ-url {{ janitor_differ_url }} --archiver-url {{ janitor_archive_url }}{% if not janitor_site_external_workers %} --no-external-workers{% endif %} {% if janitor_site_external_url %}--external-url={{ janitor_site_external_url }} {% endif %} --vcs-store-url {{ janitor_vcs_store_url }}
+
+
+[Install]
+WantedBy=default.target

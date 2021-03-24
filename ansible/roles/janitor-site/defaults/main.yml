@@ -1,0 +1,4 @@
+---
+janitor_site_address: '::1'
+janitor_site_port: 8082
+janitor_site_external_workers: true

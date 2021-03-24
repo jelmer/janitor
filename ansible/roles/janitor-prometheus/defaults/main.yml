@@ -1,0 +1,3 @@
+---
+janitor_prometheus_address: 127.0.0.1
+janitor_prometheus_port: 9090

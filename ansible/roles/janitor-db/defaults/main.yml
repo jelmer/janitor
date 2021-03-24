@@ -1,0 +1,4 @@
+---
+janitor_db_address: '127.0.0.1/32'
+janitor_db_prometheus_port: 9187
+janitor_db_prometheus_address: ::1

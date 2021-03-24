@@ -1,0 +1,15 @@
+- name: Backup directory exists
+  file:
+    state: directory
+    path: "{{ janitor_runner_backup_directory }}"
+    owner: "{{ janitor_user }}"
+- name: Runner systemd installed
+  template:
+    src: run.service
+    dest: /etc/systemd/system/janitor-runner.service
+- name: Enable systemd service file
+  systemd:
+    name: janitor-runner.service
+    state: started
+    enabled: yes
+    daemon_reload: yes
