@@ -303,8 +303,9 @@ def import_branches_bzr(
     vcs_manager, local_branch, package, suite, log_id, branches, tags
 ):
     for fn, n, br, r in branches:
-        if n is not None:
-            raise AssertionError("unable to handle non-default branches for bzr")
+        if fn is not None:
+            raise AssertionError(
+                "unable to handle non-default branches for bzr (%s/%s)" % (fn, n))
         target_branch_path = vcs_manager.get_branch_url(package, suite, "bzr")
         try:
             target_branch = Branch.open(target_branch_path)
