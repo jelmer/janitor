@@ -1,0 +1,2 @@
+PYTHONPATH={{ janitor_code_path }}/ognibuild:{{ janitor_code_path }}/buildlog-consultant:{{ janitor_code_path }}/upstream-ontologist:{{ janitor_code_path }}:{{ janitor_code_path }}/lintian-brush:{{ janitor_code_path }}/breezy:{{ janitor_code_path }}/silver-platter:{{ janitor_code_path }}/dulwich:{{ janitor_code_path }}/python-debian/lib:{{ janitor_code_path }}/debmutate
+AUTOPKGTEST={{ janitor_code_path }}/autopkgtest-wrapper
