@@ -1,4 +1,4 @@
-{% macro local_command(command, package) %}
+{% macro local_command(command, package, vcs, vcs_url) %}
 {% if command.startswith('lintian-brush') %}
 <p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
@@ -26,9 +26,26 @@ deb-scrub-obsolete
 </pre>
 </div>
 </div>
+{% elif command.startswith('debianize') %}
+<p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>
+{{ clone_command(vcs, vcs_url, package) }}
+cd {{ package }}
+debianize
+</pre>
+</div>
+</div>
 {% else %}
 <p>Try this locally (using <a href="https://packages.debian.org/silver-platter">silver-platter</a>):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>debian-svp {{ command }} {{ package }} </pre></div></div>
+{% endif %}
+{% endmacro %}
+
+{% macro clone_command(vcs, vcs_url, package) %}
+{% if vcs == 'git' %}
+git clone {{ vcs_url }} {{ package }}
+{% elif vcs == 'bzr' %}
+bzr clone {{ vcs_url }} {{ package }}
 {% endif %}
 {% endmacro %}
 
