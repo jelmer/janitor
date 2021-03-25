@@ -95,7 +95,7 @@ PUBLISH_MODE_VALUE = {
 }
 
 
-def full_command(update_changelog: str, command: List[str]) -> List[str]:
+def full_command(update_changelog: str, command: str) -> str:
     """Generate the full command to run.
 
     Args:
@@ -104,7 +104,7 @@ def full_command(update_changelog: str, command: List[str]) -> List[str]:
     Returns:
       full list of arguments
     """
-    entry_command = command
+    entry_command = shlex.split(command)
     if update_changelog == "update":
         entry_command.append("--update-changelog")
     elif update_changelog == "leave":
@@ -113,7 +113,7 @@ def full_command(update_changelog: str, command: List[str]) -> List[str]:
         pass
     else:
         raise ValueError("Invalid value %r for update_changelog" % update_changelog)
-    return entry_command
+    return shlex.join(entry_command)
 
 
 async def iter_candidates_with_policy(
@@ -129,7 +129,7 @@ async def iter_candidates_with_policy(
         Optional[float],
         Dict[str, str],
         str,
-        List[str],
+        str,
     ]
 ]:
     query = """
@@ -169,7 +169,7 @@ WHERE NOT package.removed
             (
                 dict(row['publish']) if row['publish'] is not None else None,
                 row['update_changelog'],
-                shlex.split(row['command']) if row['command'] is not None else None,
+                row['command'],
             ),
         )  # type: ignore
         for row in await conn.fetch(query, *args)
@@ -304,7 +304,7 @@ async def estimate_duration(
 async def _add_to_queue(
     conn: asyncpg.Connection,
     package: str,
-    command: List[str],
+    command: str,
     suite: str,
     offset: float = 0.0,
     bucket: str = "default",
@@ -331,7 +331,7 @@ async def _add_to_queue(
         "(queue.bucket = EXCLUDED.bucket AND "
         "queue.priority >= EXCLUDED.priority)",
         package,
-        " ".join(command),
+        command,
         offset,
         bucket,
         context,
@@ -515,8 +515,9 @@ async def do_schedule_control(
     main_branch_revision: Optional[bytes],
     offset: Optional[float] = None,
     refresh: bool = False,
-    bucket: str = "default",
+    bucket: str = "control",
     requestor: Optional[str] = None,
+    estimated_duration: Optional[timedelta] = None
 ) -> Tuple[float, Optional[timedelta]]:
     command = ["just-build"]
     if main_branch_revision is not None:
@@ -529,7 +530,7 @@ async def do_schedule_control(
         refresh=refresh,
         bucket=bucket,
         requestor=requestor,
-        command=command,
+        command=shlex.join(command),
     )
 
 
@@ -548,7 +549,7 @@ async def do_schedule(
     refresh: bool = False,
     requestor: Optional[str] = None,
     estimated_duration=None,
-    command=None,
+    command: Optional[str] = None,
 ) -> Tuple[float, Optional[timedelta]]:
     if offset is None:
         offset = DEFAULT_SCHEDULE_OFFSET

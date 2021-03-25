@@ -788,7 +788,7 @@ async def iter_publish_ready(
         str,
         List[str],
         str,
-        List[str],
+        str,
         List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int]]],
     ]
 ]:
@@ -834,7 +834,7 @@ SELECT * FROM publish_ready
             + list(record[23:-3])
             + [
                 record[-3],  # type: ignore
-                shlex.split(record[-2]) if record[-2] else None,  # type: ignore
+                record[-2],
                 record[-1],
             ]
         )  # type: ignore

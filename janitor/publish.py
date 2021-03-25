@@ -696,7 +696,7 @@ async def publish_from_policy(
     mode: str,
     max_frequency_days: Optional[int],
     update_changelog: str,
-    command: List[str],
+    command: str,
     dry_run: bool,
     external_url: str,
     differ_url: str,
@@ -710,14 +710,14 @@ async def publish_from_policy(
         logger.warning("no command set for %s", run.id)
         return
     expected_command = full_command(update_changelog, command)
-    if " ".join(expected_command) != run.command:
+    if expected_command != run.command:
         logger.warning(
             "Not publishing %s/%s: command is different (policy changed?). "
             "Build used %r, now: %r. Rescheduling.",
             run.package,
             run.suite,
             run.command,
-            " ".join(expected_command),
+            expected_command,
         )
         await do_schedule(
             conn,
@@ -1675,7 +1675,7 @@ applied independently.
                 conn,
                 last_run.package,
                 last_run.suite,
-                command=shlex.split(last_run.command),
+                command=last_run.command,
                 bucket="update-existing-mp",
                 refresh=False,
                 requestor="publisher (transient error)",
@@ -1691,7 +1691,7 @@ applied independently.
                 conn,
                 last_run.package,
                 last_run.suite,
-                command=shlex.split(last_run.command),
+                command=last_run.command,
                 bucket="update-existing-mp",
                 refresh=False,
                 requestor="publisher (retrying failed run after %d days)"
@@ -1953,7 +1953,7 @@ applied independently.
                     conn,
                     mp_run['package'],
                     mp_run['suite'],
-                    command=shlex.split(mp_run['command']),
+                    command=mp_run['command'],
                     bucket="update-existing-mp",
                     refresh=True,
                     requestor="publisher (merge conflict)",
