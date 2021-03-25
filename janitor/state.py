@@ -537,10 +537,13 @@ class QueueItem(object):
 
 
 async def get_queue_position(conn: asyncpg.Connection, suite, package):
-    return await conn.fetchrow(
+    row = await conn.fetchrow(
         "SELECT position, wait_time FROM queue_positions "
         "WHERE package = $1 AND suite = $2",
         package, suite)
+    if not row:
+        return (None, None)
+    return row
 
 
 async def iter_queue(conn: asyncpg.Connection, limit=None):
