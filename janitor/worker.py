@@ -162,7 +162,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                     raise DistCommandFailed(lines[0])
                 else:
                     raise DistCommandFailed(
-                        "command %r failed with unidentified error "
+                        "%r failed with unidentified error "
                         "(return code %d)" % (e.argv, e.retcode)
                     )
 
@@ -208,7 +208,7 @@ class DebianizeChanger(ActualDebianizeChanger):
                     raise DistCommandFailed(lines[0])
                 else:
                     raise DistCommandFailed(
-                        "command %r failed with unidentified error "
+                        "%r failed with unidentified error "
                         "(return code %d)" % (e.argv, e.retcode)
                     )
 
