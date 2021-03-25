@@ -1810,7 +1810,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 return False
         return False
 
-    if last_run != mp_run:
+    if last_run.id != mp_run['id']:
         publish_id = str(uuid.uuid4())
         logger.info(
             "%s (%s) needs to be updated (%s => %s).",
