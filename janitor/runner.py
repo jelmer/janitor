@@ -249,8 +249,9 @@ class DebianResult(BuilderResult):
 
     async def store(self, conn, run_id, package):
         if self.build_version:
-            await debian_state.store_debian_build(
-                conn,
+            await conn.execute(
+                "INSERT INTO debian_build (run_id, source, version, distribution, lintian_result) "
+                "VALUES ($1, $2, $3, $4, $5)",
                 run_id,
                 package,
                 self.build_version,

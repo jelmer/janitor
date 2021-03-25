@@ -235,6 +235,27 @@ class PublishFailure(Exception):
         self.description = description
 
 
+async def has_cotenants(
+    conn: asyncpg.Connection, package: str, url: str
+) -> Optional[bool]:
+    url = urlutils.split_segment_parameters(url)[0].rstrip("/")
+    rows = await conn.fetch(
+        "SELECT name FROM package where "
+        "branch_url = $1 or "
+        "branch_url like $1 || ',branch=%' or "
+        "branch_url like $1 || '/,branch=%'",
+        url,
+    )
+    if len(rows) > 1:
+        return True
+    elif len(rows) == 1 and rows[0][0] == package:
+        return False
+    else:
+        # Uhm, we actually don't really know
+        logging.warning("Unable to figure out if %s has cotenants on %s", package, url)
+        return None
+
+
 async def derived_branch_name(conn, run, role):
     # TODO(jelmer): Add package name if there are more packages living in this
     # repository
@@ -243,7 +264,7 @@ async def derived_branch_name(conn, run, role):
     else:
         name = "%s/%s" % (run.branch_name, role)
 
-    has_cotenants = await state.has_cotenants(conn, run.package, run.branch_url)
+    has_cotenants = await has_cotenants(conn, run.package, run.branch_url)
 
     if has_cotenants:
         return name + "/" + run.package
@@ -614,6 +635,53 @@ order by timestamp desc limit 1
 """, suite, package)
 
 
+async def store_publish(
+    conn: asyncpg.Connection,
+    package,
+    branch_name,
+    main_branch_revision,
+    revision,
+    role,
+    mode,
+    result_code,
+    description,
+    merge_proposal_url=None,
+    publish_id=None,
+    requestor=None,
+):
+    if isinstance(revision, bytes):
+        revision = revision.decode("utf-8")
+    if isinstance(main_branch_revision, bytes):
+        main_branch_revision = main_branch_revision.decode("utf-8")
+    if merge_proposal_url:
+        await conn.execute(
+            "INSERT INTO merge_proposal (url, package, status, "
+            "revision) VALUES ($1, $2, 'open', $3) ON CONFLICT (url) "
+            "DO UPDATE SET package = EXCLUDED.package, "
+            "revision = EXCLUDED.revision",
+            merge_proposal_url,
+            package,
+            revision,
+        )
+    await conn.execute(
+        "INSERT INTO publish (package, branch_name, "
+        "main_branch_revision, revision, role, mode, result_code, "
+        "description, merge_proposal_url, id, requestor) "
+        "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ",
+        package,
+        branch_name,
+        main_branch_revision,
+        revision,
+        role,
+        mode,
+        result_code,
+        description,
+        merge_proposal_url,
+        publish_id,
+        requestor,
+    )
+
+
 async def publish_from_policy(
     conn,
     rate_limiter,
@@ -766,7 +834,7 @@ async def publish_from_policy(
         else:
             mode = MODE_PUSH
 
-    await state.store_publish(
+    await store_publish(
         conn,
         run.package,
         branch_name,
@@ -873,7 +941,7 @@ async def publish_and_store(
                 result_tags=run.result_tags,
             )
         except PublishFailure as e:
-            await state.store_publish(
+            await store_publish(
                 conn,
                 run.package,
                 run.branch_name,
@@ -908,7 +976,7 @@ async def publish_and_store(
             else:
                 mode = MODE_PUSH
 
-        await state.store_publish(
+        await store_publish(
             conn,
             run.package,
             branch_name,
@@ -1324,6 +1392,53 @@ async def get_last_effective_run(conn, package, suite):
         return None
 
 
+async def get_merge_proposal_run(
+    conn: asyncpg.Connection, mp_url: str) -> asyncpg.Record:
+    query = """
+SELECT
+    run.id AS id,
+    run.package AS package,
+    run.suite AS suite,
+    run.branch_url AS branch_url,
+    run.branch_name AS branch_name,
+    run.command AS command,
+    rb.role AS role,
+    rb.remote_name AS remote_name,
+    rb.revision AS revision
+FROM new_result_branch rb
+RIGHT JOIN run ON rb.run_id = run.id
+LEFT JOIN debian_build ON run.id = debian_build.run_id
+WHERE rb.revision IN (
+    SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
+ORDER BY run.finish_time ASC
+LIMIT 1
+"""
+    return await conn.fetchrow(query, mp_url)
+
+
+async def get_proposal_info(
+    conn: asyncpg.Connection, url
+) -> Tuple[Optional[bytes], str, str, str]:
+    row = await conn.fetchrow(
+        """\
+SELECT
+    package.maintainer_email,
+    merge_proposal.revision,
+    merge_proposal.status,
+    package.name
+FROM
+    merge_proposal
+LEFT JOIN package ON merge_proposal.package = package.name
+WHERE
+    merge_proposal.url = $1
+""",
+        url,
+    )
+    if not row:
+        raise KeyError
+    return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[0])
+
+
 async def check_existing_mp(
     conn,
     mp,
@@ -1452,32 +1567,29 @@ async def check_existing_mp(
         return False
     if check_only:
         return False
-    try:
-        (
-            mp_run,
-            (mp_role, mp_remote_branch_name, mp_base_revision, mp_revision),
-        ) = await state.get_merge_proposal_run(conn, mp.url)
-    except KeyError:
+
+    mp_run = await get_merge_proposal_run(conn, mp.url)
+    if mp_run is None:
         raise NoRunForMergeProposal(mp, revision)
 
-    if mp_remote_branch_name is None:
+    if mp['remote_branch_name'] is None:
         target_branch_url = mp.get_target_branch_url()
         if target_branch_url is None:
             logger.warning("No target branch for %r", mp)
         else:
             try:
-                mp_remote_branch_name = open_branch(
+                mp['remote_branch_name'] = open_branch(
                     target_branch_url, possible_transports=possible_transports
                 ).name
             except (BranchMissing, BranchUnavailable):
                 pass
 
-    last_run = await get_last_effective_run(conn, mp_run.package, mp_run.suite)
+    last_run = await get_last_effective_run(conn, mp_run['package'], mp_run['suite'])
     if last_run is None:
         logger.warning("%s: Unable to find any relevant runs.", mp.url)
         return False
 
-    package = await debian_state.get_package(conn, mp_run.package)
+    package = await debian_state.get_package(conn, mp_run['package'])
     if package is None:
         logger.warning("%s: Unable to find package.", mp.url)
         return False
@@ -1593,37 +1705,37 @@ applied independently.
             last_run_remote_branch_name,
             last_run_base_revision,
             last_run_revision,
-        ) = last_run.get_result_branch(mp_role)
+        ) = last_run.get_result_branch(mp_run['role'])
     except KeyError:
         logger.warning(
             "%s: Merge proposal run %s had role %s" " but it is gone now (%s)",
             mp.url,
-            mp_run.id,
-            mp_role,
+            mp_run['id'],
+            mp_run['role'],
             last_run.id,
         )
         return False
 
     if (
-        last_run_remote_branch_name != mp_remote_branch_name
+        last_run_remote_branch_name != mp['remote_branch_name']
         and last_run_remote_branch_name is not None
     ):
         logger.warning(
             "%s: Remote branch name has changed: %s => %s, " "skipping...",
             mp.url,
-            mp_remote_branch_name,
+            mp_run['remote_branch_name'],
             last_run_remote_branch_name,
         )
-        # Note that we require that mp_remote_branch_name is set.
+        # Note that we require that mp_run['remote_branch_name'] is set.
         # For some old runs it is not set because we didn't track
         # the default branch name.
-        if not dry_run and mp_remote_branch_name is not None:
+        if not dry_run and mp_run['remote_branch_name'] is not None:
             logger.info(
                 "%s: Closing merge proposal, since branch for role "
                 "'%s' has changed from %s to %s.",
                 mp.url,
-                mp_role,
-                last_run_remote_branch_name,
+                mp_run['role'],
+                mp_run['remote_branch_name'],
                 last_run_remote_branch_name,
             )
             await update_proposal_status(mp, "abandoned", revision, package_name)
@@ -1633,7 +1745,7 @@ applied independently.
 This merge proposal will be closed, since the branch for the role '%s'
 has changed to %s.
 """
-                    % (mp_role, last_run_remote_branch_name)
+                    % (mp_run['role'], last_run_remote_branch_name)
                 )
             except PermissionDenied as e:
                 logger.warning(
@@ -1648,12 +1760,12 @@ has changed to %s.
                 return False
         return False
 
-    if not branches_match(mp_run.branch_url, last_run.branch_url):
+    if not branches_match(mp_run['branch_url'], last_run.branch_url):
         logger.warning(
             "%s: Remote branch URL appears to have have changed: "
             "%s => %s, skipping.",
             mp.url,
-            mp_run.branch_url,
+            mp_run['branch_url'],
             last_run.branch_url,
         )
         return False
@@ -1688,32 +1800,32 @@ This merge proposal will be closed, since the branch has moved to %s.
         logger.info(
             "%s (%s) needs to be updated (%s => %s).",
             mp.url,
-            mp_run.package,
-            mp_run.id,
+            mp_run['package'],
+            mp_run['id'],
             last_run.id,
         )
-        if last_run_revision == mp_revision:
+        if last_run_revision == mp_run['revision'].encode('utf-8'):
             logger.warning(
                 "%s (%s): old run (%s/%s) has same revision as new run (%s/%s)" ": %r",
                 mp.url,
-                mp_run.package,
-                mp_run.id,
-                mp_role,
+                mp_run['package'],
+                mp_run['id'],
+                mp_run['role'],
                 last_run.id,
-                mp_role,
-                mp_revision,
+                mp_run['role'],
+                mp_run['revision'].encode('utf-8'),
             )
         if source_branch_name is None:
-            source_branch_name = await derived_branch_name(conn, last_run, mp_role)
+            source_branch_name = await derived_branch_name(conn, last_run, mp_run['role'])
         try:
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite,
                 last_run.package,
                 last_run.command,
                 last_run.result,
-                role_branch_url(mp_run.branch_url, mp_remote_branch_name),
+                role_branch_url(mp_run['branch_url'], mp_run['remote_branch_name']),
                 MODE_PROPOSE,
-                mp_role,
+                mp_run['role'],
                 last_run_revision,
                 last_run.id,
                 source_branch_name,
@@ -1753,18 +1865,18 @@ This merge proposal will be closed, since all remaining changes have been
 applied independently.
 """
                         )
-                    except PermissionDenied as e:
+                    except PermissionDenied as f:
                         logger.warning(
-                            "Permission denied posting comment to %s: %s", mp.url, e
+                            "Permission denied posting comment to %s: %s", mp.url, f
                         )
                     try:
                         mp.close()
-                    except PermissionDenied as e:
+                    except PermissionDenied as f:
                         logger.warning(
-                            "Permission denied closing merge request %s: %s", mp.url, e
+                            "Permission denied closing merge request %s: %s", mp.url, f
                         )
                         code = "empty-failed-to-close"
-                        description = "Permission denied closing merge request: %s" % e
+                        description = "Permission denied closing merge request: %s" % f
                 code = "success"
                 description = (
                     "Closing merge request for which changes were "
@@ -1778,13 +1890,13 @@ applied independently.
                     description,
                 )
             if not dry_run:
-                await state.store_publish(
+                await store_publish(
                     conn,
                     last_run.package,
-                    mp_run.branch_name,
+                    mp_run['branch_name'],
                     last_run_base_revision,
                     last_run_revision,
-                    mp_role,
+                    mp_run['role'],
                     e.mode,
                     code,
                     description,
@@ -1794,13 +1906,13 @@ applied independently.
                 )
         else:
             if not dry_run:
-                await state.store_publish(
+                await store_publish(
                     conn,
                     last_run.package,
                     branch_name,
                     last_run_base_revision,
                     last_run_revision,
-                    mp_role,
+                    mp_run['role'],
                     MODE_PROPOSE,
                     "success",
                     "Succesfully updated",
@@ -1824,9 +1936,9 @@ applied independently.
             if not dry_run:
                 await do_schedule(
                     conn,
-                    mp_run.package,
-                    mp_run.suite,
-                    command=shlex.split(mp_run.command),
+                    mp_run['package'],
+                    mp_run['suite'],
+                    command=shlex.split(mp_run['command']),
                     bucket="update-existing-mp",
                     refresh=True,
                     requestor="publisher (merge conflict)",
@@ -1856,7 +1968,7 @@ async def check_existing(
 
     modified_mps = 0
     check_only = False
-    hoster_ratelimited = {}
+    hoster_ratelimited: Set[Hoster] = set()
 
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
@@ -1883,7 +1995,7 @@ async def check_existing(
         except BranchRateLimited:
             logger.warning(
                 "Rate-limited accessing %s. Skipping %r for this cycle.",
-                e.mp.url, hoster)
+                mp.url, hoster)
             hoster_ratelimited.add(hoster)
             continue
 

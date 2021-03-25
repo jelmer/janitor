@@ -65,6 +65,8 @@ logfile_manager = get_log_manager(config.logs_location)
 
 
 async def reprocess_run(db, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=False, reschedule=False):
+    if result_code in ('dist-no-tarball', ):
+        return
     if result_code.startswith('dist-'):
         logname = 'dist.log'
     else:
@@ -99,14 +101,9 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
         lines = [line.decode('utf-8', 'replace') for line in logf]
         problem = find_build_failure_description(lines)[1]
         if problem is None:
-            if result_code == 'dist-no-tarball':
-                new_code = result_code
-                new_description = description
-                new_failure_details = failure_details
-            else:
-                new_code = 'dist-command-failed'
-                new_description = description
-                new_failure_details = None
+            new_code = 'dist-command-failed'
+            new_description = description
+            new_failure_details = None
         else:
             new_code = 'dist-' + problem.kind
             new_description = str(problem)

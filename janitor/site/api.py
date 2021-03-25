@@ -123,7 +123,7 @@ async def process_webhook(request, db):
         body = json.loads(post["payload"])
     else:
         return web.Response(
-            415, status="Invalid content type %s" % request.content_type
+            status=415, text="Invalid content type %s" % request.content_type
         )
     async with db.acquire() as conn:
         if "X-Gitlab-Event" in request.headers:
@@ -331,14 +331,30 @@ async def handle_queue(request):
         limit = int(limit)
     response_obj = []
     async with request.app.db.acquire() as conn:
-        async for entry in state.iter_queue(conn, limit=limit):
+        async for entry in await conn.fetch("""
+SELECT
+   queue.id AS queue_id,
+   package.branch_url AS branch_url,
+   package.subpath AS subpath,
+   package.name AS package,
+   queue.context AS context,
+   queue.id AS queue_id,
+   queue.command AS command
+FROM
+    queue
+LEFT JOIN package ON package.name = queue.package
+ORDER BY
+queue.bucket ASC,
+queue.priority ASC,
+queue.id ASC
+"""):
             response_obj.append(
                 {
-                    "queue_id": entry.id,
-                    "branch_url": entry.branch_url,
-                    "package": entry.package,
-                    "context": entry.context,
-                    "command": entry.command,
+                    "queue_id": entry['queue_id'],
+                    "branch_url": entry['branch_url'],
+                    "package": entry['package'],
+                    "context": entry['context'],
+                    "command": entry['command'],
                 }
             )
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=60"})
@@ -500,8 +516,11 @@ async def handle_run_post(request):
                     bucket="default",
                 )
                 review_status = "rejected"
-            await state.set_run_review_status(
-                conn, run_id, review_status, review_comment
+            await conn.execute(
+                "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
+                review_status,
+                review_comment,
+                run_id,
             )
     return web.json_response(
         {"review-status": review_status, "review-comment": review_comment}
@@ -696,31 +715,30 @@ async def handle_runner_log(request):
 async def handle_publish_id(request):
     publish_id = request.match_info["publish_id"]
     async with request.app.db.acquire() as conn:
-        publish = await state.get_publish(conn, publish_id)
-        if publish is None:
+        row = await conn.fetchrow("""
+SELECT
+  package,
+  branch_name,
+  main_branch_revision,
+  revision,
+  mode,
+  merge_proposal_url,
+  result_code,
+  description
+FROM publish WHERE id = $1
+""", publish_id)
+        if row:
             raise web.HTTPNotFound(text="no such publish: %s" % publish_id)
-        (
-            package,
-            branch_name,
-            main_branch_revision,
-            revision,
-            mode,
-            merge_proposal_url,
-            result_code,
-            description,
-        ) = publish
     return web.json_response(
         {
-            "package": package,
-            "branch": branch_name,
-            "main_branch_revision": main_branch_revision.decode("utf-8")
-            if main_branch_revision
-            else None,
-            "revision": revision.decode("utf-8") if revision else None,
-            "mode": mode,
-            "merge_proposal_url": merge_proposal_url,
-            "result_code": result_code,
-            "description": description,
+            "package": row['package'],
+            "branch": row['branch_name'],
+            "main_branch_revision": row['main_branch_revision'],
+            "revision": row['revision'],
+            "mode": row['mode'],
+            "merge_proposal_url": row['merge_proposal_url'],
+            "result_code": row['result_code'],
+            "description": row['description'],
         }
     )
 

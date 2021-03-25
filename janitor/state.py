@@ -148,53 +148,6 @@ async def store_run(
             )
 
 
-async def store_publish(
-    conn: asyncpg.Connection,
-    package,
-    branch_name,
-    main_branch_revision,
-    revision,
-    role,
-    mode,
-    result_code,
-    description,
-    merge_proposal_url=None,
-    publish_id=None,
-    requestor=None,
-):
-    if isinstance(revision, bytes):
-        revision = revision.decode("utf-8")
-    if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode("utf-8")
-    if merge_proposal_url:
-        await conn.execute(
-            "INSERT INTO merge_proposal (url, package, status, "
-            "revision) VALUES ($1, $2, 'open', $3) ON CONFLICT (url) "
-            "DO UPDATE SET package = EXCLUDED.package, "
-            "revision = EXCLUDED.revision",
-            merge_proposal_url,
-            package,
-            revision,
-        )
-    await conn.execute(
-        "INSERT INTO publish (package, branch_name, "
-        "main_branch_revision, revision, role, mode, result_code, "
-        "description, merge_proposal_url, id, requestor) "
-        "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ",
-        package,
-        branch_name,
-        main_branch_revision,
-        revision,
-        role,
-        mode,
-        result_code,
-        description,
-        merge_proposal_url,
-        publish_id,
-        requestor,
-    )
-
-
 class Run(object):
 
     id: str
@@ -327,7 +280,7 @@ class Run(object):
     @classmethod
     def from_row(cls, row) -> "Run":
         return cls(
-            run_id=row['run_id'],
+            run_id=row['id'],
             times=(row['start_time'], row['finish_time']),
             command=row['command'],
             description=row[4],
@@ -640,33 +593,19 @@ class QueueItem(object):
 
     @classmethod
     def from_row(cls, row) -> "QueueItem":
-        (
-            branch_url,
-            subpath,
-            package,
-            command,
-            context,
-            queue_id,
-            estimated_duration,
-            suite,
-            refresh,
-            requestor,
-            vcs_type,
-            upstream_branch_url,
-        ) = row
         return cls(
-            id=queue_id,
-            branch_url=branch_url,
-            subpath=subpath,
-            package=package,
-            context=context,
-            command=shlex.split(command),
-            estimated_duration=estimated_duration,
-            suite=suite,
-            refresh=refresh,
-            requestor=requestor,
-            vcs_type=vcs_type,
-            upstream_branch_url=upstream_branch_url,
+            id=row['id'],
+            branch_url=row['branch_url'],
+            subpath=row['subpath'],
+            package=row['package'],
+            context=row['context'],
+            command=shlex.split(row['command']),
+            estimated_duration=row['estimated_duration'],
+            suite=row['suite'],
+            refresh=row['refresh'],
+            requestor=row['requestor'],
+            vcs_type=row['vcs_type'],
+            upstream_branch_url=row['upstream_branch_url'],
         )
 
     def _tuple(self):
@@ -716,18 +655,18 @@ async def get_queue_positions(conn: asyncpg.Connection, suite, packages):
 async def iter_queue(conn: asyncpg.Connection, limit=None):
     query = """
 SELECT
-    package.branch_url,
-    package.subpath,
-    queue.package,
-    queue.command,
-    queue.context,
-    queue.id,
-    queue.estimated_duration,
-    queue.suite,
-    queue.refresh,
-    queue.requestor,
-    package.vcs_type,
-    upstream.upstream_branch_url
+    package.branch_url AS branch_url,
+    package.subpath AS subpath,
+    queue.package AS package,
+    queue.command AS command,
+    queue.context AS context,
+    queue.id AS id,
+    queue.estimated_duration AS estimated_duration,
+    queue.suite AS suite,
+    queue.refresh AS refresh,
+    queue.requestor AS requestor,
+    package.vcs_type AS vcs_type,
+    upstream.upstream_branch_url AS upstream_branch_url
 FROM
     queue
 LEFT JOIN package ON package.name = queue.package
@@ -741,48 +680,6 @@ queue.id ASC
         query += " LIMIT %d" % limit
     for row in await conn.fetch(query):
         yield QueueItem.from_row(row)
-
-
-async def add_to_queue(
-    conn: asyncpg.Connection,
-    package: str,
-    command: List[str],
-    suite: str,
-    offset: float = 0.0,
-    bucket: str = "default",
-    context: Optional[str] = None,
-    estimated_duration: Optional[datetime.timedelta] = None,
-    refresh: bool = False,
-    requestor: Optional[str] = None,
-) -> bool:
-    await conn.execute(
-        "INSERT INTO queue "
-        "(package, command, priority, bucket, context, "
-        "estimated_duration, suite, refresh, requestor) "
-        "VALUES "
-        "($1, $2, "
-        "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
-        + " + $3, $4, $5, $6, $7, $8, $9) "
-        "ON CONFLICT (package, suite) DO UPDATE SET "
-        "context = EXCLUDED.context, priority = EXCLUDED.priority, "
-        "bucket = EXCLUDED.bucket, "
-        "estimated_duration = EXCLUDED.estimated_duration, "
-        "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
-        "command = EXCLUDED.command "
-        "WHERE queue.bucket >= EXCLUDED.bucket OR "
-        "(queue.bucket = EXCLUDED.bucket AND "
-        "queue.priority >= EXCLUDED.priority)",
-        package,
-        " ".join(command),
-        offset,
-        bucket,
-        context,
-        estimated_duration,
-        suite,
-        refresh,
-        requestor,
-    )
-    return True
 
 
 async def iter_previous_runs(
@@ -1073,84 +970,6 @@ where not exists (
     return await conn.fetch(query, *args)
 
 
-async def get_merge_proposal_run(
-    conn: asyncpg.Connection, mp_url: str
-) -> Tuple[Run, Tuple[str, str, bytes, bytes]]:
-    query = """
-SELECT
-    run.id AS id, run.command AS command,
-    run.start_time AS start_time,
-    run.finish_time AS finish_time, run.description,
-    run.package, debian_build.version, debian_build.distribution, run.result_code,
-    run.branch_name, run.main_branch_revision, run.revision, run.context,
-    run.result, run.suite, run.instigated_context, run.branch_url,
-    run.logfilenames, run.review_status, run.review_comment, run.worker,
-    array(SELECT row(role, remote_name, base_revision, revision)
-     FROM new_result_branch WHERE run_id = run.id), run.result_tags, rb.role,
-     rb.remote_name, rb.base_revision, rb.revision
-FROM new_result_branch rb
-RIGHT JOIN run ON rb.run_id = run.id
-LEFT JOIN debian_build ON run.id = debian_build.run_id
-WHERE rb.revision IN (
-    SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
-ORDER BY run.finish_time ASC
-LIMIT 1
-"""
-    row = await conn.fetchrow(query, mp_url)
-    if row:
-        return Run.from_row(row[:23]), (
-            row[23],
-            row[24],
-            row[25].encode("utf-8"),
-            row[26].encode("utf-8"),
-        )
-    raise KeyError
-
-
-async def get_publish(
-    conn: asyncpg.Connection, publish_id: str
-) -> Optional[Tuple[str, str, bytes, bytes, str, str, str, str]]:
-    query = """
-SELECT
-  package,
-  branch_name,
-  main_branch_revision,
-  revision,
-  mode,
-  merge_proposal_url,
-  result_code,
-  description
-FROM publish WHERE id = $1
-"""
-    row = await conn.fetchrow(query, publish_id)
-    if row:
-        return None
-    return (
-        row[0],
-        row[1],
-        row[2].encode("utf-8") if row[2] else None,
-        row[3].encode("utf-8") if row[3] else None,
-        row[4],
-        row[5],
-        row[6],
-        row[7],
-    )
-
-
-async def set_run_review_status(
-    conn: asyncpg.Connection,
-    run_id: str,
-    review_status: str,
-    review_comment: Optional[str] = None,
-) -> None:
-    await conn.execute(
-        "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
-        review_status,
-        review_comment,
-        run_id,
-    )
-
-
 async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
     query = "SELECT package, suite, publish, update_changelog, command " "FROM policy"
     args = []
@@ -1185,39 +1004,3 @@ async def get_publish_policy(
             shlex.split(row[2]) if row[2] else None,
         )
     return None, None, None
-
-
-async def store_site_session(
-    conn: asyncpg.Connection, session_id: str, user: Any
-) -> None:
-    await conn.execute(
-        """
-INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
-ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo""",
-        session_id,
-        user,
-    )
-
-
-async def has_cotenants(
-    conn: asyncpg.Connection, package: str, url: str
-) -> Optional[bool]:
-    url = urlutils.split_segment_parameters(url)[0].rstrip("/")
-    rows = await conn.fetch(
-        "SELECT name FROM package where "
-        "branch_url = $1 or "
-        "branch_url like $1 || ',branch=%' or "
-        "branch_url like $1 || '/,branch=%'",
-        url,
-    )
-    if len(rows) > 1:
-        return True
-    elif len(rows) == 1 and rows[0][0] == package:
-        return False
-    else:
-        # Uhm, we actually don't really know
-        logging.warning("Unable to figure out if %s has cotenants on %s", package, url)
-        return None
-
-
-
