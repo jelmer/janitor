@@ -257,7 +257,6 @@ async def handle_schedule_control(request):
             refresh=refresh,
             requestor=requestor,
             main_branch_revision=run.main_branch_revision,
-            bucket="control",
         )
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, "unchanged", package.name

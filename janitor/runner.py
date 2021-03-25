@@ -91,7 +91,7 @@ from .logs import (
 )
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
-from .schedule import do_schedule
+from .schedule import do_schedule_control
 from .vcs import (
     get_vcs_abbreviation,
     is_authenticated_url,
@@ -1484,18 +1484,10 @@ class QueueProcessor(object):
                 )
                 if run is None:
                     logging.info("Scheduling control run for %s.", item.package)
-                    await do_schedule(
+                    await do_schedule_control(
                         conn,
                         item.package,
-                        "unchanged",
-                        command=[
-                            "just-build",
-                            (
-                                "--revision=%s"
-                                % result.main_branch_revision.decode("utf-8")
-                            ),
-                        ],
-                        bucket="control",
+                        result.main_branch_revision
                         estimated_duration=duration,
                         requestor="control",
                     )

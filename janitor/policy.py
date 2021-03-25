@@ -18,7 +18,6 @@
 import asyncpg
 from email.utils import parseaddr
 from fnmatch import fnmatch
-import shlex
 import logging
 from google.protobuf import text_format  # type: ignore
 import re
