@@ -537,19 +537,10 @@ class QueueItem(object):
 
 
 async def get_queue_position(conn: asyncpg.Connection, suite, package):
-    ret = list(await get_queue_positions(conn, suite, [package]))
-    if len(ret) == 0:
-        return (None, None)
-    return ret[0][1], ret[0][2]
-
-
-async def get_queue_positions(conn: asyncpg.Connection, suite, packages):
-
-    query = (
-        "SELECT package, position, wait_time FROM queue_positions "
-        "WHERE package = ANY($1::text[]) AND suite = $2"
-    )
-    return await conn.fetch(query, packages, suite)
+    return await conn.fetchrow(
+        "SELECT position, wait_time FROM queue_positions "
+        "WHERE package = $1 AND suite = $2",
+        package, suite)
 
 
 async def iter_queue(conn: asyncpg.Connection, limit=None):
@@ -856,20 +847,6 @@ where not exists (
     return await conn.fetch(query, *args)
 
 
-async def get_never_processed(conn: asyncpg.Connection, suites=None):
-    query = """\
-select c.package, c.suite from candidate c
-where not exists (
-    SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
-"""
-    args = []
-    if suites:
-        query += " AND suite = ANY($1::text[])"
-        args.append(suites)
-
-    return await conn.fetch(query, *args)
-
-
 async def get_publish_policy(
     conn: asyncpg.Connection, package: str, suite: str
 ) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:
@@ -881,8 +858,8 @@ async def get_publish_policy(
     )
     if row:
         return (  # type: ignore
-            {k: (v, f) for k, v, f in row[0]},
-            row[1],
-            shlex.split(row[2]) if row[2] else None,
+            {k: (v, f) for k, v, f in row['publish']},
+            row['update_changelog'],
+            row['command']
         )
     return None, None, None

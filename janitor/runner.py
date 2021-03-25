@@ -26,6 +26,7 @@ import logging
 import os
 import re
 import signal
+import shlex
 import socket
 import sys
 import tempfile
@@ -541,7 +542,7 @@ async def invoke_subprocess_worker(
     worker_kind: str,
     main_branch_url: str,
     env: Dict[str, str],
-    command: List[str],
+    command: str,
     output_directory: str,
     target: str,
     resume: Optional["ResumeInfo"] = None,
@@ -590,7 +591,7 @@ async def invoke_subprocess_worker(
     if subpath:
         args.append("--subpath=%s" % subpath)
 
-    args.extend(command)
+    args.extend(shlex.split(command))
     return await run_subprocess(args, env=subprocess_env, log_path=log_path)
 
 
@@ -1292,7 +1293,7 @@ async def store_run(
     vcs_url: str,
     start_time: datetime,
     finish_time: datetime,
-    command: List[str],
+    command: str,
     description: str,
     instigated_context: Optional[str],
     context: Optional[str],
@@ -1350,7 +1351,7 @@ async def store_run(
         "failure_details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
         "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
         run_id,
-        " ".join(command),
+        command,
         description,
         result_code,
         start_time,
@@ -1487,7 +1488,7 @@ class QueueProcessor(object):
                     await do_schedule_control(
                         conn,
                         item.package,
-                        result.main_branch_revision
+                        result.main_branch_revision,
                         estimated_duration=duration,
                         requestor="control",
                     )
