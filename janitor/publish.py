@@ -1587,13 +1587,15 @@ async def check_existing_mp(
     if mp_run is None:
         raise NoRunForMergeProposal(mp, revision)
 
-    if mp_run['remote_branch_name'] is None:
+    mp_remote_branch_name = mp_run['remote_branch_name']
+
+    if mp_remote_branch_name is None:
         target_branch_url = mp.get_target_branch_url()
         if target_branch_url is None:
             logger.warning("No target branch for %r", mp)
         else:
             try:
-                mp_run['remote_branch_name'] = open_branch(
+                mp_remote_branch_name = open_branch(
                     target_branch_url, possible_transports=possible_transports
                 ).name
             except (BranchMissing, BranchUnavailable):
@@ -1732,25 +1734,25 @@ applied independently.
         return False
 
     if (
-        last_run_remote_branch_name != mp_run['remote_branch_name']
+        last_run_remote_branch_name != mp_remote_branch_name
         and last_run_remote_branch_name is not None
     ):
         logger.warning(
             "%s: Remote branch name has changed: %s => %s, " "skipping...",
             mp.url,
-            mp_run['remote_branch_name'],
+            mp_remote_branch_name,
             last_run_remote_branch_name,
         )
-        # Note that we require that mp_run['remote_branch_name'] is set.
+        # Note that we require that mp_remote_branch_name is set.
         # For some old runs it is not set because we didn't track
         # the default branch name.
-        if not dry_run and mp_run['remote_branch_name'] is not None:
+        if not dry_run and mp_remote_branch_name is not None:
             logger.info(
                 "%s: Closing merge proposal, since branch for role "
                 "'%s' has changed from %s to %s.",
                 mp.url,
                 mp_run['role'],
-                mp_run['remote_branch_name'],
+                mp_remote_branch_name,
                 last_run_remote_branch_name,
             )
             await update_proposal_status(mp, "abandoned", revision, package_name)
@@ -1838,7 +1840,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 last_run.package,
                 last_run.command,
                 last_run.result,
-                role_branch_url(mp_run['branch_url'], mp_run['remote_branch_name']),
+                role_branch_url(mp_run['branch_url'], mp_remote_branch_name),
                 MODE_PROPOSE,
                 mp_run['role'],
                 last_run_revision,
