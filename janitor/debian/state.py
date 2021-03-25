@@ -116,30 +116,6 @@ WHERE
     return Package.from_row(row)
 
 
-async def iter_vcs_regressions(conn: asyncpg.Connection):
-    query = """\
-select
-  package.name,
-  run.suite,
-  run.id,
-  run.result_code,
-  package.vcswatch_status
-from
-  last_runs run left join package on run.package = package.name
-where
-  result_code in (
-    'branch-missing',
-    'branch-unavailable',
-    '401-unauthorized',
-    'hosted-on-alioth',
-    'missing-control-file'
-  )
-and
-  vcswatch_status in ('old', 'new', 'commits', 'ok')
-"""
-    return await conn.fetch(query)
-
-
 async def get_package_by_upstream_branch_url(
     conn: asyncpg.Connection, upstream_branch_url: str
 ) -> Optional[Package]:
@@ -157,7 +133,6 @@ WHERE
     if row is None:
         return None
     return Package.from_row(row)
-
 
 async def iter_packages(conn: asyncpg.Connection, package: Optional[str] = None):
     query = """
@@ -367,42 +342,6 @@ WHERE name = $1 AND %(version_match2)s
     return await conn.fetch(query, *args)
 
 
-async def store_debian_build(
-    conn: asyncpg.Connection,
-    run_id: str,
-    source: str,
-    version: Version,
-    distribution: str,
-    lintian_result: Any
-):
-    await conn.execute(
-        "INSERT INTO debian_build (run_id, source, version, distribution, lintian_result) "
-        "VALUES ($1, $2, $3, $4, $5)",
-        run_id,
-        source,
-        str(version),
-        distribution,
-        lintian_result,
-    )
-
-
-async def update_removals(
-    conn: asyncpg.Connection,
-    distribution: str,
-    items: List[Tuple[str, Optional[Version]]],
-) -> None:
-    if not items:
-        return
-    query = """\
-UPDATE package SET removed = True
-WHERE name = $1 AND distribution = $2 AND archive_version <= $3
-"""
-    await conn.executemany(
-        query,
-        [(name, distribution, archive_version) for (name, archive_version) in items],
-    )
-
-
 async def guess_package_from_revision(
     conn: asyncpg.Connection, revision: bytes
 ) -> Tuple[Optional[str], Optional[str]]:
@@ -430,25 +369,3 @@ order by package.name, debian_build.version desc
         suite,
     )
 
-
-async def get_proposal_info(
-    conn: asyncpg.Connection, url
-) -> Tuple[Optional[bytes], str, str, str]:
-    row = await conn.fetchrow(
-        """\
-SELECT
-    package.maintainer_email,
-    merge_proposal.revision,
-    merge_proposal.status,
-    package.name
-FROM
-    merge_proposal
-LEFT JOIN package ON merge_proposal.package = package.name
-WHERE
-    merge_proposal.url = $1
-""",
-        url,
-    )
-    if not row:
-        raise KeyError
-    return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[0])

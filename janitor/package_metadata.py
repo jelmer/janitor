@@ -140,13 +140,16 @@ async def mark_removed_packages(conn, distribution: str, removals: List[PackageR
         package.name: package for package in await debian_state.iter_packages(conn)
     }
     logging.info("Updating removals.")
-    filtered_removals: List[Tuple[str, Optional[Version]]] = [
-        (removal.name, Version(removal.version) if removal.version else None)
+    query = """\
+UPDATE package SET removed = True
+WHERE name = $1 AND distribution = $2 AND archive_version <= $3
+"""
+    await conn.executemany(
+        query, [
+        (removal.name, distribution, Version(removal.version) if removal.version else None)
         for removal in removals
         if removal.name in existing_packages
-        and not existing_packages[removal.name].removed
-    ]
-    await debian_state.update_removals(conn, distribution, filtered_removals)
+        and not existing_packages[removal.name].removed])
 
 
 def iter_packages_from_script(stdin) -> Tuple[List[PackageMetadata], List[PackageRemoval]]:

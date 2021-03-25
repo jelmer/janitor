@@ -689,8 +689,27 @@ if __name__ == "__main__":
     @html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600"})
     async def handle_vcs_regressions(request):
         async with request.app.database.acquire() as conn:
-            regressions = await debian_state.iter_vcs_regressions(conn)
-        return {"regressions": regressions}
+            query = """\
+select
+  package.name,
+  run.suite,
+  run.id,
+  run.result_code,
+  package.vcswatch_status
+from
+  last_runs run left join package on run.package = package.name
+where
+  result_code in (
+    'branch-missing',
+    'branch-unavailable',
+    '401-unauthorized',
+    'hosted-on-alioth',
+    'missing-control-file'
+  )
+and
+  vcswatch_status in ('old', 'new', 'commits', 'ok')
+"""
+            return {"regressions": await conn.fetch(query)}
 
     @html_template(
         "broken-merge-proposals.html", headers={"Cache-Control": "max-age=600"}
@@ -1024,7 +1043,12 @@ order by url, last_run.finish_time desc
                     requestor="reviewer",
                     bucket="default",
                 )
-            await state.set_run_review_status(conn, post["run_id"], review_status)
+            await conn.execute(
+                "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
+                review_status,
+                post.get("review_comment"),
+                post["run_id"],
+            )
             text = await generate_review(
                 conn,
                 request,
@@ -1113,7 +1137,10 @@ order by url, last_run.finish_time desc
             userinfo = await resp.json()
         session_id = str(uuid.uuid4())
         async with request.app.database.acquire() as conn:
-            await state.store_site_session(conn, session_id, userinfo)
+            await conn.execute("""
+INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
+ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
+""", session_id, userinfo)
 
         # TODO(jelmer): Store access token / refresh token?
 

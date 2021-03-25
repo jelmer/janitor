@@ -240,6 +240,47 @@ async def estimate_duration(
     return timedelta(seconds=DEFAULT_ESTIMATED_DURATION)
 
 
+async def _add_to_queue(
+    conn: asyncpg.Connection,
+    package: str,
+    command: List[str],
+    suite: str,
+    offset: float = 0.0,
+    bucket: str = "default",
+    context: Optional[str] = None,
+    estimated_duration: Optional[timedelta] = None,
+    refresh: bool = False,
+    requestor: Optional[str] = None,
+) -> None:
+    await conn.execute(
+        "INSERT INTO queue "
+        "(package, command, priority, bucket, context, "
+        "estimated_duration, suite, refresh, requestor) "
+        "VALUES "
+        "($1, $2, "
+        "(SELECT COALESCE(MIN(priority), 0) FROM queue)"
+        + " + $3, $4, $5, $6, $7, $8, $9) "
+        "ON CONFLICT (package, suite) DO UPDATE SET "
+        "context = EXCLUDED.context, priority = EXCLUDED.priority, "
+        "bucket = EXCLUDED.bucket, "
+        "estimated_duration = EXCLUDED.estimated_duration, "
+        "refresh = EXCLUDED.refresh, requestor = EXCLUDED.requestor, "
+        "command = EXCLUDED.command "
+        "WHERE queue.bucket >= EXCLUDED.bucket OR "
+        "(queue.bucket = EXCLUDED.bucket AND "
+        "queue.priority >= EXCLUDED.priority)",
+        package,
+        " ".join(command),
+        offset,
+        bucket,
+        context,
+        estimated_duration,
+        suite,
+        refresh,
+        requestor,
+    )
+
+
 async def add_to_queue(
     conn: asyncpg.Connection,
     todo,
@@ -311,7 +352,7 @@ async def add_to_queue(
         )
 
         if not dry_run:
-            added = await state.add_to_queue(
+            added = await _add_to_queue(
                 conn,
                 package=package,
                 suite=suite,
@@ -460,7 +501,7 @@ async def do_schedule(
         command = full_command(policy['update_changelog'], policy['command'])
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, suite)
-    await state.add_to_queue(
+    await _add_to_queue(
         conn,
         package,
         command,
