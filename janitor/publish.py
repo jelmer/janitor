@@ -1403,7 +1403,7 @@ SELECT
     run.branch_name AS branch_name,
     run.command AS command,
     rb.role AS role,
-    rb.remote_name AS remote_name,
+    rb.remote_name AS remote_branch_name,
     rb.revision AS revision
 FROM new_result_branch rb
 RIGHT JOIN run ON rb.run_id = run.id
