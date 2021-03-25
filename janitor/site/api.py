@@ -48,18 +48,18 @@ async def handle_policy(request):
     package = request.match_info["package"]
     suite_policies = {}
     async with request.app.db.acquire() as conn:
-        async for unused_package, suite, policy in state.iter_policy(conn, package):
-            suite_policies[suite] = policy
-    if not suite_policies:
+        rows = await conn.fetch(
+            "SELECT suite, publish, update_changelog, command "
+            "FROM policy WHERE package = $1", package)
+    if not rows:
         return web.json_response({"reason": "Package not found"}, status=404)
-    for suite, (publish_policy, changelog_policy, command) in suite_policies.items():
-        suite_policies[suite] = {
-            "publish_policy": publish_policy,
-            "changelog_policy": changelog_policy,
-            "command": command,
+    for row in rows:
+        suite_policies[row['suite']] = {
+            "publish_policy": row['publish'],
+            "changelog_policy": row['update_changelog'],
+            "command": row['command'],
         }
-    response_obj = {"by_suite": suite_policies}
-    return web.json_response(response_obj)
+    return web.json_response({"by_suite": suite_policies})
 
 
 async def handle_publish(request):
