@@ -627,7 +627,7 @@ ORDER BY timestamp DESC
 
 
 async def check_last_published(
-        conn: asyncpg.Connection, suite: str, package: str) -> Optional[datetime.datetime]:
+        conn: asyncpg.Connection, suite: str, package: str) -> Optional[datetime]:
     return await conn.fetchval("""
 SELECT timestamp from publish left join run on run.revision = publish.revision
 WHERE run.suite = $1 and run.package = $2 AND publish.result_code = 'success'
