@@ -112,7 +112,7 @@ def in_line_boundaries(i, boundaries):
 
 async def get_publish_history(
     conn: asyncpg.Connection, revision: bytes
-) -> Tuple[str, Optional[str], str, str, str, datetime.datetime]:
+) -> Tuple[str, Optional[str], str, str, str, datetime]:
     return await conn.fetch(
         "select mode, merge_proposal_url, description, result_code, "
         "requestor, timestamp from publish where revision = $1 "
