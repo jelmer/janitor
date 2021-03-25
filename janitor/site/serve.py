@@ -513,8 +513,16 @@ if __name__ == "__main__":
             suite = None
         suites = [suite] if suite else None
         async with request.app.database.acquire() as conn:
-            never_processed = await state.get_never_processed(conn, suites)
-            return {"never_processed": never_processed}
+            query = """\
+            select c.package, c.suite from candidate c
+            where not exists (
+                SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+            """
+            args = []
+            if suites:
+                query += " AND suite = ANY($1::text[])"
+                args.append(suites)
+            return {"never_processed": await conn.fetch(query, *args)}
 
     async def handle_result_codes(request):
         from .result_codes import (

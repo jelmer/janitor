@@ -25,6 +25,7 @@ from io import BytesIO
 import json
 import logging
 import os
+import shlex
 import socket
 import subprocess
 import sys
@@ -556,6 +557,8 @@ async def main(argv=None):
             resume_branches = None
         cached_branch_url = assignment["branch"].get("cached_url")
         command = assignment["command"]
+        if isinstance(command, str):
+            command = shlex.split(command)
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 

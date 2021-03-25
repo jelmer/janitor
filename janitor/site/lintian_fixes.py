@@ -170,10 +170,11 @@ async def generate_developer_table_page(db, developer):
         ):
             runs[run.package] = run
         queue_data = {
-            package: (position, duration)
-            for (package, position, duration) in await state.get_queue_positions(
-                conn, SUITE, packages
-            )
+            row['package']: (row['position'], row['wait_time'])
+            for row in await conn.fetch(
+                "SELECT package, position, wait_time FROM queue_positions "
+                "WHERE package = ANY($1::text[]) AND suite = $2",
+                packages, SUITE)
         }
 
     by_package = {}
