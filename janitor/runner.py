@@ -1283,8 +1283,105 @@ group by 1
         await asyncio.sleep(60 * 30)
 
 
-async def drop_queue_item(conn: asyncpg.Connection, queue_id):
-    await conn.execute("DELETE FROM queue WHERE id = $1", queue_id)
+
+
+async def store_run(
+    conn: asyncpg.Connection,
+    run_id: str,
+    name: str,
+    vcs_url: str,
+    start_time: datetime,
+    finish_time: datetime,
+    command: List[str],
+    description: str,
+    instigated_context: Optional[str],
+    context: Optional[str],
+    main_branch_revision: Optional[bytes],
+    result_code: str,
+    branch_name: str,
+    revision: Optional[bytes],
+    subworker_result: Optional[Any],
+    suite: str,
+    logfilenames: List[str],
+    value: Optional[int],
+    worker_name: str,
+    worker_link: Optional[str],
+    result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
+    result_tags: Optional[List[Tuple[str, bytes]]] = None,
+    failure_details: Optional[Any] = None
+):
+    """Store a run.
+
+    Args:
+      run_id: Run id
+      name: Package name
+      vcs_url: Upstream branch URL
+      start_time: Start time
+      finish_time: Finish time
+      command: Command
+      description: A human-readable description
+      instigated_context: Context that instigated this run
+      context: Subworker-specific context
+      main_branch_revision: Main branch revision
+      result_code: Result code (as constant string)
+      branch_name: Resulting branch name
+      revision: Resulting revision id
+      subworker_result: Subworker-specific result data (as json)
+      suite: Suite
+      logfilenames: List of log filenames
+      value: Value of the run (as int)
+      worker_name: Name of the worker
+      worker_link: Link to worker URL
+      result_branches: Result branches
+      result_tags: Result tags
+      failure_details: Result failure details
+    """
+    if result_tags is None:
+        result_tags_updated = None
+    else:
+        result_tags_updated = [(n, r.decode("utf-8")) for (n, r) in result_tags]
+
+    await conn.execute(
+        "INSERT INTO run (id, command, description, result_code, "
+        "start_time, finish_time, package, instigated_context, context, "
+        "main_branch_revision, "
+        "branch_name, revision, result, suite, branch_url, logfilenames, "
+        "value, worker, worker_link, result_tags, "
+        "failure_details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
+        run_id,
+        " ".join(command),
+        description,
+        result_code,
+        start_time,
+        finish_time,
+        name,
+        instigated_context,
+        context,
+        main_branch_revision.decode("utf-8") if main_branch_revision else None,
+        branch_name,
+        revision.decode("utf-8") if revision else None,
+        subworker_result if subworker_result else None,
+        suite,
+        vcs_url,
+        logfilenames,
+        value,
+        worker_name,
+        worker_link,
+        result_tags_updated,
+        failure_details,
+    )
+
+    if result_branches:
+        await conn.executemany(
+            "INSERT INTO new_result_branch "
+            "(run_id, role, remote_name, base_revision, revision) "
+            "VALUES ($1, $2, $3, $4, $5)",
+            [
+                (run_id, role, remote_name, br.decode("utf-8"), r.decode("utf-8"))
+                for (role, remote_name, br, r) in result_branches
+            ],
+        )
 
 
 class QueueProcessor(object):
@@ -1403,8 +1500,8 @@ class QueueProcessor(object):
                         requestor="control",
                     )
         if not self.dry_run:
-            async with self.database.acquire() as conn:
-                await state.store_run(
+            async with self.database.acquire() as conn, conn.transaction():
+                await store_run(
                     conn,
                     result.log_id,
                     item.package,
@@ -1431,7 +1528,7 @@ class QueueProcessor(object):
                 )
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id, item.package)
-                await drop_queue_item(conn, item.id)
+                await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[active_run.log_id]
         self.topic_queue.publish(self.status_json())
@@ -1595,9 +1692,7 @@ async def handle_assign(request):
             code=code,
             description=description,
         )
-        async with queue_processor.database.acquire() as conn:
-            await queue_processor.finish_run(active_run, result)
-            await drop_queue_item(conn, active_run.queue_item.id)
+        await queue_processor.finish_run(active_run, result)
 
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
