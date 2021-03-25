@@ -1439,6 +1439,21 @@ WHERE
     return (row[1].encode("utf-8") if row[1] else None, row[2], row[3], row[0])
 
 
+async def guess_package_from_revision(
+    conn: asyncpg.Connection, revision: bytes
+) -> Tuple[Optional[str], Optional[str]]:
+    query = """\
+select distinct package, maintainer_email from run
+left join new_result_branch rb ON rb.run_id = run.id
+left join package on package.name = run.package
+where rb.revision = $1 and run.package is not null
+"""
+    rows = await conn.fetch(query, revision.decode("utf-8"))
+    if len(rows) == 1:
+        return rows[0][0], rows[0][1]
+    return None, None
+
+
 async def check_existing_mp(
     conn,
     mp,
@@ -1545,7 +1560,7 @@ async def check_existing_mp(
                 (
                     package_name,
                     maintainer_email,
-                ) = await debian_state.guess_package_from_revision(conn, revision)
+                ) = await guess_package_from_revision(conn, revision)
             if package_name is None:
                 logger.warning(
                     "No package known for %s (%s)", mp.url, target_branch_url

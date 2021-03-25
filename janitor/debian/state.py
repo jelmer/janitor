@@ -24,10 +24,6 @@ from breezy import urlutils
 from debian.changelog import Version
 
 
-async def popcon(conn: asyncpg.Connection):
-    return await conn.fetch("SELECT name, popcon_inst FROM package")
-
-
 class Package(object):
 
     name: str
@@ -221,84 +217,12 @@ WHERE NOT package.removed AND package.name = $1
     ]
 
 
-async def iter_candidates_with_policy(
-    conn: asyncpg.Connection,
-    packages: Optional[List[str]] = None,
-    suite: Optional[str] = None,
-) -> List[
-    Tuple[
-        Package,
-        str,
-        Optional[str],
-        Optional[int],
-        Optional[float],
-        Dict[str, str],
-        str,
-        List[str],
-    ]
-]:
-    query = """
-SELECT
-""" + ','.join(['package.%s' % field for field in Package.field_names]) + """,
-  candidate.suite,
-  candidate.context,
-  candidate.value,
-  candidate.success_chance,
-  policy.publish,
-  policy.update_changelog,
-  policy.command
-FROM candidate
-INNER JOIN package on package.name = candidate.package
-LEFT JOIN policy ON
-    policy.package = package.name AND
-    policy.suite = candidate.suite
-WHERE NOT package.removed
-"""
-    args = []
-    if suite is not None and packages is not None:
-        query += " AND package.name = ANY($1::text[]) AND candidate.suite = $2"
-        args.extend([packages, suite])
-    elif suite is not None:
-        query += " AND candidate.suite = $1"
-        args.append(suite)
-    elif packages is not None:
-        query += " AND package.name = ANY($1::text[])"
-        args.append(packages)
-    return [
-        (
-            Package.from_row(row[:len(Package.field_names)]),
-            row[len(Package.field_names) + 0],
-            row[len(Package.field_names) + 1],
-            row[len(Package.field_names) + 2],
-            row[len(Package.field_names) + 3],
-            (
-                dict(row[len(Package.field_names)+4]) if row[len(Package.field_names)+4] is not None else None,
-                row[len(Package.field_names)+5],
-                shlex.split(row[len(Package.field_names)+6]) if row[len(Package.field_names)+6] is not None else None,
-            ),
-        )  # type: ignore
-        for row in await conn.fetch(query, *args)
-    ]
-
-
 async def get_candidate(conn: asyncpg.Connection, package, suite):
     return await conn.fetchrow(
         "SELECT context, value, success_chance FROM candidate "
         "WHERE package = $1 AND suite = $2",
         package,
         suite,
-    )
-
-
-async def get_last_build_version(
-    conn: asyncpg.Connection, package: str, distribution: str
-) -> Optional[Version]:
-    return await conn.fetchval(
-        "SELECT version FROM debian_build WHERE "
-        "version IS NOT NULL AND source = $1 AND "
-        "distribution = $2 ORDER BY version DESC",
-        package,
-        distribution,
     )
 
 
@@ -340,21 +264,6 @@ WHERE name = $1 AND %(version_match2)s
     else:
         query = query % {"version_match1": "True", "version_match2": "True"}
     return await conn.fetch(query, *args)
-
-
-async def guess_package_from_revision(
-    conn: asyncpg.Connection, revision: bytes
-) -> Tuple[Optional[str], Optional[str]]:
-    query = """\
-select distinct package, maintainer_email from run
-left join new_result_branch rb ON rb.run_id = run.id
-left join package on package.name = run.package
-where rb.revision = $1 and run.package is not null
-"""
-    rows = await conn.fetch(query, revision.decode("utf-8"))
-    if len(rows) == 1:
-        return rows[0][0], rows[0][1]
-    return None, None
 
 
 async def iter_published_packages(conn: asyncpg.Connection, suite):
