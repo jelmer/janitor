@@ -18,13 +18,14 @@
 from __future__ import absolute_import
 
 __all__ = [
-    "add_to_queue",
+    "bulk_add_to_queue",
     "schedule_from_candidates",
 ]
 
 from datetime import datetime, timedelta
 import logging
-from typing import Optional, List, Tuple
+import shlex
+from typing import Optional, List, Tuple, Dict
 
 from debian.changelog import Version
 from debian.deb822 import PkgRelation
@@ -113,6 +114,66 @@ def full_command(update_changelog: str, command: List[str]) -> List[str]:
     else:
         raise ValueError("Invalid value %r for update_changelog" % update_changelog)
     return entry_command
+
+
+async def iter_candidates_with_policy(
+    conn: asyncpg.Connection,
+    packages: Optional[List[str]] = None,
+    suite: Optional[str] = None,
+) -> List[
+    Tuple[
+        debian_state.Package,
+        str,
+        Optional[str],
+        Optional[int],
+        Optional[float],
+        Dict[str, str],
+        str,
+        List[str],
+    ]
+]:
+    query = """
+SELECT
+""" + ','.join(['package.%s' % field for field in debian_state.Package.field_names]) + """,
+  candidate.suite AS suite,
+  candidate.context AS context,
+  candidate.value AS value,
+  candidate.success_chance AS success_chance,
+  policy.publish AS publish,
+  policy.update_changelog AS update_changelog,
+  policy.command AS command
+FROM candidate
+INNER JOIN package on package.name = candidate.package
+LEFT JOIN policy ON
+    policy.package = package.name AND
+    policy.suite = candidate.suite
+WHERE NOT package.removed
+"""
+    args = []
+    if suite is not None and packages is not None:
+        query += " AND package.name = ANY($1::text[]) AND candidate.suite = $2"
+        args.extend([packages, suite])
+    elif suite is not None:
+        query += " AND candidate.suite = $1"
+        args.append(suite)
+    elif packages is not None:
+        query += " AND package.name = ANY($1::text[])"
+        args.append(packages)
+    return [
+        (
+            debian_state.Package.from_row(row),
+            row['suite'],
+            row['context'],
+            row['value'],
+            row['success_chance'],
+            (
+                dict(row['publish']) if row['publish'] is not None else None,
+                row['update_changelog'],
+                shlex.split(row['command']) if row['command'] is not None else None,
+            ),
+        )  # type: ignore
+        for row in await conn.fetch(query, *args)
+    ]
 
 
 async def schedule_from_candidates(iter_candidates_with_policy):
@@ -281,15 +342,15 @@ async def _add_to_queue(
     )
 
 
-async def add_to_queue(
+async def bulk_add_to_queue(
     conn: asyncpg.Connection,
     todo,
     dry_run: bool = False,
     default_offset: float = 0.0,
     bucket: str = "default",
 ) -> None:
-    popcon = {k: (v or 0) for (k, v) in await debian_state.popcon(conn)}
-    removed = set(p.name for p in await debian_state.iter_packages(conn) if p.removed)
+    popcon = {k: (v or 0) for (k, v) in await conn.fetch("SELECT name, popcon_inst FROM package")}
+    removed = set(row['name'] for row in await conn.fetch("SELECT name FROM package WHERE removed"))
     if popcon:
         max_inst = max([(v or 0) for v in popcon.values()])
         if max_inst:
@@ -435,13 +496,13 @@ async def main():
 
     async with db.acquire() as conn:
         logging.info('Finding candidates with policy')
-        iter_candidates_with_policy = await debian_state.iter_candidates_with_policy(
+        iter_candidates_with_policy = await iter_candidates_with_policy(
             conn, packages=(args.packages or None), suite=args.suite
         )
         logging.info('Determining schedule for candidates')
         todo = [x async for x in schedule_from_candidates(iter_candidates_with_policy)]
         logging.info('Adding to queue')
-        await add_to_queue(conn, todo, dry_run=args.dry_run)
+        await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:

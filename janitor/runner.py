@@ -313,8 +313,11 @@ class DebianBuilder(Builder):
         env["BUILD_DISTRIBUTION"] = suite_config.debian_build.build_distribution or ""
         env["BUILD_SUFFIX"] = suite_config.debian_build.build_suffix or ""
 
-        last_build_version = await debian_state.get_last_build_version(
-            conn, queue_item.package, queue_item.suite
+        last_build_version = await conn.fetchval(
+            "SELECT version FROM debian_build WHERE "
+            "version IS NOT NULL AND source = $1 AND "
+            "distribution = $2 ORDER BY version DESC",
+            queue_item.package, queue_item.suite
         )
 
         if last_build_version:
