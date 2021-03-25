@@ -82,7 +82,7 @@ SELECT
 
 
 async def get_queue(
-    db: state.Database, only_command: Optional[str] = None, limit: Optional[int] = None
+    db: state.Database, limit: Optional[int] = None
 ) -> AsyncIterator[
     Tuple[
         int,
@@ -95,10 +95,8 @@ async def get_queue(
         Optional[str],
     ]
 ]:
-    async for row in (iter_queue_with_last_run(db, limit=limit)):
+    async for row in iter_queue_with_last_run(db, limit=limit):
         command = shlex.split(row["command"])
-        if only_command is not None and command != only_command:
-            continue
         expecting = None
         if command[0] == "new-upstream":
             if "--snapshot" in command:
@@ -123,9 +121,7 @@ async def get_queue(
             except KeyError:
                 cs = generic_changer_subcommand(command[0])
             description = cs.describe_command(command)
-        if only_command is not None:
-            description = expecting or ""
-        elif expecting is not None:
+        if expecting is not None:
             description += ", " + expecting
         if row["refresh"]:
             description += " (from scratch)"
@@ -144,7 +140,6 @@ async def get_queue(
 async def write_queue(
     client,
     db: state.Database,
-    only_command=None,
     limit=None,
     is_admin=False,
     queue_status=None,
@@ -156,7 +151,7 @@ async def write_queue(
         processing = iter([])
         active_queue_ids = set()
     return {
-        "queue": get_queue(db, only_command, limit),
+        "queue": get_queue(db, limit),
         "active_queue_ids": active_queue_ids,
         "processing": processing,
     }
