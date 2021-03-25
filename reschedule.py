@@ -71,7 +71,7 @@ async def main(db, result_code, rejected, min_age=0):
                 conn2,
                 run.package,
                 run.suite,
-                command=run.command.split(" "),
+                command=run.command,
                 estimated_duration=run.duration,
                 requestor="reschedule",
                 refresh=args.refresh,
