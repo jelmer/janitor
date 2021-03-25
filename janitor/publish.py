@@ -1587,13 +1587,13 @@ async def check_existing_mp(
     if mp_run is None:
         raise NoRunForMergeProposal(mp, revision)
 
-    if mp['remote_branch_name'] is None:
+    if mp_run['remote_branch_name'] is None:
         target_branch_url = mp.get_target_branch_url()
         if target_branch_url is None:
             logger.warning("No target branch for %r", mp)
         else:
             try:
-                mp['remote_branch_name'] = open_branch(
+                mp_run['remote_branch_name'] = open_branch(
                     target_branch_url, possible_transports=possible_transports
                 ).name
             except (BranchMissing, BranchUnavailable):
@@ -1732,7 +1732,7 @@ applied independently.
         return False
 
     if (
-        last_run_remote_branch_name != mp['remote_branch_name']
+        last_run_remote_branch_name != mp_run['remote_branch_name']
         and last_run_remote_branch_name is not None
     ):
         logger.warning(
