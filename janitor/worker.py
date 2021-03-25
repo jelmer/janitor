@@ -104,6 +104,9 @@ TRUST_PACKAGE = False
 DEFAULT_BUILD_COMMAND = "sbuild -A -s -v"
 
 
+MAX_BUILD_ITERATIONS = 50
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -514,6 +517,7 @@ class DebianTarget(Target):
                             subpath=subpath,
                             source_date_epoch=source_date_epoch,
                             update_changelog=self.changer_args.update_changelog,
+                            max_iterations=MAX_BUILD_ITERATIONS
                         )
                 except MissingUpstreamTarball:
                     raise WorkerFailure(

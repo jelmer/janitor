@@ -96,7 +96,7 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
             new_code = "build-failed"
             new_failure_details = None
         new_description = failure.description
-        new_phase = failure.phase,
+        new_phase = failure.phase
     elif logname == 'dist.log':
         lines = [line.decode('utf-8', 'replace') for line in logf]
         problem = find_build_failure_description(lines)[1]
@@ -138,7 +138,7 @@ async def reprocess_run(db, package, suite, log_id, command, duration, result_co
                         conn,
                         package,
                         suite,
-                        command=command.split(" "),
+                        command=command,
                         estimated_duration=duration,
                         requestor="reprocess-build-results",
                         bucket="reschedule",
