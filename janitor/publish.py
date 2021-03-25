@@ -1516,7 +1516,7 @@ async def check_existing_mp(
             old_status,
             package_name,
             maintainer_email,
-        ) = await debian_state.get_proposal_info(conn, mp.url)
+        ) = await get_proposal_info(conn, mp.url)
     except KeyError:
         old_revision = None
         old_status = None
