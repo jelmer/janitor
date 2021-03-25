@@ -970,24 +970,6 @@ where not exists (
     return await conn.fetch(query, *args)
 
 
-async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
-    query = "SELECT package, suite, publish, update_changelog, command " "FROM policy"
-    args = []
-    if package:
-        query += " WHERE package = $1"
-        args.append(package)
-    for row in await conn.fetch(query, *args):
-        yield (
-            row[0],
-            row[1],
-            (
-                {k[0]: (k[1], k[2]) for k in row[2]},
-                row[3],
-                shlex.split(row[4]) if row[4] else None,
-            ),
-        )
-
-
 async def get_publish_policy(
     conn: asyncpg.Connection, package: str, suite: str
 ) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:

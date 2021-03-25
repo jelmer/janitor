@@ -93,7 +93,7 @@ def apply_policy(
     uploaders: List[str],
     in_base: bool,
     release_stages_passed: Set[str]
-) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, List[str]]:
+) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, str]:
     publish_mode = {}
     update_changelog = policy_pb2.auto
     command = None
@@ -119,7 +119,7 @@ def apply_policy(
     return (
         {k: (PUBLISH_MODE_STR[v[0]], v[1]) for (k, v) in publish_mode.items()},
         POLICY_MODE_STR[update_changelog],
-        shlex.split(command),
+        command,
     )
 
 
@@ -160,9 +160,27 @@ async def update_policy(
         name,
         suite,
         changelog_mode,
-        (" ".join(command) if command else None),
+        command,
         [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
     )
+
+
+async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
+    query = "SELECT package, suite, publish, update_changelog, command " "FROM policy"
+    args = []
+    if package:
+        query += " WHERE package = $1"
+        args.append(package)
+    for row in await conn.fetch(query, *args):
+        yield (
+            row['package'],
+            row['suite'],
+            (
+                {k[0]: (k[1], k[2]) for k in row['publish']},
+                row['update_changelog'],
+                row['command']
+            ),
+        )
 
 
 async def main(argv):

@@ -1056,7 +1056,7 @@ async def publish_request(request):
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy = (await get_publish_policy(conn, package.name, suite))[0]
+        publish_policy = (await state.get_publish_policy(conn, package.name, suite))[0]
 
         logger.info("Handling request to publish %s/%s", package.name, suite)
 
