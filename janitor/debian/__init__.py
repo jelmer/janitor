@@ -132,23 +132,6 @@ def changes_filenames(changes_location):
         yield file_details["name"]
 
 
-def dget(changes_location, target_dir):
-    """Copy all files referenced by a .changes file.
-
-    Args:
-      changes_location: Source file location
-      target_dir: Target directory
-    Return:
-      path to target source file
-    """
-    srcdir = os.path.dirname(changes_location)
-    for name in changes_filenames(changes_location):
-        shutil.copy(os.path.join(srcdir, name), os.path.join(target_dir, name))
-    shutil.copy(
-        changes_location, os.path.join(target_dir, os.path.basename(changes_location))
-    )
-
-
 def tree_set_changelog_version(
     tree: WorkingTree, build_version: Version, subpath: str
 ) -> None:
