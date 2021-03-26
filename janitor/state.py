@@ -183,25 +183,25 @@ class Run(object):
             run_id=row['id'],
             times=(row['start_time'], row['finish_time']),
             command=row['command'],
-            description=row[4],
-            package=row[5],
-            build_version=Version(row[6]) if row[6] else None,
-            build_distribution=row[7],
-            result_code=(row[8] if row[8] else None),
-            branch_name=row[9],
-            main_branch_revision=(row[10].encode("utf-8") if row[10] else None),
-            revision=(row[11].encode("utf-8") if row[11] else None),
-            context=row[12],
-            result=row[13],
-            suite=row[14],
-            instigated_context=row[15],
-            branch_url=row[16],
-            logfilenames=row[17],
-            review_status=row[18],
-            review_comment=row[19],
-            worker_name=row[20],
-            result_branches=row[21],
-            result_tags=row[22],
+            description=row['description'],
+            package=row['package'],
+            build_version=row['build_version'],
+            build_distribution=row['build_distribution'],
+            result_code=row['result_code'],
+            branch_name=row['branch_name'],
+            main_branch_revision=(row['main_branch_revision'].encode("utf-8") if row[10] else None),
+            revision=(row['revision'].encode("utf-8") if row[11] else None),
+            context=row['context'],
+            result=row['result'],
+            suite=row['suite'],
+            instigated_context=row['instigated_context'],
+            branch_url=row['branch_url'],
+            logfilenames=row['logfilenames'],
+            review_status=row['review_status'],
+            review_comment=row['review_comment'],
+            worker_name=row['worker'],
+            result_branches=row['result_branches'],
+            result_tags=row['result_tags'],
         )
 
     def __len__(self) -> int:
@@ -261,7 +261,7 @@ SELECT
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision, revision) FROM
-     new_result_branch WHERE run_id = id),
+     new_result_branch WHERE run_id = id) AS result_branches,
     result_tags
 FROM
     last_runs
@@ -319,7 +319,7 @@ SELECT
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
-     revision) FROM new_result_branch WHERE run_id = id),
+     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     result_tags
 FROM
     run
@@ -404,23 +404,24 @@ SELECT
     run.package AS package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution,
-    run.result_code,
-    run.branch_name,
-    run.main_branch_revision,
-    run.revision,
-    run.context,
-    run.result,
-    run.suite,
-    run.instigated_context,
-    run.branch_url,
-    run.logfilenames,
-    run.review_status,
-    run.review_comment,
-    run.worker,
+    run.result_code AS result_code,
+    run.branch_name AS branch_name,
+    run.main_branch_revision AS main_branch_revision,
+    run.revision AS revision,
+    run.context AS context,
+    run.result AS result,
+    run.suite AS suite,
+    run.instigated_context AS instigated_context,
+    run.branch_url AS branch_url,
+    run.logfilenames AS logfilenames,
+    run.review_status AS review_status,
+    run.review_comment AS review_comment,
+    run.worker AS worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id),
-    run.result_tags,
-    merge_proposal.url, merge_proposal.status
+    run.result_tags AS result_tags,
+    merge_proposal.url AS merge_proposal_url,
+    merge_proposal.status AS merge_proposal_status
 FROM
     merge_proposal
 LEFT JOIN new_result_branch ON
@@ -443,7 +444,9 @@ LEFT JOIN debian_build ON run.id = debian_build.run_id
         query += " WHERE run.suite = $1"
     query += " ORDER BY merge_proposal.url, run.finish_time DESC"
     for row in await conn.fetch(query, *args):
-        yield Run.from_row(row[:23]), row[23], row[24]
+        yield (
+            Run.from_row(row), row['merge_proposal_url'],
+            row['merge_proposal_status'])
 
 
 class QueueItem(object):
@@ -604,7 +607,7 @@ SELECT
   review_comment,
   worker,
   array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id),
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM
   run
@@ -647,7 +650,7 @@ SELECT
   review_comment,
   worker,
   array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id),
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM
   last_unabsorbed_runs
@@ -690,7 +693,7 @@ SELECT DISTINCT ON (package)
   review_comment,
   worker,
   array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id),
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM
   last_unabsorbed_runs
@@ -745,7 +748,7 @@ SELECT
   review_comment,
   worker,
   array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id),
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM last_runs
 LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
