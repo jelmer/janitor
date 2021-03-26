@@ -20,7 +20,7 @@ import os
 import logging
 import sys
 import tempfile
-from typing import Optional
+from typing import Optional, List
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
