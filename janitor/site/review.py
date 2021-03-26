@@ -116,6 +116,7 @@ async def generate_review(
         "run_id": run.id,
         "branches": run.result_branches,
         "suite": run.suite,
+        "suites": suites,
         "MAX_DIFF_SIZE": MAX_DIFF_SIZE,
         "todo": [
             (entry[0].package, entry[0].id, [rb[0] for rb in entry[0].result_branches])
