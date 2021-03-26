@@ -502,7 +502,7 @@ class QueueItem(object):
             subpath=row['subpath'],
             package=row['package'],
             context=row['context'],
-            command=shlex.split(row['command']),
+            command=row['command'],
             estimated_duration=row['estimated_duration'],
             suite=row['suite'],
             refresh=row['refresh'],
