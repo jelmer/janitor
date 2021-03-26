@@ -369,7 +369,7 @@ WHERE id = $1
 """
     row = await conn.fetch(query, run_id)
     if row:
-        yield Run.from_row(row)
+        return Run.from_row(row)
     return None
 
 
