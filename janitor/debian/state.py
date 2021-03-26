@@ -205,15 +205,6 @@ WHERE NOT package.removed AND package.name = $1
     ]
 
 
-async def get_candidate(conn: asyncpg.Connection, package, suite):
-    return await conn.fetchrow(
-        "SELECT context, value, success_chance FROM candidate "
-        "WHERE package = $1 AND suite = $2",
-        package,
-        suite,
-    )
-
-
 async def version_available(
     conn: asyncpg.Connection,
     package: str,

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from aiohttp import ClientConnectorError
+import asyncpg
 from functools import partial
 import urllib.parse
 
@@ -13,6 +14,15 @@ from janitor.site import (
     DebdiffRetrievalError,
     tracker_url,
 )
+
+
+async def get_candidate(conn: asyncpg.Connection, package, suite):
+    return await conn.fetchrow(
+        "SELECT context, value, success_chance FROM candidate "
+        "WHERE package = $1 AND suite = $2",
+        package,
+        suite,
+    )
 
 
 async def generate_pkg_context(
@@ -69,7 +79,7 @@ async def generate_pkg_context(
             else:
                 unchanged_run = None
 
-        candidate = await debian_state.get_candidate(conn, package.name, suite)
+        candidate = await get_candidate(conn, package.name, suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
