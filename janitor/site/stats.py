@@ -25,11 +25,11 @@ order by maintainer_email asc
 
 async def write_maintainer_overview(conn, maintainer):
     packages = [
-        p
-        for p, removed in await debian_state.iter_packages_by_maintainer(
-            conn, maintainer
-        )
-        if not removed
+        row['name']
+        for row in await conn.fetch(
+            "SELECT name FROM package WHERE "
+            "maintainer_email = $1 OR $1 = any(uploader_emails) AND NOT removed",
+            maintainer)
     ]
     proposals = []
     for package, url, status in await state.iter_proposals(conn, packages):
@@ -37,9 +37,21 @@ async def write_maintainer_overview(conn, maintainer):
     candidates = []
     for row in await debian_state.iter_candidates(conn, packages=packages):
         candidates.append(row)
-    runs = []
-    async for run in state.iter_last_unabsorbed_runs(conn, packages=packages):
-        runs.append(run)
+
+    query = """
+SELECT DISTINCT ON (package)
+  id,
+  package,
+  command,
+  finish_time,
+  result_code
+FROM
+  last_unabsorbed_runs
+LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
+WHERE package = ANY($1::text[])
+ORDER BY package, suite, start_time DESC
+"""
+    runs = await conn.fetch(query, packages)
 
     return {
         "packages": packages,

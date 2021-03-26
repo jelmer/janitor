@@ -151,17 +151,6 @@ async def get_package(conn: asyncpg.Connection, name):
         return None
 
 
-async def iter_packages_by_maintainer(conn: asyncpg.Connection, maintainer):
-    return [
-        (row[0], row[1])
-        for row in await conn.fetch(
-            "SELECT name, removed FROM package WHERE "
-            "maintainer_email = $1 OR $1 = any(uploader_emails)",
-            maintainer,
-        )
-    ]
-
-
 async def iter_candidates(
     conn: asyncpg.Connection,
     packages: Optional[List[str]] = None,

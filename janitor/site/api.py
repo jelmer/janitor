@@ -366,12 +366,13 @@ async def handle_diff(request):
         package = request.match_info["package"]
         suite = request.match_info["suite"]
         async with request.app.db.acquire() as conn:
-            run = await state.get_last_unabsorbed_run(conn, package, suite)
-        if run is None:
+            run_id = await conn.fetchval(
+                'SELECT id FROM last_unabsorbed_runs WHERE package = $1 AND suite = $2',
+                package, suite)
+        if run_id is None:
             return web.Response(
                 text="no unabsorbed run for %s/%s" % (package, suite), status=404
             )
-        run_id = run.id
     role = request.query.get("role", "main")
     try:
         max_diff_size = int(request.query["max_diff_size"])
@@ -750,24 +751,35 @@ async def handle_report(request):
         for package, url, status in await state.iter_proposals(conn, suite=suite):
             if status == "open":
                 merge_proposal[package] = url
-        async for run in state.iter_last_unabsorbed_runs(conn, suite=suite):
-            if run.result_code not in ("success", "nothing-to-do"):
+        query = """
+SELECT DISTINCT ON (package)
+  result_code,
+  start_time,
+  package,
+  result
+FROM
+  last_unabsorbed_runs
+WHERE suite = $1
+ORDER BY package, suite, start_time DESC
+"""
+        async for record in conn.fetch(query, suite):
+            if record['result_code'] not in ("success", "nothing-to-do"):
                 continue
             data = {
-                "timestamp": run.times[0].isoformat(),
+                "timestamp": record['start_time'].isoformat(),
             }
-            if run.suite == "lintian-fixes":
+            if suite == "lintian-fixes":
                 data["fixed-tags"] = []
-                for entry in run.result["applied"]:
+                for entry in record['result']["applied"]:
                     data["fixed-tags"].extend(entry["fixed_lintian_tags"])
-            if run.suite in ("fresh-releases", "fresh-snapshots"):
-                data["upstream-version"] = run.result.get("upstream_version")
-                data["old-upstream-version"] = run.result.get("old_upstream_version")
-            if run.suite == "multiarch-fixes":
-                data["applied-hints"] = run.result.get("applied-hints")
-            if run.package in merge_proposal:
-                data["merge-proposal"] = merge_proposal[run.package]
-            report[run.package] = data
+            if suite in ("fresh-releases", "fresh-snapshots"):
+                data["upstream-version"] = record['result'].get("upstream_version")
+                data["old-upstream-version"] = record['result'].get("old_upstream_version")
+            if suite == "multiarch-fixes":
+                data["applied-hints"] = record['result'].get("applied-hints")
+            if record['package'] in merge_proposal:
+                data["merge-proposal"] = merge_proposal[record['package']]
+            report[record['package']] = data
     return web.json_response(
         report, headers={"Cache-Control": "max-age=600"}, status=200
     )
