@@ -367,7 +367,7 @@ LEFT JOIN
     debian_build ON debian_build.run_id = run.id
 WHERE id = $1
 """
-    row = await conn.fetch(query, run_id)
+    row = await conn.fetchrow(query, run_id)
     if row:
         return Run.from_row(row)
     return None
