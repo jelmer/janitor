@@ -161,6 +161,14 @@ class Run(object):
             self.result_tags = [(name, r.encode("utf-8")) for (name, r) in result_tags]
 
     @property
+    def start_time(self):
+        return self.times[0]
+
+    @property
+    def finish_time(self):
+        return self.times[1]
+
+    @property
     def duration(self) -> datetime.timedelta:
         return self.times[1] - self.times[0]
 
