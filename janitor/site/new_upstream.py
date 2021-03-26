@@ -4,6 +4,7 @@ from functools import partial
 from janitor import state
 from . import tracker_url
 from janitor.debian import state as debian_state
+from .common import get_candidate
 
 
 async def generate_pkg_file(
@@ -24,7 +25,7 @@ async def generate_pkg_file(
                     conn, package.name, suite=suite
                 )
             ]
-        candidate = await debian_state.get_candidate(conn, package.name, suite)
+        candidate = await get_candidate(conn, package.name, suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
