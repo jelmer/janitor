@@ -824,14 +824,15 @@ SELECT * FROM publish_ready
         query += " LIMIT %d" % limit
     for record in await conn.fetch(query, *args):
         yield tuple(  # type: ignore
-            [Run.from_row(record[:23])]
-            + list(record[23:-3])
-            + [
-                record[-3],  # type: ignore
-                record[-2],
-                record[-1],
-            ]
-        )  # type: ignore
+            [Run.from_row(record),
+             record['value'],
+             record['maintainer_email'],
+             record['uploader_emails'],
+             record['update_changelog'],
+             record['policy_command'],
+             record['unpublished_branches']
+             ]
+        )
 
 
 async def get_never_processed_count(conn: asyncpg.Connection, suites=None):
