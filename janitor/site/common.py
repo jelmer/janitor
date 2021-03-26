@@ -27,7 +27,7 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
 
 
 async def get_last_unabsorbed_run(
-    conn: asyncpg.Connection, package: str, suite: str) -> Optional[state.Run]:
+        conn: asyncpg.Connection, package: str, suite: str) -> Optional[state.Run]:
     args = []
     query = """
 SELECT
@@ -87,7 +87,7 @@ LEFT JOIN
     debian_build ON debian_build.run_id = run.id
 WHERE id = $1
 """
-    row = await conn.fetch(query, run_id)
+    row = await conn.fetchrow(query, run_id)
     if row:
         return state.Run.from_row(row)
     return None
