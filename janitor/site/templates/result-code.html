@@ -26,8 +26,8 @@
 {% for run in runs %}
 <tr><td><a class="reference external" href="../pkg/{{ run.package }}/">{{ run.package }}</a></td>
 <td>{{ run.suite }}</td>
-<td>{{ format_timestamp(run.times[0]) }}</td>
-<td>{{ format_duration(run.duration) }}</td>
+<td>{{ format_timestamp(run.start_time) }}</td>
+<td>{{ format_duration(run.finish_time - run.start_time) }}</td>
 <td><a class="reference external" href="../pkg/{{ run.package }}/{{ run.id }}">{{ run.description }}</a></td>
 </tr>
 {% endfor %}

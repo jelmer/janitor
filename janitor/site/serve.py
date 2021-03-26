@@ -553,10 +553,12 @@ if __name__ == "__main__":
                     "result-code-index.html", request, vs
                 )
             else:
-                runs = [
-                    run async for run in state.iter_last_runs(conn, code, suite=suite)
-                ]
-
+                query = 'SELECT * FROM last_runs WHERE result_code = $1'
+                args = [code]
+                if suite:
+                    query += ' AND suite = $2'
+                    args.append(suite)
+                runs = await conn.fetch(query, *args)
                 text = await render_template_for_request(
                     "result-code.html",
                     request,

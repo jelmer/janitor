@@ -45,34 +45,44 @@ with open(args.config, "r") as f:
     config = read_config(f)
 
 
-async def main(db, result_code, rejected, min_age=0):
-    packages = {}
-    async with db.acquire() as conn1, db.acquire() as conn2:
-        for package in await debian_state.iter_packages(conn1):
-            if package.removed:
-                continue
-            packages[package.name] = package
-
-        async for run in state.iter_last_runs(conn1, result_code, suite=args.suite):
-            if run.package not in packages:
-                continue
-            if rejected and run.review_status != "rejected":
-                continue
-            if packages[run.package].branch_url is None:
-                continue
-            if datetime.now() < run.times[1] + timedelta(days=min_age):
-                continue
-            if args.description_re and not re.match(
-                args.description_re, run.description, re.S
-            ):
-                continue
-            print("Rescheduling %s, %s" % (run.package, run.suite))
+async def main(db, result_code, suite, description_re, rejected, min_age=0):
+    async with db.acquire() as conn1:
+        query = """
+SELECT
+  package,
+  suite,
+  command,
+  finish_time - start_time AS duration
+FROM last_runs
+WHERE
+    branch_url IS NOT NULL AND
+    package IN (SELECT name FROM package WHERE NOT removed) AND
+"""
+        where = []
+        params = []
+        if result_code is not None:
+            params.append(result_code)
+            where.append("result_code = $%d" % len(params))
+        if suite:
+            params.append(suite)
+            where.append("suite = $%d" % len(params))
+        if rejected:
+            where.append("run.review_status = 'rejected'")
+        if description_re:
+            params.append(description_re)
+            where.append("description ~ $%d" % len(params))
+        if min_age:
+            params.append(datetime.now() - timedelta(days=min_age))
+            where.append("finish_time < $%d" % len(params))
+        query += " AND ".join(where)
+        for run in await conn1.fetch(query, *params):
+            print("Rescheduling %s, %s" % (run['package'], run['suite']))
             await do_schedule(
-                conn2,
-                run.package,
-                run.suite,
-                command=run.command,
-                estimated_duration=run.duration,
+                conn1,
+                run['package'],
+                run['suite'],
+                command=run['command'],
+                estimated_duration=run['duration'],
                 requestor="reschedule",
                 refresh=args.refresh,
                 offset=args.offset,
@@ -81,4 +91,4 @@ async def main(db, result_code, rejected, min_age=0):
 
 
 db = state.Database(config.database_location)
-asyncio.run(main(db, args.result_code, args.rejected, args.min_age))
+asyncio.run(main(db, args.result_code, args.suite, args.description_re, args.rejected, args.min_age))
