@@ -443,7 +443,7 @@ SELECT
     run.review_comment AS review_comment,
     run.worker AS worker,
     array(SELECT row(role, remote_name, base_revision,
-     revision) FROM new_result_branch WHERE run_id = id),
+     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     run.result_tags AS result_tags,
     merge_proposal.url AS merge_proposal_url,
     merge_proposal.status AS merge_proposal_status
