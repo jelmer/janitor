@@ -95,6 +95,14 @@ PUBLISH_MODE_VALUE = {
 }
 
 
+# Backwards compatibility for python < 3.6
+try:
+    shlex_join = shlex.join
+except AttributeError:
+    def shlex_join(args):
+        return ' '.join(shlex.quote(arg) for arg in args)
+
+
 def full_command(update_changelog: str, command: str) -> str:
     """Generate the full command to run.
 
@@ -113,7 +121,7 @@ def full_command(update_changelog: str, command: str) -> str:
         pass
     else:
         raise ValueError("Invalid value %r for update_changelog" % update_changelog)
-    return shlex.join(entry_command)
+    return shlex_join(entry_command)
 
 
 async def iter_candidates_with_policy(
@@ -530,7 +538,7 @@ async def do_schedule_control(
         refresh=refresh,
         bucket=bucket,
         requestor=requestor,
-        command=shlex.join(command),
+        command=shlex_join(command),
     )
 
 
