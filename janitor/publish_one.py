@@ -62,7 +62,7 @@ from breezy.propose import (
     MergeProposalExists,
 )
 
-from .debdiff import (
+from .debian.debdiff import (
     debdiff_is_empty,
     markdownify_debdiff,
 )
