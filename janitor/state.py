@@ -767,9 +767,7 @@ LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
     if where:
         query += " WHERE " + " AND ".join(where)
     query += " ORDER BY start_time DESC"
-    async with conn.transaction():
-        async for row in conn.cursor(query, *args):
-            yield Run.from_row(row)
+    return await conn.fetch(query, *args)
 
 
 async def iter_publish_ready(
