@@ -131,8 +131,8 @@ async def generate_run_file(
     kwargs["command"] = run.command
     kwargs["description"] = run.description
     kwargs["package"] = run.package
-    kwargs["start_time"] = run.times[0]
-    kwargs["finish_time"] = run.times[1]
+    kwargs["start_time"] = run.start_time
+    kwargs["finish_time"] = run.finish_time
     kwargs["build_version"] = run.build_version
     kwargs["build_distribution"] = run.build_distribution
     kwargs["result_code"] = run.result_code

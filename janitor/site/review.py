@@ -28,7 +28,7 @@ async def generate_rejected(conn, suite=None):
     ]
 
     def entry_key(entry):
-        return entry[0].times[1]
+        return entry[0].finish_time
 
     entries.sort(key=entry_key, reverse=True)
     return {"entries": entries, "suite": suite}

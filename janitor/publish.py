@@ -438,7 +438,7 @@ async def publish_pending_new(
                 conn, run.revision, {"differ-unreachable"}
             )
             try:
-                next_try_time = run.times[1] + (2 ** attempt_count * timedelta(hours=1))
+                next_try_time = run.finish_time + (2 ** attempt_count * timedelta(hours=1))
             except OverflowError:
                 continue
             if datetime.now() < next_try_time:
@@ -854,7 +854,7 @@ async def publish_from_policy(
 
     publish_delay: Optional[timedelta]
     if code == "success":
-        publish_delay = datetime.now() - run.times[1]
+        publish_delay = datetime.now() - run.finish_time
         publish_latency.observe(publish_delay.total_seconds())
     else:
         publish_delay = None
@@ -989,7 +989,7 @@ async def publish_and_store(
             requestor=requestor,
         )
 
-        publish_delay = run.times[1] - datetime.now()
+        publish_delay = run.finish_time - datetime.now()
         publish_latency.observe(publish_delay.total_seconds())
 
         topic_publish.publish(
@@ -1664,7 +1664,7 @@ applied independently.
         return True
 
     if last_run.result_code != "success":
-        last_run_age = datetime.now() - last_run.times[1]
+        last_run_age = datetime.now() - last_run.finish_time
         if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
             logger.info(
                 "%s: Last run failed with transient error (%s). " "Rescheduling.",
