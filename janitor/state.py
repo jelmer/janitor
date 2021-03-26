@@ -101,7 +101,8 @@ class Run(object):
     def __init__(
         self,
         run_id,
-        times,
+        start_time,
+        finish_time,
         command,
         description,
         package,
@@ -124,7 +125,8 @@ class Run(object):
         result_tags,
     ):
         self.id = run_id
-        self.times = times
+        self.start_time = start_time
+        self.finish_time = finish_time
         self.command = command
         self.description = description
         self.package = package
@@ -181,7 +183,8 @@ class Run(object):
     def from_row(cls, row) -> "Run":
         return cls(
             run_id=row['id'],
-            times=(row['start_time'], row['finish_time']),
+            start_time=row['start_time'],
+            finish_time=row['finish_time'],
             command=row['command'],
             description=row['description'],
             package=row['package'],
