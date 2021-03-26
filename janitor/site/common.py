@@ -135,8 +135,8 @@ async def generate_pkg_context(
             build_version = run.build_version
             result_code = run.result_code
             context = run.context
-            start_time = run.times[0]
-            finish_time = run.times[1]
+            start_time = run.start_time
+            finish_time = run.finish_time
             run_id = run.id
             result = run.result
             branch_url = run.branch_url
