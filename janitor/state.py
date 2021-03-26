@@ -349,11 +349,28 @@ LEFT JOIN
         yield Run.from_row(row)
 
 
-async def get_run(conn: asyncpg.Connection, run_id, package=None):
-    async for run in _iter_runs(conn, run_id=run_id, package=package):
-        return run
-    else:
-        return None
+async def get_run(conn: asyncpg.Connection, run_id):
+    query = """
+SELECT
+    id, command, start_time, finish_time, description, package,
+    debian_build.version AS build_version,
+    debian_build.distribution AS build_distribution, result_code,
+    branch_name, main_branch_revision, revision, context, result, suite,
+    instigated_context, branch_url, logfilenames, review_status,
+    review_comment, worker,
+    array(SELECT row(role, remote_name, base_revision,
+     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+    result_tags
+FROM
+    run
+LEFT JOIN
+    debian_build ON debian_build.run_id = run.id
+WHERE id = $1
+"""
+    row = await conn.fetch(query, run_id)
+    if row:
+        yield Run.from_row(row)
+    return None
 
 
 async def iter_proposals(conn: asyncpg.Connection, package=None, suite=None):
