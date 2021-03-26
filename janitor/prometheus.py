@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp import web
+import asyncio
 import time
 
 from prometheus_client import (
@@ -56,11 +57,14 @@ async def metrics_middleware(request, handler):
     requests_in_progress_gauge.labels(request.method, route).inc()
     try:
         response = await handler(request)
-    except Exception as e:
-        if not isinstance(e, web.HTTPException):
-            request_exceptions.labels(request.method, route).inc()
-            import traceback
-            traceback.print_exc()
+    except asyncio.CancelledError:
+        raise
+    except web.HTTPException:
+        raise
+    except Exception:
+        request_exceptions.labels(request.method, route).inc()
+        import traceback
+        traceback.print_exc()
         raise
     finally:
         resp_time = time.time() - start_time
