@@ -89,7 +89,7 @@ WHERE id = $1
 """
     row = await conn.fetch(query, run_id)
     if row:
-        yield state.Run.from_row(row)
+        return state.Run.from_row(row)
     return None
 
 
