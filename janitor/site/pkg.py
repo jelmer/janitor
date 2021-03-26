@@ -277,7 +277,7 @@ async def generate_run_file(
         kwargs["dist_log_line_count"] = line_count
         kwargs["dist_log_include_lines"] = include_lines
         kwargs["dist_log_highlight_lines"] = highlight_lines
-    else:
+    elif has_log(WORKER_LOG_NAME):
         kwargs["primary_log"] = "worker"
 
     return kwargs
