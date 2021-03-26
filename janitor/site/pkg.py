@@ -17,7 +17,7 @@ from buildlog_consultant.sbuild import (
     find_build_failure_description,
     find_install_deps_failure_description,
     SBUILD_FOCUS_SECTION,
-    strip_useless_build_tail,
+    strip_build_tail,
 )
 from janitor.logs import LogRetrievalError
 from janitor.site import (
@@ -75,7 +75,7 @@ def find_build_log_failure(logf, length):
         include_lines = (1, linecount)
     if focus_section == "build":
         lines = paragraphs.get(focus_section, [])
-        lines = strip_useless_build_tail(lines)
+        lines, files = strip_build_tail(lines)
         include_lines = (
             max(1, offsets[focus_section][0] + len(lines) - length),
             offsets[focus_section][0] + len(lines),
