@@ -2035,6 +2035,30 @@ async def check_existing(
         open_proposal_count.labels(maintainer=maintainer_email).set(count)
 
 
+async def get_run(conn: asyncpg.Connection, run_id):
+    query = """
+SELECT
+    id, command, start_time, finish_time, description, package,
+    debian_build.version AS build_version,
+    debian_build.distribution AS build_distribution, result_code,
+    branch_name, main_branch_revision, revision, context, result, suite,
+    instigated_context, branch_url, logfilenames, review_status,
+    review_comment, worker,
+    array(SELECT row(role, remote_name, base_revision,
+     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+    result_tags
+FROM
+    run
+LEFT JOIN
+    debian_build ON debian_build.run_id = run.id
+WHERE id = $1
+"""
+    row = await conn.fetch(query, run_id)
+    if row:
+        yield state.Run.from_row(row)
+    return None
+
+
 async def listen_to_runner(
     db,
     rate_limiter,
@@ -2086,7 +2110,7 @@ async def listen_to_runner(
             async with db.acquire() as conn:
                 # TODO(jelmer): Fold these into a single query ?
                 package = await debian_state.get_package(conn, result["package"])
-                run = await state.get_run(conn, result["log_id"])
+                run = await get_run(conn, result["log_id"])
                 if run.suite != "unchanged":
                     await process_run(conn, run, package)
                 else:
