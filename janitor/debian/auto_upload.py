@@ -131,7 +131,8 @@ async def upload_build_result(result, artifact_manager, dput_host, debsign_keyid
 
 async def listen_to_runner(
         runner_url, artifact_manager, dput_host,
-        debsign_keyid: Optional[str] = None):
+        debsign_keyid: Optional[str] = None,
+        suites: Optional[List[str]] = None):
     from aiohttp.client import ClientSession
     import urllib.parse
 
@@ -140,7 +141,8 @@ async def listen_to_runner(
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
-            await upload_build_result(result, artifact_manager, dput_host, debsign_keyid)
+            if not suites or result['suite'] in suites:
+                await upload_build_result(result, artifact_manager, dput_host, debsign_keyid)
 
 
 async def main(argv=None):
@@ -160,6 +162,7 @@ async def main(argv=None):
     parser.add_argument(
         "--runner-url", type=str, default=None, help="URL to reach runner at."
     )
+    parser.add_argument('--suite', action='append', help='Suites to upload')
 
 
     args = parser.parse_args()
@@ -183,7 +186,7 @@ async def main(argv=None):
                 config,
             )
         ),
-        loop.create_task(listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid))
+        loop.create_task(listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.suite))
     )
 
 
