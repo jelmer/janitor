@@ -147,10 +147,11 @@ async def process_webhook(request, db):
                 for suite in await debian_state.iter_publishable_suites(
                         conn, package.name
                 ):
-                    await do_schedule(
-                        conn, package.name, suite, requestor=requestor, bucket="webhook"
-                    )
-                    rescheduled.setdefault(package.name, []).append(suite)
+                    if suite not in rescheduled.get(package.name, []):
+                        await do_schedule(
+                            conn, package.name, suite, requestor=requestor, bucket="webhook"
+                        )
+                        rescheduled.setdefault(package.name, []).append(suite)
 
             package = await debian_state.get_package_by_upstream_branch_url(
                 conn, vcs_url
@@ -162,10 +163,11 @@ async def process_webhook(request, db):
                 ):
                     if suite not in ("fresh-releases", "fresh-snapshots"):
                         continue
-                    await do_schedule(
-                        conn, package.name, suite, requestor=requestor, bucket="webhook"
-                    )
-                    rescheduled.setdefault(package.name, []).append(suite)
+                    if suite not in rescheduled.get(package.name, []):
+                        await do_schedule(
+                            conn, package.name, suite, requestor=requestor, bucket="webhook"
+                        )
+                        rescheduled.setdefault(package.name, []).append(suite)
 
         return web.json_response({"rescheduled": rescheduled, "urls": urls})
 
