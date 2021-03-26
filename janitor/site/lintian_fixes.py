@@ -149,11 +149,11 @@ async def generate_candidates(db):
 async def generate_developer_table_page(db, developer):
     async with db.acquire() as conn:
         packages = [
-            p
-            for p, removed in await debian_state.iter_packages_by_maintainer(
-                conn, developer
-            )
-            if not removed
+            row['name']
+            for row in await conn.fetch(
+                "SELECT name FROM package WHERE "
+                "maintainer_email = $1 OR $1 = any(uploader_emails) AND NOT removed",
+                developer)
         ]
         open_proposals = {}
         for package, url, status in await state.iter_proposals(conn, packages, SUITE):

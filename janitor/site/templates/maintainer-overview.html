@@ -39,7 +39,7 @@
 
 <ul>
 {% for run in runs %}
-<li><a class="reference external" href="/cupboard/pkg/{{ run.package }}/{{ run.id }}/">{{ format_timestamp(run.times[1]) }} {{ run.package}}: {{ run.command }}</a>: {{ display_result_code(run.result_code) }}</li>
+<li><a class="reference external" href="/cupboard/pkg/{{ run.package }}/{{ run.id }}/">{{ format_timestamp(run.finish_time) }} {{ run.package}}: {{ run.command }}</a>: {{ display_result_code(run.result_code) }}</li>
 {% endfor %}
 </ul>
 
