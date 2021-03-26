@@ -240,10 +240,12 @@ async def handle_schedule_control(request):
     except ValueError:
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
     async with request.app.db.acquire() as conn:
-        run = await state.get_run(conn, run_id)
+        run = await conn.fetchrow(
+            "SELECT main_branch_revision, package FROM run WHERE id = $1",
+            run_id)
         if run is None:
             return web.json_response({"reason": "Run not found"}, status=404)
-        package = await debian_state.get_package(conn, run.package)
+        package = await debian_state.get_package(conn, run['package'])
         if request.user:
             requestor = request.user["email"]
         else:
@@ -256,7 +258,7 @@ async def handle_schedule_control(request):
             offset=offset,
             refresh=refresh,
             requestor=requestor,
-            main_branch_revision=run.main_branch_revision,
+            main_branch_revision=run['main_branch_revision'],
         )
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, "unchanged", package.name
@@ -506,11 +508,13 @@ async def handle_run_post(request):
         async with request.app.db.acquire() as conn:
             review_status = review_status.lower()
             if review_status == "reschedule":
-                run = await state.get_run(conn, run_id)
+                run = await conn.fetchrow(
+                    'SELECT package, suite FROM run WHERE id = $1',
+                    run_id)
                 await do_schedule(
                     conn,
-                    run.package,
-                    run.suite,
+                    run['package'],
+                    run['suite'],
                     refresh=True,
                     requestor="reviewer",
                     bucket="default",
