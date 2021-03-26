@@ -2055,8 +2055,45 @@ WHERE id = $1
 """
     row = await conn.fetch(query, run_id)
     if row:
-        yield state.Run.from_row(row)
+        return state.Run.from_row(row)
     return None
+
+
+async def iter_control_matching_runs(conn: asyncpg.Connection, main_branch_revision: bytes, package: str):
+    query = """
+SELECT
+  id,
+  command,
+  start_time,
+  finish_time,
+  description,
+  package,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context,
+  branch_url,
+  logfilenames,
+  review_status,
+  review_comment,
+  worker,
+  array(SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+  result_tags
+FROM last_runs
+LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
+WHERE main_branch_revision = $1 AND package = $2 AND suite != 'unchanged'
+ORDER BY start_time DESC
+"""
+    return await conn.fetch(
+        query, main_branch_revision.decode('utf-8'), package)
+
 
 
 async def listen_to_runner(
@@ -2114,13 +2151,10 @@ async def listen_to_runner(
                 if run.suite != "unchanged":
                     await process_run(conn, run, package)
                 else:
-                    async for run in state.iter_last_runs(
-                        conn, main_branch_revision=run.revision
-                    ):
-                        if run.package != package.name:
-                            continue
-                        if run.suite != "unchanged":
-                            await process_run(conn, run, package)
+                    for run in await iter_control_matching_runs(
+                            conn, main_branch_revision=run.revision,
+                            package=run.package):
+                        await process_run(conn, run, package)
 
 
 def main(argv=None):

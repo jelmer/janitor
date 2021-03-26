@@ -691,58 +691,6 @@ ORDER BY package, suite, start_time DESC
         yield Run.from_row(row)
 
 
-async def iter_last_runs(
-    conn: asyncpg.Connection,
-    result_code: Optional[str] = None,
-    suite: Optional[str] = None,
-    main_branch_revision: Optional[bytes] = None,
-) -> AsyncIterable[Run]:
-    query = """
-SELECT
-  id,
-  command,
-  start_time,
-  finish_time,
-  description,
-  package,
-  debian_build.version AS build_version,
-  debian_build.distribution AS build_distribution,
-  result_code,
-  branch_name,
-  main_branch_revision,
-  revision,
-  context,
-  result,
-  suite,
-  instigated_context,
-  branch_url,
-  logfilenames,
-  review_status,
-  review_comment,
-  worker,
-  array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-  result_tags
-FROM last_runs
-LEFT JOIN debian_build ON last_runs.id = debian_build.run_id
-"""
-    where = []
-    args: List[Any] = []
-    if result_code is not None:
-        args.append(result_code)
-        where.append("result_code = $%d" % len(args))
-    if suite:
-        args.append(suite)
-        where.append("suite = $%d" % len(args))
-    if main_branch_revision:
-        args.append(main_branch_revision)
-        where.append("main_branch_revision = $%d" % len(args))
-    if where:
-        query += " WHERE " + " AND ".join(where)
-    query += " ORDER BY start_time DESC"
-    return await conn.fetch(query, *args)
-
-
 async def iter_publish_ready(
     conn: asyncpg.Connection,
     suites: Optional[List[str]] = None,
