@@ -756,12 +756,13 @@ order by url, last_run.finish_time desc
 
     @html_template("run.html", headers={"Cache-Control": "max-age=3600"})
     async def handle_run(request):
+        from .common import get_run
         from .pkg import generate_run_file
 
         run_id = request.match_info["run_id"]
         pkg = request.match_info.get("pkg")
         async with request.app.database.acquire() as conn:
-            run = await state.get_run(conn, run_id, pkg)
+            run = await get_run(conn, run_id, pkg)
             if run is None:
                 raise web.HTTPNotFound(text="No run with id %r" % run_id)
         return await generate_run_file(
@@ -1036,10 +1037,13 @@ order by url, last_run.finish_time desc
 
     async def handle_review_post(request):
         from .review import generate_review
+        from .common import get_run
 
         post = await request.post()
         async with request.app.database.acquire() as conn:
-            run = await state.get_run(conn, post["run_id"])
+            run = await conn.fetchrow(
+                'SELECT package, suite FROM run WHERE id = $1',
+                post["run_id"])
             review_status = post["review_status"].lower()
             if review_status == "reschedule":
                 review_status = "rejected"
@@ -1047,8 +1051,8 @@ order by url, last_run.finish_time desc
 
                 await do_schedule(
                     conn,
-                    run.package,
-                    run.suite,
+                    run['package'],
+                    run['suite'],
                     refresh=True,
                     requestor="reviewer",
                     bucket="default",
@@ -1065,7 +1069,7 @@ order by url, last_run.finish_time desc
                 request.app.http_client_session,
                 request.app.differ_url,
                 request.app.vcs_store_url,
-                suites=[run.suite],
+                suites=post.getall("suite", None)
             )
             return web.Response(
                 content_type="text/html",

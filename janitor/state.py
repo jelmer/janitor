@@ -639,50 +639,6 @@ ORDER BY start_time DESC
         yield Run.from_row(row)
 
 
-async def get_last_unabsorbed_run(
-    conn: asyncpg.Connection, package: str, suite: str
-) -> Optional[Run]:
-    args = []
-    query = """
-SELECT
-  id,
-  command,
-  start_time,
-  finish_time,
-  description,
-  package,
-  debian_build.version AS build_version,
-  debian_build.distribution AS build_distribution,
-  result_code,
-  branch_name,
-  main_branch_revision,
-  revision,
-  context,
-  result,
-  suite,
-  instigated_context,
-  branch_url,
-  logfilenames,
-  review_status,
-  review_comment,
-  worker,
-  array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-  result_tags
-FROM
-  last_unabsorbed_runs
-LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
-WHERE package = $1 AND suite = $2
-ORDER BY package, suite DESC, start_time DESC
-LIMIT 1
-"""
-    args = [package, suite]
-    row = await conn.fetchrow(query, *args)
-    if row is None:
-        return None
-    return Run.from_row(row)
-
-
 async def iter_last_unabsorbed_runs(
     conn: asyncpg.Connection, suite=None, packages=None
 ):

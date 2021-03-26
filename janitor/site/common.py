@@ -3,6 +3,7 @@
 from aiohttp import ClientConnectorError
 import asyncpg
 from functools import partial
+from typing import Optional
 import urllib.parse
 
 from janitor import state
@@ -25,6 +26,73 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
     )
 
 
+async def get_last_unabsorbed_run(
+    conn: asyncpg.Connection, package: str, suite: str) -> Optional[state.Run]:
+    args = []
+    query = """
+SELECT
+  id,
+  command,
+  start_time,
+  finish_time,
+  description,
+  package,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context,
+  branch_url,
+  logfilenames,
+  review_status,
+  review_comment,
+  worker,
+  array(SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+  result_tags
+FROM
+  last_unabsorbed_runs
+LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
+WHERE package = $1 AND suite = $2
+ORDER BY package, suite DESC, start_time DESC
+LIMIT 1
+"""
+    args = [package, suite]
+    row = await conn.fetchrow(query, *args)
+    if row is None:
+        return None
+    return state.Run.from_row(row)
+
+
+async def get_run(conn: asyncpg.Connection, run_id):
+    query = """
+SELECT
+    id, command, start_time, finish_time, description, package,
+    debian_build.version AS build_version,
+    debian_build.distribution AS build_distribution, result_code,
+    branch_name, main_branch_revision, revision, context, result, suite,
+    instigated_context, branch_url, logfilenames, review_status,
+    review_comment, worker,
+    array(SELECT row(role, remote_name, base_revision,
+     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+    result_tags
+FROM
+    run
+LEFT JOIN
+    debian_build ON debian_build.run_id = run.id
+WHERE id = $1
+"""
+    row = await conn.fetch(query, run_id)
+    if row:
+        yield state.Run.from_row(row)
+    return None
+
+
 async def generate_pkg_context(
     db, config, suite, policy, client, differ_url, vcs_store_url, package, run_id=None
 ):
@@ -33,12 +101,12 @@ async def generate_pkg_context(
         if package is None:
             raise KeyError(package)
         if run_id is not None:
-            run = await state.get_run(conn, run_id)
+            run = await get_run(conn, run_id)
             if not run:
                 raise KeyError(run_id)
             merge_proposals = []
         else:
-            run = await state.get_last_unabsorbed_run(conn, package.name, suite)
+            run = await get_last_unabsorbed_run(conn, package.name, suite)
             merge_proposals = [
                 (url, status)
                 for (unused_package, url, status) in await state.iter_proposals(

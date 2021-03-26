@@ -4,7 +4,7 @@ from functools import partial
 from janitor import state
 from . import tracker_url
 from janitor.debian import state as debian_state
-from .common import get_candidate
+from .common import get_candidate, get_run, get_last_unabsorbed_run
 
 
 async def generate_pkg_file(
@@ -15,10 +15,10 @@ async def generate_pkg_file(
         if package is None:
             raise KeyError(package)
         if run_id is not None:
-            run = await state.get_run(conn, run_id)
+            run = await get_run(conn, run_id)
             merge_proposals = []
         else:
-            run = await state.get_last_unabsorbed_run(conn, package.name, suite)
+            run = await get_last_unabsorbed_run(conn, package.name, suite)
             merge_proposals = [
                 (url, status)
                 for (unused_package, url, status) in await state.iter_proposals(
