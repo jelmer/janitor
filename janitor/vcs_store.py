@@ -58,24 +58,29 @@ async def diff_request(request):
     run_id = request.match_info["run_id"]
     role = request.match_info["role"]
     async with request.app.db.acquire() as conn:
-        run = await state.get_run(conn, run_id)
-        if not run:
+        row = await conn.fetchrow("""\
+SELECT
+  package,
+  new_result_branch.base_revision AS base_revision,
+  new_result_branch.revision AS revision
+FROM run
+LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id
+WHERE id = $1 AND new_result_branch.role = $2
+""", run_id, role)
+        if not row:
             raise web.HTTPNotFound(text="No such run: %r" % run_id)
     try:
-        repo = request.app.vcs_manager.get_repository(run.package)
+        repo = request.app.vcs_manager.get_repository(row['package'])
     except NotBranchError:
         repo = None
     if repo is None:
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
-            run.package)
-    for actual_role, _, base_revision, revision in run.result_branches:
-        if role == actual_role:
-            old_revid = base_revision
-            new_revid = revision
-            break
-    else:
+            row['package'])
+    if row['revision'] is None:
         raise web.HTTPNotFound(text="No branch with role %s" % role)
+    old_revid = row['base_revision'].encode('utf-8')
+    new_revid = row['revision'].encode('utf-8')
 
     if (hasattr(repo, '_git') and
             old_revid.startswith(b'git-v1:') and
