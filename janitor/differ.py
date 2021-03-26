@@ -31,7 +31,7 @@ from aiohttp import web
 from . import state
 from .artifacts import ArtifactsMissing, get_artifact_manager
 from .config import read_config
-from .debdiff import (
+from .debian.debdiff import (
     run_debdiff,
     DebdiffError,
     filter_boring as filter_debdiff_boring,
