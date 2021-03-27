@@ -149,12 +149,13 @@ async def listen_to_runner(
 
 async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None):
     async with db.acquire() as conn:
-        query = "SELECT DISTINCT (source) run_id FROM debian_build"
+        query = "SELECT DISTINCT ON (distribution, source) distribution, source, run_id FROM debian_build"
         args = []
         if distributions:
             query += ' WHERE distribution = ANY($1::text[])'
             args.append(distributions)
-        query += " ORDER BY version DESC"
+        query += " ORDER BY distribution, source, version DESC"
+        print(query)
         for row in await conn.fetch(query, *args):
             await upload_build_result(row['run_id'], artifact_manager, dput_host, debsign_keyid)
 
@@ -219,8 +220,10 @@ async def main(argv=None):
     if args.backfill:
         from .. import state
         db = state.Database(config.database_location)
-        tasks.append(loop.create_task(
-            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution)))
+        backfill_task = loop.create_task(
+            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution))
+        backfill_task.add_done_callback(log_result)
+        tasks.append(backfill_task)
 
     await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
 
