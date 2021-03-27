@@ -624,6 +624,21 @@ class NewUpstreamPublisher(Publisher):
         return True
 
 
+class CMEPublisher(Publisher):
+    def read_worker_result(self, result):
+        pass
+
+    def get_proposal_description(self, role, format, existing_description):
+        return "Run 'cme fix'.\n"
+
+    def get_proposal_commit_message(self, role, existing_commit_message):
+        return self.get_proposal_description(role, "text", None)
+
+    def allow_create_proposal(self):
+        # CME doesn't provide enough information
+        return True
+
+
 class DebdiffMissingRun(Exception):
     """Raised when the debdiff was missing a run."""
 
@@ -702,6 +717,8 @@ def publish_one(
         subrunner = ScrubObsoletePublisher()
     elif command.startswith("mia"):
         subrunner = MIAPublisher()
+    elif command.startswith("cme-fix"):
+        subrunner = CMEPublisher()
     else:
         raise AssertionError("unknown command %r" % command)
 
