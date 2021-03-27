@@ -85,97 +85,6 @@ SUPPORTED_MODES = [
     MODE_SKIP,
 ]
 
-# Maximum number of lines of debdiff to inline in the merge request
-# description. If this threshold is reached, we'll just include a link to the
-# debdiff.
-DEBDIFF_INLINE_THRESHOLD = 40
-
-
-JANITOR_BLURB = """
-This merge proposal was created automatically by the Janitor bot.
-For more information, including instructions on how to disable
-these merge proposals, see %(external_url)s/%(suite)s.
-
-You can follow up to this merge proposal as you normally would.
-
-The bot will automatically update the merge proposal to resolve merge conflicts
-or close the merge proposal when all changes are applied through other means
-(e.g. cherry-picks). Updates may take several hours to propagate.
-"""
-
-JANITOR_BLURB_MD = """
-This merge proposal was created automatically by the \
-[Janitor bot](%(external_url)s/%(suite)s).
-For more information, including instructions on how to disable
-these merge proposals, see %(external_url)s/%(suite)s.
-
-You can follow up to this merge proposal as you normally would.
-
-The bot will automatically update the merge proposal to resolve merge conflicts
-or close the merge proposal when all changes are applied through other means
-(e.g. cherry-picks). Updates may take several hours to propagate.
-"""
-
-LOG_BLURB = """
-Build and test logs for this branch can be found at
-%(external_url)s/%(suite)s/pkg/%(package)s/%(log_id)s.
-"""
-
-LOG_BLURB_MD = """
-Build and test logs for this branch can be found at
-%(external_url)s/%(suite)s/pkg/%(package)s/%(log_id)s.
-"""
-
-DEBDIFF_LINK_BLURB = """
-These changes affect the binary packages. See the build logs page
-or download the full debdiff from
-%(external_url)s/api/run/%(log_id)s/debdiff?filter_boring=1
-"""
-
-DEBDIFF_BLURB_MD = """
-## Debdiff
-
-These changes affect the binary packages:
-
-%(debdiff_md)s
-"""
-
-DEBDIFF_BLURB = """
-These changes affect the binary packages:
-
-%(debdiff)s
-"""
-
-DEBDIFF_LINK_BLURB_MD = """
-These changes affect the binary packages; see the
-[debdiff](%(external_url)s/api/run/\
-%(log_id)s/debdiff?filter_boring=1)
-"""
-
-NO_DEBDIFF_BLURB = """
-These changes have no impact on the binary debdiff. See
-%(external_url)s/api/run/%(log_id)s/debdiff?filter_boring=1 to
-download the raw debdiff.
-"""
-
-NO_DEBDIFF_BLURB_MD = """
-These changes have no impact on the [binary debdiff](
-%(external_url)s/api/run/%(log_id)s/debdiff?filter_boring=1).
-"""
-
-DIFFOSCOPE_LINK_BLURB_MD = """
-You can also view the [diffoscope diff](\
-%(external_url)s/api/run/%(log_id)s/diffoscope?filter_boring=1) \
-([unfiltered](%(external_url)s/api/run/%(log_id)s/diffoscope)).
-"""
-
-DIFFOSCOPE_LINK_BLURB = """
-You can also view the diffoscope diff at
-%(external_url)s/api/run/%(log_id)s/diffoscope?filter_boring=1,
-or unfiltered at %(external_url)s/api/run/%(log_id)s/diffoscope.
-"""
-
-
 
 class PublishFailure(Exception):
     def __init__(self, code, description):
@@ -199,69 +108,12 @@ class DebdiffRetrievalError(Exception):
         self.reason = reason
 
 
-def strip_janitor_blurb(text, suite, external_url):
-    for blurb in [JANITOR_BLURB, JANITOR_BLURB_MD]:
-        try:
-            i = text.index(blurb % {"suite": suite, "external_url": external_url})
-        except ValueError:
-            pass
-        else:
-            return text[:i].strip()
-    raise ValueError
-
-
-def generate_janitor_blurb(format, pkg, log_id, suite, external_url):
-    text = (
-        (JANITOR_BLURB_MD if format == "markdown" else JANITOR_BLURB)
-        % {"suite": suite, "external_url": external_url}
-    )
-    text += (LOG_BLURB_MD if format == "markdown" else LOG_BLURB) % {
-        "package": pkg,
-        "log_id": log_id,
-        "suite": suite,
-        "external_url": external_url,
-    }
-    return text
-
-
-def generate_debdiff_blurb(format, pkg, log_id, suite, debdiff, external_url):
-    if not debdiff_is_empty(debdiff):
-        blurb = NO_DEBDIFF_BLURB_MD if format == "markdown" else NO_DEBDIFF_BLURB
-    elif len(debdiff.splitlines(False)) < DEBDIFF_INLINE_THRESHOLD:
-        blurb = DEBDIFF_BLURB_MD if format == "markdown" else DEBDIFF_BLURB
-    else:
-        blurb = DEBDIFF_LINK_BLURB_MD if format == "markdown" else DEBDIFF_LINK_BLURB
-    return (
-        blurb
-        % {
-            "package": pkg,
-            "log_id": log_id,
-            "suite": suite,
-            "debdiff": debdiff,
-            "debdiff_md": markdownify_debdiff(debdiff),
-            "external_url": external_url,
-        }
-    )
-
-
-def generate_diffoscope_blurb(format, pkg, log_id, suite, external_url):
-    blurb = DIFFOSCOPE_LINK_BLURB_MD if format == "markdown" else DIFFOSCOPE_LINK_BLURB
-    return (
-        blurb
-        % {
-            "package": pkg,
-            "log_id": log_id,
-            "suite": suite,
-            "external_url": external_url,
-        }
-    )
-
-
 def publish(
     template_env,
     suite: str,
     pkg: str,
     subrunner: "Publisher",
+    subworker_result: Any,
     mode: str,
     role: str,
     hoster: Hoster,
@@ -281,36 +133,20 @@ def publish(
     stop_revision: Optional[bytes] = None,
 ):
     def get_proposal_description(description_format, existing_proposal):
-        if existing_proposal:
-            existing_description = existing_proposal.get_description()
-            try:
-                existing_description = strip_janitor_blurb(
-                    existing_description, suite, external_url
-                )
-            except ValueError:
-                # Oh, well...
-                existing_description = None
-        else:
-            existing_description = None
-        vs = {}
+        vs = {
+            'package': pkg,
+            'log_id': log_id,
+            'suite': suite,
+            'external_url': external_url,
+            'debdiff_is_empty': debdiff_is_empty,
+            'markdownify_debdiff': markdownify_debdiff,
+            'role': role,
+            }
+        vs.update(subworker_result)
         vs['runner'] = subrunner.get_proposal_description(
-            role, description_format, existing_description
-        )
-        vs['janitor'] = generate_janitor_blurb(
-            description_format, pkg, log_id, suite, external_url
-        )
-        if debdiff is not None and role == "main":
-            vs['debdiff'] = generate_debdiff_blurb(
-                description_format,
-                pkg,
-                log_id,
-                suite,
-                debdiff.decode("utf-8", "replace"),
-                external_url,
-            )
-            vs['diffoscope'] = generate_diffoscope_blurb(
-                description_format, pkg, log_id, suite, external_url
-            )
+            role, description_format)
+        if debdiff:
+            vs['debdiff'] = debdiff.decode("utf-8", "replace")
         if description_format == 'markdown':
             template = template_env.get_template('base.md')
         else:
@@ -406,7 +242,7 @@ def publish(
 
 class Publisher(object):
     def get_proposal_description(
-        self, role: str, description_format: str, existing_description: Optional[str]
+        self, role: str, description_format: str
     ) -> str:
         raise NotImplementedError(self.get_proposal_description)
 
@@ -418,7 +254,7 @@ class Publisher(object):
 
 
 class LintianBrushPublisher(Publisher):
-    def get_proposal_description(self, role, description_format, existing_description):
+    def get_proposal_description(self, role, description_format):
         from silver_platter.debian.lintian import (
             create_mp_description,
             applied_entry_as_line,
@@ -458,7 +294,7 @@ class LintianBrushPublisher(Publisher):
 
 
 class MultiArchHintsPublisher(Publisher):
-    def get_proposal_description(self, role, format, existing_description):
+    def get_proposal_description(self, role, format):
         text = "Apply hints suggested by the multi-arch hinter.\n\n"
         for entry in self.applied:
             kind = entry["link"].split("#")[-1]
@@ -510,7 +346,7 @@ class OrphanPublisher(Publisher):
 
     # TODO(jelmer): Check that the wnpp bug is still open.
 
-    def get_proposal_description(self, role, format, existing_description):
+    def get_proposal_description(self, role, format):
         from silver_platter.debian.orphan import move_instructions
 
         text = "Move orphaned package to the QA team.\n\n"
@@ -562,7 +398,7 @@ class OrphanPublisher(Publisher):
 
 class MIAPublisher(Publisher):
 
-    def get_proposal_description(self, role, format, existing_description):
+    def get_proposal_description(self, role, format):
         text = "Remove MIA uploaders:\n\n"
         for uploader in self.uploaders:
             text += " * %s\n" % uploader
@@ -579,7 +415,7 @@ class MIAPublisher(Publisher):
 
 
 class UncommittedPublisher(Publisher):
-    def get_proposal_description(self, role, format, existing_description):
+    def get_proposal_description(self, role, format):
         return "Import archive changes missing from the VCS."
 
     def get_proposal_commit_message(self, role, existing_commit_message):
@@ -593,7 +429,7 @@ class UncommittedPublisher(Publisher):
 
 
 class ScrubObsoletePublisher(Publisher):
-    def get_proposal_description(self, role, format, existing_description):
+    def get_proposal_description(self, role, format):
         return "Remove unnecessary constraints."
 
     def get_proposal_commit_message(self, role, existing_commit_message):
@@ -610,7 +446,7 @@ class NewUpstreamPublisher(Publisher):
     def read_worker_result(self, result):
         self._upstream_version = result["upstream_version"]
 
-    def get_proposal_description(self, role, format, existing_description):
+    def get_proposal_description(self, role, format):
         if role == "pristine-tar":
             return "pristine-tar data for new upstream version %s.\n" % (
                 self._upstream_version
@@ -634,7 +470,7 @@ class CMEPublisher(Publisher):
     def read_worker_result(self, result):
         pass
 
-    def get_proposal_description(self, role, format, existing_description):
+    def get_proposal_description(self, role, format):
         return "Run 'cme fix'.\n"
 
     def get_proposal_commit_message(self, role, existing_commit_message):
@@ -838,6 +674,7 @@ def publish_one(
             suite,
             pkg,
             subrunner,
+            subworker_result,
             mode,
             role,
             hoster,
