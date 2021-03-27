@@ -143,14 +143,12 @@ def publish(
             'role': role,
             }
         vs.update(subworker_result)
-        vs['runner'] = subrunner.get_proposal_description(
-            role, description_format)
         if debdiff:
             vs['debdiff'] = debdiff.decode("utf-8", "replace")
         if description_format == 'markdown':
-            template = template_env.get_template('base.md')
+            template = template_env.get_template(suite + '.md')
         else:
-            template = template_env.get_template('base.txt')
+            template = template_env.get_template(suite + '.txt')
         return template.render(vs)
 
     def get_proposal_commit_message(existing_proposal):
@@ -241,36 +239,19 @@ def publish(
 
 
 class Publisher(object):
-    def get_proposal_description(
-        self, role: str, description_format: str
+    def get_proposal_commit_message(
+        self, role: str, format: str
     ) -> str:
-        raise NotImplementedError(self.get_proposal_description)
+        raise NotImplementedError(self.get_proposal_commit_message)
 
     def read_worker_result(self, result: Any) -> None:
-        raise NotImplementedError(self.read_worker_result)
+        pass
 
     def allow_create_proposal(self) -> bool:
         raise NotImplementedError(self.allow_create_proposal)
 
 
 class LintianBrushPublisher(Publisher):
-    def get_proposal_description(self, role, description_format):
-        from silver_platter.debian.lintian import (
-            create_mp_description,
-            applied_entry_as_line,
-        )
-
-        return create_mp_description(
-            description_format,
-            [
-                applied_entry_as_line(
-                    description_format,
-                    line.get("fixed_lintian_tags", []),
-                    line["summary"],
-                )
-                for line in self.applied
-            ],
-        )
 
     def get_proposal_commit_message(self, role, existing_commit_message):
         applied = []
@@ -294,49 +275,9 @@ class LintianBrushPublisher(Publisher):
 
 
 class MultiArchHintsPublisher(Publisher):
-    def get_proposal_description(self, role, format):
-        text = "Apply hints suggested by the multi-arch hinter.\n\n"
-        for entry in self.applied:
-            kind = entry["link"].split("#")[-1]
-            if format == "markdown":
-                text += "* %s: " % entry["binary"]
-                if "action" in entry:
-                    text += entry["action"] + " "
-                    text += "This fixes: %s. ([%s](%s))" % (
-                        entry["description"],
-                        kind,
-                        entry["link"],
-                    )
-                else:
-                    text += "Fix: %s. ([%s](%s))" % (
-                        entry["description"],
-                        kind,
-                        entry["link"],
-                    )
-
-                text += "\n"
-            else:
-                text += "* %s: " % entry["binary"]
-                if "action" in entry:
-                    text += "%s. This fixes: %s (%s).\n" % (
-                        entry["action"],
-                        entry["description"],
-                        kind,
-                    )
-                else:
-                    text += "Fix: %s (%s)\n" % (entry["description"], kind)
-
-        text += """
-These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
-"""
-
-        return text
 
     def get_proposal_commit_message(self, role, existing_commit_message):
         return "Apply multi-arch hints."
-
-    def read_worker_result(self, result):
-        self.applied = result["applied-hints"]
 
     def allow_create_proposal(self):
         return True
@@ -346,51 +287,8 @@ class OrphanPublisher(Publisher):
 
     # TODO(jelmer): Check that the wnpp bug is still open.
 
-    def get_proposal_description(self, role, format):
-        from silver_platter.debian.orphan import move_instructions
-
-        text = "Move orphaned package to the QA team.\n\n"
-        if self.wnpp_bug:
-            if format == "markdown":
-                text += (
-                    "For details, see the [orphan bug](https://bugs.debian.org/%d).\n\n"
-                    % self.wnpp_bug
-                )
-            else:
-                text += (
-                    "For details, see the orphan bug at https://bugs.debian.org/%d.\n\n"
-                    % self.wnpp_bug
-                )
-        if not self.pushed and self.new_vcs_url:
-            text += "\n".join(
-                move_instructions(
-                    self.package_name,
-                    self.salsa_user,
-                    self.old_vcs_url,
-                    self.new_vcs_url,
-                )
-            )
-        return text
-
     def get_proposal_commit_message(self, role, existing_commit_message):
         return "Move package to the QA team."
-
-    def read_worker_result(self, result):
-        self.wnpp_bug = result.get("wnpp_bug")
-        self.pushed = result["pushed"]
-        self.old_vcs_url = result["old_vcs_url"]
-        self.new_vcs_url = result["new_vcs_url"]
-        try:
-            self.package_name = result["package_name"]
-            self.salsa_user = result["salsa_user"]
-        except KeyError:
-            if self.new_vcs_url is not None:
-                self.salsa_user, self.package_name = (
-                    urllib.parse.urlparse(self.new_vcs_url).path.strip("/").split("/")
-                )
-            else:
-                self.salsa_user = None
-                self.package_name = None
 
     def allow_create_proposal(self):
         return True
@@ -398,45 +296,25 @@ class OrphanPublisher(Publisher):
 
 class MIAPublisher(Publisher):
 
-    def get_proposal_description(self, role, format):
-        text = "Remove MIA uploaders:\n\n"
-        for uploader in self.uploaders:
-            text += " * %s\n" % uploader
-        return text
-
     def get_proposal_commit_message(self, role, existing_commit_message):
         return "Remove MIA uploaders."
-
-    def read_worker_result(self, result):
-        self.uploaders = result.get("removed_uploaders")
 
     def allow_create_proposal(self):
         return True
 
 
 class UncommittedPublisher(Publisher):
-    def get_proposal_description(self, role, format):
-        return "Import archive changes missing from the VCS."
 
     def get_proposal_commit_message(self, role, existing_commit_message):
         return "Import archive changes missing from the VCS."
-
-    def read_worker_result(self, result):
-        self.tags = result["tags"]
 
     def allow_create_proposal(self):
         return True
 
 
 class ScrubObsoletePublisher(Publisher):
-    def get_proposal_description(self, role, format):
-        return "Remove unnecessary constraints."
-
     def get_proposal_commit_message(self, role, existing_commit_message):
         return "Remove unnecessary constraints."
-
-    def read_worker_result(self, result):
-        pass
 
     def allow_create_proposal(self):
         return True
@@ -446,20 +324,17 @@ class NewUpstreamPublisher(Publisher):
     def read_worker_result(self, result):
         self._upstream_version = result["upstream_version"]
 
-    def get_proposal_description(self, role, format):
+    def get_proposal_commit_message(self, role, existing_commit_message):
         if role == "pristine-tar":
-            return "pristine-tar data for new upstream version %s.\n" % (
+            return "pristine-tar data for new upstream version %s." % (
                 self._upstream_version
             )
         elif role == "upstream":
-            return "Import of new upstream version %s.\n" % (self._upstream_version)
+            return "Import of new upstream version %s." % (self._upstream_version)
         elif role == "main":
-            return "Merge new upstream version %s.\n" % self._upstream_version
+            return "Merge new upstream version %s." % self._upstream_version
         else:
             raise KeyError(role)
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        return self.get_proposal_description(role, "text", None)
 
     def allow_create_proposal(self):
         # No upstream release too small...
@@ -467,14 +342,8 @@ class NewUpstreamPublisher(Publisher):
 
 
 class CMEPublisher(Publisher):
-    def read_worker_result(self, result):
-        pass
-
-    def get_proposal_description(self, role, format):
-        return "Run 'cme fix'.\n"
-
     def get_proposal_commit_message(self, role, existing_commit_message):
-        return self.get_proposal_description(role, "text", None)
+        return "Run CME fix."
 
     def allow_create_proposal(self):
         # CME doesn't provide enough information

@@ -1,0 +1,12 @@
+{% extends "base.txt" %}
+{% block runner %}
+Apply hints suggested by the multi-arch hinter.
+
+
+{% for entry in applied %}
+{% set kind = entry.link.split("#")[-1] %}
+* {{ entry.binary }}{% if entry.action %}{{ entry.action }}. This fixes {{ entry.description }} ({{ kind }}).{% else %}Fix: {{ entry.description }} ({{ kind }}){% endif %}
+{% endfor %}
+
+These changes were suggested on https://wiki.debian.org/MultiArch/Hints.
+{% endblock %}
