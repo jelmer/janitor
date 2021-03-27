@@ -2,4 +2,4 @@
 janitor_auto_upload_port: 9933
 janitor_auto_upload_address: ::1
 janitor_auto_upload_dput_host:
-janitor_auto_upload_suites: []
+janitor_auto_upload_distributions: []
