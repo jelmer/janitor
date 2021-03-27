@@ -23,76 +23,6 @@ from breezy import urlutils
 from debian.changelog import Version
 
 
-class Package(object):
-
-    name: str
-    branch_url: str
-    maintainer_email: str
-    uploader_emails: List[str]
-    subpath: Optional[str]
-    archive_version: Optional[Version]
-    vcs_type: Optional[str]
-    vcs_url: Optional[str]
-    vcs_browse: Optional[str]
-    popcon_inst: Optional[int]
-    removed: bool
-    vcswatch_status: str
-    vcswatch_version: str
-    upstream_branch_url: Optional[str]
-
-    def __init__(
-        self,
-        name,
-        maintainer_email,
-        uploader_emails,
-        branch_url,
-        vcs_type,
-        vcs_url,
-        vcs_browse,
-        removed,
-        vcswatch_status,
-        vcswatch_version,
-        in_base
-    ):
-        self.name = name
-        self.maintainer_email = maintainer_email
-        self.uploader_emails = uploader_emails
-        self.branch_url = branch_url
-        self.vcs_type = vcs_type
-        self.vcs_url = vcs_url
-        self.vcs_browse = vcs_browse
-        self.removed = removed
-        self.vcswatch_status = vcswatch_status
-        self.vcswatch_version = vcswatch_version
-        self.in_base = in_base
-
-    field_names = ["name", "maintainer_email", "uploader_emails", "branch_url", "vcs_type", "vcs_url", "vcs_browse", "removed", "vcswatch_status", "vcswatch_version", "in_base"]
-
-    @classmethod
-    def from_row(cls, row) -> "Package":
-        return cls(*row)
-
-    def __lt__(self, other) -> bool:
-        if not isinstance(other, type(self)):
-            raise TypeError(other)
-        return self.__tuple__ < other.__tuple__()
-
-    def __tuple__(self):
-        return (
-            self.name,
-            self.maintainer_email,
-            self.uploader_emails,
-            self.branch_url,
-            self.vcs_type,
-            self.vcs_url,
-            self.vcs_browse,
-            self.removed,
-            self.vcswatch_status,
-            self.vcswatch_version,
-            self.in_base
-        )
-
-
 async def version_available(
     conn: asyncpg.Connection,
     package: str,
@@ -131,17 +61,3 @@ WHERE name = $1 AND %(version_match2)s
     else:
         query = query % {"version_match1": "True", "version_match2": "True"}
     return await conn.fetch(query, *args)
-
-
-async def iter_published_packages(conn: asyncpg.Connection, suite):
-    return await conn.fetch(
-        """
-select distinct on (package.name) package.name, debian_build.version,
-archive_version from debian_build
-left join package on package.name = debian_build.source
-where debian_build.distribution = $1 and not package.removed
-order by package.name, debian_build.version desc
-""",
-        suite,
-    )
-

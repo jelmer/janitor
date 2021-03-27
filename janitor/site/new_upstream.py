@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import asyncpg
 from functools import partial
 from janitor import state
 from . import tracker_url
@@ -92,14 +93,8 @@ async def generate_pkg_file(
 async def generate_candidates(db, suite):
     async with db.acquire() as conn:
         candidates = [
-            (package.name, context, value, success_chance)
-            for (
-                package,
-                suite,
-                context,
-                value,
-                success_chance,
-            ) in await iter_candidates(conn, suite=suite)
+            (row['package'], row['context'], row['value'], row['success_chance'])
+            for row in await iter_candidates(conn, suite=suite)
         ]
     candidates.sort()
     return {"candidates": candidates, "suite": suite}

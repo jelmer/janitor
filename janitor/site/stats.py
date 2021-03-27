@@ -35,9 +35,7 @@ async def write_maintainer_overview(conn, maintainer):
     proposals = []
     for package, url, status in await state.iter_proposals(conn, packages):
         proposals.append((package, url, status))
-    candidates = []
-    for row in await iter_candidates(conn, packages=packages):
-        candidates.append(row)
+    candidates = await iter_candidates(conn, packages=packages)
 
     query = """
 SELECT DISTINCT ON (package)

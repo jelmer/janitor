@@ -29,15 +29,14 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
 async def iter_candidates(
     conn: asyncpg.Connection,
     packages: Optional[List[str]] = None,
-    suite: Optional[str] = None,
-) -> List[Tuple[debian_state.Package, str, Optional[str], Optional[int], Optional[float]]]:
+    suite: Optional[str] = None):
     query = """
 SELECT
-""" + ','.join(['package.%s' % field for field in debian_state.Package.field_names]) + """,
-  candidate.suite,
-  candidate.context,
-  candidate.value,
-  candidate.success_chance
+  candidate.package AS package,
+  candidate.suite AS suite,
+  candidate.context AS context,
+  candidate.value AS value,
+  candidate.success_chance AS success_chance
 FROM candidate
 INNER JOIN package on package.name = candidate.package
 WHERE NOT package.removed
@@ -52,11 +51,7 @@ WHERE NOT package.removed
     elif packages is not None:
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
-    return [
-        (debian_state.Package.from_row(row), row['candidate.suite'], row['candidate.context'], row['candidate.value'],
-         row['candidate.success_chance'])
-        for row in await conn.fetch(query, *args)
-    ]
+    return await conn.fetch(query, *args)
 
 
 async def get_last_unabsorbed_run(
@@ -274,13 +269,7 @@ async def generate_pkg_context(
 async def generate_candidates(db, suite):
     candidates = []
     async with db.acquire() as conn:
-        for (
-            package,
-            suite,
-            context,
-            value,
-            success_chance,
-        ) in await iter_candidates(conn, suite=suite):
-            candidates.append((package.name, value))
+        for row in await iter_candidates(conn, suite=suite):
+            candidates.append((row['package'], row['value']))
         candidates.sort(key=lambda x: x[1], reverse=True)
     return {"candidates": candidates, "suite": suite}
