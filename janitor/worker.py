@@ -641,7 +641,17 @@ class GenericTarget(Target):
             except DetailedFailure as f:
                 raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
             except UnidentifiedError as e:
-                raise WorkerFailure('build-failed', str(e))
+                lines = [line for line in e.lines if line]
+                if e.secondary:
+                    raise WorkerFailure('build-failed', e.secondary.line)
+                elif len(lines) == 1:
+                    raise WorkerFailure('build-failed', lines[0])
+                else:
+                    raise WorkerFailure(
+                        'build-failed',
+                        "%r failed with unidentified error "
+                        "(return code %d)" % (e.argv, e.retcode)
+                    )
 
         return {}
 
