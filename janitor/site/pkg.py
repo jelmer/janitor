@@ -124,7 +124,6 @@ async def get_publish_history(
 async def generate_run_file(
     db, client, config, differ_url, logfile_manager, run, vcs_store_url, is_admin
 ):
-    (start_time, finish_time) = run.times
     kwargs = {}
     kwargs["run"] = run
     kwargs["run_id"] = run.id
