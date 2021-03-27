@@ -358,6 +358,7 @@ CUSTOM_GENERIC_SUBCOMMANDS = {
     "just-build": DummyGenericChanger,
 }
 
+
 def generic_changer_subcommand(n):
     try:
         return CUSTOM_GENERIC_SUBCOMMANDS[n]
