@@ -85,16 +85,16 @@ async def dput(directory, changes_filename, dput_host):
     raise DputFailure(p.returncode, stderr.decode())
 
 
-async def upload_build_result(result, artifact_manager, dput_host, debsign_keyid: Optional[str] = None):
-    logging.info('Uploading results for %s', result['log_id'])
+async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid: Optional[str] = None):
+    logging.info('Uploading results for %s', log_id)
     with tempfile.TemporaryDirectory() as td:
         try:
             await artifact_manager.retrieve_artifacts(
-                result['log_id'], td)
+                log_id, td)
         except ArtifactsMissing:
             logging.error(
                 'artifacts for build %s are missing',
-                result['log_id'])
+                log_id)
             return
         for entry in os.scandir(td):
             if entry.name.endswith('.changes'):
@@ -111,11 +111,11 @@ async def upload_build_result(result, artifact_manager, dput_host, debsign_keyid
             logging.error(
                 'Error (exit code %d) signing %s for %s: %s',
                 e.returncode, changes_filename,
-                result['log_id'], e.reason)
+                log_id, e.reason)
         else:
             logging.info(
                 'Successfully signed %s for %s',
-                changes_filename, result['log_id'])
+                changes_filename, log_id)
 
         logging.debug('Running dput.')
         try:
@@ -124,9 +124,9 @@ async def upload_build_result(result, artifact_manager, dput_host, debsign_keyid
             logging.error(
                 'Error (exit code %d) uploading %s for %s: %s',
                 e.returncode, changes_filename,
-                result['log_id'], e.reason)
+                log_id, e.reason)
         else:
-            logging.info('Successfully uploaded run %s', result['log_id'])
+            logging.info('Successfully uploaded run %s', log_id)
 
 
 async def listen_to_runner(
@@ -142,7 +142,18 @@ async def listen_to_runner(
             if result["code"] != "success":
                 continue
             if not suites or result['suite'] in suites:
-                await upload_build_result(result, artifact_manager, dput_host, debsign_keyid)
+                await upload_build_result(result['log_id'], artifact_manager, dput_host, debsign_keyid)
+
+
+async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, suites=None):
+    async with db.acquire() as conn:
+        query = "SELECT id FROM last_runs WHERE EXISTS (SELECT FROM debian_build WHERE run_id = id) AND result_code = 'success'"
+        args = []
+        if suites:
+            query += ' AND suite = ANY($1::text[])'
+            args.append(suites)
+        for log_id in await conn.fetch(query, *args):
+            await upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid)
 
 
 async def main(argv=None):
@@ -162,6 +173,9 @@ async def main(argv=None):
     parser.add_argument(
         "--runner-url", type=str, default=None, help="URL to reach runner at."
     )
+    parser.add_argument(
+        "--backfill",
+        action="store_true", help="Upload previously built packages.")
     parser.add_argument('--suite', action='append', help='Suites to upload')
 
 
@@ -178,7 +192,8 @@ async def main(argv=None):
     artifact_manager = get_artifact_manager(config.artifact_location)
 
     loop = asyncio.get_event_loop()
-    await asyncio.gather(
+
+    tasks = [
         loop.create_task(
             run_web_server(
                 args.listen_address,
@@ -186,8 +201,15 @@ async def main(argv=None):
                 config,
             )
         ),
-        loop.create_task(listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.suite))
-    )
+        loop.create_task(listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.suite))]
+
+    if args.backfill:
+        from .. import state
+        db = state.Database(config.database_location)
+        tasks.append(loop.create_task(
+            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.suite))
+
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
