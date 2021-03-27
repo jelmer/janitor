@@ -27,6 +27,10 @@ from janitor.config import Config
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import RemoteVcsManager
 
+BUG_ERROR_RESULT_CODES = [
+    'worker-failure',
+    ]
+
 
 def json_chart_data(max_age=None):
     if max_age is not None:
@@ -137,6 +141,8 @@ def highlight_diff(diff):
 def classify_result_code(result_code):
     if result_code in ("success", "nothing-to-do", "nothing-new-to-do"):
         return result_code
+    if result_code in BUG_ERROR_RESULT_CODES:
+        return "bug"
     if result_code in TRANSIENT_ERROR_RESULT_CODES:
         return "transient-failure"
     return "failure"
