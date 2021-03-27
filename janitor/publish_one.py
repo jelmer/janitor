@@ -62,6 +62,8 @@ from breezy.propose import (
     MergeProposalExists,
 )
 
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+
 from .debian.debdiff import (
     debdiff_is_empty,
     markdownify_debdiff,
@@ -174,6 +176,7 @@ or unfiltered at %(external_url)s/api/run/%(log_id)s/diffoscope.
 """
 
 
+
 class PublishFailure(Exception):
     def __init__(self, code, description):
         self.code = code
@@ -207,8 +210,8 @@ def strip_janitor_blurb(text, suite, external_url):
     raise ValueError
 
 
-def add_janitor_blurb(format, text, pkg, log_id, suite, external_url):
-    text += "\n" + (
+def generate_janitor_blurb(format, pkg, log_id, suite, external_url):
+    text = (
         (JANITOR_BLURB_MD if format == "markdown" else JANITOR_BLURB)
         % {"suite": suite, "external_url": external_url}
     )
@@ -221,14 +224,14 @@ def add_janitor_blurb(format, text, pkg, log_id, suite, external_url):
     return text
 
 
-def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff, external_url):
+def generate_debdiff_blurb(format, pkg, log_id, suite, debdiff, external_url):
     if not debdiff_is_empty(debdiff):
         blurb = NO_DEBDIFF_BLURB_MD if format == "markdown" else NO_DEBDIFF_BLURB
     elif len(debdiff.splitlines(False)) < DEBDIFF_INLINE_THRESHOLD:
         blurb = DEBDIFF_BLURB_MD if format == "markdown" else DEBDIFF_BLURB
     else:
         blurb = DEBDIFF_LINK_BLURB_MD if format == "markdown" else DEBDIFF_LINK_BLURB
-    text += "\n" + (
+    return (
         blurb
         % {
             "package": pkg,
@@ -239,12 +242,11 @@ def add_debdiff_blurb(format, text, pkg, log_id, suite, debdiff, external_url):
             "external_url": external_url,
         }
     )
-    return text
 
 
-def add_diffoscope_blurb(format, text, pkg, log_id, suite, external_url):
+def generate_diffoscope_blurb(format, pkg, log_id, suite, external_url):
     blurb = DIFFOSCOPE_LINK_BLURB_MD if format == "markdown" else DIFFOSCOPE_LINK_BLURB
-    text += "\n" + (
+    return (
         blurb
         % {
             "package": pkg,
@@ -253,10 +255,10 @@ def add_diffoscope_blurb(format, text, pkg, log_id, suite, external_url):
             "external_url": external_url,
         }
     )
-    return text
 
 
 def publish(
+    template_env,
     suite: str,
     pkg: str,
     subrunner: "Publisher",
@@ -290,26 +292,30 @@ def publish(
                 existing_description = None
         else:
             existing_description = None
-        description = subrunner.get_proposal_description(
+        vs = {}
+        vs['runner'] = subrunner.get_proposal_description(
             role, description_format, existing_description
         )
-        description = add_janitor_blurb(
-            description_format, description, pkg, log_id, suite, external_url
+        vs['janitor'] = generate_janitor_blurb(
+            description_format, pkg, log_id, suite, external_url
         )
         if debdiff is not None and role == "main":
-            description = add_debdiff_blurb(
+            vs['debdiff'] = generate_debdiff_blurb(
                 description_format,
-                description,
                 pkg,
                 log_id,
                 suite,
                 debdiff.decode("utf-8", "replace"),
                 external_url,
             )
-            description = add_diffoscope_blurb(
-                description_format, description, pkg, log_id, suite, external_url
+            vs['diffoscope'] = generate_diffoscope_blurb(
+                description_format, pkg, log_id, suite, external_url
             )
-        return description
+        if description_format == 'markdown':
+            template = template_env.get_template('base.md')
+        else:
+            template = template_env.get_template('base.txt')
+        return template.render(vs)
 
     def get_proposal_commit_message(existing_proposal):
         if existing_proposal:
@@ -679,6 +685,7 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
 
 
 def publish_one(
+    template_env,
     suite,
     pkg,
     command,
@@ -827,6 +834,7 @@ def publish_one(
 
     try:
         publish_result = publish(
+            template_env,
             suite,
             pkg,
             subrunner,
@@ -867,6 +875,7 @@ def publish_one(
 if __name__ == "__main__":
     import argparse
     import json
+    import os
     import sys
 
     parser = argparse.ArgumentParser()
@@ -876,8 +885,14 @@ if __name__ == "__main__":
 
     request = json.load(sys.stdin)
 
+    template_env = Environment(
+        loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '..', "proposal-templates")),
+        autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False),
+    )
+
     try:
         publish_result, branch_name = publish_one(
+            template_env,
             suite=request["suite"],
             pkg=request["package"],
             derived_branch_name=request["derived_branch_name"],
