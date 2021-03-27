@@ -132,7 +132,7 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
 async def listen_to_runner(
         runner_url, artifact_manager, dput_host,
         debsign_keyid: Optional[str] = None,
-        suites: Optional[List[str]] = None):
+        distributions: Optional[List[str]] = None):
     from aiohttp.client import ClientSession
     import urllib.parse
 
@@ -141,19 +141,22 @@ async def listen_to_runner(
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
-            if not suites or result['suite'] in suites:
+            if result['target']['name'] != 'debian':
+                continue
+            if not distributions or result['target']['build_distribution'] in distributions:
                 await upload_build_result(result['log_id'], artifact_manager, dput_host, debsign_keyid)
 
 
-async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, suites=None):
+async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None):
     async with db.acquire() as conn:
-        query = "SELECT id FROM last_runs WHERE EXISTS (SELECT FROM debian_build WHERE run_id = id) AND result_code = 'success'"
+        query = "SELECT DISTINCT (source) run_id FROM debian_build"
         args = []
-        if suites:
-            query += ' AND suite = ANY($1::text[])'
-            args.append(suites)
+        if distributions:
+            query += ' WHERE distribution = ANY($1::text[])'
+            args.append(distributions)
+        query += " ORDER BY version DESC"
         for row in await conn.fetch(query, *args):
-            await upload_build_result(row['id'], artifact_manager, dput_host, debsign_keyid)
+            await upload_build_result(row['run_id'], artifact_manager, dput_host, debsign_keyid)
 
 
 async def main(argv=None):
@@ -176,7 +179,7 @@ async def main(argv=None):
     parser.add_argument(
         "--backfill",
         action="store_true", help="Upload previously built packages.")
-    parser.add_argument('--suite', action='append', help='Suites to upload')
+    parser.add_argument('--distribution', action='append', help='Build distributions to upload')
 
 
     args = parser.parse_args()
@@ -199,7 +202,7 @@ async def main(argv=None):
                 args.listen_address,
                 args.port,
                 config,
-            ), 'web server'
+            )
         )]
 
     def log_result(future):
@@ -209,8 +212,7 @@ async def main(argv=None):
             logging.exception('listening to runner failed')
 
     runner_task = loop.create_task(
-        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.suite),
-        'runner listener')
+        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution))
     runner_task.add_done_callback(log_result)
     tasks.append(runner_task)
 
@@ -218,7 +220,7 @@ async def main(argv=None):
         from .. import state
         db = state.Database(config.database_location)
         tasks.append(loop.create_task(
-            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.suite)))
+            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution)))
 
     await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
 

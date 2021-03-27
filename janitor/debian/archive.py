@@ -331,7 +331,7 @@ async def publish_suite(
 
 def create_background_task(fn, title):
     loop = asyncio.get_event_loop()
-    task = loop.create_task(fn, title)
+    task = loop.create_task(fn)
 
     def log_result(future):
         try:
