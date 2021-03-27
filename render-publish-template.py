@@ -38,7 +38,6 @@ with open(args.config, "r") as f:
 
 
 async def process_build(db, run_id, role, format):
-    todo = []
     async with db.acquire() as conn:
         query = """
 SELECT
@@ -53,7 +52,8 @@ WHERE
         row = await conn.fetchrow(query, run_id)
         vs = {}
         vs.update(row)
-        vs.update(row['_result'])
+        if row['_result']:
+            vs.update(row['_result'])
         vs['external_url'] = 'https://janitor.debian.net/'
         vs['markdownify_debdiff'] = markdownify_debdiff
         vs['debdiff_is_empty'] = debdiff_is_empty
