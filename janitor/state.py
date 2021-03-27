@@ -75,7 +75,8 @@ class Run(object):
 
     __slots__ = [
         "id",
-        "times",
+        "start_time",
+        "finish_time",
         "command",
         "description",
         "package",
