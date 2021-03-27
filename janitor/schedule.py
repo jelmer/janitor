@@ -125,24 +125,13 @@ def full_command(update_changelog: str, command: str) -> str:
 
 
 async def iter_candidates_with_policy(
-    conn: asyncpg.Connection,
-    packages: Optional[List[str]] = None,
-    suite: Optional[str] = None,
-) -> List[
-    Tuple[
-        debian_state.Package,
-        str,
-        Optional[str],
-        Optional[int],
-        Optional[float],
-        Dict[str, str],
-        str,
-        str,
-    ]
-]:
+        conn: asyncpg.Connection,
+        packages: Optional[List[str]] = None,
+        suite: Optional[str] = None):
     query = """
 SELECT
-""" + ','.join(['package.%s' % field for field in debian_state.Package.field_names]) + """,
+  package.name AS package,
+  package.branch_url AS branch_url,
   candidate.suite AS suite,
   candidate.context AS context,
   candidate.value AS value,
@@ -167,55 +156,34 @@ WHERE NOT package.removed
     elif packages is not None:
         query += " AND package.name = ANY($1::text[])"
         args.append(packages)
-    return [
-        (
-            debian_state.Package.from_row(row),
-            row['suite'],
-            row['context'],
-            row['value'],
-            row['success_chance'],
-            (
-                dict(row['publish']) if row['publish'] is not None else None,
-                row['update_changelog'],
-                row['command'],
-            ),
-        )  # type: ignore
-        for row in await conn.fetch(query, *args)
-    ]
+    return await conn.fetch(query, *args)
 
 
 async def schedule_from_candidates(iter_candidates_with_policy):
-    for (
-        package,
-        suite,
-        context,
-        value,
-        success_chance,
-        policy,
-    ) in iter_candidates_with_policy:
-        if package.branch_url is None:
+    for row in iter_candidates_with_policy:
+        if row['branch_url'] is None:
             continue
 
-        (publish_mode, update_changelog, command) = policy
-
-        if publish_mode is None:
-            logging.info("%s: no policy defined", package.name)
+        if row['publish_mode'] is None:
+            logging.info("%s: no policy defined", row['package'])
             continue
 
-        if all([mode == "skip" for mode in publish_mode]):
-            logging.debug("%s: skipping, per policy", package.name)
+        if all([mode == "skip" for mode, max_freq in row['publish_mode']]):
+            logging.debug("%s: skipping, per policy", row['package'])
             continue
 
-        if not command:
-            logging.debug("%s: skipping, no command set", package.name)
+        if not row['command']:
+            logging.debug("%s: skipping, no command set", row['package'])
             continue
 
-        for mode in publish_mode.values():
+        value = row['value']
+        for mode, max_freq in row['publish_mode'].values():
             value += PUBLISH_MODE_VALUE[mode]
 
-        entry_command = full_command(update_changelog, command)
+        entry_command = full_command(row['update_changelog'], row['command'])
 
-        yield (package.name, context, entry_command, suite, value, success_chance)
+        yield (row['package'], row['context'], entry_command, row['suite'],
+               value, row['success_chance'])
 
 
 async def estimate_success_probability(
