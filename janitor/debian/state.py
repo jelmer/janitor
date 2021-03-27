@@ -102,10 +102,11 @@ SELECT
 FROM
   package
 WHERE
-  branch_url = $1 OR branch_url = $2
+  branch_url = ANY($1::text[])
 """
-    branch_url2 = urlutils.split_segment_parameters(branch_url)[0]
-    row = await conn.fetchrow(query, branch_url, branch_url2)
+    row = await conn.fetchrow(query, [
+        branch_url,
+        urlutils.split_segment_parameters(branch_url)[0]])
     if row is None:
         return None
     return Package.from_row(row)
@@ -121,10 +122,14 @@ FROM
   package
 WHERE
   name IN (
-    SELECT package FROM upstream_branch_urls WHERE url = $1 OR url = $2)
+    SELECT package FROM upstream_branch_urls WHERE url = ANY($1::text[]))
 """
-    upstream_branch_url2 = urlutils.split_segment_parameters(upstream_branch_url)[0]
-    row = await conn.fetchrow(query, upstream_branch_url, upstream_branch_url2)
+    row = await conn.fetchrow(query, [
+        upstream_branch_url.rstrip('/'),
+        upstream_branch_url,
+        urlutils.split_segment_parameters(upstream_branch_url.rstrip('/'))[0],
+        urlutils.split_segment_parameters(upstream_branch_url.rstrip('/')+'/')[0],
+        ])
     if row is None:
         return None
     return Package.from_row(row)
