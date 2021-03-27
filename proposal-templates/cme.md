@@ -1,4 +1,4 @@
 {% extends "base.md" %}
-{% block runner %}
+{% block runner -%}
 Run CME.
 {% endblock %}

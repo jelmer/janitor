@@ -1,11 +1,8 @@
-{# vim: ft=jinja
-#}
 {# Maximum number of lines of debdiff to inline in the merge request
    description. If this threshold is reached, we'll just include a link to the
    debdiff.
-#}
-{% set DEBDIFF_INLINE_THRESHOLD = 40 %}
-
+-#}
+{%- set DEBDIFF_INLINE_THRESHOLD = 40 -%}
 {% block runner %}{% endblock %}
 
 This merge proposal was created automatically by the [Janitor bot]({{ external_url }}/{{ suite }}).
@@ -37,7 +34,5 @@ These changes affect the binary packages; see the
 {{ log_id }}/debdiff?filter_boring=1)
 {% endif %}
 
-You can also view the [diffoscope diff](\
-{{ external_url }}/api/run/{{ log_id }}/diffoscope?filter_boring=1) \
-([unfiltered]({{ external_url }}/api/run/{{ log_id }}/diffoscope)).
-{% endif %}
+You can also view the [diffoscope diff]({{ external_url }}/api/run/{{ log_id }}/diffoscope?filter_boring=1) ([unfiltered]({{ external_url }}/api/run/{{ log_id }}/diffoscope)).
+{% endif -%}

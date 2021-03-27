@@ -22,6 +22,7 @@ to be published, this module gets invoked. It accepts some JSON on stdin with a
 request, and writes results to standard out as JSON.
 """
 
+import os
 from typing import Optional, List, Any, Dict
 
 import logging
@@ -85,6 +86,11 @@ SUPPORTED_MODES = [
     MODE_SKIP,
 ]
 
+template_env = Environment(
+    loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '..', "proposal-templates")),
+    autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False),
+)
+
 
 class PublishFailure(Exception):
     def __init__(self, code, description):
@@ -109,7 +115,6 @@ class DebdiffRetrievalError(Exception):
 
 
 def publish(
-    template_env,
     suite: str,
     pkg: str,
     subrunner: "Publisher",
@@ -391,7 +396,6 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
 
 
 def publish_one(
-    template_env,
     suite,
     pkg,
     command,
@@ -540,7 +544,6 @@ def publish_one(
 
     try:
         publish_result = publish(
-            template_env,
             suite,
             pkg,
             subrunner,
@@ -592,14 +595,8 @@ if __name__ == "__main__":
 
     request = json.load(sys.stdin)
 
-    template_env = Environment(
-        loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '..', "proposal-templates")),
-        autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False),
-    )
-
     try:
         publish_result, branch_name = publish_one(
-            template_env,
             suite=request["suite"],
             pkg=request["package"],
             derived_branch_name=request["derived_branch_name"],

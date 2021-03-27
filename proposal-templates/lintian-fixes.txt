@@ -1,10 +1,10 @@
-{# vim: ft=jinja
-#}
 {% extends "base.txt" %}
 {% block runner %}
-{% if len(applied) > 1 %}
+{% if applied|length > 1 -%}
 Fix some issues reported by lintian
+{% endif %}
 {% for entry in applied %}
-{% if len(entries) > 1 %}* {% endif %}{{ entry.summary }}{% if entry.fixed_lintian_tags %} ({% for tag in entry.fixed_lintian_tags %}{{ tag }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
-{% endfor %}
+{% if applied|length > 1 %}* {% endif -%}
+{{ entry.summary }}{% if entry.fixed_lintian_tags %} ({% for tag in entry.fixed_lintian_tags %}{{ tag }}{% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+{% endfor -%}
 {% endblock %}
