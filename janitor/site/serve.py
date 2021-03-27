@@ -1526,9 +1526,11 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
         policy_config = read_policy(f)
 
     async def handle_post_root(request):
-        if "X-Gitlab-Event" in request.headers or "X-GitHub-Event" in request.headers:
+        if ("X-Gitlab-Event" in request.headers or
+                "X-GitHub-Event" in request.headers or
+                "X-Launchpad-Event-Type" in request.headers):
             return await process_webhook(request, request.app.database)
-        return web.HTTPMethodNotAllowed(text="Not a supported webhook")
+        raise web.HTTPMethodNotAllowed(text="Not a supported webhook", allowed_methods=['GET', 'HEAD'])
 
     app.http_client_session = ClientSession()
     app.topic_notifications = Topic("notifications")
