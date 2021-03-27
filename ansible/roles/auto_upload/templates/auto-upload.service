@@ -9,7 +9,7 @@ User={{ janitor_user }}
 Type=simple
 WorkingDirectory={{ janitor_home }}
 EnvironmentFile={{ janitor_home }}/env
-ExecStart=python3 -m janitor.debian.auto_upload --listen-address={{ janitor_auto_upload_address }} --port={{ janitor_auto_upload_port }} --config={{ janitor_conf_path }} --dput-host={{ janitor_auto_upload_dput_host }} --runner-url={{ janitor_runner_url }}{% for distro in janitor_auto_upload_distributoins %} --distribution={{ distro }}{% endfor %}
+ExecStart=python3 -m janitor.debian.auto_upload --listen-address={{ janitor_auto_upload_address }} --port={{ janitor_auto_upload_port }} --config={{ janitor_conf_path }} --dput-host={{ janitor_auto_upload_dput_host }} --runner-url={{ janitor_runner_url }}{% for distro in janitor_auto_upload_distributions %} --distribution={{ distro }}{% endfor %}
 
 Restart=on-failure
 RestartSec=90s
