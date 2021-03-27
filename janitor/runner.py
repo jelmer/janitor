@@ -354,8 +354,10 @@ class JanitorResult(object):
         worker_cls=None,
         logfilenames=None,
         legacy_branch_name=None,
+        suite=None,
     ):
         self.package = pkg
+        self.suite = suite
         self.log_id = log_id
         self.description = description
         self.branch_url = branch_url
@@ -392,6 +394,7 @@ class JanitorResult(object):
     def json(self):
         return {
             "package": self.package,
+            "suite": self.suite,
             "log_id": self.log_id,
             "description": self.description,
             "code": self.code,
@@ -696,7 +699,9 @@ class ActiveRun(object):
 
     def create_result(self, **kwargs):
         return JanitorResult(
-            pkg=self.queue_item.package, log_id=self.log_id, **kwargs)
+            pkg=self.queue_item.package,
+            suite=self.queue_item.suite,
+            log_id=self.log_id, **kwargs)
 
     def json(self) -> Any:
         """Return a JSON representation."""
