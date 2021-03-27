@@ -16,7 +16,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[]):
     if include:
         cmd.append("--include=%s" % ','.join(include))
     for suite in suites:
-        cmd.append("--alias=%s-%s-sbuild" % (suite.name, sbuild_arch))
+        cmd.append("--alias=%s-%s-sbuild" % (suite.build_distribution, sbuild_arch))
     subprocess.check_call(cmd)
 
 
@@ -64,6 +64,6 @@ create_chroot(config.distribution, sbuild_path, config.suite, sbuild_arch, args.
 
 if args.user:
     subprocess.check_call(
-        ['schroot', '-c', '%s-%s-sbuild' % (config.suite.name, sbuild_arch),
+        ['schroot', '-c', '%s-%s-sbuild' % (config.suite.build_distribution, sbuild_arch),
          '--directory', '/', '--', 'install', '-d', '--owner=%s' % args.user,
          pwd.getpwnam(args.user).pw_dir])
