@@ -199,9 +199,20 @@ async def main(argv=None):
                 args.listen_address,
                 args.port,
                 config,
-            )
-        ),
-        loop.create_task(listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.suite))]
+            ), 'web server'
+        )]
+
+    def log_result(future):
+        try:
+            future.result()
+        except BaseException:
+            logging.exception('listening to runner failed')
+
+    runner_task = loop.create_task(
+        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.suite),
+        'runner listener')
+    runner_task.add_done_callback(log_result)
+    tasks.append(runner_task)
 
     if args.backfill:
         from .. import state
@@ -209,7 +220,7 @@ async def main(argv=None):
         tasks.append(loop.create_task(
             backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.suite)))
 
-    await asyncio.gather(*tasks)
+    await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
 
 
 if __name__ == "__main__":
