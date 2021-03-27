@@ -214,7 +214,8 @@ class Run(object):
     def __tuple__(self):
         return (
             self.id,
-            self.times,
+            self.start_time,
+            self.finish_time,
             self.command,
             self.description,
             self.package,
