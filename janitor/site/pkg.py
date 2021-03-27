@@ -249,7 +249,7 @@ async def generate_run_file(
         kwargs["dist_log_name"] = DIST_LOG_NAME
 
     kwargs["get_log"] = get_log
-    if run.result_code.startswith('worker-'):
+    if run.result_code.startswith('worker-') or run.result_code.startswith('result-'):
         kwargs["primary_log"] = "worker"
     elif has_log(BUILD_LOG_NAME):
         kwargs["earlier_build_log_names"] = []
