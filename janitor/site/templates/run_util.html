@@ -81,7 +81,7 @@ window.bugform.onsubmit = function(e) {
     var contents = $("#issue_description").attr("value");
     contents += "\n\n```\n";
     $("{{ verbatim_id }}").children('span').each(function(i, l) {
-        contents += l.innerHTML + '\n';
+        contents += l.innerText + '\n';
     });
     contents += "```\n";
     $("#issue_description").attr("value", contents);
