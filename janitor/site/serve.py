@@ -369,6 +369,7 @@ if __name__ == "__main__":
 
     @html_template("fresh-builds.html", headers={"Cache-Control": "max-age=60"})
     async def handle_fresh_builds(request):
+        from .apt_repo import iter_published_packages
         archive_version = {}
         suite_version = {}
         sources = set()
@@ -385,7 +386,7 @@ if __name__ == "__main__":
 
         async with request.app.database.acquire() as conn:
             for suite in SUITES:
-                for name, jv, av in await debian_state.iter_published_packages(conn, suite):
+                for name, jv, av in await iter_published_packages(conn, suite):
                     sources.add(name)
                     archive_version[name] = av
                     suite_version.setdefault(suite, {})[name] = jv

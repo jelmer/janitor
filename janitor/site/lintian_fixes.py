@@ -130,14 +130,8 @@ async def generate_candidates(db):
         supported_tags.update(fixer.lintian_tags)
     async with db.acquire() as conn:
         candidates = [
-            (package.name, context.split(" "), value)
-            for (
-                package,
-                suite,
-                context,
-                value,
-                success_chance,
-            ) in await iter_candidates(conn, suite=SUITE)
+            (row['package'], row['context'].split(" "), row['value'])
+            for row in await iter_candidates(conn, suite=SUITE)
         ]
         candidates.sort()
     return {
@@ -160,10 +154,8 @@ async def generate_developer_table_page(db, developer):
             if status == "open":
                 open_proposals[package] = url
         candidates = {}
-        for row in await iter_candidates(
-            conn, packages=packages, suite=SUITE
-        ):
-            candidates[row[0].name] = row[2].split(" ")
+        for row in await iter_candidates(conn, packages=packages, suite=SUITE):
+            candidates[row['package']] = row['context'].split(" ")
         runs = {}
         async for run in state.iter_last_unabsorbed_runs(
             conn, suite=SUITE, packages=packages

@@ -28,9 +28,9 @@
 <h2>Candidates</h2>
 
 <ul>
-{% for package, suite, context, value, chance in candidates %}
-{% if suite != 'unchanged' %}
-<li><a href="/{{ suite }}/pkg/{{ package.name }}">{{ package.name }} ({{ suite }})</a></li>
+{% for candidate in candidates %}
+{% if candidate.suite != 'unchanged' %}
+<li><a href="/{{ candidate.suite }}/pkg/{{ candidate.package }}">{{ candidate.package }} ({{ suite }})</a></li>
 {% endif %}
 {% endfor %}
 </ul>

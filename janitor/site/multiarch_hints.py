@@ -84,18 +84,12 @@ async def generate_hint_page(db, hint):
 async def generate_candidates(db):
     candidates = []
     async with db.acquire() as conn:
-        for (
-            package,
-            suite,
-            context,
-            value,
-            success_chance,
-        ) in await iter_candidates(conn, suite=SUITE):
+        for row in await iter_candidates(conn, suite=SUITE):
             hints = {}
-            for h in context.split(" "):
+            for h in row['context'].split(" "):
                 hints.setdefault(h, 0)
                 hints[h] += 1
-            candidates.append((package.name, list(hints.items()), value))
+            candidates.append((row['package'], list(hints.items()), row['value']))
         candidates.sort(key=lambda x: x[2], reverse=True)
     return {"candidates": candidates}
 

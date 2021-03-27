@@ -552,6 +552,7 @@ LEFT JOIN branch ON package.branch_url = branch.url
 
 
 async def handle_published_packages(request):
+    from .apt_repo import iter_published_packages
     suite = request.match_info["suite"]
     async with request.app.db.acquire() as conn:
         response_obj = []
@@ -559,7 +560,7 @@ async def handle_published_packages(request):
             package,
             build_version,
             archive_version,
-        ) in await debian_state.iter_published_packages(conn, suite):
+        ) in await iter_published_packages(conn, suite):
             response_obj.append(
                 {
                     "package": package,

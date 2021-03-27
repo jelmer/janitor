@@ -301,14 +301,8 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:
         kwargs["candidates"] = {
-            suite: (context, value, success_chance)
-            for (
-                package,
-                suite,
-                context,
-                value,
-                success_chance,
-            ) in await iter_candidates(conn, packages=[package['name']])
+            row['suite']: (row['context'], row['value'], row['success_chance'])
+            for row in await iter_candidates(conn, packages=[package['name']])
         }
     return kwargs
 
