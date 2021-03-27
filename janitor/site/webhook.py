@@ -115,12 +115,11 @@ async def get_package_by_upstream_branch_url(
 ) -> Optional[Tuple[str, str]]:
     query = """
 SELECT
-  name, branch_url
+  package AS name, url AS upstream_branch_url
 FROM
-  package
+  upstream_branch_urls
 WHERE
-  name IN (
-    SELECT package FROM upstream_branch_urls WHERE url = ANY($1::text[]))
+  upstream_branch_urls.url = ANY($1::text[]))
 """
     candidates = []
     for url in upstream_branch_urls:
@@ -180,7 +179,7 @@ async def process_webhook(request, db):
         package = await get_package_by_upstream_branch_url(
             conn, urls)
         if package is not None:
-            requestor = "Push hook for %s" % package['branch_url']
+            requestor = "Push hook for %s" % package['upstream_branch_url']
             for suite in await state.iter_publishable_suites(
                 conn, package['name']
             ):
