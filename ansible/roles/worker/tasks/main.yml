@@ -6,6 +6,10 @@
       - python3-ruamel.yaml
       - python3-iniparse
       - python3-toml
+      - python3-docutils
+      - python3-markdown
+      - python3-lxml
+      - python3-requirement-parser
       - devscripts
       - quilt
       - gnome-pkg-tools
