@@ -167,29 +167,29 @@ async def process_webhook(request, db):
         rescheduled = {}
         package = await get_package_by_branch_url(conn, urls)
         if package is not None:
-            requestor = "Push hook for %s" % package.branch_url
+            requestor = "Push hook for %s" % package['branch_url']
             for suite in await state.iter_publishable_suites(
-                    conn, package.name
+                    conn, package['name']
             ):
-                if suite not in rescheduled.get(package.name, []):
+                if suite not in rescheduled.get(package['name'], []):
                     await do_schedule(
-                        conn, package.name, suite, requestor=requestor, bucket="webhook"
+                        conn, package['name'], suite, requestor=requestor, bucket="webhook"
                     )
-                    rescheduled.setdefault(package.name, []).append(suite)
+                    rescheduled.setdefault(package['name'], []).append(suite)
 
         package = await get_package_by_upstream_branch_url(
             conn, urls)
         if package is not None:
-            requestor = "Push hook for %s" % package.branch_url
+            requestor = "Push hook for %s" % package['branch_url']
             for suite in await state.iter_publishable_suites(
-                conn, package.name
+                conn, package['name']
             ):
                 if suite not in ("fresh-releases", "fresh-snapshots"):
                     continue
-                if suite not in rescheduled.get(package.name, []):
+                if suite not in rescheduled.get(package['name'], []):
                     await do_schedule(
-                        conn, package.name, suite, requestor=requestor, bucket="webhook"
+                        conn, package['name'], suite, requestor=requestor, bucket="webhook"
                     )
-                    rescheduled.setdefault(package.name, []).append(suite)
+                    rescheduled.setdefault(package['name'], []).append(suite)
 
         return web.json_response({"rescheduled": rescheduled, "urls": urls})
