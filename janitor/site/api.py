@@ -550,12 +550,11 @@ async def handle_run(request):
             }
         else:
             build_info = None
-        (start_time, finish_time) = run.times
         response_obj.append(
             {
                 "run_id": run.id,
-                "start_time": start_time.isoformat(),
-                "finish_time": finish_time.isoformat(),
+                "start_time": run.start_time.isoformat(),
+                "finish_time": run.finish_time.isoformat(),
                 "command": run.command,
                 "description": run.description,
                 "package": run.package,
