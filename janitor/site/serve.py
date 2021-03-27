@@ -663,7 +663,7 @@ if __name__ == "__main__":
                 conn, package=package.name
             ):
                 merge_proposals.append((url, status, run))
-            available_suites = await debian_state.iter_publishable_suites(
+            available_suites = await state.iter_publishable_suites(
                 conn, package_name)
         runs = state.iter_runs(request.app.database, package=package.name)
         return await generate_pkg_file(
@@ -1520,15 +1520,14 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
         )
     app.router.add_get("/oauth/callback", handle_oauth_callback, name="oauth2-callback")
 
-    from .api import create_app as create_api_app, process_webhook
+    from .api import create_app as create_api_app
+    from .webhook import process_webhook, is_webhook_request
 
     with open(args.policy, "r") as f:
         policy_config = read_policy(f)
 
     async def handle_post_root(request):
-        if ("X-Gitlab-Event" in request.headers or
-                "X-GitHub-Event" in request.headers or
-                "X-Launchpad-Event-Type" in request.headers):
+        if is_webhook_request(request):
             return await process_webhook(request, request.app.database)
         raise web.HTTPMethodNotAllowed(text="Not a supported webhook", allowed_methods=['GET', 'HEAD'])
 

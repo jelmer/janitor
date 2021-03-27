@@ -1450,6 +1450,18 @@ where rb.revision = $1 and run.package is not null
     return None, None
 
 
+async def guess_package_from_branch_url(conn: asyncpg.Connection, url: str):
+    query = """
+SELECT
+  package, maintainer_email
+FROM
+  package
+WHERE
+  branch_url = ANY($1::text[])
+"""
+    return await conn.fetchrow(query, [url.rstrip('/'), url.rstrip('/')+'/'])
+
+
 async def check_existing_mp(
     conn,
     mp,
@@ -1547,10 +1559,10 @@ async def check_existing_mp(
         revision = old_revision
     if maintainer_email is None:
         target_branch_url = mp.get_target_branch_url()
-        package = await debian_state.get_package_by_branch_url(conn, target_branch_url)
-        if package is not None:
-            maintainer_email = package.maintainer_email
-            package_name = package.name
+        row = await guess_package_from_branch_url(conn, target_branch_url)
+        if row is not None:
+            maintainer_email = row['maintainer_email']
+            package_name = row['name']
         else:
             if revision is not None:
                 (

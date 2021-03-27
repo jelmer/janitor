@@ -1,4 +1,19 @@
 #!/usr/bin/python3
+# Copyright (C) 2019-2021 Jelmer Vernooij <jelmer@jelmer.uk>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import aiohttp
 from aiohttp import (
@@ -32,6 +47,7 @@ from . import (
     BuildDiffUnavailable,
     DebdiffRetrievalError,
 )
+from .webhook import process_webhook
 from ..debian import state as debian_state
 from ..policy_pb2 import PolicyConfig
 from ..schedule import (
@@ -40,8 +56,6 @@ from ..schedule import (
     PolicyUnavailable,
 )
 
-
-from breezy.git.urls import git_url_to_bzr_url
 
 
 async def handle_policy(request):
@@ -93,113 +107,6 @@ async def handle_publish(request):
         )
     except ClientConnectorError:
         return web.json_response({"reason": "unable to contact publisher"}, status=400)
-
-
-def get_branch_urls_from_github_webhook(body):
-    url_keys = ["clone_url", "html_url", "git_url", "ssh_url"]
-    urls = []
-    for url_key in url_keys:
-        url = body["repository"][url_key]
-        if "ref" in body:
-            urls.append(git_url_to_bzr_url(url, ref=body["ref"].encode()))
-        urls.append(git_url_to_bzr_url(url))
-    return urls
-
-
-def get_bzr_branch_urls_from_launchpad_webhook(body):
-    return [
-        base + body['bzr_branch_path']
-        for base in [
-            'https://code.launchpad.net/',
-            'https://bazaar.launchpad.net/',
-            'lp:']]
-
-
-def get_git_branch_urls_from_launchpad_webhook(body):
-    path = body['git_repository_path']
-    base_urls = [
-        'https://git.launchpad.net/' + path,
-        'git+ssh://git.launchpad.net/' + path]
-    urls = []
-    for base_url in base_urls:
-        for ref in body['ref_changes']:
-            urls.append(git_url_to_bzr_url(base_url, ref=body["ref"].encode()))
-        urls.append(git_url_to_bzr_url(base_url))
-    return urls
-
-
-def get_branch_urls_from_gitlab_webhook(body):
-    vcs_url = body["project"]["git_http_url"]
-    return [
-        git_url_to_bzr_url(vcs_url, ref=body["ref"].encode()),
-        git_url_to_bzr_url(vcs_url),
-    ]
-
-
-async def process_webhook(request, db):
-    if request.content_type == "application/json":
-        body = await request.json()
-    elif request.content_type == "application/x-www-form-urlencoded":
-        post = await request.post()
-        body = json.loads(post["payload"])
-    else:
-        return web.Response(
-            status=415, text="Invalid content type %s" % request.content_type
-        )
-    async with db.acquire() as conn:
-        if "X-Gitlab-Event" in request.headers:
-            if request.headers["X-Gitlab-Event"] != "Push Hook":
-                return web.json_response({}, status=200)
-            urls = get_branch_urls_from_gitlab_webhook(body)
-            # TODO(jelmer: If nothing found, then maybe fall back to
-            # urlutils.basename(body['project']['path_with_namespace'])?
-        elif "X-GitHub-Event" in request.headers:
-            if request.headers["X-GitHub-Event"] not in ("ping", "push"):
-                return web.json_response({}, status=200)
-            urls = get_branch_urls_from_github_webhook(body)
-        elif "X-Launchpad-Event-Type" in request.headers:
-            if request.headers["X-Launchpad-Event-Type"] not in ("ping", "bzr:push:0.1", "git:push:0.1"):
-                return web.json_response({}, status=200)
-            if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
-                urls = get_bzr_branch_urls_from_launchpad_webhook(body)
-            elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
-                urls = get_git_branch_urls_from_launchpad_webhook(body)
-            else:
-                return web.json_response({}, status=200)
-        else:
-            return web.Response(status=400, text="Unrecognized webhook")
-
-        rescheduled = {}
-        for vcs_url in urls:
-            package = await debian_state.get_package_by_branch_url(conn, vcs_url)
-            if package is not None:
-                requestor = "Push hook for %s" % package.branch_url
-                for suite in await debian_state.iter_publishable_suites(
-                        conn, package.name
-                ):
-                    if suite not in rescheduled.get(package.name, []):
-                        await do_schedule(
-                            conn, package.name, suite, requestor=requestor, bucket="webhook"
-                        )
-                        rescheduled.setdefault(package.name, []).append(suite)
-
-            package = await debian_state.get_package_by_upstream_branch_url(
-                conn, vcs_url
-            )
-            if package is not None:
-                requestor = "Push hook for %s" % package.branch_url
-                for suite in await debian_state.iter_publishable_suites(
-                    conn, package.name
-                ):
-                    if suite not in ("fresh-releases", "fresh-snapshots"):
-                        continue
-                    if suite not in rescheduled.get(package.name, []):
-                        await do_schedule(
-                            conn, package.name, suite, requestor=requestor, bucket="webhook"
-                        )
-                        rescheduled.setdefault(package.name, []).append(suite)
-
-        return web.json_response({"rescheduled": rescheduled, "urls": urls})
 
 
 async def handle_webhook(request):

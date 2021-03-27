@@ -93,47 +93,6 @@ class Package(object):
         )
 
 
-async def get_package_by_branch_url(
-    conn: asyncpg.Connection, branch_url: str
-) -> Optional[Package]:
-    query = """
-SELECT
-""" + ','.join(Package.field_names) + """
-FROM
-  package
-WHERE
-  branch_url = ANY($1::text[])
-"""
-    row = await conn.fetchrow(query, [
-        branch_url,
-        urlutils.split_segment_parameters(branch_url)[0]])
-    if row is None:
-        return None
-    return Package.from_row(row)
-
-
-async def get_package_by_upstream_branch_url(
-    conn: asyncpg.Connection, upstream_branch_url: str
-) -> Optional[Package]:
-    query = """
-SELECT
-""" + ','.join(Package.field_names) + """
-FROM
-  package
-WHERE
-  name IN (
-    SELECT package FROM upstream_branch_urls WHERE url = ANY($1::text[]))
-"""
-    row = await conn.fetchrow(query, [
-        upstream_branch_url.rstrip('/'),
-        upstream_branch_url,
-        urlutils.split_segment_parameters(upstream_branch_url.rstrip('/'))[0],
-        urlutils.split_segment_parameters(upstream_branch_url.rstrip('/')+'/')[0],
-        ])
-    if row is None:
-        return None
-    return Package.from_row(row)
-
 async def iter_packages(conn: asyncpg.Connection, package: Optional[str] = None):
     query = """
 SELECT
@@ -185,28 +144,6 @@ WHERE NOT package.removed
     return [
         tuple([Package.from_row(row[:len(Package.field_names)])] + list(row[len(Package.field_names):]))  # type: ignore
         for row in await conn.fetch(query, *args)
-    ]
-
-
-async def iter_publishable_suites(
-    conn: asyncpg.Connection,
-    package: str
-) -> List[
-    Tuple[
-        str,
-    ]
-]:
-    query = """
-SELECT DISTINCT candidate.suite
-FROM candidate
-INNER JOIN package on package.name = candidate.package
-LEFT JOIN policy ON
-    policy.package = package.name AND
-    policy.suite = candidate.suite
-WHERE NOT package.removed AND package.name = $1
-"""
-    return [
-        row[0] for row in await conn.fetch(query, package)
     ]
 
 
