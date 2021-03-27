@@ -266,7 +266,7 @@ def run_worker(
                 except RemoteGitError as e:
                     if str(e) == 'missing necessary objects':
                         raise WorkerFailure(
-                            'git-missing-necessary-objects', str(e))
+                            'result-push-git-missing-necessary-objects', str(e))
                     else:
                         raise
 
