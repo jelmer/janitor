@@ -85,7 +85,7 @@
 <ul>
 {% for previous_run in previous_runs %}
 {% if previous_run != run %}
-<li>{{ format_timestamp(previous_run.times[0]) }}: <a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code)|safe }}: {{ previous_run.description }}</a></li>
+<li>{{ format_timestamp(previous_run.start_time) }}: <a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code)|safe }}: {{ previous_run.description }}</a></li>
 {% endif %}
 {% endfor %}
 </ul>

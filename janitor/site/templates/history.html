@@ -31,7 +31,7 @@
 <tbody valign="top">
 {% for run in history %}
 <tr class="row-even">
-<td>{{ format_timestamp(run.times[1]) }}</td>
+<td>{{ format_timestamp(run.finish_time) }}</td>
 <td><a class="reference external" href="pkg/{{ run.package }}">{{ run.package }}</a></td>
 <td><a href="/{{ run.suite}}">{{ run.suite }}</a></td>
 <td>{% if run.worker_link %}<a href="{{ run.worker_link }}">{{ run.worker_name }}</a>{% else %}{{ run.worker_name }}{% endif %}</td>
