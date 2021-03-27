@@ -1039,7 +1039,6 @@ order by url, last_run.finish_time desc
 
     async def handle_review_post(request):
         from .review import generate_review
-        from .common import get_run
 
         post = await request.post()
         async with request.app.database.acquire() as conn:
