@@ -142,7 +142,8 @@ def publish(
             'markdownify_debdiff': markdownify_debdiff,
             'role': role,
             }
-        vs.update(subworker_result)
+        if subworker_result:
+            vs.update(subworker_result)
         if debdiff:
             vs['debdiff'] = debdiff.decode("utf-8", "replace")
         if description_format == 'markdown':
