@@ -158,7 +158,7 @@ async def process_webhook(request, db):
                 return web.json_response({}, status=200)
             urls = get_branch_urls_from_github_webhook(body)
         elif "X-Launchpad-Event-Type" in request.headers:
-            if request.headers["X-GitHub-Event"] not in ("ping", "bzr:push:0.1", "git:push:0.1"):
+            if request.headers["X-Launchpad-Event-Type"] not in ("ping", "bzr:push:0.1", "git:push:0.1"):
                 return web.json_response({}, status=200)
             if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
                 urls = get_bzr_branch_urls_from_launchpad_webhook(body)
