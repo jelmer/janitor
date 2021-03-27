@@ -106,8 +106,29 @@ def get_branch_urls_from_github_webhook(body):
     return urls
 
 
+def get_bzr_branch_urls_from_launchpad_webhook(body):
+    return [
+        base + body['bzr_branch_path']
+        for base in [
+            'https://code.launchpad.net/',
+            'https://bazaar.launchpad.net/',
+            'lp:']]
+
+
+def get_git_branch_urls_from_launchpad_webhook(body):
+    path = body['git_repository_path']
+    base_urls = [
+        'https://git.launchpad.net/' + path,
+        'git+ssh://git.launchpad.net/' + path]
+    urls = []
+    for base_url in base_urls:
+        for ref in body['ref_changes']:
+            urls.append(git_url_to_bzr_url(base_url, ref=body["ref"].encode()))
+        urls.append(git_url_to_bzr_url(base_url))
+    return urls
+
+
 def get_branch_urls_from_gitlab_webhook(body):
-    print(body)
     vcs_url = body["project"]["git_http_url"]
     return [
         git_url_to_bzr_url(vcs_url, ref=body["ref"].encode()),
@@ -136,6 +157,15 @@ async def process_webhook(request, db):
             if request.headers["X-GitHub-Event"] not in ("ping", "push"):
                 return web.json_response({}, status=200)
             urls = get_branch_urls_from_github_webhook(body)
+        elif "X-Launchpad-Event-Type" in request.headers:
+            if request.headers["X-GitHub-Event"] not in ("ping", "bzr:push:0.1", "git:push:0.1"):
+                return web.json_response({}, status=200)
+            if request.headers["X-Launchpad-Event-Type"] == 'bzr:push:0.1':
+                urls = get_bzr_branch_urls_from_launchpad_webhook(body)
+            elif request.headers["X-Launchpad-Event-Type"] == 'git:push:0.1':
+                urls = get_git_branch_urls_from_launchpad_webhook(body)
+            else:
+                return web.json_response({}, status=200)
         else:
             return web.Response(status=400, text="Unrecognized webhook")
 
