@@ -24,7 +24,7 @@
 <li class="not-in-archive">This package is not present in the archive.</li>
 {% endif %}
 {% if previous_runs %}
-<li>Last processed: {{ format_timestamp(previous_runs[0].times[1]) }} (took {{ format_duration(previous_runs[0].times[1] - previous_runs[0].times[0]) }})</li>
+<li>Last processed: {{ format_timestamp(previous_runs[0].finish_time) }} (took {{ format_duration(previous_runs[0].finish_time - previous_runs[0].finish_time) }})</li>
 {% endif %}
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
