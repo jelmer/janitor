@@ -372,24 +372,26 @@ async def handle_archive_diff(request):
     run_id = request.match_info["run_id"]
     kind = request.match_info["kind"]
     async with request.app.db.acquire() as conn:
-        run = await state.get_run(conn, run_id)
+        run = await conn.fetchrow(
+            'select id, package, suite, main_branch_revision, result_code from run where id = $1',
+            run_id)
         if run is None:
             raise web.HTTPNotFound(text="No such run: %s" % run_id)
         unchanged_run = await state.get_unchanged_run(
-            conn, run.package, run.main_branch_revision
+            conn, run['package'], run['main_branch_revision']
         )
         if unchanged_run is None:
             return web.json_response(
                 {
                     "reason": "No matching unchanged build for %s" % run_id,
-                    "run_id": [run.id],
+                    "run_id": [run['id']],
                     "unavailable_run_id": None,
-                    "suite": run.suite,
+                    "suite": run['suite'],
                 },
                 status=404,
             )
 
-    if not run.has_artifacts():
+    if run['result_code'] != 'success':
         raise web.HTTPNotFound(text="Build %s has no artifacts" % run_id)
 
     if not unchanged_run.has_artifacts():
@@ -413,12 +415,12 @@ async def handle_archive_diff(request):
         return web.json_response(
             {
                 "reason": "debdiff not calculated yet (run: %s, unchanged run: %s)"
-                % (run.id, unchanged_run.id),
-                "run_id": [unchanged_run.id, run.id],
+                % (run['id'], unchanged_run.id),
+                "run_id": [unchanged_run.id, run['id']],
                 "unavailable_run_id": (
                     e.unavailable_run.id if e.unavailable_run else None
                 ),
-                "suite": [unchanged_run.suite, run.suite],
+                "suite": [unchanged_run.suite, run['suite']],
             },
             status=404,
         )
