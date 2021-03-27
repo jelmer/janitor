@@ -9,7 +9,6 @@
       - python3-docutils
       - python3-markdown
       - python3-lxml
-      - python3-requirement-parser
       - devscripts
       - quilt
       - gnome-pkg-tools
@@ -28,6 +27,9 @@
   command: sbuild-update -udcar "{{ item.item['chroot'] }}"
   with_items: "{{ sbuild.results }}"
   when: item.stat.exists
+- name: Install requirement-parser
+  pip:
+    name: requirement-parser
 - name: Update schroot from cron job
   cron:
     name: "update schroot for {{ item['name'] }}"
