@@ -315,7 +315,7 @@ async def publish_one(
       pkg: Package name
       command: Command that was run
     """
-    assert mode in SUPPORTED_MODES, "mode is %r" % mode
+    assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
     local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (suite, role))
     if local_branch is None:
         local_branch = vcs_manager.get_branch(pkg, legacy_local_branch_name)
@@ -1064,9 +1064,9 @@ async def publish_request(request):
         roles = [e[0] for e in run.result_branches]
 
     if mode:
-        branches = [(r, (mode, None)) for r in roles]
+        branches = [(r, mode) for r in roles]
     else:
-        branches = [(r, publish_policy.get(r, (MODE_SKIP, None))) for r in roles]
+        branches = [(r, publish_policy.get(r, (MODE_SKIP, None))[0]) for r in roles]
 
     publish_ids = {}
     for role, mode in branches:

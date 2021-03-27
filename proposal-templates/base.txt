@@ -26,7 +26,7 @@ Build and test logs for this branch can be found at
 These changes have no impact on the binary debdiff. See
 {{ external_url }}/api/run/{{ log_id }}/debdiff?filter_boring=1 to
 download the raw debdiff.
-{% elif len(debdiff.splitlines(False)) < DEBDIFF_INLINE_THRESHOLD %}
+{% elif debdiff.splitlines(False)|length < DEBDIFF_INLINE_THRESHOLD %}
 These changes affect the binary packages:
 
 {{ debdiff }}
