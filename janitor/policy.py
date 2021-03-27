@@ -225,7 +225,7 @@ async def main(argv):
     db = state.Database(config.database_location)
     num_updated = 0
     async with db.acquire() as conn:
-        async for (package, suite, cur_pol) in state.iter_policy(conn, package=args.package):
+        async for (package, suite, cur_pol) in iter_policy(conn, package=args.package):
             current_policy[(package, suite)] = cur_pol
         for package in await debian_state.iter_packages(conn, package=args.package):
             updated = False
