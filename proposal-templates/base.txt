@@ -1,11 +1,8 @@
-{# vim: ft=jinja
-#}
 {# Maximum number of lines of debdiff to inline in the merge request
    description. If this threshold is reached, we'll just include a link to the
    debdiff.
-#}
-{% set DEBDIFF_INLINE_THRESHOLD = 40 %}
-
+-#}
+{% set DEBDIFF_INLINE_THRESHOLD = 40 -%}
 {% block runner %}{% endblock %}
 
 This merge proposal was created automatically by the Janitor bot.
