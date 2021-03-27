@@ -2,7 +2,7 @@
 
 import asyncpg
 from ..debian import state as debian_state
-from .common import generate_pkg_context
+from .common import generate_pkg_context, iter_candidates
 
 
 SUITE = "multiarch-fixes"
@@ -90,7 +90,7 @@ async def generate_candidates(db):
             context,
             value,
             success_chance,
-        ) in await debian_state.iter_candidates(conn, suite=SUITE):
+        ) in await iter_candidates(conn, suite=SUITE):
             hints = {}
             for h in context.split(" "):
                 hints.setdefault(h, 0)

@@ -91,9 +91,9 @@ async def open_guessed_salsa_branch(
 ):
     # Don't do this as a top-level export, since it imports asyncpg, which
     # isn't available on jenkins.debian.net.
-    from ..debian import state as debian_state
 
-    package = await debian_state.get_package(conn, pkg)
+    package = await conn.fetchrow(
+        'SELECT name, maintainer_email FROM package WHERE name = $1', pkg)
     probers = select_probers("git")
     vcs_url, params = urlutils.split_segment_parameters_raw(vcs_url)
 
@@ -101,7 +101,7 @@ async def open_guessed_salsa_branch(
 
     for salsa_url in itertools.chain(
         possible_urls_from_alioth_url(vcs_type, vcs_url),
-        possible_salsa_urls_from_package_name(package.name, package.maintainer_email),
+        possible_salsa_urls_from_package_name(package['name'], package['maintainer_email']),
     ):
         if not salsa_url or salsa_url in tried:
             continue

@@ -136,9 +136,9 @@ async def update_package_metadata(
 
 
 async def mark_removed_packages(conn, distribution: str, removals: List[PackageRemoval]):
-    existing_packages = {
-        package.name: package for package in await debian_state.iter_packages(conn)
-    }
+    existing_packages = set([
+        row['name'] for row in await conn.fetch(
+            "SELECT name FROM packge WHERE NOT removed")])
     logging.info("Updating removals.")
     query = """\
 UPDATE package SET removed = True
@@ -148,8 +148,7 @@ WHERE name = $1 AND distribution = $2 AND archive_version <= $3
         query, [
         (removal.name, distribution, Version(removal.version) if removal.version else None)
         for removal in removals
-        if removal.name in existing_packages
-        and not existing_packages[removal.name].removed])
+        if removal.name in existing_packages])
 
 
 def iter_packages_from_script(stdin) -> Tuple[List[PackageMetadata], List[PackageRemoval]]:

@@ -182,6 +182,24 @@ async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
         )
 
 
+async def iter_packages(conn: asyncpg.Connection, package: Optional[str] = None):
+    query = """
+SELECT
+  name,
+  vcs_url,
+  maintainer_email,
+  uploader_emails,
+  in_base
+FROM
+  package
+"""
+    args = []
+    if package:
+        query += " WHERE name = $1"
+        args.append(package)
+    return await conn.fetch(query, *args)
+
+
 async def main(argv):
     import argparse
     from .config import read_config
@@ -227,24 +245,24 @@ async def main(argv):
     async with db.acquire() as conn:
         async for (package, suite, cur_pol) in iter_policy(conn, package=args.package):
             current_policy[(package, suite)] = cur_pol
-        for package in await debian_state.iter_packages(conn, package=args.package):
+        for package in await iter_packages(conn, package=args.package):
             updated = False
             for suite in suites:
                 intended_policy = apply_policy(
                     policy,
                     suite,
-                    package.name,
-                    package.vcs_url,
-                    package.maintainer_email,
-                    package.uploader_emails,
-                    package.in_base,
+                    package['name'],
+                    package['vcs_url'],
+                    package['maintainer_email'],
+                    package['uploader_emails'],
+                    package['in_base'],
                     release_stages_passed
                 )
-                stored_policy = current_policy.get((package.name, suite))
+                stored_policy = current_policy.get((package['name'], suite))
                 if stored_policy != intended_policy:
-                    logging.debug("%s/%s -> %r" % (package.name, suite, intended_policy))
+                    logging.debug("%s/%s -> %r" % (package['name'], suite, intended_policy))
                     await update_policy(
-                        conn, package.name, suite, *intended_policy
+                        conn, package['name'], suite, *intended_policy
                     )
                     updated = True
             if updated:

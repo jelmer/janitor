@@ -130,7 +130,8 @@ async def handle_schedule(request):
     except ValueError:
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
     async with request.app.db.acquire() as conn:
-        package = await debian_state.get_package(conn, package)
+        package = await conn.fetchrow(
+            'SELECT name, branch_url FROM package WHERE name = $1', package)
         if package is None:
             return web.json_response({"reason": "Package not found"}, status=404)
         if request.user:
@@ -140,12 +141,12 @@ async def handle_schedule(request):
                 requestor = request.user["name"]
         else:
             requestor = "user from web UI"
-        if package.branch_url is None:
+        if package['branch_url'] is None:
             return web.json_response({"reason": "No branch URL defined."}, status=400)
         try:
             offset, estimated_duration = await do_schedule(
                 conn,
-                package.name,
+                package['name'],
                 suite,
                 offset,
                 refresh=refresh,
@@ -157,10 +158,10 @@ async def handle_schedule(request):
                 {"reason": "Publish policy not yet available."}, status=503
             )
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, suite, package.name
+            conn, suite, package['name']
         )
     response_obj = {
-        "package": package.name,
+        "package": package['name'],
         "suite": suite,
         "offset": offset,
         "estimated_duration_seconds": estimated_duration.total_seconds(),
@@ -180,30 +181,29 @@ async def handle_schedule_control(request):
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
     async with request.app.db.acquire() as conn:
         run = await conn.fetchrow(
-            "SELECT main_branch_revision, package FROM run WHERE id = $1",
+            "SELECT main_branch_revision, package, branch_url FROM run "
+            "LEFT JOIN package ON package.name = run.package WHERE id = $1",
             run_id)
         if run is None:
             return web.json_response({"reason": "Run not found"}, status=404)
-        package = await debian_state.get_package(conn, run['package'])
         if request.user:
             requestor = request.user["email"]
         else:
             requestor = "user from web UI"
-        if package.branch_url is None:
+        if run['branch_url'] is None:
             return web.json_response({"reason": "No branch URL defined."}, status=400)
         offset, estimated_duration = await do_schedule_control(
-            conn,
-            package.name,
+            conn, run['package'],
             offset=offset,
             refresh=refresh,
             requestor=requestor,
             main_branch_revision=run['main_branch_revision'],
         )
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, "unchanged", package.name
+            conn, "unchanged", run['package']
         )
     response_obj = {
-        "package": package.name,
+        "package": run['package'],
         "suite": "unchanged",
         "offset": offset,
         "estimated_duration_seconds": estimated_duration.total_seconds(),
@@ -217,14 +217,17 @@ async def handle_package_list(request):
     name = request.match_info.get("package")
     response_obj = []
     async with request.app.db.acquire() as conn:
-        for package in await debian_state.iter_packages(conn, package=name):
-            if not name and package.removed:
-                continue
+        query = 'SELECT name, maintainer_email, branch_url FROM package WHERE NOT removed'
+        args = []
+        if name:
+            query += ' AND name = $1'
+            args.append(name)
+        for row in await conn.fetch(query, *args):
             response_obj.append(
                 {
-                    "name": package.name,
-                    "maintainer_email": package.maintainer_email,
-                    "branch_url": package.branch_url,
+                    "name": row['name'],
+                    "maintainer_email": row['maintainer_email'],
+                    "branch_url": row['branch_url'],
                 }
             )
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
@@ -233,10 +236,8 @@ async def handle_package_list(request):
 async def handle_packagename_list(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
-        for package in await debian_state.iter_packages(conn):
-            if package.removed:
-                continue
-            response_obj.append(package.name)
+        for row in await conn.fetch('SELECT name FROM package WHERE NOT removed'):
+            response_obj.append(row['name'])
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
 
 

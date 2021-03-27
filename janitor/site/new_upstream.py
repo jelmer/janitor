@@ -4,28 +4,30 @@ from functools import partial
 from janitor import state
 from . import tracker_url
 from janitor.debian import state as debian_state
-from .common import get_candidate, get_run, get_last_unabsorbed_run
+from .common import get_candidate, get_run, get_last_unabsorbed_run, iter_candidates
 
 
 async def generate_pkg_file(
     db, config, client, differ_url, package, suite, run_id=None
 ):
     async with db.acquire() as conn:
-        package = await debian_state.get_package(conn, package)
+        package = await conn.fetchrow(
+            'SELECT name, maintainer_email, uploader_emails, removed, branch_url, '
+            'vcs_url, vcs_browse FROM package WHERE name = $1', package)
         if package is None:
             raise KeyError(package)
         if run_id is not None:
             run = await get_run(conn, run_id)
             merge_proposals = []
         else:
-            run = await get_last_unabsorbed_run(conn, package.name, suite)
+            run = await get_last_unabsorbed_run(conn, package['name'], suite)
             merge_proposals = [
                 (url, status)
                 for (unused_package, url, status) in await state.iter_proposals(
-                    conn, package.name, suite=suite
+                    conn, package['name'], suite=suite
                 )
             ]
-        candidate = await get_candidate(conn, package.name, suite)
+        candidate = await get_candidate(conn, package['name'], suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
@@ -53,19 +55,19 @@ async def generate_pkg_file(
             result = run.result
             branch_url = run.branch_url
         previous_runs = [
-            r async for r in state.iter_previous_runs(conn, package.name, suite)
+            r async for r in state.iter_previous_runs(conn, package['name'], suite)
         ]
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, suite, package.name
+            conn, suite, package['name']
         )
     return {
-        "package": package.name,
+        "package": package['name'],
         "merge_proposals": merge_proposals,
-        "maintainer_email": package.maintainer_email,
-        "uploader_emails": package.uploader_emails,
-        "removed": package.removed,
-        "vcs_url": package.branch_url,
-        "vcs_browse": package.vcs_browse,
+        "maintainer_email": package['maintainer_email'],
+        "uploader_emails": package['uploader_emails'],
+        "removed": package['removed'],
+        "vcs_url": package['branch_url'],
+        "vcs_browse": package['vcs_browse'],
         "command": command,
         "build_version": build_version,
         "result_code": result_code,
@@ -97,7 +99,7 @@ async def generate_candidates(db, suite):
                 context,
                 value,
                 success_chance,
-            ) in await debian_state.iter_candidates(conn, suite=suite)
+            ) in await iter_candidates(conn, suite=suite)
         ]
     candidates.sort()
     return {"candidates": candidates, "suite": suite}

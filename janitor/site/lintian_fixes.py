@@ -2,7 +2,7 @@
 
 import asyncpg
 from typing import List, Dict
-from .common import generate_pkg_context
+from .common import generate_pkg_context, iter_candidates
 from silver_platter.debian.lintian import (
     available_lintian_fixers,
 )
@@ -137,7 +137,7 @@ async def generate_candidates(db):
                 context,
                 value,
                 success_chance,
-            ) in await debian_state.iter_candidates(conn, suite=SUITE)
+            ) in await iter_candidates(conn, suite=SUITE)
         ]
         candidates.sort()
     return {
@@ -160,7 +160,7 @@ async def generate_developer_table_page(db, developer):
             if status == "open":
                 open_proposals[package] = url
         candidates = {}
-        for row in await debian_state.iter_candidates(
+        for row in await iter_candidates(
             conn, packages=packages, suite=SUITE
         ):
             candidates[row[0].name] = row[2].split(" ")

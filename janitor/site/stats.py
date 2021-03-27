@@ -6,6 +6,7 @@ from . import env, json_chart_data, html_template
 from aiohttp import web
 from .. import state
 from ..debian import state as debian_state
+from .common import iter_candidates
 
 
 async def write_maintainer_stats(conn):
@@ -35,7 +36,7 @@ async def write_maintainer_overview(conn, maintainer):
     for package, url, status in await state.iter_proposals(conn, packages):
         proposals.append((package, url, status))
     candidates = []
-    for row in await debian_state.iter_candidates(conn, packages=packages):
+    for row in await iter_candidates(conn, packages=packages):
         candidates.append(row)
 
     query = """

@@ -93,60 +93,6 @@ class Package(object):
         )
 
 
-async def iter_packages(conn: asyncpg.Connection, package: Optional[str] = None):
-    query = """
-SELECT
-""" + ','.join(Package.field_names) + """
-FROM
-  package
-"""
-    args = []
-    if package:
-        query += " WHERE name = $1"
-        args.append(package)
-    query += " ORDER BY name ASC"
-    return [Package.from_row(row) for row in await conn.fetch(query, *args)]
-
-
-async def get_package(conn: asyncpg.Connection, name):
-    try:
-        return list(await iter_packages(conn, package=name))[0]
-    except IndexError:
-        return None
-
-
-async def iter_candidates(
-    conn: asyncpg.Connection,
-    packages: Optional[List[str]] = None,
-    suite: Optional[str] = None,
-) -> List[Tuple[Package, str, Optional[str], Optional[int], Optional[float]]]:
-    query = """
-SELECT
-""" + ','.join(['package.%s' % field for field in Package.field_names]) + """,
-  candidate.suite,
-  candidate.context,
-  candidate.value,
-  candidate.success_chance
-FROM candidate
-INNER JOIN package on package.name = candidate.package
-WHERE NOT package.removed
-"""
-    args = []
-    if suite is not None and packages is not None:
-        query += " AND package.name = ANY($1::text[]) AND suite = $2"
-        args.extend([packages, suite])
-    elif suite is not None:
-        query += " AND suite = $1"
-        args.append(suite)
-    elif packages is not None:
-        query += " AND package.name = ANY($1::text[])"
-        args.append(packages)
-    return [
-        tuple([Package.from_row(row[:len(Package.field_names)])] + list(row[len(Package.field_names):]))  # type: ignore
-        for row in await conn.fetch(query, *args)
-    ]
-
-
 async def version_available(
     conn: asyncpg.Connection,
     package: str,

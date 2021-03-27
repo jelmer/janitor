@@ -605,19 +605,16 @@ if __name__ == "__main__":
         pkg = request.query.get("package")
         if pkg:
             async with request.app.database.acquire() as conn:
-                package = await debian_state.get_package(conn, pkg)
-                if package is None:
+                if not await conn.fetchrow('SELECT FROM package WHERE name = $1', pkg):
                     raise web.HTTPNotFound(text="No package with name %s" % pkg)
             return web.HTTPFound(pkg)
-        from .pkg import generate_pkg_list
 
         async with request.app.database.acquire() as conn:
             packages = [
-                (item.name, item.maintainer_email)
-                for item in await debian_state.iter_packages(conn)
-                if not item.removed
-            ]
-        return await generate_pkg_list(packages)
+                row['name']
+                for row in await conn.fetch(
+                    'SELECT name, maintainer_email FROM package WHERE NOT removed')]
+        return {'packages': packages}
 
     @html_template(
         "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600"}
@@ -627,10 +624,9 @@ if __name__ == "__main__":
 
         async with request.app.database.acquire() as conn:
             packages = [
-                (item.name, item.maintainer_email)
-                for item in await debian_state.iter_packages(conn)
-                if not item.removed
-            ]
+                (row['name'], row['maintainer_email'])
+                for row in await conn.fetch(
+                    'SELECT name, maintainer_email FROM package WHERE NOT removed')]
         return await generate_maintainer_list(packages)
 
     @html_template("maintainer-index.html", headers={"Cache-Control": "max-age=600"})
@@ -655,17 +651,19 @@ if __name__ == "__main__":
 
         package_name = request.match_info["pkg"]
         async with request.app.database.acquire() as conn:
-            package = await debian_state.get_package(conn, package_name)
+            package = await conn.fetchrow(
+                'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
+                'vcs_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
             if package is None:
                 raise web.HTTPNotFound(text="No package with name %s" % package_name)
             merge_proposals = []
             async for (run, url, status) in state.iter_proposals_with_run(
-                conn, package=package.name
+                conn, package=package['name']
             ):
                 merge_proposals.append((url, status, run))
             available_suites = await state.iter_publishable_suites(
                 conn, package_name)
-        runs = state.iter_runs(request.app.database, package=package.name)
+        runs = state.iter_runs(request.app.database, package=package['name'])
         return await generate_pkg_file(
             request.app.database, request.app.config, package, merge_proposals, runs,
             available_suites
