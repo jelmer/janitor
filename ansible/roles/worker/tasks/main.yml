@@ -29,7 +29,7 @@
   when: item.stat.exists
 - name: Install requirement-parser
   pip:
-    name: requirement-parser
+    name: requirements-parser
 - name: Update schroot from cron job
   cron:
     name: "update schroot for {{ item['name'] }}"
