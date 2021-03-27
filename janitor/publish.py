@@ -757,7 +757,7 @@ async def publish_from_policy(
                 proposal_rate_limited_count.labels(
                     package=run.package, suite=run.suite
                 ).inc()
-                logger.warning(
+                logger.debug(
                     "Not creating proposal for %s/%s: %s", run.package, run.suite, e
                 )
                 mode = MODE_BUILD_ONLY
@@ -766,7 +766,7 @@ async def publish_from_policy(
                     conn, run.suite, run.package)
                 if last_published is not None and \
                         (datetime.now()-last_published).days < max_frequency_days:
-                    logger.warning(
+                    logger.debug(
                         'Not creating proposal for %s/%s: '
                         'was published already in last %d days (at %s)',
                         run.package, run.suite, max_frequency_days, last_published)
