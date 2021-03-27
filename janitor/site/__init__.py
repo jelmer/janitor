@@ -29,6 +29,8 @@ from janitor.vcs import RemoteVcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
+    'autopkgtest-chroot-not-found',
+    'build-chroot-not-found',
     ]
 
 
