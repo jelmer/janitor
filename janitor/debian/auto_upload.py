@@ -152,8 +152,8 @@ async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, suites=N
         if suites:
             query += ' AND suite = ANY($1::text[])'
             args.append(suites)
-        for log_id in await conn.fetch(query, *args):
-            await upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid)
+        for row in await conn.fetch(query, *args):
+            await upload_build_result(row['id'], artifact_manager, dput_host, debsign_keyid)
 
 
 async def main(argv=None):
@@ -207,7 +207,7 @@ async def main(argv=None):
         from .. import state
         db = state.Database(config.database_location)
         tasks.append(loop.create_task(
-            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.suite))
+            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.suite)))
 
     await asyncio.gather(*tasks)
 
