@@ -28,6 +28,8 @@ from janitor.site import (
     tracker_url,
 )
 
+from .common import iter_candidates
+
 FAIL_BUILD_LOG_LEN = 15
 
 BUILD_LOG_NAME = "build.log"
@@ -147,17 +149,19 @@ async def generate_run_file(
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, run.suite, run.package
         )
-        package = await debian_state.get_package(conn, run.package)
+        package = await conn.fetchrow(
+            'SELECT name, vcs_type, vcs_url, vcs_browse, vcswatch_version '
+            'FROM package WHERE name = $1', run.package)
         if run.revision and run.result_code in ("success", "nothing-new-to-do"):
             publish_history = await get_publish_history(conn, run.revision)
         else:
             publish_history = []
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
-    kwargs["vcs_type"] = package.vcs_type
-    kwargs["vcs_url"] = package.vcs_url
-    kwargs["vcs_browse"] = package.vcs_browse
-    kwargs["vcswatch_version"] = package.vcswatch_version
+    kwargs["vcs_type"] = package['vcs_type']
+    kwargs["vcs_url"] = package['vcs_url']
+    kwargs["vcs_browse"] = package['vcs_browse']
+    kwargs["vcswatch_version"] = package['vcswatch_version']
     kwargs["is_admin"] = is_admin
     kwargs["publish_history"] = publish_history
 
@@ -284,15 +288,15 @@ async def generate_run_file(
 
 async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites):
     kwargs = {}
-    kwargs["package"] = package.name
-    kwargs["vcswatch_status"] = package.vcswatch_status
-    kwargs["maintainer_email"] = package.maintainer_email
-    kwargs["vcs_type"] = package.vcs_type
-    kwargs["vcs_url"] = package.vcs_url
-    kwargs["vcs_browse"] = package.vcs_browse
+    kwargs["package"] = package['name']
+    kwargs["vcswatch_status"] = package['vcswatch_status']
+    kwargs["maintainer_email"] = package['maintainer_email']
+    kwargs["vcs_type"] = package['vcs_type']
+    kwargs["vcs_url"] = package['vcs_url']
+    kwargs["vcs_browse"] = package['vcs_browse']
     kwargs["merge_proposals"] = merge_proposals
     kwargs["runs"] = [run async for run in runs]
-    kwargs["removed"] = package.removed
+    kwargs["removed"] = package['removed']
     kwargs["tracker_url"] = partial(tracker_url, config)
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:
@@ -304,13 +308,9 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
                 context,
                 value,
                 success_chance,
-            ) in await debian_state.iter_candidates(conn, packages=[package.name])
+            ) in await iter_candidates(conn, packages=[package['name']])
         }
     return kwargs
-
-
-async def generate_pkg_list(packages):
-    return {"packages": [name for (name, maintainer) in packages]}
 
 
 async def generate_maintainer_list(packages):

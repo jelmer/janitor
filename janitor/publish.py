@@ -1044,18 +1044,19 @@ async def publish_request(request):
     post = await request.post()
     mode = post.get("mode")
     async with request.app.db.acquire() as conn:
-        try:
-            package = await debian_state.get_package(conn, package)
-        except IndexError:
+        package = await conn.fetchrow(
+            'SELECT name, maintainer_email FROM package WHERE name = $1',
+            package)
+        if package is None:
             return web.json_response({}, status=400)
 
-        run = await get_last_effective_run(conn, package.name, suite)
+        run = await get_last_effective_run(conn, package['name'], suite)
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy = (await state.get_publish_policy(conn, package.name, suite))[0]
+        publish_policy = (await state.get_publish_policy(conn, package['name'], suite))[0]
 
-        logger.info("Handling request to publish %s/%s", package.name, suite)
+        logger.info("Handling request to publish %s/%s", package['name'], suite)
 
     if role is not None:
         roles = [role]
@@ -1086,7 +1087,7 @@ async def publish_request(request):
                 run,
                 mode,
                 role,
-                package.maintainer_email,
+                package['maintainer_email'],
                 vcs_manager=vcs_manager,
                 rate_limiter=rate_limiter,
                 dry_run=dry_run,
@@ -1095,7 +1096,7 @@ async def publish_request(request):
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
-            ), 'publish of %s/%s, role %s' % (package, suite, role)
+            ), 'publish of %s/%s, role %s' % (package['name'], suite, role)
         )
 
     if not publish_ids:
@@ -1614,12 +1615,13 @@ async def check_existing_mp(
         logger.warning("%s: Unable to find any relevant runs.", mp.url)
         return False
 
-    package = await debian_state.get_package(conn, mp_run['package'])
-    if package is None:
+    removed = await conn.fetchval(
+        'SELECT removed FROM package WHERE name = $1', mp_run['package'])
+    if removed is None:
         logger.warning("%s: Unable to find package.", mp.url)
         return False
 
-    if package.removed:
+    if removed:
         logger.info(
             "%s: package has been removed from the archive, " "closing proposal.",
             mp.url,
@@ -2118,7 +2120,7 @@ async def listen_to_runner(
     differ_url: str,
     require_binary_diff: bool = False,
 ):
-    async def process_run(conn, run, package):
+    async def process_run(conn, run, maintainer_email, uploader_emails, branch_url):
         publish_policy, update_changelog, command = await state.get_publish_policy(
             conn, run.package, run.suite
         )
@@ -2129,9 +2131,9 @@ async def listen_to_runner(
                 vcs_manager,
                 run,
                 role,
-                package.maintainer_email,
-                package.uploader_emails,
-                package.branch_url,
+                maintainer_email,
+                uploader_emails,
+                branch_url,
                 topic_publish,
                 topic_merge_proposal,
                 mode,
@@ -2156,15 +2158,25 @@ async def listen_to_runner(
                 continue
             async with db.acquire() as conn:
                 # TODO(jelmer): Fold these into a single query ?
-                package = await debian_state.get_package(conn, result["package"])
+                package = await conn.fetchrow(
+                    'SELECT maintainer_email, uploader_emails, branch_url FROM package WHERE name = $1',
+                    result["package"])
+                if package is None:
+                    logging.warning('Package %s not in database?', result['package'])
+                    continue
                 run = await get_run(conn, result["log_id"])
                 if run.suite != "unchanged":
-                    await process_run(conn, run, package)
+                    await process_run(
+                        conn, run, package['maintainer_email'],
+                        package['uploader_emails'], package['branch_url'])
                 else:
                     for run in await iter_control_matching_runs(
                             conn, main_branch_revision=run.revision,
                             package=run.package):
-                        await process_run(conn, run, package)
+                        await process_run(
+                            conn, run, package['maintainer_email'],
+                            package['uploader_emails'],
+                            package['branch_url'])
 
 
 def main(argv=None):

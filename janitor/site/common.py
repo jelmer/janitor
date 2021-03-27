@@ -3,7 +3,7 @@
 from aiohttp import ClientConnectorError
 import asyncpg
 from functools import partial
-from typing import Optional
+from typing import Optional, List, Tuple
 import urllib.parse
 
 from janitor import state
@@ -24,6 +24,39 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
         package,
         suite,
     )
+
+
+async def iter_candidates(
+    conn: asyncpg.Connection,
+    packages: Optional[List[str]] = None,
+    suite: Optional[str] = None,
+) -> List[Tuple[debian_state.Package, str, Optional[str], Optional[int], Optional[float]]]:
+    query = """
+SELECT
+""" + ','.join(['package.%s' % field for field in debian_state.Package.field_names]) + """,
+  candidate.suite,
+  candidate.context,
+  candidate.value,
+  candidate.success_chance
+FROM candidate
+INNER JOIN package on package.name = candidate.package
+WHERE NOT package.removed
+"""
+    args = []
+    if suite is not None and packages is not None:
+        query += " AND package.name = ANY($1::text[]) AND suite = $2"
+        args.extend([packages, suite])
+    elif suite is not None:
+        query += " AND suite = $1"
+        args.append(suite)
+    elif packages is not None:
+        query += " AND package.name = ANY($1::text[])"
+        args.append(packages)
+    return [
+        (debian_state.Package.from_row(row), row['candidate.suite'], row['candidate.context'], row['candidate.value'],
+         row['candidate.success_chance'])
+        for row in await conn.fetch(query, *args)
+    ]
 
 
 async def get_last_unabsorbed_run(
@@ -97,7 +130,7 @@ async def generate_pkg_context(
     db, config, suite, policy, client, differ_url, vcs_store_url, package, run_id=None
 ):
     async with db.acquire() as conn:
-        package = await debian_state.get_package(conn, name=package)
+        package = await conn.fetchrow('SELECT name, maintainer_email, uploader_emails, removed, vcs_url, vcs_browse, vcswatch_version FROM package WHERE name = $1', package)
         if package is None:
             raise KeyError(package)
         if run_id is not None:
@@ -106,18 +139,18 @@ async def generate_pkg_context(
                 raise KeyError(run_id)
             merge_proposals = []
         else:
-            run = await get_last_unabsorbed_run(conn, package.name, suite)
+            run = await get_last_unabsorbed_run(conn, package['name'], suite)
             merge_proposals = [
                 (url, status)
                 for (unused_package, url, status) in await state.iter_proposals(
-                    conn, package.name, suite=suite
+                    conn, package['name'], suite=suite
                 )
             ]
         (
             publish_policy,
             changelog_policy,
             unused_command,
-        ) = await state.get_publish_policy(conn, package.name, suite)
+        ) = await state.get_publish_policy(conn, package['name'], suite)
         if run is None:
             # No runs recorded
             command = None
@@ -147,7 +180,7 @@ async def generate_pkg_context(
             else:
                 unchanged_run = None
 
-        candidate = await get_candidate(conn, package.name, suite)
+        candidate = await get_candidate(conn, package['name'], suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
@@ -155,10 +188,10 @@ async def generate_pkg_context(
             candidate_value = None
             candidate_success_chance = None
         previous_runs = [
-            x async for x in state.iter_previous_runs(conn, package.name, suite)
+            x async for x in state.iter_previous_runs(conn, package['name'], suite)
         ]
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, suite, package.name
+            conn, suite, package['name']
         )
 
     async def show_diff(role):
@@ -203,16 +236,16 @@ async def generate_pkg_context(
         return await get_vcs_type(client, vcs_store_url, run.package)
 
     return {
-        "package": package.name,
+        "package": package['name'],
         "unchanged_run": unchanged_run,
         "merge_proposals": merge_proposals,
-        "maintainer_email": package.maintainer_email,
-        "uploader_emails": package.uploader_emails,
-        "removed": package.removed,
-        "vcs_url": package.vcs_url,
+        "maintainer_email": package['maintainer_email'],
+        "uploader_emails": package['uploader_emails'],
+        "removed": package['removed'],
+        "vcs_url": package['vcs_url'],
         "vcs_type": vcs_type,
-        "vcs_browse": package.vcs_browse,
-        "vcswatch_version": package.vcswatch_version,
+        "vcs_browse": package['vcs_browse'],
+        "vcswatch_version": package['vcswatch_version'],
         "command": command,
         "build_version": build_version,
         "result_code": result_code,
@@ -247,7 +280,7 @@ async def generate_candidates(db, suite):
             context,
             value,
             success_chance,
-        ) in await debian_state.iter_candidates(conn, suite=suite):
+        ) in await iter_candidates(conn, suite=suite):
             candidates.append((package.name, value))
         candidates.sort(key=lambda x: x[1], reverse=True)
     return {"candidates": candidates, "suite": suite}
