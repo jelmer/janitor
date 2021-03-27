@@ -6,7 +6,7 @@
 #}
 {% set DEBDIFF_INLINE_THRESHOLD = 40 %}
 
-{{ runner }}
+{% block runner %}{% endblock %}
 
 This merge proposal was created automatically by the [Janitor bot]({{ external_url }}/{{ suite }}).
 For more information, including instructions on how to disable
