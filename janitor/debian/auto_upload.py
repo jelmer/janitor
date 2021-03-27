@@ -143,7 +143,7 @@ async def listen_to_runner(
                 continue
             if result['target']['name'] != 'debian':
                 continue
-            if not distributions or result['target']['build_distribution'] in distributions:
+            if not distributions or result['target']['details']['build_distribution'] in distributions:
                 await upload_build_result(result['log_id'], artifact_manager, dput_host, debsign_keyid)
 
 
@@ -211,6 +211,7 @@ async def main(argv=None):
             future.result()
         except BaseException:
             logging.exception('listening to runner failed')
+            sys.exit(1)
 
     runner_task = loop.create_task(
         listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution))
