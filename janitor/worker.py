@@ -564,10 +564,17 @@ class DebianTarget(Target):
         except subprocess.CalledProcessError:
             logger.warning('lintian failed to run.')
             return None
+        lines = []
+        for line in lintian_output.splitlines(True):
+            lines.append(line)
+            if line == b"}\n":
+                break
         try:
-            return json.loads(lintian_output)
+            return json.loads(b''.join(lines))
         except json.decoder.JSONDecodeError:
-            logging.warning('Error parsing lintian output: %r', lintian_output)
+            logging.warning(
+                'Error parsing lintian output: %r (%r)', lintian_output,
+                b''.join(lines))
             return None
 
     def directory_name(self):
