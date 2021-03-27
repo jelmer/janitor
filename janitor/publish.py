@@ -763,7 +763,7 @@ async def publish_from_policy(
                 mode = MODE_BUILD_ONLY
             if max_frequency_days is not None:
                 last_published = await check_last_published(
-                    conn, run.suite, run.package, max_frequency_days)
+                    conn, run.suite, run.package)
                 if last_published is not None and \
                         (datetime.now()-last_published).days < max_frequency_days:
                     logger.warning(
