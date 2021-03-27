@@ -17,8 +17,8 @@ or close the merge proposal when all changes are applied through other means
 
 Build and test logs for this branch can be found at
 {{ external_url }}/{{ suite }}/pkg/{{ package }}/{{ log_id }}.
-
 {% if role == 'main' and debdiff %}
+
 {% if not debdiff_is_empty(debdiff) %}
 These changes have no impact on the [binary debdiff](
 {{ external_url }}/api/run/{{ log_id }}/debdiff?filter_boring=1).
