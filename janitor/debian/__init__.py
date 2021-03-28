@@ -65,8 +65,8 @@ def find_changes(path, package):
     version = None
     distribution = None
     for entry in os.scandir(path):
-        if entry.name.endswith(".changes"):
-            break
+        if not entry.name.endswith(".changes"):
+            continue
         with open(entry.path, "r") as f:
             changes = Changes(f)
             if changes['Source'] != package:
