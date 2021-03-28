@@ -341,6 +341,8 @@ class DebianBuilder(Builder):
             env["LAST_BUILD_VERSION"] = str(last_build_version)
 
         env['LINTIAN_PROFILE'] = self.distro_config.lintian_profile
+        if self.distro_config.lintian_suppress_tag:
+            env['LINTIAN_SUPPRESS_TAGS'] = ','.join(self.distro_config.lintian_suppress_tag)
 
         env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
         return env

@@ -17,6 +17,8 @@ message Distribution {
 
   optional string lintian_profile = 6;
 
+  repeated string lintian_suppress_tag = 8;
+
   optional string build_command = 7;
 }
 
