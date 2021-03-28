@@ -1185,7 +1185,7 @@ class ActiveLocalRun(ActiveRun):
         )
 
         result.builder_result.from_directory(
-            self.output_directory, self.queue_item.package
+            self.output_directory, self.queue_item.package)
 
         try:
             local_branch = open_branch(
