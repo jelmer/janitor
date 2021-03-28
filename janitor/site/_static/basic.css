@@ -583,7 +583,7 @@ div.math:hover a.headerlink {
 
 span.result-code-bug, span.publish-bug {
     color: darkred;
-};
+}
 
 /* -- result codes */
 span.result-code-failure, span.publish-failure {
