@@ -35,5 +35,3 @@ _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent()
 
 
 SUITE_REGEX = "[a-z0-9-]+"
-
-DEFAULT_BUILD_ARCH = "amd64"
