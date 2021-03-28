@@ -64,18 +64,18 @@ def find_changes(path, package):
     names = []
     version = None
     distribution = None
-    for name in os.listdir(path):
-        if name.endswith(".changes"):
+    for entry in os.scandir(path):
+        if entry.name.endswith(".changes"):
             break
-        with open(os.path.join(path, name), "r") as f:
+        with open(entry.path, "r") as f:
             changes = Changes(f)
             if changes['Source'] != package:
                 logging.warning(
                     'Skipping changes file %s; it has a different '
                     'source package %s, expecting %s',
-                    name, changes['Source'], package)
+                    entry.name, changes['Source'], package)
                 continue
-            names.append(name)
+            names.append(entry.name)
             if version is not None and changes["Version"] != version:
                 raise InconsistentChangesFiles(
                     names, 'Version', changes['Version'], version)

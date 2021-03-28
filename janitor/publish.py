@@ -1454,7 +1454,7 @@ where rb.revision = $1 and run.package is not null
 async def guess_package_from_branch_url(conn: asyncpg.Connection, url: str):
     query = """
 SELECT
-  package, maintainer_email
+  name, maintainer_email
 FROM
   package
 WHERE
