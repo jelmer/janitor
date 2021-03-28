@@ -335,6 +335,10 @@ class DebianBuilder(Builder):
         return env
 
 
+BUILDER_CLASSES = [DebianBuilder, GenericBuilder]
+RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
+
+
 def get_builder(config, suite_config):
     if suite_config.HasField('debian_build'):
         return DebianBuilder(
@@ -502,14 +506,15 @@ class WorkerResult(object):
         if tags:
             tags = [(n, r.encode("utf-8")) for (fn, n, r) in tags]
         target_kind = worker_result.get("target", {}).get("name")
-        if target_kind == DebianResult.kind:
-            builder_result = DebianResult.from_json(worker_result["target"]["details"])
-        elif target_kind == GenericResult.kind:
-            builder_result = GenericResult.from_json(worker_result["target"]["details"])
-        elif target_kind is None:
-            builder_result = None
+        for result_cls in RESULT_CLASSES:
+            if target_kind == result_cls.kind:
+                builder_result = result_cls.from_json(worker_result["target"]["details"])
+                break
         else:
-            raise NotImplementedError('unsupported build target %r' % target_kind)
+            if target_kind is None:
+                builder_result = None
+            else:
+                raise NotImplementedError('unsupported build target %r' % target_kind)
         return cls(
             worker_result.get("code"),
             worker_result.get("description"),
