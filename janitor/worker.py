@@ -410,9 +410,11 @@ class DebianTarget(Target):
         'distribution-and-changes-mismatch',
         ]
 
+    DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
+
     def __init__(self, env):
         self.build_distribution = env.get("BUILD_DISTRIBUTION")
-        self.build_command = env.get("BUILD_COMMAND") or DEFAULT_BUILD_COMMAND
+        self.build_command = env.get("BUILD_COMMAND") or self.DEFAULT_BUILD_COMMAND
         self.build_suffix = env.get("BUILD_SUFFIX")
         self.last_build_version = env.get("LAST_BUILD_VERSION")
         self.package = env["PACKAGE"]
