@@ -172,9 +172,9 @@ class BuildDiffUnavailable(Exception):
 async def get_archive_diff(
     client, differ_url, run, unchanged_run, kind, accept=None, filter_boring=False
 ):
-    if not unchanged_run.has_artifacts():
+    if unchanged_run.result_code != 'success':
         raise DebdiffRetrievalError("unchanged run not successful")
-    if not run.has_artifacts():
+    if run.result_code != 'success':
         raise DebdiffRetrievalError("run not successful")
     if kind not in ("debdiff", "diffoscope"):
         raise DebdiffRetrievalError("invalid diff kind %r" % kind)

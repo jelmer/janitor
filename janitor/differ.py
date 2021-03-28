@@ -170,12 +170,12 @@ async def get_run_pair(db, old_id, new_id):
         else:
             old_run = await state.get_run(conn, old_id)
 
-    if old_run is None or not old_run.has_artifacts():
+    if old_run is None or old_run.result_code != 'success':
         raise web.HTTPNotFound(
             text="missing artifacts", headers={"unavailable_run_id": old_id}
         )
 
-    if new_run is None or not new_run.has_artifacts():
+    if new_run is None or new_run.result_code != 'success':
         raise web.HTTPNotFound(
             text="missing artifacts", headers={"unavailable_run_id": new_id}
         )

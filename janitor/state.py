@@ -167,13 +167,6 @@ class Run(object):
     def duration(self) -> datetime.timedelta:
         return self.finish_time - self.start_time
 
-    def age(self):
-        return datetime.datetime.now() - self.finish_time
-
-    def has_artifacts(self):
-        # Reasonable proxy, for now?
-        return self.result_code == "success"
-
     def get_result_branch(self, role):
         for entry in self.result_branches:
             if role == entry[0]:
