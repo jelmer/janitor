@@ -84,7 +84,7 @@ def find_changes(path, package):
                 raise InconsistentChangesFiles(
                     names, 'Distribution', changes['Distribution'], distribution)
             distribution = changes['Distribution']
-    else:
+    if not names:
         raise NoChangesFile(path, package)
     return (names, version, distribution)
 
