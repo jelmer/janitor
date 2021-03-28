@@ -71,7 +71,8 @@ def find_changes(path, package):
             changes = Changes(f)
             if changes['Source'] != package:
                 logging.warning(
-                    'Changes file %s has different source package %s, expecting %s',
+                    'Skipping changes file %s; it has a different '
+                    'source package %s, expecting %s',
                     name, changes['Source'], package)
                 continue
             names.append(name)

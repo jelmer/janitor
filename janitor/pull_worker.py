@@ -454,6 +454,8 @@ async def main(argv=None):
         action="store_true",
         default=False,
     )
+    # Unused, here for backwards compatibility.
+    parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
 
     args = parser.parse_args(argv)
 
