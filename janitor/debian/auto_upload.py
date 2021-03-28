@@ -150,6 +150,8 @@ async def listen_to_runner(
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
+            if not result['target']:
+                continue
             if result['target']['name'] != 'debian':
                 continue
             if not distributions or result['target']['details']['build_distribution'] in distributions:
