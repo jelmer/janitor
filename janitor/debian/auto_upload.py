@@ -85,7 +85,7 @@ async def dput(directory, changes_filename, dput_host):
     raise DputFailure(p.returncode, stderr.decode())
 
 
-async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid: Optional[str] = None):
+async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid: Optional[str] = None, source_only: bool = False):
     logging.info('Uploading results for %s', log_id)
     with tempfile.TemporaryDirectory() as td:
         try:
@@ -98,8 +98,11 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
             return
         changes_filenames = []
         for entry in os.scandir(td):
-            if entry.name.endswith('.changes'):
-                changes_filenames.append(entry.name)
+            if not entry.name.endswith('.changes'):
+                continue
+            if source_only and not not entry.name.endswith('_source.changes'):
+                continue
+            changes_filenames.append(entry.name)
         if not changes_filenames:
             logging.error('no changes filename in build artifacts')
             return
@@ -137,7 +140,8 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
 async def listen_to_runner(
         runner_url, artifact_manager, dput_host,
         debsign_keyid: Optional[str] = None,
-        distributions: Optional[List[str]] = None):
+        distributions: Optional[List[str]] = None,
+        source_only: bool = False):
     from aiohttp.client import ClientSession
     import urllib.parse
 
@@ -149,10 +153,10 @@ async def listen_to_runner(
             if result['target']['name'] != 'debian':
                 continue
             if not distributions or result['target']['details']['build_distribution'] in distributions:
-                await upload_build_result(result['log_id'], artifact_manager, dput_host, debsign_keyid)
+                await upload_build_result(result['log_id'], artifact_manager, dput_host, debsign_keyid, source_only)
 
 
-async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None):
+async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None, source_only=False):
     async with db.acquire() as conn:
         query = "SELECT DISTINCT ON (distribution, source) distribution, source, run_id FROM debian_build"
         args = []
@@ -162,7 +166,7 @@ async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distribu
         query += " ORDER BY distribution, source, version DESC"
         print(query)
         for row in await conn.fetch(query, *args):
-            await upload_build_result(row['run_id'], artifact_manager, dput_host, debsign_keyid)
+            await upload_build_result(row['run_id'], artifact_manager, dput_host, debsign_keyid, source_only)
 
 
 async def main(argv=None):
@@ -185,6 +189,7 @@ async def main(argv=None):
     parser.add_argument(
         "--backfill",
         action="store_true", help="Upload previously built packages.")
+    parser.add_argument('--source-only', action='store_true', help='Only upload source-only changes')
     parser.add_argument('--distribution', action='append', help='Build distributions to upload')
 
 
@@ -219,7 +224,7 @@ async def main(argv=None):
             sys.exit(1)
 
     runner_task = loop.create_task(
-        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution))
+        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, args.source_only))
     runner_task.add_done_callback(log_result)
     tasks.append(runner_task)
 
@@ -227,7 +232,7 @@ async def main(argv=None):
         from .. import state
         db = state.Database(config.database_location)
         backfill_task = loop.create_task(
-            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution))
+            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, args.source_only))
         backfill_task.add_done_callback(log_result)
         tasks.append(backfill_task)
 
