@@ -6,7 +6,6 @@ StartLimitBurst=3
 
 [Service]
 User={{ janitor_user }}
-User={{ janitor_user }}
 Type=simple
 EnvironmentFile={{ janitor_home }}/env
 ExecStart=python3 -m janitor.runner --overall-timeout={{ janitor_runner_overall_timeout }} --listen-address={{ janitor_runner_address }} --port={{ janitor_runner_port }} --concurrency={{ janitor_runner_concurrency }} --config={{ janitor_conf_path }} --public-vcs-location={{ janitor_site_external_url }} --backup-directory={{ janitor_runner_backup_directory }}
