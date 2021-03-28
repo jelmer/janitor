@@ -100,7 +100,7 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
         for entry in os.scandir(td):
             if not entry.name.endswith('.changes'):
                 continue
-            if source_only and not not entry.name.endswith('_source.changes'):
+            if source_only and not entry.name.endswith('_source.changes'):
                 continue
             changes_filenames.append(entry.name)
         if not changes_filenames:
