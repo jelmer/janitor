@@ -1,0 +1,11 @@
+- name: Pull worker systemd installed
+  template:
+    src: worker@.service
+    dest: /etc/systemd/system/janitor-worker@.service
+- name: Enable systemd service file
+  systemd:
+    # TODO(jelmer): Support multiple workers
+    name: janitor-worker@1.service
+    state: started
+    enabled: yes
+    daemon_reload: yes

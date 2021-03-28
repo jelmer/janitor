@@ -1,0 +1,18 @@
+[Unit]
+Description=Pull Worker
+
+StartLimitIntervalSec=90
+StartLimitBurst=3
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 -m janitor.pull_worker --credentials={{ janitor_pull_worker_credentials_path }}
+Restart=always
+MemoryAccounting=yes
+MemoryHigh=10G
+MemoryMax=12G
+
+[Install]
+WantedBy=default.target
