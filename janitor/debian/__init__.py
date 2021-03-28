@@ -15,10 +15,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import logging
 import os
 import itertools
 import re
-import shutil
 
 from debian.changelog import Changelog, Version
 from debian.deb822 import Changes
@@ -56,16 +56,36 @@ class UploadFailedError(Exception):
     """Upload failed."""
 
 
+class InconsistentChangesFiles(Exception):
+    """Inconsistent changes files."""
+
+
 def find_changes(path, package):
+    names = []
+    version = None
+    distribution = None
     for name in os.listdir(path):
-        if name.startswith("%s_" % package) and name.endswith(".changes"):
+        if name.endswith(".changes"):
             break
+        with open(os.path.join(path, name), "r") as f:
+            changes = Changes(f)
+            if changes['Source'] != package:
+                logging.warning(
+                    'Changes file %s has different source package %s, expecting %s',
+                    name, changes['Source'], package)
+                continue
+            names.append(name)
+            if version is not None and changes["Version"] != version:
+                raise InconsistentChangesFiles(
+                    names, 'Version', changes['Version'], version)
+            version = changes['Version']
+            if distribution is not None and changes["Distribution"] != distribution:
+                raise InconsistentChangesFiles(
+                    names, 'Distribution', changes['Distribution'], distribution)
+            distribution = changes['Distribution']
     else:
         raise NoChangesFile(path, package)
-
-    with open(os.path.join(path, name), "r") as f:
-        changes = Changes(f)
-        return (name, changes["Version"], changes["Distribution"])
+    return (names, version, distribution)
 
 
 def possible_salsa_urls_from_package_name(package_name, maintainer_email=None):
