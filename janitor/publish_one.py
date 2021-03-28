@@ -61,6 +61,7 @@ from breezy.plugins.gitlab.hoster import (
 )
 from breezy.propose import (
     MergeProposalExists,
+    HosterLoginRequired,
 )
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -483,6 +484,22 @@ def publish_one(
                 "Unsupported hoster (%s), will attempt to push to %s",
                 e,
                 full_branch_url(main_branch),
+            )
+        hoster = None
+    except HosterLoginRequired as e:
+        if mode not in (MODE_PUSH, MODE_BUILD_ONLY):
+            netloc = urllib.parse.urlparse(main_branch.user_url).netloc
+            raise PublishFailure(
+                description="Hoster %s supported but not login known." % netloc,
+                code="hoster-no-login")
+        # We can't figure out what branch to resume from when there's no hoster
+        # that can tell us.
+        resume_branch = None
+        existing_proposal = None
+        if mode == MODE_PUSH:
+            logging.warning(
+                "No login for hoster (%s), will attempt to push to %s",
+                e, full_branch_url(main_branch),
             )
         hoster = None
     else:
