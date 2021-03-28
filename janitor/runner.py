@@ -311,8 +311,13 @@ class DebianBuilder(Builder):
             " ".join(self.distro_config.component),
         )
 
-        env["BUILD_DISTRIBUTION"] = suite_config.debian_build.build_distribution or ""
+        env["BUILD_DISTRIBUTION"] = suite_config.debian_build.build_distribution or suite_config.name
         env["BUILD_SUFFIX"] = suite_config.debian_build.build_suffix or ""
+
+        if suite_config.debian_build.build_command:
+            env["BUILD_COMMAND"] = suite_config.debian_build.build_command
+        elif self.distro_config.build_command:
+            env["BUILD_COMMAND"] = self.distro_config.build_command
 
         last_build_version = await conn.fetchval(
             "SELECT version FROM debian_build WHERE "
@@ -552,7 +557,6 @@ async def invoke_subprocess_worker(
     cached_branch_url: Optional[str] = None,
     pre_check: Optional[str] = None,
     post_check: Optional[str] = None,
-    build_command: Optional[str] = None,
     log_path: Optional[str] = None,
     subpath: Optional[str] = None,
 ) -> int:
@@ -589,8 +593,6 @@ async def invoke_subprocess_worker(
         args.append("--pre-check=%s" % pre_check)
     if post_check:
         args.append("--post-check=%s" % post_check)
-    if build_command:
-        args.append("--build-command=%s" % build_command)
     if subpath:
         args.append("--subpath=%s" % subpath)
 
@@ -959,7 +961,6 @@ class ActiveLocalRun(ActiveRun):
         backup_logfile_manager: Optional[LogFileManager],
         artifact_manager: Optional[ArtifactManager],
         worker_kind: str,
-        build_command: Optional[str],
         pre_check=None,
         post_check=None,
         dry_run: bool = False,
@@ -1087,7 +1088,6 @@ class ActiveLocalRun(ActiveRun):
                         cached_branch_url=cached_branch_url,
                         pre_check=pre_check,
                         post_check=post_check,
-                        build_command=build_command,
                         log_path=log_path,
                         subpath=self.queue_item.subpath,
                         target=builder.kind,
@@ -1396,7 +1396,6 @@ class QueueProcessor(object):
         database,
         config,
         worker_kind,
-        build_command,
         pre_check=None,
         post_check=None,
         dry_run=False,
@@ -1415,14 +1414,12 @@ class QueueProcessor(object):
 
         Args:
           worker_kind: The kind of worker to run ('local', 'gcb')
-          build_command: The command used to build packages
           pre_check: Function to run prior to modifying a package
           post_check: Function to run after modifying a package
         """
         self.database = database
         self.config = config
         self.worker_kind = worker_kind
-        self.build_command = build_command
         self.pre_check = pre_check
         self.post_check = post_check
         self.dry_run = dry_run
@@ -1459,7 +1456,6 @@ class QueueProcessor(object):
                 artifact_manager=self.artifact_manager,
                 worker_kind=self.worker_kind,
                 pre_check=self.pre_check,
-                build_command=self.build_command,
                 post_check=self.post_check,
                 dry_run=self.dry_run,
                 logfile_manager=self.logfile_manager,
@@ -1909,9 +1905,6 @@ def main(argv=None):
         "--post-check", help="Command to run to check package before pushing.", type=str
     )
     parser.add_argument(
-        "--build-command", help="Build package to verify it.", type=str, default=None
-    )
-    parser.add_argument(
         "--dry-run",
         help="Create branches but don't push or propose anything.",
         action="store_true",
@@ -1996,7 +1989,6 @@ def main(argv=None):
         db,
         config,
         args.worker,
-        args.build_command,
         args.pre_check,
         args.post_check,
         args.dry_run,

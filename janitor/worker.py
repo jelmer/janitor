@@ -101,9 +101,6 @@ from .vcs import (
 TRUST_PACKAGE = False
 
 
-DEFAULT_BUILD_COMMAND = "sbuild -A -s -v"
-
-
 MAX_BUILD_ITERATIONS = 50
 
 
@@ -413,9 +410,9 @@ class DebianTarget(Target):
         'distribution-and-changes-mismatch',
         ]
 
-    def __init__(self, env, build_command):
+    def __init__(self, env):
         self.build_distribution = env.get("BUILD_DISTRIBUTION")
-        self.build_command = build_command
+        self.build_command = env.get("BUILD_COMMAND") or DEFAULT_BUILD_COMMAND
         self.build_suffix = env.get("BUILD_SUFFIX")
         self.last_build_version = env.get("LAST_BUILD_VERSION")
         self.package = env["PACKAGE"]
@@ -691,7 +688,7 @@ def process_package(
     metadata["command"] = command
 
     if target == "debian":
-        build_target = DebianTarget(env, build_command=build_command)
+        build_target = DebianTarget(env)
     elif target == "generic":
         build_target = GenericTarget(env)
     else:
@@ -883,12 +880,6 @@ def main(argv=None):
         default="",
     )
     parser.add_argument(
-        "--build-command",
-        help="Build package to verify it.",
-        type=str,
-        default=DEFAULT_BUILD_COMMAND,
-    )
-    parser.add_argument(
         "--tgz-repo",
         help="Whether to create a tgz of the VCS repo.",
         action="store_true",
@@ -940,7 +931,6 @@ def main(argv=None):
             output_directory,
             metadata=metadata,
             target=args.target,
-            build_command=args.build_command,
             pre_check_command=args.pre_check,
             post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,

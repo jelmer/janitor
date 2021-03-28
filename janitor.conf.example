@@ -34,6 +34,7 @@ distribution {
   component: "main"
   chroot: "unstable-amd64-sbuild"
   lintian_profile: "debian"
+  build_command: "sbuild -Asv"
 }
 
 suite {
@@ -44,6 +45,7 @@ suite {
     build_distribution: "lintian-fixes"
     build_suffix: "jan+lint"
     base_distribution: "unstable"
+    build_command: "sbuild -Asv"
   }
 }
 

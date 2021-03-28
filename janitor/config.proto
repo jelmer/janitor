@@ -16,6 +16,8 @@ message Distribution {
   repeated string component = 4;
 
   optional string lintian_profile = 6;
+
+  optional string build_command = 7;
 }
 
 message Config {
@@ -93,6 +95,8 @@ message DebianBuild {
 
   // Suffix to add to version in changelog on build.
   optional string build_suffix = 7;
+
+  optional string build_command = 8;
 };
 
 message OAuth2Provider {
