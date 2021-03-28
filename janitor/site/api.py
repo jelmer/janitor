@@ -405,7 +405,7 @@ async def handle_archive_diff(request):
         debdiff, content_type = await get_archive_diff(
             request.app.http_client_session,
             request.app.differ_url,
-            run,
+            run_id,
             unchanged_run,
             kind=kind,
             filter_boring=filter_boring,
@@ -417,9 +417,7 @@ async def handle_archive_diff(request):
                 "reason": "debdiff not calculated yet (run: %s, unchanged run: %s)"
                 % (run['id'], unchanged_run.id),
                 "run_id": [unchanged_run.id, run['id']],
-                "unavailable_run_id": (
-                    e.unavailable_run.id if e.unavailable_run else None
-                ),
+                "unavailable_run_id": e.unavailable_run_id,
                 "suite": [unchanged_run.suite, run['suite']],
             },
             status=404,
