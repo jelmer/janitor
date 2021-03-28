@@ -394,7 +394,7 @@ async def handle_archive_diff(request):
     if run['result_code'] != 'success':
         raise web.HTTPNotFound(text="Build %s has no artifacts" % run_id)
 
-    if not unchanged_run.has_artifacts():
+    if unchanged_run.result_code != 'success':
         raise web.HTTPNotFound(
             text="Unchanged build %s has no artifacts" % unchanged_run.id
         )

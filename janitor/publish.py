@@ -557,7 +557,7 @@ async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
                 "Missing build diff; last control run failed (%s)."
                 % unchanged_run.result_code
             )
-        elif unchanged_run and unchanged_run.has_artifacts():
+        elif unchanged_run and unchanged_run.result_code == 'success':
             description = (
                 "Missing build diff due to control run, but successful "
                 "control run exists. Rescheduling."
