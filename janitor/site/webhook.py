@@ -33,6 +33,8 @@ from ..schedule import (
 def is_webhook_request(request):
     return ("X-Gitlab-Event" in request.headers or
             "X-GitHub-Event" in request.headers or
+            "X-Gitea-Event" in request.headers or
+            "X-Gogs-Event" in request.headers or
             "X-Launchpad-Event-Type" in request.headers)
 
 
@@ -149,6 +151,14 @@ async def process_webhook(request, db):
             # urlutils.basename(body['project']['path_with_namespace'])?
         elif "X-GitHub-Event" in request.headers:
             if request.headers["X-GitHub-Event"] not in ("push", ):
+                return web.json_response({}, status=200)
+            urls = get_branch_urls_from_github_webhook(body)
+        elif "X-Gitea-Event" in request.headers:
+            if request.headers["X-Gitea-Event"] not in ("push", ):
+                return web.json_response({}, status=200)
+            urls = get_branch_urls_from_github_webhook(body)
+        elif "X-Gogs-Event" in request.headers:
+            if request.headers["X-Gogs-Event"] not in ("push", ):
                 return web.json_response({}, status=200)
             urls = get_branch_urls_from_github_webhook(body)
         elif "X-Launchpad-Event-Type" in request.headers:
