@@ -221,28 +221,37 @@ class DebianResult(BuilderResult):
     kind = "debian"
 
     def __init__(
-        self, build_version=None, build_distribution=None, changes_filename=None, lintian_result=None
+        self, build_version=None, build_distribution=None, changes_filenames=None, lintian_result=None
     ):
         self.build_version = build_version
         self.build_distribution = build_distribution
-        self.changes_filename = changes_filename
+        self.changes_filenames = changes_filenames
         self.lintian_result = lintian_result
 
     def from_directory(self, path, package):
-        self.output_directory = path
-        (
-            self.changes_filename,
-            self.build_version,
-            self.build_distribution,
-        ) = find_changes(path, package)
+        try:
+            self.output_directory = path
+            (
+                self.changes_filenames,
+                self.build_version,
+                self.build_distribution,
+            ) = find_changes(path, package)
+        except NoChangesFile as e:
+            # Oh, well.
+            logging.info("No changes file found: %s", e)
+        except InconsistentChangesFiles as e:
+            raise WorkerResult(
+                'build-inconsistent-changes-files', str(e))
 
     def artifact_filenames(self):
-        if not self.changes_filename:
+        if not self.changes_filenames:
             return []
-        changes_path = os.path.join(self.output_directory, self.changes_filename)
-        return list(changes_filenames(changes_path)) + [
-            os.path.basename(self.changes_filename)
-        ]
+        changes_path = os.path.join(self.output_directory, self.changes_filenames)
+        ret = []
+        for changes_filename in self.changes_filenames:
+            ret.extend(changes_filenames(changes_path))
+            ret.append(changes_filename)
+        return ret
 
     @classmethod
     def from_json(cls, target_details):
@@ -264,12 +273,12 @@ class DebianResult(BuilderResult):
         return {
             "build_distribution": self.build_distribution,
             "build_version": self.build_version,
-            "changes_filename": self.changes_filename,
+            "changes_filenames": self.changes_filenames,
             "lintian": self.lintian_result,
         }
 
     def __bool__(self):
-        return self.changes_filename is not None
+        return self.changes_filenames is not None
 
 
 class DebianBuilder(Builder):
@@ -1175,13 +1184,8 @@ class ActiveLocalRun(ActiveRun):
             logfilenames=logfilenames,
         )
 
-        try:
-            result.builder_result.from_directory(
-                self.output_directory, self.queue_item.package
-            )
-        except NoChangesFile as e:
-            # Oh, well.
-            logging.info("No changes file found: %s", e)
+        result.builder_result.from_directory(
+            self.output_directory, self.queue_item.package
 
         try:
             local_branch = open_branch(
