@@ -30,7 +30,7 @@
 <ul>
 {% for candidate in candidates %}
 {% if candidate.suite != 'unchanged' %}
-<li><a href="/{{ candidate.suite }}/pkg/{{ candidate.package }}">{{ candidate.package }} ({{ suite }})</a></li>
+<li><a href="/{{ candidate.suite }}/pkg/{{ candidate.package }}">{{ candidate.package }} ({{ candidate.suite }})</a></li>
 {% endif %}
 {% endfor %}
 </ul>
