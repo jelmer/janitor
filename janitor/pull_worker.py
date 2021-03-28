@@ -66,7 +66,6 @@ from janitor.vcs import (
 from janitor.worker import (
     WorkerFailure,
     process_package,
-    DEFAULT_BUILD_COMMAND,
 )
 
 
@@ -194,7 +193,6 @@ def run_worker(
     legacy_branch_name,
     suite,
     target,
-    build_command=None,
     pre_check_command=None,
     post_check_command=None,
     resume_branch_url=None,
@@ -215,7 +213,6 @@ def run_worker(
                 output_directory,
                 metadata=metadata,
                 target=target,
-                build_command=build_command,
                 pre_check_command=pre_check_command,
                 post_check_command=post_check_command,
                 resume_branch_url=resume_branch_url,
@@ -449,12 +446,6 @@ async def main(argv=None):
         default=None,
     )
     parser.add_argument(
-        "--build-command",
-        help="Build package to verify it.",
-        type=str,
-        default=DEFAULT_BUILD_COMMAND,
-    )
-    parser.add_argument(
         "--credentials", help="Path to credentials file (JSON).", type=str, default=None
     )
     parser.add_argument(
@@ -599,7 +590,6 @@ async def main(argv=None):
                     legacy_branch_name,
                     suite,
                     target=target,
-                    build_command=args.build_command,
                     pre_check_command=args.pre_check,
                     post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
