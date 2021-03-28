@@ -82,6 +82,7 @@ from .debian import (
     open_guessed_salsa_branch,
     find_changes,
     NoChangesFile,
+    InconsistentChangesFiles,
 )
 from .debian import state as debian_state
 from .logs import (
