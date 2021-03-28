@@ -34,6 +34,11 @@ distribution {
   component: "main"
   chroot: "unstable-amd64-sbuild"
   lintian_profile: "debian"
+  lintian_suppress_tag: "bad-distribution-in-changes-file"
+  lintian_suppress_tag: "no-nmu-in-changelog"
+  lintian_suppress_tag: "source-nmu-has-incorrect-version-number"
+  lintian_suppress_tag: "changelog-distribution-does-not-match-changes-file"
+  lintian_suppress_tag: "distribution-and-changes-mismatch"
   build_command: "sbuild -Asv"
 }
 

@@ -402,14 +402,6 @@ class DebianTarget(Target):
 
     name = "debian"
 
-    SUPPRESS_LINTIAN_TAGS = [
-        'bad-distribution-in-changes-file',
-        'no-nmu-in-changelog',
-        'source-nmu-has-incorrect-version-number',
-        'changelog-distribution-does-not-match-changes-file',
-        'distribution-and-changes-mismatch',
-        ]
-
     DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
     def __init__(self, env):
@@ -420,6 +412,7 @@ class DebianTarget(Target):
         self.package = env["PACKAGE"]
         self.chroot = env.get("CHROOT")
         self.lintian_profile = env.get("LINTIAN_PROFILE")
+        self.lintian_suppress_tags = env.get("LINTIAN_SUPPRESS_TAGS")
         self.committer = env.get("COMMITTER")
 
     def parse_args(self, argv):
@@ -553,9 +546,9 @@ class DebianTarget(Target):
 
     def _run_lintian(self, output_directory, changes_name):
         logger.info('Running lintian')
-        args = [
-            '--exp-output=format=json',
-            '--suppress-tags=%s' % ','.join(self.SUPPRESS_LINTIAN_TAGS)]
+        args = ['--exp-output=format=json']
+        if self.lintian_suppress_tags:
+            args.append('--suppress-tags=' + self.lintian_suppress_tags)
         if self.lintian_profile:
             args.append('--profile=%s' % self.lintian_profile)
         try:
