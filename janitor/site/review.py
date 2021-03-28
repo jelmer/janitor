@@ -97,7 +97,7 @@ async def generate_review(
             text, unused_content_type = await get_archive_diff(
                 client,
                 differ_url,
-                run,
+                run.id,
                 unchanged_run,
                 kind="debdiff",
                 filter_boring=True,

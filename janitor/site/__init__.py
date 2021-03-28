@@ -165,21 +165,19 @@ class DebdiffRetrievalError(Exception):
 class BuildDiffUnavailable(Exception):
     """The build diff is not available."""
 
-    def __init__(self, unavailable_run):
-        self.unavailable_run = unavailable_run
+    def __init__(self, unavailable_run_id):
+        self.unavailable_run_id = unavailable_run_id
 
 
 async def get_archive_diff(
-    client, differ_url, run, unchanged_run, kind, accept=None, filter_boring=False
+    client, differ_url, run_id, unchanged_run, kind, accept=None, filter_boring=False
 ):
     if unchanged_run.result_code != 'success':
         raise DebdiffRetrievalError("unchanged run not successful")
-    if run.result_code != 'success':
-        raise DebdiffRetrievalError("run not successful")
     if kind not in ("debdiff", "diffoscope"):
         raise DebdiffRetrievalError("invalid diff kind %r" % kind)
     url = urllib.parse.urljoin(
-        differ_url, "%s/%s/%s" % (kind, unchanged_run.id, run.id)
+        differ_url, "%s/%s/%s" % (kind, unchanged_run.id, run_id)
     )
     params = {
         "jquery_url": "https://janitor.debian.org/_static/jquery.js",
@@ -198,7 +196,7 @@ async def get_archive_diff(
                 if resp.headers.get("unavailable_run_id") == unchanged_run.id:
                     raise BuildDiffUnavailable(unchanged_run)
                 else:
-                    raise BuildDiffUnavailable(run)
+                    raise BuildDiffUnavailable(run_id)
             else:
                 raise DebdiffRetrievalError(
                     "Unable to get debdiff: %s" % await resp.text()

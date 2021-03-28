@@ -194,7 +194,7 @@ async def generate_run_file(
             debdiff, unused_content_type = await get_archive_diff(
                 client,
                 differ_url,
-                run,
+                run.id,
                 unchanged_run,
                 kind="debdiff",
                 filter_boring=True,
