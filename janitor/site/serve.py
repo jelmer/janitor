@@ -606,7 +606,7 @@ if __name__ == "__main__":
         pkg = request.query.get("package")
         if pkg:
             async with request.app.database.acquire() as conn:
-                if not await conn.fetchrow('SELECT FROM package WHERE name = $1', pkg):
+                if not await conn.fetchrow('SELECT FROM package WHERE name = $1 ORDER BY name', pkg):
                     raise web.HTTPNotFound(text="No package with name %s" % pkg)
             return web.HTTPFound(pkg)
 
