@@ -96,36 +96,41 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
                 'artifacts for build %s are missing',
                 log_id)
             return
+        changes_filenames = []
         for entry in os.scandir(td):
             if entry.name.endswith('.changes'):
-                changes_filename = entry.name
-                break
-        else:
+                changes_filenames.append(entry.name)
+        if not changes_filenames:
             logging.error('no changes filename in build artifacts')
             return
 
-        logging.info('Running debsign')
-        try:
-            await debsign(td, changes_filename, debsign_keyid)
-        except DebsignFailure as e:
-            logging.error(
-                'Error (exit code %d) signing %s for %s: %s',
-                e.returncode, changes_filename,
-                log_id, e.reason)
-        else:
-            logging.info(
-                'Successfully signed %s for %s',
-                changes_filename, log_id)
+        failures = False
+        for changes_filename in changes_filenames:
+            logging.info('Running debsign')
+            try:
+                await debsign(td, changes_filename, debsign_keyid)
+            except DebsignFailure as e:
+                logging.error(
+                    'Error (exit code %d) signing %s for %s: %s',
+                    e.returncode, changes_filename,
+                    log_id, e.reason)
+                failures = True
+            else:
+                logging.info(
+                    'Successfully signed %s for %s',
+                    changes_filename, log_id)
 
-        logging.debug('Running dput.')
-        try:
-            await dput(td, changes_filename, dput_host)
-        except DputFailure as e:
-            logging.error(
-                'Error (exit code %d) uploading %s for %s: %s',
-                e.returncode, changes_filename,
-                log_id, e.reason)
-        else:
+            logging.debug('Running dput.')
+            try:
+                await dput(td, changes_filename, dput_host)
+            except DputFailure as e:
+                logging.error(
+                    'Error (exit code %d) uploading %s for %s: %s',
+                    e.returncode, changes_filename,
+                    log_id, e.reason)
+                failures = True
+
+        if not failures:
             logging.info('Successfully uploaded run %s', log_id)
 
 
