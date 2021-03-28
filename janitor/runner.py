@@ -240,16 +240,17 @@ class DebianResult(BuilderResult):
         except NoChangesFile as e:
             # Oh, well.
             logging.info("No changes file found: %s", e)
-        except InconsistentChangesFiles as e:
-            raise WorkerResult(
-                'build-inconsistent-changes-files', str(e))
+        else:
+            logging.info(
+                "Found changes files %r, build version %s, distribution: %s",
+                self.changes_filenames, self.build_version, self.build_distribution)
 
     def artifact_filenames(self):
         if not self.changes_filenames:
             return []
-        changes_path = os.path.join(self.output_directory, self.changes_filenames)
         ret = []
         for changes_filename in self.changes_filenames:
+            changes_path = os.path.join(self.output_directory, changes_filename)
             ret.extend(changes_filenames(changes_path))
             ret.append(changes_filename)
         return ret
@@ -1851,13 +1852,9 @@ async def handle_finish(request):
                 legacy_branch_name=active_run.legacy_branch_name,
             )
 
-            try:
-                result.builder_result.from_directory(
-                    output_directory, active_run.queue_item.package
-                )
-            except NoChangesFile as e:
-                # Oh, well.
-                logging.info("No changes file found: %s", e)
+            result.builder_result.from_directory(
+                output_directory, active_run.queue_item.package
+            )
 
             artifact_names = result.builder_result.artifact_filenames()
             await store_artifacts_with_backup(
