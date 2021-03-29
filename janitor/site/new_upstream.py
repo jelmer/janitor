@@ -16,7 +16,7 @@ FROM
     merge_proposal
 LEFT JOIN run
 ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE package = $1 AND suite = $2
+WHERE merge_proposal.package = $1 AND suite = $2
 ORDER BY merge_proposal.url, run.finish_time DESC
 """, package, suite)
 
