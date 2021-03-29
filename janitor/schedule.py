@@ -202,7 +202,8 @@ ORDER BY start_time DESC
         same_context = False
         if context and context in (run['instigated_context'], run['context']):
             same_context = True
-        if run['result_code'] == "install-deps-unsatisfied-dependencies" and run['failure_details'].get('relations'):
+        if (run['result_code'] == "install-deps-unsatisfied-dependencies" and run['failure_details']
+                and run['failure_details'].get('relations')):
             if await deps_satisfied(conn, suite, run['failure_details']['relations']):
                 success += 1
                 same_context = False
