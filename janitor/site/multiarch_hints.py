@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 import asyncpg
-from ..debian import state as debian_state
 from .common import generate_pkg_context, iter_candidates
 
 

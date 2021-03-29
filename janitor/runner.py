@@ -84,7 +84,6 @@ from .debian import (
     NoChangesFile,
     InconsistentChangesFiles,
 )
-from .debian import state as debian_state
 from .logs import (
     get_log_manager,
     ServiceUnavailable,
@@ -1285,7 +1284,13 @@ ORDER BY package, suite, start_time DESC
                 run_count.labels(suite=suite).set(count)
             for (suite, result_code), count in by_suite_result.items():
                 run_result_count.labels(suite=suite, result_code=result_code).set(count)
-            for suite, count in await state.get_never_processed_count(conn):
+            for suite, count in await conn.fetch("""\
+select suite, count(*) from candidate c
+where not exists (
+    SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+GROUP BY suite
+"""):
+
                 never_processed_count.labels(suite).set(count)
             for row in await conn.fetch("""\
 select
@@ -1300,8 +1305,6 @@ group by 1
 
         # Every 30 minutes
         await asyncio.sleep(60 * 30)
-
-
 
 
 async def store_run(

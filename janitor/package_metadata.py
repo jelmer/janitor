@@ -31,7 +31,6 @@ from silver_platter.debian import (
     convert_debian_vcs_url,
 )
 from . import state
-from .debian import state as debian_state
 from .config import read_config
 from .package_metadata_pb2 import PackageList, PackageMetadata, PackageRemoval
 from debmutate.vcs import (

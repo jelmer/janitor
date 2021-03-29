@@ -39,8 +39,8 @@
 <div class="section" id="recent-merge-proposals">
 <h2>Recent merge proposals</h2>
 <ul>
-{% for url, status, run in merge_proposals %}
-<li><a href="{{ url }}">{% if run %}{{ run.suite }}{% else %}{{ url }}{% endif %}</a> ({{ status }})</li>
+{% for merge_proposal in merge_proposals %}
+<li><a href="{{ merge_proposal.url }}">{{ merge_proposal.suite }}</a> ({{ merge_proposal.status }})</li>
 {% endfor %}
 </ul>
 </div>

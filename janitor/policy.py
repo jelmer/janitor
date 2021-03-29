@@ -73,6 +73,7 @@ PUBLISH_MODE_STR = {
     policy_pb2.bts: "bts",
     policy_pb2.push: "push",
     policy_pb2.build_only: "build-only",
+    policy_pb2.skip: "skip",
 }
 
 
@@ -204,7 +205,6 @@ async def main(argv):
     import argparse
     from .config import read_config
     from . import state
-    from .debian import state as debian_state
 
 
     parser = argparse.ArgumentParser()

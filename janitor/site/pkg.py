@@ -10,7 +10,6 @@ import urllib.parse
 import asyncpg
 
 from janitor import state
-from janitor.debian import state as debian_state
 from buildlog_consultant.sbuild import (
     parse_sbuild_log,
     find_failed_stage,

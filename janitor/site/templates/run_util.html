@@ -248,11 +248,7 @@ $("#{{ propose_id }}").click(function() {
 {% endmacro %}
 
 {% macro describe_publish_policy(publish_policy) %}
-{% if publish_policy|length > 0 %}
-<b>{{ publish_policy['main'][0] }}{% if publish_policy['main'][1] %} (every {{ publish_policy['main'][1] }} days){% endif %}</b>
-{% else %}
-{% for role, policy in publish_policy %}{{ role }}: <b>{{ policy }}</b>{% if not loop.last %}, {% endif %}{% endfor %}
-{% endif %}
+{% for pp in publish_policy %}{% if publish_policy|length > 1 %}{{ role }}: {% endif %}<b>{{ pp['mode'] }}{% if pp['frequency_days'] %} (every {{ pp['frequency_days'] }} days){% endif %}</b>{% if not loop.last %}, {% endif %}{% endfor %}
 {% endmacro %}
 
 {% macro display_vcs_diffs(get_diff, branches, tags=None) %}

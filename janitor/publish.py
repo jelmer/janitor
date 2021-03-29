@@ -72,7 +72,6 @@ import breezy.plugins.github  # noqa: F401
 from . import (
     state,
 )
-from .debian import state as debian_state
 from .config import read_config
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader

@@ -26,6 +26,7 @@ from aiohttp import (
     WSMsgType,
 )
 from aiohttp.web_middlewares import normalize_path_middleware
+import asyncpg
 import json
 import logging
 from typing import Optional
@@ -48,7 +49,6 @@ from . import (
     DebdiffRetrievalError,
 )
 from .webhook import process_webhook
-from ..debian import state as debian_state
 from ..policy_pb2 import PolicyConfig
 from ..schedule import (
     do_schedule,
@@ -241,13 +241,36 @@ async def handle_packagename_list(request):
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
 
 
+async def get_proposals(conn: asyncpg.Connection, package=None, suite=None):
+    args = []
+    query = """
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
+    run.suite
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+"""
+    if package is not None:
+        args.append(package)
+        query += " WHERE run.package = $1"
+        if suite:
+            query += " AND run.suite = $2"
+            args.append(suite)
+    elif suite:
+        args.append(suite)
+        query += " WHERE run.suite = $1"
+    query += " ORDER BY merge_proposal.url, run.finish_time DESC"
+    return await conn.fetch(query, *args)
+
+
 async def handle_merge_proposal_list(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
-        for package, url, status in await state.iter_proposals(
-            conn, request.match_info.get("package"), request.match_info.get("suite")
-        ):
-            response_obj.append({"package": package, "url": url, "status": status})
+        for row in await get_proposals(conn, request.match_info.get("package"), request.match_info.get("suite")):
+            response_obj.append({"package": row['package'], "url": row['url'], "status": row['status']})
     return web.json_response(response_obj)
 
 
@@ -256,7 +279,7 @@ async def handle_refresh_proposal_status(request):
     try:
         mp_url = post["url"]
     except KeyError:
-        raise web.HTTPBadRequest("No URL specified")
+        raise web.HTTPBadRequest(text="No URL specified")
 
     data = {"url": mp_url}
     url = urllib.parse.urljoin(request.app.publisher_url, "refresh-status")
@@ -692,9 +715,18 @@ async def handle_report(request):
     report = {}
     merge_proposal = {}
     async with request.app.db.acquire() as conn:
-        for package, url, status in await state.iter_proposals(conn, suite=suite):
-            if status == "open":
-                merge_proposal[package] = url
+        for package, url in await conn.fetch("""
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.package, merge_proposal.url
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+AND status = 'open'
+WHERE run.suite = $1
+""", suite):
+            merge_proposal[package] = url
         query = """
 SELECT DISTINCT ON (package)
   result_code,

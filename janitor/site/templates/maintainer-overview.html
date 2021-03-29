@@ -9,18 +9,18 @@
 <h2>Merge Proposals</h2>
 <h3>Open Merge Proposals</h3>
 <ul>
-{% for package, url, status in proposals %}
-{% if status == 'open' %}
-<li><a href="{{ url }}">{{ package }}</a></li>
+{% for proposal in proposals %}
+{% if proposal.status == 'open' %}
+<li><a href="{{ proposal.url }}">{{ proposal.package }}</a></li>
 {% endif %}
 {% endfor %}
 </ul>
 
 <h3>Resolved Merge Proposals</h3>
 <ul>
-{% for package, url, status in proposals %}
-{% if status != 'open' %}
-<li><a href="{{ url }}">{{ package }}</a> ({{ status }})</li>
+{% for proposal in proposals %}
+{% if proposal.status != 'open' %}
+<li><a href="{{ proposal.url }}">{{ proposal.package }}</a> ({{ proposal.status }})</li>
 {% endif %}
 {% endfor %}
 </ul>
