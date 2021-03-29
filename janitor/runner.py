@@ -1819,7 +1819,7 @@ async def handle_finish(request):
     else:
         # TODO(jelmer): Allow just passing in a queue id, or finding the queue
         # id based on other info?
-        raise web.HTTPNotFound(text='no such run %s' % run_id)
+        return web.json_response({'reason': 'no such run: %s' % run_id}, status=404)
 
     reader = await request.multipart()
     worker_result = None
