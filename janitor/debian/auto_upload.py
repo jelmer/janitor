@@ -97,7 +97,11 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
                 log_id)
             return
         changes_filenames = []
+        # Work around https://bugs.debian.org/389908:
+        umask = os.umask(0)
+        os.umask(umask)
         for entry in os.scandir(td):
+            os.chmod(entry.path, 0o644 & ~umask)
             if not entry.name.endswith('.changes'):
                 continue
             if source_only and not entry.name.endswith('_source.changes'):
