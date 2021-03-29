@@ -103,6 +103,7 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
             if source_only and not entry.name.endswith('_source.changes'):
                 continue
             changes_filenames.append(entry.name)
+
         if not changes_filenames:
             logging.error('no changes filename in build artifacts')
             return
@@ -155,7 +156,9 @@ async def listen_to_runner(
             if result['target']['name'] != 'debian':
                 continue
             if not distributions or result['target']['details']['build_distribution'] in distributions:
-                await upload_build_result(result['log_id'], artifact_manager, dput_host, debsign_keyid, source_only)
+                await upload_build_result(
+                    result['log_id'], artifact_manager, dput_host,
+                    debsign_keyid=debsign_keyid, source_only=source_only)
 
 
 async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distributions=None, source_only=False):
@@ -168,7 +171,9 @@ async def backfill(db, artifact_manager, dput_host, debsign_keyid=None, distribu
         query += " ORDER BY distribution, source, version DESC"
         print(query)
         for row in await conn.fetch(query, *args):
-            await upload_build_result(row['run_id'], artifact_manager, dput_host, debsign_keyid, source_only)
+            await upload_build_result(
+                row['run_id'], artifact_manager, dput_host,
+                debsign_keyid=debsign_keyid, source_only=source_only)
 
 
 async def main(argv=None):
@@ -226,7 +231,7 @@ async def main(argv=None):
             sys.exit(1)
 
     runner_task = loop.create_task(
-        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, args.source_only))
+        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, source_only=args.source_only))
     runner_task.add_done_callback(log_result)
     tasks.append(runner_task)
 
@@ -234,7 +239,7 @@ async def main(argv=None):
         from .. import state
         db = state.Database(config.database_location)
         backfill_task = loop.create_task(
-            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, args.source_only))
+            backfill(db, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, source_only=args.source_only))
         backfill_task.add_done_callback(log_result)
         tasks.append(backfill_task)
 
