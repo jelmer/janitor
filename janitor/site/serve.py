@@ -41,7 +41,6 @@ from . import (
     html_template,
     render_template_for_request,
 )
-from ..debian import state as debian_state
 
 
 FORWARD_CLIENT_TIMEOUT = 30 * 60
@@ -539,14 +538,12 @@ if __name__ == "__main__":
         async with request.app.database.acquire() as conn:
             if not code:
                 stats = await stats_by_result_codes(conn, suite=suite)
-                if suite:
-                    suites = [suite]
-                else:
-                    suites = None
-                never_processed = sum(
-                    dict(await state.get_never_processed_count(conn, suites)).values()
-                )
-
+                never_processed = await conn.fetchval("""\
+select SUM(count(*)) from candidate c
+where not exists (
+    SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+AND suite = ANY($1::text[])
+""", [suite] if suite else all_suites)
                 vs = await generate_result_code_index(
                     stats, never_processed, suite, all_suites=all_suites
                 )
@@ -657,13 +654,17 @@ if __name__ == "__main__":
                 'vcs_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
             if package is None:
                 raise web.HTTPNotFound(text="No package with name %s" % package_name)
-            merge_proposals = []
-            async for (run, url, status) in state.iter_proposals_with_run(
-                conn, package=package['name']
-            ):
-                merge_proposals.append((url, status, run))
-            available_suites = await state.iter_publishable_suites(
-                conn, package_name)
+            merge_proposals = await conn.fetch("""\
+SELECT DISTINCT ON (merge_proposal.url)
+    merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+WHERE run.package = $1
+ORDER BY merge_proposal.url, run.finish_time DESC
+""", package['name'])
+            available_suites = await state.iter_publishable_suites(conn, package_name)
         runs = state.iter_runs(request.app.database, package=package['name'])
         return await generate_pkg_file(
             request.app.database, request.app.config, package, merge_proposals, runs,

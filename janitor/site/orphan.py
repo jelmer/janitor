@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-from ..debian import state as debian_state
 from .common import iter_candidates
 
 

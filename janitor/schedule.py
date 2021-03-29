@@ -35,7 +35,6 @@ import asyncpg
 from . import (
     state,
 )
-from .debian import state as debian_state
 from .config import read_config
 
 FIRST_RUN_BONUS = 100.0
@@ -141,10 +140,14 @@ SELECT
   policy.command AS command
 FROM candidate
 INNER JOIN package on package.name = candidate.package
-LEFT JOIN policy ON
+INNER JOIN policy ON
     policy.package = package.name AND
     policy.suite = candidate.suite
-WHERE NOT package.removed
+WHERE
+  NOT package.removed AND
+  package.branch_url IS NOT NULL AND
+  command != '' AND
+
 """
     args = []
     if suite is not None and packages is not None:
@@ -161,19 +164,8 @@ WHERE NOT package.removed
 
 async def schedule_from_candidates(iter_candidates_with_policy):
     for row in iter_candidates_with_policy:
-        if row['branch_url'] is None:
-            continue
-
-        if row['publish_mode'] is None:
-            logging.info("%s: no policy defined", row['package'])
-            continue
-
-        if all([mode == "skip" for mode, max_freq in row['publish_mode']]):
+        if all([e.mode == "skip" for e in row['publish']]):
             logging.debug("%s: skipping, per policy", row['package'])
-            continue
-
-        if not row['command']:
-            logging.debug("%s: skipping, no command set", row['package'])
             continue
 
         value = row['value']
@@ -196,29 +188,35 @@ async def estimate_success_probability(
         same_context_multiplier = 0.5
     else:
         same_context_multiplier = 1.0
-    async for run in state.iter_previous_runs(conn, package, suite):
+    async for run in await conn.fetch("""
+SELECT
+  result_code,
+  instigated_context,
+  context,
+  failure_details
+FROM
+  run
+WHERE
+  package = $1 AND suite = $2
+ORDER BY start_time DESC
+""", package, suite):
         try:
-            ignore_checker = IGNORE_RESULT_CODE[run.result_code]
+            ignore_checker = IGNORE_RESULT_CODE[run['result_code']]
         except KeyError:
             pass
         else:
             if ignore_checker(run):
                 continue
         total += 1
-        if run.result_code == "success":
+        if run['result_code'] == "success":
             success += 1
         same_context = False
-        if context and context in (run.instigated_context, run.context):
+        if context and context in (run['instigated_context'], run['context']):
             same_context = True
-        if run.result_code == "install-deps-unsatisfied-dependencies":
-            START = "Unsatisfied dependencies: "
-            if run.description and run.description.startswith(START):
-                unsatisfied_dependencies = PkgRelation.parse_relations(
-                    run.description[len(START) :]
-                )
-                if await deps_satisfied(conn, suite, unsatisfied_dependencies):
-                    success += 1
-                    same_context = False
+        if run['result_code'] == "install-deps-unsatisfied-dependencies" and run['failure_details'].get('relations'):
+            if await deps_satisfied(conn, suite, run['failure_details']['relations']):
+                success += 1
+                same_context = False
         if same_context:
             same_context_multiplier = 0.1
 
@@ -408,23 +406,36 @@ async def bulk_add_to_queue(
 
 async def dep_available(
     conn: asyncpg.Connection,
-    suite: str,
     name: str,
     archqual: Optional[str] = None,
     arch: Optional[str] = None,
+    distribution: Optional[str] = None,
     version: Optional[Tuple[str, Version]] = None,
     restrictions=None,
 ) -> bool:
-    available = await debian_state.version_available(conn, name, suite, version)
-    if available:
-        return True
-    return False
+    query = """\
+SELECT
+  1
+FROM
+  all_debian_versions
+WHERE
+  source = $1 AND
+  AND %(version_match1)s
+"""
+    args = [name]
+    if version:
+        version_match = "version %s $2" % (version[0],)
+        args.append(str(version[1]))
+    else:
+        version_match = "True"
+
+    return bool(await conn.fetchval(query % version_match, *args))
 
 
 async def deps_satisfied(conn: asyncpg.Connection, suite: str, dependencies) -> bool:
     for dep in dependencies:
         for subdep in dep:
-            if await dep_available(conn, suite=suite, **subdep):
+            if await dep_available(conn, **subdep):
                 break
         else:
             return False

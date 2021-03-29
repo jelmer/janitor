@@ -3,11 +3,10 @@
 from aiohttp import ClientConnectorError
 import asyncpg
 from functools import partial
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, AsyncIterable
 import urllib.parse
 
 from janitor import state
-from janitor.debian import state as debian_state
 from janitor.site import (
     get_archive_diff,
     BuildDiffUnavailable,
@@ -15,6 +14,50 @@ from janitor.site import (
     DebdiffRetrievalError,
     tracker_url,
 )
+
+
+async def iter_previous_runs(
+    conn: asyncpg.Connection, package: str, suite: str
+) -> AsyncIterable[state.Run]:
+    for row in await conn.fetch(
+        """
+SELECT
+  id,
+  command,
+  start_time,
+  finish_time,
+  description,
+  package,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context,
+  branch_url,
+  logfilenames,
+  review_status,
+  review_comment,
+  worker,
+  array(SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+  result_tags
+FROM
+  run
+LEFT JOIN debian_build ON run.id = debian_build.run_id
+WHERE
+  package = $1 AND suite = $2
+ORDER BY start_time DESC
+""",
+        package,
+        suite,
+    ):
+        yield state.Run.from_row(row)
+
 
 
 async def get_candidate(conn: asyncpg.Connection, package, suite):
@@ -125,7 +168,11 @@ async def generate_pkg_context(
     db, config, suite, policy, client, differ_url, vcs_store_url, package, run_id=None
 ):
     async with db.acquire() as conn:
-        package = await conn.fetchrow('SELECT name, maintainer_email, uploader_emails, removed, vcs_url, vcs_browse, vcswatch_version FROM package WHERE name = $1', package)
+        package = await conn.fetchrow("""\
+SELECT name, maintainer_email, uploader_emails, removed, vcs_url, vcs_browse, vcswatch_version, update_changelog, publish_policy
+FROM package
+LEFT JOIN policy ON package.name = policy.package AND suite = $2
+WHERE name = $1""", package, suite)
         if package is None:
             raise KeyError(package)
         if run_id is not None:
@@ -135,17 +182,16 @@ async def generate_pkg_context(
             merge_proposals = []
         else:
             run = await get_last_unabsorbed_run(conn, package['name'], suite)
-            merge_proposals = [
-                (url, status)
-                for (unused_package, url, status) in await state.iter_proposals(
-                    conn, package['name'], suite=suite
-                )
-            ]
-        (
-            publish_policy,
-            changelog_policy,
-            unused_command,
-        ) = await state.get_publish_policy(conn, package['name'], suite)
+            merge_proposals = await conn.fetch("""\
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.url AS url, merge_proposal.status AS status
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+WHERE run.package = $1 AND run.suite = $2
+""", package['name'], suite)
         if run is None:
             # No runs recorded
             command = None
@@ -183,7 +229,7 @@ async def generate_pkg_context(
             candidate_value = None
             candidate_success_chance = None
         previous_runs = [
-            x async for x in state.iter_previous_runs(conn, package['name'], suite)
+            x async for x in iter_previous_runs(conn, package['name'], suite)
         ]
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package['name']
@@ -260,8 +306,8 @@ async def generate_pkg_context(
         "branch_url": branch_url,
         "queue_position": queue_position,
         "queue_wait_time": queue_wait_time,
-        "publish_policy": publish_policy,
-        "changelog_policy": changelog_policy,
+        "publish_policy": package['publish_policy'],
+        "changelog_policy": package['changelog_policy'],
         "tracker_url": partial(tracker_url, config),
     }
 

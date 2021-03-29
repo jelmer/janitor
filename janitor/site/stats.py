@@ -4,8 +4,8 @@ import operator
 
 from . import env, json_chart_data, html_template
 from aiohttp import web
+import asyncpg
 from .. import state
-from ..debian import state as debian_state
 from .common import iter_candidates
 
 
@@ -24,6 +24,21 @@ order by maintainer_email asc
     return {"by_maintainer": by_maintainer}
 
 
+async def get_proposals(conn: asyncpg.Connection, packages):
+    return await conn.fetch("""
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
+    run.suite AS suite
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+WHERE package = ANY($1::text[])
+ORDER BY merge_proposal.url, run.finish_time DESC
+""", packages)
+
+
 async def write_maintainer_overview(conn, maintainer):
     packages = [
         row['name']
@@ -32,12 +47,10 @@ async def write_maintainer_overview(conn, maintainer):
             "maintainer_email = $1 OR $1 = any(uploader_emails) AND NOT removed",
             maintainer)
     ]
-    proposals = []
-    for package, url, status in await state.iter_proposals(conn, packages):
-        proposals.append((package, url, status))
+    proposals = await get_proposals(conn, packages)
     candidates = await iter_candidates(conn, packages=packages)
 
-    query = """
+    runs = await conn.fetch("""
 SELECT DISTINCT ON (package)
   id,
   package,
@@ -49,8 +62,7 @@ FROM
 LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
 WHERE package = ANY($1::text[])
 ORDER BY package, suite, start_time DESC
-"""
-    runs = await conn.fetch(query, packages)
+""", packages)
 
     return {
         "packages": packages,

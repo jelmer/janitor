@@ -18,6 +18,9 @@ enum Mode {
 
     // Create bug in the BTS with patch attached.
     bts = 5;
+
+    // Don't even build
+    skip = 6;
 }
 
 enum ChangelogMode {

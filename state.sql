@@ -411,3 +411,21 @@ FROM
     run
 LEFT JOIN
     debian_build ON debian_build.run_id = run.id;
+
+
+CREATE VIEW all_debian_versions AS
+SELECT
+  source,
+  distribution,
+  version
+FROM
+  debian_build
+
+UNION
+
+SELECT
+  name AS source,
+  distribution,
+  archive_version AS version
+FROM
+  package;

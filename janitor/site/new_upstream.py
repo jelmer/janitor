@@ -4,8 +4,21 @@ import asyncpg
 from functools import partial
 from janitor import state
 from . import tracker_url
-from janitor.debian import state as debian_state
-from .common import get_candidate, get_run, get_last_unabsorbed_run, iter_candidates
+from .common import get_candidate, get_run, get_last_unabsorbed_run, iter_candidates, iter_previous_runs
+
+
+async def get_proposals(conn: asyncpg.Connection, package, suite):
+    return await conn.fetch("""
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.url, merge_proposal.status
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+WHERE package = $1 AND suite = $2
+ORDER BY merge_proposal.url, run.finish_time DESC
+""", package, suite)
 
 
 async def generate_pkg_file(
@@ -22,12 +35,7 @@ async def generate_pkg_file(
             merge_proposals = []
         else:
             run = await get_last_unabsorbed_run(conn, package['name'], suite)
-            merge_proposals = [
-                (url, status)
-                for (unused_package, url, status) in await state.iter_proposals(
-                    conn, package['name'], suite=suite
-                )
-            ]
+            merge_proposals = await get_proposals(conn, package['name'], suite=suite)
         candidate = await get_candidate(conn, package['name'], suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
@@ -56,7 +64,7 @@ async def generate_pkg_file(
             result = run.result
             branch_url = run.branch_url
         previous_runs = [
-            r async for r in state.iter_previous_runs(conn, package['name'], suite)
+            r async for r in iter_previous_runs(conn, package['name'], suite)
         ]
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package['name']

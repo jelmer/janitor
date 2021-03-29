@@ -9,12 +9,57 @@ from silver_platter.debian.lintian import (
 from lintian_brush.lintian_overrides import load_renamed_tags
 
 from .. import state
-from ..debian import state as debian_state
 
 
 SUITE = "lintian-fixes"
 
 renamed_tags = load_renamed_tags()
+
+
+async def iter_last_unabsorbed_runs(
+    conn: asyncpg.Connection, suite, packages=None
+):
+    query = """
+SELECT DISTINCT ON (package)
+  id,
+  command,
+  start_time,
+  finish_time,
+  description,
+  package,
+  debian_build.version AS build_version,
+  debian_build.distribution AS build_distribution,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  suite,
+  instigated_context,
+  branch_url,
+  logfilenames,
+  review_status,
+  review_comment,
+  worker,
+  array(SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+  result_tags
+FROM
+  last_unabsorbed_runs
+LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
+WHERE suite = $1
+"""
+    args = [suite]
+    if packages is not None:
+        args.append(packages)
+        query += " AND package = ANY($%d::text[])" % len(args)
+
+    query += """
+ORDER BY package, suite, start_time DESC
+"""
+    for row in await conn.fetch(query, *args):
+        yield state.Run.from_row(row)
 
 
 async def generate_pkg_file(
@@ -150,14 +195,22 @@ async def generate_developer_table_page(db, developer):
                 developer)
         ]
         open_proposals = {}
-        for package, url, status in await state.iter_proposals(conn, packages, SUITE):
-            if status == "open":
-                open_proposals[package] = url
+        for row in await conn.fetch("""
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.package AS package, merge_proposal.url AS url
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+WHERE status = 'open' AND run.suite = $1
+""", SUITE):
+            open_proposals[row['package']] = row['url']
         candidates = {}
         for row in await iter_candidates(conn, packages=packages, suite=SUITE):
             candidates[row['package']] = row['context'].split(" ")
         runs = {}
-        async for run in state.iter_last_unabsorbed_runs(
+        async for run in iter_last_unabsorbed_runs(
             conn, suite=SUITE, packages=packages
         ):
             runs[run.package] = run
