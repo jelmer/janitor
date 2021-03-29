@@ -606,7 +606,7 @@ if __name__ == "__main__":
         pkg = request.query.get("package")
         if pkg:
             async with request.app.database.acquire() as conn:
-                if not await conn.fetchrow('SELECT FROM package WHERE name = $1 ORDER BY name', pkg):
+                if not await conn.fetchrow('SELECT 1 FROM package WHERE name = $1', pkg):
                     raise web.HTTPNotFound(text="No package with name %s" % pkg)
             return web.HTTPFound(pkg)
 
@@ -614,7 +614,7 @@ if __name__ == "__main__":
             packages = [
                 row['name']
                 for row in await conn.fetch(
-                    'SELECT name, maintainer_email FROM package WHERE NOT removed')]
+                    'SELECT name, maintainer_email FROM package WHERE NOT removed ORDER BY name')]
         return {'packages': packages}
 
     @html_template(
