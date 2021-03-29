@@ -539,7 +539,7 @@ if __name__ == "__main__":
             if not code:
                 stats = await stats_by_result_codes(conn, suite=suite)
                 never_processed = await conn.fetchval("""\
-select SUM(count(*)) from candidate c
+select count(*) from candidate c
 where not exists (
     SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
 AND suite = ANY($1::text[])
