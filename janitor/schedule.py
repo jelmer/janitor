@@ -77,7 +77,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
 # will give a clearer error message.
 IGNORE_RESULT_CODE = {
     # Run worker failures from more than a day ago.
-    "worker-failure": lambda run: ((datetime.now() - run.start_time).days > 0),
+    "worker-failure": lambda run: ((datetime.now() - run['start_time']).days > 0),
 }
 
 IGNORE_RESULT_CODE.update(
@@ -146,8 +146,8 @@ INNER JOIN policy ON
 WHERE
   NOT package.removed AND
   package.branch_url IS NOT NULL AND
-  command != '' AND
-
+  command != '' AND EXISTS (
+        SELECT FROM publish WHERE mode != 'skip')
 """
     args = []
     if suite is not None and packages is not None:
@@ -162,20 +162,15 @@ WHERE
     return await conn.fetch(query, *args)
 
 
-async def schedule_from_candidates(iter_candidates_with_policy):
-    for row in iter_candidates_with_policy:
-        if all([e.mode == "skip" for e in row['publish']]):
-            logging.debug("%s: skipping, per policy", row['package'])
-            continue
+def queue_item_from_candidate_and_policy(row):
+    value = row['value']
+    for entry in row['publish']:
+        value += PUBLISH_MODE_VALUE[entry['mode']]
 
-        value = row['value']
-        for mode, max_freq in row['publish_mode'].values():
-            value += PUBLISH_MODE_VALUE[mode]
+    entry_command = full_command(row['update_changelog'], row['command'])
 
-        entry_command = full_command(row['update_changelog'], row['command'])
-
-        yield (row['package'], row['context'], entry_command, row['suite'],
-               value, row['success_chance'])
+    return (row['package'], row['context'], entry_command, row['suite'],
+            value, row['success_chance'])
 
 
 async def estimate_success_probability(
@@ -188,16 +183,10 @@ async def estimate_success_probability(
         same_context_multiplier = 0.5
     else:
         same_context_multiplier = 1.0
-    async for run in await conn.fetch("""
-SELECT
-  result_code,
-  instigated_context,
-  context,
-  failure_details
-FROM
-  run
-WHERE
-  package = $1 AND suite = $2
+    for run in await conn.fetch("""
+SELECT result_code, instigated_context, context, failure_details, start_time
+FROM run
+WHERE package = $1 AND suite = $2
 ORDER BY start_time DESC
 """, package, suite):
         try:
@@ -324,7 +313,6 @@ async def bulk_add_to_queue(
     bucket: str = "default",
 ) -> None:
     popcon = {k: (v or 0) for (k, v) in await conn.fetch("SELECT name, popcon_inst FROM package")}
-    removed = set(row['name'] for row in await conn.fetch("SELECT name FROM package WHERE removed"))
     if popcon:
         max_inst = max([(v or 0) for v in popcon.values()])
         if max_inst:
@@ -334,8 +322,6 @@ async def bulk_add_to_queue(
     for package, context, command, suite, value, success_chance in todo:
         assert package is not None
         assert value > 0, "Value: %s" % value
-        if package in removed:
-            continue
         estimated_duration = await estimate_duration(conn, package, suite)
         assert estimated_duration >= timedelta(
             0
@@ -374,11 +360,11 @@ async def bulk_add_to_queue(
         assert offset > 0.0
         offset = default_offset + offset
         logging.info(
-            "Package %s: "
+            "Package %s/%s: "
             "estimated_popularity(%.2f) * "
             "probability_of_success(%.2f) * value(%d) = "
             "estimated_value(%.2f), estimated cost (%f)",
-            package,
+            suite, package,
             estimated_popularity,
             estimated_probability_of_success,
             value,
@@ -483,11 +469,12 @@ async def main():
 
     async with db.acquire() as conn:
         logging.info('Finding candidates with policy')
-        iter_candidates_with_policy = await iter_candidates_with_policy(
-            conn, packages=(args.packages or None), suite=args.suite
-        )
         logging.info('Determining schedule for candidates')
-        todo = [x async for x in schedule_from_candidates(iter_candidates_with_policy)]
+        todo = [
+            queue_item_from_candidate_and_policy(row)
+            for row in
+            await iter_candidates_with_policy(
+                conn, packages=(args.packages or None), suite=args.suite)]
         logging.info('Adding to queue')
         await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
 
