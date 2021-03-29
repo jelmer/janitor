@@ -121,7 +121,7 @@ SELECT
 FROM
   upstream_branch_urls
 WHERE
-  upstream_branch_urls.url = ANY($1::text[]))
+  upstream_branch_urls.url = ANY($1::text[])
 """
     candidates = []
     for url in upstream_branch_urls:
