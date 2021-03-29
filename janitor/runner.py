@@ -376,6 +376,9 @@ class JanitorResult(object):
         logfilenames=None,
         legacy_branch_name=None,
         suite=None,
+        start_time=None,
+        worker_name=None,
+        worker_link=None
     ):
         self.package = pkg
         self.suite = suite
@@ -385,6 +388,8 @@ class JanitorResult(object):
         self.code = code
         self.legacy_branch_name = legacy_branch_name
         self.logfilenames = logfilenames
+        self.worker_name = worker_name
+        self.worker_link = worker_link
         if worker_result:
             self.context = worker_result.context
             if self.code is None:
@@ -400,7 +405,9 @@ class JanitorResult(object):
             self.tags = worker_result.tags
             self.remotes = worker_result.remotes
             self.failure_details = worker_result.details
+            self.start_time = worker_result.start_time
         else:
+            self.start_time = start_time
             self.context = None
             self.main_branch_revision = None
             self.revision = None
@@ -479,6 +486,7 @@ class WorkerResult(object):
         remotes=None,
         details=None,
         builder_result=None,
+        start_time=None
     ):
         self.code = code
         self.description = description
@@ -492,6 +500,7 @@ class WorkerResult(object):
         self.remotes = remotes
         self.details = details
         self.builder_result = builder_result
+        self.start_time = start_time
 
     @classmethod
     def from_file(cls, path):
@@ -540,6 +549,8 @@ class WorkerResult(object):
             worker_result.get("remotes"),
             worker_result.get("details"),
             builder_result,
+            datetime.fromisoformat(worker_result['start_time'])
+            if 'start_time' in worker_result else None,
         )
 
 
@@ -720,7 +731,11 @@ class ActiveRun(object):
         return JanitorResult(
             pkg=self.queue_item.package,
             suite=self.queue_item.suite,
-            log_id=self.log_id, **kwargs)
+            start_time=self.start_time,
+            log_id=self.log_id,
+            worker_name=self.worker_name,
+            worker_link=self.worker_link,
+            **kwargs)
 
     def json(self) -> Any:
         """Return a JSON representation."""
@@ -1481,17 +1496,16 @@ class QueueProcessor(object):
                 committer=self.committer,
                 backup_artifact_manager=self.backup_artifact_manager,
             )
-            await self.finish_run(active_run, result)
+            await self.finish_run(active_run.queue_item, result)
 
     def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
         packages_processed_count.inc()
 
-    async def finish_run(self, active_run: ActiveRun, result: JanitorResult) -> None:
+    async def finish_run(self, item: state.QueueItem, result: JanitorResult) -> None:
         finish_time = datetime.now()
-        item = active_run.queue_item
-        duration = finish_time - active_run.start_time
+        duration = finish_time - result.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds()
         )
@@ -1516,7 +1530,7 @@ class QueueProcessor(object):
                     result.log_id,
                     item.package,
                     result.branch_url,
-                    active_run.start_time,
+                    result.start_time,
                     finish_time,
                     item.command,
                     result.description,
@@ -1530,8 +1544,8 @@ class QueueProcessor(object):
                     suite=item.suite,
                     logfilenames=result.logfilenames,
                     value=result.value,
-                    worker_name=active_run.worker_name,
-                    worker_link=active_run.worker_link,
+                    worker_name=result.worker_name,
+                    worker_link=result.worker_link,
                     result_branches=result.branches,
                     result_tags=result.tags,
                     failure_details=result.failure_details,
@@ -1540,7 +1554,7 @@ class QueueProcessor(object):
                     await result.builder_result.store(conn, result.log_id, item.package)
                 await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
         self.topic_result.publish(result.json())
-        del self.active_runs[active_run.log_id]
+        del self.active_runs[result.log_id]
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
 
@@ -1701,8 +1715,9 @@ async def handle_assign(request):
             branch_url=active_run.main_branch_url,
             code=code,
             description=description,
+            start_time=datetime.now(),
         )
-        await queue_processor.finish_run(active_run, result)
+        await queue_processor.finish_run(active_run.queue_item, result)
 
     queue_processor = request.app.queue_processor
     [item] = await queue_processor.next_queue_item(1)
@@ -1795,14 +1810,16 @@ async def handle_assign(request):
 async def handle_finish(request):
     queue_processor = request.app.queue_processor
     run_id = request.match_info["run_id"]
-    try:
-        active_run = queue_processor.active_runs[run_id]
-    except KeyError:
-        return web.json_response(
-            {"reason": "No such current run: %s" % run_id}, status=404
-        )
-
-    active_run.stop_watchdog()
+    active_run = queue_processor.active_runs.get(run_id)
+    if active_run:
+        active_run.stop_watchdog()
+        queue_item = active_run.queue_item
+        worker_name = active_run.worker_name
+        worker_link = active_run.worker_link
+    else:
+        # TODO(jelmer): Allow just passing in a queue id, or finding the queue
+        # id based on other info?
+        raise web.HTTPNotFound(text='no such run %s' % run_id)
 
     reader = await request.multipart()
     worker_result = None
@@ -1833,12 +1850,17 @@ async def handle_finish(request):
             output_directory,
             queue_processor.logfile_manager,
             queue_processor.backup_logfile_manager,
-            active_run.queue_item.package,
+            queue_item.package,
             run_id,
         )
 
         if worker_result.code is not None:
-            result = active_run.create_result(
+            result = JanitorResult(
+                pkg=queue_item.package,
+                suite=queue_item.suite,
+                log_id=run_id,
+                worker_name=worker_name,
+                worker_link=worker_link,
                 branch_url=active_run.main_branch_url,
                 worker_result=worker_result,
                 logfilenames=logfilenames,
@@ -1849,7 +1871,12 @@ async def handle_finish(request):
                 ),
             )
         else:
-            result = active_run.create_result(
+            result = JanitorResult(
+                pkg=queue_item.package,
+                suite=queue_item.suite,
+                log_id=run_id,
+                worker_name=worker_name,
+                worker_link=worker_link,
                 branch_url=active_run.main_branch_url,
                 code="success",
                 worker_result=worker_result,
@@ -1858,7 +1885,7 @@ async def handle_finish(request):
             )
 
             result.builder_result.from_directory(
-                output_directory, active_run.queue_item.package
+                output_directory, queue_item.package
             )
 
             artifact_names = result.builder_result.artifact_filenames()
@@ -1870,9 +1897,9 @@ async def handle_finish(request):
                 artifact_names,
             )
 
-    await queue_processor.finish_run(active_run, result)
+    await queue_processor.finish_run(queue_item, result)
     return web.json_response(
-        {"id": active_run.log_id, "filenames": filenames, "result": result.json()},
+        {"id": run_id, "filenames": filenames, "result": result.json()},
         status=201,
     )
 
