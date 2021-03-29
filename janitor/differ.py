@@ -69,7 +69,7 @@ async def handle_debdiff(request):
 
     old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
 
-    cache_path = request.app.debdiff_cache_path(old_run.id, new_run.id)
+    cache_path = request.app.debdiff_cache_path(old_run['id'], new_run['id'])
     if cache_path:
         try:
             with open(cache_path, "rb") as f:
@@ -82,14 +82,14 @@ async def handle_debdiff(request):
     if debdiff is None:
         logging.info(
             "Generating debdiff between %s (%s/%s/%s) and %s (%s/%s/%s)",
-            old_run.id,
-            old_run.package,
-            old_run.build_version,
-            old_run.suite,
-            new_run.id,
-            new_run.package,
-            new_run.build_version,
-            new_run.suite,
+            old_run['id'],
+            old_run['package'],
+            old_run['build_version'],
+            old_run['suite'],
+            new_run['id'],
+            new_run['package'],
+            new_run['build_version'],
+            new_run['suite'],
         )
         with ExitStack() as es:
             old_dir = es.enter_context(TemporaryDirectory())
@@ -98,10 +98,10 @@ async def handle_debdiff(request):
             try:
                 await asyncio.gather(
                     request.app.artifact_manager.retrieve_artifacts(
-                        old_run.id, old_dir, filter_fn=is_binary
+                        old_run['id'], old_dir, filter_fn=is_binary
                     ),
                     request.app.artifact_manager.retrieve_artifacts(
-                        new_run.id, new_dir, filter_fn=is_binary
+                        new_run['id'], new_dir, filter_fn=is_binary
                     ),
                 )
             except ArtifactsMissing as e:
@@ -115,15 +115,15 @@ async def handle_debdiff(request):
             old_binaries = find_binaries(old_dir)
             if not old_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % old_run.id,
-                    headers={"unavailable_run_id": old_run.id},
+                    text="No artifacts for run id: %s" % old_run['id'],
+                    headers={"unavailable_run_id": old_run['id']},
                 )
 
             new_binaries = find_binaries(new_dir)
             if not new_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % new_run.id,
-                    headers={"unavailable_run_id": new_run.id},
+                    text="No artifacts for run id: %s" % new_run['id'],
+                    headers={"unavailable_run_id": new_run['id']},
                 )
 
             try:
@@ -139,7 +139,7 @@ async def handle_debdiff(request):
 
     if "filter_boring" in request.query:
         debdiff = filter_debdiff_boring(
-            debdiff.decode(), str(old_run.build_version), str(new_run.build_version)
+            debdiff.decode(), str(old_run['build_version']), str(new_run['build_version'])
         ).encode()
 
     for accept in request.headers.get("ACCEPT", "*/*").split(","):
@@ -160,17 +160,41 @@ async def handle_debdiff(request):
     )
 
 
+async def get_run(conn, run_id):
+    return await conn.fetchrow("""\
+SELECT result_code, package, suite, id, debian_build.version AS build_version, main_branch_revision
+FROM run
+LEFT JOIN debian_build ON debian_build.run_id = run.id
+WHERE id = $1""", run_id)
+
+
+async def get_unchanged_run(conn, package, main_branch_revision):
+    query = """
+SELECT result_code, package, suite, id, debian_build.version AS build_version
+FROM
+    last_runs
+LEFT JOIN
+    debian_build ON debian_build.run_id = last_runs.id
+WHERE
+    suite = 'unchanged' AND revision = $1 AND
+    package = $2 AND
+    result_code = 'success'
+ORDER BY finish_time DESC
+""", 
+    return await conn.fetchrow(query, main_branch_revision, package)
+
+
 async def get_run_pair(db, old_id, new_id):
     async with db.acquire() as conn:
-        new_run = await state.get_run(conn, new_id)
+        new_run = await get_run(conn, new_id)
         if old_id == "BASE":
-            old_run = await state.get_unchanged_run(
-                conn, new_run.package, new_run.main_branch_revision
+            old_run = await get_unchanged_run(
+                conn, new_run['package'], new_run['main_branch_revision']
             )
         else:
-            old_run = await state.get_run(conn, old_id)
+            old_run = await get_run(conn, old_id)
 
-    if old_run is None or old_run.result_code != 'success':
+    if old_run is None or old_run['result_code'] != 'success':
         raise web.HTTPNotFound(
             text="missing artifacts", headers={"unavailable_run_id": old_id}
         )
@@ -219,7 +243,7 @@ async def handle_diffoscope(request):
 
     old_run, new_run = await get_run_pair(request.app.db, old_id, new_id)
 
-    cache_path = request.app.diffoscope_cache_path(old_run.id, new_run.id)
+    cache_path = request.app.diffoscope_cache_path(old_run['id'], new_run['id'])
     if cache_path:
         try:
             with open(cache_path, "rb") as f:
@@ -232,14 +256,14 @@ async def handle_diffoscope(request):
     if diffoscope_diff is None:
         logging.info(
             "Generating diffoscope between %s (%s/%s/%s) and %s (%s/%s/%s)",
-            old_run.id,
-            old_run.package,
-            old_run.build_version,
-            old_run.suite,
-            new_run.id,
-            new_run.package,
-            new_run.build_version,
-            new_run.suite,
+            old_run['id'],
+            old_run['package'],
+            old_run['build_version'],
+            old_run['suite'],
+            new_run['id'],
+            new_run['package'],
+            new_run['build_version'],
+            new_run['suite'],
         )
         with ExitStack() as es:
             old_dir = es.enter_context(TemporaryDirectory())
@@ -248,10 +272,10 @@ async def handle_diffoscope(request):
             try:
                 await asyncio.gather(
                     request.app.artifact_manager.retrieve_artifacts(
-                        old_run.id, old_dir, filter_fn=is_binary
+                        old_run['id'], old_dir, filter_fn=is_binary
                     ),
                     request.app.artifact_manager.retrieve_artifacts(
-                        new_run.id, new_dir, filter_fn=is_binary
+                        new_run['id'], new_dir, filter_fn=is_binary
                     ),
                 )
             except ArtifactsMissing as e:
@@ -265,15 +289,15 @@ async def handle_diffoscope(request):
             old_binaries = find_binaries(old_dir)
             if not old_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % old_run.id,
-                    headers={"unavailable_run_id": old_run.id},
+                    text="No artifacts for run id: %s" % old_run['id'],
+                    headers={"unavailable_run_id": old_run['id']},
                 )
 
             new_binaries = find_binaries(new_dir)
             if not new_binaries:
                 raise web.HTTPNotFound(
-                    text="No artifacts for run id: %s" % new_run.id,
-                    headers={"unavailable_run_id": new_run.id},
+                    text="No artifacts for run id: %s" % new_run['id'],
+                    headers={"unavailable_run_id": new_run['id']},
                 )
 
             try:
@@ -293,27 +317,27 @@ async def handle_diffoscope(request):
                 json.dump(diffoscope_diff, f)
 
     diffoscope_diff["source1"] = "%s version %s (%s)" % (
-        old_run.package,
-        old_run.build_version,
-        old_run.suite,
+        old_run['package'],
+        old_run['build_version'],
+        old_run['suite'],
     )
     diffoscope_diff["source2"] = "%s version %s (%s)" % (
-        new_run.package,
-        new_run.build_version,
-        new_run.suite,
+        new_run['package'],
+        new_run['build_version'],
+        new_run['suite'],
     )
 
     filter_diffoscope_irrelevant(diffoscope_diff)
 
-    title = "diffoscope for %s applied to %s" % (new_run.suite, new_run.package)
+    title = "diffoscope for %s applied to %s" % (new_run['suite'], new_run['package'])
 
     if "filter_boring" in request.query:
         filter_diffoscope_boring(
             diffoscope_diff,
-            str(old_run.build_version),
-            str(new_run.build_version),
-            old_run.suite,
-            new_run.suite,
+            str(old_run['build_version']),
+            str(new_run['build_version']),
+            old_run['suite'],
+            new_run['suite'],
         )
         title += " (filtered)"
 
@@ -405,7 +429,7 @@ async def handle_precache(request):
 
     async def _precache():
         try:
-            return precache(request.app, old_run.id, new_run.id)
+            return precache(request.app, old_run['id'], new_run['id'])
         except ArtifactsMissing as e:
             raise web.HTTPNotFound(
                 text="No artifacts for run id: %r" % e,
@@ -520,13 +544,12 @@ async def listen_to_runner(runner_url, app):
                 ):
                     to_precache.append((result["log_id"], row[0]))
             else:
-                unchanged_run = await state.get_unchanged_run(
+                unchanged_run = await get_unchanged_run(
                     conn,
                     result["package"],
-                    result["main_branch_revision"].encode("utf-8"),
-                )
+                    result["main_branch_revision"])
                 if unchanged_run:
-                    to_precache.append((unchanged_run.id, result["log_id"]))
+                    to_precache.append((unchanged_run['id'], result["log_id"]))
             # This could be concurrent, but risks hitting resource constraints
             # for large packages.
             for old_id, new_id in to_precache:
