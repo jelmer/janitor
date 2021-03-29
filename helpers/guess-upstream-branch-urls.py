@@ -2,10 +2,11 @@
 
 import argparse
 import asyncio
-import asyncpg
+import logging
 import sys
 import traceback
 
+import asyncpg
 from google.protobuf import text_format
 
 from janitor import state
@@ -42,7 +43,7 @@ async def main(db, start=None):
         async for pkg, version in iter_missing_upstream_branch_packages(conn):
             if start and pkg < start:
                 continue
-            sys.stderr.write('Package: %s\n' % pkg)
+            logging.info('Package: %s' % pkg)
             urls = []
             for name, guesser in [
                     ('aur', guess_from_aur),
@@ -81,6 +82,8 @@ parser.add_argument(
 args = parser.parse_args()
 with open(args.config, 'r') as f:
     config = read_config(f)
+
+logging.basicConfig(level=logging.INFO)
 
 db = state.Database(config.database_location)
 asyncio.run(main(db, args.start))

@@ -17,11 +17,11 @@
 
 """Exporting of upstream metadata from UDD."""
 
-import sys
+from email.utils import parseaddr
+import logging
 
 from debian.changelog import Version
 from debmutate.vcs import unsplit_vcs_url, split_vcs_url
-from email.utils import parseaddr
 from typing import List, Optional, Iterator, AsyncIterator, Tuple
 
 from janitor.package_metadata_pb2 import PackageList
@@ -106,6 +106,8 @@ async def main():
     parser.add_argument("packages", nargs="*")
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO)
+
     udd = await UDD.public_udd_mirror()
 
     removals = {}
@@ -153,8 +155,8 @@ async def main():
             repo_url, oldbranch, subpath = split_vcs_url(vcswatch_vcs_url)
             if oldbranch != vcswatch_branch:
                 package.vcs_url = unsplit_vcs_url(repo_url, vcswatch_branch, subpath)
-                sys.stderr.write(
-                    "Fixing up branch name from vcswatch: %s -> %s\n"
+                logging.error(
+                    "Fixing up branch name from vcswatch: %s -> %s"
                     % (vcswatch_vcs_url, package.vcs_url)
                 )
             else:
