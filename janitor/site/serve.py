@@ -576,6 +576,8 @@ AND suite = ANY($1::text[])
     async def handle_login(request):
         state = str(uuid.uuid4())
         callback_path = request.app.router["oauth2-callback"].url_for()
+        if not request.openid_config:
+            raise web.HTTPNotFound(text='login is disabled on this instance')
         location = URL(request.app.openid_config["authorization_endpoint"]).with_query(
             {
                 "client_id": request.app.config.oauth2_provider.client_id,
@@ -1109,6 +1111,8 @@ order by url, last_run.finish_time desc
         state_code = request.query.get("state")
         if request.cookies.get("state") != state_code:
             return web.Response(status=400, text="state variable mismatch")
+        if not request.app.openid_config:
+            raise web.HTTPNotFound(text='login disabled')
         token_url = URL(request.app.openid_config["token_endpoint"])
         redirect_uri = (request.app.external_url or request.url).join(
             request.app.router["oauth2-callback"].url_for()
@@ -1540,6 +1544,8 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     app.vcs_store_url = args.vcs_store_url
     if config.oauth2_provider and config.oauth2_provider.base_url:
         app.on_startup.append(discover_openid_config)
+    else:
+        app.openid_config = None
     app.on_startup.append(start_pubsub_forwarder)
     app.on_startup.append(start_gpg_context)
     if args.external_url:
