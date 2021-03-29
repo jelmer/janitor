@@ -1,5 +1,6 @@
 ---
 janitor_instance_name: 'Debian Janitor'
+janitor_static_owner: "root"
 janitor_db_user: janitor
 janitor_db_host: brangwain.vpn.jelmer.uk
 janitor_db_port: 5432

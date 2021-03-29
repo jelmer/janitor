@@ -38,29 +38,39 @@
     repo: https://salsa.debian.org/jelmer/debian-janitor
     dest: "{{ janitor_code_path }}"
     force: yes
+  become: yes
+  become_user: "{{ janitor_static_owner }}"
 - name: Build protobuf
   make:
     chdir: "{{ janitor_code_path }}"
+  become: yes
+  become_user: "{{ janitor_static_owner }}"
 - name: Build C extensions for Breezy
   make:
     chdir: "{{ janitor_code_path }}/breezy"
+  become: yes
+  become_user: "{{ janitor_static_owner }}"
 - name: Build C extensions for Dulwich
   make:
     chdir: "{{ janitor_code_path }}/dulwich"
+  become: yes
+  become_user: "{{ janitor_static_owner }}"
 - name: janitor.conf configuration
   template:
     src: janitor.conf
     dest: "{{ janitor_conf_path }}"
+    owner: "{{ janitor_static_owner }}"
 - name: env file
   template:
     src: env
     dest: "{{ janitor_home }}/env"
+    owner: "{{ janitor_static_owner }}"
 - name: postgresql credentials
   template:
     src: pgpass
     dest: "{{ janitor_home }}/.pgpass"
     mode: '0600'
-    owner: janitor
+    owner: "{{ janitor_user }}"
 - name: configuration directory for Breezy
   file:
     state: directory
@@ -78,3 +88,5 @@
     state: link
 - name: Breezy Identity
   command: "{{ janitor_code_path }}/breezy/brz whoami '{{ janitor_fullname }} <{{ janitor_email }}>'"
+  become: yes
+  become_user: "{{ janitor_user }}"
