@@ -489,7 +489,7 @@ class DebianTarget(Target):
                 ).timestamp
                 try:
                     if not self.build_suffix:
-                        (changes_name, cl_version) = build_once(
+                        (changes_names, cl_version) = build_once(
                             ws.local_tree,
                             self.build_distribution,
                             output_directory,
@@ -498,7 +498,7 @@ class DebianTarget(Target):
                             source_date_epoch=source_date_epoch,
                         )
                     else:
-                        (changes_name, cl_version) = build_incrementally(
+                        (changes_names, cl_version) = build_incrementally(
                             ws.local_tree,
                             apt,
                             "~" + self.build_suffix,
@@ -540,11 +540,11 @@ class DebianTarget(Target):
                     except NotImplementedError:
                         details = None
                     raise WorkerFailure(code, e.description, details=details)
-                logger.info("Built %s", changes_name)
-        lintian_result = self._run_lintian(output_directory, changes_name)
+                logger.info("Built %r.", changes_names)
+        lintian_result = self._run_lintian(output_directory, changes_names)
         return {'lintian': lintian_result}
 
-    def _run_lintian(self, output_directory, changes_name):
+    def _run_lintian(self, output_directory, changes_names):
         logger.info('Running lintian')
         args = ['--exp-output=format=json']
         if self.lintian_suppress_tags:
@@ -553,7 +553,9 @@ class DebianTarget(Target):
             args.append('--profile=%s' % self.lintian_profile)
         try:
             lintian_output = subprocess.check_output(
-                ['lintian'] + args + [os.path.join(output_directory, changes_name)])
+                ['lintian'] + args +
+                [os.path.join(output_directory, changes_name)
+                 for changes_name in changes_names])
         except subprocess.CalledProcessError:
             logger.warning('lintian failed to run.')
             return None
