@@ -29,11 +29,14 @@ import tempfile
 import sys
 import traceback
 from typing import List, Dict
+from email.utils import formatdate
+from datetime import datetime
+from time import mktime
+
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 
-from debian.changelog import format_date
 from debian.deb822 import Release, Packages
 
 import gpg
@@ -94,6 +97,7 @@ class PackageInfoProvider(object):
                 )
                 yield bytes(para)
                 yield b"\n"
+        await asyncio.sleep(0)
 
 
 class CachingPackageInfoProvider(object):
@@ -147,6 +151,7 @@ async def get_packages(db, info_provider, suite_name, component, arch):
         try:
             async for chunk in info_provider.info_for_run(run_id, suite_name, package):
                 yield chunk
+                await asyncio.sleep(0)
         except ArtifactsMissing:
             logger.warning("Artifacts missing for %s (%s), skipping", package, run_id)
             continue
@@ -172,12 +177,15 @@ def add_file_info(r, base, p):
 async def write_suite_files(
     base_path, db, package_info_provider, suite, components, arches, origin, gpg_context
 ):
+
+    stamp = mktime(datetime.now().timetuple())
+
     r = Release()
     r["Origin"] = origin
     r["Label"] = suite.debian_build.archive_description
     r["Codename"] = suite.name
     r["Suite"] = suite.name
-    r["Date"] = format_date()
+    r["Date"] = formatdate(timeval=stamp, localtime=False, usegmt=True)
     r["NotAutomatic"] = "yes"
     r["ButAutomaticUpgrades"] = "yes"
     r["Architectures"] = " ".join(arches)
@@ -222,6 +230,8 @@ async def write_suite_files(
                         f.write(chunk)
             for suffix in SUFFIXES:
                 add_file_info(r, base_path, packages_path + suffix)
+            await asyncio.sleep(0)
+        await asyncio.sleep(0)
 
     logger.debug('Writing Release file for %s', suite.name)
     with open(os.path.join(base_path, "Release"), "wb") as f:
@@ -375,7 +385,7 @@ class GeneratorManager(object):
                 self.config,
                 suite_config,
                 self.gpg_context,
-            ), 'publish %s' % suite
+            ), 'publish %s' % suite.name
         )
 
 
@@ -434,7 +444,7 @@ async def main(argv=None):
         )
 
     generator_manager = GeneratorManager(
-        args.dists_directory, db, config, package_info_provider, gpg_context
+        args.dists_directory, db, config, package_info_provider, gpg_context,
     )
 
     loop = asyncio.get_event_loop()
