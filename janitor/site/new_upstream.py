@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from aiohttp import web
 import asyncpg
 from functools import partial
 from janitor import state
@@ -29,9 +30,11 @@ async def generate_pkg_file(
             'SELECT name, maintainer_email, uploader_emails, removed, branch_url, '
             'vcs_url, vcs_browse FROM package WHERE name = $1', package)
         if package is None:
-            raise KeyError(package)
+            raise web.HTTPNotFound(text='No such package: %s' % package)
         if run_id is not None:
             run = await get_run(conn, run_id)
+            if not run:
+                raise web.HTTPNotFound(text='No such run: %s' % run_id)
             merge_proposals = []
         else:
             run = await get_last_unabsorbed_run(conn, package['name'], suite)

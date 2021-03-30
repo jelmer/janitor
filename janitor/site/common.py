@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 from aiohttp import ClientConnectorError
+from aiohttp import web
 import asyncpg
 from functools import partial
 from typing import Optional, List, Tuple, AsyncIterable
@@ -174,11 +175,11 @@ FROM package
 LEFT JOIN policy ON package.name = policy.package AND suite = $2
 WHERE name = $1""", package, suite)
         if package is None:
-            raise KeyError(package)
+            raise web.HTTPNotFound(text='no such package: %s' % package)
         if run_id is not None:
             run = await get_run(conn, run_id)
             if not run:
-                raise KeyError(run_id)
+                raise web.HTTPNotFound(text='no such run: %s' % run_id)
             merge_proposals = []
         else:
             run = await get_last_unabsorbed_run(conn, package['name'], suite)

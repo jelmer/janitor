@@ -838,19 +838,16 @@ order by url, last_run.finish_time desc
         # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info["pkg"]
         run_id = request.match_info.get("run_id")
-        try:
-            return await generate_pkg_file(
-                request.app.database,
-                request.app.config,
-                request.app.policy,
-                request.app.http_client_session,
-                request.app.differ_url,
-                request.app.vcs_store_url,
-                pkg,
-                run_id,
-            )
-        except KeyError:
-            raise web.HTTPNotFound()
+        return await generate_pkg_file(
+            request.app.database,
+            request.app.config,
+            request.app.policy,
+            request.app.http_client_session,
+            request.app.differ_url,
+            request.app.vcs_store_url,
+            pkg,
+            run_id,
+        )
 
     @html_template("generic-package.html", headers={"Cache-Control": "max-age=600"})
     async def handle_generic_pkg(request):
@@ -859,20 +856,17 @@ order by url, last_run.finish_time desc
         # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info["pkg"]
         run_id = request.match_info.get("run_id")
-        try:
-            return await generate_pkg_context(
-                request.app.database,
-                request.app.config,
-                request.match_info["suite"],
-                request.app.policy,
-                request.app.http_client_session,
-                request.app.differ_url,
-                request.app.vcs_store_url,
-                pkg,
-                run_id,
-            )
-        except KeyError:
-            raise web.HTTPNotFound()
+        return await generate_pkg_context(
+            request.app.database,
+            request.app.config,
+            request.match_info["suite"],
+            request.app.policy,
+            request.app.http_client_session,
+            request.app.differ_url,
+            request.app.vcs_store_url,
+            pkg,
+            run_id,
+        )
 
     @html_template(
         "scrub-obsolete-package.html", headers={"Cache-Control": "max-age=600"}
@@ -883,20 +877,17 @@ order by url, last_run.finish_time desc
         # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info["pkg"]
         run_id = request.match_info.get("run_id")
-        try:
-            return await generate_pkg_context(
-                request.app.database,
-                request.app.config,
-                "scrub-obsolete",
-                request.app.policy,
-                request.app.http_client_session,
-                request.app.differ_url,
-                request.app.vcs_store_url,
-                pkg,
-                run_id,
-            )
-        except KeyError:
-            raise web.HTTPNotFound()
+        return await generate_pkg_context(
+            request.app.database,
+            request.app.config,
+            "scrub-obsolete",
+            request.app.policy,
+            request.app.http_client_session,
+            request.app.differ_url,
+            request.app.vcs_store_url,
+            pkg,
+            run_id,
+        )
 
     @html_template(
         "multiarch-fixes-package.html", headers={"Cache-Control": "max-age=600"}
@@ -907,19 +898,16 @@ order by url, last_run.finish_time desc
         # TODO(jelmer): Handle Accept: text/diff
         pkg = request.match_info["pkg"]
         run_id = request.match_info.get("run_id")
-        try:
-            return await generate_pkg_file(
-                request.app.database,
-                request.app.config,
-                request.app.policy,
-                request.app.http_client_session,
-                request.app.differ_url,
-                request.app.vcs_store_url,
-                pkg,
-                run_id,
-            )
-        except KeyError:
-            raise web.HTTPNotFound()
+        return await generate_pkg_file(
+            request.app.database,
+            request.app.config,
+            request.app.policy,
+            request.app.http_client_session,
+            request.app.differ_url,
+            request.app.vcs_store_url,
+            pkg,
+            run_id,
+        )
 
     @html_template(
         "lintian-fixes-tag-list.html", headers={"Cache-Control": "max-age=600"}
@@ -978,18 +966,15 @@ order by url, last_run.finish_time desc
         suite = request.match_info["suite"]
         pkg = request.match_info["pkg"]
         run_id = request.match_info.get("run_id")
-        try:
-            return await generate_pkg_file(
-                request.app.database,
-                request.app.config,
-                request.app.http_client_session,
-                request.app.differ_url,
-                pkg,
-                suite,
-                run_id,
-            )
-        except KeyError:
-            raise web.HTTPNotFound()
+        return await generate_pkg_file(
+            request.app.database,
+            request.app.config,
+            request.app.http_client_session,
+            request.app.differ_url,
+            pkg,
+            suite,
+            run_id,
+        )
 
     @html_template(
         "lintian-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}
