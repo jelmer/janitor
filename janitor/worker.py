@@ -901,7 +901,10 @@ def main(argv=None):
         parser.print_usage()
         return 1
 
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[%(asctime)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S")
 
     output_directory = os.path.abspath(args.output_directory)
 
