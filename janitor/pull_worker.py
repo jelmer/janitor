@@ -460,9 +460,14 @@ async def main(argv=None):
     args = parser.parse_args(argv)
 
     if args.debug:
-        logging.basicConfig(level=logging.DEBUG, format="%(message)s")
+        log_level = logging.DEBUG
     else:
-        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        log_level = logging.INFO
+
+    logging.basicConfig(
+        level=log_level,
+        format="[%(asctime)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S")
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
