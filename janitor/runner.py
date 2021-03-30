@@ -279,7 +279,7 @@ class DebianBuilder(Builder):
             "EXTRA_REPOSITORIES": ":".join(
                 [
                     "deb %s %s/ main" % (apt_location, suite)
-                    for suite in suite_config.debian_build.extra_build_suite
+                    for suite in suite_config.debian_build.extra_build_distribution
                 ]
             )
         }
