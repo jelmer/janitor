@@ -18,8 +18,7 @@ from janitor.site import (
 
 
 async def get_previous_runs(
-    conn: asyncpg.Connection, package: str, suite: str
-) -> AsyncIterable[state.Run]:
+        conn: asyncpg.Connection, package: str, suite: str):
     return await conn.fetch(
         """
 SELECT
