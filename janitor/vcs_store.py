@@ -51,7 +51,6 @@ from .vcs import (
 
 
 GIT_BACKEND_CHUNK_SIZE = 4096
-GIT_BACKEND_TIMEOUT = 60.0 * 60.0
 
 
 async def diff_request(request):
@@ -388,10 +387,15 @@ async def git_backend(request):
 
             return response
 
-    unused_stderr, response, unused_stdin = await asyncio.wait_for(asyncio.gather(*[
-        read_stderr(p.stderr), read_stdout(p.stdout),
-        feed_stdin(p.stdin),
-        ], return_exceptions=False), GIT_BACKEND_TIMEOUT)
+    try:
+        unused_stderr, response, unused_stdin = await asyncio.gather(*[
+            read_stderr(p.stderr), read_stdout(p.stdout),
+            feed_stdin(p.stdin),
+            ], return_exceptions=False)
+    except asyncio.CancelledError:
+        p.terminate()
+        await p.wait()
+        raise
 
     return response
 
