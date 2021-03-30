@@ -23,7 +23,7 @@
 <li class="not-in-archive">This package is not present in the archive.</li>
 {% endif %}
 {% if previous_runs %}
-<li>Last processed: {{ format_timestamp(previous_runs[0].finish_time) }} (took {{ format_duration(previous_runs[0].finish_time - previous_runs[0].start_time) }})</li>
+<li>Last processed: {{ format_timestamp(previous_runs[0].finish_time) }} (took {{ format_duration(previous_runs[0].duration) }})</li>
 {% endif %}
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>

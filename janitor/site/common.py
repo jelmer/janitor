@@ -17,48 +17,28 @@ from janitor.site import (
 )
 
 
-async def iter_previous_runs(
+async def get_previous_runs(
     conn: asyncpg.Connection, package: str, suite: str
 ) -> AsyncIterable[state.Run]:
-    for row in await conn.fetch(
+    return await conn.fetch(
         """
 SELECT
   id,
-  command,
   start_time,
   finish_time,
+  finish_time - start_time AS duration,
   description,
   package,
-  debian_build.version AS build_version,
-  debian_build.distribution AS build_distribution,
   result_code,
-  branch_name,
-  main_branch_revision,
-  revision,
-  context,
-  result,
-  suite,
-  instigated_context,
-  branch_url,
-  logfilenames,
-  review_status,
-  review_comment,
-  worker,
-  array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-  result_tags
 FROM
   run
-LEFT JOIN debian_build ON run.id = debian_build.run_id
 WHERE
   package = $1 AND suite = $2
 ORDER BY start_time DESC
 """,
         package,
         suite,
-    ):
-        yield state.Run.from_row(row)
-
+    )
 
 
 async def get_candidate(conn: asyncpg.Connection, package, suite):
@@ -229,9 +209,7 @@ WHERE run.package = $1 AND run.suite = $2
             candidate_context = None
             candidate_value = None
             candidate_success_chance = None
-        previous_runs = [
-            x async for x in iter_previous_runs(conn, package['name'], suite)
-        ]
+        previous_runs = get_previous_runs(conn, package['name'], suite)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package['name']
         )
