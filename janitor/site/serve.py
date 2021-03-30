@@ -576,7 +576,7 @@ AND suite = ANY($1::text[])
     async def handle_login(request):
         state = str(uuid.uuid4())
         callback_path = request.app.router["oauth2-callback"].url_for()
-        if not request.openid_config:
+        if not request.app.openid_config:
             raise web.HTTPNotFound(text='login is disabled on this instance')
         location = URL(request.app.openid_config["authorization_endpoint"]).with_query(
             {
