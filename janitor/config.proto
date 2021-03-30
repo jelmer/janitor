@@ -78,8 +78,8 @@ message GenericBuild {
 }
 
 message DebianBuild {
-  // Extra suites to pull in packages from when building
-  repeated string extra_build_suite = 1;
+  // Extra distributions to pull in packages from when building
+  repeated string extra_build_distribution = 1;
 
   // Sbuild environment override
   repeated Env sbuild_env = 2;
