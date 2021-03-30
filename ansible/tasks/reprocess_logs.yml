@@ -1,0 +1,6 @@
+---
+- name: Reprocess logs
+  shell:
+    cmd: ". {{ janitor_home }}/env; export PYTHONPATH; {{ janitor_code_path }}/reprocess-build-results.py --reschedule --config={{ janitor_conf_path }}"
+  become: yes
+  become_user: "{{ janitor_user }}"
