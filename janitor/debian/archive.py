@@ -385,7 +385,7 @@ class GeneratorManager(object):
                 self.config,
                 suite_config,
                 self.gpg_context,
-            ), 'publish %s' % suite.name
+            ), 'publish %s' % suite_config.name
         )
 
 
