@@ -180,7 +180,7 @@ WHERE
     package = $2 AND
     result_code = 'success'
 ORDER BY finish_time DESC
-""", 
+"""
     return await conn.fetchrow(query, main_branch_revision, package)
 
 
