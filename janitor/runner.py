@@ -106,35 +106,12 @@ from .vcs import (
     import_branches,
 )
 
-apt_package_count = Gauge(
-    "apt_package_count", "Number of packages with a version published", ["suite"]
-)
 packages_processed_count = Counter("package_count", "Number of packages processed.")
-queue_length = Gauge(
-    "queue_length", "Number of items in the queue.", labelnames=("bucket",)
-)
-queue_duration = Gauge(
-    "queue_duration", "Time to process all items in the queue sequentially"
-)
 last_success_gauge = Gauge(
     "job_last_success_unixtime", "Last time a batch job successfully finished"
 )
 build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
-current_tick = Gauge(
-    "current_tick",
-    "The current tick in the queue that's being processed",
-    labelnames=("bucket",),
-)
 run_count = Gauge("run_count", "Number of total runs.", labelnames=("suite",))
-run_result_count = Gauge(
-    "run_result_count", "Number of runs by code.", labelnames=("suite", "result_code")
-)
-never_processed_count = Gauge(
-    "never_processed_count", "Number of items never processed.", labelnames=("suite",)
-)
-review_status_count = Gauge(
-    "review_status_count", "Last runs by review status.", labelnames=("review_status",)
-)
 
 
 class BuilderResult(object):
@@ -1249,74 +1226,6 @@ class ActiveLocalRun(ActiveRun):
         return result
 
 
-async def export_queue_length(db: state.Database) -> None:
-    # TODO(jelmer): Move to a different process?
-    while True:
-        async with db.acquire() as conn:
-            query = """\
-            SELECT SUM(estimated_duration) FROM queue
-            WHERE estimated_duration IS NOT NULL"""
-            total_duration = await conn.fetchval(query)
-            if total_duration is not None:
-                queue_duration.set(total_duration.total_seconds())
-            for bucket, tick, length in await conn.fetch(
-                    "SELECT bucket, MIN(priority), count(*) FROM queue "
-                    "GROUP BY bucket"):
-                current_tick.labels(bucket=bucket).set(tick)
-                queue_length.labels(bucket=bucket).set(length)
-        await asyncio.sleep(60)
-
-
-async def export_stats(db: state.Database) -> None:
-    # TODO(jelmer): Move to a different process?
-    while True:
-        async with db.acquire() as conn:
-            for suite, count in await conn.fetch(
-                """
-select suite, count(distinct package) from run where result_code = 'success'
-group by 1"""
-            ):
-                apt_package_count.labels(suite=suite).set(count)
-
-            by_suite: Dict[str, int] = {}
-            by_suite_result: Dict[Tuple[str, str], int] = {}
-            for row in await conn.fetch("""
-SELECT DISTINCT ON (package, suite)
-  package, suite, result_code
-FROM run
-ORDER BY package, suite, start_time DESC
-"""):
-                by_suite.setdefault(row['suite'], 0)
-                by_suite[row['suite']] += 1
-                by_suite_result.setdefault((row['suite'], row['result_code']), 0)
-                by_suite_result[(row['suite'], row['result_code'])] += 1
-            for suite, count in by_suite.items():
-                run_count.labels(suite=suite).set(count)
-            for (suite, result_code), count in by_suite_result.items():
-                run_result_count.labels(suite=suite, result_code=result_code).set(count)
-            for suite, count in await conn.fetch("""\
-select suite, count(*) from candidate c
-where not exists (
-    SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
-GROUP BY suite
-"""):
-
-                never_processed_count.labels(suite).set(count)
-            for row in await conn.fetch("""\
-select
-  review_status,
-  count(review_status) AS cnt
-from
-  last_runs
-where result_code = 'success'
-group by 1
-"""):
-                review_status_count.labels(row['review_status']).set(row['cnt'])
-
-        # Every 30 minutes
-        await asyncio.sleep(60 * 30)
-
-
 async def store_run(
     conn: asyncpg.Connection,
     run_id: str,
@@ -2036,8 +1945,6 @@ def main(argv=None):
         async with artifact_manager:
             return await asyncio.gather(
                 loop.create_task(queue_processor.process()),
-                loop.create_task(export_queue_length(db)),
-                loop.create_task(export_stats(db)),
                 loop.create_task(
                     run_web_server(args.listen_address, args.port, queue_processor)
                 ),
