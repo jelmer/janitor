@@ -21,7 +21,6 @@ import asyncio
 from datetime import datetime, timedelta
 import re
 from janitor import state
-from janitor.debian import state as debian_state
 from janitor.config import read_config
 from janitor.schedule import do_schedule
 
