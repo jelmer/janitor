@@ -5,7 +5,7 @@ import asyncpg
 from functools import partial
 from janitor import state
 from . import tracker_url
-from .common import get_candidate, get_run, get_last_unabsorbed_run, iter_candidates, iter_previous_runs
+from .common import get_candidate, get_run, get_last_unabsorbed_run, iter_candidates, get_previous_runs
 
 
 async def get_proposals(conn: asyncpg.Connection, package, suite):
@@ -66,9 +66,7 @@ async def generate_pkg_file(
             run_id = run.id
             result = run.result
             branch_url = run.branch_url
-        previous_runs = [
-            r async for r in iter_previous_runs(conn, package['name'], suite)
-        ]
+        previous_runs = await get_previous_runs(conn, package['name'], suite)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package['name']
         )
