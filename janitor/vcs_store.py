@@ -375,7 +375,7 @@ async def git_backend(request):
             try:
                 response.enable_chunked_encoding()
             except RuntimeError:
-                pass
+                pass  # HTTP/1.0
 
             await response.prepare(request)
 
@@ -388,12 +388,10 @@ async def git_backend(request):
 
             return response
 
-    stdin_feeder = feed_stdin(p.stdin)
-
     unused_stderr, response, unused_stdin = await asyncio.wait_for(asyncio.gather(*[
         read_stderr(p.stderr), read_stdout(p.stdout),
-        stdin_feeder,
-        ], return_exceptions=True), GIT_BACKEND_TIMEOUT)
+        feed_stdin(p.stdin),
+        ], return_exceptions=False), GIT_BACKEND_TIMEOUT)
 
     return response
 
