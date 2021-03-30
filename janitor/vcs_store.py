@@ -308,9 +308,6 @@ async def git_backend(request):
         # REMOTE_USER is not set
     }
 
-    if request.content_length is not None:
-        env['CONTENT_LENGTH'] = str(request.content_length)
-
     if request.content_type is not None:
         env['CONTENT_TYPE'] = request.content_type
 
