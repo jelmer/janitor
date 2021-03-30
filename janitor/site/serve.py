@@ -961,20 +961,21 @@ order by url, last_run.finish_time desc
         "new-upstream-package.html", headers={"Cache-Control": "max-age=600"}
     )
     async def handle_new_upstream_pkg(request):
-        from .new_upstream import generate_pkg_file
+        from .common import generate_pkg_context
 
         suite = request.match_info["suite"]
         pkg = request.match_info["pkg"]
         run_id = request.match_info.get("run_id")
-        return await generate_pkg_file(
+        return await generate_pkg_context(
             request.app.database,
             request.app.config,
+            suite,
+            request.app.policy,
             request.app.http_client_session,
             request.app.differ_url,
+            request.app.vcs_store_url,
             pkg,
-            suite,
-            run_id,
-        )
+            run_id)
 
     @html_template(
         "lintian-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}

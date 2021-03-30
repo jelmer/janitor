@@ -16,52 +16,6 @@ SUITE = "lintian-fixes"
 renamed_tags = load_renamed_tags()
 
 
-async def iter_last_unabsorbed_runs(
-    conn: asyncpg.Connection, suite, packages=None
-):
-    query = """
-SELECT DISTINCT ON (package)
-  id,
-  command,
-  start_time,
-  finish_time,
-  description,
-  package,
-  debian_build.version AS build_version,
-  debian_build.distribution AS build_distribution,
-  result_code,
-  branch_name,
-  main_branch_revision,
-  revision,
-  context,
-  result,
-  suite,
-  instigated_context,
-  branch_url,
-  logfilenames,
-  review_status,
-  review_comment,
-  worker,
-  array(SELECT row(role, remote_name, base_revision,
-   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-  result_tags
-FROM
-  last_unabsorbed_runs
-LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
-WHERE suite = $1
-"""
-    args = [suite]
-    if packages is not None:
-        args.append(packages)
-        query += " AND package = ANY($%d::text[])" % len(args)
-
-    query += """
-ORDER BY package, suite, start_time DESC
-"""
-    for row in await conn.fetch(query, *args):
-        yield state.Run.from_row(row)
-
-
 async def generate_pkg_file(
     db, config, policy, client, differ_url, vcs_store_url, package, run_id=None
 ):
@@ -210,10 +164,32 @@ WHERE status = 'open' AND run.suite = $1
         for row in await iter_candidates(conn, packages=packages, suite=SUITE):
             candidates[row['package']] = row['context'].split(" ")
         runs = {}
-        async for run in iter_last_unabsorbed_runs(
-            conn, suite=SUITE, packages=packages
-        ):
-            runs[run.package] = run
+        query = """
+SELECT DISTINCT ON (package)
+  id,
+  command,
+  start_time,
+  finish_time,
+  description,
+  package,
+  result_code,
+  branch_name,
+  main_branch_revision,
+  revision,
+  context,
+  result,
+  instigated_context,
+  branch_url,
+  array(SELECT row(role, remote_name, base_revision,
+   revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
+  result_tags
+FROM
+  last_unabsorbed_runs
+WHERE suite = $1 AND package = ANY($2::text[])
+ORDER BY package, suite, start_time DESC
+"""
+        for run in await conn.fetch(query, SUITE, packages):
+            runs[run['package']] = run
         queue_data = {
             row['package']: (row['position'], row['wait_time'])
             for row in await conn.fetch(
@@ -227,24 +203,24 @@ WHERE status = 'open' AND run.suite = $1
         run = runs.get(package)
         fixed = set()
         unfixed = set()
-        if run and run.result:
-            applied = run.result.get("applied")
+        if run and run['result']:
+            applied = run['result'].get("applied")
             if isinstance(applied, dict):
                 applied = [applied]
             for applied in applied:
                 for tag in applied.get("fixed_lintian_tags", []):
                     fixed.add(tag)
-        if run and run.instigated_context:
-            for tag in run.instigated_context.split(" "):
+        if run and run['instigated_context']:
+            for tag in run['instigated_context'].split(" "):
                 unfixed.add(tag)
         unfixed -= fixed
         open_proposal = open_proposals.get(package)
         package_candidates = set(candidates.get(package, []))
         if open_proposal:
             status = "proposal"
-        elif run and run.result and run.result_code in ("success", "nothing-new-to-do"):
+        elif run and run['result'] and run['result_code'] in ("success", "nothing-new-to-do"):
             status = "unabsorbed"
-        elif run and run.result_code != "nothing-to-do":
+        elif run and run['result_code'] != "nothing-to-do":
             status = "error"
         elif package_candidates:
             status = "candidates"
