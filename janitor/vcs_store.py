@@ -311,6 +311,8 @@ async def git_backend(request):
     if request.content_type is not None:
         env['CONTENT_TYPE'] = request.content_type
 
+    assert request.headers.get('Content-Encoding', 'identity') == 'identity'
+
     for key, value in request.headers.items():
         env["HTTP_" + key.replace("-", "_").upper()] = value
 
@@ -359,26 +361,32 @@ async def git_backend(request):
             status_code = 200
             status_reason = "OK"
 
-        response = web.StreamResponse(
-            headers=headers,
-            status=status_code, reason=status_reason,
-        )
-
         if 'Content-Length' in headers:
-            response.content_length = int(headers['Content-Length'])
+            content_length = int(headers['Content-Length'])
+            return web.Response(
+                headers=headers, status=status_code, reason=status_reason,
+                body=await p.stdout.read(content_length))
         else:
-            response.enable_chunked_encoding()
+            response = web.StreamResponse(
+                headers=headers,
+                status=status_code, reason=status_reason,
+            )
 
-        await response.prepare(request)
+            try:
+                response.enable_chunked_encoding()
+            except RuntimeError:
+                pass
 
-        chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
-        while chunk:
-            await response.write(chunk)
+            await response.prepare(request)
+
             chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
+            while chunk:
+                await response.write(chunk)
+                chunk = await p.stdout.read(GIT_BACKEND_CHUNK_SIZE)
 
-        await response.write_eof()
+            await response.write_eof()
 
-        return response
+            return response
 
     stdin_feeder = feed_stdin(p.stdin)
 
