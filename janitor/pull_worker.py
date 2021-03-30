@@ -566,7 +566,7 @@ async def main(argv=None):
         os.environ.update(env)
         os.environ.update(build_environment)
 
-        metadata = {}
+        metadata = {"queue_id": assignment["queue_id"]}
         if jenkins_metadata:
             metadata["jenkins"] = jenkins_metadata
 

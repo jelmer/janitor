@@ -374,11 +374,11 @@ class JanitorResult(object):
         worker_result=None,
         worker_cls=None,
         logfilenames=None,
-        legacy_branch_name=None,
         suite=None,
         start_time=None,
         worker_name=None,
-        worker_link=None
+        worker_link=None,
+        legacy_branch_name=None
     ):
         self.package = pkg
         self.suite = suite
@@ -386,14 +386,14 @@ class JanitorResult(object):
         self.description = description
         self.branch_url = branch_url
         self.code = code
-        self.legacy_branch_name = legacy_branch_name
         self.logfilenames = logfilenames
         self.worker_name = worker_name
         self.worker_link = worker_link
+        self.legacy_branch_name = legacy_branch_name
         if worker_result:
             self.context = worker_result.context
             if self.code is None:
-                self.code = worker_result.code
+                self.code = worker_result.code or 'success'
             if self.description is None:
                 self.description = worker_result.description
             self.main_branch_revision = worker_result.main_branch_revision
@@ -431,7 +431,6 @@ class JanitorResult(object):
                 "name": self.builder_result.kind,
                 "details": self.builder_result.json(),
             } if self.builder_result else {}),
-            "legacy_branch_name": self.legacy_branch_name,
             "logfilenames": self.logfilenames,
             "subworker": self.subworker_result,
             "value": self.value,
@@ -486,7 +485,8 @@ class WorkerResult(object):
         remotes=None,
         details=None,
         builder_result=None,
-        start_time=None
+        start_time=None,
+        queue_id=None
     ):
         self.code = code
         self.description = description
@@ -501,6 +501,7 @@ class WorkerResult(object):
         self.details = details
         self.builder_result = builder_result
         self.start_time = start_time
+        self.queue_id = queue_id
 
     @classmethod
     def from_file(cls, path):
@@ -551,6 +552,7 @@ class WorkerResult(object):
             builder_result,
             datetime.fromisoformat(worker_result['start_time'])
             if 'start_time' in worker_result else None,
+            worker_result.get("queue_id")
         )
 
 
@@ -768,7 +770,6 @@ class ActiveRemoteRun(ActiveRun):
         self,
         queue_item: state.QueueItem,
         worker_name: str,
-        legacy_branch_name: str,
         jenkins_metadata: Optional[Dict[str, str]] = None,
     ):
         super(ActiveRemoteRun, self).__init__(queue_item)
@@ -777,7 +778,6 @@ class ActiveRemoteRun(ActiveRun):
         self.main_branch_url = self.queue_item.branch_url
         self.resume_branch_name = None
         self.reset_keepalive()
-        self.legacy_branch_name = legacy_branch_name
         self._watch_dog = None
         self._jenkins_metadata = jenkins_metadata
 
@@ -1188,11 +1188,6 @@ class ActiveLocalRun(ActiveRun):
                 branch_url=full_branch_url(main_branch),
                 worker_result=worker_result,
                 logfilenames=logfilenames,
-                legacy_branch_name=(
-                    resume.legacy_branch_name
-                    if resume and worker_result.code == "nothing-to-do"
-                    else None
-                ),
             )
 
         result = self.create_result(
@@ -1200,6 +1195,7 @@ class ActiveLocalRun(ActiveRun):
             code="success",
             worker_result=worker_result,
             logfilenames=logfilenames,
+            legacy_branch_name=suite_config.branch_name,
         )
 
         result.builder_result.from_directory(
@@ -1239,7 +1235,6 @@ class ActiveLocalRun(ActiveRun):
             result.branches,
             result.tags,
         )
-        result.legacy_branch_name = suite_config.branch_name
 
         if result.builder_result and artifact_manager:
             artifact_names = result.builder_result.artifact_filenames()
@@ -1563,7 +1558,7 @@ class QueueProcessor(object):
         async with self.database.acquire() as conn:
             limit = len(self.active_runs) + n + 2
             async for item in state.iter_queue(conn, limit=limit):
-                if self.queue_item_assigned(item):
+                if self.queue_item_assigned(item.id):
                     continue
                 if len(ret) < n:
                     ret.append(item)
@@ -1608,10 +1603,10 @@ class QueueProcessor(object):
         finally:
             loop.remove_signal_handler(signal.SIGTERM)
 
-    def queue_item_assigned(self, queue_item: state.QueueItem) -> bool:
+    def queue_item_assigned(self, queue_item_id: int) -> bool:
         """Check if a queue item has been assigned already."""
         for active_run in self.active_runs.values():
-            if active_run.queue_item.id == queue_item.id:
+            if active_run.queue_item.id == queue_item_id:
                 return True
         return False
 
@@ -1727,7 +1722,6 @@ async def handle_assign(request):
     active_run = ActiveRemoteRun(
         worker_name=worker,
         queue_item=item,
-        legacy_branch_name=suite_config.branch_name,
         jenkins_metadata=json.get("jenkins"),
     )
 
@@ -1757,6 +1751,9 @@ async def handle_assign(request):
                 )
             else:
                 resume_branch = None
+            await conn.execute(
+                'UPDATE queue SET branch_url = $1 WHERE id = $2',
+                active_run.main_branch_url, item.id)
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
@@ -1799,7 +1796,7 @@ async def handle_assign(request):
         "env": env,
         "command": item.command,
         "suite": item.suite,
-        "legacy_branch_name": active_run.legacy_branch_name,
+        "legacy_branch_name": suite_config.branch_name,
         "vcs_manager": queue_processor.public_vcs_manager.base_url,
     }
 
@@ -1817,9 +1814,7 @@ async def handle_finish(request):
         worker_name = active_run.worker_name
         worker_link = active_run.worker_link
     else:
-        # TODO(jelmer): Allow just passing in a queue id, or finding the queue
-        # id based on other info?
-        return web.json_response({'reason': 'no such run: %s' % run_id}, status=404)
+        queue_item = None
 
     reader = await request.multipart()
     worker_result = None
@@ -1846,6 +1841,13 @@ async def handle_finish(request):
         if worker_result is None:
             return web.json_response({"reason": "Missing result JSON"}, status=400)
 
+        if queue_item is None:
+            async with queue_processor.database.acquire() as conn:
+                queue_item = await state.get_queue_item(conn, worker_result.queue_id)
+            if queue_item is None:
+                return web.json_response(
+                    {"reason": "Unable to find relevant queue item"}, status=404)
+
         logfilenames = await import_logs(
             output_directory,
             queue_processor.logfile_manager,
@@ -1854,36 +1856,23 @@ async def handle_finish(request):
             run_id,
         )
 
-        if worker_result.code is not None:
-            result = JanitorResult(
-                pkg=queue_item.package,
-                suite=queue_item.suite,
-                log_id=run_id,
-                worker_name=worker_name,
-                worker_link=worker_link,
-                branch_url=active_run.main_branch_url,
-                worker_result=worker_result,
-                logfilenames=logfilenames,
-                legacy_branch_name=(
-                    active_run.resume_branch_name
-                    if worker_result.code == "nothing-to-do"
-                    else None
-                ),
-            )
-        else:
-            result = JanitorResult(
-                pkg=queue_item.package,
-                suite=queue_item.suite,
-                log_id=run_id,
-                worker_name=worker_name,
-                worker_link=worker_link,
-                branch_url=active_run.main_branch_url,
-                code="success",
-                worker_result=worker_result,
-                logfilenames=logfilenames,
-                legacy_branch_name=active_run.legacy_branch_name,
+        suite_config = get_suite_config(queue_processor.config, queue_item.suite)
+
+        result = JanitorResult(
+            pkg=queue_item.package,
+            suite=queue_item.suite,
+            log_id=run_id,
+            worker_name=worker_name,
+            worker_link=worker_link,
+            branch_url=queue_item.branch_url,
+            worker_result=worker_result,
+            logfilenames=logfilenames,
+            legacy_branch_name=(
+                suite_config.branch_name
+                if worker_result.code is None else None),
             )
 
+        if worker_result.code is None:
             result.builder_result.from_directory(
                 output_directory, queue_item.package
             )

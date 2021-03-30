@@ -471,6 +471,33 @@ async def get_queue_position(conn: asyncpg.Connection, suite, package):
     return row
 
 
+async def get_queue_item(conn: asyncpg.Connection, queue_id: int):
+    query = """
+SELECT
+    package.branch_url AS branch_url,
+    package.subpath AS subpath,
+    queue.package AS package,
+    queue.command AS command,
+    queue.context AS context,
+    queue.id AS id,
+    queue.estimated_duration AS estimated_duration,
+    queue.suite AS suite,
+    queue.refresh AS refresh,
+    queue.requestor AS requestor,
+    package.vcs_type AS vcs_type,
+    upstream.upstream_branch_url AS upstream_branch_url
+FROM
+    queue
+LEFT JOIN package ON package.name = queue.package
+LEFT OUTER JOIN upstream ON upstream.name = package.name
+WHERE queue.id = $1
+"""
+    row = await conn.fetchrow(query, queue_id)
+    if row:
+        return QueueItem.from_row(row)
+    return None
+
+
 async def iter_queue(conn: asyncpg.Connection, limit=None):
     query = """
 SELECT
