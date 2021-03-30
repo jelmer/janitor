@@ -386,8 +386,9 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
             if "unavailable_run_id" in e.headers:
                 raise DebdiffMissingRun(e.headers["unavailable_run_id"])
             raise
-        elif e.code in (400, 502, 503, 504):
-            raise DebdiffRetrievalError(e.file.read().decode("utf-8", "replace"))
+        elif e.code in (400, 500, 502, 503, 504):
+            raise DebdiffRetrievalError(
+                'Error %d: %s' % (e.code, e.file.read().decode("utf-8", "replace")))
         else:
             raise
     except ConnectionResetError as e:
