@@ -389,6 +389,7 @@ class JanitorResult(object):
             self.failure_details = worker_result.details
             self.start_time = worker_result.start_time
             self.finish_time = worker_result.finish_time
+            self.worker_name = worker_result.worker_name
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -471,7 +472,8 @@ class WorkerResult(object):
         builder_result=None,
         start_time=None,
         finish_time=None,
-        queue_id=None
+        queue_id=None,
+        worker_name=None
     ):
         self.code = code
         self.description = description
@@ -488,6 +490,7 @@ class WorkerResult(object):
         self.start_time = start_time
         self.finish_time = finish_time
         self.queue_id = queue_id
+        self.worker_name = worker_name
 
     @classmethod
     def from_file(cls, path):
@@ -540,7 +543,8 @@ class WorkerResult(object):
             if 'start_time' in worker_result else None,
             datetime.fromisoformat(worker_result['finish_time'])
             if 'finish_time' in worker_result else None,
-            worker_result.get("queue_id")
+            worker_result.get("queue_id"),
+            worker_result.get("worker_name")
         )
 
 
@@ -1736,6 +1740,8 @@ async def handle_finish(request):
         worker_link = active_run.worker_link
     else:
         queue_item = None
+        worker_name = None
+        worker_link = None
 
     reader = await request.multipart()
     worker_result = None
@@ -1776,6 +1782,9 @@ async def handle_finish(request):
             queue_item.package,
             run_id,
         )
+
+        if worker_name is None:
+            worker_name = worker_result.worker_name
 
         suite_config = get_suite_config(queue_processor.config, queue_item.suite)
 
