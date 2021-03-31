@@ -357,6 +357,7 @@ class JanitorResult(object):
         logfilenames=None,
         suite=None,
         start_time=None,
+        finish_time=None,
         worker_name=None,
         worker_link=None,
         legacy_branch_name=None
@@ -387,8 +388,10 @@ class JanitorResult(object):
             self.remotes = worker_result.remotes
             self.failure_details = worker_result.details
             self.start_time = worker_result.start_time
+            self.finish_time = worker_result.finish_time
         else:
             self.start_time = start_time
+            self.finish_time = finish_time
             self.context = None
             self.main_branch_revision = None
             self.revision = None
@@ -467,6 +470,7 @@ class WorkerResult(object):
         details=None,
         builder_result=None,
         start_time=None,
+        finish_time=None,
         queue_id=None
     ):
         self.code = code
@@ -482,6 +486,7 @@ class WorkerResult(object):
         self.details = details
         self.builder_result = builder_result
         self.start_time = start_time
+        self.finish_time = finish_time
         self.queue_id = queue_id
 
     @classmethod
@@ -533,6 +538,8 @@ class WorkerResult(object):
             builder_result,
             datetime.fromisoformat(worker_result['start_time'])
             if 'start_time' in worker_result else None,
+            datetime.fromisoformat(worker_result['finish_time'])
+            if 'finish_time' in worker_result else None,
             worker_result.get("queue_id")
         )
 
@@ -715,6 +722,7 @@ class ActiveRun(object):
             pkg=self.queue_item.package,
             suite=self.queue_item.suite,
             start_time=self.start_time,
+            finish_time=datetime.now(),
             log_id=self.log_id,
             worker_name=self.worker_name,
             worker_link=self.worker_link,
@@ -1412,8 +1420,7 @@ class QueueProcessor(object):
         packages_processed_count.inc()
 
     async def finish_run(self, item: state.QueueItem, result: JanitorResult) -> None:
-        finish_time = datetime.now()
-        duration = finish_time - result.start_time
+        duration = result.finish_time - result.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds()
         )
@@ -1439,7 +1446,7 @@ class QueueProcessor(object):
                     item.package,
                     result.branch_url,
                     result.start_time,
-                    finish_time,
+                    result.finish_time,
                     item.command,
                     result.description,
                     item.context,
@@ -1624,6 +1631,7 @@ async def handle_assign(request):
             code=code,
             description=description,
             start_time=datetime.now(),
+            finish_time=datetime.now(),
         )
         await queue_processor.finish_run(active_run.queue_item, result)
 

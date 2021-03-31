@@ -952,6 +952,7 @@ def main(argv=None):
         return 0
     finally:
         finish_time = datetime.now()
+        metadata["finish_time"] = finish_time.isoformat()
         logger.info("Elapsed time: %s", finish_time - start_time)
         with open(os.path.join(output_directory, "result.json"), "w") as f:
             try:
