@@ -282,6 +282,38 @@ Tag: {{ tagname }}
 
 {% endmacro %}
 
+{%- macro lintian_severity_short(severity) -%}
+{%- if severity == 'error' -%}e
+{%- elif severity == 'warning' -%}w
+{%- elif severity == 'informational' -%}i
+{%- elif severity == 'pedantic' -%}p
+{%- else -%}?
+{%- endif -%}
+{%- endmacro -%}
+
 {% macro display_lintian_result(lintian_result) %}
-{{ lintian_result }}
+
+{% for group in lintian_result['groups'] %}
+<ul class="lintian-filelist">
+ {% for file in group['input-files'] %}
+ <li class="lintian-fileitem"><a href="{{ file.path.split('/')[-1] }}">{{ file.path.split('/')[-1] }}</a></li>
+ <ul class="lintian-hintlist">
+  {% if not file.tags -%}
+  {% else %}
+  {% for hint in file.tags %}
+    <li class="lintian-hintitem">
+      <span class="tinycode" id="lintian-code-{{ hint.severity }}">{{ lintian_severity_short(hint.severity) }}</span>
+      <span class="tinyhint"><a href="https://lintian.debian.org/tags/{{ hint.name }}.html">{{ hint.name }}</a></span>
+      <span class="tinycontext">{{ hint.context }}</span>
+    </li>
+  {% endfor %}
+  {% endif %}
+ </ul>
+ {% endfor %}
+</ul>
+{% endfor %}
+
+{% if 'lintian-version' in lintian_result %}
+<!-- lintian version {{ lintian_result['lintian-version'] }} -->
+{% endif %}
 {% endmacro %}
