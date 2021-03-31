@@ -469,6 +469,9 @@ class DebianTarget(Target):
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
 
+        if not ws.local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
+            raise WorkerFailure("not-debian-package", "Not a Debian package")
+
         if self.chroot:
             session = SchrootSession(self.chroot)
         else:
