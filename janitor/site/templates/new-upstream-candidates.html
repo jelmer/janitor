@@ -6,8 +6,8 @@
 <h1>{{ suite }} - Candidates</h1>
 
 <ul>
-{% for package, version, value, success_chance in candidates %}
-<li><a href="/{{ suite }}/pkg/{{ package }}">{{ package }}</a> - {{ version }}
+{% for candidate in candidates %}
+<li><a href="/{{ suite }}/pkg/{{ candidate.package }}">{{ candidate.package }}</a> - {{ candidate.archive_version }} &rArr; {{ candidate.version }}
 {% endfor %}
 </ul>
 
