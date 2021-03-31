@@ -216,7 +216,7 @@ WHERE run.package = $1 AND run.suite = $2
     async def show_debdiff():
         if not run['build_version']:
             return ""
-        if not unchanged_run or not unchanged_run['build_version']:
+        if not unchanged_run or not unchanged_run.build_version:
             return ""
         try:
             debdiff, content_type = await get_archive_diff(
