@@ -28,7 +28,7 @@ SELECT
   finish_time - start_time AS duration,
   description,
   package,
-  result_code,
+  result_code
 FROM
   run
 WHERE
