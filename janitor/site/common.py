@@ -78,7 +78,7 @@ WHERE NOT package.removed
 
 
 async def get_last_unabsorbed_run(
-        conn: asyncpg.Connection, package: str, suite: str) -> Optional[state.Run]:
+        conn: asyncpg.Connection, package: str, suite: str):
     args = []
     query = """
 SELECT
@@ -114,10 +114,7 @@ ORDER BY package, suite DESC, start_time DESC
 LIMIT 1
 """
     args = [package, suite]
-    row = await conn.fetchrow(query, *args)
-    if row is None:
-        return None
-    return state.Run.from_row(row)
+    return await conn.fetchrow(query, *args)
 
 
 async def get_run(conn: asyncpg.Connection, run_id):
@@ -138,10 +135,7 @@ LEFT JOIN
     debian_build ON debian_build.run_id = run.id
 WHERE id = $1
 """
-    row = await conn.fetchrow(query, run_id)
-    if row:
-        return state.Run.from_row(row)
-    return None
+    return await conn.fetchrow(query, run_id)
 
 
 async def generate_pkg_context(
@@ -185,18 +179,18 @@ WHERE run.package = $1 AND run.suite = $2
             branch_url = None
             unchanged_run = None
         else:
-            command = run.command
-            build_version = run.build_version
-            result_code = run.result_code
-            context = run.context
-            start_time = run.start_time
-            finish_time = run.finish_time
-            run_id = run.id
-            result = run.result
-            branch_url = run.branch_url
-            if run.main_branch_revision:
+            command = run['command']
+            build_version = run['build_version']
+            result_code = run['result_code']
+            context = run['context']
+            start_time = run['start_time']
+            finish_time = run['finish_time']
+            run_id = run['id']
+            result = run['result']
+            branch_url = run['branch_url']
+            if run['main_branch_revision']:
                 unchanged_run = await state.get_unchanged_run(
-                    conn, run.package, run.main_branch_revision
+                    conn, run['package'], run['main_branch_revision']
                 )
             else:
                 unchanged_run = None
@@ -215,12 +209,12 @@ WHERE run.package = $1 AND run.suite = $2
 
     async def show_diff(role):
         try:
-            (remote_name, base_revid, revid) = run.get_result_branch(role)
+            (remote_name, base_revid, revid) = state.get_result_branch(run['result_branches'], role)
         except KeyError:
             return "no result branch with role %s" % role
         if base_revid == revid:
             return ""
-        url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run.id, role))
+        url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run['id'], role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -231,15 +225,15 @@ WHERE run.package = $1 AND run.suite = $2
             return "Unable to retrieve diff; error %s" % e
 
     async def show_debdiff():
-        if not run.build_version:
+        if not run['build_version']:
             return ""
-        if not unchanged_run or not unchanged_run.build_version:
+        if not unchanged_run or not unchanged_run['build_version']:
             return ""
         try:
             debdiff, content_type = await get_archive_diff(
                 client,
                 differ_url,
-                run.id,
+                run['id'],
                 unchanged_run,
                 kind="debdiff",
                 filter_boring=True,
@@ -252,7 +246,7 @@ WHERE run.package = $1 AND run.suite = $2
             return "Error retrieving debdiff: %s" % e
 
     async def vcs_type():
-        return await get_vcs_type(client, vcs_store_url, run.package)
+        return await get_vcs_type(client, vcs_store_url, run['package'])
 
     return {
         "package": package['name'],

@@ -127,32 +127,32 @@ async def generate_run_file(
 ):
     kwargs = {}
     kwargs["run"] = run
-    kwargs["run_id"] = run.id
-    kwargs["command"] = run.command
-    kwargs["description"] = run.description
-    kwargs["package"] = run.package
-    kwargs["start_time"] = run.start_time
-    kwargs["finish_time"] = run.finish_time
-    kwargs["build_version"] = run.build_version
-    kwargs["build_distribution"] = run.build_distribution
-    kwargs["result_code"] = run.result_code
-    kwargs["result"] = run.result
-    kwargs["revision"] = run.revision
-    kwargs["branch_url"] = run.branch_url
+    kwargs["run_id"] = run['id']
+    kwargs["command"] = run['command']
+    kwargs["description"] = run['description']
+    kwargs["package"] = run['package']
+    kwargs["start_time"] = run['start_time']
+    kwargs["finish_time"] = run['finish_time']
+    kwargs["build_version"] = run['build_version']
+    kwargs["build_distribution"] = run['build_distribution']
+    kwargs["result_code"] = run['result_code']
+    kwargs["result"] = run['result']
+    kwargs["revision"] = run['revision']
+    kwargs["branch_url"] = run['branch_url']
     kwargs["tracker_url"] = partial(tracker_url, config)
     async with db.acquire() as conn:
-        if run.main_branch_revision:
+        if run['main_branch_revision']:
             kwargs["unchanged_run"] = await state.get_unchanged_run(
-                conn, run.package, run.main_branch_revision
+                conn, run['package'], run['main_branch_revision']
             )
         (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, run.suite, run.package
+            conn, run['suite'], run['package']
         )
         package = await conn.fetchrow(
             'SELECT name, vcs_type, vcs_url, vcs_browse, vcswatch_version '
-            'FROM package WHERE name = $1', run.package)
-        if run.revision and run.result_code in ("success", "nothing-new-to-do"):
-            publish_history = await get_publish_history(conn, run.revision)
+            'FROM package WHERE name = $1', run['package'])
+        if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
+            publish_history = await get_publish_history(conn, run['revision'])
         else:
             publish_history = []
     kwargs["queue_wait_time"] = queue_wait_time
@@ -166,12 +166,13 @@ async def generate_run_file(
 
     async def show_diff(role):
         try:
-            (remote_name, base_revid, revid) = run.get_result_branch(role)
+            (remote_name, base_revid, revid) = state.get_result_branch(
+                    run['result_branches'], role)
         except KeyError:
             return "No branch with role %s" % role
         if base_revid == revid:
             return ""
-        url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run.id, role))
+        url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run['id'], role))
         try:
             async with client.get(url) as resp:
                 if resp.status == 200:
@@ -184,16 +185,16 @@ async def generate_run_file(
     kwargs["show_diff"] = show_diff
 
     async def show_debdiff():
-        if run.result_code != 'success':
+        if run['result_code'] != 'success':
             return ""
         unchanged_run = kwargs.get("unchanged_run")
-        if not unchanged_run or unchanged_run.result_code != 'success':
+        if not unchanged_run or unchanged_run['result_code'] != 'success':
             return ""
         try:
             debdiff, unused_content_type = await get_archive_diff(
                 client,
                 differ_url,
-                run.id,
+                run['id'],
                 unchanged_run,
                 kind="debdiff",
                 filter_boring=True,
@@ -207,7 +208,7 @@ async def generate_run_file(
 
     kwargs["show_debdiff"] = show_debdiff
     kwargs["max"] = max
-    kwargs["suite"] = run.suite
+    kwargs["suite"] = run['suite']
 
     def read_file(f):
         return [line.decode("utf-8", "replace") for line in f.readlines()]
@@ -215,7 +216,7 @@ async def generate_run_file(
     kwargs["read_file"] = read_file
 
     async def vcs_type():
-        return await get_vcs_type(client, vcs_store_url, run.package)
+        return await get_vcs_type(client, vcs_store_url, run['package'])
 
     kwargs["vcs_type"] = vcs_type
     kwargs["in_line_boundaries"] = in_line_boundaries
@@ -225,7 +226,7 @@ async def generate_run_file(
     async def _cache_log(name):
         try:
             cached_logs[name] = (
-                await logfile_manager.get_log(run.package, run.id, name)
+                await logfile_manager.get_log(run['package'], run['id'], name)
             ).read()
         except FileNotFoundError:
             cached_logs[name] = None
@@ -233,7 +234,7 @@ async def generate_run_file(
             cached_logs[name] = None
 
     def has_log(name):
-        return name in run.logfilenames
+        return name in run['logfilenames']
 
     async def get_log(name):
         if name not in cached_logs:
@@ -252,7 +253,7 @@ async def generate_run_file(
         kwargs["dist_log_name"] = DIST_LOG_NAME
 
     kwargs["get_log"] = get_log
-    if run.result_code.startswith('worker-') or run.result_code.startswith('result-'):
+    if run['result_code'].startswith('worker-') or run['result_code'].startswith('result-'):
         kwargs["primary_log"] = "worker"
     elif has_log(BUILD_LOG_NAME):
         kwargs["earlier_build_log_names"] = []
@@ -270,7 +271,7 @@ async def generate_run_file(
         kwargs["build_log_include_lines"] = include_lines
         kwargs["build_log_highlight_lines"] = highlight_lines
         kwargs["primary_log"] = "build"
-    elif has_log(DIST_LOG_NAME) and run.result_code.startswith('dist-'):
+    elif has_log(DIST_LOG_NAME) and run['result_code'].startswith('dist-'):
         kwargs["primary_log"] = "dist"
         logf = await get_log(DIST_LOG_NAME)
         line_count, include_lines, highlight_lines = find_dist_log_failure(
