@@ -313,8 +313,8 @@ class DebianBuilder(Builder):
         last_build_version = await conn.fetchval(
             "SELECT version FROM debian_build WHERE "
             "version IS NOT NULL AND source = $1 AND "
-            "distribution = $2 ORDER BY version DESC",
-            queue_item.package, queue_item.suite
+            "distribution = $2 ORDER BY version DESC LIMIT 1",
+            queue_item.package, env['BUILD_DISTRIBUTION']
         )
 
         if last_build_version:
