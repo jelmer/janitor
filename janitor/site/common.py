@@ -191,7 +191,7 @@ WHERE run.package = $1 AND run.suite = $2
             candidate_context = None
             candidate_value = None
             candidate_success_chance = None
-        previous_runs = get_previous_runs(conn, package['name'], suite)
+        previous_runs = await get_previous_runs(conn, package['name'], suite)
         (queue_position, queue_wait_time) = await state.get_queue_position(
             conn, suite, package['name']
         )

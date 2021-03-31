@@ -48,6 +48,14 @@ class Database(object):
             yield conn
 
 
+def get_result_branch(result_branches, role):
+    for entry in result_branches:
+        if role == entry[0]:
+            return entry[1:]
+    raise KeyError
+
+
+
 class Run(object):
 
     id: str
@@ -168,10 +176,7 @@ class Run(object):
         return self.finish_time - self.start_time
 
     def get_result_branch(self, role):
-        for entry in self.result_branches:
-            if role == entry[0]:
-                return entry[1:]
-        raise KeyError
+        return get_result_branch(self.result_branches, role)
 
     @classmethod
     def from_row(cls, row) -> "Run":
