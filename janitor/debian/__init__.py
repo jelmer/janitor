@@ -64,6 +64,7 @@ def find_changes(path, package):
     names = []
     version = None
     distribution = None
+    binary_packages = []
     for entry in os.scandir(path):
         if not entry.name.endswith(".changes"):
             continue
@@ -84,9 +85,13 @@ def find_changes(path, package):
                 raise InconsistentChangesFiles(
                     names, 'Distribution', changes['Distribution'], distribution)
             distribution = changes['Distribution']
+            binary_packages.extend(
+                [entry['name'].split('_')[0]
+                 for entry in changes['files']
+                 if entry['name'].endswith('.deb')])
     if not names:
         raise NoChangesFile(path, package)
-    return (names, version, distribution)
+    return (names, version, distribution, binary_packages)
 
 
 def possible_salsa_urls_from_package_name(package_name, maintainer_email=None):

@@ -198,10 +198,12 @@ class DebianResult(BuilderResult):
     kind = "debian"
 
     def __init__(
-        self, build_version=None, build_distribution=None, changes_filenames=None, lintian_result=None
+        self, build_version=None, build_distribution=None, changes_filenames=None, lintian_result=None,
+        binary_packages=None
     ):
         self.build_version = build_version
         self.build_distribution = build_distribution
+        self.binary_packages = binary_packages
         self.changes_filenames = changes_filenames
         self.lintian_result = lintian_result
 
@@ -238,13 +240,14 @@ class DebianResult(BuilderResult):
     async def store(self, conn, run_id, package):
         if self.build_version:
             await conn.execute(
-                "INSERT INTO debian_build (run_id, source, version, distribution, lintian_result) "
-                "VALUES ($1, $2, $3, $4, $5)",
+                "INSERT INTO debian_build (run_id, source, version, distribution, lintian_result, binary_packages) "
+                "VALUES ($1, $2, $3, $4, $5, $6)",
                 run_id,
                 package,
                 self.build_version,
                 self.build_distribution,
                 self.lintian_result,
+                self.binary_packages
             )
 
     def json(self):
@@ -253,6 +256,7 @@ class DebianResult(BuilderResult):
             "build_version": self.build_version,
             "changes_filenames": self.changes_filenames,
             "lintian": self.lintian_result,
+            "binary_packages": self.binary_packages,
         }
 
     def __bool__(self):

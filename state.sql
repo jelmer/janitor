@@ -292,6 +292,7 @@ CREATE TABLE debian_build (
  -- Distribution the package was built for (e.g. "lintian-fixes")
  distribution text not null,
  source text not null,
+ binary_packages text[],
  lintian_result json
 );
 CREATE INDEX ON debian_build (run_id);

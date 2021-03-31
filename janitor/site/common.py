@@ -90,6 +90,8 @@ SELECT
   package,
   debian_build.version AS build_version,
   debian_build.distribution AS build_distribution,
+  debian_build.lintian_result AS lintian_result,
+  debian_build.binary_packages AS binary_packages,
   result_code,
   branch_name,
   main_branch_revision,
@@ -122,7 +124,10 @@ async def get_run(conn: asyncpg.Connection, run_id):
 SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution, result_code,
+    debian_build.distribution AS build_distribution,
+    debian_build.lintian_result AS lintian_result,
+    debian_build.binary_packages AS binary_packages,
+    result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
@@ -168,26 +173,10 @@ WHERE run.package = $1 AND run.suite = $2
 """, package['name'], suite)
         if run is None:
             # No runs recorded
-            command = None
-            build_version = None
-            result_code = None
-            context = None
-            start_time = None
-            finish_time = None
             run_id = None
-            result = None
-            branch_url = None
             unchanged_run = None
         else:
-            command = run['command']
-            build_version = run['build_version']
-            result_code = run['result_code']
-            context = run['context']
-            start_time = run['start_time']
-            finish_time = run['finish_time']
             run_id = run['id']
-            result = run['result']
-            branch_url = run['branch_url']
             if run['main_branch_revision']:
                 unchanged_run = await state.get_unchanged_run(
                     conn, run['package'], run['main_branch_revision']
@@ -248,7 +237,9 @@ WHERE run.package = $1 AND run.suite = $2
     async def vcs_type():
         return await get_vcs_type(client, vcs_store_url, run['package'])
 
-    return {
+    kwargs = {}
+    kwargs.update(run)
+    kwargs.update({
         "package": package['name'],
         "unchanged_run": unchanged_run,
         "merge_proposals": merge_proposals,
@@ -259,14 +250,7 @@ WHERE run.package = $1 AND run.suite = $2
         "vcs_type": vcs_type,
         "vcs_browse": package['vcs_browse'],
         "vcswatch_version": package['vcswatch_version'],
-        "command": command,
-        "build_version": build_version,
-        "result_code": result_code,
-        "context": context,
-        "start_time": start_time,
-        "finish_time": finish_time,
         "run_id": run_id,
-        "result": result,
         "suite": suite,
         "show_diff": show_diff,
         "show_debdiff": show_debdiff,
@@ -275,13 +259,13 @@ WHERE run.package = $1 AND run.suite = $2
         "candidate_context": candidate_context,
         "candidate_success_chance": candidate_success_chance,
         "candidate_value": candidate_value,
-        "branch_url": branch_url,
         "queue_position": queue_position,
         "queue_wait_time": queue_wait_time,
         "publish_policy": package['publish_policy'],
         "changelog_policy": package['changelog_policy'],
         "tracker_url": partial(tracker_url, config),
-    }
+    })
+    return kwargs
 
 
 async def generate_candidates(db, suite):
