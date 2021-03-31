@@ -5,7 +5,6 @@ import asyncpg
 from functools import partial
 from janitor import state
 from . import tracker_url
-from .common import iter_candidates
 
 
 async def get_proposals(conn: asyncpg.Connection, package, suite):
@@ -24,9 +23,18 @@ ORDER BY merge_proposal.url, run.finish_time DESC
 
 async def generate_candidates(db, suite):
     async with db.acquire() as conn:
-        candidates = [
-            (row['package'], row['context'], row['value'], row['success_chance'])
-            for row in await iter_candidates(conn, suite=suite)
-        ]
-    candidates.sort()
+        query = """
+SELECT
+  candidate.package AS package,
+  candidate.suite AS suite,
+  candidate.context AS context,
+  candidate.value AS value,
+  candidate.success_chance AS success_chance,
+  package.archive_version AS archive_version
+FROM candidate
+INNER JOIN package on package.name = candidate.package
+WHERE NOT package.removed AND suite = $1
+"""
+        candidates = await conn.fetch(query, suite)
+    candidates.sort(key=lambda row: row['package'])
     return {"candidates": candidates, "suite": suite}
