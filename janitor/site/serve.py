@@ -767,7 +767,7 @@ order by url, last_run.finish_time desc
             run = await get_run(conn, run_id)
             if run is None:
                 raise web.HTTPNotFound(text="No run with id %r" % run_id)
-        if pkg is not None and pkg != run.package:
+        if pkg is not None and pkg != run['package']:
             if run is None:
                 raise web.HTTPNotFound(text="No run with id %r" % run_id)
         return await generate_run_file(
