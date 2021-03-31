@@ -178,7 +178,7 @@ async def generate_run_file(
         if run['result_code'] != 'success':
             return ""
         unchanged_run = kwargs.get("unchanged_run")
-        if not unchanged_run or unchanged_run['result_code'] != 'success':
+        if not unchanged_run or unchanged_run.result_code != 'success':
             return ""
         try:
             debdiff, unused_content_type = await get_archive_diff(
