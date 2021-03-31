@@ -565,12 +565,19 @@ class DebianTarget(Target):
             if line == b"}\n":
                 break
         try:
-            return json.loads(b''.join(lines))
+            result = json.loads(b''.join(lines))
         except json.decoder.JSONDecodeError:
             logging.warning(
                 'Error parsing lintian output: %r (%r)', lintian_output,
                 b''.join(lines))
             return None
+
+        # Strip irrelevant directory information
+        for group in result.get('groups', []):
+            for inp in group.get('input-files', []):
+                inp['path'] = os.path.basename(inp['path'])
+
+        return result
 
     def directory_name(self):
         return self.package

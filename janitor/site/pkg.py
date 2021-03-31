@@ -118,7 +118,7 @@ async def get_publish_history(
         "select mode, merge_proposal_url, description, result_code, "
         "requestor, timestamp from publish where revision = $1 "
         "ORDER BY timestamp DESC",
-        revision.decode("utf-8"),
+        revision
     )
 
 
@@ -128,17 +128,7 @@ async def generate_run_file(
     kwargs = {}
     kwargs["run"] = run
     kwargs["run_id"] = run['id']
-    kwargs["command"] = run['command']
-    kwargs["description"] = run['description']
-    kwargs["package"] = run['package']
-    kwargs["start_time"] = run['start_time']
-    kwargs["finish_time"] = run['finish_time']
-    kwargs["build_version"] = run['build_version']
-    kwargs["build_distribution"] = run['build_distribution']
-    kwargs["result_code"] = run['result_code']
-    kwargs["result"] = run['result']
-    kwargs["revision"] = run['revision']
-    kwargs["branch_url"] = run['branch_url']
+    kwargs.update(run)
     kwargs["tracker_url"] = partial(tracker_url, config)
     async with db.acquire() as conn:
         if run['main_branch_revision']:

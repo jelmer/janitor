@@ -148,7 +148,7 @@ async def generate_pkg_context(
 ):
     async with db.acquire() as conn:
         package = await conn.fetchrow("""\
-SELECT name, maintainer_email, uploader_emails, removed, vcs_url, vcs_browse, vcswatch_version, update_changelog, publish AS publish_policy
+SELECT name, maintainer_email, uploader_emails, removed, vcs_url, vcs_browse, vcswatch_version, update_changelog AS changelog_policy, publish AS publish_policy
 FROM package
 LEFT JOIN policy ON package.name = policy.package AND suite = $2
 WHERE name = $1""", package, suite)
@@ -238,7 +238,8 @@ WHERE run.package = $1 AND run.suite = $2
         return await get_vcs_type(client, vcs_store_url, run['package'])
 
     kwargs = {}
-    kwargs.update(run)
+    if run:
+        kwargs.update(run)
     kwargs.update({
         "package": package['name'],
         "unchanged_run": unchanged_run,

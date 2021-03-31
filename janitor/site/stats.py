@@ -34,7 +34,7 @@ FROM
     merge_proposal
 LEFT JOIN run
 ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE merge-proposal.package = ANY($1::text[])
+WHERE merge_proposal.package = ANY($1::text[])
 ORDER BY merge_proposal.url, run.finish_time DESC
 """, packages)
 
