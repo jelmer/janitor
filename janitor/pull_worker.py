@@ -276,6 +276,7 @@ def run_worker(
                     stop_revision=ws.main_branch.last_revision(),
                     overwrite=True,
                 )
+                logging.info("All done.")
                 return result
         except WorkerFailure:
             raise
