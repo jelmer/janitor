@@ -98,17 +98,17 @@ registerHandler('queue', function(msg) {
          tr.append('<td>' + format_duration(p['estimated_duration']) + '</td>');
          tr.append('<td>' + format_duration(p['current_duration']) + '</td>');
          tr.append('<td>' + p['worker'] + '</td>');
-	 tr.append('<td>' + $.map(p['logfilenames'], function(n, i) { 
-		 return '<a href="/api/active-runs/' + p['id'] + '/log/' + n + '">' + n + '</a>';
-	 }).join(' ') + '</td>');
+         tr.append('<td>' + $.map(p['logfilenames'], function(n, i) {
+                 return '<a href="/api/active-runs/' + p['id'] + '/log/' + n + '">' + n + '</a>';
+         }).join(' ') + '</td>');
          if ('last-keepalive' in p) {
-    	     tr.append('<td>' + format_duration(p['keepalive_age']) + '</td>');
+             tr.append('<td>' + format_duration(p['keepalive_age']) + '</td>');
              var keepalive_age = moment.duration(p['keepalive_age'], 's');
-	     if (keepalive_age.hours() >= 1) {
-	         tr.addClass('old-keepalive');
-	     }
-	 } else {
-	     tr.append('<td>N/A</td>');
+             if (keepalive_age.hours() >= 1) {
+                 tr.addClass('old-keepalive');
+             }
+         } else {
+             tr.append('<td>N/A</td>');
          }
 {% if is_admin %}
          tr.append('<td><button id="kill-' + p['id'] + '" onclick="kill(\'' + p['id'] + '\')"">Kill</button></td>');

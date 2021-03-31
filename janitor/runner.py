@@ -138,21 +138,8 @@ class Builder(object):
 
     result_cls: Type[BuilderResult] = BuilderResult
 
-    def json(self):
-        return {}
-
-    @classmethod
-    def from_json(cls, target_details):
-        return cls()
-
-    def from_directory(self, path, package):
-        pass
-
-    def artifact_filenames(self):
-        return []
-
-    async def store(self, conn, run_id, package):
-        pass
+    async def build_env(self, conn, suite_config, queue_item):
+        raise NotImplementedError(self.build_env)
 
 
 class GenericResult(BuilderResult):
@@ -163,6 +150,18 @@ class GenericResult(BuilderResult):
     @classmethod
     def from_json(cls, target_details):
         return cls()
+
+    def from_directory(self, path, package):
+        pass
+
+    def json(self):
+        return {}
+
+    def artifact_filenames(self):
+        return []
+
+    async def store(self, conn, run_id, package):
+        pass
 
 
 class GenericBuilder(Builder):
