@@ -12,7 +12,7 @@ async def get_proposals_with_run(
 SELECT
     DISTINCT ON (merge_proposal.url)
     run.package AS package,
-    run.suite AS suite
+    run.suite AS suite,
     merge_proposal.url AS url,
     merge_proposal.status AS status
 FROM
