@@ -541,43 +541,10 @@ class DebianTarget(Target):
                         details = None
                     raise WorkerFailure(code, e.description, details=details)
                 logger.info("Built %r.", changes_names)
-        lintian_result = self._run_lintian(output_directory, changes_names)
+        from .debian.lintian import run_lintian
+        lintian_result = run_lintian(output_directory, changes_names)
         return {'lintian': lintian_result}
 
-    def _run_lintian(self, output_directory, changes_names):
-        logger.info('Running lintian')
-        args = ['--exp-output=format=json']
-        if self.lintian_suppress_tags:
-            args.append('--suppress-tags=' + self.lintian_suppress_tags)
-        if self.lintian_profile:
-            args.append('--profile=%s' % self.lintian_profile)
-        try:
-            lintian_output = subprocess.check_output(
-                ['lintian'] + args +
-                [os.path.join(output_directory, changes_name)
-                 for changes_name in changes_names])
-        except subprocess.CalledProcessError:
-            logger.warning('lintian failed to run.')
-            return None
-        lines = []
-        for line in lintian_output.splitlines(True):
-            lines.append(line)
-            if line == b"}\n":
-                break
-        try:
-            result = json.loads(b''.join(lines))
-        except json.decoder.JSONDecodeError:
-            logging.warning(
-                'Error parsing lintian output: %r (%r)', lintian_output,
-                b''.join(lines))
-            return None
-
-        # Strip irrelevant directory information
-        for group in result.get('groups', []):
-            for inp in group.get('input-files', []):
-                inp['path'] = os.path.basename(inp['path'])
-
-        return result
 
     def directory_name(self):
         return self.package
