@@ -24,13 +24,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def run_lintian(self, output_directory, changes_names):
+def run_lintian(output_directory, changes_names, profile=None, suppress_tags=None):
     logger.info('Running lintian')
     args = ['--exp-output=format=json']
-    if self.lintian_suppress_tags:
-        args.append('--suppress-tags=' + self.lintian_suppress_tags)
-    if self.lintian_profile:
-        args.append('--profile=%s' % self.lintian_profile)
+    if suppress_tags:
+        args.append('--suppress-tags=' + suppress_tags)
+    if profile:
+        args.append('--profile=%s' % profile)
     try:
         lintian_output = subprocess.check_output(
             ['lintian'] + args +
