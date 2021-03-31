@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import logging
 from typing import Optional
 
 from google.protobuf import text_format  # type: ignore
@@ -60,7 +61,7 @@ async def main(args):
     async with db.acquire() as conn:
         currents = {
             row['name']: row['upstream_branch_url']
-            for row in conn.fetch("""
+            for row in await conn.fetch("""
 select
   name,
   upstream_branch_url
@@ -74,7 +75,7 @@ where upstream_branch_url is not null
             if desired == current:
                 continue
             await set_upstream_branch_url(conn, name, desired)
-            print("Updating upstream branch URL for %s: %s" % (name, desired))
+            logging.info("Updating upstream branch URL for %s: %s" % (name, desired))
             if args.reschedule:
                 await do_schedule(
                     conn, name, "fresh-snapshots", requestor="package overrides"
@@ -98,4 +99,5 @@ if __name__ == "__main__":
         default="package_overrides.conf",
     )
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main(args))
