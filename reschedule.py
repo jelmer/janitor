@@ -71,7 +71,7 @@ WHERE
             params.append(description_re)
             where.append("description ~ $%d" % len(params))
         if min_age:
-            params.append(datetime.now() - timedelta(days=min_age))
+            params.append(datetime.utcnow() - timedelta(days=min_age))
             where.append("finish_time < $%d" % len(params))
         query += " AND ".join(where)
         for run in await conn1.fetch(query, *params):

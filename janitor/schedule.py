@@ -77,7 +77,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
 # will give a clearer error message.
 IGNORE_RESULT_CODE = {
     # Run worker failures from more than a day ago.
-    "worker-failure": lambda run: ((datetime.now() - run['start_time']).days > 0),
+    "worker-failure": lambda run: ((datetime.utcnow() - run['start_time']).days > 0),
 }
 
 IGNORE_RESULT_CODE.update(

@@ -440,14 +440,14 @@ async def publish_pending_new(
                 next_try_time = run.finish_time + (2 ** attempt_count * timedelta(hours=1))
             except OverflowError:
                 continue
-            if datetime.now() < next_try_time:
+            if datetime.utcnow() < next_try_time:
                 logger.info(
                     "Not attempting to push %s / %s (%s) due to "
                     "exponential backoff. Next try in %s.",
                     run.package,
                     run.suite,
                     run.id,
-                    next_try_time - datetime.now(),
+                    next_try_time - datetime.utcnow(),
                 )
                 continue
             ms = [b[4] for b in unpublished_branches]
@@ -764,7 +764,7 @@ async def publish_from_policy(
                 last_published = await check_last_published(
                     conn, run.suite, run.package)
                 if last_published is not None and \
-                        (datetime.now()-last_published).days < max_frequency_days:
+                        (datetime.utcnow()-last_published).days < max_frequency_days:
                     logger.debug(
                         'Not creating proposal for %s/%s: '
                         'was published already in last %d days (at %s)',
@@ -853,7 +853,7 @@ async def publish_from_policy(
 
     publish_delay: Optional[timedelta]
     if code == "success":
-        publish_delay = datetime.now() - run.finish_time
+        publish_delay = datetime.utcnow() - run.finish_time
         publish_latency.observe(publish_delay.total_seconds())
     else:
         publish_delay = None
@@ -987,7 +987,7 @@ async def publish_and_store(
             requestor=requestor,
         )
 
-        publish_delay = run.finish_time - datetime.now()
+        publish_delay = run.finish_time - datetime.utcnow()
         publish_latency.observe(publish_delay.total_seconds())
 
         topic_publish.publish(
@@ -1325,7 +1325,7 @@ async def process_queue_loop(
     require_binary_diff: bool = False,
 ):
     while True:
-        cycle_start = datetime.now()
+        cycle_start = datetime.utcnow()
         async with db.acquire() as conn:
             await check_existing(
                 conn,
@@ -1351,7 +1351,7 @@ async def process_queue_loop(
                 push_limit=push_limit,
                 require_binary_diff=require_binary_diff,
             )
-        cycle_duration = datetime.now() - cycle_start
+        cycle_duration = datetime.utcnow() - cycle_start
         to_wait = max(0, interval - cycle_duration.total_seconds())
         logger.info("Waiting %d seconds for next cycle." % to_wait)
         if to_wait > 0:
@@ -1675,7 +1675,7 @@ applied independently.
         return True
 
     if last_run.result_code != "success":
-        last_run_age = datetime.now() - last_run.finish_time
+        last_run_age = datetime.utcnow() - last_run.finish_time
         if last_run.result_code in TRANSIENT_ERROR_RESULT_CODES:
             logger.info(
                 "%s: Last run failed with transient error (%s). " "Rescheduling.",

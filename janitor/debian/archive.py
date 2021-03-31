@@ -178,7 +178,7 @@ async def write_suite_files(
     base_path, db, package_info_provider, suite, components, arches, origin, gpg_context
 ):
 
-    stamp = mktime(datetime.now().timetuple())
+    stamp = mktime(datetime.utcnow().timetuple())
 
     r = Release()
     r["Origin"] = origin
@@ -307,7 +307,7 @@ async def publish_suite(
         logger.info("%s is not a Debian suite", suite.name)
         return
     try:
-        start_time = datetime.now()
+        start_time = datetime.utcnow()
         logger.info("Publishing %s", suite.name)
         suite_path = os.path.join(dists_directory, suite.name)
         with tempfile.TemporaryDirectory(dir=dists_directory) as td:
@@ -331,10 +331,10 @@ async def publish_suite(
             shutil.rmtree(suite_path + '.old')
 
         logger.info(
-            "Done publishing %s (took %s)", suite.name, datetime.now() - start_time
+            "Done publishing %s (took %s)", suite.name, datetime.utcnow() - start_time
         )
         last_publish_success.labels(suite=suite.name).set_to_current_time()
-        last_publish_time[suite.name] = datetime.now()
+        last_publish_time[suite.name] = datetime.utcnow()
     except BaseException:
         traceback.print_exc()
 

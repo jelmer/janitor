@@ -701,12 +701,12 @@ class ActiveRun(object):
 
     def __init__(self, queue_item: state.QueueItem):
         self.queue_item = queue_item
-        self.start_time = datetime.now()
+        self.start_time = datetime.utcnow()
         self.log_id = str(uuid.uuid4())
 
     @property
     def current_duration(self):
-        return datetime.now() - self.start_time
+        return datetime.utcnow() - self.start_time
 
     def kill(self) -> None:
         """Abort this run."""
@@ -726,7 +726,7 @@ class ActiveRun(object):
             pkg=self.queue_item.package,
             suite=self.queue_item.suite,
             start_time=self.start_time,
-            finish_time=datetime.now(),
+            finish_time=datetime.utcnow(),
             log_id=self.log_id,
             worker_name=self.worker_name,
             worker_link=self.worker_link,
@@ -802,7 +802,7 @@ class ActiveRemoteRun(ActiveRun):
         self._watch_dog = None
 
     def reset_keepalive(self):
-        self.last_keepalive = datetime.now()
+        self.last_keepalive = datetime.utcnow()
 
     def append_log(self, name, data):
         try:
@@ -818,7 +818,7 @@ class ActiveRemoteRun(ActiveRun):
     async def watchdog(self, queue_processor):
         while True:
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
-            duration = datetime.now() - self.last_keepalive
+            duration = datetime.utcnow() - self.last_keepalive
             if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
                 logging.warning(
                     "No keepalives received from %s for %s in %d, aborting.",
@@ -1634,8 +1634,8 @@ async def handle_assign(request):
             branch_url=active_run.main_branch_url,
             code=code,
             description=description,
-            start_time=datetime.now(),
-            finish_time=datetime.now(),
+            start_time=datetime.utcnow(),
+            finish_time=datetime.utcnow(),
         )
         await queue_processor.finish_run(active_run.queue_item, result)
 
