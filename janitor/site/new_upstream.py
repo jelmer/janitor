@@ -27,7 +27,7 @@ async def generate_candidates(db, suite):
 SELECT
   candidate.package AS package,
   candidate.suite AS suite,
-  candidate.context AS context,
+  candidate.context AS version,
   candidate.value AS value,
   candidate.success_chance AS success_chance,
   package.archive_version AS archive_version
