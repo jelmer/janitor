@@ -1676,9 +1676,6 @@ async def handle_assign(request):
                 )
             else:
                 resume_branch = None
-            await conn.execute(
-                'UPDATE queue SET branch_url = $1 WHERE id = $2',
-                active_run.main_branch_url, item.id)
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
@@ -1738,10 +1735,12 @@ async def handle_finish(request):
         queue_item = active_run.queue_item
         worker_name = active_run.worker_name
         worker_link = active_run.worker_link
+        main_branch_url = active_run.main_branch_url
     else:
         queue_item = None
         worker_name = None
         worker_link = None
+        main_branch_url = None
 
     reader = await request.multipart()
     worker_result = None
@@ -1774,6 +1773,10 @@ async def handle_finish(request):
             if queue_item is None:
                 return web.json_response(
                     {"reason": "Unable to find relevant queue item"}, status=404)
+            if main_branch_url is None:
+                main_branch_url = queue_item.branch_url
+        if worker_name is None:
+            worker_name = worker_result.worker_name
 
         logfilenames = await import_logs(
             output_directory,
@@ -1783,9 +1786,6 @@ async def handle_finish(request):
             run_id,
         )
 
-        if worker_name is None:
-            worker_name = worker_result.worker_name
-
         suite_config = get_suite_config(queue_processor.config, queue_item.suite)
 
         result = JanitorResult(
@@ -1794,7 +1794,7 @@ async def handle_finish(request):
             log_id=run_id,
             worker_name=worker_name,
             worker_link=worker_link,
-            branch_url=queue_item.branch_url,
+            branch_url=main_branch_url,
             worker_result=worker_result,
             logfilenames=logfilenames,
             legacy_branch_name=(
