@@ -60,6 +60,7 @@ in this archive.</p>
 <ul class="simple">
 <li><a class="reference internal" href="#requesting-new-packages">How do I request a new package to be built?</a></li>
 <li><a class="reference internal" href="#how-much-testing">How are these packages tested?</a></li>
+<li><a class="reference internal" href="#how-do-i-trigger-updates">Triggering updates?</a></li>
 </ul>
 </div>
 
@@ -86,6 +87,20 @@ pass those tests before they are included in the repository.</p>
 not be comprehensive.</p>
 
 <p>No manual testing has been done on these packages - use at your own risk</p>
+
+</div>
+
+<div class="section" id="how-do-i-trigger-updates">
+<h3><a class="toc-backref" href="#id7">How do I trigger updates?</a></h3>
+
+<p>If you maintain an upstream package, you can trigger the building of new
+snapshots by installing a webhook targeting <a
+href="https://janitor.debian.net/">https://janitor.debian.net/</a> in
+your GitHub, GitLab, Gitea, Gogs or Launchpad repository.
+</p>
+
+<p>The webhook will cause the package for your project to be prioritized for
+rebuilding.</p>
 
 </div>
 
