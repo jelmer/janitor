@@ -1,7 +1,7 @@
 {% macro new_upstream_summary(result) %}
 {% if result and 'old_upstream_version' in result %}
 <p>Merged new upstream version: <b>{{ result['upstream_version'] }}</b> (was: <b>{{ result['old_upstream_version'] }}</b>).</p>
-{% else %}
+{% elif result and 'upstream_version' in result %}
 <p>Upstream version: <b>{{ result['upstream_version'] }}</b>.</p>
 {% endif %}
 {% endmacro %}
