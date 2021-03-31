@@ -545,9 +545,10 @@ class DebianTarget(Target):
                     raise WorkerFailure(code, e.description, details=details)
                 logger.info("Built %r.", changes_names)
         from .debian.lintian import run_lintian
-        lintian_result = run_lintian(output_directory, changes_names)
+        lintian_result = run_lintian(
+            output_directory, changes_names, profile=self.lintian_profile,
+            suppress_tags=self.lintian_suppress_tags)
         return {'lintian': lintian_result}
-
 
     def directory_name(self):
         return self.package
