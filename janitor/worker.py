@@ -897,7 +897,7 @@ def main(argv=None):
     extra_resume_branches = [b.split(":", 1) for b in args.extra_resume_branch]
 
     metadata = {}
-    start_time = datetime.now()
+    start_time = datetime.utcnow()
     metadata["start_time"] = start_time.isoformat()
     try:
         with process_package(
@@ -951,7 +951,7 @@ def main(argv=None):
         logger.info("%s", result.description)
         return 0
     finally:
-        finish_time = datetime.now()
+        finish_time = datetime.utcnow()
         metadata["finish_time"] = finish_time.isoformat()
         logger.info("Elapsed time: %s", finish_time - start_time)
         with open(os.path.join(output_directory, "result.json"), "w") as f:

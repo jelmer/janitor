@@ -39,9 +39,9 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
             entry["estimated_duration"] = timedelta(seconds=entry["estimated_duration"])
         if entry.get("start_time"):
             entry["start_time"] = datetime.fromisoformat(entry["start_time"])
-            entry["current_duration"] = datetime.now() - entry["start_time"]
+            entry["current_duration"] = datetime.utcnow() - entry["start_time"]
         if entry.get('last-keepalive'):
-            entry["keepalive_age"] = datetime.now() - datetime.fromisoformat(entry['last-keepalive'])
+            entry["keepalive_age"] = datetime.utcnow() - datetime.fromisoformat(entry['last-keepalive'])
         yield entry
 
 

@@ -581,7 +581,7 @@ async def main(argv=None):
             watchdog_petter.track_log_directory(output_directory)
 
             metadata = {}
-            start_time = datetime.now()
+            start_time = datetime.utcnow()
             main_task = loop.run_in_executor(
                 None,
                 functools.partial(
@@ -630,7 +630,8 @@ async def main(argv=None):
 
                 return 0
             finally:
-                finish_time = datetime.now()
+                finish_time = datetime.utcnow()
+                metadata["finish_time"] = finish_time.isoformat()
                 logging.info("Elapsed time: %s", finish_time - start_time)
 
                 try:
