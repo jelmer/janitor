@@ -60,7 +60,7 @@ class InconsistentChangesFiles(Exception):
     """Inconsistent changes files."""
 
 
-def find_changes(path, package):
+def find_changes(path):
     names = []
     version = None
     distribution = None
@@ -70,12 +70,6 @@ def find_changes(path, package):
             continue
         with open(entry.path, "r") as f:
             changes = Changes(f)
-            if changes['Source'] != package:
-                logging.warning(
-                    'Skipping changes file %s; it has a different '
-                    'source package %s, expecting %s',
-                    entry.name, changes['Source'], package)
-                continue
             names.append(entry.name)
             if version is not None and changes["Version"] != version:
                 raise InconsistentChangesFiles(

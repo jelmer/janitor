@@ -118,7 +118,7 @@ class BuilderResult(object):
 
     kind: str
 
-    def from_directory(self, path, package):
+    def from_directory(self, path):
         raise NotImplementedError(self.from_directory)
 
     async def store(self, conn, run_id, package):
@@ -151,7 +151,7 @@ class GenericResult(BuilderResult):
     def from_json(cls, target_details):
         return cls()
 
-    def from_directory(self, path, package):
+    def from_directory(self, path):
         pass
 
     def json(self):
@@ -206,14 +206,14 @@ class DebianResult(BuilderResult):
         self.changes_filenames = changes_filenames
         self.lintian_result = lintian_result
 
-    def from_directory(self, path, package):
+    def from_directory(self, path):
         try:
             self.output_directory = path
             (
                 self.changes_filenames,
                 self.build_version,
                 self.build_distribution,
-            ) = find_changes(path, package)
+            ) = find_changes(path)
         except NoChangesFile as e:
             # Oh, well.
             logging.info("No changes file found: %s", e)
@@ -1190,8 +1190,7 @@ class ActiveLocalRun(ActiveRun):
             legacy_branch_name=suite_config.branch_name,
         )
 
-        result.builder_result.from_directory(
-            self.output_directory, self.queue_item.package)
+        result.builder_result.from_directory(self.output_directory)
 
         try:
             local_branch = open_branch(
@@ -1802,9 +1801,7 @@ async def handle_finish(request):
             )
 
         if worker_result.code is None:
-            result.builder_result.from_directory(
-                output_directory, queue_item.package
-            )
+            result.builder_result.from_directory(output_directory)
 
             artifact_names = result.builder_result.artifact_filenames()
             await store_artifacts_with_backup(
