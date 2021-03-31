@@ -31,8 +31,8 @@ async def generate_pkg_file(
         run_id=run_id,
     )
     run = kwargs["run"]
-    if run and run.result:
-        applied = run.result.get("applied", [])
+    if run and run['result']:
+        applied = run['result'].get("applied", [])
     else:
         applied = []
     fixed_tags = set()
