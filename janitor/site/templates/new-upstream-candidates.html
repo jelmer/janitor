@@ -7,7 +7,7 @@
 
 <ul>
 {% for candidate in candidates %}
-<li><a href="/{{ suite }}/pkg/{{ candidate.package }}">{{ candidate.package }}</a> - {{ candidate.archive_version }} &rArr; {{ candidate.version }}
+<li><a href="/{{ suite }}/pkg/{{ candidate.package }}">{{ candidate.package }}</a> - {{ candidate.archive_version.upstream_version }} &rArr; {{ candidate.version }}
 {% endfor %}
 </ul>
 
