@@ -161,6 +161,7 @@ def push_branch(
     vcs_type: str,
     overwrite=False,
     stop_revision=None,
+    tag_selector=None,
     possible_transports: Optional[List[Transport]] = None,
 ) -> None:
     url, params = urlutils.split_segment_parameters(url)
@@ -175,7 +176,8 @@ def push_branch(
         )
 
     target.push_branch(
-        source_branch, revision_id=stop_revision, overwrite=overwrite, name=branch_name
+        source_branch, revision_id=stop_revision, overwrite=overwrite, name=branch_name,
+        tag_selector=tag_selector
     )
 
 
@@ -189,6 +191,7 @@ def run_worker(
     output_directory,
     metadata,
     vcs_manager,
+    vendor,
     suite,
     target,
     pre_check_command=None,
@@ -257,12 +260,17 @@ def run_worker(
                         raise
 
                 logging.info("Pushing packaging branch cache to %s", cached_branch_url)
+
+                def tag_selector(tag_name):
+                    return tag_name.startswith(vendor + '/') or tag_name.startswith('upstream/')
+
                 push_branch(
                     ws.local_tree.branch,
                     cached_branch_url,
                     vcs_type=vcs_type.lower(),
                     possible_transports=possible_transports,
                     stop_revision=ws.main_branch.last_revision(),
+                    tag_selector=tag_selector,
                     overwrite=True,
                 )
                 logging.info("All done.")
@@ -557,6 +565,8 @@ async def main(argv=None):
 
         env = assignment["env"]
 
+        vendor = assignment.get('vendor', 'debian')
+
         os.environ.update(env)
         os.environ.update(build_environment)
 
@@ -583,6 +593,7 @@ async def main(argv=None):
                     output_directory,
                     metadata,
                     vcs_manager,
+                    vendor,
                     suite,
                     target=target,
                     pre_check_command=args.pre_check,
