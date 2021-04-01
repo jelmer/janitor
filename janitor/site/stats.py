@@ -5,7 +5,6 @@ import operator
 from . import env, json_chart_data, html_template
 from aiohttp import web
 import asyncpg
-from .. import state
 from .common import iter_candidates
 
 
