@@ -1,7 +1,6 @@
-- name: Install klaus
-  apt:
-    package: python3-klaus
-    state: present
+- name: Install klaus from pip
+  pip:
+    name: klaus
 - name: Check if aiohttp-wsgi is packaged
   shell: '[ $(apt-cache showpkg python3-aiohttp-wsgi ) ]'
   ignore_errors: True
