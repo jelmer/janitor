@@ -320,7 +320,7 @@ async def publish_one(
             mode,
             "result-branch-not-found",
             "can not find local branch for %s / %s / %s (%s)"
-            % (pkg, suite, rol,e log_id),
+            % (pkg, suite, role, log_id),
             )
 
     request = {
