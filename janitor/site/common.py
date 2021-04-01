@@ -104,14 +104,14 @@ SELECT
   logfilenames,
   review_status,
   review_comment,
-  run.worker AS worker_name,
+  last_unabsorbed_runs.worker AS worker_name,
   worker.link AS worker_link,
   array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
   result_tags
 FROM
   last_unabsorbed_runs
-LEFT JOIN worker ON worker.name = run.worker
+LEFT JOIN worker ON worker.name = last_unabsorbed_runs.worker
 LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
 WHERE package = $1 AND suite = $2
 ORDER BY package, suite DESC, start_time DESC
