@@ -1686,7 +1686,7 @@ async def handle_assign(request):
 
     try:
         cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-            item.package, cache_branch_name(queue_processor.config, "main"), vcs_type
+            item.package, cache_branch_name(queue_processor.config.distribution, "main"), vcs_type
         )
     except UnsupportedVcs:
         cached_branch_url = None
@@ -1812,19 +1812,21 @@ async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
     app.queue_processor = queue_processor
     setup_metrics(app)
-    app.router.add_get("/status", handle_status)
-    app.router.add_get("/log/{run_id}", handle_log_index)
-    app.router.add_get("/log/{run_id}/{filename}", handle_log)
-    app.router.add_post("/kill/{run_id}", handle_kill)
-    app.router.add_get("/ws/progress", handle_progress_ws)
+    app.router.add_get("/status", handle_status, name="status")
+    app.router.add_get("/log/{run_id}", handle_log_index, name="log-index")
+    app.router.add_get("/log/{run_id}/{filename}", handle_log, name="log")
+    app.router.add_post("/kill/{run_id}", handle_kill, name="kill")
+    app.router.add_get("/ws/progress", handle_progress_ws, name="ws-progress")
     app.router.add_get(
-        "/ws/queue", functools.partial(pubsub_handler, queue_processor.topic_queue)
+        "/ws/queue", functools.partial(pubsub_handler, queue_processor.topic_queue),
+        name="ws-queue"
     )
     app.router.add_get(
-        "/ws/result", functools.partial(pubsub_handler, queue_processor.topic_result)
+        "/ws/result", functools.partial(pubsub_handler, queue_processor.topic_result),
+        name="ws-result"
     )
-    app.router.add_post("/assign", handle_assign)
-    app.router.add_post("/finish/{run_id}", handle_finish)
+    app.router.add_post("/assign", handle_assign, name="assign")
+    app.router.add_post("/finish/{run_id}", handle_finish, name="finish")
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
