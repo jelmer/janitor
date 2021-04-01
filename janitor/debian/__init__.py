@@ -62,6 +62,7 @@ class InconsistentChangesFiles(Exception):
 
 def find_changes(path):
     names = []
+    source = None
     version = None
     distribution = None
     binary_packages = []
@@ -75,6 +76,10 @@ def find_changes(path):
                 raise InconsistentChangesFiles(
                     names, 'Version', changes['Version'], version)
             version = changes['Version']
+            if source is not None and changes['Source'] != source:
+                raise InconsistentChangesFiles(
+                    names, 'Source', changes['Source'], source)
+            source = changes['Source']
             if distribution is not None and changes["Distribution"] != distribution:
                 raise InconsistentChangesFiles(
                     names, 'Distribution', changes['Distribution'], distribution)
@@ -85,7 +90,7 @@ def find_changes(path):
                  if entry['name'].endswith('.deb')])
     if not names:
         raise NoChangesFile(path)
-    return (names, version, distribution, binary_packages)
+    return (names, source, version, distribution, binary_packages)
 
 
 def possible_salsa_urls_from_package_name(package_name, maintainer_email=None):

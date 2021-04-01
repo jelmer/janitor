@@ -350,22 +350,28 @@ if __name__ == "__main__":
 
     @html_template("debianize-start.html", headers={"Cache-Control": "max-age=60"})
     async def handle_debianize_start(request):
-        from .apt_repo import gather_package_list
+        from .apt_repo import get_published_packages
 
         async with request.app.database.acquire() as conn:
             return {
-                "packages": gather_package_list(conn, 'debianize'),
+                "packages": await conn.fetch("""
+select distinct on (source) source, version
+from debian_build
+INNER JOIN run on debian_build.run_id = run.id
+where run.suite = 'debianize'
+order by source, version desc
+"""),
                 "suite": 'debianize',
                 "suite_config": get_suite_config(request.app.config, 'debianize'),
             }
 
     async def handle_apt_repo(request):
         suite = request.match_info["suite"]
-        from .apt_repo import gather_package_list
+        from .apt_repo import get_published_packages
 
         async with request.app.database.acquire() as conn:
             vs = {
-                "packages": gather_package_list(conn, suite),
+                "packages": await get_published_packages(conn, suite),
                 "suite": suite,
                 "suite_config": get_suite_config(request.app.config, suite),
             }
