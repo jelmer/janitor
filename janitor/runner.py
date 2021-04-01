@@ -388,7 +388,6 @@ class JanitorResult(object):
             self.failure_details = worker_result.details
             self.start_time = worker_result.start_time
             self.finish_time = worker_result.finish_time
-            self.worker_name = worker_result.worker_name
         else:
             self.start_time = start_time
             self.finish_time = finish_time
