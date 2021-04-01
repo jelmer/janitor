@@ -743,12 +743,12 @@ async def publish_from_policy(
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
 
     if not force and await already_published(
-        conn, run.package, run.branch_name, revision, mode
+        conn, run.package, suite_config.branch_name, revision, mode
     ):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         open_mp = await get_open_merge_proposal(
-            conn, run.package, run.branch_name
+            conn, run.package, suite_config.branch_name
         )
         if not open_mp:
             try:
@@ -940,7 +940,7 @@ async def publish_and_store(
             await store_publish(
                 conn,
                 run.package,
-                run.branch_name,
+                suite_config.branch_name,
                 run.main_branch_revision,
                 run.revision,
                 role,
@@ -1399,14 +1399,13 @@ async def get_last_effective_run(conn, package, suite):
 
 
 async def get_merge_proposal_run(
-    conn: asyncpg.Connection, mp_url: str) -> asyncpg.Record:
+        conn: asyncpg.Connection, mp_url: str) -> asyncpg.Record:
     query = """
 SELECT
     run.id AS id,
     run.package AS package,
     run.suite AS suite,
     run.branch_url AS branch_url,
-    run.branch_name AS branch_name,
     run.command AS command,
     rb.role AS role,
     rb.remote_name AS remote_branch_name,
@@ -1727,12 +1726,6 @@ applied independently.
             )
         return False
 
-    if last_run.branch_name is None:
-        logger.info(
-            "%s: Last run (%s) does not have branch name set.", mp.url, last_run.id
-        )
-        return False
-
     if maintainer_email is None:
         logger.info("%s: No maintainer email known.", mp.url)
         return False
@@ -1930,7 +1923,7 @@ applied independently.
                 await store_publish(
                     conn,
                     last_run.package,
-                    mp_run['branch_name'],
+                    suite_config.branch_name,
                     last_run_base_revision,
                     last_run_revision,
                     mp_run['role'],
