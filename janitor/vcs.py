@@ -263,7 +263,13 @@ def import_branches_git(
             branchname = ("refs/heads/%s/%s" % (suite, fn)).encode("utf-8")
             # TODO(jelmer): Ideally this would be a symref:
             changed_refs[branchname] = changed_refs[tagname]
-        for (fn, n, r) in tags:
+        for taginfo in tags:
+            if len(taginfo) == 3:
+                (fn, n, r) = taginfo
+            elif len(taginfo) == 2:
+                (n, r) = taginfo
+            else:
+                raise ValueError(taginfo)
             tagname = ("refs/tags/%s/%s" % (log_id, n)).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
