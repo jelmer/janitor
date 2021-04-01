@@ -72,7 +72,7 @@ import breezy.plugins.github  # noqa: F401
 from . import (
     state,
 )
-from .config import read_config
+from .config import read_config, get_suite_config
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .schedule import (
@@ -255,13 +255,13 @@ async def has_cotenants(
         return None
 
 
-async def derived_branch_name(conn, run, role):
+async def derived_branch_name(conn, suite_config, run, role):
     # TODO(jelmer): Add package name if there are more packages living in this
     # repository
     if role == "main":
-        name = run.branch_name
+        name = suite_config.branch_name
     else:
-        name = "%s/%s" % (run.branch_name, role)
+        name = "%s/%s" % (suite_config.branch_name, role)
 
     if await has_cotenants(conn, run.package, run.branch_url):
         return name + "/" + run.package
@@ -391,6 +391,7 @@ async def publish_one(
 
 async def publish_pending_new(
     db,
+    config,
     rate_limiter,
     vcs_manager,
     topic_publish,
@@ -429,6 +430,7 @@ async def publish_pending_new(
                     "Run %s is publish ready, but does not have revision set.", run.id
                 )
                 continue
+            suite_config = get_suite_config(config, run.suite)
             # TODO(jelmer): next try in SQL query
             attempt_count = await get_publish_attempt_count(
                 conn, run.revision, {"differ-unreachable"}
@@ -473,6 +475,7 @@ async def publish_pending_new(
                     continue
                 actual_modes[role] = await publish_from_policy(
                     conn,
+                    suite_config,
                     rate_limiter,
                     vcs_manager,
                     run,
@@ -678,6 +681,7 @@ async def store_publish(
 
 async def publish_from_policy(
     conn,
+    suite_config,
     rate_limiter,
     vcs_manager,
     run: state.Run,
@@ -794,7 +798,7 @@ async def publish_from_policy(
             role,
             revision,
             run.id,
-            await derived_branch_name(conn, run, role),
+            await derived_branch_name(conn, suite_config, run, role),
             maintainer_email,
             vcs_manager=vcs_manager,
             topic_merge_proposal=topic_merge_proposal,
@@ -885,6 +889,7 @@ def role_branch_url(url, remote_branch_name):
 
 async def publish_and_store(
     db,
+    suite_config,
     topic_publish,
     topic_merge_proposal,
     publish_id,
@@ -917,7 +922,7 @@ async def publish_and_store(
                 role,
                 revision,
                 run.id,
-                await derived_branch_name(conn, run, role),
+                await derived_branch_name(conn, suite_config, run, role),
                 maintainer_email,
                 vcs_manager,
                 dry_run=dry_run,
@@ -1075,6 +1080,7 @@ async def publish_request(request):
         create_background_task(
             publish_and_store(
                 request.app.db,
+                get_suite_config(request.app.config, run.suite),
                 request.app.topic_publish,
                 request.app.topic_merge_proposal,
                 publish_id,
@@ -1147,6 +1153,7 @@ async def run_web_server(
     rate_limiter: RateLimiter,
     vcs_manager: VcsManager,
     db: state.Database,
+    config,
     topic_merge_proposal: Topic,
     topic_publish: Topic,
     dry_run: bool,
@@ -1161,6 +1168,7 @@ async def run_web_server(
     app.gpg = gpg.Context(armor=True)
     app.vcs_manager = vcs_manager
     app.db = db
+    app.config = config
     app.external_url = external_url
     app.differ_url = differ_url
     app.rate_limiter = rate_limiter
@@ -1205,6 +1213,7 @@ async def check_mp_request(request):
         try:
             modified = await check_existing_mp(
                 conn,
+                request.app.config,
                 mp,
                 status,
                 topic_merge_proposal=request.app.topic_merge_proposal,
@@ -1231,6 +1240,7 @@ async def scan_request(request):
         async with request.app.db.acquire() as conn:
             await check_existing(
                 conn,
+                request.app.config,
                 request.app.rate_limiter,
                 request.app.vcs_manager,
                 request.app.topic_merge_proposal,
@@ -1264,6 +1274,7 @@ async def refresh_proposal_status_request(request):
             try:
                 await check_existing_mp(
                     conn,
+                    request.app.config,
                     mp,
                     status,
                     vcs_manager=request.app.vcs_manager,
@@ -1287,6 +1298,7 @@ async def autopublish_request(request):
     async def autopublish():
         await publish_pending_new(
             request.app.db,
+            request.app.config,
             request.app.rate_limiter,
             request.app.vcs_manager,
             dry_run=request.app.dry_run,
@@ -1305,6 +1317,7 @@ async def autopublish_request(request):
 
 async def process_queue_loop(
     db,
+    config,
     rate_limiter,
     dry_run,
     vcs_manager,
@@ -1324,6 +1337,7 @@ async def process_queue_loop(
         async with db.acquire() as conn:
             await check_existing(
                 conn,
+                config,
                 rate_limiter,
                 vcs_manager,
                 topic_merge_proposal,
@@ -1335,6 +1349,7 @@ async def process_queue_loop(
         if auto_publish:
             await publish_pending_new(
                 db,
+                config,
                 rate_limiter,
                 vcs_manager,
                 dry_run=dry_run,
@@ -1459,6 +1474,7 @@ WHERE
 
 async def check_existing_mp(
     conn,
+    config,
     mp,
     status,
     topic_merge_proposal,
@@ -1837,7 +1853,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['revision'].encode('utf-8'),
             )
         if source_branch_name is None:
-            source_branch_name = await derived_branch_name(conn, last_run, mp_run['role'])
+            suite_config = get_suite_config(config, mp_run['suite'])
+            source_branch_name = await derived_branch_name(conn, suite_config, last_run, mp_run['role'])
         try:
             mp_url, branch_name, is_new = await publish_one(
                 last_run.suite,
@@ -1968,6 +1985,7 @@ applied independently.
 
 async def check_existing(
     conn,
+    config,
     rate_limiter,
     vcs_manager,
     topic_merge_proposal,
@@ -1997,6 +2015,7 @@ async def check_existing(
         try:
             modified = await check_existing_mp(
                 conn,
+                config,
                 mp,
                 status,
                 topic_merge_proposal=topic_merge_proposal,
@@ -2103,6 +2122,7 @@ ORDER BY start_time DESC
 
 async def listen_to_runner(
     db,
+    config,
     rate_limiter,
     vcs_manager,
     runner_url,
@@ -2120,6 +2140,7 @@ async def listen_to_runner(
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
                 conn,
+                get_suite_config(config, run.suite),
                 rate_limiter,
                 vcs_manager,
                 run,
@@ -2282,6 +2303,7 @@ def main(argv=None):
         loop.run_until_complete(
             publish_pending_new(
                 db,
+                config,
                 rate_limiter,
                 dry_run=args.dry_run,
                 external_url=args.external_url,
@@ -2300,6 +2322,7 @@ def main(argv=None):
             loop.create_task(
                 process_queue_loop(
                     db,
+                    config,
                     rate_limiter,
                     dry_run=args.dry_run,
                     vcs_manager=vcs_manager,
@@ -2321,7 +2344,7 @@ def main(argv=None):
                     args.port,
                     rate_limiter,
                     vcs_manager,
-                    db,
+                    db, config,
                     topic_merge_proposal,
                     topic_publish,
                     dry_run=args.dry_run,
@@ -2338,6 +2361,7 @@ def main(argv=None):
                 loop.create_task(
                     listen_to_runner(
                         db,
+                        config,
                         rate_limiter,
                         vcs_manager,
                         args.runner_url,
