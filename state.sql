@@ -75,7 +75,6 @@ CREATE TABLE IF NOT EXISTS run (
    context text,
    -- Main branch revision
    main_branch_revision text,
-   branch_name text,
    revision text,
    result json,
    suite suite_name not null,
@@ -342,7 +341,6 @@ CREATE OR REPLACE VIEW publishable AS
   debian_build.version AS build_version,
   debian_build.distribution AS build_distribution,
   run.result_code AS result_code,
-  run.branch_name AS branch_name,
   run.main_branch_revision AS main_branch_revision,
   run.revision AS revision,
   run.context AS context,

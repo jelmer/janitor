@@ -241,39 +241,6 @@ def mirror_branches(
         raise AssertionError("unsupported vcs %s" % vcs)
 
 
-def legacy_import_branches(
-    target_vcs_manager,
-    main_entry,
-    local_entry,
-    pkg,
-    name,
-    additional_colocated_branches=None,
-    possible_transports=None,
-):
-    """Publish resulting changes in VCS form.
-
-    This creates a repository with the following branches:
-     * master - the original Debian packaging branch
-     * name - whatever command was run
-     * upstream - the upstream branch (optional)
-     * pristine-tar the pristine tar packaging branch (optional)
-    """
-    branch_map = [
-        (name, local_entry[0], local_entry[1]),
-        ("master", main_entry[0], main_entry[1]),
-    ]
-    if get_vcs_abbreviation(local_entry[0].repository) == "git":
-        for branch_name in additional_colocated_branches or []:
-            try:
-                from_branch = local_entry[0].controldir.open_branch(name=branch_name)
-            except NotBranchError:
-                continue
-            branch_map.append((branch_name, from_branch, from_branch.last_revision()))
-    mirror_branches(
-        target_vcs_manager, pkg, branch_map, public_master_branch=main_entry[0]
-    )
-
-
 def import_branches_git(
     vcs_manager, local_branch, package, suite, log_id, branches, tags
 ):
@@ -293,6 +260,12 @@ def import_branches_git(
         for (fn, n, br, r) in branches:
             tagname = ("refs/tags/%s/%s" % (log_id, fn)).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
+            branchname = ("refs/heads/%s/%s" % (suite, fn)).encode("utf-8")
+            # TODO(jelmer): Ideally this would be a symref:
+            changed_refs[branchname] = changed_refs[tagname]
+        for (fn, n, r) in tags:
+            tagname = ("refs/tags/%s/%s" % (log_id, n)).encode("utf-8")
+            changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
 
     inter = InterRepository.get(local_branch.repository, repo)
@@ -303,10 +276,9 @@ def import_branches_bzr(
     vcs_manager, local_branch, package, suite, log_id, branches, tags
 ):
     for fn, n, br, r in branches:
-        if fn is not None:
-            raise AssertionError(
-                "unable to handle non-default branches for bzr (%s/%s)" % (fn, n))
         target_branch_path = vcs_manager.get_branch_url(package, suite, "bzr")
+        if fn is not None:
+            target_branch_path = urlutils.join_segment_parameters(target_branch_path, {"branch": fn})
         try:
             target_branch = Branch.open(target_branch_path)
         except NotBranchError:
@@ -318,8 +290,11 @@ def import_branches_bzr(
 
         target_branch.tags.set_tag(log_id, local_branch.last_revision())
 
+        graph = target_branch.repository.get_graph()
         for name, revision in tags:
-            target_branch.tags.set_tag(name, revision)
+            # Only set tags on those branches where the revisions exist
+            if graph.is_ancestor(revision, target_branch.last_revision()):
+                target_branch.tags.set_tag(name, revision)
 
 
 def import_branches(vcs_manager, local_branch, package, suite, log_id, branches, tags):

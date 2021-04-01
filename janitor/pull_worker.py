@@ -60,7 +60,6 @@ from silver_platter.proposal import enable_tag_pushing
 from janitor.vcs import (
     RemoteVcsManager,
     MirrorFailure,
-    legacy_import_branches,
     import_branches,
 )
 from janitor.worker import (
@@ -190,7 +189,6 @@ def run_worker(
     output_directory,
     metadata,
     vcs_manager,
-    legacy_branch_name,
     suite,
     target,
     pre_check_command=None,
@@ -229,15 +227,6 @@ def run_worker(
                 logging.info("Pushing result branch to %r", vcs_manager)
 
                 try:
-                    legacy_import_branches(
-                        vcs_manager,
-                        (ws.local_tree.branch, ws.main_branch.last_revision()),
-                        (ws.local_tree.branch, ws.local_tree.last_revision()),
-                        env["PACKAGE"],
-                        legacy_branch_name,
-                        ws.additional_colocated_branches,
-                        possible_transports=possible_transports,
-                    )
                     import_branches(
                         vcs_manager,
                         ws.local_tree.branch,
@@ -562,7 +551,6 @@ async def main(argv=None):
         build_environment = assignment["build"].get("environment", {})
 
         vcs_manager = RemoteVcsManager(assignment["vcs_manager"])
-        legacy_branch_name = assignment["legacy_branch_name"]
         run_id = assignment["id"]
 
         possible_transports = []
@@ -595,7 +583,6 @@ async def main(argv=None):
                     output_directory,
                     metadata,
                     vcs_manager,
-                    legacy_branch_name,
                     suite,
                     target=target,
                     pre_check_command=args.pre_check,

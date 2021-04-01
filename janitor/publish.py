@@ -293,7 +293,6 @@ async def publish_one(
     derived_branch_name: str,
     maintainer_email: str,
     vcs_manager: VcsManager,
-    legacy_local_branch_name: str,
     topic_merge_proposal,
     rate_limiter: RateLimiter,
     dry_run: bool,
@@ -317,13 +316,11 @@ async def publish_one(
     assert mode in SUPPORTED_MODES, "mode is %r" % (mode, )
     local_branch = vcs_manager.get_branch(pkg, "%s/%s" % (suite, role))
     if local_branch is None:
-        local_branch = vcs_manager.get_branch(pkg, legacy_local_branch_name)
-        if local_branch is None:
-            raise PublishFailure(
-                mode,
-                "result-branch-not-found",
-                "can not find local branch for %s / %s (%s)"
-                % (pkg, legacy_local_branch_name, log_id),
+        raise PublishFailure(
+            mode,
+            "result-branch-not-found",
+            "can not find local branch for %s / %s / %s (%s)"
+            % (pkg, suite, rol,e log_id),
             )
 
     request = {
@@ -800,7 +797,6 @@ async def publish_from_policy(
             await derived_branch_name(conn, run, role),
             maintainer_email,
             vcs_manager=vcs_manager,
-            legacy_local_branch_name=run.branch_name,
             topic_merge_proposal=topic_merge_proposal,
             dry_run=dry_run,
             external_url=external_url,
@@ -924,7 +920,6 @@ async def publish_and_store(
                 await derived_branch_name(conn, run, role),
                 maintainer_email,
                 vcs_manager,
-                legacy_local_branch_name=run.branch_name,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
@@ -1857,7 +1852,6 @@ This merge proposal will be closed, since the branch has moved to %s.
                 source_branch_name,
                 maintainer_email,
                 vcs_manager=vcs_manager,
-                legacy_local_branch_name=last_run.branch_name,
                 dry_run=dry_run,
                 external_url=external_url,
                 differ_url=differ_url,
