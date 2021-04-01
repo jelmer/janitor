@@ -1711,6 +1711,7 @@ async def handle_assign(request):
         "env": env,
         "command": item.command,
         "suite": item.suite,
+        "vendor": queue_processor.config.distribution.vendor or dpkg_vendor().lower(),
         "vcs_manager": queue_processor.public_vcs_manager.base_url,
     }
 
