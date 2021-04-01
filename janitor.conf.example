@@ -40,6 +40,7 @@ distribution {
   lintian_suppress_tag: "changelog-distribution-does-not-match-changes-file"
   lintian_suppress_tag: "distribution-and-changes-mismatch"
   build_command: "sbuild -Asv"
+  vendor: "debian"
 }
 
 suite {
