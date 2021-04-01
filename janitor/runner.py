@@ -1769,7 +1769,7 @@ async def handle_finish(request):
                 queue_item = await state.get_queue_item(conn, worker_result.queue_id)
             if queue_item is None:
                 return web.json_response(
-                    {"reason": "Unable to find relevant queue item"}, status=404)
+                    {"reason": "Unable to find relevant queue item %r"}, status=404)
             if main_branch_url is None:
                 main_branch_url = queue_item.branch_url
         if worker_name is None:
