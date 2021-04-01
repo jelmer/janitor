@@ -84,7 +84,7 @@ def find_changes(path):
                  for entry in changes['files']
                  if entry['name'].endswith('.deb')])
     if not names:
-        raise NoChangesFile(path, package)
+        raise NoChangesFile(path)
     return (names, version, distribution, binary_packages)
 
 

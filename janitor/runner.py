@@ -213,14 +213,17 @@ class DebianResult(BuilderResult):
                 self.changes_filenames,
                 self.build_version,
                 self.build_distribution,
+                self.binary_packages
             ) = find_changes(path)
         except NoChangesFile as e:
             # Oh, well.
             logging.info("No changes file found: %s", e)
         else:
             logging.info(
-                "Found changes files %r, build version %s, distribution: %s",
-                self.changes_filenames, self.build_version, self.build_distribution)
+                    "Found changes files %r, build version %s, "
+                    "distribution: %s, binary packages: %r",
+                self.changes_filenames, self.build_version,
+                self.build_distribution, self.binary_packages)
 
     def artifact_filenames(self):
         if not self.changes_filenames:
