@@ -64,7 +64,7 @@ debianize
 {% endif %}
 {% endmacro %}
 
-{% macro file_bug_button(run_id, result_code, verbatim_id=None) %}
+{% macro file_bug_button(run_id, result_code, verbatim_id=None, accesskey="b") %}
 <form id="bugform" action="https://salsa.debian.org/jelmer/debian-janitor/-/issues/new" method="GET" style="display: contents;">
 <input type="hidden" name="issue[issue_type]" value="issue"/>
 <input type="hidden" name="issue[title]" value="{{ (result_code + ": " + (description or ''))|escape }}"/>
@@ -72,7 +72,7 @@ debianize
 See run [{{ run_id }}]({{ url }}).
 
 {%- endfilter %}"/>
-<button id="filebug">File a Bug</button>
+<button id="filebug"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>File a Bug</button>
 </form>
 
 {% if verbatim_id %}
@@ -92,8 +92,8 @@ window.bugform.onsubmit = function(e) {
 
 {% endmacro %}
 
-{% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}) %}
-<button id="{{ id }}">{{ title }}</button>
+{% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}, accesskey="s") %}
+<button id="{{ id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
 
 <script>
 $(function() {
@@ -112,8 +112,8 @@ $(function() {
 </script>
 {% endmacro %}
 
-{% macro schedule_control_button(run_id, title="Schedule control run", id='schedule-control', data={}) %}
-<button id="{{ id }}">{{ title }}</button>
+{% macro schedule_control_button(run_id, title="Schedule control run", id='schedule-control', data={}, accesskey="c") %}
+<button id="{{ id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
 
 <script>
 $(function() {
@@ -130,12 +130,12 @@ $(function() {
 </script>
 {% endmacro %}
 
-{% macro publish_buttons(suite, package, id_suffix='') %}
+{% macro publish_buttons(suite, package, id_suffix='', accesskey='p') %}
 {% set propose_id="propose" + id_suffix %}
 {% set fork_id="push-derived" + id_suffix  %}
 {% set push_id="push" + id_suffix  %}
 {% set publish_id="publish" + id_suffix  %}
-<button id="{{ publish_id }}">Publish now</button> {% if is_admin %} <button id="{{ fork_id }}">Create fork with changes</button><button id="{{ push_id }}">Push</button> <button id="{{ propose_id }}">Create merge proposal</button>{% endif %}
+<button id="{{ publish_id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>Publish now</button> {% if is_admin %} <button id="{{ fork_id }}">Create fork with changes</button><button id="{{ push_id }}">Push</button> <button id="{{ propose_id }}">Create merge proposal</button>{% endif %}
 
 <script>
 $(function() {
