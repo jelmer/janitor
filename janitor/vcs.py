@@ -328,7 +328,7 @@ def get_cached_branch_url(
     if vcs_type == "git":
         return "%s/git/%s,branch=%s" % (
             base_url.rstrip("/"), package,
-            urlutils.escape(branch_name))
+            urlutils.escape(branch_name, safe=''))
     elif vcs_type == "bzr":
         return "%s/bzr/%s/%s" % (base_url.rstrip("/"), package, branch_name)
     else:
@@ -361,7 +361,7 @@ def get_local_vcs_branch_url(
     if vcs == "git":
         return "file:%s,branch=%s" % (
             os.path.join(vcs_directory, "git", codebase),
-            urlutils.escape(branch_name),
+            urlutils.escape(branch_name, safe=''),
         )
     elif vcs == "bzr":
         return os.path.join(vcs_directory, "bzr", codebase, branch_name)
