@@ -948,6 +948,13 @@ def queue_item_env(queue_item):
     return env
 
 
+def cache_branch_name(distro_config, role):
+    if role != 'main':
+        raise ValueError(role)
+    # TODO(jelmer)
+    return "debian/latest"
+
+
 class ActiveLocalRun(ActiveRun):
     def __init__(self, queue_item: state.QueueItem, output_directory: str):
         super(ActiveLocalRun, self).__init__(queue_item)
@@ -1052,7 +1059,7 @@ class ActiveLocalRun(ActiveRun):
             if resume_branch is None:
                 resume_branch = vcs_manager.get_branch(
                     self.queue_item.package,
-                    suite_config.branch_name,
+                    '%s/%s' % (suite_config.name, 'main'),
                     get_vcs_abbreviation(main_branch.repository),
                 )
 
@@ -1062,11 +1069,13 @@ class ActiveLocalRun(ActiveRun):
 
             cached_branch_url = vcs_manager.get_branch_url(
                 self.queue_item.package,
-                "master",
+                cache_branch_name(config.distribution, "main"),
                 get_vcs_abbreviation(main_branch.repository),
             )
         else:
-            main_branch = vcs_manager.get_branch(self.queue_item.package, "master")
+            main_branch = vcs_manager.get_branch(
+                self.queue_item.package,
+                cache_branch_name(config.distribution, "main"))
             if main_branch is None:
                 return self.create_result(
                     branch_url=self.queue_item.branch_url,
@@ -1076,7 +1085,7 @@ class ActiveLocalRun(ActiveRun):
                 )
             logging.info("Using cached branch %s", full_branch_url(main_branch))
             resume_branch = vcs_manager.get_branch(
-                self.queue_item.package, suite_config.branch_name
+                self.queue_item.package, '%s/%s' % (suite_config.name, 'main')
             )
             cached_branch_url = None
 
@@ -1663,7 +1672,7 @@ async def handle_assign(request):
 
         if resume_branch is None and not item.refresh:
             resume_branch = queue_processor.public_vcs_manager.get_branch(
-                item.package, suite_config.branch_name, vcs_type
+                item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type
             )
 
         resume = await check_resume_result(conn, item.suite, resume_branch)
@@ -1674,7 +1683,7 @@ async def handle_assign(request):
 
     try:
         cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-            item.package, "master", vcs_type
+            item.package, cache_branch_name(queue_processor.config, "main"), vcs_type
         )
     except UnsupportedVcs:
         cached_branch_url = None
@@ -1765,8 +1774,6 @@ async def handle_finish(request):
             queue_item.package,
             run_id,
         )
-
-        suite_config = get_suite_config(queue_processor.config, queue_item.suite)
 
         result = JanitorResult(
             pkg=queue_item.package,
