@@ -21,7 +21,7 @@
 <tbody valign="top">
 {% for run_id, finish_time, pkg, description in failures %}
 <tr>
-<td><a class="reference external" href="../pkg/{{ pkg }}/">{{ pkg }}</a><br/> {{ reschedule_button('lintian-fixes', pkg, id='reschedule-' + pkg) }}</td>
+<td><a class="reference external" href="../pkg/{{ pkg }}/">{{ pkg }}</a><br/> {{ reschedule_button('lintian-fixes', pkg, id='reschedule-' + pkg, accesskey=None) }}</td>
 <td>{{ format_timestamp(finish_time) }}</td>
 <td><a class="reference external" href="../pkg/{{ pkg }}/{{ run_id }}"><pre>{{ description }}</pre></a></td>
 </tr>
