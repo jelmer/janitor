@@ -120,7 +120,7 @@ class BuilderResult(object):
     def from_directory(self, path):
         raise NotImplementedError(self.from_directory)
 
-    async def store(self, conn, run_id, package):
+    async def store(self, conn, run_id):
         raise NotImplementedError(self.store)
 
     def json(self):
@@ -159,7 +159,7 @@ class GenericResult(BuilderResult):
     def artifact_filenames(self):
         return []
 
-    async def store(self, conn, run_id, package):
+    async def store(self, conn, run_id):
         pass
 
 
@@ -196,9 +196,10 @@ class DebianResult(BuilderResult):
     kind = "debian"
 
     def __init__(
-        self, build_version=None, build_distribution=None, changes_filenames=None, lintian_result=None,
-        binary_packages=None
+        self, source=None, build_version=None, build_distribution=None,
+        changes_filenames=None, lintian_result=None, binary_packages=None
     ):
+        self.source = source
         self.build_version = build_version
         self.build_distribution = build_distribution
         self.binary_packages = binary_packages
@@ -210,6 +211,7 @@ class DebianResult(BuilderResult):
             self.output_directory = path
             (
                 self.changes_filenames,
+                self.source,
                 self.build_version,
                 self.build_distribution,
                 self.binary_packages
@@ -219,9 +221,9 @@ class DebianResult(BuilderResult):
             logging.info("No changes file found: %s", e)
         else:
             logging.info(
-                    "Found changes files %r, build version %s, "
+                    "Found changes files %r, source %s, build version %s, "
                     "distribution: %s, binary packages: %r",
-                self.changes_filenames, self.build_version,
+                self.source, self.changes_filenames, self.build_version,
                 self.build_distribution, self.binary_packages)
 
     def artifact_filenames(self):
@@ -238,13 +240,13 @@ class DebianResult(BuilderResult):
     def from_json(cls, target_details):
         return cls(lintian_result=target_details.get('lintian'))
 
-    async def store(self, conn, run_id, package):
+    async def store(self, conn, run_id):
         if self.build_version:
             await conn.execute(
                 "INSERT INTO debian_build (run_id, source, version, distribution, lintian_result, binary_packages) "
                 "VALUES ($1, $2, $3, $4, $5, $6)",
                 run_id,
-                package,
+                self.source,
                 self.build_version,
                 self.build_distribution,
                 self.lintian_result,
@@ -1461,7 +1463,7 @@ class QueueProcessor(object):
                     failure_details=result.failure_details,
                 )
                 if result.builder_result:
-                    await result.builder_result.store(conn, result.log_id, item.package)
+                    await result.builder_result.store(conn, result.log_id)
                 await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
         self.topic_result.publish(result.json())
         del self.active_runs[result.log_id]

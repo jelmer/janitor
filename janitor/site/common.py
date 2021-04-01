@@ -134,7 +134,7 @@ SELECT
     instigated_context, branch_url, logfilenames, review_status,
     review_comment,
     run.worker AS worker_name,
-    worker.link AS worker_link
+    worker.link AS worker_link,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
     result_tags
