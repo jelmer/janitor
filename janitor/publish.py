@@ -1845,8 +1845,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 mp_run['revision'].encode('utf-8'),
             )
+        suite_config = get_suite_config(config, mp_run['suite'])
         if source_branch_name is None:
-            suite_config = get_suite_config(config, mp_run['suite'])
             source_branch_name = await derived_branch_name(conn, suite_config, last_run, mp_run['role'])
         try:
             mp_url, branch_name, is_new = await publish_one(
