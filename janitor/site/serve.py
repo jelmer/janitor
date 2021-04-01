@@ -355,7 +355,7 @@ if __name__ == "__main__":
         async with request.app.database.acquire() as conn:
             return {
                 "packages": await conn.fetch("""
-select distinct on (source) source, version
+select distinct on (source) source, run.package AS package, version
 from debian_build
 INNER JOIN run on debian_build.run_id = run.id
 where run.suite = 'debianize'
