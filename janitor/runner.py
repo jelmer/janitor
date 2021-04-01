@@ -102,7 +102,6 @@ from .vcs import (
     RemoteVcsManager,
     UnsupportedVcs,
     VcsManager,
-    legacy_import_branches,
     import_branches,
 )
 
@@ -362,7 +361,6 @@ class JanitorResult(object):
         finish_time=None,
         worker_name=None,
         worker_link=None,
-        legacy_branch_name=None
     ):
         self.package = pkg
         self.suite = suite
@@ -373,7 +371,6 @@ class JanitorResult(object):
         self.logfilenames = logfilenames
         self.worker_name = worker_name
         self.worker_link = worker_link
-        self.legacy_branch_name = legacy_branch_name
         if worker_result:
             self.context = worker_result.context
             if self.code is None:
@@ -899,7 +896,6 @@ async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branc
         )
         if row is not None:
             resume_branch_result = row['result']
-            resume_branch_name = row['branch_name']
             resume_review_status = row['review_status']
             resume_result_branches = [
                 (role, name,
@@ -918,18 +914,16 @@ async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branc
             resume_branch,
             resume_branch_result,
             resume_result_branches or [],
-            legacy_branch_name=resume_branch_name,
         )
     else:
         return None
 
 
 class ResumeInfo(object):
-    def __init__(self, branch, result, resume_result_branches, legacy_branch_name):
+    def __init__(self, branch, result, resume_result_branches):
         self.branch = branch
         self.result = result
         self.resume_result_branches = resume_result_branches
-        self.legacy_branch_name = legacy_branch_name
 
     @property
     def resume_branch_url(self):
@@ -939,7 +933,6 @@ class ResumeInfo(object):
         return {
             "result": self.result,
             "branch_url": self.resume_branch_url,
-            "branch_name": self.legacy_branch_name,
             "branches": [
                 (fn, n, br.decode("utf-8"), r.decode("utf-8"))
                 for (fn, n, br, r) in self.resume_result_branches
@@ -1189,7 +1182,6 @@ class ActiveLocalRun(ActiveRun):
             code="success",
             worker_result=worker_result,
             logfilenames=logfilenames,
-            legacy_branch_name=suite_config.branch_name,
         )
 
         result.builder_result.from_directory(self.output_directory)
@@ -1209,16 +1201,6 @@ class ActiveLocalRun(ActiveRun):
 
         enable_tag_pushing(local_branch)
 
-        legacy_import_branches(
-            vcs_manager,
-            (main_branch, main_branch.last_revision()),
-            (local_branch, local_branch.last_revision()),
-            self.queue_item.package,
-            suite_config.branch_name,
-            additional_colocated_branches=(
-                pick_additional_colocated_branches(main_branch)
-            ),
-        )
         import_branches(
             vcs_manager,
             local_branch,
@@ -1457,7 +1439,6 @@ class QueueProcessor(object):
                     result.context,
                     result.main_branch_revision,
                     result.code,
-                    branch_name=result.legacy_branch_name,
                     revision=result.revision,
                     subworker_result=result.subworker_result,
                     suite=item.suite,
@@ -1718,7 +1699,6 @@ async def handle_assign(request):
         "env": env,
         "command": item.command,
         "suite": item.suite,
-        "legacy_branch_name": suite_config.branch_name,
         "vcs_manager": queue_processor.public_vcs_manager.base_url,
     }
 
@@ -1797,9 +1777,6 @@ async def handle_finish(request):
             branch_url=main_branch_url,
             worker_result=worker_result,
             logfilenames=logfilenames,
-            legacy_branch_name=(
-                suite_config.branch_name
-                if worker_result.code is None else None),
             )
 
         if worker_result.code is None:

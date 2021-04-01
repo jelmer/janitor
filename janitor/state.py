@@ -66,7 +66,6 @@ class Run(object):
     build_version: Optional[Version]
     build_distribution: Optional[str]
     result_code: str
-    branch_name: Optional[str]
     main_branch_revision: Optional[bytes]
     revision: Optional[bytes]
     context: Optional[str]
@@ -91,7 +90,6 @@ class Run(object):
         "build_version",
         "build_distribution",
         "result_code",
-        "branch_name",
         "main_branch_revision",
         "revision",
         "context",
@@ -118,7 +116,6 @@ class Run(object):
         build_version,
         build_distribution,
         result_code,
-        branch_name,
         main_branch_revision,
         revision,
         context,
@@ -142,7 +139,6 @@ class Run(object):
         self.build_version = build_version
         self.build_distribution = build_distribution
         self.result_code = result_code
-        self.branch_name = branch_name
         self.main_branch_revision = main_branch_revision
         self.revision = revision
         self.context = context
@@ -190,7 +186,6 @@ class Run(object):
             build_version=row['build_version'],
             build_distribution=row['build_distribution'],
             result_code=row['result_code'],
-            branch_name=row['branch_name'],
             main_branch_revision=(row['main_branch_revision'].encode("utf-8") if row[10] else None),
             revision=(row['revision'].encode("utf-8") if row[11] else None),
             context=row['context'],
@@ -220,7 +215,6 @@ class Run(object):
             self.build_version,
             self.build_distribution,
             self.result_code,
-            self.branch_name,
             self.main_branch_revision,
             self.revision,
             self.context,
@@ -260,7 +254,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code,
-    branch_name, main_branch_revision, revision, context, result, suite,
+    main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision, revision) FROM
@@ -318,7 +312,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code,
-    branch_name, main_branch_revision, revision, context, result, suite,
+    main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
@@ -358,7 +352,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code,
-    branch_name, main_branch_revision, revision, context, result, suite,
+    main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
