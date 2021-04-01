@@ -10,7 +10,7 @@
 <!-- {{ run.result_branches }} -->
 
 <ul class="metadata">
-<li>Worker: {{ run.worker_name }}</li>
+<li>Worker: {% if worker_link %}<a href="{{ worker_link }}">{% endif %}{{ worker_name }}{% if worker_link %}</a>{% endif %}</li>
 <li>Package: <a class="reference external" href="..">{{ package }}</a>{% if tracker_url(package) %} (<a href="{{ tracker_url(package) }}">QA Page</a>){% endif %}</li>
 {% if vcs_url %}
 <li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
