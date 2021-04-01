@@ -269,7 +269,7 @@ def import_branches_git(
         return changed_refs
 
     inter = InterRepository.get(local_branch.repository, repo)
-    inter.fetch_refs(get_changed_refs, lossy=False)
+    inter.fetch_refs(get_changed_refs, lossy=False, overwrite=True)
 
 
 def import_branches_bzr(
