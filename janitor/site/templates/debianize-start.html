@@ -1,0 +1,112 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "generic-sidebar.html" %}{% endblock %}
+{% block page_title %}Debianize{% endblock %}
+{% block body %}
+
+<div class="section" id="lintian-fixes">
+<h1>Debianize</h1>
+
+<p>The Debianize effort automatically creates Debian packages for upstream
+projects. It does this using a combination of parsing metadata files in the
+upstream projects, build log analysis and heuristics.</p>
+
+<p>These packages are currently only available for amd64.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">The packages in this repository were created automatically, without review
+from a human.</p>
+</div>
+<div class="section" id="using-the-repository">
+<h2>Using the repository</h2>
+<p>To use the apt repository, run something like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb {{ url.join(URL('..')) }} debianize main &gt; /etc/apt/sources.list.d/debianize.list
+curl {{ url.join(URL('../pgp_keys.asc')) }} | sudo apt-key add -
+apt update
+</pre></div>
+</div>
+<p>The repository is marked as <code class="docutils literal notranslate"><span class="pre">experimental</span></code>, meaning that apt won’t
+automatically update to packages in them unless explicitly requested to do so.
+To e.g. install the version of <em>cifs-utils</em> that’s in this repository, run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>apt install -t debianize cifs-utils
+</pre></div>
+</div>
+<p>The packages are also versioned in such a way that if the new upstream version
+gets uploaded to the official Debian APT repository, it will replace the package
+in this archive.</p>
+</div>
+<div class="section" id="pinning">
+<h2>Pinning</h2>
+<p>Optionally, if you want to track a given package so upgrades happen automatically,
+add the following to <code class="docutils literal notranslate"><span class="pre">/etc/apt/preferences</span></code> (and see
+<a class="reference external" href="https://wiki.debian.org/AptPreferences">the documentation about apt preferences</a>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>Package: cifs-utils
+Pin: release a=debianize
+Pin-Priority: <span class="mi">800</span>
+</pre></div>
+</div>
+</div>
+
+<div class="section" id="faq">
+<h2>FAQ</h2>
+<div class="contents local topic" id="contents">
+<p class="topic-title first">Contents:</p>
+<ul class="simple">
+<li><a class="reference internal" href="#how-do-i-opt-in" id="id7">How do I submit a new package?</a></li>
+<li><a class="reference internal" href="#what-repositories-are-supported" id="id11">What repositories are supported?</a></li>
+<li><a class="reference internal" href="#what-kind-of-changes-are-made" id="id12">What kind of changes are made?</a></li>
+<li><a class="reference internal" href="#the-bot-is-doing-something-else-wrong-where-do-i-report-this" id="id15">The bot is doing something wrong. Where do I report this?</a></li>
+<li><a class="reference internal" href="#how-do-i-run-the-fixers-locally" id="id16">How do I run debianize locally?</a></li>
+<li><a class="reference internal" href="#how-can-i-contribute-more-fixer-scripts" id="id17">How can I contribute improvements?</a></li>
+<li><a class="reference internal" href="#what-technologies-are-used" id="id19">What technologies are used?</a></li>
+</ul>
+</div>
+
+{% include "faq-debianize-opt-in.html" %}
+{% include "faq-supported-vcs.html" %}
+{% include "faq-other-problem.html" %}
+{% include "faq-debianize-locally.html" %}
+{% include "faq-debianize-contributing.html" %}
+{% include "faq-api.html" %}
+{% include "faq-debianize-technology.html" %}
+
+</div>
+</div>
+
+<div class="section" id="status">
+<h2>Package Status</h2>
+<p>
+<form autocomplete="off" action="pkg">
+  <div class="packages" style="width:300px;">
+    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p></div>
+
+<div class="section" id="package-list">
+<h2>Package list</h2>
+<p>The following source packages with new upstream releases merged are currently
+available:</p>
+
+{{ package_list(suite_config.base_distribution, packages) }}
+
+</div>
+</div>
+
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#package').typeahead(null, {
+  name: 'packages',
+  source: packages
+});
+});
+</script>
+
+
+{% endblock %}

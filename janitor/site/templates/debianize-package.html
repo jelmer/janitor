@@ -1,0 +1,118 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include [suite + "-sidebar.html", "generic-sidebar.html"] %}{% endblock %}
+{% from "run_util.html" import local_command, merge_command, reschedule_button, describe_publish_policy, publish_buttons, result_code_explanation, display_result_code, display_vcs_diffs, display_branch_url with context %}
+{% block page_title %}{{ suite }} Packages - {{ package }}{% endblock %}
+{% block body %}
+<div class="section" id="{{ package }}">
+<h1>{{ suite }} Package - {{ package }}</h1>
+<ul class="metadata">
+{% if tracker_url(package) %}
+<li><a class="reference external" href="{{ tracker_url(package) }}">QA Page</a></li>
+{% endif %}
+<li>Maintainer email: <a class="reference external" href="mailto:{{ maintainer_email }}">{{ maintainer_email }}</a></li>
+{% if publish_policy %}
+<li>Automatic publish policy: {{ describe_publish_policy(publish_policy) }}</li>
+{% endif %}
+{% if changelog_policy != 'auto' %}
+<li>Changelog update policy: {{ changelog_policy }}</li>
+{% endif %}
+{% if compat_release %}
+<li>Release compatibility: {{ compat_release }}</li>
+{% endif %}
+{% if removed %}
+<li class="not-in-archive">This package is not present in the archive.</li>
+{% endif %}
+{% if previous_runs %}
+<li>Last processed: {{ format_timestamp(previous_runs[0].finish_time) }} (took {{ format_duration(previous_runs[0].finish_time - previous_runs[0].start_time) }})</li>
+{% endif %}
+{% if vcs_url %}
+<li>Branch URL: {{ display_branch_url(vcs_browse, vcs_url, vcswatch_version) }}</li>
+{% endif %}
+
+{% if queue_position %}
+<li id='queue-position.{{ package }}'>Queue position: {{ queue_position }}{% if queue_wait_time %} (a {{ format_duration(queue_wait_time) }} wait){% endif %}</li>
+{% else %}
+<li id='queue-position.{{ package }}'/>
+{% endif %}
+</ul>
+
+{% if vcs_url %}
+{{ reschedule_button(suite, package, "Schedule a new run") }}
+{% endif %}
+
+{% if merge_proposals %}
+<div class="section" id="recent-merge-proposals">
+<h2>Recent merge proposals</h2>
+<ul>
+{% for url, status in merge_proposals %}
+<li><a href="{{ url }}">{{ url }}</a> ({{ status }})</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+{{ result_code_explanation(result_code, run) }}
+
+{% if not result_code %}
+
+{% if run and run.result_code == 'nothing-to-do' %}
+<p>
+Nothing to do for {{ package }}.
+{% else %}
+<p>No unpublished successful runs for {{ package }}.</p>
+{% endif %}
+
+{% else %}
+
+{% if run.result_branches %}
+
+<div class="section" id="ready-changes">
+<h2>Ready changes</h2>
+
+{% if run.result_branches %}
+{{ publish_buttons(suite, package) }}
+{% endif %}
+
+{{ merge_command(package, suite, run.result_branches, vcs) }}
+
+</div>
+
+{{ display_vcs_diffs(show_diff, run.result_branches, run.result_tags) }}
+
+{% if debdiff %}
+<h3>Debdiff</h3>
+
+{% if debdiff.split('\n')|length < 200 %}
+
+{{ debdiff|safe }}
+
+{% else %}
+<p>Debdiff is too long (more than 200 lines). Download the <a href="/api/run/{{ run_id }}/debdiff?filter_boring=1">raw debdiff</a>.</p>
+{% endif %}
+
+{% endif %}
+
+{% endif %}
+
+<h3>Run locally</h3>
+
+{{ local_command(command, package, vcs, vcs_url) }}
+
+<h3>More details</h3>
+<p><a href="/cupboard/pkg/{{ package }}/{{ run_id }}">Full run details</a></p>
+
+{% endif %}
+
+{% if previous_runs and result_code not in ('nothing-to-do', 'success') %}
+<h3>Historical runs</h3>
+
+<ul>
+{% for previous_run in previous_runs %}
+<li><a href="/cupboard/pkg/{{ package }}/{{ previous_run.id }}">{{ display_result_code(previous_run.result_code)|safe }}: {{ previous_run.description }}</a></li>
+{% endfor %}
+</ul>
+
+{% endif %}
+
+</div>
+{% endblock %}
