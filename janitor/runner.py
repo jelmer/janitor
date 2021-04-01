@@ -948,11 +948,15 @@ def queue_item_env(queue_item):
     return env
 
 
+def dpkg_vendor():
+    import subprocess
+    return subprocess.check_output(['dpkg-vendor', '--query', 'vendor']).strip().decode()
+
+
 def cache_branch_name(distro_config, role):
     if role != 'main':
         raise ValueError(role)
-    # TODO(jelmer)
-    return "debian/latest"
+    return "%s/latest" % (distro_config.vendor or dpkg_vendor().lower())
 
 
 class ActiveLocalRun(ActiveRun):
