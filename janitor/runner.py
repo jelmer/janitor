@@ -1246,7 +1246,6 @@ async def store_run(
     context: Optional[str],
     main_branch_revision: Optional[bytes],
     result_code: str,
-    branch_name: str,
     revision: Optional[bytes],
     subworker_result: Optional[Any],
     suite: str,
@@ -1272,7 +1271,6 @@ async def store_run(
       context: Subworker-specific context
       main_branch_revision: Main branch revision
       result_code: Result code (as constant string)
-      branch_name: Resulting branch name
       revision: Resulting revision id
       subworker_result: Subworker-specific result data (as json)
       suite: Suite
@@ -1293,10 +1291,10 @@ async def store_run(
         "INSERT INTO run (id, command, description, result_code, "
         "start_time, finish_time, package, instigated_context, context, "
         "main_branch_revision, "
-        "branch_name, revision, result, suite, branch_url, logfilenames, "
+        "revision, result, suite, branch_url, logfilenames, "
         "value, worker, worker_link, result_tags, "
         "failure_details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20)",
         run_id,
         command,
         description,
@@ -1307,7 +1305,6 @@ async def store_run(
         instigated_context,
         context,
         main_branch_revision.decode("utf-8") if main_branch_revision else None,
-        branch_name,
         revision.decode("utf-8") if revision else None,
         subworker_result if subworker_result else None,
         suite,
