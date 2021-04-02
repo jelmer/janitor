@@ -284,11 +284,14 @@ def import_branches_bzr(
     for fn, n, br, r in branches:
         target_branch_path = vcs_manager.get_branch_url(package, suite, "bzr")
         if fn is not None:
-            target_branch_path = urlutils.join_segment_parameters(target_branch_path, {"branch": fn})
+            target_branch_path = urlutils.join_segment_parameters(
+                target_branch_path,
+                {"branch": urlutils.escape(fn, safe='')}).rstrip('/')
         try:
             target_branch = Branch.open(target_branch_path)
         except NotBranchError:
-            target_branch = ControlDir.create_branch_convenience(target_branch_path)
+            target_branch = ControlDir.create_branch_convenience(
+                target_branch_path)
         try:
             local_branch.push(target_branch, overwrite=True)
         except NoSuchRevision as e:
