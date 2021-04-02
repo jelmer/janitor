@@ -619,7 +619,7 @@ async def main(argv=None):
                 return 0
             except BaseException as e:
                 metadata["code"] = "worker-failure"
-                metadata["description"] = str(e)
+                metadata["description"] = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
                 raise
             else:
                 metadata["code"] = None
