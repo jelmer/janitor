@@ -407,8 +407,7 @@ SELECT
 FROM
   all_debian_versions
 WHERE
-  source = $1 AND
-  AND %(version_match)s
+  source = $1 AND %(version_match)s
 """
     args = [name]
     if version:
