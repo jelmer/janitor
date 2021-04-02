@@ -73,7 +73,8 @@ from ognibuild.debian.fix_build import build_incrementally
 from ognibuild.debian.build import (
     build_once,
     MissingChangesFile,
-    SbuildFailure,
+    DetailedDebianBuildFailure,
+    UnidentifiedDebianBuildError,
 )
 from .debian import tree_set_changelog_version
 from ognibuild import (
@@ -525,24 +526,22 @@ class DebianTarget(Target):
                         "Expected changes path %s does not exist." % e.filename,
                         details={'filename': e.filename}
                     )
-                except SbuildFailure as e:
-                    if e.error is not None:
-                        if e.stage and not e.error.is_global:
-                            code = "%s-%s" % (e.stage, e.error.kind)
-                        else:
-                            code = e.error.kind
-                    elif e.stage is not None:
-                        code = "build-failed-stage-%s" % e.stage
+                except DetailedDebianBuildFailure as e:
+                    if e.stage and not e.error.is_global:
+                        code = "%s-%s" % (e.stage, e.error.kind)
                     else:
-                        code = "build-failed"
+                        code = e.error.kind
                     try:
-                        if e.error is not None:
-                            details = e.error.json()
-                        else:
-                            details = None
+                        details = e.error.json()
                     except NotImplementedError:
                         details = None
                     raise WorkerFailure(code, e.description, details=details)
+                except UnidentifiedDebianBuildError as e:
+                    if e.stage is not None:
+                        code = "build-failed-stage-%s" % e.stage
+                    else:
+                        code = "build-failed"
+                    raise WorkerFailure(code, e.description)
                 logger.info("Built %r.", changes_names)
         from .debian.lintian import run_lintian
         lintian_result = run_lintian(

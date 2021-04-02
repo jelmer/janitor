@@ -166,7 +166,8 @@ WHERE
    result_code LIKE 'build-%' OR
    result_code LIKE 'dist-%' OR
    result_code LIKE 'unpack-%s' OR
-   result_code LIKE 'create-session-%')
+   result_code LIKE 'create-session-%' OR
+   result_code LIKE 'missing-%')
    """
         async for package, suite, log_id, command, duration, result_code, description, failure_details in (conn.cursor(query)):
             todo.append(reprocess_run(db, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=dry_run, reschedule=reschedule))
