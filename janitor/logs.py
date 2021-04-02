@@ -21,6 +21,7 @@ from aiohttp import (
     ClientTimeout,
     ServerDisconnectedError,
 )
+import asyncio
 import gzip
 from io import BytesIO
 import os
@@ -183,6 +184,9 @@ class GCSLogFilemanager(LogFileManager):
             if e.status == 503:
                 raise ServiceUnavailable()
             raise
+        except asyncio.CancelledError as e:
+            # Timeout
+            raise ServiceUnavailable()
 
 
 def get_log_manager(location):
