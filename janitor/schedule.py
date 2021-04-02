@@ -86,6 +86,7 @@ IGNORE_RESULT_CODE.update(
 
 
 PUBLISH_MODE_VALUE = {
+    "skip": 0,
     "build-only": 0,
     "push": 500,
     "propose": 400,
