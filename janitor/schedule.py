@@ -408,7 +408,7 @@ FROM
   all_debian_versions
 WHERE
   source = $1 AND
-  AND %(version_match1)s
+  AND %(version_match)s
 """
     args = [name]
     if version:
@@ -417,7 +417,8 @@ WHERE
     else:
         version_match = "True"
 
-    return bool(await conn.fetchval(query % version_match, *args))
+    return bool(await conn.fetchval(
+        query % {"version_match": version_match}, *args))
 
 
 async def deps_satisfied(conn: asyncpg.Connection, suite: str, dependencies) -> bool:
