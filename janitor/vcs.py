@@ -37,7 +37,7 @@ from breezy.errors import (
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import InterRepository, Repository
-from breezy.transport import Transport
+from breezy.transport import Transport, get_transport
 from lintian_brush.vcs import (
     determine_browser_url,
     unsplit_vcs_url,
@@ -287,11 +287,13 @@ def import_branches_bzr(
             target_branch_path = urlutils.join_segment_parameters(
                 target_branch_path,
                 {"branch": urlutils.escape(fn, safe='')}).rstrip('/')
+        transport = get_transport(target_branch_path)
+        transport.create_prefix() 
         try:
-            target_branch = Branch.open(target_branch_path)
+            target_branch = Branch.open_from_transport(target_branch_path)
         except NotBranchError:
             target_branch = ControlDir.create_branch_convenience(
-                target_branch_path)
+                target_branch_path, possible_transports=[transport])
         try:
             local_branch.push(target_branch, overwrite=True)
         except NoSuchRevision as e:
