@@ -288,9 +288,9 @@ def import_branches_bzr(
                 target_branch_path,
                 {"branch": urlutils.escape(fn, safe='')}).rstrip('/')
         transport = get_transport(target_branch_path)
-        transport.create_prefix() 
+        transport.create_prefix()
         try:
-            target_branch = Branch.open_from_transport(target_branch_path)
+            target_branch = Branch.open_from_transport(transport)
         except NotBranchError:
             target_branch = ControlDir.create_branch_convenience(
                 target_branch_path, possible_transports=[transport])
