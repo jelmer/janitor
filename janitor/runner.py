@@ -28,6 +28,7 @@ import re
 import signal
 import shlex
 import socket
+import ssl
 import sys
 import tempfile
 from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set, Type
@@ -869,6 +870,9 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
         return None
     except HosterLoginRequired as e:
         logging.warning("No credentials for hoster (%s)", e)
+        return None
+    except ssl.SSLCertVerificationError as e:
+        logging.warning("SSL error probing for hoster(%s)", e)
         return None
     else:
         try:
