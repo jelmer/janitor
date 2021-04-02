@@ -371,10 +371,8 @@ async def git_backend(request):
                 status=status_code, reason=status_reason,
             )
 
-            try:
+            if tuple(request.version) == (1, 1):
                 response.enable_chunked_encoding()
-            except RuntimeError:
-                pass  # HTTP/1.0
 
             await response.prepare(request)
 
