@@ -43,7 +43,7 @@ from yarl import URL
 
 from breezy import debug
 from breezy.branch import Branch
-from breezy.errors import PermissionDenied
+from breezy.errors import PermissionDenied, ConnectionError
 from breezy.propose import Hoster, HosterLoginRequired
 from breezy.transport import Transport
 
@@ -873,6 +873,9 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
         return None
     except ssl.SSLCertVerificationError as e:
         logging.warning("SSL error probing for hoster(%s)", e)
+        return None
+    except ConnectionError as e:
+        logging.warning("Connection error opening resume branch (%s)", e)
         return None
     else:
         try:
