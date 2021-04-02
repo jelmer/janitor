@@ -41,7 +41,7 @@ from . import (
     state,
 )
 
-from .config import read_config
+from .config import read_config, get_suite_config
 from .prometheus import setup_metrics
 from .site import is_worker, iter_accept, env as site_env
 from .vcs import (
@@ -500,13 +500,21 @@ async def _bzr_open_repo(vcs_manager, db, package):
 async def bzr_backend(request):
     vcs_manager = request.app.vcs_manager
     package = request.match_info["package"]
-    branch = request.match_info.get("branch")
+    branch_name = request.match_info.get("branch")
     repo = await _bzr_open_repo(vcs_manager, request.app.db, package)
-    if await is_worker(request.app.db, request):
-        backing_transport = repo.user_transport
+    if branch_name:
+        try:
+            get_suite_config(request.app.config, branch_name)
+        except KeyError:
+            raise web.HTTPNotFound(text='no such suite: %s' % branch_name)
+        transport = repo.user_transport.clone(branch_name)
     else:
-        backing_transport = get_transport_from_url("readonly+" + repo.user_url)
-    transport = backing_transport.clone(branch)
+        transport = repo.user_transport
+    transport.ensure_base()
+    if await is_worker(request.app.db, request):
+        backing_transport = transport
+    else:
+        backing_transport = get_transport_from_url("readonly+" + transport.base)
     out_buffer = BytesIO()
     request_data_bytes = await request.read()
 
@@ -570,6 +578,7 @@ def run_web_server(
     port: int,
     vcs_manager: VcsManager,
     db: state.Database,
+    config,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
 ):
@@ -579,6 +588,7 @@ def run_web_server(
     )
     app.vcs_manager = vcs_manager
     app.db = db
+    app.config = config
     setup_metrics(app)
     app.router.add_get("/diff/{run_id}/{role}", diff_request)
     if dulwich_server:
@@ -652,6 +662,7 @@ def main(argv=None):
         args.port,
         vcs_manager,
         db,
+        config,
         dulwich_server=args.dulwich_server,
         client_max_size=args.client_max_size,
     )
