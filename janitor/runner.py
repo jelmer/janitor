@@ -56,6 +56,7 @@ from silver_platter.proposal import (
     find_existing_proposed,
     enable_tag_pushing,
     UnsupportedHoster,
+    HosterLoginRequired,
     NoSuchProject,
     get_hoster,
 )
@@ -865,6 +866,9 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
         # We can't figure out what branch to resume from when there's
         # no hoster that can tell us.
         logging.warning("Unsupported hoster (%s)", e)
+        return None
+    except HosterLoginRequired as e:
+        logging.warning("No credentials for hoster (%s)", e)
         return None
     else:
         try:
