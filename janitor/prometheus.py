@@ -57,9 +57,7 @@ async def metrics_middleware(request, handler):
     requests_in_progress_gauge.labels(request.method, route).inc()
     try:
         response = await handler(request)
-    except asyncio.CancelledError:
-        raise
-    except web.HTTPException:
+    except (asyncio.CancelledError, web.HTTPException, ConnectionResetError):
         raise
     except Exception:
         request_exceptions.labels(request.method, route).inc()
