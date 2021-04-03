@@ -22,7 +22,7 @@ cd {{ package }}
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 debcheckout {{ package }}
 cd {{ package }}
-deb-scrub-obsolete
+deb-{{ command }}
 </pre>
 </div>
 </div>
@@ -31,7 +31,7 @@ deb-scrub-obsolete
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 {{ clone_command(vcs, vcs_url, package) }}
 cd {{ package }}
-debianize
+{{ command }} -x
 </pre>
 </div>
 </div>
