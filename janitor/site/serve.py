@@ -46,6 +46,21 @@ from . import (
 FORWARD_CLIENT_TIMEOUT = 30 * 60
 
 
+def create_background_task(fn, title):
+    loop = asyncio.get_event_loop()
+    task = loop.create_task(fn)
+
+    def log_result(future):
+        try:
+            future.result()
+        except BaseException:
+            logging.exception('%s failed', title)
+        else:
+            logging.debug('%s succeeded', title)
+    task.add_done_callback(log_result)
+    return task
+
+
 class ForwardedResource(PrefixResource):
     def __init__(
         self, prefix, location, name=None, expect_handler=None, chunk_size=256 * 1024
@@ -1249,12 +1264,12 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
                 app.topic_notifications.publish(["result", msg])
 
         for cb in [
-            listen_to_publisher_publish,
-            listen_to_publisher_mp,
-            listen_to_queue,
-            listen_to_result,
+            (listen_to_publisher_publish, 'publisher publish listening'),
+            (listen_to_publisher_mp, 'merge proposal listiening'),
+            (listen_to_queue, 'queue listening'),
+            (listen_to_result, 'result listening'),
         ]:
-            listener = app.loop.create_task(cb(app))
+            listener = create_background_task(cb(app))
 
             async def stop_listener(app):
                 listener.cancel()
