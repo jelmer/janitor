@@ -822,6 +822,8 @@ async def handle_run_progress(request):
                     )
             else:
                 logging.warning("Ignoring ws message type %r", msg.type)
+    except ConnectionResetError:
+        pass
     finally:
         await run_ws.close()
 
