@@ -279,7 +279,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.config = config
     app.generator_manager = generator_manager
     setup_metrics(app)
-    app.router.add_static("/dists", dists_dir)
+    app.router.add_static("/dists", dists_dir, show_index=True)
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
     runner = web.AppRunner(app)
