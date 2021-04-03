@@ -588,25 +588,25 @@ def run_web_server(
     app.db = db
     app.config = config
     setup_metrics(app)
-    app.router.add_get("/diff/{run_id}/{role}", diff_request)
+    app.router.add_get("/diff/{run_id}/{role}", diff_request, name='diff')
     if dulwich_server:
         app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}", dulwich_service
+            "/git/{package}/{service:git-receive-pack|git-upload-pack}", dulwich_service, name='dulwich-service'
         )
-        app.router.add_get("/git/{package}/info/refs", dulwich_refs)
+        app.router.add_get("/git/{package}/info/refs", dulwich_refs, name='dulwich-refs')
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend
+                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend, name='git'
             )
 
-    app.router.add_get("/{vcs:git|bzr}/", handle_repo_list)
-    app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus)
-    app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend)
-    app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend)
-    app.router.add_get("/vcs-type/{package}", get_vcs_type)
-    app.router.add_post("/remotes/git/{package}/{remote}", handle_set_git_remote)
-    app.router.add_post("/remotes/bzr/{package}/{remote}", handle_set_bzr_remote)
+    app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
+    app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
+    app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
+    app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
+    app.router.add_get("/vcs-type/{package}", get_vcs_type, name='vcs-type')
+    app.router.add_post("/remotes/git/{package}/{remote}", handle_set_git_remote, name='git-remote')
+    app.router.add_post("/remotes/bzr/{package}/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
     web.run_app(app, host=listen_addr, port=port)
 
