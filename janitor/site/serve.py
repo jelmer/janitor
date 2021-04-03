@@ -608,7 +608,11 @@ AND suite = ANY($1::text[])
             "state", state, max_age=60, path=callback_path, httponly=True, secure=True
         )
         if "url" in request.query:
-            response.set_cookie("back_url", str(URL(request.query["url"]).relative()))
+            try:
+                response.set_cookie("back_url", str(URL(request.query["url"]).relative()))
+            except ValueError:
+                # 'url' is not a URL
+                raise web.HTTPBadRequest(text='invalid url')
         return response
 
     async def handle_static_file(path, request):
