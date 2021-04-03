@@ -56,7 +56,7 @@ def find_build_log_failure(logf, length):
         (focus_section, match, error) = find_install_deps_failure_description(
             paragraphs
         )
-        if offset is not None:
+        if match:
             abs_offset = offsets[focus_section][0] + match.lineno
             include_lines = (
                 max(1, abs_offset - length // 2),
