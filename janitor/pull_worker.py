@@ -316,6 +316,7 @@ class WatchdogPetter(object):
         self._thread.start()
         self._tasks = []
         self._log_dir_tasks = {}
+        self._last_communication = datetime.now()
         self.kill = None
 
     def _run(self):
@@ -330,9 +331,10 @@ class WatchdogPetter(object):
     async def _send_keepalives(self):
         try:
             while True:
-                await asyncio.sleep(60)
-                if not await self.send_keepalive():
-                    logging.warning('failed to send keepalive')
+                await asyncio.sleep(10)
+                if (datetime.now() - self._last_communication).total_seconds() > 60:
+                    if not await self.send_keepalive():
+                        logging.warning('failed to send keepalive')
         except BaseException:
             logging.exception('sending keepalives')
             raise
@@ -384,6 +386,7 @@ class WatchdogPetter(object):
         else:
             logging.debug('Not sending keepalive; websocket is dead')
             return False
+        self._last_communication = datetime.now()
 
     async def send_log_fragment(self, filename, data):
         if self.ws is None:
@@ -392,6 +395,7 @@ class WatchdogPetter(object):
             await self.ws.send_bytes(
                 b"\0".join([b"log", filename.encode("utf-8"), data])
             )
+        self._last_communication = datetime.now()
 
     def track_log_directory(self, directory):
         task = self._forward_logs(directory)
@@ -412,7 +416,7 @@ class WatchdogPetter(object):
                 for name, f in fs.items():
                     data = f.read()
                     await self.send_log_fragment(name, data)
-                await asyncio.sleep(10)
+                await asyncio.sleep(60)
         except BaseException:
             logging.exception('log directory forwarding')
             raise
