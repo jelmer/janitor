@@ -795,12 +795,16 @@ async def handle_run_progress(request):
 
     run_id = request.match_info["run_id"].encode()
 
+    progress_url = urllib.parse.urljoin(request.app.runner_url, "ws/progress")
+
+    try:
+        run_ws = await request.app.http_client_session.ws_connect(progress_url)
+    except ClientConnectorError:
+        raise web.HTTPBadGateway(text='unable to contact runner')
+
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
-    progress_url = urllib.parse.urljoin(request.app.runner_url, "ws/progress")
-
-    run_ws = await request.app.http_client_session.ws_connect(progress_url)
     try:
         async for msg in ws:
             if msg.type == WSMsgType.BINARY:
