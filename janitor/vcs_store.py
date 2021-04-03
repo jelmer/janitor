@@ -597,7 +597,7 @@ def run_web_server(
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend, name='git'
+                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend
             )
 
     app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
