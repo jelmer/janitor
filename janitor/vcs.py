@@ -270,7 +270,7 @@ def import_branches_git(
                 (n, r) = taginfo
             else:
                 raise ValueError(taginfo)
-            tagname = ("refs/tags/%s/%s" % (log_id, n)).encode("utf-8")
+            tagname = ("refs/tags/%s" % (n, )).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
 
