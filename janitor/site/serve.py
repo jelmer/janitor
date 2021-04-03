@@ -1263,13 +1263,13 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(["result", msg])
 
-        for cb in [
+        for cb, title in [
             (listen_to_publisher_publish, 'publisher publish listening'),
             (listen_to_publisher_mp, 'merge proposal listiening'),
             (listen_to_queue, 'queue listening'),
             (listen_to_result, 'result listening'),
         ]:
-            listener = create_background_task(cb(app))
+            listener = create_background_task(cb(app), title)
 
             async def stop_listener(app):
                 listener.cancel()
