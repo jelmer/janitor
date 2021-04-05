@@ -11,12 +11,9 @@ import asyncpg
 
 from janitor import state
 from buildlog_consultant.sbuild import (
-    parse_sbuild_log,
-    find_failed_stage,
+    SbuildLog,
     find_build_failure_description,
-    find_install_deps_failure_description,
-    SBUILD_FOCUS_SECTION,
-    strip_build_tail,
+    worker_failure_from_sbuild_log,
 )
 from janitor.logs import LogRetrievalError
 from janitor.site import (
@@ -37,55 +34,27 @@ DIST_LOG_NAME = "dist.log"
 
 
 def find_build_log_failure(logf, length):
-    offsets = {}
-    linecount = 0
-    paragraphs = {}
-    for title, offset, lines in parse_sbuild_log(logf):
-        if title is not None:
-            title = title.lower()
-        paragraphs[title] = lines
-        linecount = max(offset[1], linecount)
-        offsets[title] = offset
-    highlight_lines = []
-    include_lines = None
-    failed_stage = find_failed_stage(paragraphs.get("summary", []))
-    focus_section = SBUILD_FOCUS_SECTION.get(failed_stage)
-    if focus_section not in paragraphs:
-        focus_section = None
-    if failed_stage == "install-deps":
-        (focus_section, match, error) = find_install_deps_failure_description(
-            paragraphs
-        )
-        if match:
-            abs_offset = offsets[focus_section][0] + match.lineno
-            include_lines = (
-                max(1, abs_offset - length // 2),
-                abs_offset + min(length // 2, len(lines)),
-            )
-            highlight_lines = [abs_offset]
-            return (linecount, include_lines, highlight_lines)
+    sbuildlog = SbuildLog.parse(logf)
+    linecount = sbuildlog.sections[-1].offsets[1]
+    failure = worker_failure_from_sbuild_log(sbuildlog)
 
-    if focus_section:
+    if failure.match:
+        abs_offset = failure.section.offsets[0] + failure.match.lineno
         include_lines = (
-            max(1, offsets[focus_section][1] - length),
-            offsets[focus_section][1],
+            max(1, abs_offset - length // 2),
+            abs_offset + min(length // 2, len(failure.section.lines)),
         )
+        highlight_lines = [abs_offset]
+        return (linecount, include_lines, highlight_lines)
+
+    if failure.section:
+        include_lines = (max(1, failure.section.offsets[1] - length), failure.section.offsets[1])
     elif length < linecount:
         include_lines = (linecount - length, None)
     else:
         include_lines = (1, linecount)
-    if focus_section == "build":
-        lines = paragraphs.get(focus_section, [])
-        lines, files = strip_build_tail(lines)
-        include_lines = (
-            max(1, offsets[focus_section][0] + len(lines) - length),
-            offsets[focus_section][0] + len(lines),
-        )
-        match, unused_err = find_build_failure_description(lines)
-        if match is not None:
-            highlight_lines = [offsets[focus_section][0] + match.lineno]
 
-    return (linecount, include_lines, highlight_lines)
+    return (linecount, include_lines, [])
 
 
 def find_dist_log_failure(logf, length):
