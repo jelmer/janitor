@@ -1493,9 +1493,10 @@ class QueueProcessor(object):
             return ret
 
     async def process(self) -> None:
+        loop = asyncio.get_event_loop()
         todo = set(
             [
-                self.process_queue_item(item)
+                loop.create_task(self.process_queue_item(item))
                 for item in await self.next_queue_item(self.concurrency)
             ]
         )
@@ -1504,7 +1505,6 @@ class QueueProcessor(object):
             self.concurrency = None
             logging.info("Received SIGTERM; not starting new jobs.")
 
-        loop = asyncio.get_event_loop()
         loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
         try:
             while True:
@@ -1524,7 +1524,7 @@ class QueueProcessor(object):
                 if self.concurrency:
                     todo.update(
                         [
-                            self.process_queue_item(item)
+                            loop.create_task(self.process_queue_item(item))
                             for item in await self.next_queue_item(len(done))
                         ]
                     )
