@@ -134,7 +134,7 @@ available:</p>
 <tr class="row-even">
   <td>{{ source }}</td>
   <td class="version{% if release_version <= old_version %} old-version{% endif %}"{% if release_version and snapshot_version and release_version.upstream_version == snapshot_version.upstream_version %} colspan="2"{% endif %}>{% if release_version %}<a href="/fresh-releases/pkg/{{ source }}">{{ release_version.upstream_version }}</a>{% endif %}</td>
-  {% if release_version and snapshot_version and release_version.upstream_version != snapshot_version.upstream_version %}<td class="version{% if snapshot_version <= old_version %} old-version{% endif %}">{% if snapshot_version %}<a href="/fresh-snapshots/pkg/{{ source }}">{{ snapshot_version.upstream_version }}</a>{% endif %}</td>{% endif %}
+  {% if not release_version or not snapshot_version or release_version.upstream_version != snapshot_version.upstream_version %}<td class="version{% if snapshot_version <= old_version %} old-version{% endif %}">{% if snapshot_version %}<a href="/fresh-snapshots/pkg/{{ source }}">{{ snapshot_version.upstream_version }}</a>{% endif %}</td>{% endif %}
   <td class="version"><a href="https://packages.debian.org/source/sid/{{ source }}">{{ old_version.upstream_version }}</a></td>
 </tr>
 {% endif %}
