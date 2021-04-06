@@ -189,8 +189,8 @@ async def generate_run_file(
             ).read()
         except FileNotFoundError:
             cached_logs[name] = None
-        except LogRetrievalError:
-            cached_logs[name] = None
+        except LogRetrievalError as e:
+            cached_logs[name] = str(e).encode('utf-8')
 
     def has_log(name):
         return name in run['logfilenames']
@@ -199,7 +199,7 @@ async def generate_run_file(
         if name not in cached_logs:
             await _cache_log(name)
         if cached_logs[name] is None:
-            return BytesIO(b"Log file missing or inaccessible.")
+            return BytesIO(b"Log file missing.")
         return BytesIO(cached_logs[name])
 
     if has_log(BUILD_LOG_NAME):
