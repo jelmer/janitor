@@ -738,7 +738,7 @@ FROM
 WHERE suite = $1
 ORDER BY package, suite, start_time DESC
 """
-        async for record in conn.fetch(query, suite):
+        for record in await conn.fetch(query, suite):
             if record['result_code'] not in ("success", "nothing-to-do"):
                 continue
             data = {
