@@ -721,3 +721,6 @@ li.lintian-fileitem {
 li.lintian-code-O {
     color: #444;
 }
+td.version {
+    text-align: center;
+}
