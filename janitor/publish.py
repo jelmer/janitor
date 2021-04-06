@@ -255,9 +255,7 @@ async def has_cotenants(
 
 
 async def derived_branch_name(conn, suite_config, run, role):
-    # TODO(jelmer): Add package name if there are more packages living in this
-    # repository
-    if role == "main":
+    if len(run.result_branches) == 1:
         name = suite_config.branch_name
     else:
         name = "%s/%s" % (suite_config.branch_name, role)
