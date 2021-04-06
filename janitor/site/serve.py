@@ -365,8 +365,6 @@ if __name__ == "__main__":
 
     @html_template("debianize-start.html", headers={"Cache-Control": "max-age=60"})
     async def handle_debianize_start(request):
-        from .apt_repo import get_published_packages
-
         async with request.app.database.acquire() as conn:
             return {
                 "packages": await conn.fetch("""
@@ -399,7 +397,7 @@ order by source, version desc
 
     @html_template("fresh-builds.html", headers={"Cache-Control": "max-age=60"})
     async def handle_fresh_builds(request):
-        from .apt_repo import iter_published_packages
+        from .apt_repo import get_published_packages
         archive_version = {}
         suite_version = {}
         sources = set()
@@ -416,7 +414,7 @@ order by source, version desc
 
         async with request.app.database.acquire() as conn:
             for suite in SUITES:
-                for name, jv, av in await iter_published_packages(conn, suite):
+                for name, jv, av in await get_published_packages(conn, suite):
                     sources.add(name)
                     archive_version[name] = av
                     suite_version.setdefault(suite, {})[name] = jv
