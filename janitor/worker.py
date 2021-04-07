@@ -28,6 +28,7 @@ import traceback
 from typing import Dict, List, Optional, Any, Type, Iterator, Tuple
 
 from breezy.config import GlobalStack
+from breezy.errors import NotBranchError
 from breezy.transport import Transport
 
 from silver_platter.workspace import Workspace
@@ -788,9 +789,13 @@ def process_package(
                 for (f, n) in extra_resume_branches:
                     if any([b[1] == n for b in branches]):
                         continue
+                    try:
+                        br = resume_branch.controldir.open_branch(n).last_revision()
+                    except NotBranchError:
+                        br = None
                     branches.append(
                         (f, n,
-                         resume_branch.controldir.open_branch(n).last_revision(),
+                         br,
                          ws.local_tree.controldir.open_branch(n).last_revision()))
         else:
             branches = None
