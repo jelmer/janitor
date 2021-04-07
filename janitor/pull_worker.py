@@ -194,8 +194,6 @@ def run_worker(
     vendor,
     suite,
     target,
-    pre_check_command=None,
-    post_check_command=None,
     resume_branch_url=None,
     cached_branch_url=None,
     resume_subworker_result=None,
@@ -214,8 +212,6 @@ def run_worker(
                 output_directory,
                 metadata=metadata,
                 target=target,
-                pre_check_command=pre_check_command,
-                post_check_command=post_check_command,
                 resume_branch_url=resume_branch_url,
                 cached_branch_url=cached_branch_url,
                 resume_subworker_result=resume_subworker_result,
@@ -437,17 +433,6 @@ async def main(argv=None):
         "--output-directory", type=str, help="Output directory", default="."
     )
     parser.add_argument(
-        "--pre-check",
-        help="Command to run to check whether to process package.",
-        type=str,
-    )
-    parser.add_argument(
-        "--post-check",
-        help="Command to run to check package before pushing.",
-        type=str,
-        default=None,
-    )
-    parser.add_argument(
         "--credentials", help="Path to credentials file (JSON).", type=str, default=None
     )
     parser.add_argument(
@@ -600,8 +585,6 @@ async def main(argv=None):
                     vendor,
                     suite,
                     target=target,
-                    pre_check_command=args.pre_check,
-                    post_check_command=args.post_check,
                     resume_branch_url=resume_branch_url,
                     resume_branches=resume_branches,
                     cached_branch_url=cached_branch_url,

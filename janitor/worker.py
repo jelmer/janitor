@@ -60,10 +60,6 @@ from silver_platter.proposal import Hoster
 
 from silver_platter.utils import (
     full_branch_url,
-    run_pre_check,
-    run_post_check,
-    PreCheckFailed,
-    PostCheckFailed,
     open_branch,
     BranchMissing,
     BranchUnavailable,
@@ -648,8 +644,6 @@ def process_package(
     target: str,
     metadata: Any,
     build_command: Optional[str] = None,
-    pre_check_command: Optional[str] = None,
-    post_check_command: Optional[str] = None,
     possible_transports: Optional[List[Transport]] = None,
     possible_hosters: Optional[List[Hoster]] = None,
     resume_branch_url: Optional[str] = None,
@@ -697,7 +691,6 @@ def process_package(
         cached_branch = None
 
     if resume_branch_url:
-        # TODO(jelmer): Use extra_resume_branches
         try:
             resume_branch = open_branch(
                 resume_branch_url, possible_transports=possible_transports
@@ -723,7 +716,10 @@ def process_package(
         cached_branch=cached_branch,
         path=os.path.join(output_directory, build_target.directory_name()),
         additional_colocated_branches=(
-            build_target.additional_colocated_branches(main_branch)
+            build_target.additional_colocated_branches(main_branch),
+        ),
+        resume_branch_additional_colocated_branches=(
+            [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
         ),
     ) as ws:
         logger.info('Workspace ready - starting.')
@@ -739,12 +735,6 @@ def process_package(
         metadata["revision"] = metadata[
             "main_branch_revision"
         ] = ws.main_branch.last_revision().decode()
-
-        try:
-            run_pre_check(ws.local_tree, pre_check_command)
-        except PreCheckFailed as e:
-            raise WorkerFailure(
-                "pre-check-failed", str(e), details={'command': pre_check_command})
 
         metadata["subworker"] = {}
         metadata["remotes"] = {}
@@ -784,12 +774,6 @@ def process_package(
             if not changer_result.branches:
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
 
-        try:
-            run_post_check(ws.local_tree, post_check_command, ws.orig_revid)
-        except PostCheckFailed as e:
-            raise WorkerFailure("post-check-failed", str(e), details={
-                'command': post_check_command})
-
         build_target_details = build_target.build(
             ws, subpath, output_directory, env)
 
@@ -799,6 +783,15 @@ def process_package(
                 (f, n or main_branch.name, br, r)
                 for (f, n, br, r) in changer_result.branches
             ]
+            if not ws.refreshed and extra_resume_branches:
+                # Preserve resume branches that weren't returned by the worker
+                for (f, n) in extra_resume_branches:
+                    if any([b[1] == n for b in branches]):
+                        continue
+                    branches.append(
+                        (f, n,
+                         resume_branch.controldir.open_branch(n).last_revision(),
+                         ws.local_tree.controldir.open_branch(n).last_revision()))
         else:
             branches = None
 
@@ -835,17 +828,6 @@ def main(argv=None):
     )
     parser.add_argument(
         "--cached-branch-url", type=str, help="URL of cached branch to start from."
-    )
-    parser.add_argument(
-        "--pre-check",
-        help="Command to run to check whether to process package.",
-        type=str,
-    )
-    parser.add_argument(
-        "--post-check",
-        help="Command to run to check package before pushing.",
-        type=str,
-        default=None,
     )
     parser.add_argument(
         "--subpath",
@@ -908,8 +890,6 @@ def main(argv=None):
             output_directory,
             metadata=metadata,
             target=args.target,
-            pre_check_command=args.pre_check,
-            post_check_command=args.post_check,
             resume_branch_url=args.resume_branch_url,
             cached_branch_url=args.cached_branch_url,
             extra_resume_branches=extra_resume_branches,

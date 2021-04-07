@@ -50,7 +50,6 @@ from breezy.transport import Transport
 from prometheus_client import Counter, Gauge, Histogram
 
 from silver_platter.debian import (
-    pick_additional_colocated_branches,
     select_preferred_probers,
 )
 from silver_platter.proposal import (
@@ -579,8 +578,6 @@ async def invoke_subprocess_worker(
     target: str,
     resume: Optional["ResumeInfo"] = None,
     cached_branch_url: Optional[str] = None,
-    pre_check: Optional[str] = None,
-    post_check: Optional[str] = None,
     log_path: Optional[str] = None,
     subpath: Optional[str] = None,
 ) -> int:
@@ -613,10 +610,6 @@ async def invoke_subprocess_worker(
                 args.append("--extra-resume-branch=%s:%s" % (role, name))
     if cached_branch_url:
         args.append("--cached-branch-url=%s" % cached_branch_url)
-    if pre_check:
-        args.append("--pre-check=%s" % pre_check)
-    if post_check:
-        args.append("--post-check=%s" % post_check)
     if subpath:
         args.append("--subpath=%s" % subpath)
 
@@ -1004,8 +997,6 @@ class ActiveLocalRun(ActiveRun):
         backup_logfile_manager: Optional[LogFileManager],
         artifact_manager: Optional[ArtifactManager],
         worker_kind: str,
-        pre_check=None,
-        post_check=None,
         dry_run: bool = False,
         possible_transports: Optional[List[Transport]] = None,
         possible_hosters: Optional[List[Hoster]] = None,
@@ -1131,8 +1122,6 @@ class ActiveLocalRun(ActiveRun):
                         self.output_directory,
                         resume=resume,
                         cached_branch_url=cached_branch_url,
-                        pre_check=pre_check,
-                        post_check=post_check,
                         log_path=log_path,
                         subpath=self.queue_item.subpath,
                         target=builder.kind,
@@ -1352,8 +1341,6 @@ class QueueProcessor(object):
         database,
         config,
         worker_kind,
-        pre_check=None,
-        post_check=None,
         dry_run=False,
         logfile_manager=None,
         artifact_manager=None,
@@ -1370,14 +1357,10 @@ class QueueProcessor(object):
 
         Args:
           worker_kind: The kind of worker to run ('local', 'gcb')
-          pre_check: Function to run prior to modifying a package
-          post_check: Function to run after modifying a package
         """
         self.database = database
         self.config = config
         self.worker_kind = worker_kind
-        self.pre_check = pre_check
-        self.post_check = post_check
         self.dry_run = dry_run
         self.logfile_manager = logfile_manager
         self.artifact_manager = artifact_manager
@@ -1411,8 +1394,6 @@ class QueueProcessor(object):
                 vcs_manager=self.vcs_manager,
                 artifact_manager=self.artifact_manager,
                 worker_kind=self.worker_kind,
-                pre_check=self.pre_check,
-                post_check=self.post_check,
                 dry_run=self.dry_run,
                 logfile_manager=self.logfile_manager,
                 backup_logfile_manager=self.backup_logfile_manager,
@@ -1946,8 +1927,6 @@ def main(argv=None):
         db,
         config,
         args.worker,
-        args.pre_check,
-        args.post_check,
         args.dry_run,
         logfile_manager,
         artifact_manager,
