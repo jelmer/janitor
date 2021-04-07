@@ -775,8 +775,14 @@ def process_package(
             if not changer_result.branches:
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
 
-        build_target_details = build_target.build(
-            ws, subpath, output_directory, env)
+        should_build = (
+            command[0] == "just-build" or
+            any([(role is None)
+                 for (role, name, br, r) in changer_result.branches]))
+
+        if should_build:
+            build_target_details = build_target.build(
+                ws, subpath, output_directory, env)
 
         branches: Optional[List[Tuple[str, str, bytes, bytes]]]
         if changer_result.branches is not None:
