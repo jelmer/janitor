@@ -37,7 +37,6 @@ from silver_platter.debian import (
     MissingUpstreamTarball,
     pick_additional_colocated_branches,
     control_files_in_root,
-    control_file_present,
 )
 from silver_platter.changer import (
     ChangerError,
@@ -777,12 +776,14 @@ def process_package(
 
         should_build = (
             command[0] == "just-build" or
-            any([(role is None)
+            any([(role is None or role == 'main')
                  for (role, name, br, r) in changer_result.branches]))
 
         if should_build:
             build_target_details = build_target.build(
                 ws, subpath, output_directory, env)
+        else:
+            build_target_details = None
 
         branches: Optional[List[Tuple[str, str, bytes, bytes]]]
         if changer_result.branches is not None:
