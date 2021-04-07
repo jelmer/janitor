@@ -151,3 +151,10 @@ groups:
     labels:
       severity: critical
       project: debian-janitor
+
+  - alert: WorkerCrashing
+    expr: avg without(instance)(changes(run{result_code="worker-failure"}[10m])) > 5
+    for: 10m
+    labels:
+      severity: critical
+      project: debian-janitor
