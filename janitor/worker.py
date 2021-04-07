@@ -851,7 +851,6 @@ def main(argv=None):
         "--target",
         type=str,
         help="Build target")
-    parser.add_argument("--build-distribution", type=str, help="Build distribution.")
 
     parser.add_argument("command", nargs=argparse.REMAINDER)
 
