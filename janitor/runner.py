@@ -111,7 +111,7 @@ last_success_gauge = Gauge(
     "job_last_success_unixtime", "Last time a batch job successfully finished"
 )
 build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
-run_count = Gauge("run_count", "Number of total runs.", labelnames=("suite",))
+run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
 
 
 class BuilderResult(object):
@@ -1410,6 +1410,10 @@ class QueueProcessor(object):
         packages_processed_count.inc()
 
     async def finish_run(self, item: state.QueueItem, result: JanitorResult) -> None:
+        run_result_count.labels(
+            package=item.package,
+            suite=item.suite,
+            result_code=result.code).inc()
         duration = result.finish_time - result.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds()
