@@ -1,1 +1,5 @@
 ---
+- name: janitor.rules
+  copy:
+    src: janitor.rules
+    dest: "{{ prometheus_config_dir }}/rules/janitor.rules"

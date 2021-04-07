@@ -716,7 +716,7 @@ def process_package(
         cached_branch=cached_branch,
         path=os.path.join(output_directory, build_target.directory_name()),
         additional_colocated_branches=(
-            build_target.additional_colocated_branches(main_branch),
+            build_target.additional_colocated_branches(main_branch)
         ),
         resume_branch_additional_colocated_branches=(
             [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
