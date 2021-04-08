@@ -64,6 +64,8 @@ from ..schedule import (
     PolicyUnavailable,
 )
 
+routes = web.RouteTableDef()
+
 
 class PolicySchema(Schema):
 
@@ -77,8 +79,10 @@ class PolicySchema(Schema):
     responses={
         404: {"description": "Package does not exist or does not have a policy"},
         200: {"description": "Success response"}
+    }
 )
 @response_schema(PolicySchema())
+@routes.get("/pkg/{package}/policy", name="package-policy")
 async def handle_policy(request):
     package = request.match_info["package"]
     suite_policies = {}
@@ -97,6 +101,8 @@ async def handle_policy(request):
     return web.json_response({"by_suite": suite_policies})
 
 
+@docs()
+@routes.post("/{suite}/pkg/{package}/publish", name="package-publish")
 async def handle_publish(request):
     publisher_url = request.app.publisher_url
     package = request.match_info["package"]
@@ -130,6 +136,8 @@ async def handle_publish(request):
         return web.json_response({"reason": "unable to contact publisher"}, status=400)
 
 
+@routes.post("/webhook", name="webhook")
+@routes.get("/webhook", name="webhook-help")
 async def handle_webhook(request):
     if request.headers.get("Content-Type") != "application/json":
         text = await render_template_for_request("webhook.html", request, {})
@@ -152,6 +160,8 @@ class ScheduleResultSchema(Schema):
 
 
 @response_schema(ScheduleResultSchema())
+@routes.post(
+    "/{suite:" + SUITE_REGEX + "}/pkg/{package}/schedule", name="package-schedule")
 async def handle_schedule(request):
     package = request.match_info["package"]
     suite = request.match_info["suite"]
@@ -204,6 +214,7 @@ async def handle_schedule(request):
 
 
 @response_schema(ScheduleResultSchema())
+@routes.post("/run/{run_id}/schedule-control", name="run-schedule-control")
 async def handle_schedule_control(request):
     run_id = request.match_info["run_id"]
     post = await request.post()
@@ -253,7 +264,9 @@ class PackageListEntrySchema(Schema):
     branch_url = fields.Url(description='branch URL')
 
 
-@response_schema(fields.List(PackageListEntrySchema()))
+@docs()
+@routes.get("/pkg", name="package-list")
+@routes.get("/pkg/{package}", name="package")
 async def handle_package_list(request):
     name = request.match_info.get("package")
     response_obj = []
@@ -274,7 +287,8 @@ async def handle_package_list(request):
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
 
 
-@response_schema(fields.List(fields.Str(description='package name')))
+@docs()
+@routes.get("/pkgnames", name="package-names")
 async def handle_packagename_list(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
@@ -315,6 +329,9 @@ class MergeProposalSchema(Schema):
     status = fields.Str(description='status')
 
 
+@docs()
+@routes.get("/pkg/{package}/merge-proposals", name="package-merge-proposals")
+@routes.get("/merge-proposals", name="merge-proposals")
 async def handle_merge_proposal_list(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
@@ -323,6 +340,8 @@ async def handle_merge_proposal_list(request):
     return web.json_response(response_obj)
 
 
+@docs()
+@routes.post("/refresh-proposal-status", name="refresh-proposal-status")
 async def handle_refresh_proposal_status(request):
     post = await request.post()
     try:
@@ -347,7 +366,8 @@ class QueueItemSchema(Schema):
     command = fields.Str(description="Command")
 
 
-@response_schema(fields.List(QueueItemSchema()))
+@docs()
+@routes.get("/queue", name="queue")
 async def handle_queue(request):
     limit = request.query.get("limit")
     if limit is not None:
@@ -383,6 +403,10 @@ queue.id ASC
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=60"})
 
 
+@docs()
+@routes.get("/{suite}/pkg/{package}/diff", name="package-diff")
+@routes.get("/pkg/{package}/run/{run_id}/diff", name="package-run-diff")
+@routes.get("/run/{run_id}/diff", name="run-diff")
 async def handle_diff(request):
     try:
         run_id = request.match_info["run_id"]
@@ -450,6 +474,9 @@ async def handle_diff(request):
         return web.Response(text="unable to contact publisher - oserror", status=502)
 
 
+@docs()
+@routes.get("/run/{run_id}/{kind:debdiff|diffoscope}", name="run-archive-diff")
+@routes.get("/pkg/{package}/run/{run_id}/{kind:debdiff|diffoscope}", name="package-run-archive-diff")
 async def handle_archive_diff(request):
     run_id = request.match_info["run_id"]
     kind = request.match_info["kind"]
@@ -520,6 +547,9 @@ async def handle_archive_diff(request):
     )
 
 
+@docs()
+@routes.post("/run/{run_id}", name="run-update")
+@routes.post("/pkg/{package}/run/{run_id}", name="package-run")
 async def handle_run_post(request):
     run_id = request.match_info["run_id"]
     check_qa_reviewer(request)
@@ -571,7 +601,11 @@ class RunSchema(Schema):
     result_code = fields.Str(description="Result code")
 
 
-@response_schema(fields.List(RunSchema())
+@docs()
+@routes.get("/run", name="run-list")
+@routes.get("/run/{run_id}", name="run")
+@routes.get("/pkg/{package}/run", name="package-run-list")
+@routes.get("/pkg/{package}/run/{run_id}", name="package-run")
 async def handle_run(request):
     package = request.match_info.get("package")
     run_id = request.match_info.get("run_id")
@@ -604,6 +638,8 @@ async def handle_run(request):
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
 
 
+@docs()
+@routes.post("/publish/scan", name="publish-scan")
 async def handle_publish_scan(request):
     check_admin(request)
     publisher_url = request.app.publisher_url
@@ -615,6 +651,8 @@ async def handle_publish_scan(request):
         return web.Response(text="unable to contact publisher", status=400)
 
 
+@docs()
+@routes.post("/publish/autopublish", name="publish-autopublish")
 async def handle_publish_autopublish(request):
     check_admin(request)
     publisher_url = request.app.publisher_url
@@ -626,6 +664,8 @@ async def handle_publish_autopublish(request):
         return web.Response(text="unable to contact publisher", status=400)
 
 
+@docs()
+@routes.get("/package-branch", name="package-branch")
 async def handle_package_branch(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
@@ -652,6 +692,8 @@ LEFT JOIN branch ON package.branch_url = branch.url
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=60"})
 
 
+@docs()
+@routes.get("/{suite}/published-packages", name="published-packages")
 async def handle_published_packages(request):
     from .apt_repo import get_published_packages
     suite = request.match_info["suite"]
@@ -672,6 +714,8 @@ async def handle_published_packages(request):
     return web.json_response(response_obj)
 
 
+@docs()
+@routes.get("/policy", name="policy")
 async def handle_global_policy(request):
     return web.Response(
         content_type="text/protobuf",
@@ -680,6 +724,7 @@ async def handle_global_policy(request):
     )
 
 
+@docs()
 async def forward_to_runner(client, runner_url, path):
     url = urllib.parse.urljoin(runner_url, path)
     try:
@@ -691,12 +736,16 @@ async def forward_to_runner(client, runner_url, path):
         return web.json_response({"reason": "unable to contact runner", "details": repr(e)}, status=502)
 
 
+@docs()
+@routes.get("/runner/status", name="runner-status")
 async def handle_runner_status(request):
     return await forward_to_runner(
         request.app.http_client_session, request.app.runner_url, "status"
     )
 
 
+@docs()
+@routes.get("/active-runs/{run_id}/log/", name="run-log-list")
 async def handle_runner_log_index(request):
     run_id = request.match_info["run_id"]
     url = urllib.parse.urljoin(request.app.runner_url, "log/%s" % run_id)
@@ -727,6 +776,7 @@ async def handle_runner_log_index(request):
     responses={
         200: {"description": "success response"},
     })
+@routes.post("/active-runs/{run_id}/kill", name="run-kill")
 async def handle_runner_kill(request):
     check_admin(request)
     run_id = request.match_info["run_id"]
@@ -740,6 +790,8 @@ async def handle_runner_kill(request):
         return web.json_response({"reason": "unable to contact runner"}, status=502)
 
 
+@docs()
+@routes.get("/active-runs/{run_id}/log/{filename}", name="run-log")
 async def handle_runner_log(request):
     run_id = request.match_info["run_id"]
     filename = request.match_info["filename"]
@@ -756,6 +808,8 @@ async def handle_runner_log(request):
         return web.Response(text="unable to contact runner", status=502)
 
 
+@docs()
+@routes.get("/publish/{publish_id}", name="publish-details")
 async def handle_publish_id(request):
     publish_id = request.match_info["publish_id"]
     async with request.app.db.acquire() as conn:
@@ -787,6 +841,8 @@ FROM publish WHERE id = $1
     )
 
 
+@docs()
+@routes.get("/{suite:" + SUITE_REGEX + "}/report", name="report")
 async def handle_report(request):
     suite = request.match_info["suite"]
     report = {}
@@ -838,6 +894,9 @@ ORDER BY package, suite, start_time DESC
     )
 
 
+@docs()
+@routes.get("/publish-ready", name="publish-ready")
+@routes.get("/{suite:" + SUITE_REGEX + "}/publish-ready", name="publish-ready-suite")
 async def handle_publish_ready(request):
     suite = request.match_info.get("suite")
     review_status = request.query.get("review-status")
@@ -867,6 +926,8 @@ async def handle_publish_ready(request):
     return web.json_response(ret, status=200)
 
 
+@docs()
+@routes.get("/ws/active-runs/{run_id}/progress", name="run-progress")
 async def handle_run_progress(request):
     worker_name = await check_worker_creds(request.app.db, request)
 
@@ -907,6 +968,8 @@ async def handle_run_progress(request):
     return ws
 
 
+@docs()
+@routes.post("/active-runs", name="run-assign")
 async def handle_run_assign(request):
     worker_name = await check_worker_creds(request.app.db, request)
     url = urllib.parse.urljoin(request.app.runner_url, "assign")
@@ -929,6 +992,8 @@ async def handle_run_assign(request):
         return web.json_response({"reason": "unable to contact runner: %s" % e}, status=502)
 
 
+@docs()
+@routes.post("/active-runs/{run_id}/finish", name="run-finish")
 async def handle_run_finish(request: web.Request) -> web.Response:
     worker_name = await check_worker_creds(request.app.db, request)
     run_id = request.match_info["run_id"]
@@ -1000,6 +1065,8 @@ async def handle_run_finish(request: web.Request) -> web.Response:
     return web.json_response(result, status=201)
 
 
+@docs()
+@routes.get("/active-runs", name="active-runs-list")
 async def handle_list_active_runs(request):
     url = urllib.parse.urljoin(request.app.runner_url, "status")
     async with request.app.http_client_session.get(url) as resp:
@@ -1009,6 +1076,8 @@ async def handle_list_active_runs(request):
         return web.json_response(status["processing"], status=200)
 
 
+@docs()
+@routes.get("/active-runs/{run_id}", name="active-run-get")
 async def handle_get_active_run(request):
     run_id = request.match_info["run_id"]
     url = urllib.parse.urljoin(request.app.runner_url, "status")
@@ -1031,11 +1100,11 @@ def create_app(
     differ_url: str,
     config: Config,
     policy_config: PolicyConfig,
-    enable_external_workers: bool = True,
     external_url: Optional[URL] = None,
 ) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
+    app.router.add_routes(routes)
     app.http_client_session = ClientSession()
     app.config = config
     app.jinja_env = env
@@ -1047,128 +1116,16 @@ def create_app(
     app.runner_url = runner_url
     app.differ_url = differ_url
     app.archiver_url = archiver_url
-    app.router.add_get("/pkgnames", handle_packagename_list, name="api-package-names")
-    app.router.add_get("/pkg", handle_package_list, name="api-package-list")
-    app.router.add_get("/pkg/{package}", handle_package_list, name="api-package")
-    app.router.add_get(
-        "/pkg/{package}/merge-proposals",
-        handle_merge_proposal_list,
-        name="api-package-merge-proposals",
-    )
-    app.router.add_get(
-        "/pkg/{package}/policy", handle_policy, name="api-package-policy"
-    )
-    app.router.add_post(
-        "/{suite}/pkg/{package}/publish", handle_publish, name="api-package-publish"
-    )
-    app.router.add_post(
-        "/{suite:" + SUITE_REGEX + "}/pkg/{package}/schedule",
-        handle_schedule,
-        name="api-package-schedule",
-    )
-    app.router.add_get(
-        "/{suite}/pkg/{package}/diff", handle_diff, name="api-package-diff"
-    )
-    app.router.add_post(
-        "/refresh-proposal-status",
-        handle_refresh_proposal_status,
-        name="api-refresh-proposal-status",
-    )
-    app.router.add_get(
-        "/merge-proposals", handle_merge_proposal_list, name="api-merge-proposals"
-    )
-    app.router.add_get("/queue", handle_queue, name="api-queue")
-    app.router.add_get("/run", handle_run, name="api-run-list")
-    app.router.add_post("/publish/scan", handle_publish_scan, name="api-publish-scan")
-    app.router.add_post(
-        "/publish/autopublish",
-        handle_publish_autopublish,
-        name="api-publish-autopublish",
-    )
-    app.router.add_get("/run/{run_id}", handle_run, name="api-run")
-    app.router.add_post(
-        "/run/{run_id}/schedule-control",
-        handle_schedule_control,
-        name="api-run-schedule-control",
-    )
-    app.router.add_post("/run/{run_id}", handle_run_post, name="api-run-update")
-    app.router.add_get("/run/{run_id}/diff", handle_diff, name="api-run-diff")
-    app.router.add_get(
-        "/run/{run_id}/{kind:debdiff|diffoscope}",
-        handle_archive_diff,
-        name="api-run-archive-diff",
-    )
-    app.router.add_get("/pkg/{package}/run", handle_run, name="api-package-run-list")
-    app.router.add_get(
-        "/pkg/{package}/run/{run_id}", handle_run, name="api-package-run"
-    )
-    app.router.add_post(
-        "/pkg/{package}/run/{run_id}", handle_run_post, name="api-package-run"
-    )
-    app.router.add_get(
-        "/pkg/{package}/run/{run_id}/diff", handle_diff, name="api-package-run-diff"
-    )
-    app.router.add_get(
-        "/pkg/{package}/run/{run_id}/{kind:debdiff|diffoscope}",
-        handle_archive_diff,
-        name="api-package-run-archive-diff",
-    )
-    app.router.add_get(
-        "/package-branch", handle_package_branch, name="api-package-branch"
-    )
-    app.router.add_get(
-        "/{suite}/published-packages",
-        handle_published_packages,
-        name="api-published-packages",
-    )
-    app.router.add_get("/policy", handle_global_policy, name="api-policy")
-    app.router.add_post("/webhook", handle_webhook, name="api-webhook")
-    app.router.add_get("/webhook", handle_webhook, name="api-webhook-help")
-    app.router.add_get(
-        "/publish/{publish_id}", handle_publish_id, name="publish-details"
-    )
-    app.router.add_get("/runner/status", handle_runner_status, name="api-runner-status")
-    app.router.add_get(
-        "/{suite:" + SUITE_REGEX + "}/report", handle_report, name="api-report"
-    )
-    app.router.add_get("/publish-ready", handle_publish_ready, name="api-publish-ready")
-    app.router.add_get(
-        "/{suite:" + SUITE_REGEX + "}/publish-ready",
-        handle_publish_ready,
-        name="api-publish-ready-suite",
-    )
-    app.router.add_get(
-        "/active-runs", handle_list_active_runs, name="api-active-runs-list"
-    )
-    app.router.add_get(
-        "/active-runs/{run_id}", handle_get_active_run, name="api-active-run-get"
-    )
-    if enable_external_workers:
-        app.router.add_post("/active-runs", handle_run_assign, name="api-run-assign")
-        app.router.add_post(
-            "/active-runs/{run_id}/finish", handle_run_finish, name="api-run-finish"
-        )
-    app.router.add_post(
-        "/active-runs/{run_id}/kill", handle_runner_kill, name="api-run-kill"
-    )
-    app.router.add_get(
-        "/active-runs/{run_id}/log/", handle_runner_log_index, name="api-run-log-list"
-    )
-    app.router.add_get(
-        "/active-runs/{run_id}/log/{filename}", handle_runner_log, name="api-run-log"
-    )
-    app.router.add_get(
-        "/ws/active-runs/{run_id}/progress", handle_run_progress, name="api-run-progress"
-    )
     app.router.add_get('/', lambda req: web.HTTPFound(location='docs'))
 
     setup_aiohttp_apispec(
         app=app,
         title="Debian Janitor API Documentation",
-        version="v1",
-        url="/docs/swagger.json",
+        version=None,
+        url="/swagger.json",
         swagger_path="/docs",
+        prefix='/api',
     )
 
-    app.middlewares.append(apispec_validation_middleware)
+    # app.middlewares.append(apispec_validation_middleware)
     return app

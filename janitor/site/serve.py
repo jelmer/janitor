@@ -1648,6 +1648,9 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
             ),
         ),
     )
+    import aiohttp_apispec
+    app.router.add_static('/static/swagger', os.path.join(os.path.dirname(aiohttp_apispec.__file__), "static"))
+
     if args.debugtoolbar:
         import aiohttp_debugtoolbar
         # install aiohttp_debugtoolbar
