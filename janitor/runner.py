@@ -106,6 +106,7 @@ from .vcs import (
     import_branches,
 )
 
+routes = web.RouteTableDef()
 packages_processed_count = Counter("package_count", "Number of packages processed.")
 last_success_gauge = Gauge(
     "job_last_success_unixtime", "Last time a batch job successfully finished"
@@ -1527,13 +1528,15 @@ class QueueProcessor(object):
         return False
 
 
+@routes.get("/status", name="status")
 async def handle_status(request):
-    queue_processor = request.app.queue_processor
+    queue_processor = request.app['queue_processor']
     return web.json_response(queue_processor.status_json())
 
 
+@routes.get("/log/{run_id}", name="log-index")
 async def handle_log_index(request):
-    queue_processor = request.app.queue_processor
+    queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
     try:
         active_run = queue_processor.active_runs[run_id]
@@ -1543,8 +1546,9 @@ async def handle_log_index(request):
     return web.json_response(log_filenames)
 
 
+@routes.post("/kill/{run_id}", name="kill")
 async def handle_kill(request):
-    queue_processor = request.app.queue_processor
+    queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
     try:
         ret = queue_processor.active_runs[run_id].json()
@@ -1554,8 +1558,9 @@ async def handle_kill(request):
     return web.json_response(ret)
 
 
+@routes.get("/ws/progress", name="ws-progress")
 async def handle_progress_ws(request):
-    queue_processor = request.app.queue_processor
+    queue_processor = request.app['queue_processor']
     ws = web.WebSocketResponse()
     await ws.prepare(request)
 
@@ -1586,8 +1591,9 @@ async def handle_progress_ws(request):
     return ws
 
 
+@routes.get("/log/{run_id}/{filename}", name="log")
 async def handle_log(request):
-    queue_processor = request.app.queue_processor
+    queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
     filename = request.match_info["filename"]
     if "/" in filename:
@@ -1614,6 +1620,7 @@ async def handle_log(request):
     return response
 
 
+@routes.post("/assign", name="assign")
 async def handle_assign(request):
     json = await request.json()
     worker = json["worker"]
@@ -1631,7 +1638,7 @@ async def handle_assign(request):
         )
         await queue_processor.finish_run(active_run.queue_item, result)
 
-    queue_processor = request.app.queue_processor
+    queue_processor = request.app['queue_processor']
     [item] = await queue_processor.next_queue_item(1)
 
     suite_config = get_suite_config(queue_processor.config, item.suite)
@@ -1718,8 +1725,9 @@ async def handle_assign(request):
     return web.json_response(assignment, status=201)
 
 
+@routes.post("/finish/{run_id}", name="finish")
 async def handle_finish(request):
-    queue_processor = request.app.queue_processor
+    queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
     active_run = queue_processor.active_runs.get(run_id)
     if active_run:
@@ -1810,13 +1818,9 @@ async def handle_finish(request):
 
 async def run_web_server(listen_addr, port, queue_processor):
     app = web.Application()
-    app.queue_processor = queue_processor
+    app.router.add_routes(routes)
+    app['queue_processor'] = queue_processor
     setup_metrics(app)
-    app.router.add_get("/status", handle_status, name="status")
-    app.router.add_get("/log/{run_id}", handle_log_index, name="log-index")
-    app.router.add_get("/log/{run_id}/{filename}", handle_log, name="log")
-    app.router.add_post("/kill/{run_id}", handle_kill, name="kill")
-    app.router.add_get("/ws/progress", handle_progress_ws, name="ws-progress")
     app.router.add_get(
         "/ws/queue", functools.partial(pubsub_handler, queue_processor.topic_queue),
         name="ws-queue"
@@ -1825,8 +1829,6 @@ async def run_web_server(listen_addr, port, queue_processor):
         "/ws/result", functools.partial(pubsub_handler, queue_processor.topic_result),
         name="ws-result"
     )
-    app.router.add_post("/assign", handle_assign, name="assign")
-    app.router.add_post("/finish/{run_id}", handle_finish, name="finish")
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
