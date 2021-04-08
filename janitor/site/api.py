@@ -27,11 +27,20 @@ from aiohttp import (
 )
 from aiohttp.web_middlewares import normalize_path_middleware
 import asyncpg
-import json
 import logging
 from typing import Optional
 import urllib.parse
 from yarl import URL
+
+from aiohttp_apispec import (
+    docs,
+    request_schema,
+    response_schema,
+    setup_aiohttp_apispec,
+    )
+from aiohttp_apispec import validation_middleware as apispec_validation_middleware
+
+from marshmallow import Schema, fields
 
 from janitor import state, SUITE_REGEX
 from janitor.config import Config
@@ -41,7 +50,6 @@ from . import (
     check_worker_creds,
     env,
     highlight_diff,
-    html_template,
     get_archive_diff,
     iter_accept,
     render_template_for_request,
@@ -57,7 +65,20 @@ from ..schedule import (
 )
 
 
+class PolicySchema(Schema):
 
+    # TODO(jelmer): publish_policy is actually a list
+    publish_policy = fields.Str(description='publish policy')
+    changelog_policy = fields.Str(description='changelog policy')
+    command = fields.Str(description='command to run')
+
+
+@docs(
+    responses={
+        404: {"description": "Package does not exist or does not have a policy"},
+        200: {"description": "Success response"}
+)
+@response_schema(PolicySchema())
 async def handle_policy(request):
     package = request.match_info["package"]
     suite_policies = {}
@@ -120,6 +141,17 @@ async def handle_webhook(request):
     return await process_webhook(request, request.app.db)
 
 
+class ScheduleResultSchema(Schema):
+
+    package = fields.Str(description="package name")
+    suite = fields.Str(description="suite")
+    offset = fields.Int(description="offset from top of queue")
+    estimated_duration_seconds = fields.Int(description="estimated duration in seconds")
+    queue_position = fields.Int(description="new position in the queue")
+    queue_wait_time = fields.Int(description="new delay until run, in seconds")
+
+
+@response_schema(ScheduleResultSchema())
 async def handle_schedule(request):
     package = request.match_info["package"]
     suite = request.match_info["suite"]
@@ -171,6 +203,7 @@ async def handle_schedule(request):
     return web.json_response(response_obj)
 
 
+@response_schema(ScheduleResultSchema())
 async def handle_schedule_control(request):
     run_id = request.match_info["run_id"]
     post = await request.post()
@@ -213,6 +246,14 @@ async def handle_schedule_control(request):
     return web.json_response(response_obj)
 
 
+class PackageListEntrySchema(Schema):
+
+    name = fields.Str(description='package name')
+    maintainer_email = fields.Email(description='maintainer email')
+    branch_url = fields.Url(description='branch URL')
+
+
+@response_schema(fields.List(PackageListEntrySchema()))
 async def handle_package_list(request):
     name = request.match_info.get("package")
     response_obj = []
@@ -233,6 +274,7 @@ async def handle_package_list(request):
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
 
 
+@response_schema(fields.List(fields.Str(description='package name')))
 async def handle_packagename_list(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
@@ -266,6 +308,13 @@ ON merge_proposal.revision = run.revision AND run.result_code = 'success'
     return await conn.fetch(query, *args)
 
 
+class MergeProposalSchema(Schema):
+
+    package = fields.Str(description='package name')
+    url = fields.Url(description='merge proposal URL')
+    status = fields.Str(description='status')
+
+
 async def handle_merge_proposal_list(request):
     response_obj = []
     async with request.app.db.acquire() as conn:
@@ -289,6 +338,16 @@ async def handle_refresh_proposal_status(request):
         return web.Response(text=(await resp.text()), status=resp.status)
 
 
+class QueueItemSchema(Schema):
+
+    queue_id = fields.Int(description="Queue identifier")
+    branch_url = fields.Str(description="Branch URL")
+    package = fields.Str(description="Package name")
+    context = fields.Str(description="Run context")
+    command = fields.Str(description="Command")
+
+
+@response_schema(fields.List(QueueItemSchema()))
 async def handle_queue(request):
     limit = request.query.get("limit")
     if limit is not None:
@@ -494,6 +553,25 @@ async def handle_run_post(request):
     )
 
 
+class BuildInfoSchema(Schema):
+
+    version = fields.Str(description="build version")
+    distribution = fields.Str(description="build distribution name")
+
+
+class RunSchema(Schema):
+
+    run_id = fields.Str(description="Run identifier")
+    start_time = fields.DateTime(description="Run start time")
+    finish_time = fields.DateTime(description="Run finish time")
+    command = fields.Str(description="Command to run")
+    description = fields.Str(description="Build result description")
+    package = fields.Str(description="Package name")
+    build_info = BuildInfoSchema()
+    result_code = fields.Str(description="Result code")
+
+
+@response_schema(fields.List(RunSchema())
 async def handle_run(request):
     package = request.match_info.get("package")
     run_id = request.match_info.get("run_id")
@@ -594,11 +672,6 @@ async def handle_published_packages(request):
     return web.json_response(response_obj)
 
 
-@html_template("api-index.html", headers={"Cache-Control": "max-age=600"})
-async def handle_index(request):
-    return {}
-
-
 async def handle_global_policy(request):
     return web.Response(
         content_type="text/protobuf",
@@ -650,6 +723,10 @@ async def handle_runner_log_index(request):
     return web.json_response(ret)
 
 
+@docs(
+    responses={
+        200: {"description": "success response"},
+    })
 async def handle_runner_kill(request):
     check_admin(request)
     run_id = request.match_info["run_id"]
@@ -1039,7 +1116,6 @@ def create_app(
     app.router.add_get(
         "/package-branch", handle_package_branch, name="api-package-branch"
     )
-    app.router.add_get("/", handle_index, name="api-index")
     app.router.add_get(
         "/{suite}/published-packages",
         handle_published_packages,
@@ -1084,4 +1160,15 @@ def create_app(
     app.router.add_get(
         "/ws/active-runs/{run_id}/progress", handle_run_progress, name="api-run-progress"
     )
+    app.router.add_get('/', lambda req: web.HTTPFound(location='docs'))
+
+    setup_aiohttp_apispec(
+        app=app,
+        title="Debian Janitor API Documentation",
+        version="v1",
+        url="/docs/swagger.json",
+        swagger_path="/docs",
+    )
+
+    app.middlewares.append(apispec_validation_middleware)
     return app

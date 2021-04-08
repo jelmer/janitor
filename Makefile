@@ -1,4 +1,4 @@
-export PYTHONPATH=ognibuild:buildlog-consultant:.:breezy:silver-platter:lintian-brush:python-debian/lib:debmutate
+export PYTHONPATH=ognibuild:buildlog-consultant:.:breezy:silver-platter:lintian-brush:python-debian/lib:debmutate:dulwich
 
 PB2_PY_OUTPUT = janitor/policy_pb2.py janitor/config_pb2.py janitor/package_overrides_pb2.py janitor/candidates_pb2.py janitor/package_metadata_pb2.py janitor/upstream_project_pb2.py
 
@@ -18,6 +18,19 @@ check:: typing
 check:: test
 
 check:: style
+
+check-it-all:: test-it-all
+
+test-it-all:: 
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest dulwich.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest breezy.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest janitor.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest lintian_brush.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest silver_platter.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest ognibuild.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest buildlog_consultant.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest upstream_ontologist.tests.test_suite
+	PYTHONPATH=$(PYTHONPATH) python3 -m unittest debmutate.tests.test_suite
 
 test:
 	PYTHONPATH=$(PYTHONPATH) python3 setup.py test
