@@ -74,7 +74,7 @@ class PublishPolicySchema(Schema):
 
 class PolicySchema(Schema):
 
-    publish_policy = fields.Dict(fields.Str(), fields.Nested(PublishPolicySchema))
+    publish_policy = fields.Dict(keys=fields.Str(), values=fields.Nested(PublishPolicySchema))
     changelog_policy = fields.Str(description='changelog policy')
     command = fields.Str(description='command to run')
 
