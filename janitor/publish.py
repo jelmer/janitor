@@ -1031,15 +1031,15 @@ async def get_publish_attempt_count(
 
 
 async def publish_request(request):
-    dry_run = request.app.dry_run
-    vcs_manager = request.app.vcs_manager
-    rate_limiter = request.app.rate_limiter
+    dry_run = request.app['dry_run']
+    vcs_manager = request.app['vcs_manager']
+    rate_limiter = request.app['rate_limiter']
     package = request.match_info["package"]
     suite = request.match_info["suite"]
     role = request.query.get("role")
     post = await request.post()
     mode = post.get("mode")
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         package = await conn.fetchrow(
             'SELECT name, maintainer_email FROM package WHERE name = $1',
             package)
@@ -1076,10 +1076,10 @@ async def publish_request(request):
 
         create_background_task(
             publish_and_store(
-                request.app.db,
-                get_suite_config(request.app.config, run.suite),
-                request.app.topic_publish,
-                request.app.topic_merge_proposal,
+                request.app['db'],
+                get_suite_config(request.app['config'], run.suite),
+                request.app['topic_publish'],
+                request.app['topic_merge_proposal'],
                 publish_id,
                 run,
                 mode,
@@ -1088,8 +1088,8 @@ async def publish_request(request):
                 vcs_manager=vcs_manager,
                 rate_limiter=rate_limiter,
                 dry_run=dry_run,
-                external_url=request.app.external_url,
-                differ_url=request.app.differ_url,
+                external_url=request.app['external_url'],
+                differ_url=request.app['differ_url'],
                 allow_create_proposal=True,
                 require_binary_diff=False,
                 requestor=post.get("requestor"),
@@ -1113,8 +1113,8 @@ async def credentials_request(request):
             with open(entry.path, "r") as f:
                 ssh_keys.extend([line.strip() for line in f.readlines()])
     pgp_keys = []
-    for entry in list(request.app.gpg.keylist(secret=True)):
-        pgp_keys.append(request.app.gpg.key_export_minimal(entry.fpr).decode())
+    for entry in list(request.app['gpg'].keylist(secret=True)):
+        pgp_keys.append(request.app['gpg'].key_export_minimal(entry.fpr).decode())
     hosting = []
     for name, hoster_cls in hosters.items():
         for instance in hoster_cls.iter_instances():
@@ -1162,19 +1162,19 @@ async def run_web_server(
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
-    app.gpg = gpg.Context(armor=True)
-    app.vcs_manager = vcs_manager
-    app.db = db
-    app.config = config
-    app.external_url = external_url
-    app.differ_url = differ_url
-    app.rate_limiter = rate_limiter
-    app.modify_mp_limit = modify_mp_limit
-    app.topic_publish = topic_publish
-    app.topic_merge_proposal = topic_merge_proposal
-    app.dry_run = dry_run
-    app.push_limit = push_limit
-    app.require_binary_diff = require_binary_diff
+    app['gpg'] = gpg.Context(armor=True)
+    app['vcs_manager'] = vcs_manager
+    app['db'] = db
+    app['config'] = config
+    app['external_url'] = external_url
+    app['differ_url'] = differ_url
+    app['rate_limiter'] = rate_limiter
+    app['modify_mp_limit'] = modify_mp_limit
+    app['topic_publish'] = topic_publish
+    app['topic_merge_proposal'] = topic_merge_proposal
+    app['dry_run'] = dry_run
+    app['push_limit'] = push_limit
+    app['require_binary_diff'] = require_binary_diff
     setup_metrics(app)
     app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/ws/publish", functools.partial(pubsub_handler, topic_publish))
@@ -1206,19 +1206,19 @@ async def check_mp_request(request):
         status = "closed"
     else:
         status = "open"
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         try:
             modified = await check_existing_mp(
                 conn,
-                request.app.config,
+                request.app['config'],
                 mp,
                 status,
-                topic_merge_proposal=request.app.topic_merge_proposal,
-                vcs_manager=request.app.vcs_manager,
+                topic_merge_proposal=request.app['topic_merge_proposal'],
+                vcs_manager=request.app['vcs_manager'],
                 dry_run=("dry_run" in post),
-                external_url=request.app.external_url,
-                differ_url=request.app.differ_url,
-                rate_limiter=request.app.rate_limiter,
+                external_url=request.app['external_url'],
+                differ_url=request.app['differ_url'],
+                rate_limiter=request.app['rate_limiter'],
             )
         except NoRunForMergeProposal as e:
             return web.Response(
@@ -1234,17 +1234,17 @@ async def check_mp_request(request):
 
 async def scan_request(request):
     async def scan():
-        async with request.app.db.acquire() as conn:
+        async with request.app['db'].acquire() as conn:
             await check_existing(
                 conn,
-                request.app.config,
-                request.app.rate_limiter,
-                request.app.vcs_manager,
-                request.app.topic_merge_proposal,
-                dry_run=request.app.dry_run,
-                differ_url=request.app.differ_url,
-                external_url=request.app.external_url,
-                modify_limit=request.app.modify_mp_limit,
+                request.app['config'],
+                request.app['rate_limiter'],
+                request.app['vcs_manager'],
+                request.app['topic_merge_proposal'],
+                dry_run=request.app['dry_run'],
+                differ_url=request.app['differ_url'],
+                external_url=request.app['external_url'],
+                modify_limit=request.app['modify_mp_limit'],
             )
 
     create_background_task(scan(), 'merge proposal refresh scan')
@@ -1261,7 +1261,7 @@ async def refresh_proposal_status_request(request):
 
     async def scan():
         mp = get_proposal_by_url(url)
-        async with request.app.db.acquire() as conn:
+        async with request.app['db'].acquire() as conn:
             if mp.is_merged():
                 status = "merged"
             elif mp.is_closed():
@@ -1271,15 +1271,15 @@ async def refresh_proposal_status_request(request):
             try:
                 await check_existing_mp(
                     conn,
-                    request.app.config,
+                    request.app['config'],
                     mp,
                     status,
-                    vcs_manager=request.app.vcs_manager,
-                    rate_limiter=request.app.rate_limiter,
-                    topic_merge_proposal=request.app.topic_merge_proposal,
-                    dry_run=request.app.dry_run,
-                    differ_url=request.app.differ_url,
-                    external_url=request.app.external_url,
+                    vcs_manager=request.app['vcs_manager'],
+                    rate_limiter=request.app['rate_limiter'],
+                    topic_merge_proposal=request.app['topic_merge_proposal'],
+                    dry_run=request.app['dry_run'],
+                    differ_url=request.app['differ_url'],
+                    external_url=request.app['external_url'],
                 )
             except NoRunForMergeProposal as e:
                 logger.warning(
@@ -1294,18 +1294,18 @@ async def autopublish_request(request):
 
     async def autopublish():
         await publish_pending_new(
-            request.app.db,
-            request.app.config,
-            request.app.rate_limiter,
-            request.app.vcs_manager,
-            dry_run=request.app.dry_run,
-            topic_publish=request.app.topic_publish,
-            external_url=request.app.external_url,
-            differ_url=request.app.differ_url,
-            topic_merge_proposal=request.app.topic_merge_proposal,
+            request.app['db'],
+            request.app['config'],
+            request.app['rate_limiter'],
+            request.app['vcs_manager'],
+            dry_run=request.app['dry_run'],
+            topic_publish=request.app['topic_publish'],
+            external_url=request.app['external_url'],
+            differ_url=request.app['differ_url'],
+            topic_merge_proposal=request.app['topic_merge_proposal'],
             reviewed_only=reviewed_only,
-            push_limit=request.app.push_limit,
-            require_binary_diff=request.app.require_binary_diff,
+            push_limit=request.app['push_limit'],
+            require_binary_diff=request.app['require_binary_diff'],
         )
 
     create_background_task(autopublish(), 'autopublish')
