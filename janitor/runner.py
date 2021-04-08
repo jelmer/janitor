@@ -513,7 +513,7 @@ class WorkerResult(object):
         tags = worker_result.get("tags")
         if branches:
             branches = [
-                (fn, n, br.encode("utf-8"), r.encode("utf-8"))
+                (fn, n, br.encode("utf-8") if br else None, r.encode("utf-8"))
                 for (fn, n, br, r) in branches
             ]
         if tags:
