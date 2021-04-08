@@ -45,7 +45,7 @@ from breezy import debug
 from breezy.branch import Branch
 from breezy.errors import PermissionDenied, ConnectionError
 from breezy.propose import Hoster, HosterLoginRequired
-from breezy.transport import Transport
+from breezy.transport import Transport, UnusableRedirect
 
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -883,6 +883,9 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
             logging.warning("Project %s not found", e.project)
             return None
         except PermissionDenied as e:
+            logging.warning("Unable to list existing proposals: %s", e)
+            return None
+        except UnusableRedirect as e:
             logging.warning("Unable to list existing proposals: %s", e)
             return None
         else:
