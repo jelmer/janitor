@@ -31,7 +31,7 @@ from aiohttp.web_urldispatcher import (
     URL,
     UrlMappingMatchInfo,
 )
-from aiohttp import ClientTimeout
+from aiohttp import ClientTimeout, ClientConnectorError
 from aiohttp.web import middleware
 import gpg
 
@@ -397,13 +397,16 @@ order by source, version desc
         sources = set()
         SUITES = ["fresh-releases", "fresh-snapshots"]
         url = urllib.parse.urljoin(request.app.archiver_url, "last-publish")
-        async with request.app.http_client_session.get(url) as resp:
-            if resp.status == 200:
-                last_publish_time = {
-                    suite: datetime.fromisoformat(v)
-                    for suite, v in (await resp.json()).items()
-                }
-            else:
+        try:
+            async with request.app.http_client_session.get(url) as resp:
+                if resp.status == 200:
+                    last_publish_time = {
+                        suite: datetime.fromisoformat(v)
+                        for suite, v in (await resp.json()).items()
+                    }
+                else:
+                    last_publish_time = {}
+        except ClientConnectorError:
                 last_publish_time = {}
 
         async with request.app.database.acquire() as conn:
