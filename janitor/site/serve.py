@@ -289,12 +289,6 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable debugging mode. For example, avoid minified JS.",
     )
-    parser.add_argument(
-        "--no-external-workers",
-        action="store_true",
-        default=False,
-        help="Disable support for external workers.",
-    )
     parser.add_argument("--external-url", type=str, default=None, help="External URL")
 
     args = parser.parse_args()
@@ -1642,7 +1636,6 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
             args.differ_url,
             config,
             policy_config,
-            enable_external_workers=(not args.no_external_workers),
             external_url=(
                 app.external_url.join(URL("api")) if app.external_url else None
             ),

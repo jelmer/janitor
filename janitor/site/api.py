@@ -67,10 +67,14 @@ from ..schedule import (
 routes = web.RouteTableDef()
 
 
+class PublishPolicySchema(Schema):
+
+    mode = fields.Str(description="publish mode")
+
+
 class PolicySchema(Schema):
 
-    # TODO(jelmer): publish_policy is actually a list
-    publish_policy = fields.Str(description='publish policy')
+    publish_policy = fields.Dict(fields.Str(), fields.Nested(PublishPolicySchema))
     changelog_policy = fields.Str(description='changelog policy')
     command = fields.Str(description='command to run')
 
@@ -94,7 +98,7 @@ async def handle_policy(request):
         return web.json_response({"reason": "Package not found"}, status=404)
     for row in rows:
         suite_policies[row['suite']] = {
-            "publish_policy": row['publish'],
+            "publish_policy": {p['role']: {'mode': p['mode']} for p in row['publish']},
             "changelog_policy": row['update_changelog'],
             "command": row['command'],
         }
@@ -438,7 +442,7 @@ async def handle_diff(request):
                         text="Diff too large (%d bytes). See it at %s"
                         % (
                             len(diff),
-                            request.app.router["api-run-diff"].url_for(run_id=run_id),
+                            request.app.router["run-diff"].url_for(run_id=run_id),
                         ),
                     )
 
@@ -549,7 +553,7 @@ async def handle_archive_diff(request):
 
 @docs()
 @routes.post("/run/{run_id}", name="run-update")
-@routes.post("/pkg/{package}/run/{run_id}", name="package-run")
+@routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
 async def handle_run_post(request):
     run_id = request.match_info["run_id"]
     check_qa_reviewer(request)
@@ -1061,7 +1065,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
     except ServerDisconnectedError:
         return web.Response(text="server disconnected", status=502)
 
-    result["api_url"] = str(request.app.router["api-run"].url_for(run_id=run_id))
+    result["api_url"] = str(request.app.router["run"].url_for(run_id=run_id))
     return web.json_response(result, status=201)
 
 
@@ -1124,7 +1128,6 @@ def create_app(
         version=None,
         url="/swagger.json",
         swagger_path="/docs",
-        prefix='/api',
     )
 
     # app.middlewares.append(apispec_validation_middleware)
