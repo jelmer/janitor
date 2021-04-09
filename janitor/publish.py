@@ -130,6 +130,9 @@ publish_latency = Histogram(
 logger = logging.getLogger('janitor.publish')
 
 
+routes = web.RouteTableDef()
+
+
 class RateLimited(Exception):
     """A rate limit was reached."""
 
@@ -1030,6 +1033,7 @@ async def get_publish_attempt_count(
     )
 
 
+@routes.post("/{suite}/{package}/publish", name='publish')
 async def publish_request(request):
     dry_run = request.app['dry_run']
     vcs_manager = request.app['vcs_manager']
@@ -1106,6 +1110,7 @@ async def publish_request(request):
     )
 
 
+@routes.get("/credentials", name='credentials')
 async def credentials_request(request):
     ssh_keys = []
     for entry in os.scandir(os.path.expanduser("~/.ssh")):
@@ -1162,6 +1167,7 @@ async def run_web_server(
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
+    app.router.add_routes(routes)
     app['gpg'] = gpg.Context(armor=True)
     app['vcs_manager'] = vcs_manager
     app['db'] = db
@@ -1176,16 +1182,10 @@ async def run_web_server(
     app['push_limit'] = push_limit
     app['require_binary_diff'] = require_binary_diff
     setup_metrics(app)
-    app.router.add_post("/{suite}/{package}/publish", publish_request)
     app.router.add_get("/ws/publish", functools.partial(pubsub_handler, topic_publish))
     app.router.add_get(
         "/ws/merge-proposal", functools.partial(pubsub_handler, topic_merge_proposal)
     )
-    app.router.add_post("/check-proposal", check_mp_request)
-    app.router.add_post("/scan", scan_request)
-    app.router.add_post("/refresh-status", refresh_proposal_status_request)
-    app.router.add_post("/autopublish", autopublish_request)
-    app.router.add_get("/credentials", credentials_request)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -1193,6 +1193,7 @@ async def run_web_server(
     await site.start()
 
 
+@routes.post("/check-proposal", name='check-proposal')
 async def check_mp_request(request):
     post = await request.post()
     url = post["url"]
@@ -1232,6 +1233,7 @@ async def check_mp_request(request):
         return web.Response(status=200, text="Merge proposal not updated.")
 
 
+@routes.post("/scan", name='scan')
 async def scan_request(request):
     async def scan():
         async with request.app['db'].acquire() as conn:
@@ -1251,6 +1253,7 @@ async def scan_request(request):
     return web.Response(status=202, text="Scan started.")
 
 
+@routes.post("/refresh-status", name='refresh-status')
 async def refresh_proposal_status_request(request):
     post = await request.post()
     try:
@@ -1289,6 +1292,7 @@ async def refresh_proposal_status_request(request):
     return web.Response(status=202, text="Refresh of proposal started.")
 
 
+@routes.post("/autopublish", name='autopublish')
 async def autopublish_request(request):
     reviewed_only = "unreviewed" not in request.query
 

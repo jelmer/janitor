@@ -6,6 +6,6 @@ Fix some issues reported by lintian
 {% for entry in applied %}
 {% if applied|length > 1 %}* {% endif -%}
 {{ entry.summary }}
-{%- if entry.fixed_lintian_tags %} ({% for tag in entry.fixed_lintian_tags %}[{{ tag }}](https://lintian.debian.org/tags/{{ tag }}.html){% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
+{%- if entry.fixed_lintian_tags %} ({% for tag in entry.fixed_lintian_tags %}[{{ tag }}](https://lintian.debian.org/tags/{{ tag }}){% if not loop.last %}, {% endif %}{% endfor %}){% endif %}
 {% endfor -%}
 {% endblock -%}

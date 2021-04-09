@@ -50,6 +50,7 @@ from .prometheus import setup_metrics
 
 suite_check = re.compile("^[a-z0-9-]+$")
 PRECACHE_RETRIEVE_TIMEOUT = 300
+routes = web.RouteTableDef()
 
 
 def find_binaries(path):
@@ -63,6 +64,7 @@ def is_binary(n):
     return n.endswith(".deb") or n.endswith(".udeb")
 
 
+@routes.get("/debdiff/{old_id}/{new_id}", name="debdiff")
 async def handle_debdiff(request):
     old_id = request.match_info["old_id"]
     new_id = request.match_info["new_id"]
@@ -217,6 +219,7 @@ def _set_limits(limit_mb):
     resource.setrlimit(resource.RLIMIT_AS, (int(0.8 * limit), limit))
 
 
+@routes.get("/diffoscope/{old_id}/{new_id}", name="diffoscope")
 async def handle_diffoscope(request):
     for accept in request.headers.get("ACCEPT", "*/*").split(","):
         if accept in ("text/plain", "*/*"):
@@ -420,6 +423,7 @@ def create_background_task(fn, title):
     task.add_done_callback(log_result)
 
 
+@routes.post("/precache/{old_id}/{new_id}", name="precache")
 async def handle_precache(request):
 
     old_id = request.match_info["old_id"]
@@ -443,6 +447,7 @@ async def handle_precache(request):
     return web.Response(status=202, text="Precaching started")
 
 
+@routes.post("/precache-all", name="precache-all")
 async def handle_precache_all(request):
     todo = []
     async with request.app.db.acquire() as conn:
@@ -481,6 +486,7 @@ class DifferWebApp(web.Application):
     def __init__(self, db, config, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
         trailing_slash_redirect = normalize_path_middleware(append_slash=True)
         super(DifferWebApp, self).__init__(middlewares=[trailing_slash_redirect])
+        self.router.add_routes(routes)
         self.db = db
         self.config = config
         self.cache_path = cache_path
@@ -504,12 +510,6 @@ class DifferWebApp(web.Application):
 
 async def run_web_server(app, listen_addr, port):
     setup_metrics(app)
-    app.router.add_get("/debdiff/{old_id}/{new_id}", handle_debdiff, name="debdiff")
-    app.router.add_get(
-        "/diffoscope/{old_id}/{new_id}", handle_diffoscope, name="diffoscope"
-    )
-    app.router.add_post("/precache/{old_id}/{new_id}", handle_precache, name="precache")
-    app.router.add_post("/precache-all", handle_precache_all, name="precache-all")
 
     async def connect_artifact_manager(app):
         await app.artifact_manager.__aenter__()
