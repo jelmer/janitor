@@ -19,6 +19,7 @@ import argparse
 import asyncio
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
+import errno
 import functools
 from http.client import IncompleteRead
 from io import BytesIO
@@ -563,7 +564,7 @@ async def main(argv=None):
         if jenkins_metadata:
             metadata["jenkins"] = jenkins_metadata
 
-        with TemporaryDirectory() as output_directory:
+        with TemporaryDirectory(prefix='janitor') as output_directory:
             loop = asyncio.get_running_loop()
             watchdog_petter.track_log_directory(output_directory)
 
@@ -604,6 +605,14 @@ async def main(argv=None):
                 # jenkins to mark the job having failed, which is not really
                 # true.  We're happy if we get to successfully POST to /finish
                 return 0
+            except OSError as e:
+                if e.errno == errno.ENOSPC:
+                    metadata["code"] = "no-space-on-device"
+                    metadata["description"] = str(e)
+                else:
+                    metadata["code"] = "worker-exception"
+                    metadata["description"] = str(e)
+                    raise
             except BaseException as e:
                 metadata["code"] = "worker-failure"
                 metadata["description"] = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
