@@ -61,6 +61,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "too-many-requests",
     "autopkgtest-testbed-chroot-disappeared",
     "autopkgtest-file-fetch-failure",
+    "autopkgtest-apt-file-fetch-failure",
     "check-space-insufficient-disk-space",
     "worker-resume-branch-unavailable",
     "explain-bd-uninstallable-apt-file-fetch-failure",
@@ -68,7 +69,9 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "result-push-failed",
     "result-push-bad-gateway",
     "dist-apt-file-fetch-failure",
-    "autopkgtest-apt-file-fetch-failure",
+    "post-build-testbed-chroot-disappeared"
+    "post-build-file-fetch-failure",
+    "post-build-apt-file-fetch-failure",
 ]
 
 # In some cases, we want to ignore certain results when guessing
