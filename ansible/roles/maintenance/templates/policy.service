@@ -8,7 +8,7 @@ WorkingDirectory={{ janitor_code_path }}
 EnvironmentFile={{ janitor_home }}/env
 ExecStart=python3 -m janitor.policy \
 	--config={{ janitor_conf_path}} \
-	--policy={% if janitor_policy is defined %}{{ janitor_home }}/policy.conf{% else %}{{ janitor_code_path }}/policy.conf{% endif %} "$@"
+	--policy={{ janitor_home }}/policy.conf "$@"
 
 [Install]
 WantedBy=default.target
