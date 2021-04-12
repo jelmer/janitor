@@ -511,10 +511,15 @@ async def publish_pending_new(
     last_publish_pending_success.set_to_current_time()
 
 
-async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
+async def handle_publish_failure(e, conn, run, bucket):
     from .schedule import (
         do_schedule,
         do_schedule_control,
+    )
+
+    unchanged_run = await conn.fetchrow(
+        "SELECT result_code, package, revision FROM last_runs WHERE revision = $2 AND package = $1 and result_code = 'success'",
+        run.package, run.main_branch_revision.decode('utf-8')
     )
 
     code = e.code
@@ -551,20 +556,20 @@ async def handle_publish_failure(e, conn, run, unchanged_run, bucket):
                 bucket=bucket,
             )
     elif e.code == "missing-build-diff-control":
-        if unchanged_run and unchanged_run.result_code != "success":
+        if unchanged_run and unchanged_run['result_code'] != "success":
             description = (
                 "Missing build diff; last control run failed (%s)."
-                % unchanged_run.result_code
+                % unchanged_run['result_code']
             )
-        elif unchanged_run and unchanged_run.result_code == 'success':
+        elif unchanged_run and unchanged_run['result_code'] == 'success':
             description = (
                 "Missing build diff due to control run, but successful "
                 "control run exists. Rescheduling."
             )
             await do_schedule_control(
                 conn,
-                unchanged_run.package,
-                unchanged_run.revision,
+                unchanged_run['package'],
+                unchanged_run['revision'],
                 refresh=True,
                 requestor="publisher (missing build artifacts - control)",
                 bucket=bucket,
@@ -774,7 +779,9 @@ async def publish_from_policy(
     if mode in (MODE_BUILD_ONLY, MODE_SKIP):
         return
 
-    unchanged_run = await state.get_unchanged_run(conn, run.package, base_revision)
+    unchanged_run = await conn.fetchrow(
+        conn, "SELECT result_code FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
+        run.package, base_revision.decode('utf-8'))
 
     # TODO(jelmer): Make this more generic
     if (
@@ -813,7 +820,7 @@ async def publish_from_policy(
         )
     except PublishFailure as e:
         code, description = await handle_publish_failure(
-            e, conn, run, unchanged_run, bucket="update-new-mp"
+            e, conn, run, bucket="update-new-mp"
         )
         branch_name = None
         proposal_url = None
@@ -1873,11 +1880,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 result_tags=last_run.result_tags,
             )
         except PublishFailure as e:
-            unchanged_run = await state.get_unchanged_run(
-                conn, last_run.package, last_run.main_branch_revision
-            )
             code, description = await handle_publish_failure(
-                e, conn, last_run, unchanged_run, bucket="update-existing-mp"
+                e, conn, last_run, bucket="update-existing-mp"
             )
             if code == "empty-merge-proposal":
                 # The changes from the merge proposal have already made it in

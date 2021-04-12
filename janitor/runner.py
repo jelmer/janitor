@@ -1424,8 +1424,9 @@ class QueueProcessor(object):
         )
         if result.code == "success" and item.suite != "unchanged":
             async with self.database.acquire() as conn:
-                run = await state.get_unchanged_run(
-                    conn, result.package, result.main_branch_revision
+                run = await conn.fetchrow(
+                    "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
+                    result.package, result.main_branch_revision.decode('utf-8')
                 )
                 if run is None:
                     logging.info("Scheduling control run for %s.", item.package)

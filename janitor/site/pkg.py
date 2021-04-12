@@ -24,7 +24,7 @@ from janitor.site import (
     tracker_url,
 )
 
-from .common import iter_candidates
+from .common import iter_candidates, get_unchanged_run
 
 FAIL_BUILD_LOG_LEN = 15
 
@@ -101,7 +101,7 @@ async def generate_run_file(
     kwargs["tracker_url"] = partial(tracker_url, config)
     async with db.acquire() as conn:
         if run['main_branch_revision']:
-            kwargs["unchanged_run"] = await state.get_unchanged_run(
+            kwargs["unchanged_run"] = await get_unchanged_run(
                 conn, run['package'], run['main_branch_revision']
             )
         (queue_position, queue_wait_time) = await state.get_queue_position(
@@ -154,7 +154,7 @@ async def generate_run_file(
                 client,
                 differ_url,
                 run['id'],
-                unchanged_run,
+                unchanged_run.id,
                 kind="debdiff",
                 filter_boring=True,
                 accept="text/html",

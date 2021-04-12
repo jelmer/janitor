@@ -490,10 +490,11 @@ async def handle_archive_diff(request):
             run_id)
         if run is None:
             raise web.HTTPNotFound(text="No such run: %s" % run_id)
-        unchanged_run = await state.get_unchanged_run(
-            conn, run['package'], run['main_branch_revision']
-        )
-        if unchanged_run is None:
+        unchanged_run_id = await conn.fetchval(
+            "SELECT id FROM last_runs WHERE "
+            "package = $1 AND revision = $2 AND result_code = 'success'",
+            run['package'], run['main_branch_revision'])
+        if unchanged_run_id is None:
             return web.json_response(
                 {
                     "reason": "No matching unchanged build for %s" % run_id,
@@ -507,11 +508,6 @@ async def handle_archive_diff(request):
     if run['result_code'] != 'success':
         raise web.HTTPNotFound(text="Build %s has no artifacts" % run_id)
 
-    if unchanged_run.result_code != 'success':
-        raise web.HTTPNotFound(
-            text="Unchanged build %s has no artifacts" % unchanged_run.id
-        )
-
     filter_boring = "filter_boring" in request.query
 
     try:
@@ -519,7 +515,7 @@ async def handle_archive_diff(request):
             request.app.http_client_session,
             request.app.differ_url,
             run_id,
-            unchanged_run,
+            unchanged_run_id,
             kind=kind,
             filter_boring=filter_boring,
             accept=request.headers.get("ACCEPT", "*/*"),
@@ -528,10 +524,10 @@ async def handle_archive_diff(request):
         return web.json_response(
             {
                 "reason": "debdiff not calculated yet (run: %s, unchanged run: %s)"
-                % (run['id'], unchanged_run.id),
-                "run_id": [unchanged_run.id, run['id']],
+                % (run['id'], unchanged_run_id),
+                "run_id": [unchanged_run_id, run['id']],
                 "unavailable_run_id": e.unavailable_run_id,
-                "suite": [unchanged_run.suite, run['suite']],
+                "suite": run['suite'],
             },
             status=404,
         )
