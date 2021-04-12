@@ -114,7 +114,7 @@ async def main():
                 package.vcs_browser = args.override_vcs_browser.replace(
                     "$PACKAGE", source["Package"]
                 )
-            package.in_base = ('XSBC-Original-Maintainer' in source)
+            package.in_base = ('Original-Maintainer' in source)
             package.archive_version = source["Version"]
             package.removed = False
             print(pl)
