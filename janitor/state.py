@@ -248,36 +248,6 @@ class Run(object):
         return getattr(self, self.__slots__[i])
 
 
-async def get_unchanged_run(conn: asyncpg.Connection, package, main_branch_revision):
-    query = """
-SELECT
-    id, command, start_time, finish_time, description, package,
-    debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution, result_code,
-    main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames, review_status,
-    review_comment, worker,
-    array(SELECT row(role, remote_name, base_revision, revision) FROM
-     new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags
-FROM
-    last_runs
-LEFT JOIN
-    debian_build ON debian_build.run_id = last_runs.id
-WHERE
-    suite = 'unchanged' AND revision = $1 AND
-    package = $2 AND
-    result_code = 'success'
-ORDER BY finish_time DESC
-"""
-    if isinstance(main_branch_revision, bytes):
-        main_branch_revision = main_branch_revision.decode("utf-8")
-    row = await conn.fetchrow(query, main_branch_revision, package)
-    if row is not None:
-        return Run.from_row(row)
-    return None
-
-
 async def iter_runs(
     db: Database,
     package: Optional[str] = None,

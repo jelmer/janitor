@@ -178,7 +178,7 @@ FROM
 LEFT JOIN
     debian_build ON debian_build.run_id = last_runs.id
 WHERE
-    suite = 'unchanged' AND revision = $1 AND
+    revision = $1 AND
     package = $2 AND
     result_code = 'success'
 ORDER BY finish_time DESC

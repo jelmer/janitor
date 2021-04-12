@@ -5,12 +5,13 @@ from aiohttp import ClientConnectorError, ClientTimeout
 import urllib.parse
 
 from janitor import state
-from janitor.site import (
+from . import (
     get_archive_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     render_template_for_request,
 )
+from .common import get_unchanged_run
 
 MAX_DIFF_SIZE = 200 * 1024
 
@@ -88,7 +89,7 @@ async def generate_review(
             return "Timeout while retrieving diff; see it at %s" % external_url
 
     async def show_debdiff():
-        unchanged_run = await state.get_unchanged_run(
+        unchanged_run = await get_unchanged_run(
             conn, run.package, run.main_branch_revision
         )
         if unchanged_run is None:
@@ -98,7 +99,7 @@ async def generate_review(
                 client,
                 differ_url,
                 run.id,
-                unchanged_run,
+                unchanged_run.id,
                 kind="debdiff",
                 filter_boring=True,
                 accept="text/html",

@@ -76,6 +76,7 @@ Description: Runner for the Debian janitor
 
 Package: janitor-publisher
 Depends: python3-aiohttp-wsgi, python3-klaus
+Architecture: all
 
 Package: janitor-site
 Depends: diffoscope,
@@ -121,4 +122,4 @@ Description: Mail filter for the Debian Janitor
 Package: janitor-pull-worker
 Architecture: all
 Depends: janitor-worker
-Description: 
+Description: Pull worker for the Debian Janitor
