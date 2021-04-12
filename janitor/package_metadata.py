@@ -108,6 +108,7 @@ async def update_package_metadata(
                 package.vcswatch_version if package.vcswatch_version else None,
                 package.insts,
                 package.removed,
+                package.in_base,
             )
         )
     await conn.executemany(
