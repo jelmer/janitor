@@ -115,8 +115,8 @@ async def update_package_metadata(
         "(name, distribution, branch_url, subpath, maintainer_email, "
         "uploader_emails, archive_version, vcs_type, vcs_url, vcs_browse, "
         "vcs_last_revision, vcswatch_status, vcswatch_version, popcon_inst, "
-        "removed) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-        "$13, $14, $15) ON CONFLICT (name, distribution) DO UPDATE SET "
+        "removed, in_base) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
+        "$13, $14, $15, $16) ON CONFLICT (name, distribution) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
         "maintainer_email = EXCLUDED.maintainer_email, "
@@ -129,7 +129,8 @@ async def update_package_metadata(
         "vcswatch_status = EXCLUDED.vcswatch_status, "
         "vcswatch_version = EXCLUDED.vcswatch_version, "
         "popcon_inst = EXCLUDED.popcon_inst, "
-        "removed = EXCLUDED.removed",
+        "removed = EXCLUDED.removed, "
+        "in_base = EXCLUDED.in_base",
         packages,
     )
 
