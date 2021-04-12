@@ -313,34 +313,9 @@ if __name__ == "__main__":
             headers={"Cache-Control": "max-age=3600"},
         )
 
-    @html_template(
-        "lintian-fixes-start.html", headers={"Cache-Control": "max-age=3600"}
-    )
-    async def handle_lintian_fixes(request):
-        from .lintian_fixes import render_start
-
-        return await render_start()
-
     @html_template("generic-start.html")
     async def handle_generic_start(request):
         return {"suite": request.match_info["suite"]}
-
-    @html_template(
-        "multiarch-fixes-start.html", headers={"Cache-Control": "max-age=3600"}
-    )
-    async def handle_multiarch_fixes(request):
-        from .multiarch_hints import render_start
-        return await render_start()
-
-    @html_template("orphan-start.html")
-    async def handle_orphan_start(request):
-        return {}
-
-    @html_template("orphan-candidates.html", headers={"Cache-Control": "max-age=3600"})
-    async def handle_orphan_candidates(request):
-        from .orphan import generate_candidates
-
-        return await generate_candidates(request.app.database)
 
     @html_template("generic-candidates.html", headers={"Cache-Control": "max-age=3600"})
     async def handle_generic_candidates(request):
@@ -356,21 +331,6 @@ if __name__ == "__main__":
 
         suite = request.match_info["suite"]
         return await write_merge_proposals(request.app.database, suite)
-
-    @html_template("debianize-start.html", headers={"Cache-Control": "max-age=60"})
-    async def handle_debianize_start(request):
-        async with request.app.database.acquire() as conn:
-            return {
-                "packages": await conn.fetch("""
-select distinct on (source) source, run.package AS package, version
-from debian_build
-INNER JOIN run on debian_build.run_id = run.id
-where run.suite = 'debianize'
-order by source, version desc
-"""),
-                "suite": 'debianize',
-                "suite_config": get_suite_config(request.app.config, 'debianize'),
-            }
 
     async def handle_apt_repo(request):
         suite = request.match_info["suite"]
@@ -388,46 +348,6 @@ order by source, version desc
                 text=text,
                 headers={"Cache-Control": "max-age=60"},
             )
-
-    @html_template("fresh-builds.html", headers={"Cache-Control": "max-age=60"})
-    async def handle_fresh_builds(request):
-        from .apt_repo import get_published_packages
-        archive_version = {}
-        suite_version = {}
-        sources = set()
-        SUITES = ["fresh-releases", "fresh-snapshots"]
-        url = urllib.parse.urljoin(request.app.archiver_url, "last-publish")
-        try:
-            async with request.app.http_client_session.get(url) as resp:
-                if resp.status == 200:
-                    last_publish_time = {
-                        suite: datetime.fromisoformat(v)
-                        for suite, v in (await resp.json()).items()
-                    }
-                else:
-                    last_publish_time = {}
-        except ClientConnectorError:
-                last_publish_time = {}
-
-        async with request.app.database.acquire() as conn:
-            for suite in SUITES:
-                for name, jv, av in await get_published_packages(conn, suite):
-                    sources.add(name)
-                    archive_version[name] = av
-                    suite_version.setdefault(suite, {})[name] = jv
-            return {
-                "base_distribution": get_suite_config(
-                    request.app.config, SUITES[0]
-                ).debian_build.base_distribution,
-                "archive_version": archive_version,
-                "suite_version": suite_version,
-                "sources": sources,
-                "suites": SUITES,
-                "last_publish_time": last_publish_time,
-            }
-
-    async def handle_fresh(request):
-        return web.HTTPPermanentRedirect("/fresh-builds")
 
     @html_template("history.html", headers={"Cache-Control": "max-age=10"})
     async def handle_history(request):
@@ -859,26 +779,6 @@ order by url, last_run.finish_time desc
         review_status = request.query.get("review_status")
         return await generate_ready_list(request.app.database, suite, review_status)
 
-    @html_template(
-        "lintian-fixes-package.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_lintian_fixes_pkg(request):
-        from .lintian_fixes import generate_pkg_file
-
-        # TODO(jelmer): Handle Accept: text/diff
-        pkg = request.match_info["pkg"]
-        run_id = request.match_info.get("run_id")
-        return await generate_pkg_file(
-            request.app.database,
-            request.app.config,
-            request.app.policy,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app.vcs_store_url,
-            pkg,
-            run_id,
-        )
-
     @html_template("generic-package.html", headers={"Cache-Control": "max-age=600"})
     async def handle_generic_pkg(request):
         from .common import generate_pkg_context
@@ -897,177 +797,6 @@ order by url, last_run.finish_time desc
             pkg,
             run_id,
         )
-
-    @html_template(
-        "scrub-obsolete-package.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_scrub_obsolete_pkg(request):
-        from .common import generate_pkg_context
-
-        # TODO(jelmer): Handle Accept: text/diff
-        pkg = request.match_info["pkg"]
-        run_id = request.match_info.get("run_id")
-        return await generate_pkg_context(
-            request.app.database,
-            request.app.config,
-            "scrub-obsolete",
-            request.app.policy,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app.vcs_store_url,
-            pkg,
-            run_id,
-        )
-
-    @html_template(
-        "multiarch-fixes-package.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_multiarch_fixes_pkg(request):
-        from .multiarch_hints import generate_pkg_file
-
-        # TODO(jelmer): Handle Accept: text/diff
-        pkg = request.match_info["pkg"]
-        run_id = request.match_info.get("run_id")
-        return await generate_pkg_file(
-            request.app.database,
-            request.app.config,
-            request.app.policy,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app.vcs_store_url,
-            pkg,
-            run_id,
-        )
-
-    @html_template(
-        "debianize-package.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_debianize_pkg(request):
-        from .common import generate_pkg_context
-
-        # TODO(jelmer): Handle Accept: text/diff
-        pkg = request.match_info["pkg"]
-        run_id = request.match_info.get("run_id")
-        return await generate_pkg_context(
-            request.app.database,
-            request.app.config,
-            "debianize",
-            request.app.policy,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app.vcs_store_url,
-            pkg,
-            run_id,
-        )
-
-    @html_template(
-        "lintian-fixes-tag-list.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_lintian_fixes_tag_list(request):
-        from .lintian_fixes import generate_tag_list
-
-        async with request.app.database.acquire() as conn:
-            return await generate_tag_list(conn)
-
-    @html_template(
-        "multiarch-fixes-hint-list.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_multiarch_fixes_hint_list(request):
-        from .multiarch_hints import generate_hint_list
-
-        async with request.app.database.acquire() as conn:
-            return await generate_hint_list(conn)
-
-    @html_template("lintian-fixes-tag.html", headers={"Cache-Control": "max-age=600"})
-    async def handle_lintian_fixes_tag_page(request):
-        from .lintian_fixes import generate_tag_page
-
-        return await generate_tag_page(request.app.database, request.match_info["tag"])
-
-    @html_template(
-        "multiarch-fixes-hint.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_multiarch_fixes_hint_page(request):
-        from .multiarch_hints import generate_hint_page
-
-        return await generate_hint_page(
-            request.app.database, request.match_info["hint"]
-        )
-
-    @html_template(
-        "lintian-fixes-developer-table.html", headers={"Cache-Control": "max-age=30"}
-    )
-    async def handle_lintian_fixes_developer_table_page(request):
-        from .lintian_fixes import generate_developer_table_page
-
-        try:
-            developer = request.match_info["developer"]
-        except KeyError:
-            developer = request.query.get("developer")
-        if developer and "@" not in developer:
-            developer = "%s@debian.org" % developer
-        return await generate_developer_table_page(request.app.database, developer)
-
-    @html_template(
-        "new-upstream-package.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_new_upstream_pkg(request):
-        from .common import generate_pkg_context
-
-        suite = request.match_info["suite"]
-        pkg = request.match_info["pkg"]
-        run_id = request.match_info.get("run_id")
-        return await generate_pkg_context(
-            request.app.database,
-            request.app.config,
-            suite,
-            request.app.policy,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app.vcs_store_url,
-            pkg,
-            run_id)
-
-    @html_template(
-        "lintian-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_lintian_fixes_candidates(request):
-        from .lintian_fixes import generate_candidates
-
-        return await generate_candidates(request.app.database)
-
-    @html_template(
-        "multiarch-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_multiarch_fixes_candidates(request):
-        from .multiarch_hints import generate_candidates
-
-        return await generate_candidates(request.app.database)
-
-    @html_template(
-        "lintian-fixes-stats.html", headers={"Cache-Control": "max-age=3600"}
-    )
-    async def handle_lintian_fixes_stats(request):
-        from .lintian_fixes import generate_stats
-
-        return await generate_stats(request.app.database)
-
-    @html_template(
-        "multiarch-fixes-stats.html", headers={"Cache-Control": "max-age=3600"}
-    )
-    async def handle_multiarch_fixes_stats(request):
-        from .multiarch_hints import generate_stats
-
-        return await generate_stats(request.app.database)
-
-    @html_template(
-        "new-upstream-candidates.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_new_upstream_candidates(request):
-        from .new_upstream import generate_candidates
-
-        suite = request.match_info["suite"]
-        return await generate_candidates(request.app.database, suite)
 
     @html_template("rejected.html")
     async def handle_rejected(request):
@@ -1292,36 +1021,18 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     app.router.add_get(
         r"/pgp_keys{extension:(\.asc)?}", handle_pgp_keys, name="pgp-keys"
     )
-    app.router.add_get(
-        "/lintian-fixes/", handle_lintian_fixes, name="lintian-fixes-start"
-    )
-    app.router.add_get(
-        "/multiarch-fixes/", handle_multiarch_fixes, name="multiarch-fixes-start"
-    )
-    app.router.add_get(
-        "/multiarch-fixes/by-hint/",
-        handle_multiarch_fixes_hint_list,
-        name="multiarch-fixes-hint-list",
-    )
-    app.router.add_get(
-        "/multiarch-fixes/stats",
-        handle_multiarch_fixes_stats,
-        name="multiarch-fixes-stats",
-    )
-    app.router.add_get(
-        "/multiarch-fixes/by-hint/{hint}",
-        handle_multiarch_fixes_hint_page,
-        name="multiarch-fixes-hint",
-    )
-    app.router.add_get(
-        "/multiarch-fixes/candidates",
-        handle_multiarch_fixes_candidates,
-        name="multiarch-fixes-candidates",
-    )
-    app.router.add_get("/orphan/", handle_orphan_start, name="orphan-start")
-    app.router.add_get(
-        "/orphan/candidates", handle_orphan_candidates, name="orphan-candidates"
-    )
+    from .lintian_fixes import register_lintian_fixes_endpoints
+    register_lintian_fixes_endpoints(app.router)
+    from .multiarch_hints import register_multiarch_hints_endpoints
+    register_multiarch_hints_endpoints(app.router)
+    from .orphan import register_orphan_endpoints
+    register_orphan_endpoints(app.router)
+    from .debianize import register_debianize_endpoints
+    register_debianize_endpoints(app.router)
+    from .scrub_obsolete import register_scrub_obsolete_endpoints
+    register_scrub_obsolete_endpoints(app.router)
+    from .new_upstream import register_new_upstream_endpoints
+    register_new_upstream_endpoints(app.router)
     SUITE_REGEX = "|".join([re.escape(suite.name) for suite in config.suite])
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % SUITE_REGEX,
@@ -1350,101 +1061,7 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     )
     app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
-    app.router.add_get(
-        "/multiarch-fixes/pkg/{pkg}/",
-        handle_multiarch_fixes_pkg,
-        name="multiarch-fixes-package",
-    )
-    app.router.add_get(
-        "/multiarch-fixes/pkg/{pkg}/{run_id}",
-        handle_multiarch_fixes_pkg,
-        name="multiarch-fixes-package-run",
-    )
     app.router.add_get("/{suite:unchanged}", handle_apt_repo, name="unchanged-start")
-    app.router.add_get(
-        "/lintian-fixes/pkg/{pkg}/",
-        handle_lintian_fixes_pkg,
-        name="lintian-fixes-package",
-    )
-    app.router.add_get(
-        "/lintian-fixes/pkg/{pkg}/{run_id}",
-        handle_lintian_fixes_pkg,
-        name="lintian-fixes-package-run",
-    )
-    app.router.add_get(
-        "/debianize/",
-        handle_debianize_start,
-        name="debianize-start")
-    app.router.add_get(
-        "/debianize/pkg/{pkg}/",
-        handle_debianize_pkg,
-        name="debianize-package",
-    )
-    app.router.add_get(
-        "/debianize/pkg/{pkg}/{run_id}",
-        handle_debianize_pkg,
-        name="debianize-package-run",
-    )
-    app.router.add_get(
-        "/lintian-fixes/by-tag/",
-        handle_lintian_fixes_tag_list,
-        name="lintian-fixes-tag-list",
-    )
-    app.router.add_get(
-        "/lintian-fixes/by-tag/{tag}",
-        handle_lintian_fixes_tag_page,
-        name="lintian-fixes-tag",
-    )
-    app.router.add_get(
-        "/lintian-fixes/by-developer",
-        handle_lintian_fixes_developer_table_page,
-        name="lintian-fixes-developer-list",
-    )
-    app.router.add_get(
-        "/lintian-fixes/by-developer/{developer}",
-        handle_lintian_fixes_developer_table_page,
-        name="lintian-fixes-developer",
-    )
-    app.router.add_get(
-        "/lintian-fixes/candidates",
-        handle_lintian_fixes_candidates,
-        name="lintian-fixes-candidates",
-    )
-    app.router.add_get(
-        "/lintian-fixes/stats", handle_lintian_fixes_stats, name="lintian-fixes-stats"
-    )
-    app.router.add_get(
-        "/scrub-obsolete/pkg/{pkg}/",
-        handle_scrub_obsolete_pkg,
-        name="scrub-obsolete-package",
-    )
-    app.router.add_get(
-        "/scrub-obsolete/pkg/{pkg}/{run_id}",
-        handle_scrub_obsolete_pkg,
-        name="scrub-obsolete-package-run",
-    )
-    NEW_UPSTREAM_REGEX = "fresh-(releases|snapshots)"
-    app.router.add_get(
-        "/{suite:%s}/" % NEW_UPSTREAM_REGEX, handle_apt_repo, name="new-upstream-start"
-    )
-    app.router.add_get("/fresh-builds", handle_fresh_builds, name="fresh-builds")
-    app.router.add_get("/fresh", handle_fresh, name="fresh")
-    app.router.add_get(
-        "/{suite:%s}/pkg/{pkg}/" % NEW_UPSTREAM_REGEX,
-        handle_new_upstream_pkg,
-        name="new-upstream-package",
-    )
-    app.router.add_get(
-        "/{suite:%s}/pkg/{pkg}/{run_id}" % NEW_UPSTREAM_REGEX,
-        handle_new_upstream_pkg,
-        name="new-upstream-run",
-    )
-    app.router.add_get(
-        "/{suite:%s}/candidates" % NEW_UPSTREAM_REGEX,
-        handle_new_upstream_candidates,
-        name="new-upstream-candidates",
-    )
-
     app.router.add_get("/cupboard/history", handle_history, name="history")
     app.router.add_get("/cupboard/queue", handle_queue, name="queue")
     app.router.add_get(

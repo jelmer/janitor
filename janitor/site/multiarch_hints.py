@@ -2,7 +2,7 @@
 
 import asyncpg
 from .common import generate_pkg_context, iter_candidates
-
+from . import html_template
 
 SUITE = "multiarch-fixes"
 
@@ -21,10 +21,6 @@ async def generate_pkg_file(
         package,
         run_id=run_id,
     )
-
-
-async def render_start():
-    return {"SUITE": SUITE}
 
 
 async def iter_hint_links(conn):
@@ -93,8 +89,35 @@ async def generate_candidates(db):
     return {"candidates": candidates}
 
 
-async def generate_stats(db):
-    async with db.acquire() as conn:
+@html_template(
+    "multiarch-fixes-start.html", headers={"Cache-Control": "max-age=3600"}
+)
+async def handle_multiarch_fixes(request):
+        return {"SUITE": SUITE}
+
+
+@html_template(
+    "multiarch-fixes-hint-list.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_multiarch_fixes_hint_list(request):
+    async with request.app.database.acquire() as conn:
+        return await generate_hint_list(conn)
+
+
+@html_template(
+    "multiarch-fixes-hint.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_multiarch_fixes_hint_page(request):
+    return await generate_hint_page(
+        request.app.database, request.match_info["hint"]
+    )
+
+
+@html_template(
+    "multiarch-fixes-stats.html", headers={"Cache-Control": "max-age=3600"}
+)
+async def handle_multiarch_fixes_stats(request):
+    async with request.app.database.acquire() as conn:
         hints_per_run = {
             (c or 0): nr
             for (c, nr) in await conn.fetch(
@@ -128,3 +151,65 @@ absorbed_multiarch_hints group by 1
         "per_kind": per_kind,
         "absorbed_per_kind": absorbed_per_kind,
     }
+
+
+@html_template(
+    "multiarch-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_multiarch_fixes_candidates(request):
+    return await generate_candidates(request.app.database)
+
+
+@html_template(
+    "multiarch-fixes-package.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_multiarch_fixes_pkg(request):
+    # TODO(jelmer): Handle Accept: text/diff
+    pkg = request.match_info["pkg"]
+    run_id = request.match_info.get("run_id")
+    return await generate_pkg_file(
+        request.app.database,
+        request.app.config,
+        request.app.policy,
+        request.app.http_client_session,
+        request.app.differ_url,
+        request.app.vcs_store_url,
+        pkg,
+        run_id,
+    )
+
+
+def register_multiarch_hints_endpoints(router):
+    router.add_get(
+        "/multiarch-fixes/", handle_multiarch_fixes, name="multiarch-fixes-start"
+    )
+    router.add_get(
+        "/multiarch-fixes/by-hint/",
+        handle_multiarch_fixes_hint_list,
+        name="multiarch-fixes-hint-list",
+    )
+    router.add_get(
+        "/multiarch-fixes/stats",
+        handle_multiarch_fixes_stats,
+        name="multiarch-fixes-stats",
+    )
+    router.add_get(
+        "/multiarch-fixes/by-hint/{hint}",
+        handle_multiarch_fixes_hint_page,
+        name="multiarch-fixes-hint",
+    )
+    router.add_get(
+        "/multiarch-fixes/candidates",
+        handle_multiarch_fixes_candidates,
+        name="multiarch-fixes-candidates",
+    )
+    router.add_get(
+        "/multiarch-fixes/pkg/{pkg}/",
+        handle_multiarch_fixes_pkg,
+        name="multiarch-fixes-package",
+    )
+    router.add_get(
+        "/multiarch-fixes/pkg/{pkg}/{run_id}",
+        handle_multiarch_fixes_pkg,
+        name="multiarch-fixes-package-run",
+    )

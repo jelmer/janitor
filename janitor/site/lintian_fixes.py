@@ -9,6 +9,7 @@ from silver_platter.debian.lintian import (
 from lintian_brush.lintian_overrides import load_renamed_tags
 
 from .. import state
+from . import html_template
 
 
 SUITE = "lintian-fixes"
@@ -68,20 +69,6 @@ select tag, count(tag) from (
     )
 
 
-async def generate_tag_list(conn: asyncpg.Connection):
-    tags = []
-    oldnames = {}  # type: Dict[str, List[str]]
-    for tag in await iter_lintian_tags(conn):
-        try:
-            newname = renamed_tags[tag]
-        except KeyError:
-            tags.append(tag)
-        else:
-            oldnames.setdefault(newname, []).append(tag)
-    tags.sort()
-    return {"tags": tags, "oldnames": oldnames}
-
-
 async def iter_last_successes_by_lintian_tag(conn: asyncpg.Connection, tags: List[str]):
     return await conn.fetch(
         """
@@ -105,22 +92,6 @@ where
 """,
         tags,
     )
-
-
-async def generate_tag_page(db, tag):
-    oldnames = []
-    for oldname, newname in renamed_tags.items():
-        if newname == tag:
-            oldnames.append(oldname)
-    async with db.acquire() as conn:
-        packages = list(
-            await iter_last_successes_by_lintian_tag(conn, [tag] + oldnames)
-        )
-    return {
-        "tag": tag,
-        "oldnames": oldnames,
-        "packages": packages,
-    }
 
 
 async def generate_candidates(db):
@@ -331,8 +302,100 @@ ON absorbed.tag = unabsorbed.tag
     return entries
 
 
-async def generate_stats(db):
-    async with db.acquire() as conn:
+@html_template(
+    "lintian-fixes-start.html", headers={"Cache-Control": "max-age=3600"}
+)
+async def handle_lintian_fixes(request):
+    import lintian_brush
+    from silver_platter.debian.lintian import DEFAULT_ADDON_FIXERS
+
+    return {
+        "SUITE": SUITE,
+        "lintian_brush": lintian_brush,
+        "ADDON_FIXERS": DEFAULT_ADDON_FIXERS,
+    }
+
+
+@html_template(
+    "lintian-fixes-package.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_lintian_fixes_pkg(request):
+    # TODO(jelmer): Handle Accept: text/diff
+    pkg = request.match_info["pkg"]
+    run_id = request.match_info.get("run_id")
+    return await generate_pkg_file(
+        request.app.database,
+        request.app.config,
+        request.app.policy,
+        request.app.http_client_session,
+        request.app.differ_url,
+        request.app.vcs_store_url,
+        pkg,
+        run_id,
+    )
+
+
+@html_template(
+    "lintian-fixes-tag-list.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_lintian_fixes_tag_list(request):
+    async with request.app.database.acquire() as conn:
+        tags = []
+        oldnames = {}  # type: Dict[str, List[str]]
+        for tag in await iter_lintian_tags(conn):
+            try:
+                newname = renamed_tags[tag]
+            except KeyError:
+                tags.append(tag)
+            else:
+                oldnames.setdefault(newname, []).append(tag)
+        tags.sort()
+        return {"tags": tags, "oldnames": oldnames}
+
+
+@html_template("lintian-fixes-tag.html", headers={"Cache-Control": "max-age=600"})
+async def handle_lintian_fixes_tag_page(request):
+    tag = request.match_info["tag"]
+    oldnames = []
+    for oldname, newname in renamed_tags.items():
+        if newname == tag:
+            oldnames.append(oldname)
+    async with request.app.database.acquire() as conn:
+        packages = list(
+            await iter_last_successes_by_lintian_tag(conn, [tag] + oldnames)
+        )
+    return {
+        "tag": tag,
+        "oldnames": oldnames,
+        "packages": packages,
+    }
+
+
+@html_template(
+    "lintian-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_lintian_fixes_candidates(request):
+    return await generate_candidates(request.app.database)
+
+
+@html_template(
+    "lintian-fixes-developer-table.html", headers={"Cache-Control": "max-age=30"}
+)
+async def handle_lintian_fixes_developer_table_page(request):
+    try:
+        developer = request.match_info["developer"]
+    except KeyError:
+        developer = request.query.get("developer")
+    if developer and "@" not in developer:
+        developer = "%s@debian.org" % developer
+    return await generate_developer_table_page(request.app.database, developer)
+
+
+@html_template(
+    "lintian-fixes-stats.html", headers={"Cache-Control": "max-age=3600"}
+)
+async def handle_lintian_fixes_stats(request):
+    async with request.app.database.acquire() as conn:
         by_tag = await iter_lintian_fixes_counts(conn)
         tags_per_run = {
             c: nr
@@ -363,12 +426,46 @@ group by 1 order by 1 desc
     }
 
 
-async def render_start():
-    import lintian_brush
-    from silver_platter.debian.lintian import DEFAULT_ADDON_FIXERS
+def register_lintian_fixes_endpoints(router):
+    router.add_get(
+        "/lintian-fixes/", handle_lintian_fixes, name="lintian-fixes-start"
+    )
+    router.add_get(
+        "/lintian-fixes/pkg/{pkg}/",
+        handle_lintian_fixes_pkg,
+        name="lintian-fixes-package",
+    )
+    router.add_get(
+        "/lintian-fixes/pkg/{pkg}/{run_id}",
+        handle_lintian_fixes_pkg,
+        name="lintian-fixes-package-run",
+    )
 
-    return {
-        "SUITE": SUITE,
-        "lintian_brush": lintian_brush,
-        "ADDON_FIXERS": DEFAULT_ADDON_FIXERS,
-    }
+    router.add_get(
+        "/lintian-fixes/by-tag/",
+        handle_lintian_fixes_tag_list,
+        name="lintian-fixes-tag-list",
+    )
+    router.add_get(
+        "/lintian-fixes/by-tag/{tag}",
+        handle_lintian_fixes_tag_page,
+        name="lintian-fixes-tag",
+    )
+    router.add_get(
+        "/lintian-fixes/by-developer",
+        handle_lintian_fixes_developer_table_page,
+        name="lintian-fixes-developer-list",
+    )
+    router.add_get(
+        "/lintian-fixes/by-developer/{developer}",
+        handle_lintian_fixes_developer_table_page,
+        name="lintian-fixes-developer",
+    )
+    router.add_get(
+        "/lintian-fixes/candidates",
+        handle_lintian_fixes_candidates,
+        name="lintian-fixes-candidates",
+    )
+    router.add_get(
+        "/lintian-fixes/stats", handle_lintian_fixes_stats, name="lintian-fixes-stats"
+    )
