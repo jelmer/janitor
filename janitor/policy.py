@@ -201,6 +201,42 @@ FROM
     return await conn.fetch(query, *args)
 
 
+async def sync_policy(conn, policy, package=None):
+    current_policy = {}
+    suites = known_suites(policy)
+    if policy.freeze_dates_url:
+        release_stages_passed = await read_release_stages(policy.freeze_dates_url)
+        logging.info('Release stages passed: %r', release_stages_passed)
+    else:
+        release_stages_passed = None
+    num_updated = 0
+    async for (package, suite, cur_pol) in iter_policy(conn, package=package):
+        current_policy[(package, suite)] = cur_pol
+    for package in await iter_packages(conn, package=package):
+        updated = False
+        for suite in suites:
+            intended_policy = apply_policy(
+                policy,
+                suite,
+                package['name'],
+                package['vcs_url'],
+                package['maintainer_email'],
+                package['uploader_emails'],
+                package['in_base'],
+                release_stages_passed
+            )
+            stored_policy = current_policy.get((package['name'], suite))
+            if stored_policy != intended_policy:
+                logging.debug("%s/%s -> %r" % (package['name'], suite, intended_policy))
+                await update_policy(
+                    conn, package['name'], suite, *intended_policy
+                )
+                updated = True
+        if updated:
+            num_updated += 1
+
+
+
 async def main(argv):
     import argparse
     from .config import read_config
@@ -228,45 +264,13 @@ async def main(argv):
     with open(args.policy, "r") as f:
         policy = read_policy(f)
 
-    if policy.freeze_dates_url:
-        release_stages_passed = await read_release_stages(policy.freeze_dates_url)
-        logging.info('Release stages passed: %r', release_stages_passed)
-    else:
-        release_stages_passed = None
-
-    suites = known_suites(policy)
-
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    current_policy = {}
     db = state.Database(config.database_location)
-    num_updated = 0
     async with db.acquire() as conn:
-        async for (package, suite, cur_pol) in iter_policy(conn, package=args.package):
-            current_policy[(package, suite)] = cur_pol
-        for package in await iter_packages(conn, package=args.package):
-            updated = False
-            for suite in suites:
-                intended_policy = apply_policy(
-                    policy,
-                    suite,
-                    package['name'],
-                    package['vcs_url'],
-                    package['maintainer_email'],
-                    package['uploader_emails'],
-                    package['in_base'],
-                    release_stages_passed
-                )
-                stored_policy = current_policy.get((package['name'], suite))
-                if stored_policy != intended_policy:
-                    logging.debug("%s/%s -> %r" % (package['name'], suite, intended_policy))
-                    await update_policy(
-                        conn, package['name'], suite, *intended_policy
-                    )
-                    updated = True
-            if updated:
-                num_updated += 1
+        num_updated = await sync_policy(
+            conn, policy, package=args.package)
     logging.info('Updated policy for %d packages.', num_updated)
 
 

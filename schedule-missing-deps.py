@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import apt_pkg
 import argparse
 import asyncio
 from dataclasses import dataclass
@@ -9,8 +10,11 @@ import logging
 import re
 from typing import List, Tuple, Dict, Optional, Union
 from janitor import state
+from janitor.candidates import store_candidates
 from janitor.config import read_config
 from janitor.schedule import do_schedule
+from janitor.policy import sync_policy, read_policy
+from janitor.udd import UDD
 from ognibuild import Requirement
 from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
@@ -18,7 +22,6 @@ from ognibuild.resolver.apt import resolve_requirement_apt
 from ognibuild.session.plain import PlainSession
 from buildlog_consultant import problem_clses
 from lintian_brush.debianize import find_upstream, UpstreamInfo
-from janitor.schedule import do_schedule
 
 parser = argparse.ArgumentParser("reschedule")
 parser.add_argument(
@@ -27,6 +30,10 @@ parser.add_argument(
 args = parser.parse_args()
 with open(args.config, "r") as f:
     config = read_config(f)
+
+
+DEFAULT_NEW_PACKAGE_PRIORITY = 150
+DEFAULT_SUCCESS_CHANCE = 0.5
 
 
 def recreate_problem(kind, details):
@@ -87,8 +94,18 @@ async def resolve_requirement(conn, requirement: Requirement) -> List[List[Union
                         if not r.get('version'):
                             logging.debug('package already available: %s', r['name'])
                         elif r['version'][0] == '>=':
-                            # TODO(jelmer): find source name
-                            option.append(UpdatePackage(r['name'], r['version'][1]))
+                            depcache = apt_pkg.DepCache(apt_mgr.apt_cache._cache)
+                            depcache.init()
+                            version = depcache.get_candidate_ver(apt_mgr.apt_cache._cache[r['name']])
+                            if not version:
+                                logging.warning(
+                                    'unable to find source package matching %s', r['name'])
+                                option = None
+                                break
+                            file, index = version.file_list.pop(0)
+                            records = apt_pkg.PackageRecords(apt_mgr.apt_cache._cache)
+                            records.lookup((file, index))
+                            option.append(UpdatePackage(records.source_pkg, r['version'][1]))
                         else:
                             logging.warning("don't know what to do with constraint %r", r['version'])
                             option = None
@@ -107,32 +124,56 @@ async def resolve_requirement(conn, requirement: Requirement) -> List[List[Union
     return options
 
 
+async def followup_missing_requirement(conn, policy, requirement):
+    actions = await resolve_requirement(conn, requirement)
+    logging.debug('%s: %r', requirement, actions)
+    if actions == []:
+        # We don't know what to do
+        logging.info('Unable to find actions for requirement %r', requirement)
+        return False
+    if actions == [[]]:
+        # We don't need to do anything - could retry things that need this?
+        return False
+    if isinstance(actions[0][0], NewPackage):
+        package = actions[0][0].upstream_info.name.replace('/', '-') + '-upstream'
+        logging.info(
+            "Creating new upstream %s => %s",
+            package, actions[0][0].upstream_info.branch_url)
+        await conn.execute(
+            "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email) "
+            "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+            package, 'upstream', actions[0][0].upstream_info.branch_url, '',
+            'dummy@example.com')
+        await store_candidates(
+            conn,
+            [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
+              DEFAULT_SUCCESS_CHANCE)])
+        await sync_policy(conn, policy, package=package)
+        await do_schedule(conn, package, "debianize", requestor='schedule-missing-deps')
+    elif isinstance(actions[0][0], UpdatePackage):
+        logging.info('Scheduling new run for %s/fresh-releases', actions[0][0].name)
+        # TODO(jelmer): fresh-snapshots?
+        await do_schedule(conn, actions[0][0].name, "fresh-releases", requestor='schedule-missing-deps')
+    else:
+        raise NotImplementedError('unable to deal with %r' % actions[0][0])
+    return True
+
+
 async def main(db, session):
     requirements = []
     async for requirement in gather_requirements(db, session):
         if requirement not in requirements:
             requirements.append(requirement)
 
+    with open('policy.conf', "r") as f:
+        policy = read_policy(f)
+
     async with db.acquire() as conn:
         for requirement in requirements:
-            actions = await resolve_requirement(conn, requirement)
-            logging.debug('%s: %r', requirement, actions)
-            if actions == []:
-                # We don't know what to do
-                continue
-            if actions == [[]]:
-                # We don't need to do anything - could retry things that need this?
-                continue
-            if isinstance(actions[0][0], NewPackage):
-                print('new-package: debianize %s-upstream => %r' % (actions[0][0].upstream_info.name, actions[0][0].upstream_info.branch_url))
-            elif isinstance(actions[0][0], UpdatePackage):
-
-                logging.info('Scheduling new run for %s/fresh-releases', actions[0][0].name)
-                await do_schedule(conn, actions[0][0].name, "fresh-releases")
+            await followup_missing_requirement(conn, policy, requirement)
 
 
-
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 db = state.Database(config.database_location)
 session = PlainSession()

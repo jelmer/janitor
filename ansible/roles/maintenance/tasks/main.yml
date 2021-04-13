@@ -18,11 +18,6 @@
     - schedule
     - policy
     - package-overrides
-- name: Deploy policy.conf
-  copy:
-    src: "{{ janitor_policy }}"
-    dest: "{{ janitor_home }}/policy.conf"
-  when: janitor_policy is defined
 - name: Schedule
   template:
     src: schedule.sh
