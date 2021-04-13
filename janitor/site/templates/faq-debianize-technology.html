@@ -7,10 +7,7 @@ GitLab, Launchpad).</p>
 <p><a class="reference external" href="https://github.com/jelmer/buildlog-consultant">buildlog-consultant</a> is responsible for parsing and interpreting build logs.
 <p><a class="reference external" href="https://github.com/jelmer/upstream-ontologist">upstream-ontologist</a> extracts metadata from upstream projects.
 <p><a class="reference external" href="https://github.com/jelmer/ognibuild">ognibuild</a> is responsible for detecting build systems and invoking them.
-<p><a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">Lintian-brush</a> is responsible for actually making changes to the packages.</p>
+<p><a class="reference external" href="https://salsa.debian.org/jelmer/lintian-brush">Lintian-brush</a> is responsible for actually creating the packaging based on information provided by <i>ognibuild</i> and <i>upstream-ontologist</i>.</p>
 <p><a class="reference external" href="https://jelmer.uk/code/silver-platter">Silver-Platter</a>
- ties this all together; it trawls UDD to find packages that are
-affected by lintian tags that lintian-brush knows how to fix, clones the
- packaging branches, invokes lintian-brush and pushes back or creates
-merge proposals.</p>
+ ties this all together. It clones the packaging branches, invokes debianize and pushes back or creates merge proposals.</p>
 </div>
