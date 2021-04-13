@@ -169,6 +169,8 @@ def push_branch(
     branch_name = params.get("branch")
     if branch_name is not None:
         branch_name = urlutils.unquote(branch_name)
+    if vcs_type is None:
+        vcs_type = source_branch.controldir.cloning_metadir()
     try:
         target = ControlDir.open(url, possible_transports=possible_transports)
     except NotBranchError:
@@ -264,7 +266,7 @@ def run_worker(
                 push_branch(
                     ws.local_tree.branch,
                     cached_branch_url,
-                    vcs_type=vcs_type.lower(),
+                    vcs_type=vcs_type.lower() if vcs_type is not None else None,
                     possible_transports=possible_transports,
                     stop_revision=ws.main_branch.last_revision(),
                     tag_selector=tag_selector,
