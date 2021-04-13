@@ -1,20 +1,29 @@
 #!/usr/bin/python3
+# Copyright (C) 2021 Jelmer Vernooij <jelmer@jelmer.uk>
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import apt_pkg
 import argparse
 import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from debian.changelog import Version
 import logging
-import re
-from typing import List, Tuple, Dict, Optional, Union
-from janitor import state
-from janitor.candidates import store_candidates
-from janitor.config import read_config
-from janitor.schedule import do_schedule
-from janitor.policy import sync_policy, read_policy
-from janitor.udd import UDD
+from typing import List, Optional, Union
+
+import apt_pkg
+from debian.changelog import Version
+
 from ognibuild import Requirement
 from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
@@ -23,33 +32,17 @@ from ognibuild.session.plain import PlainSession
 from buildlog_consultant import problem_clses
 from lintian_brush.debianize import find_upstream, UpstreamInfo
 
-parser = argparse.ArgumentParser("reschedule")
-parser.add_argument(
-    "--config", type=str, default="janitor.conf", help="Path to configuration."
-)
-parser.add_argument(
-    "--policy", type=str, default="policy.conf", help="Path to policy."
-)
-parser.add_argument(
-    "-r", dest="run_id", type=str, help="Run to process.", action="append"
-)
-parser.add_argument('--debug', action='store_true')
-
-
-args = parser.parse_args()
-with open(args.config, "r") as f:
-    config = read_config(f)
-
+from janitor import state
+from janitor.candidates import store_candidates
+from janitor.config import read_config
+from janitor.schedule import do_schedule
+from janitor.policy import sync_policy, read_policy
 
 DEFAULT_NEW_PACKAGE_PRIORITY = 150
 DEFAULT_SUCCESS_CHANCE = 0.5
 
 
 def recreate_problem(kind, details):
-    try:
-        return problem_clses[kind](**details)
-    except KeyError:
-        return None
 
 
 async def gather_requirements(db, session, run_ids=None):
@@ -66,8 +59,9 @@ SELECT result_code, failure_details FROM last_unabsorbed_runs WHERE result_code 
             for prefix in ['build-', 'post-build-', 'dist-']:
                 if kind.startswith(prefix):
                     kind = kind[len(prefix):]
-            problem = recreate_problem(kind, row['failure_details'])
-            if problem is None:
+            try:
+                problem = problem_clses[kind](**row['failure_details'])
+            except KeyError:
                 continue
             requirement = problem_to_upstream_requirement(problem)
             if requirement is None:
@@ -88,7 +82,7 @@ class UpdatePackage:
     desired_version: Optional[Version] = None
 
 
-async def resolve_requirement(conn, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
+async def resolve_requirement(conn, apt_mgr, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
     apt_opts = resolve_requirement_apt(apt_mgr, requirement)
     options = []
     if apt_opts:
@@ -138,8 +132,8 @@ async def resolve_requirement(conn, requirement: Requirement) -> List[List[Union
     return options
 
 
-async def followup_missing_requirement(conn, policy, requirement):
-    actions = await resolve_requirement(conn, requirement)
+async def followup_missing_requirement(conn, apt_mgr, policy, requirement):
+    actions = await resolve_requirement(conn, apt_mgr, requirement)
     logging.debug('%s: %r', requirement, actions)
     if actions == []:
         # We don't know what to do
@@ -173,27 +167,45 @@ async def followup_missing_requirement(conn, policy, requirement):
     return True
 
 
-async def main(db, session, run_ids):
-    requirements = []
-    async for requirement in gather_requirements(db, session, run_ids):
-        if requirement not in requirements:
-            requirements.append(requirement)
+async def main():
+    parser = argparse.ArgumentParser("reschedule")
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
+    parser.add_argument(
+        "--policy", type=str, default="policy.conf", help="Path to policy."
+    )
+    parser.add_argument(
+        "-r", dest="run_id", type=str, help="Run to process.", action="append"
+    )
+    parser.add_argument('--debug', action='store_true')
 
-    with open(args.policy, "r") as f:
-        policy = read_policy(f)
 
-    async with db.acquire() as conn:
-        for requirement in requirements:
-            await followup_missing_requirement(conn, policy, requirement)
+    args = parser.parse_args()
+    with open(args.config, "r") as f:
+        config = read_config(f)
 
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
 
-if args.debug:
-    logging.basicConfig(level=logging.DEBUG)
-else:
-    logging.basicConfig(level=logging.INFO)
+    db = state.Database(config.database_location)
+    session = PlainSession()
+    with session:
+        requirements = []
+        async for requirement in gather_requirements(db, session, args.run_id or None):
+            if requirement not in requirements:
+                requirements.append(requirement)
 
-db = state.Database(config.database_location)
-session = PlainSession()
-with session:
-    apt_mgr = AptManager.from_session(session)
-    asyncio.run(main(db, session, args.run_id or None))
+        with open(args.policy, "r") as f:
+            policy = read_policy(f)
+
+        apt_mgr = AptManager.from_session(session)
+
+        async with db.acquire() as conn:
+            for requirement in requirements:
+                await followup_missing_requirement(conn, apt_mgr, policy, requirement)
+
+if __name__ == '__main__':
+    asyncio.run(main())
