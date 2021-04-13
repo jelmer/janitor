@@ -603,7 +603,7 @@ AND suite = ANY($1::text[])
         async with request.app.database.acquire() as conn:
             package = await conn.fetchrow(
                 'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
-                'vcs_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
+                'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
             if package is None:
                 raise web.HTTPNotFound(text="No package with name %s" % package_name)
             merge_proposals = await conn.fetch("""\
