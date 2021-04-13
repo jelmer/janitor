@@ -53,7 +53,7 @@ SELECT result_code, failure_details FROM last_unabsorbed_runs WHERE result_code 
             args.append(run_ids)
         for row in await conn.fetch(query, *args):
             kind = row['result_code']
-            for prefix in ['build-', 'post-build-', 'dist-']:
+            for prefix in ['build-', 'post-build-', 'dist-', 'install-deps-']:
                 if kind.startswith(prefix):
                     kind = kind[len(prefix):]
             try:
@@ -154,11 +154,11 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement):
             [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
               DEFAULT_SUCCESS_CHANCE)])
         await sync_policy(conn, policy, package=package)
-        await do_schedule(conn, package, "debianize", requestor='schedule-missing-deps')
+        await do_schedule(conn, package, "debianize", requestor='schedule-missing-deps', bucket='missing-deps')
     elif isinstance(actions[0][0], UpdatePackage):
         logging.info('Scheduling new run for %s/fresh-releases', actions[0][0].name)
         # TODO(jelmer): fresh-snapshots?
-        await do_schedule(conn, actions[0][0].name, "fresh-releases", requestor='schedule-missing-deps')
+        await do_schedule(conn, actions[0][0].name, "fresh-releases", requestor='schedule-missing-deps', bucket='missing-deps')
     else:
         raise NotImplementedError('unable to deal with %r' % actions[0][0])
     return True

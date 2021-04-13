@@ -121,7 +121,7 @@ CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
 CREATE INDEX ON publish (timestamp);
 CREATE TYPE queue_bucket AS ENUM(
-    'update-existing-mp', 'webhook', 'manual', 'control', 'reschedule', 'update-new-mp', 'default');
+    'update-existing-mp', 'webhook', 'manual', 'control', 'reschedule', 'update-new-mp', 'missing-deps', 'default');
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket default 'default',
@@ -274,10 +274,10 @@ CREATE TRIGGER expire_site_session_delete_old_rows_trigger
    AFTER INSERT ON site_session
    EXECUTE PROCEDURE expire_site_session_delete_old_rows();
 
-CREATE VIEW queue_positions AS SELECT
+CREATE OR REPLACE VIEW queue_positions AS SELECT
     package,
     suite,
-    row_number() OVER (ORDER BY priority ASC, id ASC) AS position,
+    row_number() OVER (ORDER BY bucket ASC, priority ASC, id ASC) AS position,
     SUM(estimated_duration) OVER (ORDER BY priority ASC, id ASC)
         - coalesce(estimated_duration, interval '0') AS wait_time
 FROM
