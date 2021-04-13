@@ -45,7 +45,7 @@ DEFAULT_SUCCESS_CHANCE = 0.5
 async def gather_requirements(db, session, run_ids=None):
     async with db.acquire() as conn:
         query = """
-SELECT result_code, failure_details FROM last_unabsorbed_runs WHERE result_code != 'success' AND failure_details IS NOT NULL
+SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WHERE result_code != 'success' AND failure_details IS NOT NULL
 """
         args = []
         if run_ids:
@@ -63,7 +63,7 @@ SELECT result_code, failure_details FROM last_unabsorbed_runs WHERE result_code 
             requirement = problem_to_upstream_requirement(problem)
             if requirement is None:
                 continue
-            yield requirement
+            yield row['package'], row['suite'], requirement
 
 
 @dataclass
@@ -129,7 +129,10 @@ async def resolve_requirement(conn, apt_mgr, requirement: Requirement) -> List[L
     return options
 
 
-async def followup_missing_requirement(conn, apt_mgr, policy, requirement):
+async def followup_missing_requirement(conn, apt_mgr, policy, requirement, needed_by=None):
+    requestor = 'schedule-missing-deps'
+    if needed_by is not None:
+        requestor += ' (needed by %s)' % needed_by
     actions = await resolve_requirement(conn, apt_mgr, requirement)
     logging.debug('%s: %r', requirement, actions)
     if actions == []:
@@ -154,11 +157,11 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement):
             [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
               DEFAULT_SUCCESS_CHANCE)])
         await sync_policy(conn, policy, package=package)
-        await do_schedule(conn, package, "debianize", requestor='schedule-missing-deps', bucket='missing-deps')
+        await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps')
     elif isinstance(actions[0][0], UpdatePackage):
         logging.info('Scheduling new run for %s/fresh-releases', actions[0][0].name)
         # TODO(jelmer): fresh-snapshots?
-        await do_schedule(conn, actions[0][0].name, "fresh-releases", requestor='schedule-missing-deps', bucket='missing-deps')
+        await do_schedule(conn, actions[0][0].name, "fresh-releases", requestor=requestor, bucket='missing-deps')
     else:
         raise NotImplementedError('unable to deal with %r' % actions[0][0])
     return True
@@ -190,10 +193,9 @@ async def main():
     db = state.Database(config.database_location)
     session = PlainSession()
     with session:
-        requirements = []
-        async for requirement in gather_requirements(db, session, args.run_id or None):
-            if requirement not in requirements:
-                requirements.append(requirement)
+        requirements = {}
+        async for package, suite, requirement in gather_requirements(db, session, args.run_id or None):
+            requirements.setdefault(requirement, []).append((package, suite))
 
         with open(args.policy, "r") as f:
             policy = read_policy(f)
@@ -201,8 +203,10 @@ async def main():
         apt_mgr = AptManager.from_session(session)
 
         async with db.acquire() as conn:
-            for requirement in requirements:
-                await followup_missing_requirement(conn, apt_mgr, policy, requirement)
+            for requirement, needed_by in requirements.items():
+                await followup_missing_requirement(
+                    conn, apt_mgr, policy, requirement,
+                    needed_by=', '.join(["%s/%s" % (package, suite) for (package, suite) in needed_by]))
 
 if __name__ == '__main__':
     asyncio.run(main())
