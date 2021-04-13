@@ -27,6 +27,14 @@ parser = argparse.ArgumentParser("reschedule")
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
+parser.add_argument(
+    "--policy", type=str, default="policy.conf", help="Path to policy."
+)
+parser.add_argument(
+    "-r", type=str, help="Run to process."
+)
+
+
 args = parser.parse_args()
 with open(args.config, "r") as f:
     config = read_config(f)
@@ -43,11 +51,16 @@ def recreate_problem(kind, details):
         return None
 
 
-async def gather_requirements(db, session):
+async def gather_requirements(db, session, run_ids=None):
     async with db.acquire() as conn:
-        for row in await conn.fetch("""
+        query = """
 SELECT result_code, failure_details FROM last_unabsorbed_runs WHERE result_code != 'success' AND failure_details IS NOT NULL
-"""):
+"""
+        args = []
+        if run_ids:
+            query += " WHERE id = ANY($1::text[])"
+            args.append(run_ids)
+        for row in await conn.fetch(query, *args):
             kind = row['result_code']
             for prefix in ['build-', 'post-build-', 'dist-']:
                 if kind.startswith(prefix):
@@ -165,7 +178,7 @@ async def main(db, session):
         if requirement not in requirements:
             requirements.append(requirement)
 
-    with open('policy.conf', "r") as f:
+    with open(args.policy, "r") as f:
         policy = read_policy(f)
 
     async with db.acquire() as conn:
