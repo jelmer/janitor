@@ -108,7 +108,7 @@ async def generate_run_file(
             conn, run['suite'], run['package']
         )
         package = await conn.fetchrow(
-            'SELECT name, vcs_type, vcs_url, vcs_browse, vcswatch_version '
+            'SELECT name, vcs_type, vcs_url, branch_url, vcs_browse, vcswatch_version '
             'FROM package WHERE name = $1', run['package'])
         if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
             publish_history = await get_publish_history(conn, run['revision'])
@@ -118,6 +118,7 @@ async def generate_run_file(
     kwargs["queue_position"] = queue_position
     kwargs["vcs_type"] = package['vcs_type']
     kwargs["vcs_url"] = package['vcs_url']
+    kwargs["branch_url"] = package['branch_url']
     kwargs["vcs_browse"] = package['vcs_browse']
     kwargs["vcswatch_version"] = package['vcswatch_version']
     kwargs["is_admin"] = is_admin
@@ -253,6 +254,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     kwargs["vcs_type"] = package['vcs_type']
     kwargs["vcs_url"] = package['vcs_url']
     kwargs["vcs_browse"] = package['vcs_browse']
+    kwargs["branch_url"] = package['branch_url']
     kwargs["merge_proposals"] = merge_proposals
     kwargs["runs"] = [run async for run in runs]
     kwargs["removed"] = package['removed']

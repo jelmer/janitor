@@ -183,7 +183,7 @@ async def generate_pkg_context(
 ):
     async with db.acquire() as conn:
         package = await conn.fetchrow("""\
-SELECT name, maintainer_email, uploader_emails, removed, vcs_url, vcs_browse, vcswatch_version, update_changelog AS changelog_policy, publish AS publish_policy
+SELECT name, maintainer_email, uploader_emails, removed, branch_url, vcs_url, vcs_browse, vcswatch_version, update_changelog AS changelog_policy, publish AS publish_policy
 FROM package
 LEFT JOIN policy ON package.name = policy.package AND suite = $2
 WHERE name = $1""", package, suite)
@@ -282,6 +282,7 @@ WHERE run.package = $1 AND run.suite = $2
         "maintainer_email": package['maintainer_email'],
         "uploader_emails": package['uploader_emails'],
         "removed": package['removed'],
+        "vcs_url": package['branch_url'],
         "vcs_url": package['vcs_url'],
         "vcs_type": vcs_type,
         "vcs_browse": package['vcs_browse'],
