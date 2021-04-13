@@ -42,9 +42,6 @@ DEFAULT_NEW_PACKAGE_PRIORITY = 150
 DEFAULT_SUCCESS_CHANCE = 0.5
 
 
-def recreate_problem(kind, details):
-
-
 async def gather_requirements(db, session, run_ids=None):
     async with db.acquire() as conn:
         query = """
