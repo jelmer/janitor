@@ -600,6 +600,7 @@ async def main(argv=None):
             except WorkerFailure as e:
                 metadata["code"] = e.code
                 metadata["description"] = e.description
+                metadata['details'] = e.details
                 logging.info("Worker failed (%s): %s", e.code, e.description)
                 # This is a failure for the worker, but returning 0 will cause
                 # jenkins to mark the job having failed, which is not really

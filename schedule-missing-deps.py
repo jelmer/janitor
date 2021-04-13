@@ -31,8 +31,9 @@ parser.add_argument(
     "--policy", type=str, default="policy.conf", help="Path to policy."
 )
 parser.add_argument(
-    "-r", type=str, help="Run to process."
+    "-r", dest="run_id", type=str, help="Run to process.", action="append"
 )
+parser.add_argument('--debug', action='store_true')
 
 
 args = parser.parse_args()
@@ -58,7 +59,7 @@ SELECT result_code, failure_details FROM last_unabsorbed_runs WHERE result_code 
 """
         args = []
         if run_ids:
-            query += " WHERE id = ANY($1::text[])"
+            query += " AND id = ANY($1::text[])"
             args.append(run_ids)
         for row in await conn.fetch(query, *args):
             kind = row['result_code']
@@ -172,9 +173,9 @@ async def followup_missing_requirement(conn, policy, requirement):
     return True
 
 
-async def main(db, session):
+async def main(db, session, run_ids):
     requirements = []
-    async for requirement in gather_requirements(db, session):
+    async for requirement in gather_requirements(db, session, run_ids):
         if requirement not in requirements:
             requirements.append(requirement)
 
@@ -186,10 +187,13 @@ async def main(db, session):
             await followup_missing_requirement(conn, policy, requirement)
 
 
-logging.basicConfig(level=logging.INFO)
+if args.debug:
+    logging.basicConfig(level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
 
 db = state.Database(config.database_location)
 session = PlainSession()
 with session:
     apt_mgr = AptManager.from_session(session)
-    asyncio.run(main(db, session))
+    asyncio.run(main(db, session, args.run_id or None))
