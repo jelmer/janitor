@@ -64,6 +64,11 @@
     src: janitor.conf
     dest: "{{ janitor_conf_path }}"
     owner: "{{ janitor_static_owner }}"
+- name: janitor policy.conf
+  copy:
+    src: "{{ janitor_policy }}"
+    dest: "{{ janitor_home }}/policy.conf"
+  when: janitor_policy is defined
 - name: env file
   template:
     src: env
