@@ -91,6 +91,7 @@ from .logs import (
     LogFileManager,
     FileSystemLogFileManager,
 )
+from .policy import read_policy
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
 from .schedule import do_schedule_control
@@ -1066,7 +1067,7 @@ class ActiveLocalRun(ActiveRun):
                 resume_branch = await open_resume_branch(
                     main_branch,
                     suite_config.branch_name,
-                    self.queue_item.package
+                    self.queue_item.package,
                     possible_hosters=possible_hosters,
                 )
             except HosterLoginRequired as e:
