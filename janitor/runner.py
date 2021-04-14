@@ -1678,17 +1678,23 @@ async def handle_assign(request):
         await queue_processor.finish_run(active_run.queue_item, result)
 
     queue_processor = request.app['queue_processor']
-    [item] = await queue_processor.next_queue_item(1)
+    item = None
+    while item is None:
+        [item] = await queue_processor.next_queue_item(1)
+        active_run = ActiveRemoteRun(
+            worker_name=worker,
+            queue_item=item,
+            jenkins_metadata=json.get("jenkins"),
+        )
+
+        queue_processor.register_run(active_run)
+
+        if item.branch_url is None:
+            # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
+            await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
+            item = None
 
     suite_config = get_suite_config(queue_processor.config, item.suite)
-
-    active_run = ActiveRemoteRun(
-        worker_name=worker,
-        queue_item=item,
-        jenkins_metadata=json.get("jenkins"),
-    )
-
-    queue_processor.register_run(active_run)
 
     # This is simple for now, since we only support one distribution.
     builder = get_builder(queue_processor.config, suite_config)
@@ -1710,7 +1716,7 @@ async def handle_assign(request):
                 resume_branch = await open_resume_branch(
                     main_branch,
                     suite_config.branch_name,
-                    active_run.package,
+                    item.package,
                     possible_hosters=possible_hosters,
                 )
             else:
