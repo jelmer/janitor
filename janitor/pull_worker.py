@@ -600,9 +600,7 @@ async def main(argv=None):
             try:
                 result = await main_task
             except WorkerFailure as e:
-                metadata["code"] = e.code
-                metadata["description"] = e.description
-                metadata['details'] = e.details
+                metadata.update(e.json())
                 logging.info("Worker failed (%s): %s", e.code, e.description)
                 # This is a failure for the worker, but returning 0 will cause
                 # jenkins to mark the job having failed, which is not really
