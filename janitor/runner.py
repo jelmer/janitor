@@ -854,7 +854,7 @@ async def open_canonical_main_branch(conn, queue_item, possible_transports=None)
     )
 
 
-async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
+async def open_resume_branch(main_branch, suite_name, package, possible_hosters=None):
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
@@ -873,13 +873,16 @@ async def open_resume_branch(main_branch, branch_name, possible_hosters=None):
         return None
     else:
         try:
-            (
-                resume_branch,
-                unused_overwrite,
-                unused_existing_proposal,
-            ) = find_existing_proposed(
-                    main_branch, hoster, branch_name,
-                    preferred_schemes=['https', 'git', 'bzr'])
+            for option in [suite_name, ('%s/main' % suite_name), ('%s/main/%s' % (suite_name, package))]:
+                (
+                    resume_branch,
+                    unused_overwrite,
+                    unused_existing_proposal,
+                ) = find_existing_proposed(
+                        main_branch, hoster, suite_name,
+                        preferred_schemes=['https', 'git', 'bzr'])
+                if resume_branch:
+                    break
         except NoSuchProject as e:
             logging.warning("Project %s not found", e.project)
             return None
@@ -1057,7 +1060,8 @@ class ActiveLocalRun(ActiveRun):
             try:
                 resume_branch = await open_resume_branch(
                     main_branch,
-                    '%s/%s' % (suite_config.branch_name, 'main'),
+                    suite_config.branch_name,
+                    self.queue_item.package
                     possible_hosters=possible_hosters,
                 )
             except HosterLoginRequired as e:
@@ -1671,7 +1675,8 @@ async def handle_assign(request):
             if not item.refresh:
                 resume_branch = await open_resume_branch(
                     main_branch,
-                    '%s/%s' % (suite_config.branch_name, 'main'),
+                    suite_config.branch_name,
+                    active_run.package,
                     possible_hosters=possible_hosters,
                 )
             else:
