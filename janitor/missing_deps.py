@@ -27,10 +27,8 @@ from debian.changelog import Version
 from ognibuild import Requirement
 from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
-from ognibuild.resolver.apt import resolve_requirement_apt
 from ognibuild.session.plain import PlainSession
 from buildlog_consultant import problem_clses
-from lintian_brush.debianize import find_upstream, UpstreamInfo
 
 from janitor import state
 from janitor.candidates import store_candidates
@@ -70,79 +68,6 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
             yield row['package'], row['suite'], requirement
 
 
-@dataclass
-class NewPackage:
-
-    upstream_info: UpstreamInfo
-
-    def json(self):
-        return {'action': 'new-package', 'upstream-info': self.upstream_info.json()}
-
-
-@dataclass
-class UpdatePackage:
-
-    name: str
-    desired_version: Optional[Version] = None
-
-    def json(self):
-        return {
-            'action': 'update-package',
-            'package': self.name,
-            'desired-version': self.desired_version,
-            }
-
-
-async def resolve_requirement(conn, apt_mgr, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
-    apt_opts = resolve_requirement_apt(apt_mgr, requirement)
-    options = []
-    if apt_opts:
-        for apt_req in apt_opts:
-            option: Optional[List[Union[NewPackage, UpdatePackage]]] = []
-            for entry in apt_req.relations:
-                for r in entry:
-                    versions = apt_mgr.package_versions(r['name'])
-                    if not versions:
-                        upstream = find_upstream(apt_req)
-                        if upstream:
-                            option.append(NewPackage(upstream))
-                        else:
-                            option = None
-                            break
-                    else:
-                        if not r.get('version'):
-                            logging.debug('package already available: %s', r['name'])
-                        elif r['version'][0] == '>=':
-                            depcache = apt_pkg.DepCache(apt_mgr.apt_cache._cache)
-                            depcache.init()
-                            version = depcache.get_candidate_ver(apt_mgr.apt_cache._cache[r['name']])
-                            if not version:
-                                logging.warning(
-                                    'unable to find source package matching %s', r['name'])
-                                option = None
-                                break
-                            file, index = version.file_list.pop(0)
-                            records = apt_pkg.PackageRecords(apt_mgr.apt_cache._cache)
-                            records.lookup((file, index))
-                            option.append(UpdatePackage(records.source_pkg, r['version'][1]))
-                        else:
-                            logging.warning("don't know what to do with constraint %r", r['version'])
-                            option = None
-                            break
-                if option is None:
-                    break
-            if option == []:
-                return [[]]
-            if option is not None:
-                options.append(option)
-    else:
-        upstream = find_upstream(requirement)
-        if upstream:
-            options.append([NewPackage(upstream)])
-
-    return options
-
-
 async def schedule_new_package(conn, upstream_info, policy, requestor=None):
     package = upstream_info['name'].replace('/', '-') + '-upstream'
     logging.info(
@@ -172,7 +97,7 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement, neede
     requestor = 'schedule-missing-deps'
     if needed_by is not None:
         requestor += ' (needed by %s)' % needed_by
-    actions = await resolve_requirement(conn, apt_mgr, requirement)
+    actions = await resolve_requirement(apt_mgr, requirement)
     logging.debug('%s: %r', requirement, actions)
     if actions == []:
         # We don't know what to do
