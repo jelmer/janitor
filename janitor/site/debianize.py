@@ -1,5 +1,7 @@
 from . import html_template
 from ..config import get_suite_config
+from lintian_brush.lintian_overrides import load_renamed_tags
+renamed_tags = load_renamed_tags()
 
 
 @html_template("debianize-start.html", headers={"Cache-Control": "max-age=60"})
@@ -40,6 +42,45 @@ async def handle_debianize_pkg(request):
     )
 
 
+@html_template("debianize-tag.html", headers={"Cache-Control": "max-age=600"})
+async def handle_debianize_tag_page(request):
+    tag = request.match_info["tag"]
+    oldnames = []
+    for oldname, newname in renamed_tags.items():
+        if newname == tag:
+            oldnames.append(oldname)
+    async with request.app.database.acquire() as conn:
+        issues = await conn.fetch("""
+select path, name, lintian_results.context, severity from run inner join lintian_results on lintian_results.run_id = run.id where suite = 'debianize' AND lintian_results.name = $1
+""", tag)
+    return {
+        "tag": tag,
+        "oldnames": oldnames,
+        "issues": issues,
+    }
+
+
+@html_template(
+    "debianize-tag-list.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_debianize_lintian_tag_list(request):
+    async with request.app.database.acquire() as conn:
+        tags = []
+        oldnames = {}  # type: Dict[str, List[str]]
+        for tag, cnt in await conn.fetch("""
+select lintian_results.name, count(*) from run inner join lintian_results on
+lintian_results.run_id = run.id where suite = 'debianize' group by
+lintian_results.name order by 2 desc
+"""):
+            try:
+                newname = renamed_tags[tag]
+            except KeyError:
+                tags.append((tag, cnt))
+            else:
+                oldnames.setdefault(newname, []).append(tag)
+        return {"tags": tags, "oldnames": oldnames}
+
+
 def register_debianize_endpoints(router):
     router.add_get(
         "/debianize/",
@@ -55,4 +96,13 @@ def register_debianize_endpoints(router):
         handle_debianize_pkg,
         name="debianize-package-run",
     )
-
+    router.add_get(
+        "/cupboard/debianize/lintian/",
+        handle_debianize_lintian_tag_list,
+        name="debianize-lintian-tag-list",
+    )
+    router.add_get(
+        "/cupboard/debianize/lintian/{tag}",
+        handle_debianize_tag_page,
+        name="debianize-tag",
+    )

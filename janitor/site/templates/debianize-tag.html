@@ -1,0 +1,19 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "debianize-sidebar.html" %}{% endblock %}
+{% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
+{% from "run_util.html" import display_lintian_hintitem %}
+{% block page_title %}Lintian Fixes - for {{ tag }}{% endblock %}
+{% block body %}
+<div class="section" id="tag-list">
+<h1>Lintian tag <i>{{ tag }}</i></h1>
+
+<p>Lintian Info page: {{ lintian_tag_link(tag) }}</p>
+
+<ul class="lintian-hintlist">
+{% for issue in issues %}
+    {{ display_lintian_hintitem(issue) }}
+{% endfor %}
+</ul>
+
+</div>
+{% endblock %}

@@ -57,7 +57,7 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
                 if kind.startswith(prefix):
                     kind = kind[len(prefix):]
             try:
-                problem = problem_clses[kind](**row['failure_details'])
+                problem = problem_clses[kind].from_json(row['failure_details'])
             except KeyError:
                 continue
             requirement = problem_to_upstream_requirement(problem)
