@@ -33,6 +33,7 @@ from buildlog_consultant import problem_clses
 from janitor import state
 from janitor.candidates import store_candidates
 from janitor.config import read_config
+from janitor.debian.missing_deps import NewPackage, UpdatePackage, resolve_requirement
 from janitor.schedule import do_schedule
 from janitor.policy import sync_policy, read_policy
 
