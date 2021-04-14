@@ -42,6 +42,17 @@ DEFAULT_NEW_PACKAGE_PRIORITY = 150
 DEFAULT_SUCCESS_CHANCE = 0.5
 
 
+def reconstruct_problem(result_code, failure_details):
+    kind = result_code
+    for prefix in ['build-', 'post-build-', 'dist-', 'install-deps-']:
+        if kind.startswith(prefix):
+            kind = kind[len(prefix):]
+    try:
+        return problem_clses[kind].from_json(failure_details)
+    except KeyError:
+        return None
+
+
 async def gather_requirements(db, session, run_ids=None):
     async with db.acquire() as conn:
         query = """
@@ -52,14 +63,7 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
             query += " AND id = ANY($1::text[])"
             args.append(run_ids)
         for row in await conn.fetch(query, *args):
-            kind = row['result_code']
-            for prefix in ['build-', 'post-build-', 'dist-', 'install-deps-']:
-                if kind.startswith(prefix):
-                    kind = kind[len(prefix):]
-            try:
-                problem = problem_clses[kind].from_json(row['failure_details'])
-            except KeyError:
-                continue
+            problem = reconstruct_problem(row['result_code'], row['failure_details'])
             requirement = problem_to_upstream_requirement(problem)
             if requirement is None:
                 continue
@@ -71,12 +75,22 @@ class NewPackage:
 
     upstream_info: UpstreamInfo
 
+    def json(self):
+        return {'action': 'new-package', 'upstream-info': self.upstream_info.json()}
+
 
 @dataclass
 class UpdatePackage:
 
     name: str
     desired_version: Optional[Version] = None
+
+    def json(self):
+        return {
+            'action': 'update-package',
+            'package': self.name,
+            'desired-version': self.desired_version,
+            }
 
 
 async def resolve_requirement(conn, apt_mgr, requirement: Requirement) -> List[List[Union[NewPackage, UpdatePackage]]]:
@@ -129,6 +143,31 @@ async def resolve_requirement(conn, apt_mgr, requirement: Requirement) -> List[L
     return options
 
 
+async def schedule_new_package(conn, upstream_info, policy, requestor=None):
+    package = upstream_info['name'].replace('/', '-') + '-upstream'
+    logging.info(
+        "Creating new upstream %s => %s",
+        package, upstream_info['branch_url'])
+    await conn.execute(
+        "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email) "
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        package, 'upstream', upstream_info['branch_url'], '',
+        'dummy@example.com')
+    await store_candidates(
+        conn,
+        [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
+          DEFAULT_SUCCESS_CHANCE)])
+    await sync_policy(conn, policy, package=package)
+    await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps')
+
+
+async def schedule_update_package(conn, package, desired_version, requestor=None):
+    logging.info('Scheduling new run for %s/fresh-releases', package)
+    # TODO(jelmer): Do something with desired_version
+    # TODO(jelmer): fresh-snapshots?
+    await do_schedule(conn, package, "fresh-releases", requestor=requestor, bucket='missing-deps')
+
+
 async def followup_missing_requirement(conn, apt_mgr, policy, requirement, needed_by=None):
     requestor = 'schedule-missing-deps'
     if needed_by is not None:
@@ -143,25 +182,9 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement, neede
         # We don't need to do anything - could retry things that need this?
         return False
     if isinstance(actions[0][0], NewPackage):
-        package = actions[0][0].upstream_info.name.replace('/', '-') + '-upstream'
-        logging.info(
-            "Creating new upstream %s => %s",
-            package, actions[0][0].upstream_info.branch_url)
-        await conn.execute(
-            "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email) "
-            "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
-            package, 'upstream', actions[0][0].upstream_info.branch_url, '',
-            'dummy@example.com')
-        await store_candidates(
-            conn,
-            [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
-              DEFAULT_SUCCESS_CHANCE)])
-        await sync_policy(conn, policy, package=package)
-        await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps')
+        await schedule_new_package(conn, actions[0][0].upstream_info.json(), policy, requestor=requestor)
     elif isinstance(actions[0][0], UpdatePackage):
-        logging.info('Scheduling new run for %s/fresh-releases', actions[0][0].name)
-        # TODO(jelmer): fresh-snapshots?
-        await do_schedule(conn, actions[0][0].name, "fresh-releases", requestor=requestor, bucket='missing-deps')
+        await schedule_update_package(conn, actions[0][0].name, actions[0][0].desired_version, requestor=requestor)
     else:
         raise NotImplementedError('unable to deal with %r' % actions[0][0])
     return True

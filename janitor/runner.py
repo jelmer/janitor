@@ -392,6 +392,7 @@ class JanitorResult(object):
             self.failure_details = worker_result.details
             self.start_time = worker_result.start_time
             self.finish_time = worker_result.finish_time
+            self.followup_actions = worker_result.followup_actions
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -405,6 +406,7 @@ class JanitorResult(object):
             self.tags = None
             self.failure_details = None
             self.remotes = {}
+            self.followup_actions = []
 
     def json(self):
         return {
@@ -475,7 +477,8 @@ class WorkerResult(object):
         start_time=None,
         finish_time=None,
         queue_id=None,
-        worker_name=None
+        worker_name=None,
+        followup_actions=None,
     ):
         self.code = code
         self.description = description
@@ -493,6 +496,7 @@ class WorkerResult(object):
         self.finish_time = finish_time
         self.queue_id = queue_id
         self.worker_name = worker_name
+        self.followup_actions = followup_actions
 
     @classmethod
     def from_file(cls, path):
@@ -546,7 +550,8 @@ class WorkerResult(object):
             datetime.fromisoformat(worker_result['finish_time'])
             if 'finish_time' in worker_result else None,
             worker_result.get("queue_id"),
-            worker_result.get("worker_name")
+            worker_result.get("worker_name"),
+            worker_result.get("followup_actions")
         )
 
 
@@ -1343,7 +1348,7 @@ async def store_run(
         )
 
 
-async def followup_run(database, item, result):
+async def followup_run(database, policy, item, result: JanitorResult):
     if result.code == "success" and item.suite != "unchanged":
         async with database.acquire() as conn:
             run = await conn.fetchrow(
@@ -1359,12 +1364,35 @@ async def followup_run(database, item, result):
                     estimated_duration=duration,
                     requestor="control",
                 )
+    if result.followup_actions and result.code != 'success':
+        from .missing_deps import schedule_new_package
+        async with database.acquire() as conn:
+            for scenario in result.followup_actions:
+                for action in scenario:
+                    if action['action'] == 'new-package':
+                        await schedule_new_package(
+                            conn, action['upstream_info'],
+                            policy,
+                            requestor='schedule-missing-deps (needed by %s)' % item.package)
+                    elif action['action'] == 'update-package':
+                        await schedule_update_package(
+                            conn, action['package'], action['desired_version'],
+                            requestor=requestor)
+        from .missing_deps import reconstruct_problem, problem_to_upstream_requirement
+        problem = reconstruct_problem(result.code, result.failure_details)
+        if problem is not None:
+            requirement = problem_to_upstream_requirement(problem)
+        else:
+            requirement = None
+        if requirement:
+            logging.info('TODO: attempt to find a resolution for %r', requirement)
 
 
 class QueueProcessor(object):
     def __init__(
         self,
         database,
+        policy,
         config,
         worker_kind,
         dry_run=False,
@@ -1385,6 +1413,7 @@ class QueueProcessor(object):
           worker_kind: The kind of worker to run ('local', 'gcb')
         """
         self.database = database
+        self.policy = policy
         self.config = config
         self.worker_kind = worker_kind
         self.dry_run = dry_run
@@ -1477,7 +1506,7 @@ class QueueProcessor(object):
         del self.active_runs[result.log_id]
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
-        await followup_run(self.database, item, result)
+        await followup_run(self.database, self.policy, item, result)
 
     async def next_queue_item(self, n) -> List[state.QueueItem]:
         ret: List[state.QueueItem] = []
@@ -1904,7 +1933,9 @@ def main(argv=None):
     parser.add_argument(
         "--public-vcs-location", type=str, default="https://janitor.debian.net/"
     )
-
+    parser.add_argument(
+        "--policy", type=str, default="policy.conf", help="Path to policy."
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO)
@@ -1942,8 +1973,11 @@ def main(argv=None):
         backup_artifact_manager = None
         backup_logfile_manager = None
     db = state.Database(config.database_location)
+    with open(args.policy, 'r') as f:
+        policy = read_policy(f)
     queue_processor = QueueProcessor(
         db,
+        policy,
         config,
         args.worker,
         args.dry_run,
