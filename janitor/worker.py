@@ -333,6 +333,16 @@ class WorkerFailure(Exception):
         self.details = details
         self.followup_actions = followup_actions
 
+    def json(self):
+        ret = {
+            "code": self.code,
+            "description": self.description,
+            'details': self.details,
+            }
+        if self.followup_actions:
+            ret['followup_actions'] = [action.json() for action in self.followup_actions]
+        return ret
+
 
 CUSTOM_DEBIAN_SUBCOMMANDS = {
     "just-build": DummyDebianChanger,
@@ -932,11 +942,7 @@ def main(argv=None):
             else:
                 ws.defer_destroy()
     except WorkerFailure as e:
-        metadata["code"] = e.code
-        metadata["description"] = e.description
-        metadata['details'] = e.details
-        if e.followup_actions:
-            metadata['followup_actions'] = [action.json() for action in e.followup_actions]
+        metadata.update(e.json())
         logger.info("Worker failed (%s): %s", e.code, e.description)
         return 0
     except OSError as e:
