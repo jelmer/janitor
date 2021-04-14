@@ -340,7 +340,7 @@ class WorkerFailure(Exception):
             'details': self.details,
             }
         if self.followup_actions:
-            ret['followup_actions'] = [action.json() for action in self.followup_actions]
+            ret['followup_actions'] = [[action.json() for action in scenario] for scenario in self.followup_actions]
         return ret
 
 
