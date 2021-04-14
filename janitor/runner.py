@@ -1343,6 +1343,24 @@ async def store_run(
         )
 
 
+async def followup_run(database, item, result):
+    if result.code == "success" and item.suite != "unchanged":
+        async with database.acquire() as conn:
+            run = await conn.fetchrow(
+                "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
+                result.package, result.main_branch_revision.decode('utf-8')
+            )
+            if run is None:
+                logging.info("Scheduling control run for %s.", item.package)
+                await do_schedule_control(
+                    conn,
+                    item.package,
+                    result.main_branch_revision,
+                    estimated_duration=duration,
+                    requestor="control",
+                )
+
+
 class QueueProcessor(object):
     def __init__(
         self,
@@ -1426,21 +1444,6 @@ class QueueProcessor(object):
         build_duration.labels(package=item.package, suite=item.suite).observe(
             duration.total_seconds()
         )
-        if result.code == "success" and item.suite != "unchanged":
-            async with self.database.acquire() as conn:
-                run = await conn.fetchrow(
-                    "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
-                    result.package, result.main_branch_revision.decode('utf-8')
-                )
-                if run is None:
-                    logging.info("Scheduling control run for %s.", item.package)
-                    await do_schedule_control(
-                        conn,
-                        item.package,
-                        result.main_branch_revision,
-                        estimated_duration=duration,
-                        requestor="control",
-                    )
         if not self.dry_run:
             async with self.database.acquire() as conn, conn.transaction():
                 await store_run(
@@ -1474,6 +1477,7 @@ class QueueProcessor(object):
         del self.active_runs[result.log_id]
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
+        await followup_run(self.database, item, result)
 
     async def next_queue_item(self, n) -> List[state.QueueItem]:
         ret: List[state.QueueItem] = []
