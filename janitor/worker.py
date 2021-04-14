@@ -327,10 +327,11 @@ class WorkerResult(object):
 class WorkerFailure(Exception):
     """Worker processing failed."""
 
-    def __init__(self, code: str, description: str, details: Optional[Any] = None) -> None:
+    def __init__(self, code: str, description: str, details: Optional[Any] = None, followup_actions: Optional[List[Any]] = None) -> None:
         self.code = code
         self.description = description
         self.details = details
+        self.followup_actions = followup_actions
 
 
 CUSTOM_DEBIAN_SUBCOMMANDS = {
@@ -531,7 +532,17 @@ class DebianTarget(Target):
                         details = e.error.json()
                     except NotImplementedError:
                         details = None
-                    raise WorkerFailure(code, e.description, details=details)
+                        actions = None
+                    else:
+                        from .debian.missing_deps import resolve_requirement
+                        from ognibuild.buildlog import problem_to_upstream_requirement
+                        # Maybe there's a follow-up action we can consider?
+                        req = problem_to_upstream_requirement(e.error)
+                        if req:
+                            actions = resolve_requirement(apt, req)
+                        else:
+                            actions = None
+                    raise WorkerFailure(code, e.description, details=details, actions=actions)
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
@@ -922,6 +933,7 @@ def main(argv=None):
         metadata["code"] = e.code
         metadata["description"] = e.description
         metadata['details'] = e.details
+        metadata['followup_actions'] = e.followup_actions
         logger.info("Worker failed (%s): %s", e.code, e.description)
         return 0
     except OSError as e:
