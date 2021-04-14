@@ -540,9 +540,11 @@ class DebianTarget(Target):
                         req = problem_to_upstream_requirement(e.error)
                         if req:
                             actions = resolve_requirement(apt, req)
+                            if actions:
+                                logging.info('Suggesting follow-up actions: %r', actions)
                         else:
                             actions = None
-                    raise WorkerFailure(code, e.description, details=details, actions=actions)
+                    raise WorkerFailure(code, e.description, details=details, followup_actions=actions)
                 except UnidentifiedDebianBuildError as e:
                     if e.stage is not None:
                         code = "build-failed-stage-%s" % e.stage
@@ -933,7 +935,8 @@ def main(argv=None):
         metadata["code"] = e.code
         metadata["description"] = e.description
         metadata['details'] = e.details
-        metadata['followup_actions'] = e.followup_actions
+        if e.followup_actions:
+            metadata['followup_actions'] = [action.json() for action in e.followup_actions]
         logger.info("Worker failed (%s): %s", e.code, e.description)
         return 0
     except OSError as e:
