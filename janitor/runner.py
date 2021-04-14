@@ -1057,7 +1057,7 @@ class ActiveLocalRun(ActiveRun):
             try:
                 resume_branch = await open_resume_branch(
                     main_branch,
-                    suite_config.branch_name,
+                    '%s/%s' % (suite_config.branch_name, 'main'),
                     possible_hosters=possible_hosters,
                 )
             except HosterLoginRequired as e:
@@ -1671,7 +1671,7 @@ async def handle_assign(request):
             if not item.refresh:
                 resume_branch = await open_resume_branch(
                     main_branch,
-                    suite_config.branch_name,
+                    '%s/%s' % (suite_config.branch_name, 'main'),
                     possible_hosters=possible_hosters,
                 )
             else:
