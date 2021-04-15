@@ -409,6 +409,10 @@ class JanitorResult(object):
             self.remotes = {}
             self.followup_actions = []
 
+    @property
+    def duration(self):
+        return self.finish_time - self.start_time
+
     def json(self):
         return {
             "package": self.package,
@@ -1362,11 +1366,12 @@ async def followup_run(database, policy, item, result: JanitorResult):
                     conn,
                     item.package,
                     result.main_branch_revision,
-                    estimated_duration=duration,
+                    estimated_duration=result.duration,
                     requestor="control",
                 )
     if result.followup_actions and result.code != 'success':
-        from .missing_deps import schedule_new_package
+        from .missing_deps import schedule_new_package, schedule_update_package
+        requestor = 'schedule-missing-deps (needed by %s)' % item.package
         async with database.acquire() as conn:
             for scenario in result.followup_actions:
                 for action in scenario:
@@ -1374,7 +1379,7 @@ async def followup_run(database, policy, item, result: JanitorResult):
                         await schedule_new_package(
                             conn, action['upstream_info'],
                             policy,
-                            requestor='schedule-missing-deps (needed by %s)' % item.package)
+                            requestor=requestor)
                     elif action['action'] == 'update-package':
                         await schedule_update_package(
                             conn, action['package'], action['desired_version'],
@@ -1470,9 +1475,8 @@ class QueueProcessor(object):
             package=item.package,
             suite=item.suite,
             result_code=result.code).inc()
-        duration = result.finish_time - result.start_time
         build_duration.labels(package=item.package, suite=item.suite).observe(
-            duration.total_seconds()
+            result.duration.total_seconds()
         )
         if not self.dry_run:
             async with self.database.acquire() as conn, conn.transaction():
