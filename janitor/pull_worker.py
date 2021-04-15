@@ -570,7 +570,6 @@ async def main(argv=None):
             loop = asyncio.get_running_loop()
             watchdog_petter.track_log_directory(output_directory)
 
-            metadata = {}
             start_time = datetime.utcnow()
             main_task = loop.run_in_executor(
                 None,
