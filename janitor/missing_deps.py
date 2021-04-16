@@ -69,16 +69,16 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
             yield row['package'], row['suite'], requirement
 
 
-async def schedule_new_package(conn, upstream_info, policy, requestor=None):
+async def schedule_new_package(conn, upstream_info, policy, requestor=None, origin=None):
     package = upstream_info['name'].replace('/', '-') + '-upstream'
     logging.info(
         "Creating new upstream %s => %s",
         package, upstream_info['branch_url'])
     await conn.execute(
-        "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email) "
-        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+        "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email, origin) "
+        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
         package, 'upstream', upstream_info['branch_url'], '',
-        'dummy@example.com')
+        'dummy@example.com', origin)
     await store_candidates(
         conn,
         [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
@@ -97,7 +97,10 @@ async def schedule_update_package(conn, package, desired_version, requestor=None
 async def followup_missing_requirement(conn, apt_mgr, policy, requirement, needed_by=None):
     requestor = 'schedule-missing-deps'
     if needed_by is not None:
+        origin = 'dependency of %s' % needed_by
         requestor += ' (needed by %s)' % needed_by
+    else:
+        origin = None
     actions = await resolve_requirement(apt_mgr, requirement)
     logging.debug('%s: %r', requirement, actions)
     if actions == []:
@@ -108,9 +111,13 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement, neede
         # We don't need to do anything - could retry things that need this?
         return False
     if isinstance(actions[0][0], NewPackage):
-        await schedule_new_package(conn, actions[0][0].upstream_info.json(), policy, requestor=requestor)
+        await schedule_new_package(
+            conn, actions[0][0].upstream_info.json(), policy,
+            requestor=requestor, origin=origin)
     elif isinstance(actions[0][0], UpdatePackage):
-        await schedule_update_package(conn, actions[0][0].name, actions[0][0].desired_version, requestor=requestor)
+        await schedule_update_package(
+            conn, actions[0][0].name, actions[0][0].desired_version,
+            requestor=requestor)
     else:
         raise NotImplementedError('unable to deal with %r' % actions[0][0])
     return True

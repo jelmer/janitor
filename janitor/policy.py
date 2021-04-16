@@ -234,7 +234,7 @@ async def sync_policy(conn, policy, package=None):
                 updated = True
         if updated:
             num_updated += 1
-
+    return num_updated
 
 
 async def main(argv):

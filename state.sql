@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS package (
    vcswatch_status vcswatch_status,
    vcswatch_version debversion,
    in_base boolean,
+   origin text,
    unique(distribution, name)
 );
 CREATE INDEX ON package (removed);
