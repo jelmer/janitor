@@ -23,6 +23,8 @@ message PackageMetadata {
    optional bool in_base = 13;
 
    optional bool removed = 12 [default=false];
+
+   optional string origin = 14;
 };
 
 message PackageRemoval {
