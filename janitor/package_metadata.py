@@ -45,7 +45,7 @@ from lintian_brush.vcs import (
 
 
 async def update_package_metadata(
-    conn, distribution: str, provided_packages, package_overrides
+    conn, distribution: str, provided_packages, package_overrides, origin
 ):
     logging.info("Updating package metadata.")
     packages = []
@@ -109,6 +109,7 @@ async def update_package_metadata(
                 package.insts,
                 package.removed,
                 package.in_base,
+                origin
             )
         )
     await conn.executemany(
@@ -116,8 +117,8 @@ async def update_package_metadata(
         "(name, distribution, branch_url, subpath, maintainer_email, "
         "uploader_emails, archive_version, vcs_type, vcs_url, vcs_browse, "
         "vcs_last_revision, vcswatch_status, vcswatch_version, popcon_inst, "
-        "removed, in_base) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
-        "$13, $14, $15, $16) ON CONFLICT (name, distribution) DO UPDATE SET "
+        "removed, in_base, origin) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, "
+        "$13, $14, $15, $16, $17) ON CONFLICT (name, distribution) DO UPDATE SET "
         "branch_url = EXCLUDED.branch_url, "
         "subpath = EXCLUDED.subpath, "
         "maintainer_email = EXCLUDED.maintainer_email, "
@@ -213,7 +214,8 @@ async def main():
             'Updating package data for %d packages',
             len(packages))
         await update_package_metadata(
-            conn, args.distribution, packages, package_overrides
+            conn, args.distribution, packages, package_overrides,
+            args.package_overrides
         )
         if removals:
             logging.info('Removing %d packages', len(removals))

@@ -46,7 +46,7 @@ select distinct on (sources.source) sources.source || '-upstream',
         yield row
 
 
-def create_package(pl, name, vcs_type, branch_url, subpath):
+def create_package(pl, name, vcs_type, branch_url, subpath, origin):
     package = pl.package.add()
     package.name = name
     # TODO(jelmer): Detect this somehow, or leave something further
@@ -54,6 +54,7 @@ def create_package(pl, name, vcs_type, branch_url, subpath):
     package.vcs_type = 'Git'
     package.vcs_url = unsplit_vcs_url(branch_url, None, subpath)
     package.maintainer_email = "dummy@example.com"
+    package.origin = origin
     return package
 
 
@@ -73,7 +74,7 @@ async def main():
         udd, args.packages
     ):
         pl = PackageList()
-        create_package(pl, name, 'Git', branch_url, subpath)
+        create_package(pl, name, 'Git', branch_url, subpath, origin='UDD')
         print(pl)
 
     if args.extra_upstream_projects:
@@ -83,7 +84,8 @@ async def main():
             pl = PackageList()
             create_package(
                 pl, upstream_project.name + '-upstream', upstream_project.vcs_type,
-                upstream_project.vcs_url, upstream_project.subpath)
+                upstream_project.vcs_url, upstream_project.subpath,
+                origin=args.extra_upstream_projects)
             print(pl)
 
 
