@@ -428,3 +428,6 @@ SELECT
   archive_version AS version
 FROM
   package;
+
+CREATE VIEW lintian_results AS
+   select run_id, path, name, context, severity from debian_build, json_to_recordset(lintian_result->'groups'->0->'input-files') as entries(path text, tags json), json_to_recordset(tags) as hint(context text, name text, severity text);

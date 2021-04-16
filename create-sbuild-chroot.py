@@ -10,9 +10,12 @@ from iniparse import RawConfigParser
 from janitor.config import read_config
 
 
-def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[]):
+def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydata=True):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path, distro.archive_mirror_uri]
     cmd.append("--components=%s" % ','.join(distro.component))
+    if eatmydata:
+        cmd.append("--command-prefix=eatmydata")
+        include = list(include) + ["eatmydata"]
     if include:
         cmd.append("--include=%s" % ','.join(include))
     for suite in suites:
