@@ -98,6 +98,3 @@ def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[Ne
             options.append([NewPackage(upstream)])
 
     return options
-
-
-

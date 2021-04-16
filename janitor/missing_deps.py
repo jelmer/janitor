@@ -34,7 +34,7 @@ from janitor import state
 from janitor.candidates import store_candidates
 from janitor.config import read_config
 from janitor.debian.missing_deps import NewPackage, UpdatePackage, resolve_requirement
-from janitor.schedule import do_schedule
+from janitor.schedule import do_schedule, full_command
 from janitor.policy import sync_policy, read_policy
 
 DEFAULT_NEW_PACKAGE_PRIORITY = 150
@@ -84,7 +84,15 @@ async def schedule_new_package(conn, upstream_info, policy, requestor=None, orig
         [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
           DEFAULT_SUCCESS_CHANCE)])
     await sync_policy(conn, policy, package=package)
-    await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps')
+    policy = await conn.fetchrow(
+        "SELECT update_changelog, command "
+        "FROM policy WHERE package = $1 AND suite = $2",
+        package, 'debianize')
+    command = policy['command']
+    if upstream_info.version:
+        command += ' --upstream-version=%s' % upstream_info.version
+    command = full_command(policy['update_changelog'], command)
+    await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps', command=command)
 
 
 async def schedule_update_package(conn, package, desired_version, requestor=None):

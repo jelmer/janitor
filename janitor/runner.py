@@ -1377,12 +1377,12 @@ async def followup_run(database, policy, item, result: JanitorResult):
                 for action in scenario:
                     if action['action'] == 'new-package':
                         await schedule_new_package(
-                            conn, action['upstream_info'],
+                            conn, action['upstream-info'],
                             policy,
                             requestor=requestor)
                     elif action['action'] == 'update-package':
                         await schedule_update_package(
-                            conn, action['package'], action['desired_version'],
+                            conn, action['package'], action['desired-version'],
                             requestor=requestor)
         from .missing_deps import reconstruct_problem, problem_to_upstream_requirement
         problem = reconstruct_problem(result.code, result.failure_details)
@@ -1508,7 +1508,10 @@ class QueueProcessor(object):
                     await result.builder_result.store(conn, result.log_id)
                 await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
         self.topic_result.publish(result.json())
-        del self.active_runs[result.log_id]
+        try:
+            del self.active_runs[result.log_id]
+        except KeyError:
+            pass
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
         await followup_run(self.database, self.policy, item, result)
@@ -1675,9 +1678,7 @@ async def handle_assign(request):
         result = active_run.create_result(
             branch_url=active_run.main_branch_url,
             code=code,
-            description=description,
-            start_time=datetime.utcnow(),
-            finish_time=datetime.utcnow(),
+            description=description
         )
         await queue_processor.finish_run(active_run.queue_item, result)
 
