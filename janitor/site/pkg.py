@@ -2,7 +2,7 @@
 
 from aiohttp import ClientConnectorError
 from datetime import datetime
-from functools import partial, cache
+from functools import partial
 from io import BytesIO
 from typing import Optional, Tuple
 import urllib.parse
@@ -124,7 +124,6 @@ async def generate_run_file(
     kwargs["is_admin"] = is_admin
     kwargs["publish_history"] = publish_history
 
-    @cache
     async def show_diff(role):
         try:
             (remote_name, base_revid, revid) = state.get_result_branch(
@@ -145,7 +144,6 @@ async def generate_run_file(
 
     kwargs["show_diff"] = show_diff
 
-    @cache
     async def show_debdiff():
         if run['result_code'] != 'success':
             return ""
@@ -177,14 +175,14 @@ async def generate_run_file(
 
     kwargs["read_file"] = read_file
 
-    @cache
     async def vcs_type():
         return await get_vcs_type(client, vcs_store_url, run['package'])
 
     kwargs["vcs_type"] = vcs_type
     kwargs["in_line_boundaries"] = in_line_boundaries
 
-    @cache
+    cache_logs = {}
+
     async def _get_log(name):
         try:
             return (await logfile_manager.get_log(run['package'], run['id'], name)).read()
@@ -200,7 +198,9 @@ async def generate_run_file(
         if name not in run['logfilenames']:
             log = None
         else:
-            log = await _get_log(name)
+            if name not in cache_logs:
+                cache_logs[name] = await _get_log(name)
+            log = cache_logs[name] 
         if log is None:
             return BytesIO(b"Log file missing.")
         return BytesIO(log)

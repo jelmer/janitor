@@ -3,7 +3,7 @@
 from aiohttp import ClientConnectorError
 from aiohttp import web
 import asyncpg
-from functools import partial, cache
+from functools import partial
 from typing import Optional, List, Tuple, AsyncIterable
 import urllib.parse
 
@@ -231,7 +231,6 @@ WHERE run.package = $1 AND run.suite = $2
             conn, suite, package['name']
         )
 
-    @cache
     async def show_diff(role):
         try:
             (remote_name, base_revid, revid) = state.get_result_branch(run['result_branches'], role)
@@ -249,7 +248,6 @@ WHERE run.package = $1 AND run.suite = $2
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
 
-    @cache
     async def show_debdiff():
         if not run['build_version']:
             return ""
@@ -271,7 +269,6 @@ WHERE run.package = $1 AND run.suite = $2
         except DebdiffRetrievalError as e:
             return "Error retrieving debdiff: %s" % e
 
-    @cache
     async def vcs_type():
         return await get_vcs_type(client, vcs_store_url, run['package'])
 
