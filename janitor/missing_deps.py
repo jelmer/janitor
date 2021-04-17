@@ -70,15 +70,17 @@ SELECT package, suite, result_code, failure_details FROM last_unabsorbed_runs WH
 
 
 async def schedule_new_package(conn, upstream_info, policy, requestor=None, origin=None):
+    from debmutate.vcs import unsplit_vcs_url
     package = upstream_info['name'].replace('/', '-') + '-upstream'
     logging.info(
         "Creating new upstream %s => %s",
         package, upstream_info['branch_url'])
+    vcs_url = unsplit_vcs_url(upstream_info['branch_url'], None, upstream_info['subpath'])
     await conn.execute(
-        "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email, origin) "
-        "VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
+        "INSERT INTO package (name, distribution, branch_url, subpath, maintainer_email, origin, vcs_url) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
         package, 'upstream', upstream_info['branch_url'], '',
-        'dummy@example.com', origin)
+        'dummy@example.com', origin, vcs_url)
     await store_candidates(
         conn,
         [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
