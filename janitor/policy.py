@@ -270,7 +270,7 @@ async def main(argv):
     db = state.Database(config.database_location)
     async with db.acquire() as conn:
         num_updated = await sync_policy(
-            conn, policy, package=args.package)
+            conn, policy, selected_package=args.package)
     logging.info('Updated policy for %d packages.', num_updated)
 
 
