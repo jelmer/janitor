@@ -201,7 +201,7 @@ FROM
     return await conn.fetch(query, *args)
 
 
-async def sync_policy(conn, policy, package=None):
+async def sync_policy(conn, policy, selected_package=None):
     current_policy = {}
     suites = known_suites(policy)
     if policy.freeze_dates_url:
@@ -210,9 +210,9 @@ async def sync_policy(conn, policy, package=None):
     else:
         release_stages_passed = None
     num_updated = 0
-    async for (package, suite, cur_pol) in iter_policy(conn, package=package):
+    async for (package, suite, cur_pol) in iter_policy(conn, package=selected_package):
         current_policy[(package, suite)] = cur_pol
-    for package in await iter_packages(conn, package=package):
+    for package in await iter_packages(conn, package=selected_package):
         updated = False
         for suite in suites:
             intended_policy = apply_policy(
