@@ -106,7 +106,6 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement, neede
     requestor = 'schedule-missing-deps'
     if needed_by is not None:
         origin = 'dependency of %s' % needed_by
-        requestor += ' (needed by %s)' % needed_by
     else:
         origin = None
     actions = await resolve_requirement(apt_mgr, requirement)
@@ -119,10 +118,14 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement, neede
         # We don't need to do anything - could retry things that need this?
         return False
     if isinstance(actions[0][0], NewPackage):
+        if needed_by:
+            requestor += ' (needed by %s)' % needed_by
         await schedule_new_package(
             conn, actions[0][0].upstream_info.json(), policy,
             requestor=requestor, origin=origin)
     elif isinstance(actions[0][0], UpdatePackage):
+        if needed_by:
+            requestor += ' (%s needed by %s)' % (actions[0][0].desired_version, needed_by)
         await schedule_update_package(
             conn, actions[0][0].name, actions[0][0].desired_version,
             requestor=requestor)
