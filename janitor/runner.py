@@ -1967,6 +1967,8 @@ def main(argv=None):
     artifact_manager = get_artifact_manager(config.artifact_location)
 
     loop = asyncio.get_event_loop()
+    loop.run_until_complete(artifact_manager.__aenter__())
+
     if args.backup_directory:
         backup_logfile_directory = os.path.join(args.backup_directory, "logs")
         backup_artifact_directory = os.path.join(args.backup_directory, "artifacts")
@@ -1976,7 +1978,7 @@ def main(argv=None):
             os.mkdir(backup_artifact_directory)
         backup_artifact_manager = LocalArtifactManager(backup_artifact_directory)
         backup_logfile_manager = FileSystemLogFileManager(backup_logfile_directory)
-        loop.run_until_complete(
+        loop.create_task(
             upload_backup_artifacts(
                 backup_artifact_manager, artifact_manager, timeout=60 * 15
             )
@@ -2005,18 +2007,11 @@ def main(argv=None):
         backup_logfile_manager=backup_logfile_manager,
     )
 
-    async def run():
-        async with artifact_manager:
-            tasks = []
-            if args.concurrency > 0:
-                tasks.append(loop.create_task(queue_processor.process()))
-            tasks.append(
-                loop.create_task(
-                    run_web_server(args.listen_address, args.port, queue_processor)
-                ))
-            return await asyncio.gather(*tasks)
+    if args.concurrency > 0:
+        loop.create_task(queue_processor.process())
+    loop.create_task(run_web_server(args.listen_address, args.port, queue_processor))
 
-    loop.run_until_complete(run())
+    loop.run_forever()
 
 
 if __name__ == "__main__":

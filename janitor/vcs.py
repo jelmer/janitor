@@ -443,6 +443,9 @@ class LocalVcsManager(VcsManager):
     def __init__(self, base_path: str):
         self.base_path = base_path
 
+    def __repr__(self):
+        return "%s(%r)" % (type(self).__name__, self.base_path)
+
     def get_branch(self, codebase, branch_name, vcs_type=None):
         try:
             return get_local_vcs_branch(self.base_path, codebase, branch_name)
