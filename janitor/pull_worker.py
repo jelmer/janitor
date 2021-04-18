@@ -59,6 +59,7 @@ from breezy.transport import Transport
 from silver_platter.proposal import enable_tag_pushing
 
 from janitor.vcs import (
+    LocalVcsManager,
     RemoteVcsManager,
     MirrorFailure,
     import_branches,
@@ -552,7 +553,10 @@ async def main(argv=None):
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 
-        vcs_manager = RemoteVcsManager(args.vcs_location or assignment["vcs_manager"])
+        if args.vcs_location:
+            vcs_manager = LocalVcsManager(args.vcs_location)
+        else:
+            vcs_manager = RemoteVcsManager(assignment["vcs_manager"])
         run_id = assignment["id"]
 
         possible_transports = []
