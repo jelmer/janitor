@@ -2007,12 +2007,14 @@ def main(argv=None):
 
     async def run():
         async with artifact_manager:
-            return await asyncio.gather(
-                loop.create_task(queue_processor.process()),
+            tasks = []
+            if args.concurrency > 0:
+                tasks.append(loop.create_task(queue_processor.process()))
+            tasks.append(
                 loop.create_task(
                     run_web_server(args.listen_address, args.port, queue_processor)
-                ),
-            )
+                ))
+            return await asyncio.gather(*tasks)
 
     loop.run_until_complete(run())
 
