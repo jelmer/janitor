@@ -439,6 +439,8 @@ async def main(argv=None):
         "--credentials", help="Path to credentials file (JSON).", type=str, default=None
     )
     parser.add_argument(
+        "--vcs-location", help="Override VCS location.", type=str)
+    parser.add_argument(
         "--debug",
         help="Print out API communication",
         action="store_true",
@@ -550,7 +552,7 @@ async def main(argv=None):
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 
-        vcs_manager = RemoteVcsManager(assignment["vcs_manager"])
+        vcs_manager = RemoteVcsManager(args.vcs_location or assignment["vcs_manager"])
         run_id = assignment["id"]
 
         possible_transports = []
