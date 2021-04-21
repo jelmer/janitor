@@ -1040,6 +1040,11 @@ async def get_publish_attempt_count(
     )
 
 
+@routes.post("/consider/{run_id}", name="consider")
+async def consider_request(request):
+    raise NotImplementedError
+
+
 @routes.post("/{suite}/{package}/publish", name='publish')
 async def publish_request(request):
     dry_run = request.app['dry_run']
@@ -1198,6 +1203,11 @@ async def run_web_server(
     site = web.TCPSite(runner, listen_addr, port)
     logger.info("Listening on %s:%s", listen_addr, port)
     await site.start()
+
+
+@routes.post("/consider/{run_id}", name='consider'):
+    # TODO(jelmer): Actually consider
+    return web.json_response({}, status=200)
 
 
 @routes.post("/check-proposal", name='check-proposal')
