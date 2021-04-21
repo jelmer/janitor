@@ -547,6 +547,19 @@ async def handle_archive_diff(request):
     )
 
 
+async def consider_publishing(session, publisher_url, run_id):
+    url = urllib.parse.urljoin(publisher_url, "/consider/%s" % run_id)
+    try:
+        async with session.post(url) as resp:
+            if resp.status != 200:
+                logging.warning(
+                    'Failed to submit run %s for publish consideration: %s',
+                    run_id, await resp.read())
+    except ClientConnectorError:
+        logging.warning(
+                'Failed to submit %s for publish consideration', run_id)
+
+
 @docs()
 @routes.post("/run/{run_id}", name="run-update")
 @routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
@@ -578,6 +591,10 @@ async def handle_run_post(request):
                 review_comment,
                 run_id,
             )
+            if review_status == 'approved':
+                await consider_publishing(
+                    request.app.http_client_session, request.app.publisher_url,
+                    run_id)
     return web.json_response(
         {"review-status": review_status, "review-comment": review_comment}
     )
