@@ -94,7 +94,7 @@ from .logs import (
 from .policy import read_policy
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
-from .schedule import do_schedule_control
+from .schedule import do_schedule_control, do_schedule
 from .vcs import (
     get_vcs_abbreviation,
     is_authenticated_url,
@@ -1353,7 +1353,7 @@ async def store_run(
         )
 
 
-async def followup_run(database, policy, item, result: JanitorResult):
+async def followup_run(config, database, policy, item, result: JanitorResult):
     if result.code == "success" and item.suite != "unchanged":
         async with database.acquire() as conn:
             run = await conn.fetchrow(
@@ -1369,6 +1369,21 @@ async def followup_run(database, policy, item, result: JanitorResult):
                     estimated_duration=result.duration,
                     requestor="control",
                 )
+            # see if there are any packages that failed because
+            # they lacked this one
+            if getattr(result.buildeR_result, 'build_distribution') is not None:
+                dependent_suites = [
+                    suite.name for suite in config.suite
+                    if result.builder_result.build_distribution in suite.extra_build_distribution]
+                runs_to_retry = await conn.fetch(
+                    "SELECT package, suite FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
+                    item.package, dependent_suites)
+                for run_to_retry in runs_to_retry:
+                    await do_schedule(
+                        conn, run_to_retry['package'],
+                        bucket='missing-deps', requestor='schedule-missing-deps (now newer %s is available)' % item.package,
+                        suite=run_to_retry['suite'])
+
     if result.followup_actions and result.code != 'success':
         from .missing_deps import schedule_new_package, schedule_update_package
         requestor = 'schedule-missing-deps (needed by %s)' % item.package
@@ -1514,7 +1529,7 @@ class QueueProcessor(object):
             pass
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
-        await followup_run(self.database, self.policy, item, result)
+        await followup_run(self.config, self.database, self.policy, item, result)
 
     async def next_queue_item(self, n) -> List[state.QueueItem]:
         ret: List[state.QueueItem] = []

@@ -432,3 +432,5 @@ FROM
 
 CREATE VIEW lintian_results AS
    select run_id, path, name, context, severity from debian_build, json_to_recordset(lintian_result->'groups'->0->'input-files') as entries(path text, tags json), json_to_recordset(tags) as hint(context text, name text, severity text);
+
+create view last_missing_apt_dependencies as select id, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
