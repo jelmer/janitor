@@ -38,6 +38,7 @@ from janitor.schedule import do_schedule, full_command
 from janitor.policy import sync_policy, read_policy
 
 DEFAULT_NEW_PACKAGE_PRIORITY = 150
+DEFAULT_UPDATE_PACKAGE_PRIORITY = 150
 DEFAULT_SUCCESS_CHANCE = 0.5
 
 
@@ -97,10 +98,16 @@ async def schedule_new_package(conn, upstream_info, policy, requestor=None, orig
     await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps', command=command)
 
 
-async def schedule_update_package(conn, package, desired_version, requestor=None):
+async def schedule_update_package(conn, policy, package, desired_version, requestor=None):
     logging.info('Scheduling new run for %s/fresh-releases', package)
     # TODO(jelmer): Do something with desired_version
     # TODO(jelmer): fresh-snapshots?
+    await conn.execute(
+        "INSERT INTO candidate "
+        "(package, suite, context, value, success_chance) "
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO IGNORE",
+        package, 'fresh-releases', None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
+    await sync_policy(conn, policy, package=package)
     await do_schedule(conn, package, "fresh-releases", requestor=requestor, bucket='missing-deps')
 
 
@@ -129,7 +136,7 @@ async def followup_missing_requirement(conn, apt_mgr, policy, requirement, neede
         if needed_by:
             requestor += ' (%s needed by %s)' % (actions[0][0].desired_version, needed_by)
         await schedule_update_package(
-            conn, actions[0][0].name, actions[0][0].desired_version,
+            conn, policy, actions[0][0].name, actions[0][0].desired_version,
             requestor=requestor)
     else:
         raise NotImplementedError('unable to deal with %r' % actions[0][0])
