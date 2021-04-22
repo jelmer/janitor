@@ -1382,7 +1382,7 @@ async def followup_run(database, policy, item, result: JanitorResult):
                             requestor=requestor)
                     elif action['action'] == 'update-package':
                         await schedule_update_package(
-                            conn, action['package'], action['desired-version'],
+                            conn, policy, action['package'], action['desired-version'],
                             requestor=requestor)
         from .missing_deps import reconstruct_problem, problem_to_upstream_requirement
         problem = reconstruct_problem(result.code, result.failure_details)
