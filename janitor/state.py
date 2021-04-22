@@ -316,30 +316,6 @@ LEFT JOIN
         yield Run.from_row(row)
 
 
-async def get_run(conn: asyncpg.Connection, run_id):
-    query = """
-SELECT
-    id, command, start_time, finish_time, description, package,
-    debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution, result_code,
-    main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames, review_status,
-    review_comment, worker,
-    array(SELECT row(role, remote_name, base_revision,
-     revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags
-FROM
-    run
-LEFT JOIN
-    debian_build ON debian_build.run_id = run.id
-WHERE id = $1
-"""
-    row = await conn.fetchrow(query, run_id)
-    if row:
-        return Run.from_row(row)
-    return None
-
-
 class QueueItem(object):
 
     __slots__ = [
@@ -503,6 +479,7 @@ async def iter_publish_ready(
     review_status: Optional[Union[str, List[str]]] = None,
     limit: Optional[int] = None,
     publishable_only: bool = False,
+    run_id: Optional[str] = None,
 ) -> AsyncIterable[
     Tuple[
         Run,
@@ -520,8 +497,11 @@ SELECT * FROM publish_ready
 """
     conditions = []
     if suites is not None:
-        conditions.append("suite = ANY($1::text[])")
         args.append(suites)
+        conditions.append("suite = ANY($%d::text[])" % len(args))
+    if run_id is not None:
+        args.append(run_id)
+        conditions.append("run_id = $%d" % len(args))
     if review_status is not None:
         if not isinstance(review_status, list):
             review_status = [review_status]

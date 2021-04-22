@@ -389,6 +389,90 @@ async def publish_one(
     raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
 
 
+async def consider_publish_run(
+        conn, config, vcs_manager, rate_limiter, external_url, differ_url,
+        topic_publish, topic_merge_proposal,
+        run, maintainer_email,
+        uploader_emails, unpublished_branches, update_changelog, command,
+        push_limit=None, require_binary_diff=False,
+        possible_transports=None, possible_hosters=None, dry_run=False):
+    if run.revision is None:
+        logger.warning(
+            "Run %s is publish ready, but does not have revision set.", run.id
+        )
+        return {}
+    suite_config = get_suite_config(config, run.suite)
+    # TODO(jelmer): next try in SQL query
+    attempt_count = await get_publish_attempt_count(
+        conn, run.revision, {"differ-unreachable"}
+    )
+    try:
+        next_try_time = run.finish_time + (2 ** attempt_count * timedelta(hours=1))
+    except OverflowError:
+        return {}
+    if datetime.utcnow() < next_try_time:
+        logger.info(
+            "Not attempting to push %s / %s (%s) due to "
+            "exponential backoff. Next try in %s.",
+            run.package,
+            run.suite,
+            run.id,
+            next_try_time - datetime.utcnow(),
+        )
+        return {}
+    ms = [b[4] for b in unpublished_branches]
+    if push_limit is not None and (
+            MODE_PUSH in ms or MODE_ATTEMPT_PUSH in ms):
+        if push_limit == 0:
+            logger.info(
+                "Not pushing %s / %s: push limit reached",
+                run.package,
+                run.suite,
+            )
+            return {}
+    actual_modes = {}
+    for (
+        role,
+        remote_name,
+        base_revision,
+        revision,
+        publish_mode,
+        max_frequency_days
+    ) in unpublished_branches:
+        if publish_mode is None:
+            logger.warning(
+                "%s: No publish mode for branch with role %s", run.id, role
+            )
+            continue
+        actual_modes[role] = await publish_from_policy(
+            conn,
+            suite_config,
+            rate_limiter,
+            vcs_manager,
+            run,
+            role,
+            maintainer_email,
+            uploader_emails,
+            run.branch_url,
+            topic_publish,
+            topic_merge_proposal,
+            publish_mode,
+            max_frequency_days,
+            update_changelog,
+            command,
+            possible_hosters=possible_hosters,
+            possible_transports=possible_transports,
+            dry_run=dry_run,
+            external_url=external_url,
+            differ_url=differ_url,
+            require_binary_diff=require_binary_diff,
+            force=False,
+            requestor="publisher (publish pending)",
+        )
+
+    return actual_modes
+
+
 async def publish_pending_new(
     db,
     config,
@@ -425,83 +509,28 @@ async def publish_pending_new(
         ) in state.iter_publish_ready(
             conn1, review_status=review_status, publishable_only=True
         ):
-            if run.revision is None:
-                logger.warning(
-                    "Run %s is publish ready, but does not have revision set.", run.id
-                )
-                continue
-            suite_config = get_suite_config(config, run.suite)
-            # TODO(jelmer): next try in SQL query
-            attempt_count = await get_publish_attempt_count(
-                conn, run.revision, {"differ-unreachable"}
-            )
-            try:
-                next_try_time = run.finish_time + (2 ** attempt_count * timedelta(hours=1))
-            except OverflowError:
-                continue
-            if datetime.utcnow() < next_try_time:
-                logger.info(
-                    "Not attempting to push %s / %s (%s) due to "
-                    "exponential backoff. Next try in %s.",
-                    run.package,
-                    run.suite,
-                    run.id,
-                    next_try_time - datetime.utcnow(),
-                )
-                continue
-            ms = [b[4] for b in unpublished_branches]
-            if push_limit is not None and (
-                    MODE_PUSH in ms or MODE_ATTEMPT_PUSH in ms):
-                if push_limit == 0:
-                    logger.info(
-                        "Not pushing %s / %s: push limit reached",
-                        run.package,
-                        run.suite,
-                    )
-                    continue
-            actual_modes = {}
-            for (
-                role,
-                remote_name,
-                base_revision,
-                revision,
-                publish_mode,
-                max_frequency_days
-            ) in unpublished_branches:
-                if publish_mode is None:
-                    logger.warning(
-                        "%s: No publish mode for branch with role %s", run.id, role
-                    )
-                    continue
-                actual_modes[role] = await publish_from_policy(
-                    conn,
-                    suite_config,
-                    rate_limiter,
-                    vcs_manager,
-                    run,
-                    role,
-                    maintainer_email,
-                    uploader_emails,
-                    run.branch_url,
-                    topic_publish,
-                    topic_merge_proposal,
-                    publish_mode,
-                    max_frequency_days,
-                    update_changelog,
-                    command,
-                    possible_hosters=possible_hosters,
-                    possible_transports=possible_transports,
-                    dry_run=dry_run,
-                    external_url=external_url,
-                    differ_url=differ_url,
-                    require_binary_diff=require_binary_diff,
-                    force=False,
-                    requestor="publisher (publish pending)",
-                )
-                actions.setdefault(actual_modes[role], 0)
-                actions[actual_modes[role]] += 1
+            actual_modes = await consider_publish_run(
+                conn, config, vcs_manager,
+                rate_limiter,
+                external_url, differ_url,
+                topic_publish, topic_merge_proposal,
+                run,
+                update_changelog,
+                command,
+                maintainer_email,
+                uploader_emails,
+                unpublished_branches,
+                push_limit=push_limit,
+                require_binary_diff=require_binary_diff,
+                possible_hosters=possible_hosters,
+                possible_transports=possible_transports,
+                dry_run=dry_run)
+            for role, actual_mode in actual_modes.items():
+                actions.setdefault(actual_mode, 0)
+                actions[actual_mode] += 1
             if MODE_PUSH in actual_modes.values() and push_limit is not None:
                 push_limit -= 1
+
 
     logger.info("Actions performed: %r", actions)
     logger.info(
@@ -1019,6 +1048,7 @@ async def publish_and_store(
 def create_background_task(fn, title):
     loop = asyncio.get_event_loop()
     task = loop.create_task(fn)
+
     def log_result(future):
         try:
             future.result()
@@ -1042,7 +1072,38 @@ async def get_publish_attempt_count(
 
 @routes.post("/consider/{run_id}", name="consider")
 async def consider_request(request):
-    raise NotImplementedError
+    run_id = request.match_info['run_id']
+
+    # TODO(jelmer): Allow this to vary?
+    review_status = ["approved"]
+
+    async def run():
+        async with request.app['db'].acquire() as conn:
+            async for (run, value, maintainer_email, uploader_emails, update_changelog, command, unpublished_branches) in state.iter_publish_ready(
+                    conn, review_status=review_status, publishable_only=True,
+                    run_id=run_id):
+                break
+            else:
+                return
+            await consider_publish_run(
+                conn, request.app['config'],
+                vcs_manager=request.app['vcs_manager'],
+                rate_limiter=request.app['rate_limiter'],
+                external_url=request.app['external_url'],
+                differ_url=request.app['differ_url'],
+                topic_publish=request.app['topic_publish'],
+                topic_merge_proposal=request.app['topic_merge_proposal'],
+                run=run,
+                update_changelog=update_changelog,
+                command=command,
+                maintainer_email=maintainer_email,
+                uploader_emails=uploader_emails,
+                unpublished_branches=unpublished_branches,
+                require_binary_diff=request.app['require_binary_diff'],
+                dry_run=request.app['dry_run'])
+    create_background_task(
+        run(), 'consider publishing %s' % run_id)
+    return web.json_response({}, status=200)
 
 
 @routes.post("/{suite}/{package}/publish", name='publish')
@@ -1205,7 +1266,8 @@ async def run_web_server(
     await site.start()
 
 
-@routes.post("/consider/{run_id}", name='consider'):
+@routes.post("/consider/{run_id}", name='consider')
+async def consider_request(request):
     # TODO(jelmer): Actually consider
     return web.json_response({}, status=200)
 
