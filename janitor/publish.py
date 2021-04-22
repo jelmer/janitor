@@ -1266,12 +1266,6 @@ async def run_web_server(
     await site.start()
 
 
-@routes.post("/consider/{run_id}", name='consider')
-async def consider_request(request):
-    # TODO(jelmer): Actually consider
-    return web.json_response({}, status=200)
-
-
 @routes.post("/check-proposal", name='check-proposal')
 async def check_mp_request(request):
     post = await request.post()
