@@ -373,6 +373,10 @@ class WatchdogPetter(object):
                     elif msg.type == aiohttp.WSMsgType.error:
                         logging.warning("Error on websocket: %s", self.ws.exception())
                         break
+                    elif msg.type == aiohttp.WSMsgType.close:
+                        logging.info('Request to close websocket.')
+                        await self.ws.close()
+                        break
                     else:
                         logging.warning("Ignoring ws message type %r", msg.type)
                 self.ws = None
