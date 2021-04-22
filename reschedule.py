@@ -19,7 +19,7 @@
 import argparse
 import asyncio
 from datetime import datetime, timedelta
-import re
+import logging
 from janitor import state
 from janitor.config import read_config
 from janitor.schedule import do_schedule
@@ -44,6 +44,9 @@ with open(args.config, "r") as f:
     config = read_config(f)
 
 
+logging.basicConfig()
+
+
 async def main(db, result_code, suite, description_re, rejected, min_age=0):
     async with db.acquire() as conn1:
         query = """
@@ -66,7 +69,7 @@ WHERE
             params.append(suite)
             where.append("suite = $%d" % len(params))
         if rejected:
-            where.append("run.review_status = 'rejected'")
+            where.append("review_status = 'rejected'")
         if description_re:
             params.append(description_re)
             where.append("description ~ $%d" % len(params))
@@ -75,7 +78,7 @@ WHERE
             where.append("finish_time < $%d" % len(params))
         query += " AND ".join(where)
         for run in await conn1.fetch(query, *params):
-            print("Rescheduling %s, %s" % (run['package'], run['suite']))
+            logging.info("Rescheduling %s, %s" % (run['package'], run['suite']))
             await do_schedule(
                 conn1,
                 run['package'],
