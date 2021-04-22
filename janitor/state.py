@@ -501,7 +501,7 @@ SELECT * FROM publish_ready
         conditions.append("suite = ANY($%d::text[])" % len(args))
     if run_id is not None:
         args.append(run_id)
-        conditions.append("run_id = $%d" % len(args))
+        conditions.append("id = $%d" % len(args))
     if review_status is not None:
         if not isinstance(review_status, list):
             review_status = [review_status]
