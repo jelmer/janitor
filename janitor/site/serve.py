@@ -1200,7 +1200,7 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     async def handle_post_root(request):
         if is_webhook_request(request):
             return await process_webhook(request, request.app.database)
-        raise web.HTTPMethodNotAllowed(text="Not a supported webhook", allowed_methods=['GET', 'HEAD'])
+        raise web.HTTPMethodNotAllowed(method='POST', allowed_methods=['GET', 'HEAD'])
 
     app.http_client_session = ClientSession()
     app.topic_notifications = Topic("notifications")
