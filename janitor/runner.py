@@ -1374,7 +1374,7 @@ async def followup_run(config, database, policy, item, result: JanitorResult):
             if getattr(result.builder_result, 'build_distribution') is not None:
                 dependent_suites = [
                     suite.name for suite in config.suite
-                    if result.builder_result.build_distribution in suite.extra_build_distribution]
+                    if result.builder_result.build_distribution in suite.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
                     "SELECT package, suite FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
                     item.package, dependent_suites)
