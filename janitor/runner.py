@@ -1354,7 +1354,7 @@ async def store_run(
 
 
 async def followup_run(config, database, policy, item, result: JanitorResult):
-    if result.code == "success" and item.suite != "unchanged":
+    if result.code == "success" and item.suite not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
             run = await conn.fetchrow(
                 "SELECT 1 FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
