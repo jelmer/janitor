@@ -69,7 +69,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "result-push-failed",
     "result-push-bad-gateway",
     "dist-apt-file-fetch-failure",
-    "post-build-testbed-chroot-disappeared"
+    "post-build-testbed-chroot-disappeared",
     "post-build-file-fetch-failure",
     "post-build-apt-file-fetch-failure",
 ]
