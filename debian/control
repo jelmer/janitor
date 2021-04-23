@@ -22,7 +22,6 @@ Architecture: all
 Depends: brz-debian,
          python3-aiohttp,
          python3-aiodns,
-         python3-cchardet,
          python3-breezy,
          python3-prometheus-client,
          python3-protobuf,
@@ -38,7 +37,6 @@ Depends: brz-debian,
          autopkgtest,
          python3-aiohttp,
          python3-aiodns,
-         python3-cchardet,
          python3-dulwich,
          silver-platter,
          quilt,
@@ -53,7 +51,6 @@ Description: Worker for the Debian janitor
 Package: janitor-archiver
 Depends: python3-aiohttp,
          python3-aiodns,
-         python3-cchardet,
          python3-aionotify,
          python3-asyncpg,
          ${misc:Depends},
@@ -65,7 +62,6 @@ Package: janitor-differ
 Depends: devscripts, diffoscope
          python3-aiohttp,
          python3-aiodns,
-         python3-cchardet,
          python3-aionotify,
          python3-asyncpg,
          ${misc:Depends},
@@ -76,7 +72,6 @@ Description: Differ for the Debian janitor
 Package: janitor-runner
 Depends: python3-aiohttp,
          python3-aiodns,
-         python3-cchardet,
          python3-asyncpg,
          silver-platter,
          ${misc:Depends},
@@ -85,7 +80,7 @@ Architecture: all
 Description: Runner for the Debian janitor
 
 Package: janitor-publisher
-Depends: python3-aiohttp-wsgi, python3-aiodns, python3-cchardet, python3-klaus
+Depends: python3-aiohttp-wsgi, python3-aiodns, python3-klaus
 Architecture: all
 
 Package: janitor-site
@@ -96,7 +91,6 @@ Depends: diffoscope,
          libjs-moment,
          python3-aiohttp,
          python3-aiodns,
-         python3-cchardet,
          python3-asyncpg,
          python3-jinja2,
          ${misc:Depends},
@@ -128,7 +122,6 @@ Depends: dovecot,
          dovecot-sieve,
          python3-aiohttp,
          python3-aiodns,
-         python3-cchardet,
          ${misc:Depends},
          ${python3:Depends}
 Description: Mail filter for the Debian Janitor

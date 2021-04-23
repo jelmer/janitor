@@ -6,7 +6,6 @@
      - git
      - make
      - python3-aiohttp
-     - python3-cchardet
      - python3-aiodns
      - python3-configobj
      - python3-debian
