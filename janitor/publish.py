@@ -812,7 +812,7 @@ async def publish_from_policy(
         return
 
     unchanged_run = await conn.fetchrow(
-        conn, "SELECT result_code FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
+        "SELECT result_code FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
         run.package, base_revision.decode('utf-8'))
 
     # TODO(jelmer): Make this more generic
