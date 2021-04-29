@@ -33,6 +33,7 @@ policy {
     name: "lintian-fixes"
     command: "lintian-brush"
     publish { mode: propose }
+    qa_review: required;
   }
 
   # Don't propose merges for upstream merges for now, since the janitor only
@@ -42,12 +43,14 @@ policy {
     name: "fresh-releases"
     command: "new-upstream"
     publish { mode: build_only }
+    qa_review: required;
   }
 
   suite {
     name: "fresh-snapshots"
     publish { mode: build_only }
     command: "new-upstream --snapshot"
+    qa_review: required;
   }
 
   # Builds of packaging repositories without any changes applied.
@@ -56,6 +59,7 @@ policy {
     name: "unchanged"
     publish { mode: build_only }
     command: "just-build"
+    qa_review: required;
   }
 
   # Apply multi-arch changes (apply-multiarch-hints)
@@ -63,6 +67,7 @@ policy {
     name: "multiarch-fixes"
     publish { mode: propose }
     command: "apply-multiarch-hints"
+    qa_review: required;
   }
 
   # Mark orphaned packages as orphaned, updating Vcs-Git headers and Maintainer
@@ -71,6 +76,7 @@ policy {
     name: "orphan"
     publish { mode: build_only }
     command: "orphan --no-update-vcs"
+    qa_review: required;
   }
 
   # Drop people who are MIA from uploader fields
@@ -78,6 +84,7 @@ policy {
     name: "mia"
     publish { mode: attempt_push }
     command: "mia"
+    qa_review: required;
   }
 
   # Import NMU changes
@@ -85,6 +92,7 @@ policy {
     name: "uncommitted"
     publish { mode: build_only }
     command: "import-upload"
+    qa_review: required;
   }
 
   # CME fixes, for testing purposes.
@@ -92,6 +100,7 @@ policy {
     name: "cme"
     publish { mode: build_only }
     command: "cme-fix"
+    qa_review: required;
   }
 
   # Remove obsolete dependencies and other settings.
@@ -99,6 +108,7 @@ policy {
     name: "scrub-obsolete"
     publish { mode: propose }
     command: "scrub-obsolete"
+    qa_review: required;
   }
 
   # Generating Debian packaging from scratch
@@ -106,12 +116,14 @@ policy {
     name: "debianize"
     publish { mode: build_only }
     command: "debianize"
+    qa_review: required;
   }
 
   suite {
     name: "upstream-unchanged"
     publish { mode: build_only }
     command: "just-build"
+    qa_review: required;
   }
 
   # Possible changelog types: auto, update_changelog, leave_changelog

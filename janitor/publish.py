@@ -505,9 +505,12 @@ async def publish_pending_new(
             uploader_emails,
             update_changelog,
             command,
+            qa_review_policy,
+            needs_review,
             unpublished_branches,
         ) in state.iter_publish_ready(
-            conn1, review_status=review_status, publishable_only=True
+            conn1, review_status=review_status, publishable_only=True,
+            needs_review=False,
         ):
             actual_modes = await consider_publish_run(
                 conn, config, vcs_manager,
@@ -1079,9 +1082,9 @@ async def consider_request(request):
 
     async def run():
         async with request.app['db'].acquire() as conn:
-            async for (run, value, maintainer_email, uploader_emails, update_changelog, command, unpublished_branches) in state.iter_publish_ready(
+            async for (run, value, maintainer_email, uploader_emails, update_changelog, command, qa_review_policy, needs_review, unpublished_branches) in state.iter_publish_ready(
                     conn, review_status=review_status, publishable_only=True,
-                    run_id=run_id):
+                    needs_review=False, run_id=run_id):
                 break
             else:
                 return

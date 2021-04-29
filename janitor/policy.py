@@ -77,6 +77,13 @@ PUBLISH_MODE_STR = {
 }
 
 
+REVIEW_POLICY_STR = {
+    policy_pb2.required: "required",
+    policy_pb2.not_required: "not-required",
+    None: None,
+}
+
+
 POLICY_MODE_STR = {
     policy_pb2.auto: "auto",
     policy_pb2.update_changelog: "update",
@@ -93,10 +100,11 @@ def apply_policy(
     uploaders: List[str],
     in_base: bool,
     release_stages_passed: Set[str]
-) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, str]:
+) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, str, Optional[str]]:
     publish_mode = {}
     update_changelog = policy_pb2.auto
     command = None
+    qa_review = None
     for policy in config.policy:
         if policy.match and not any(
             [
@@ -116,10 +124,13 @@ def apply_policy(
             publish_mode[publish.role] = (publish.mode, publish.max_frequency_days)
         if s.command:
             command = s.command
+        if s.qa_review:
+            qa_review = s.qa_review
     return (
         {k: (PUBLISH_MODE_STR[v[0]], v[1]) for (k, v) in publish_mode.items()},
         POLICY_MODE_STR[update_changelog],
         command,
+        REVIEW_POLICY_STR[qa_review]
     )
 
 
@@ -148,25 +159,28 @@ async def update_policy(
     publish_mode: Dict[str, Tuple[str, Optional[int]]],
     changelog_mode: str,
     command: List[str],
+    qa_review: Optional[str],
 ) -> None:
     await conn.execute(
         "INSERT INTO policy "
-        "(package, suite, update_changelog, command, publish) "
-        "VALUES ($1, $2, $3, $4, $5) "
+        "(package, suite, update_changelog, command, publish, qa_review) "
+        "VALUES ($1, $2, $3, $4, $5, $6) "
         "ON CONFLICT (package, suite) DO UPDATE SET "
         "update_changelog = EXCLUDED.update_changelog, "
         "command = EXCLUDED.command, "
-        "publish = EXCLUDED.publish",
+        "publish = EXCLUDED.publish, "
+        "qa_review = EXCLUDED.qa_review",
         name,
         suite,
         changelog_mode,
         command,
-        [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
+        [(role, mode, max_freq, qa_review) for (role, (mode, max_freq)) in publish_mode.items()],
+        qa_review
     )
 
 
 async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
-    query = "SELECT package, suite, publish, update_changelog, command " "FROM policy"
+    query = "SELECT package, suite, publish, update_changelog, command, qa_review FROM policy"
     args = []
     if package:
         query += " WHERE package = $1"
@@ -178,7 +192,8 @@ async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
             (
                 {k[0]: (k[1], k[2]) for k in row['publish']},
                 row['update_changelog'],
-                row['command']
+                row['command'],
+                row['qa_review'],
             ),
         )
 

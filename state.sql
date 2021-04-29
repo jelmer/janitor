@@ -102,6 +102,7 @@ CREATE INDEX ON run (result_code);
 CREATE INDEX ON run (revision);
 CREATE INDEX ON run (main_branch_revision);
 CREATE TYPE publish_mode AS ENUM('push', 'attempt-push', 'propose', 'build-only', 'push-derived', 'skip');
+CREATE TYPE review_policy AS ENUM('not-required', 'required');
 CREATE TABLE IF NOT EXISTS publish (
    id text not null,
    package text not null,
@@ -162,6 +163,7 @@ CREATE TABLE IF NOT EXISTS policy (
    update_changelog changelog_mode default 'auto',
    publish publish_policy[],
    command text,
+   review_policy qa_review,
    foreign key (package) references package(name),
    unique(package, suite)
 );
@@ -360,6 +362,8 @@ CREATE OR REPLACE VIEW publishable AS
   package.uploader_emails AS uploader_emails,
   policy.update_changelog AS update_changelog,
   policy.command AS policy_command,
+  policy.qa_review AS qa_review_policy,
+  needs_review = (qa_review_policy = 'required' AND review_status = 'unreviewed'),
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
    FROM new_result_branch rb
