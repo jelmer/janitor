@@ -37,7 +37,7 @@ ENTRYPOINT ["python3", "-m", "janitor.runner", "--port=9911", "--host=127.0.0.1"
 
 FROM debian:sid AS janitor-worker
 RUN apt update
-RUN apt install --no-install-recommends -y python3 python3-aiohttp python3-configobj python3-jinja2 python3-debian python3-asyncpg python3-protobuf protobuf-compiler python3-yaml python3-apt python3-distro-info
+RUN apt install --no-install-recommends -y python3 python3-aiohttp python3-configobj python3-jinja2 python3-debian python3-asyncpg python3-protobuf protobuf-compiler python3-yaml python3-apt python3-distro-info devscripts
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/ognibuild:/code/silver-platter:/code/buildlog-consultant:/code/upstream-ontologist:/code/debmutate
 ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
 ADD . /code
