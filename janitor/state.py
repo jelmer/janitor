@@ -479,6 +479,7 @@ async def iter_publish_ready(
     review_status: Optional[Union[str, List[str]]] = None,
     limit: Optional[int] = None,
     publishable_only: bool = False,
+    needs_review: Optional[bool] = None,
     run_id: Optional[str] = None,
 ) -> AsyncIterable[
     Tuple[
@@ -488,7 +489,9 @@ async def iter_publish_ready(
         List[str],
         str,
         str,
-        List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int]]],
+        Optional[str],
+        bool,
+        List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int], Optional[str]]],
     ]
 ]:
     args: List[Any] = []
@@ -519,6 +522,10 @@ SELECT * FROM publish_ready
         conditions.append(publishable_condition)
     else:
         order_by.append(publishable_condition + " DESC")
+
+    if needs_review is not None:
+        args.append(needs_review)
+        conditions.append('needs_review = $%d' % (len(args)))
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)

@@ -24,7 +24,7 @@ async def generate_rejected(conn, suite=None):
     entries = [
         entry
         async for entry in state.iter_publish_ready(
-            conn, review_status=["rejected"], suites=suites, publishable_only=False
+            conn, review_status=["rejected"], needs_review=False, suites=suites, publishable_only=False
         )
     ]
 
@@ -43,6 +43,7 @@ async def generate_review(
         async for entry in state.iter_publish_ready(
             conn,
             review_status=["unreviewed"],
+            needs_review=True,
             limit=10,
             suites=suites,
             publishable_only=True,
@@ -58,6 +59,8 @@ async def generate_review(
         uploader_emails,
         changelog_mode,
         command,
+        qa_review_policy,
+        needs_review,
         unpublished_branches,
     ) = entries.pop(0)
 

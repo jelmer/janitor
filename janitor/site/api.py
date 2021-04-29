@@ -918,6 +918,7 @@ async def handle_publish_ready(request):
     suite = request.match_info.get("suite")
     review_status = request.query.get("review-status")
     publishable_only = request.query.get("publishable_only", "true") == "true"
+    needs_review = 'needs-review' in request.query
     limit = request.query.get("limit", 200)
     if limit:
         limit = int(limit)
@@ -932,11 +933,14 @@ async def handle_publish_ready(request):
             uploader_emails,
             changelog_mode,
             command,
+            qa_review_policy,
+            needs_review,
             unpublished_branches,
         ) in state.iter_publish_ready(
             conn,
             suites=([suite] if suite else None),
             review_status=review_status,
+            needs_review=needs_review,
             publishable_only=publishable_only,
         ):
             ret.append((run.package, run.id, [rb[0] for rb in run.result_branches]))
