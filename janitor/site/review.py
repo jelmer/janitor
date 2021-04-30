@@ -36,7 +36,8 @@ async def generate_rejected(conn, suite=None):
 
 
 async def generate_review(
-    conn, request, client, differ_url, vcs_store_url, suites=None
+    conn, request, client, differ_url, vcs_store_url, suites=None,
+    publishable_only=True
 ):
     entries = [
         entry
@@ -46,7 +47,7 @@ async def generate_review(
             needs_review=True,
             limit=10,
             suites=suites,
-            publishable_only=True,
+            publishable_only=publishable_only,
         )
     ]
     if not entries:

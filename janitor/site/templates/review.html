@@ -67,7 +67,7 @@ function loadNewJob() {
 function refreshData(cb) {
   console.log("Updating backlog of todo items");
   $.ajax({
-     url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?needs-review=true&review-status=unreviewed&publishable_only=true',
+     url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?needs-review=true&review-status=unreviewed&publishable_only={{ 'true' if publishable_only else 'false' }}',
      dataType: 'json',
      success: function(data) {
          data.forEach(function(entry) {

@@ -808,6 +808,7 @@ order by url, last_run.finish_time desc
 
     async def handle_review_post(request):
         from .review import generate_review
+        publishable_only = request.query.get("publishable_only", "true") == "true"
 
         post = await request.post()
         async with request.app.database.acquire() as conn:
@@ -839,7 +840,8 @@ order by url, last_run.finish_time desc
                 request.app.http_client_session,
                 request.app.differ_url,
                 request.app.vcs_store_url,
-                suites=post.getall("suite", None)
+                suites=post.getall("suite", None),
+                publishable_only=publishable_only,
             )
             return web.Response(
                 content_type="text/html",
@@ -849,6 +851,7 @@ order by url, last_run.finish_time desc
 
     async def handle_review(request):
         from .review import generate_review
+        publishable_only = request.query.get("publishable_only", "true") == "true"
 
         suites = request.query.getall("suite", None)
         async with request.app.database.acquire() as conn:
@@ -859,6 +862,7 @@ order by url, last_run.finish_time desc
                 request.app.differ_url,
                 request.app.vcs_store_url,
                 suites=suites,
+                publishable_only=publishable_only,
             )
         return web.Response(
             content_type="text/html", text=text, headers={"Cache-Control": "no-cache"}
