@@ -363,7 +363,7 @@ CREATE OR REPLACE VIEW publishable AS
   policy.update_changelog AS update_changelog,
   policy.command AS policy_command,
   policy.qa_review AS qa_review_policy,
-  needs_review = (qa_review_policy = 'required' AND review_status = 'unreviewed'),
+  (policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
   ARRAY(
    SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
    FROM new_result_branch rb
