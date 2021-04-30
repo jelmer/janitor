@@ -545,6 +545,8 @@ SELECT * FROM publish_ready
              record['uploader_emails'],
              record['update_changelog'],
              record['policy_command'],
+             record['qa_review_policy'],
+             record['needs_review'],
              record['unpublished_branches']
              ]
         )

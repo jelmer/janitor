@@ -174,7 +174,7 @@ async def update_policy(
         suite,
         changelog_mode,
         command,
-        [(role, mode, max_freq, qa_review) for (role, (mode, max_freq)) in publish_mode.items()],
+        [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
         qa_review
     )
 
