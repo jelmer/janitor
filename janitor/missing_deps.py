@@ -17,14 +17,8 @@
 
 import argparse
 import asyncio
-from dataclasses import dataclass
 import logging
-from typing import List, Optional, Union
 
-import apt_pkg
-from debian.changelog import Version
-
-from ognibuild import Requirement
 from ognibuild.buildlog import problem_to_upstream_requirement
 from ognibuild.debian.apt import AptManager
 from ognibuild.session.plain import PlainSession
@@ -107,6 +101,7 @@ async def schedule_update_package(conn, policy, package, desired_version, reques
         "(package, suite, context, value, success_chance) "
         "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO IGNORE",
         package, 'fresh-releases', None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
+        DEFAULT_SUCCESS_CHANCE)
     await sync_policy(conn, policy, package=package)
     await do_schedule(conn, package, "fresh-releases", requestor=requestor, bucket='missing-deps')
 
