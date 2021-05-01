@@ -187,13 +187,20 @@ class GCSArtifactManager(ArtifactManager):
         )
 
     async def get_artifact(self, run_id, filename, timeout=DEFAULT_GCS_TIMEOUT):
-        return BytesIO(
-            await self.storage.download(
-                bucket=self.bucket_name,
-                object_name="%s/%s" % (run_id, filename),
-                timeout=timeout,
+        try:
+            return BytesIO(
+                await self.storage.download(
+                    bucket=self.bucket_name,
+                    object_name="%s/%s" % (run_id, filename),
+                    timeout=timeout,
+                )
             )
-        )
+        except ClientResponseError as e:
+            if e.status == 503:
+                raise ServiceUnavailable()
+            if e.status == 404:
+                raise FileNotFoundError
+            raise
 
 
 def get_artifact_manager(location):
