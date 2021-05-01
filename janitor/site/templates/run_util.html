@@ -294,7 +294,7 @@ Tag: {{ tagname }}
 {% macro display_lintian_hintitem(hint) %}
     <li class="lintian-hintitem">
       <span class="tinycode" id="lintian-code-{{ hint.severity }}">{{ lintian_severity_short(hint.severity) }}</span>
-      <span class="tinyhint"><a href="https://lintian.debian.org/tags/{{ hint.name }}">{{ hint.name }}</a></span>
+      <span class="tinyhint"><a href="https://lintian.debian.net/tags/{{ hint.name }}">{{ hint.name }}</a></span>
       <span class="tinycontext">{{ hint.context }}</span>
     </li>
 {% endmacro %}
