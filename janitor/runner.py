@@ -183,9 +183,6 @@ class GenericBuilder(Builder):
         elif self.distro_config.chroot:
             env["CHROOT"] = self.distro_config.chroot
 
-        if self.distro_config.name:
-            env["DISTRIBUTION"] = self.distro_config.name
-
         env["REPOSITORIES"] = "%s %s/ %s" % (
             self.distro_config.archive_mirror_uri,
             self.distro_config.name,
