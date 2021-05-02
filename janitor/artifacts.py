@@ -17,7 +17,7 @@
 
 """Artifacts."""
 
-from aiohttp import ClientSession, ClientResponseError
+from typing import Optional, List
 import asyncio
 
 from io import BytesIO
@@ -26,6 +26,7 @@ import os
 import shutil
 import tempfile
 
+from aiohttp import ClientSession, ClientResponseError
 from yarl import URL
 
 
@@ -41,7 +42,19 @@ class ArtifactsMissing(Exception):
 
 
 class ArtifactManager(object):
-    async def store_artifacts(self, run_id, local_path, names=None):
+    """Manage sets of per-run artifacts.
+
+    Artifacts are named files; no other metadata is stored.
+    """
+    async def store_artifacts(self, run_id: str, local_path: str, names: Optional[List[str]] = None):
+        """Store a set of artifacts.
+
+        Args:
+          run_id: The run id
+          local_path: Local path to retrieve files from
+          names: Optional list of filenames in local_path to upload.
+            Defaults to all files in local_path.
+        """
         raise NotImplementedError(self.store_artifacts)
 
     async def get_artifact(self, run_id, filename, timeout=None):
@@ -86,7 +99,7 @@ class LocalArtifactManager(ArtifactManager):
         for entry in os.scandir(self.path):
             yield entry.name
 
-    async def delete_artifactes(self, run_id):
+    async def delete_artifacts(self, run_id):
         shutil.rmtree(os.path.join(self.path, run_id))
 
     async def get_artifact(self, run_id, filename, timeout=None):
@@ -232,7 +245,7 @@ async def upload_backup_artifacts(
                         "Unable to upload backup artifacts (%r): %s", run_id, e
                     )
                 else:
-                    await backup_artifact_manager.delete_artifactes(run_id)
+                    await backup_artifact_manager.delete_artifacts(run_id)
 
 
 async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id, names):

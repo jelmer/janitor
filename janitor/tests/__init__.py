@@ -25,6 +25,7 @@ from breezy.tests import TestCaseWithTransport  # noqa: F401
 
 def test_suite():
     names = [
+        "artifacts",
         "debdiff",
         "pull_worker",
         "runner",
