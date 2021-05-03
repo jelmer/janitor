@@ -65,6 +65,7 @@ async def main():
         "--version-re", type=str, help="Filter on versions matching regex."
     )
     parser.add_argument("--override-vcs-type", type=str, help="Override VCS Type.")
+    parser.add_argument("--package", type=str, action='append')
     parser.add_argument(
         "--override-vcs-url",
         type=str,
@@ -89,6 +90,8 @@ async def main():
             pl = PackageList()
             package = pl.package.add()
             package.name = source["Package"]
+            if args.package and package.name not in args.package:
+                continue
             package.maintainer_email = parseaddr(source["Maintainer"])[1]
             if args.maintainer and package.maintainer_email not in args.maintainer:
                 continue
