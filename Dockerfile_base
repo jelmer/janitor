@@ -1,0 +1,8 @@
+FROM debian:sid
+MAINTAINER Jelmer Vernooij <jelmer@debian.org>
+
+RUN apt update
+RUN apt install --no-install-recommends -y python3 python3-aiohttp python3-configobj python3-jinja2 python3-debian python3-asyncpg python3-protobuf protobuf-compiler python3-yaml python3-prometheus-client
+ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
+ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/debmutate:/code/silver-platter:/code/upstream-ontologist
+ADD . /code

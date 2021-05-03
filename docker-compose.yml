@@ -1,0 +1,21 @@
+site:
+  build: .
+  dockerfile: Dockerfile_site
+runner:
+  build: .
+  dockerfile: Dockerfile_runner
+worker:
+  build: .
+  dockerfile: Dockerfile_worker
+differ:
+  build: .
+  dockerfile: Dockerfile_differ
+vcs_store:
+  build: .
+  dockerfile: Dockerfile_vcs_store
+publish:
+  build: .
+  dockerfile: Dockerfile_publish
+archive:
+  build: .
+  dockerfile: Dockerfile_archive

@@ -1,0 +1,5 @@
+FROM eu.gcr.io/debian-janitor/base
+MAINTAINER Jelmer Vernooij <jelmer@debian.org>
+VOLUME /vcs
+EXPOSE 9923
+ENTRYPOINT ["python3", "-m", "janitor.vcs_store", "--port=9923", "--listen-address=127.0.0.1"]
