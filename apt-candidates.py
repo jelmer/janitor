@@ -56,6 +56,7 @@ async def main():
     parser.add_argument(
         "--exclude-native", action="store_true", help="Exclude native packages."
     )
+    parser.add_argument("--package", action='append', type=str)
     args = parser.parse_args()
 
     if args.version_re:
@@ -66,6 +67,8 @@ async def main():
     for url in args.url:
         async for source in iter_sources(url):
             if version_re is not None and not version_re.search(source["Version"]):
+                continue
+            if args.package and source["Package"] not in args.package:
                 continue
             if args.exclude_native and not Version(source["Version"]).debian_revision:
                 continue
