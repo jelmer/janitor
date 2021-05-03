@@ -19,3 +19,6 @@ publish:
 archive:
   build: .
   dockerfile: Dockerfile_archive
+postgres:
+  build: .
+  dockerfile: Dockerfile_postgres
