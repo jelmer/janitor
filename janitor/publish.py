@@ -818,7 +818,8 @@ async def publish_from_policy(
     # TODO(jelmer): Make this more generic
     if (
         unchanged_run
-        and unchanged_run.result_code in ("debian-upstream-metadata-invalid",)
+        and unchanged_run['result_code'] in (
+            "debian-upstream-metadata-invalid", )
         and run.suite == "lintian-fixes"
     ):
         require_binary_diff = False
