@@ -2,7 +2,7 @@ FROM debian:sid
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 
 RUN apt update
-RUN apt install --no-install-recommends -y python3 python3-aiohttp python3-configobj python3-jinja2 python3-debian python3-asyncpg python3-protobuf protobuf-compiler python3-yaml python3-prometheus-client
+RUN apt install --no-install-recommends -y python3 python3-distro-info python3-aiohttp python3-configobj python3-jinja2 python3-debian python3-asyncpg python3-protobuf protobuf-compiler python3-yaml python3-prometheus-client python3-gpg python3-cffi python3-future python3-cryptography python3-pycparser python3-pip python3-rsa python3-jwt python3-aiofiles python3-chardet && pip3 install gcloud-aio-storage aiohttp-apispec
 ENV BRZ_PLUGINS_AT=debian@/code/breezy-debian
 ENV PYTHONPATH=/code:/code/breezy:/code/dulwich:/code/lintian-brush:/code/debmutate:/code/silver-platter:/code/upstream-ontologist
 ADD . /code
