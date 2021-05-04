@@ -471,20 +471,26 @@ async def main(argv=None):
 
     base_url = yarl.URL(args.base_url)
 
-    auth = BasicAuth.from_url(base_url)
     if args.credentials:
         with open(args.credentials) as f:
             creds = json.load(f)
         auth = BasicAuth(login=creds["login"], password=creds["password"])
+    elif 'WORKER_NAME' in os.environ and 'WORKER_PASSWORD' in os.environ:
+        auth = BasicAuth(
+            login=os.environ["WORKER_NAME"],
+            password=os.environ["WORKER_PASSWORD"])
+    else:
+        auth = BasicAuth.from_url(base_url)
 
+    if auth is not None:
         class WorkerCredentialStore(PlainTextCredentialStore):
             def get_credentials(
                 self, protocol, host, port=None, user=None, path=None, realm=None
             ):
                 if host == base_url.host:
                     return {
-                        "user": creds["login"],
-                        "password": creds["password"],
+                        "user": auth.login,
+                        "password": auth.password,
                         "protocol": protocol,
                         "port": port,
                         "host": host,
