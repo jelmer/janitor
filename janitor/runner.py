@@ -1218,7 +1218,8 @@ class ActiveLocalRun(ActiveRun):
             logfilenames=logfilenames,
         )
 
-        result.builder_result.from_directory(self.output_directory)
+        if result.builder_result is not None:
+            result.builder_result.from_directory(self.output_directory)
 
         try:
             local_branch = open_branch(

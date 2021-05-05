@@ -16,6 +16,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import re
+
+from urllib.parse import urljoin
+
 from aiohttp.client import ClientSession
 import pydle
 
@@ -24,8 +28,6 @@ from prometheus_client import Counter
 from janitor.pubsub import pubsub_reader
 from janitor.prometheus import run_prometheus_server
 
-import re
-from urllib.parse import urljoin
 
 irc_messages_sent = Counter("irc_messages_sent", "Number of messages sent to IRC")
 
