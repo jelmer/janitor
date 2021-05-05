@@ -1373,7 +1373,7 @@ async def followup_run(config, database, policy, item, result: JanitorResult):
                 )
             # see if there are any packages that failed because
             # they lacked this one
-            if getattr(result.builder_result, 'build_distribution') is not None:
+            if getattr(result.builder_result, 'build_distribution', None) is not None:
                 dependent_suites = [
                     suite.name for suite in config.suite
                     if result.builder_result.build_distribution in suite.debian_build.extra_build_distribution]
