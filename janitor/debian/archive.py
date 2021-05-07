@@ -273,6 +273,10 @@ async def handle_last_publish(request):
     )
 
 
+async def handle_health(request):
+    return web.Response(text='ok')
+
+
 async def run_web_server(listen_addr, port, dists_dir, config, generator_manager):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -282,6 +286,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.router.add_static("/dists", dists_dir, show_index=True)
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
+    app.router.add_get("/health", handle_health, name="health")
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)

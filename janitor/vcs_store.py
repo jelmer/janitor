@@ -571,6 +571,10 @@ async def handle_repo_list(request):
     return web.json_response(names)
 
 
+async def handle_health(request):
+    return web.Response(text='ok')
+
+
 def run_web_server(
     listen_addr: str,
     port: int,
@@ -601,6 +605,7 @@ def run_web_server(
             )
 
     app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
+    app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
