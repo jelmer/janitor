@@ -1349,7 +1349,7 @@ async def store_run(
             "(run_id, role, remote_name, base_revision, revision) "
             "VALUES ($1, $2, $3, $4, $5)",
             [
-                (run_id, role, remote_name, br.decode("utf-8"), r.decode("utf-8"))
+                (run_id, role, remote_name, br.decode("utf-8") if br else None, r.decode("utf-8") if r else None)
                 for (role, remote_name, br, r) in result_branches
             ],
         )
