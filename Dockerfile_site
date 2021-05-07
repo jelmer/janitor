@@ -4,5 +4,4 @@ EXPOSE 8082
 # TODO: config
 # TODO: service discovery
 RUN apt -y install python3-distro-info libjs-jquery-datatables libjs-chart.js libjs-jquery libjs-jquery-datatables libjs-moment python3-jinja2
-ENTRYPOINT ["python3", "-m", "janitor.site.serve", "--port=8082", "--host=127.0.0.1"]
-#--publisher-url http://[2a01:348:125:15::2]:9912/ --vcs-store-url http://[2a01:348:125:15::2]:9923/ --runner-url http://[2a01:348:125:15::2]:9911/ --config /home/janitor/janitor.conf --archiver-url http://[2a01:348:125:15::2]:9914/ --external-url=https://janitor.debian.net/ --differ-url=http://[2a01:348:125:15::1]:9920/ --debugtoolbar=2a01:348:125:8::11
+ENTRYPOINT ["python3", "-m", "janitor.site.serve", "--port=8082", "--host=0.0.0.0"]
