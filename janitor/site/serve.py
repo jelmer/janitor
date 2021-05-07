@@ -941,6 +941,9 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
         resp.set_cookie("session_id", session_id, secure=True, httponly=True)
         return resp
 
+    async def handle_health(request):
+        return web.Response(text='ok')
+
     async def start_gpg_context(app):
         gpg_home = tempfile.TemporaryDirectory()
         gpg_context = gpg.Context(home_dir=gpg_home.name)
@@ -1244,6 +1247,7 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     setup_debsso(app)
     setup_metrics(app)
     app.router.add_post("/", handle_post_root, name="root-post")
+    app.router.add_get("/health", handle_health, name="health")
     app.router.add_get(
         "/ws/notifications",
         functools.partial(pubsub_handler, app.topic_notifications),  # type: ignore
