@@ -2,4 +2,5 @@ FROM eu.gcr.io/debian-janitor/base
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 VOLUME /vcs
 EXPOSE 9923
-ENTRYPOINT ["python3", "-m", "janitor.vcs_store", "--port=9923", "--listen-address=127.0.0.1"]
+RUN apt install python3-pip && pip3 install klaus
+ENTRYPOINT ["python3", "-m", "janitor.vcs_store", "--port=9923", "--listen-address=0.0.0.0"]
