@@ -1965,9 +1965,16 @@ def main(argv=None):
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     debug.set_debug_flags_from_config()
 

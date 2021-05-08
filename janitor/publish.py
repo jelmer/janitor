@@ -2341,10 +2341,17 @@ def main(argv=None):
     parser.add_argument(
         "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     with open(args.config, "r") as f:
         config = read_config(f)
