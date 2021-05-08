@@ -1,4 +1,5 @@
 FROM eu.gcr.io/debian-janitor/base
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9920
+RUN apt install -y devscripts diffoscope
 ENTRYPOINT ["python3", "-m", "janitor.differ", "--port=9920", "--listen-address=0.0.0.0"]

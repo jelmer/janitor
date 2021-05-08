@@ -1423,7 +1423,7 @@ class QueueProcessor(object):
         artifact_manager=None,
         vcs_manager=None,
         public_vcs_manager=None,
-        concurrency=1,
+        concurrency=0,
         use_cached_only=False,
         overall_timeout=None,
         committer=None,
@@ -1935,7 +1935,7 @@ def main(argv=None):
     parser.add_argument(
         "--concurrency",
         type=int,
-        default=1,
+        default=0,
         help="Number of workers to run in parallel.",
     )
     parser.add_argument(
