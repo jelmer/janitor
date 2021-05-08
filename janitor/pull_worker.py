@@ -459,10 +459,16 @@ async def main(argv=None):
 
     # Unused, here for backwards compatibility.
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
+    parser.add_argument("--gcp-logging", action="store_true")
 
     args = parser.parse_args(argv)
 
-    if args.debug:
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    elif args.debug:
         log_level = logging.DEBUG
     else:
         log_level = logging.INFO

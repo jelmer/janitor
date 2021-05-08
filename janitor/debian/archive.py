@@ -86,7 +86,7 @@ class PackageInfoProvider(object):
             await self.artifact_manager.retrieve_artifacts(
                 run_id, td, timeout=DEFAULT_GCS_TIMEOUT
             )
-            p = subprocess.Popen(["dpkg-scanpackages", td], stdout=subprocess.PIPE)
+            p = subprocess.Popen(["dpkg-scanpackages", td], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             for para in Packages.iter_paragraphs(p.stdout):
                 para["Filename"] = os.path.join(
                     suite_name,
@@ -97,6 +97,20 @@ class PackageInfoProvider(object):
                 )
                 yield bytes(para)
                 yield b"\n"
+            for line in p.stderr.readlines():
+                if line.startswith(b'dpkg-scanpackages: '):
+                    line = line[len(b'dpkg-scanpackages: '):]
+                if line.startswith(b'info: '):
+                    logging.debug('%s', line.rstrip(b'\n').decode())
+                elif line.startswith(b'warning: '):
+                    logging.warning('%s', line.rstrip(b'\n').decode())
+                elif line.startswith(b'error: '):
+                    logging.error('%s', line.rstrip(b'\n').decode())
+                else:
+                    logging.info(
+                        'dpkg-scanpackages error: %s',
+                        line.rstrip(b'\n').decode())
+
         await asyncio.sleep(0)
 
 
@@ -416,6 +430,7 @@ async def main(argv=None):
     parser.add_argument("--dists-directory", type=str, help="Dists directory")
     parser.add_argument("--cache-directory", type=str, help="Cache directory")
     parser.add_argument("--verbose", action='store_true')
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument(
         "--runner-url", type=str, default=None, help="URL to reach runner at."
     )
@@ -425,7 +440,12 @@ async def main(argv=None):
         parser.print_usage()
         sys.exit(1)
 
-    if args.verbose:
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging() 
+    elif args.verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)

@@ -1,5 +1,5 @@
 FROM eu.gcr.io/debian-janitor/base
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9912
-RUN apt install -y python3-launchpadlib
+RUN apt install -y python3-launchpadlib ssh
 ENTRYPOINT ["python3", "-m", "janitor.publish", "--port=9912", "--listen-address=0.0.0.0"]

@@ -155,11 +155,18 @@ if __name__ == "__main__":
         action="store_true",
         help="Enable debugging mode. For example, avoid minified JS.",
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("--external-url", type=str, default=None, help="External URL")
 
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     if args.debug:
         minified = ""

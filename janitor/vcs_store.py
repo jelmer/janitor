@@ -645,10 +645,16 @@ def main(argv=None):
         help="Maximum client body size (0 for no limit)",
     )
     parser.add_argument("--debug", action="store_true", help="Show debug info")
+    parser.add_argument("--gcp-logging", action="store_true")
 
     args = parser.parse_args()
 
-    if args.debug:
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    elif args.debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
