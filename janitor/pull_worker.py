@@ -40,6 +40,8 @@ import aiohttp
 from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError
 import yarl
 
+from prometheus_client import REGISTRY, push_to_gateway
+
 from breezy import urlutils
 from breezy.branch import Branch
 from breezy.config import (
@@ -451,6 +453,10 @@ async def main(argv=None):
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--prometheus", type=str, help="Prometheus push gateway to export to."
+    )
+
     # Unused, here for backwards compatibility.
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
 
@@ -660,6 +666,11 @@ async def main(argv=None):
 
                 if args.debug:
                     logging.debug("Result: %r", result)
+
+                if args.prometheus:
+                    push_to_gateway(
+                        args.prometheus, job="janitor.pull_worker",
+                        registry=REGISTRY)
 
 
 if __name__ == "__main__":
