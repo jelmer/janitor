@@ -519,6 +519,10 @@ def publish_one(
                 )
             resume_branch = None
             existing_proposal = None
+        except HosterLoginRequired:
+            raise PublishFailure(
+                description="Hoster %s supported but not login known." % hoster,
+                code="hoster-no-login")
         except PermissionDenied as e:
             raise PublishFailure(
                 description=(
