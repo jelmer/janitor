@@ -451,7 +451,7 @@ AND suite = ANY($1::text[])
             email = request.user.get("email")
         else:
             email = request.query.get("email")
-        if "/" in email:
+        if email and "/" in email:
             raise web.HTTPBadRequest(text="invalid maintainer email")
         if email:
             raise web.HTTPFound(
