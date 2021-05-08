@@ -35,6 +35,7 @@ from silver_platter.utils import (
     open_branch,
     BranchMissing,
     BranchUnavailable,
+    BranchRateLimited,
     full_branch_url,
 )
 from silver_platter.publish import (
@@ -454,6 +455,8 @@ def publish_one(
         main_branch = open_branch(
             main_branch_url, possible_transports=possible_transports
         )
+    except BranchRateLimited as e:
+        raise PublishFailure('branch-rate-limited', str(e))
     except BranchUnavailable as e:
         raise PublishFailure("branch-unavailable", str(e))
     except BranchMissing as e:
