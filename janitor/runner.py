@@ -100,8 +100,7 @@ from .vcs import (
     is_authenticated_url,
     open_branch_ext,
     BranchOpenFailure,
-    LocalVcsManager,
-    RemoteVcsManager,
+    get_vcs_manager,
     UnsupportedVcs,
     VcsManager,
     import_branches,
@@ -983,282 +982,6 @@ def cache_branch_name(distro_config, role):
     return "%s/latest" % (distro_config.vendor or dpkg_vendor().lower())
 
 
-class ActiveLocalRun(ActiveRun):
-    def __init__(self, queue_item: state.QueueItem, output_directory: str):
-        super(ActiveLocalRun, self).__init__(queue_item)
-        self.worker_name = socket.gethostname()
-        self.output_directory = output_directory
-
-    worker_link = None
-
-    def kill(self) -> None:
-        self._task.cancel()
-
-    def list_log_files(self):
-        return [
-            n
-            for n in os.listdir(self.output_directory)
-            if os.path.isfile(os.path.join(self.output_directory, n))
-            and (n.endswith(".log") or re.match(r".*\.log\.[0-9]+", n))
-        ]
-
-    def get_log_file(self, name):
-        full_path = os.path.join(self.output_directory, name)
-        return open(full_path, "rb")
-
-    async def process(
-        self,
-        db: state.Database,
-        config: Config,
-        vcs_manager: VcsManager,
-        logfile_manager: LogFileManager,
-        backup_logfile_manager: Optional[LogFileManager],
-        artifact_manager: Optional[ArtifactManager],
-        worker_kind: str,
-        dry_run: bool = False,
-        possible_transports: Optional[List[Transport]] = None,
-        possible_hosters: Optional[List[Hoster]] = None,
-        use_cached_only: bool = False,
-        overall_timeout: Optional[int] = None,
-        committer: Optional[str] = None,
-        backup_artifact_manager: Optional[ArtifactManager] = None,
-    ) -> JanitorResult:
-        logging.info(
-            "Running %r on %s", self.queue_item.command, self.queue_item.package
-        )
-
-        if self.queue_item.branch_url is None:
-            # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
-            return self.create_result(
-                branch_url=self.queue_item.branch_url,
-                description="No VCS URL known for package.",
-                code="not-in-vcs",
-                logfilenames=[],
-            )
-
-        env = {}
-        env.update(queue_item_env(self.queue_item))
-        if committer:
-            env.update(committer_env(committer))
-
-        try:
-            suite_config = get_suite_config(config, self.queue_item.suite)
-        except KeyError:
-            return self.create_result(
-                code="unknown-suite",
-                description="Suite %s not in configuration" % self.queue_item.suite,
-                logfilenames=[],
-                branch_url=self.queue_item.branch_url,
-            )
-
-        # This is simple for now, since we only support one distribution..
-        builder = get_builder(config, suite_config)
-
-        if not use_cached_only:
-            async with db.acquire() as conn:
-                try:
-                    main_branch = await open_canonical_main_branch(
-                        conn, self.queue_item, possible_transports=possible_transports
-                    )
-                except BranchOpenFailure as e:
-                    return self.create_result(
-                        branch_url=self.queue_item.branch_url,
-                        description=e.description,
-                        code=e.code,
-                        logfilenames=[],
-                    )
-
-            try:
-                resume_branch = await open_resume_branch(
-                    main_branch,
-                    suite_config.branch_name,
-                    self.queue_item.package,
-                    possible_hosters=possible_hosters,
-                )
-            except HosterLoginRequired as e:
-                return self.create_result(
-                    branch_url=self.queue_item.branch_url,
-                    description=str(e),
-                    code="hoster-login-required",
-                    logfilenames=[],
-                )
-
-            if resume_branch is None:
-                resume_branch = vcs_manager.get_branch(
-                    self.queue_item.package,
-                    '%s/%s' % (suite_config.name, 'main'),
-                    get_vcs_abbreviation(main_branch.repository),
-                )
-
-            if resume_branch is not None:
-                logging.info(
-                    "Resuming from %s", full_branch_url(resume_branch))
-
-            cached_branch_url = vcs_manager.get_branch_url(
-                self.queue_item.package,
-                cache_branch_name(config.distribution, "main"),
-                get_vcs_abbreviation(main_branch.repository),
-            )
-        else:
-            main_branch = vcs_manager.get_branch(
-                self.queue_item.package,
-                cache_branch_name(config.distribution, "main"))
-            if main_branch is None:
-                return self.create_result(
-                    branch_url=self.queue_item.branch_url,
-                    code="cached-branch-missing",
-                    description="Missing cache branch for %s" % self.queue_item.package,
-                    logfilenames=[],
-                )
-            logging.info("Using cached branch %s", full_branch_url(main_branch))
-            resume_branch = vcs_manager.get_branch(
-                self.queue_item.package, '%s/%s' % (suite_config.name, 'main')
-            )
-            cached_branch_url = None
-
-        if self.queue_item.refresh and resume_branch:
-            logging.info("Since refresh was requested, ignoring resume branch.")
-            resume_branch = None
-
-        async with db.acquire() as conn:
-            resume = await check_resume_result(
-                conn, self.queue_item.suite, resume_branch
-            )
-
-            env.update(
-                await builder.build_env(conn, suite_config, self.queue_item)
-            )
-
-        log_path = os.path.join(self.output_directory, "worker.log")
-        try:
-            self._task = asyncio.create_task(
-                asyncio.wait_for(
-                    invoke_subprocess_worker(
-                        worker_kind,
-                        full_branch_url(main_branch).rstrip("/"),
-                        env,
-                        self.queue_item.command,
-                        self.output_directory,
-                        resume=resume,
-                        cached_branch_url=cached_branch_url,
-                        log_path=log_path,
-                        subpath=self.queue_item.subpath,
-                        target=builder.kind,
-                    ),
-                    timeout=overall_timeout,
-                )
-            )
-            # set_name is only available on Python 3.8
-            if getattr(self._task, "set_name", None):
-                self._task.set_name(self.log_id)
-            retcode = await self._task
-        except asyncio.CancelledError:
-            return self.create_result(
-                branch_url=full_branch_url(main_branch),
-                code="cancelled",
-                description="Job cancelled",
-                logfilenames=[],
-            )
-        except asyncio.TimeoutError:
-            return self.create_result(
-                branch_url=full_branch_url(main_branch),
-                code="timeout",
-                description="Run timed out after %d seconds"
-                % overall_timeout,  # type: ignore
-                logfilenames=[],
-            )
-
-        logfilenames = await import_logs(
-            self.output_directory,
-            logfile_manager,
-            backup_logfile_manager,
-            self.queue_item.package,
-            self.log_id,
-        )
-
-        if retcode != 0:
-            if retcode < 0:
-                description = "Worker killed with signal %d" % abs(retcode)
-                code = "worker-killed"
-            else:
-                code = "worker-failure"
-                try:
-                    with open(log_path, "r") as f:
-                        description = list(f.readlines())[-1]
-                except FileNotFoundError:
-                    description = "Worker exited with return code %d" % retcode
-
-            return self.create_result(
-                branch_url=full_branch_url(main_branch),
-                code=code,
-                description=description,
-                logfilenames=logfilenames,
-            )
-
-        json_result_path = os.path.join(self.output_directory, "result.json")
-        if os.path.exists(json_result_path):
-            worker_result = WorkerResult.from_file(json_result_path)
-        else:
-            worker_result = WorkerResult(
-                "worker-missing-result",
-                "Worker failed and did not write a result file.",
-            )
-
-        if worker_result.code is not None:
-            return self.create_result(
-                branch_url=full_branch_url(main_branch),
-                worker_result=worker_result,
-                logfilenames=logfilenames,
-            )
-
-        result = self.create_result(
-            branch_url=full_branch_url(main_branch),
-            code="success",
-            worker_result=worker_result,
-            logfilenames=logfilenames,
-        )
-
-        if result.builder_result is not None:
-            result.builder_result.from_directory(self.output_directory)
-
-        try:
-            local_branch = open_branch(
-                os.path.join(self.output_directory, self.queue_item.package)
-            )
-        except (BranchMissing, BranchUnavailable) as e:
-            return self.create_result(
-                branch_url=full_branch_url(main_branch),
-                description="result branch unavailable: %s" % e,
-                code="result-branch-unavailable",
-                worker_result=worker_result,
-                logfilenames=logfilenames,
-            )
-
-        enable_tag_pushing(local_branch)
-
-        import_branches(
-            vcs_manager,
-            local_branch,
-            self.queue_item.package,
-            suite_config.name,
-            self.log_id,
-            result.branches,
-            result.tags,
-        )
-
-        if result.builder_result and artifact_manager:
-            artifact_names = result.builder_result.artifact_filenames()
-            await store_artifacts_with_backup(
-                artifact_manager,
-                backup_artifact_manager,
-                self.output_directory,
-                self.log_id,
-                artifact_names,
-            )
-
-        return result
-
-
 async def store_run(
     conn: asyncpg.Connection,
     run_id: str,
@@ -1423,7 +1146,6 @@ class QueueProcessor(object):
         artifact_manager=None,
         vcs_manager=None,
         public_vcs_manager=None,
-        concurrency=0,
         use_cached_only=False,
         overall_timeout=None,
         committer=None,
@@ -1444,7 +1166,6 @@ class QueueProcessor(object):
         self.artifact_manager = artifact_manager
         self.vcs_manager = vcs_manager
         self.public_vcs_manager = public_vcs_manager
-        self.concurrency = concurrency
         self.use_cached_only = use_cached_only
         self.topic_queue = Topic("queue", repeat_last=True)
         self.topic_result = Topic("result")
@@ -1459,28 +1180,7 @@ class QueueProcessor(object):
             "processing": [
                 active_run.json() for active_run in self.active_runs.values()
             ],
-            "concurrency": self.concurrency,
         }
-
-    async def process_queue_item(self, item: state.QueueItem) -> None:
-        with tempfile.TemporaryDirectory() as output_directory:
-            active_run = ActiveLocalRun(item, output_directory)
-            self.register_run(active_run)
-            result = await active_run.process(
-                self.database,
-                config=self.config,
-                vcs_manager=self.vcs_manager,
-                artifact_manager=self.artifact_manager,
-                worker_kind=self.worker_kind,
-                dry_run=self.dry_run,
-                logfile_manager=self.logfile_manager,
-                backup_logfile_manager=self.backup_logfile_manager,
-                use_cached_only=self.use_cached_only,
-                overall_timeout=self.overall_timeout,
-                committer=self.committer,
-                backup_artifact_manager=self.backup_artifact_manager,
-            )
-            await self.finish_run(active_run.queue_item, result)
 
     def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
@@ -1543,45 +1243,6 @@ class QueueProcessor(object):
                 if len(ret) < n:
                     ret.append(item)
             return ret
-
-    async def process(self) -> None:
-        loop = asyncio.get_event_loop()
-        todo = set(
-            [
-                loop.create_task(self.process_queue_item(item))
-                for item in await self.next_queue_item(self.concurrency)
-            ]
-        )
-
-        def handle_sigterm():
-            self.concurrency = None
-            logging.info("Received SIGTERM; not starting new jobs.")
-
-        loop.add_signal_handler(signal.SIGTERM, handle_sigterm)
-        try:
-            while True:
-                if not todo:
-                    if self.concurrency is None:
-                        break
-                    logging.info("Nothing to do. Sleeping for 60s.")
-                    await asyncio.sleep(60)
-                    done: Set[asyncio.Future[None]] = set()
-                else:
-                    done, pending = await asyncio.wait(
-                        todo, return_when="FIRST_COMPLETED"
-                    )
-                    for task in done:
-                        task.result()
-                    todo = pending  # type: ignore
-                if self.concurrency:
-                    todo.update(
-                        [
-                            loop.create_task(self.process_queue_item(item))
-                            for item in await self.next_queue_item(len(done))
-                        ]
-                    )
-        finally:
-            loop.remove_signal_handler(signal.SIGTERM)
 
     def queue_item_assigned(self, queue_item_id: int) -> bool:
         """Check if a queue item has been assigned already."""
@@ -1933,12 +1594,6 @@ def main(argv=None):
         help="Worker to use.",
     )
     parser.add_argument(
-        "--concurrency",
-        type=int,
-        default=0,
-        help="Number of workers to run in parallel.",
-    )
-    parser.add_argument(
         "--use-cached-only", action="store_true", help="Use cached branches only."
     )
     parser.add_argument(
@@ -1982,9 +1637,9 @@ def main(argv=None):
         config = read_config(f)
 
     state.DEFAULT_URL = config.database_location
-    public_vcs_manager = RemoteVcsManager(args.public_vcs_location)
+    public_vcs_manager = get_vcs_manager(args.public_vcs_location)
     if config.vcs_location:
-        vcs_manager = LocalVcsManager(config.vcs_location)
+        vcs_manager = get_vcs_manager(config.vcs_location)
     else:
         vcs_manager = public_vcs_manager
     logfile_manager = get_log_manager(config.logs_location)
@@ -2023,7 +1678,6 @@ def main(argv=None):
         artifact_manager,
         vcs_manager,
         public_vcs_manager,
-        args.concurrency,
         args.use_cached_only,
         overall_timeout=args.overall_timeout,
         committer=config.committer,
@@ -2031,8 +1685,6 @@ def main(argv=None):
         backup_logfile_manager=backup_logfile_manager,
     )
 
-    if args.concurrency > 0:
-        loop.create_task(queue_processor.process())
     loop.create_task(run_web_server(args.listen_address, args.port, queue_processor))
 
     loop.run_forever()

@@ -47,3 +47,23 @@
     state: link
     src: "{{ janitor_code_path }}/sbuildrc"
     dest: "{{ janitor_home }}/.sbuildrc"
+- name: Runner systemd installed
+  template:
+    src: worker@.service
+    dest: /etc/systemd/system/janitor-worker@.service
+- name: Enable systemd service file
+  systemd:
+    name: janitor-worker@{{ item }}.service
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  loop: "{{ range(janitor_runner_concurrency) }}"
+- name: Credentials file
+  template:
+    src: credentials.json
+    dest: "{{ janitor_home }}/credentials.json"
+    owner: "{{ janitor_user }}"
+    mode: '0600'
+  vars:
+    username: "{{ inventory_hostname }}"
+    password: "{{ lookup('password', 'worker-credentials.txt') }}"

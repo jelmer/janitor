@@ -20,7 +20,7 @@ import asyncio
 from contextlib import contextmanager, ExitStack
 from datetime import datetime
 import errno
-import functools
+from functools import partial
 from http.client import IncompleteRead
 from io import BytesIO
 import json
@@ -37,7 +37,7 @@ from typing import Any, Optional, List, Dict
 from urllib.parse import urljoin
 
 import aiohttp
-from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError
+from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError, web
 import yarl
 
 from prometheus_client import REGISTRY, push_to_gateway
@@ -60,6 +60,7 @@ from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
 
+from janitor.prometheus import setup_metrics
 from janitor.vcs import (
     LocalVcsManager,
     RemoteVcsManager,
@@ -428,6 +429,10 @@ class WatchdogPetter(object):
             raise
 
 
+async def handle_index(request):
+    return web.Response(text='TODO', status=200)
+
+
 async def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="janitor-pull-worker",
@@ -460,6 +465,7 @@ async def main(argv=None):
     # Unused, here for backwards compatibility.
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
     parser.add_argument("--gcp-logging", action="store_true")
+    parser.add_argument("--listen-address", type=str, default="127.0.0.1")
 
     args = parser.parse_args(argv)
 
@@ -499,6 +505,7 @@ async def main(argv=None):
             def get_credentials(
                 self, protocol, host, port=None, user=None, path=None, realm=None
             ):
+                import pdb; pdb.set_trace()
                 if host == base_url.host:
                     return {
                         "user": auth.login,
@@ -547,6 +554,16 @@ async def main(argv=None):
 
         watchdog_petter = WatchdogPetter(args.base_url, auth, assignment['id'])
         watchdog_petter.start()
+
+        app = web.Application()
+        app.router.add_get('/', handle_index, name='index')
+        setup_metrics(app)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, args.listen_address, 0)
+        await site.start()
+        (site_addr, site_port) = site._server.sockets[0].getsockname()
+        logging.info('Diagonistics available at http://%s:%d/', site_addr, site_port)
 
         if "WORKSPACE" in os.environ:
             desc_path = os.path.join(os.environ["WORKSPACE"], "description.txt")
@@ -601,7 +618,7 @@ async def main(argv=None):
             start_time = datetime.utcnow()
             main_task = loop.run_in_executor(
                 None,
-                functools.partial(
+                partial(
                     run_worker,
                     branch_url,
                     run_id,
