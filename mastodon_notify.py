@@ -23,6 +23,7 @@ from janitor.prometheus import run_prometheus_server
 
 from janitor.pubsub import pubsub_reader
 
+import logging
 import sys
 
 from mastodon import Mastodon
@@ -57,6 +58,14 @@ class MastodonNotifier(object):
 
 
 async def main(args, mastodon):
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     await run_prometheus_server(args.prometheus_listen_address, args.prometheus_port)
     notifier = MastodonNotifier(mastodon)
     async with ClientSession() as session:
@@ -108,6 +117,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--prometheus-port", type=int, default=9919, help="Port for prometheus metrics"
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
     if args.register:

@@ -246,12 +246,9 @@ def import_branches_git(
 ):
     repo_url = vcs_manager.get_repository_url(package, "git")
 
-    try:
-        vcs_result_controldir = ControlDir.open(repo_url)
-    except NotBranchError:
-        vcs_result_controldir = ControlDir.create(
-            repo_url, format=format_registry.get("git-bare")()
-        )
+    # The server is expected to have repositories ready for us, so we don't create
+    # the repository if it is missing.
+    vcs_result_controldir = ControlDir.open(repo_url)
 
     repo = vcs_result_controldir.open_repository()
 

@@ -16,6 +16,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import logging
 import re
 
 from urllib.parse import urljoin
@@ -98,6 +99,14 @@ class JanitorNotifier(pydle.Client):
 
 
 async def main(args):
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
+
     notifier = JanitorNotifier(
         args.channel,
         nickname=args.nick,
@@ -158,6 +167,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--prometheus-port", type=int, default=9918, help="Port for prometheus metrics"
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     args = parser.parse_args()
 
     asyncio.run(main(args))
