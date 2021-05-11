@@ -461,6 +461,8 @@ async def main(argv=None):
     parser.add_argument(
         "--prometheus", type=str, help="Prometheus push gateway to export to."
     )
+    parser.add_argument(
+        '--port', type=int, default=0, help="Port to use for diagnostics web server")
 
     # Unused, here for backwards compatibility.
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
@@ -505,7 +507,6 @@ async def main(argv=None):
             def get_credentials(
                 self, protocol, host, port=None, user=None, path=None, realm=None
             ):
-                import pdb; pdb.set_trace()
                 if host == base_url.host:
                     return {
                         "user": auth.login,
@@ -560,7 +561,7 @@ async def main(argv=None):
         setup_metrics(app)
         runner = web.AppRunner(app)
         await runner.setup()
-        site = web.TCPSite(runner, args.listen_address, 0)
+        site = web.TCPSite(runner, args.listen_address, args.port)
         await site.start()
         (site_addr, site_port) = site._server.sockets[0].getsockname()
         logging.info('Diagonistics available at http://%s:%d/', site_addr, site_port)

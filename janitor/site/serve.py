@@ -399,7 +399,7 @@ AND suite = ANY($1::text[])
             raise web.HTTPNotFound(text='login is disabled on this instance')
         location = URL(request.app.openid_config["authorization_endpoint"]).with_query(
             {
-                "client_id": request.app.config.oauth2_provider.client_id,
+                "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
                 "redirect_uri": str(request.app.external_url.join(callback_path)),
                 "response_type": "code",
                 "scope": "openid",
@@ -762,8 +762,8 @@ order by url, last_run.finish_time desc
         )
         params = {
             "code": code,
-            "client_id": request.app.config.oauth2_provider.client_id,
-            "client_secret": request.app.config.oauth2_provider.client_secret,
+            "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
+            "client_secret": request.app.config.oauth2_provider.client_secret or os.environ['OAUTH2_CLIENT_SECRET'],
             "grant_type": "authorization_code",
             "redirect_uri": str(redirect_uri),
         }

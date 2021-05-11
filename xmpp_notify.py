@@ -190,8 +190,15 @@ if __name__ == "__main__":
         const=logging.DEBUG,
         default=logging.INFO,
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     args = parser.parse_args()
 
-    logging.basicConfig(level=args.loglevel, format="%(levelname)-8s %(message)s")
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=args.loglevel, format="%(levelname)-8s %(message)s")
 
     asyncio.run(main(args))
