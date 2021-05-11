@@ -19,7 +19,9 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydat
     if include:
         cmd.append("--include=%s" % ','.join(include))
     for suite in suites:
-        cmd.append("--alias=%s-%s-sbuild" % (suite.build_distribution, sbuild_arch))
+        if not suite.debian_build:
+            continue
+        cmd.append("--alias=%s-%s-sbuild" % (suite.debian_build.build_distribution, sbuild_arch))
     subprocess.check_call(cmd)
 
 
@@ -29,7 +31,7 @@ def get_sbuild_architecture():
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--remove-old', action='store_true')
-parser.add_argument('--include', type=str, action='append', help='Include package.')
+parser.add_argument('--include', type=str, action='append', help='Include package.', default=[])
 parser.add_argument('--base-directory', type=str, help='Base directory for chroots')
 parser.add_argument('--user', type=str, help='User to create home directory for')
 parser.add_argument(
