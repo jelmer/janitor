@@ -575,6 +575,10 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
+async def handle_index(request):
+    return web.Response(text='')
+
+
 def run_web_server(
     listen_addr: str,
     port: int,
@@ -604,6 +608,7 @@ def run_web_server(
                 method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend
             )
 
+    app.router.add_get("/", handle_index, name="index")
     app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')

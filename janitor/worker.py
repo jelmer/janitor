@@ -474,6 +474,7 @@ class DebianTarget(Target):
 
     def build(self, ws, subpath, output_directory, env):
         from ognibuild.debian.apt import AptManager
+        from ognibuild.session import SessionSetupFailure
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
 
@@ -484,84 +485,87 @@ class DebianTarget(Target):
             session = SchrootSession(self.chroot)
         else:
             session = PlainSession()
-        with session:
-            apt = AptManager(session)
-            if self.build_command:
-                if self.last_build_version:
-                    # Update the changelog entry with the previous build version;
-                    # This allows us to upload incremented versions for subsequent
-                    # runs.
-                    tree_set_changelog_version(
-                        ws.local_tree, self.last_build_version, subpath
-                    )
+        try:
+            with session:
+                apt = AptManager(session)
+                if self.build_command:
+                    if self.last_build_version:
+                        # Update the changelog entry with the previous build version;
+                        # This allows us to upload incremented versions for subsequent
+                        # runs.
+                        tree_set_changelog_version(
+                            ws.local_tree, self.last_build_version, subpath
+                        )
 
-                source_date_epoch = ws.local_tree.branch.repository.get_revision(
-                    ws.main_branch.last_revision()
-                ).timestamp
-                try:
-                    if not self.build_suffix:
-                        (changes_names, cl_version) = build_once(
-                            ws.local_tree,
-                            self.build_distribution,
-                            output_directory,
-                            self.build_command,
-                            subpath=subpath,
-                            source_date_epoch=source_date_epoch,
-                        )
-                    else:
-                        (changes_names, cl_version) = build_incrementally(
-                            ws.local_tree,
-                            apt,
-                            "~" + self.build_suffix,
-                            self.build_distribution,
-                            output_directory,
-                            build_command=self.build_command,
-                            build_changelog_entry="Build for debian-janitor apt repository.",
-                            committer=self.committer,
-                            subpath=subpath,
-                            source_date_epoch=source_date_epoch,
-                            update_changelog=self.changer_args.update_changelog,
-                            max_iterations=MAX_BUILD_ITERATIONS
-                        )
-                except MissingUpstreamTarball:
-                    raise WorkerFailure(
-                        "build-missing-upstream-source", "unable to find upstream source"
-                    )
-                except MissingChangesFile as e:
-                    raise WorkerFailure(
-                        "build-missing-changes",
-                        "Expected changes path %s does not exist." % e.filename,
-                        details={'filename': e.filename}
-                    )
-                except DetailedDebianBuildFailure as e:
-                    if e.stage and not e.error.is_global:
-                        code = "%s-%s" % (e.stage, e.error.kind)
-                    else:
-                        code = e.error.kind
+                    source_date_epoch = ws.local_tree.branch.repository.get_revision(
+                        ws.main_branch.last_revision()
+                    ).timestamp
                     try:
-                        details = e.error.json()
-                    except NotImplementedError:
-                        details = None
-                        actions = None
-                    else:
-                        from .debian.missing_deps import resolve_requirement
-                        from ognibuild.buildlog import problem_to_upstream_requirement
-                        # Maybe there's a follow-up action we can consider?
-                        req = problem_to_upstream_requirement(e.error)
-                        if req:
-                            actions = resolve_requirement(apt, req)
-                            if actions:
-                                logging.info('Suggesting follow-up actions: %r', actions)
+                        if not self.build_suffix:
+                            (changes_names, cl_version) = build_once(
+                                ws.local_tree,
+                                self.build_distribution,
+                                output_directory,
+                                self.build_command,
+                                subpath=subpath,
+                                source_date_epoch=source_date_epoch,
+                            )
                         else:
+                            (changes_names, cl_version) = build_incrementally(
+                                ws.local_tree,
+                                apt,
+                                "~" + self.build_suffix,
+                                self.build_distribution,
+                                output_directory,
+                                build_command=self.build_command,
+                                build_changelog_entry="Build for debian-janitor apt repository.",
+                                committer=self.committer,
+                                subpath=subpath,
+                                source_date_epoch=source_date_epoch,
+                                update_changelog=self.changer_args.update_changelog,
+                                max_iterations=MAX_BUILD_ITERATIONS
+                            )
+                    except MissingUpstreamTarball:
+                        raise WorkerFailure(
+                            "build-missing-upstream-source", "unable to find upstream source"
+                        )
+                    except MissingChangesFile as e:
+                        raise WorkerFailure(
+                            "build-missing-changes",
+                            "Expected changes path %s does not exist." % e.filename,
+                            details={'filename': e.filename}
+                        )
+                    except DetailedDebianBuildFailure as e:
+                        if e.stage and not e.error.is_global:
+                            code = "%s-%s" % (e.stage, e.error.kind)
+                        else:
+                            code = e.error.kind
+                        try:
+                            details = e.error.json()
+                        except NotImplementedError:
+                            details = None
                             actions = None
-                    raise WorkerFailure(code, e.description, details=details, followup_actions=actions)
-                except UnidentifiedDebianBuildError as e:
-                    if e.stage is not None:
-                        code = "build-failed-stage-%s" % e.stage
-                    else:
-                        code = "build-failed"
-                    raise WorkerFailure(code, e.description)
-                logger.info("Built %r.", changes_names)
+                        else:
+                            from .debian.missing_deps import resolve_requirement
+                            from ognibuild.buildlog import problem_to_upstream_requirement
+                            # Maybe there's a follow-up action we can consider?
+                            req = problem_to_upstream_requirement(e.error)
+                            if req:
+                                actions = resolve_requirement(apt, req)
+                                if actions:
+                                    logging.info('Suggesting follow-up actions: %r', actions)
+                            else:
+                                actions = None
+                        raise WorkerFailure(code, e.description, details=details, followup_actions=actions)
+                    except UnidentifiedDebianBuildError as e:
+                        if e.stage is not None:
+                            code = "build-failed-stage-%s" % e.stage
+                        else:
+                            code = "build-failed"
+                        raise WorkerFailure(code, e.description)
+                    logger.info("Built %r.", changes_names)
+        except SessionSetupFailure as e:
+            raise WorkerFailure('session-setup-failure', str(e))
         from .debian.lintian import run_lintian
         lintian_result = run_lintian(
             output_directory, changes_names, profile=self.lintian_profile,

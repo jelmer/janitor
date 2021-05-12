@@ -601,7 +601,7 @@ async def handle_publish_failure(e, conn, run, bucket):
             await do_schedule_control(
                 conn,
                 unchanged_run['package'],
-                unchanged_run['revision'],
+                unchanged_run['revision'].encode('utf-8'),
                 refresh=True,
                 requestor="publisher (missing build artifacts - control)",
                 bucket=bucket,
