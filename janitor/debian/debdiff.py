@@ -50,7 +50,10 @@ def filter_boring_wdiff(
 ) -> List[str]:
     if not lines:
         return lines
-    field, changes = lines[0].split(":", 1)
+    try:
+        field, changes = lines[0].split(":", 1)
+    except ValueError:
+        return lines
     if field == "Installed-Size":
         return []
     if field == "Version":
