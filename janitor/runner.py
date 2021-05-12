@@ -370,7 +370,7 @@ class JanitorResult(object):
         self.description = description
         self.branch_url = branch_url
         self.code = code
-        self.logfilenames = logfilenames
+        self.logfilenames = logfilenames or []
         self.worker_name = worker_name
         self.worker_link = worker_link
         if worker_result:
