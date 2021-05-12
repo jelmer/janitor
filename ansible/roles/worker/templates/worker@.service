@@ -1,0 +1,21 @@
+[Unit]
+Description=Worker
+
+StartLimitIntervalSec=90
+StartLimitBurst=3
+
+[Service]
+User={{ janitor_user }}
+Type=simple
+Environment=TMPDIR=/home/janitor/tmp
+EnvironmentFile={{ janitor_home }}/env
+ExecStart=python3 -m janitor.pull_worker --credentials={{ janitor_home }}/credentials.json{% if janitor_site_external_url %} --base-url={{ janitor_site_external_url }}api/{%+ endif %}
+
+Restart=always
+MemoryAccounting=yes
+MemoryHigh=10G
+MemoryMax=12G
+Nice=-15
+
+[Install]
+WantedBy=default.target
