@@ -334,7 +334,6 @@ async def git_backend(request):
             stream.write(chunk)
             await stream.drain()
         stream.close()
-        await stream.wait_closed()
 
     async def read_stderr(stream):
         line = await stream.readline()
