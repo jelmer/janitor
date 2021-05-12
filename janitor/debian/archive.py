@@ -291,12 +291,17 @@ async def handle_health(request):
     return web.Response(text='ok')
 
 
+async def handle_index(request):
+    return web.Response(text='')
+
+
 async def run_web_server(listen_addr, port, dists_dir, config, generator_manager):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.config = config
     app.generator_manager = generator_manager
     setup_metrics(app)
+    app.router.add_get("/", handle_index, name="index")
     app.router.add_static("/dists", dists_dir, show_index=True)
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
