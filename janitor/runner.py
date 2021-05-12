@@ -113,6 +113,7 @@ last_success_gauge = Gauge(
 )
 build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
 run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
+active_run_count = Gauge("active_runs", "Number of active runs")
 
 
 class BuilderResult(object):
@@ -1185,9 +1186,11 @@ class QueueProcessor(object):
     def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
+        active_run_count.inc()
         packages_processed_count.inc()
 
     async def finish_run(self, item: state.QueueItem, result: JanitorResult) -> None:
+        active_run_count.dec()
         run_result_count.labels(
             package=item.package,
             suite=item.suite,
