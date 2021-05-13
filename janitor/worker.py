@@ -875,11 +875,6 @@ def main(argv=None):
         default="",
     )
     parser.add_argument(
-        "--tgz-repo",
-        help="Whether to create a tgz of the VCS repo.",
-        action="store_true",
-    )
-    parser.add_argument(
         "--extra-resume-branch",
         default=[],
         help="Colocated branches to resume as well",
@@ -933,18 +928,7 @@ def main(argv=None):
             extra_resume_branches=extra_resume_branches,
             resume_subworker_result=resume_subworker_result,
         ) as (ws, result):
-            if args.tgz_repo:
-                subprocess.check_call(
-                    [
-                        "tar",
-                        "czf",
-                        os.environ["PACKAGE"] + ".tgz",
-                        os.environ["PACKAGE"],
-                    ],
-                    cwd=output_directory,
-                )
-            else:
-                ws.defer_destroy()
+            ws.defer_destroy()
     except WorkerFailure as e:
         metadata.update(e.json())
         logger.info("Worker failed (%s): %s", e.code, e.description)
