@@ -2,7 +2,7 @@
 Description=Worker
 
 StartLimitIntervalSec=90
-StartLimitBurst=3
+StartLimitBurst=60
 
 [Service]
 User={{ janitor_user }}
