@@ -68,8 +68,17 @@ async def main():
     parser.add_argument(
         "--config", type=str, default="janitor.conf", help="Path to configuration."
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
+
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     last_success_gauge = Gauge(
         "job_last_success_unixtime", "Last time a batch job successfully finished"

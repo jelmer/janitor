@@ -561,74 +561,6 @@ class WorkerResult(object):
         )
 
 
-async def run_subprocess(args, env, log_path=None):
-    if log_path:
-        read, write = os.pipe()
-        p = await asyncio.create_subprocess_exec(
-            *args, env=env, stdout=write, stderr=write, stdin=asyncio.subprocess.PIPE
-        )
-        p.stdin.close()
-        os.close(write)
-        tee = await asyncio.create_subprocess_exec("tee", log_path, stdin=read)
-        os.close(read)
-        await tee.wait()
-        return await p.wait()
-    else:
-        p = await asyncio.create_subprocess_exec(
-            *args, env=env, stdin=asyncio.subprocess.PIPE
-        )
-        p.stdin.close()
-        return await p.wait()
-
-
-async def invoke_subprocess_worker(
-    worker_kind: str,
-    main_branch_url: str,
-    env: Dict[str, str],
-    command: str,
-    output_directory: str,
-    target: str,
-    resume: Optional["ResumeInfo"] = None,
-    cached_branch_url: Optional[str] = None,
-    log_path: Optional[str] = None,
-    subpath: Optional[str] = None,
-) -> int:
-    subprocess_env = dict(os.environ.items())
-    for k, v in env.items():
-        if v is not None:
-            subprocess_env[k] = v
-    worker_module = {
-        "local": "janitor.worker",
-        "gcb": "janitor.gcb_worker",
-    }[worker_kind.split(":")[0]]
-    args = [
-        sys.executable,
-        "-m",
-        worker_module,
-        "--branch-url=%s" % main_branch_url,
-        "--output-directory=%s" % output_directory,
-        "--target=%s" % target,
-    ]
-    if ":" in worker_kind:
-        args.append("--host=%s" % worker_kind.split(":")[1])
-    if resume:
-        args.append("--resume-branch-url=%s" % resume.resume_branch_url)
-        resume_result_path = os.path.join(output_directory, "previous_result.json")
-        with open(resume_result_path, "w") as f:
-            json.dump(resume.result, f)
-        args.append("--resume-result-path=%s" % resume_result_path)
-        for (role, name, base, revision) in resume.resume_result_branches or []:
-            if name is not None:
-                args.append("--extra-resume-branch=%s:%s" % (role, name))
-    if cached_branch_url:
-        args.append("--cached-branch-url=%s" % cached_branch_url)
-    if subpath:
-        args.append("--subpath=%s" % subpath)
-
-    args.extend(shlex.split(command))
-    return await run_subprocess(args, env=subprocess_env, log_path=log_path)
-
-
 async def update_branch_url(
     conn: asyncpg.Connection, package: str, vcs_type: str, vcs_url: str
 ) -> None:
@@ -698,73 +630,15 @@ async def import_logs(
 
 
 class ActiveRun(object):
-    """Tracks state of an active run."""
-
-    queue_item: state.QueueItem
-    log_id: str
-    start_time: datetime
-    worker_name: str
-    worker_link: Optional[str]
-
-    def __init__(self, queue_item: state.QueueItem):
-        self.queue_item = queue_item
-        self.start_time = datetime.utcnow()
-        self.log_id = str(uuid.uuid4())
-
-    @property
-    def current_duration(self):
-        return datetime.utcnow() - self.start_time
-
-    def kill(self) -> None:
-        """Abort this run."""
-        raise NotImplementedError(self.kill)
-
-    def list_log_files(self) -> Iterable[str]:
-        raise NotImplementedError(self.list_log_files)
-
-    def get_log_file(self, name) -> Iterable[bytes]:
-        raise NotImplementedError(self.get_log_file)
-
-    def _extra_json(self):
-        return {}
-
-    def create_result(self, **kwargs):
-        return JanitorResult(
-            pkg=self.queue_item.package,
-            suite=self.queue_item.suite,
-            start_time=self.start_time,
-            finish_time=datetime.utcnow(),
-            log_id=self.log_id,
-            worker_name=self.worker_name,
-            worker_link=self.worker_link,
-            **kwargs)
-
-    def json(self) -> Any:
-        """Return a JSON representation."""
-        ret = {
-            "queue_id": self.queue_item.id,
-            "id": self.log_id,
-            "package": self.queue_item.package,
-            "suite": self.queue_item.suite,
-            "estimated_duration": self.queue_item.estimated_duration.total_seconds()
-            if self.queue_item.estimated_duration
-            else None,
-            "current_duration": self.current_duration.total_seconds(),
-            "start_time": self.start_time.isoformat(),
-            "worker": self.worker_name,
-            "worker_link": self.worker_link,
-            "logfilenames": list(self.list_log_files()),
-        }
-        ret.update(self._extra_json())
-        return ret
-
-
-class ActiveRemoteRun(ActiveRun):
 
     KEEPALIVE_INTERVAL = 60 * 10
 
     log_files: Dict[str, BinaryIO]
     websockets: Set[web.WebSocketResponse]
+    worker_name: str
+    queue_item: state.QueueItem
+    log_id: str
+    start_time: datetime
 
     def __init__(
         self,
@@ -772,7 +646,9 @@ class ActiveRemoteRun(ActiveRun):
         worker_name: str,
         jenkins_metadata: Optional[Dict[str, str]] = None,
     ):
-        super(ActiveRemoteRun, self).__init__(queue_item)
+        self.queue_item = queue_item
+        self.start_time = datetime.utcnow()
+        self.log_id = str(uuid.uuid4())
         self.worker_name = worker_name
         self.log_files = {}
         self.main_branch_url = self.queue_item.branch_url
@@ -781,18 +657,15 @@ class ActiveRemoteRun(ActiveRun):
         self._watch_dog = None
         self._jenkins_metadata = jenkins_metadata
 
-    def _extra_json(self):
-        return {
-            "jenkins": self._jenkins_metadata,
-            "last-keepalive": self.last_keepalive.isoformat(
-                timespec='seconds'),
-            }
-
     @property
     def worker_link(self):
         if self._jenkins_metadata is not None:
             return self._jenkins_metadata["build_url"]
         return None
+
+    @property
+    def current_duration(self):
+        return datetime.utcnow() - self.start_time
 
     def start_watchdog(self, queue_processor):
         if self._watch_dog is not None:
@@ -853,6 +726,38 @@ class ActiveRemoteRun(ActiveRun):
             return BytesIO(self.log_files[name].getvalue())
         except KeyError:
             raise FileNotFoundError
+
+    def create_result(self, **kwargs):
+        return JanitorResult(
+            pkg=self.queue_item.package,
+            suite=self.queue_item.suite,
+            start_time=self.start_time,
+            finish_time=datetime.utcnow(),
+            log_id=self.log_id,
+            worker_name=self.worker_name,
+            worker_link=self.worker_link,
+            **kwargs)
+
+    def json(self) -> Any:
+        """Return a JSON representation."""
+        ret = {
+            "queue_id": self.queue_item.id,
+            "id": self.log_id,
+            "package": self.queue_item.package,
+            "suite": self.queue_item.suite,
+            "estimated_duration": self.queue_item.estimated_duration.total_seconds()
+            if self.queue_item.estimated_duration
+            else None,
+            "current_duration": self.current_duration.total_seconds(),
+            "start_time": self.start_time.isoformat(),
+            "worker": self.worker_name,
+            "worker_link": self.worker_link,
+            "logfilenames": list(self.list_log_files()),
+            "jenkins": self._jenkins_metadata,
+            "last-keepalive": self.last_keepalive.isoformat(
+                timespec='seconds'),
+        }
+        return ret
 
 
 async def open_canonical_main_branch(conn, queue_item, possible_transports=None):
@@ -1367,7 +1272,7 @@ async def handle_assign(request):
     item = None
     while item is None:
         [item] = await queue_processor.next_queue_item(1)
-        active_run = ActiveRemoteRun(
+        active_run = ActiveRun(
             worker_name=worker,
             queue_item=item,
             jenkins_metadata=json.get("jenkins"),
