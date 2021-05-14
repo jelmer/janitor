@@ -186,13 +186,19 @@ async def main():
     parser.add_argument(
         "--package-overrides",
         type=str,
-        default="package_overrides.conf",
+        default=None,
         help="Read package overrides.",
     )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
-
-    logging.basicConfig(level=logging.INFO)
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
 
     last_success_gauge = Gauge(
         "job_last_success_unixtime", "Last time a batch job successfully finished"
@@ -201,8 +207,11 @@ async def main():
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    with open(args.package_overrides, "r") as f:
-        package_overrides = read_package_overrides(f)
+    if args.package_overrides:
+        with open(args.package_overrides, "r") as f:
+            package_overrides = read_package_overrides(f)
+    else:
+        package_overrides = {}
 
     db = state.Database(config.database_location)
 

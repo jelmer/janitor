@@ -99,7 +99,7 @@ async def schedule_update_package(conn, policy, package, desired_version, reques
     await conn.execute(
         "INSERT INTO candidate "
         "(package, suite, context, value, success_chance) "
-        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO IGNORE",
+        "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
         package, 'fresh-releases', None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
         DEFAULT_SUCCESS_CHANCE)
     await sync_policy(conn, policy, package=package)
