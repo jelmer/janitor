@@ -25,6 +25,8 @@ from typing import Optional, List
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 
+from prometheus_client import Counter
+
 from ..artifacts import get_artifact_manager, ArtifactsMissing
 from ..config import read_config
 from ..prometheus import setup_metrics
@@ -32,6 +34,8 @@ from ..pubsub import pubsub_reader
 
 
 logger = logging.getLogger('janitor.debian.auto_upload')
+debsign_failed_count = Counter("debsign_failed", "Number of packages for which signing failed.")
+upload_failed_count = Counter("upload_failed", "Number of packages for which uploading failed.")
 
 
 async def run_web_server(listen_addr, port, config):
@@ -123,6 +127,7 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
                     e.returncode, changes_filename,
                     log_id, e.reason)
                 failures = True
+                debsign_failed_count.inc()
             else:
                 logging.info(
                     'Successfully signed %s for %s',
@@ -132,6 +137,7 @@ async def upload_build_result(log_id, artifact_manager, dput_host, debsign_keyid
             try:
                 await dput(td, changes_filename, dput_host)
             except DputFailure as e:
+                upload_failed_count.inc()
                 logging.error(
                     'Error (exit code %d) uploading %s for %s: %s',
                     e.returncode, changes_filename,
