@@ -63,6 +63,7 @@ from silver_platter.proposal import (
 from silver_platter.utils import (
     open_branch,
     BranchMissing,
+    BranchRateLimited,
     BranchUnavailable,
     full_branch_url,
 )
@@ -114,6 +115,7 @@ last_success_gauge = Gauge(
 build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
 run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
 active_run_count = Gauge("active_runs", "Number of active runs")
+main_branch_rate_limit_count = Count("main_branch_rate_limit_count", "Rate limiting of main branch")
 
 
 class BuilderResult(object):
@@ -760,16 +762,6 @@ class ActiveRun(object):
         return ret
 
 
-async def open_canonical_main_branch(conn, queue_item, possible_transports=None):
-    return await open_branch_with_fallback(
-        conn,
-        queue_item.package,
-        queue_item.vcs_type,
-        queue_item.branch_url,
-        possible_transports=possible_transports,
-    )
-
-
 async def open_resume_branch(main_branch, suite_name, package, possible_hosters=None):
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
@@ -1294,9 +1286,17 @@ async def handle_assign(request):
         build_env = await builder.build_env(conn, suite_config, item)
 
         try:
-            main_branch = await open_canonical_main_branch(
-                conn, item, possible_transports=possible_transports
+            main_branch = await open_branch_with_fallback(
+                conn,
+                item.package,
+                item.vcs_type,
+                item.branch_url,
+                possible_transports=possible_transports,
             )
+        except BranchRateLimited as e:
+            main_branch_rate_limit_count.inc()
+            await abort(active_run, 'pull-rate-limited', str(e))
+            return web.json_response({'reason': str(e)}, status=429)
         except BranchOpenFailure:
             resume_branch = None
             vcs_type = item.vcs_type

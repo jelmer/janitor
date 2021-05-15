@@ -433,6 +433,10 @@ async def handle_index(request):
     return web.Response(text='TODO', status=200)
 
 
+async def handle_health(request):
+    return web.Response(text='ok', status=200)
+
+
 async def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="janitor-pull-worker",
@@ -558,6 +562,7 @@ async def main(argv=None):
 
         app = web.Application()
         app.router.add_get('/', handle_index, name='index')
+        app.router.add_get('/health', handle_health, name='health')
         setup_metrics(app)
         runner = web.AppRunner(app)
         await runner.setup()
