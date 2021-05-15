@@ -78,6 +78,7 @@ from ognibuild import (
 )
 from ognibuild.buildsystem import (
     NoBuildToolsFound,
+    detect_buildsystems,
 )
 from ognibuild import (
     UnidentifiedError,
@@ -623,7 +624,6 @@ class GenericTarget(Target):
         from ognibuild.buildlog import InstallFixer
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
-        from ognibuild.buildsystem import NoBuildToolsFound, detect_buildsystems
         from ognibuild.resolver import auto_resolver
 
         if self.chroot:
@@ -640,6 +640,8 @@ class GenericTarget(Target):
             try:
                 run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
                 run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+            except NoBuildToolsFound as e:
+                raise WorkerFailure('no-build-tools-found', str(e))
             except DetailedFailure as f:
                 raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
             except UnidentifiedError as e:
