@@ -1358,7 +1358,41 @@ async def handle_assign(request):
     return web.json_response(assignment, status=201)
 
 
+@routes.post("/active-runs/{run_id}/log/{logname}", name="upload-log")
+async def handle_upload_log(request):
+    queue_processor = request.app['queue_processor']
+    run_id = request.match_info['run_id']
+    logname = request.match_info['logname']
+    try:
+        active_run = queue_processor.active_runs[run_id]
+    except KeyError:
+        logging.warning("No such current run: %s" % run_id)
+        return web.json_response({'run_id': run_id}, status=404)
+
+    async for data, _ in request.content.iter_chunks():
+        if active_run.append_log(logname, data):
+            # Make sure everybody is aware of the new log file.
+            queue_processor.topic_queue.publish(queue_processor.status_json())
+    active_run.reset_keepalive()
+
+    return web.json_response({}, status=200)
+
+
+@routes.post("/active-runs/{run_id}/keepalive", name="keepalive")
+async def handle_keepalive(request):
+    queue_processor = request.app['queue_processor']
+    run_id = request.match_info['run_id']
+    try:
+        active_run = queue_processor.active_runs[run_id]
+    except KeyError:
+        logging.warning("No such current run: %s" % run_id)
+        return web.json_response({'run_id': run_id}, status=404)
+    active_run.keepalive()
+    return web.json_response({}, status=200)
+
+
 @routes.post("/finish/{run_id}", name="finish")
+@routes.post("/active-runs/{run_id}/finish", name="finish")
 async def handle_finish(request):
     queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
