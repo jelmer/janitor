@@ -24,14 +24,10 @@ import json
 from io import BytesIO
 import logging
 import os
-import re
-import signal
-import shlex
-import socket
 import ssl
 import sys
 import tempfile
-from typing import List, Any, Optional, Iterable, BinaryIO, Dict, Tuple, Set, Type
+from typing import List, Any, Optional, BinaryIO, Dict, Tuple, Set, Type
 import uuid
 
 from aiohttp import (
@@ -115,7 +111,7 @@ last_success_gauge = Gauge(
 build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
 run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
 active_run_count = Gauge("active_runs", "Number of active runs")
-main_branch_rate_limit_count = Count("main_branch_rate_limit_count", "Rate limiting of main branch")
+main_branch_rate_limit_count = Counter("main_branch_rate_limit_count", "Rate limiting of main branch")
 
 
 class BuilderResult(object):
@@ -1133,16 +1129,14 @@ class QueueProcessor(object):
         last_success_gauge.set_to_current_time()
         await followup_run(self.config, self.database, self.policy, item, result)
 
-    async def next_queue_item(self, n) -> List[state.QueueItem]:
-        ret: List[state.QueueItem] = []
+    async def next_queue_item(self, n) -> Optional[state.QueueItem]:
         async with self.database.acquire() as conn:
             limit = len(self.active_runs) + n + 2
             async for item in state.iter_queue(conn, limit=limit):
                 if self.queue_item_assigned(item.id):
                     continue
-                if len(ret) < n:
-                    ret.append(item)
-            return ret
+                return item
+            return None
 
     def queue_item_assigned(self, queue_item_id: int) -> bool:
         """Check if a queue item has been assigned already."""
@@ -1263,7 +1257,9 @@ async def handle_assign(request):
     queue_processor = request.app['queue_processor']
     item = None
     while item is None:
-        [item] = await queue_processor.next_queue_item(1)
+        item = await queue_processor.next_queue_item(1)
+        # TODO(jelmer): Handle the case where item is none. Send
+        # back an error of some sort?
         active_run = ActiveRun(
             worker_name=worker,
             queue_item=item,
