@@ -58,6 +58,7 @@ from . import (
     BuildDiffUnavailable,
     DebdiffRetrievalError,
 )
+from janitor.logs import get_log_manager
 from .webhook import process_webhook
 from ..policy_pb2 import PolicyConfig
 from ..schedule import (
@@ -1103,6 +1104,7 @@ def create_background_task(fn, title):
 @docs()
 @routes.post('/reprocess-logs', name='admin-reprocess-logs')
 def handle_reprocess_logs(request):
+    from ..reprocess_logs import reprocess_run_logs
     check_admin(request)
     dry_run = 'dry_run' in request.match_info
     reschedule = 'reschedule' in request.match_info
@@ -1149,16 +1151,22 @@ WHERE
 """
     async with request.app.db.acquire() as conn:
         rows = await conn.fetch(query, *args)
-    todo = []
-    async for row in rows:
-        todo.append(
-            reprocess_run_logs(
-                request.app.db, row['package'], row['suite'], row['id'],
-                row['command'], row['duration'], row['result_code'],
-                row['description'], row['failure_details'],
-                dry_run=dry_run, reschedule=reschedule))
-    for i in range(0, len(todo), 100):
-        await asyncio.wait(set(todo[i : i + 100]))
+
+    async def do_reprocess():
+        todo = []
+        async for row in rows:
+            todo.append(
+                reprocess_run_logs(
+                    request.app.db,
+                    request.app['logfile_manager'],
+                    row['package'], row['suite'], row['id'],
+                    row['command'], row['duration'], row['result_code'],
+                    row['description'], row['failure_details'],
+                    dry_run=dry_run, reschedule=reschedule))
+        for i in range(0, len(todo), 100):
+            await asyncio.wait(set(todo[i : i + 100]))
+
+    create_background_task(do_reprocess(), 'reprocess logs')
 
     return web.json_response([
         {'package': row['package'],
@@ -1273,6 +1281,7 @@ def create_app(
     app.router.add_routes(routes)
     app.http_client_session = ClientSession()
     app.config = config
+    app['logfile_manager'] = get_log_manager(config.logs_location)
     app.jinja_env = env
     app.db = db
     app.external_url = external_url
