@@ -117,6 +117,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--prometheus-port", type=int, default=9919, help="Port for prometheus metrics"
     )
+    parser.add_argument(
+        "--user-secret-path", type=str, default="mastodon-notify-user.secret",
+        help="Path to user secret.")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
@@ -142,7 +145,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     mastodon = Mastodon(
-        access_token="mastodon-notify-user.secret", api_base_url=args.api_base_url
+        access_token=args.user_secret_path, api_base_url=args.api_base_url
     )
 
     asyncio.run(main(args, mastodon))
