@@ -25,13 +25,14 @@ from aiohttp import (
     ServerDisconnectedError,
     WSMsgType,
 )
-from aiohttp.web_middlewares import normalize_path_middleware
-import asyncpg
+import asyncio
+from datetime import datetime, timedelta
 import logging
 from typing import Optional
 import urllib.parse
-from yarl import URL
 
+from aiohttp.web_middlewares import normalize_path_middleware
+import asyncpg
 from aiohttp_apispec import (
     docs,
     request_schema,
@@ -41,6 +42,7 @@ from aiohttp_apispec import (
 from aiohttp_apispec import validation_middleware as apispec_validation_middleware
 
 from marshmallow import Schema, fields
+from yarl import URL
 
 from janitor import state, SUITE_REGEX
 from janitor.config import Config
@@ -954,12 +956,7 @@ async def handle_run_progress(request):
 
     run_id = request.match_info["run_id"].encode()
 
-    progress_url = urllib.parse.urljoin(request.app.runner_url, "ws/progress")
-
-    try:
-        run_ws = await request.app.http_client_session.ws_connect(progress_url)
-    except ClientConnectorError:
-        raise web.HTTPBadGateway(text='unable to contact runner')
+    run_url = urllib.parse.urljoin(request.app.runner_url, "active-run/%s")
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -969,10 +966,14 @@ async def handle_run_progress(request):
             if msg.type == WSMsgType.BINARY:
                 if msg.data == b"keepalive":
                     logging.debug('%s is still alive', run_id.decode())
-                    await run_ws.send_bytes(run_id + b"\0keepalive")
+                    async with request.app.http_client_session.post(run_url + '/keepalive', json={}) as resp:
+                        if resp.status != 200:
+                            logging.warning('error sending keepalive for %s: %s', run_id, resp.status)
                 elif msg.data.startswith(b"log\0"):
                     (kind, name, payload) = msg.data.split(b"\0", 2)
-                    await run_ws.send_bytes(b"\0".join([run_id, b"log", name, payload]))
+                    async with request.app.http_client_session.post(run_url + '/log/' + name.decode('utf-8'), data=payload) as resp:
+                        if resp.status != 200:
+                            logging.warning('error sending log for %s: %s', run_id, resp.status)
                 else:
                     logging.warning(
                         "Unknown websocket message from worker %s: %r",
@@ -983,8 +984,6 @@ async def handle_run_progress(request):
                 logging.warning("Ignoring ws message type %r", msg.type)
     except ConnectionResetError:
         pass
-    finally:
-        await run_ws.close()
 
     return ws
 
@@ -1055,7 +1054,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
         ],
     )
 
-    runner_url = urllib.parse.urljoin(request.app.runner_url, "finish/%s" % run_id)
+    runner_url = urllib.parse.urljoin(request.app.runner_url, "active-runs/%s/finish" % run_id)
     try:
         async with request.app.http_client_session.post(
             runner_url, data=runner_writer
@@ -1084,6 +1083,152 @@ async def handle_run_finish(request: web.Request) -> web.Response:
 
     result["api_url"] = str(request.app.router["run"].url_for(run_id=run_id))
     return web.json_response(result, status=201)
+
+
+def create_background_task(fn, title):
+    loop = asyncio.get_event_loop()
+    task = loop.create_task(fn)
+
+    def log_result(future):
+        try:
+            future.result()
+        except BaseException:
+            logging.exception('%s failed', title)
+        else:
+            logging.debug('%s succeeded', title)
+    task.add_done_callback(log_result)
+    return task
+
+
+@docs()
+@routes.post('/reprocess-logs', name='admin-reprocess-logs')
+def handle_reprocess_logs(request):
+    check_admin(request)
+    dry_run = 'dry_run' in request.match_info
+    reschedule = 'reschedule' in request.match_info
+    run_ids = request.query.get_all('run_id')
+
+    if run_ids:
+        args = []
+        query = """
+SELECT
+  package,
+  suite,
+  id,
+  command,
+  finish_time - start_time AS duration,
+  result_code,
+  description,
+  failure_details
+FROM run
+WHERE
+  (result_code = 'build-failed' OR
+   result_code LIKE 'build-failed-stage-%' OR
+   result_code LIKE 'autopkgtest-%' OR
+   result_code LIKE 'build-%' OR
+   result_code LIKE 'dist-%' OR
+   result_code LIKE 'unpack-%s' OR
+   result_code LIKE 'create-session-%' OR
+   result_code LIKE 'missing-%')
+"""
+    else:
+        args = [run_ids]
+        query = """
+SELECT
+  package,
+  suite,
+  id,
+  command,
+  finish_time - start_time AS duration,
+  result_code,
+  description,
+  failure_details
+FROM run
+WHERE
+  id = ANY($1::text[])
+"""
+    async with request.app.db.acquire() as conn:
+        rows = await conn.fetch(query, *args)
+    todo = []
+    async for row in rows:
+        todo.append(
+            reprocess_run_logs(
+                request.app.db, row['package'], row['suite'], row['id'],
+                row['command'], row['duration'], row['result_code'],
+                row['description'], row['failure_details'],
+                dry_run=dry_run, reschedule=reschedule))
+    for i in range(0, len(todo), 100):
+        await asyncio.wait(set(todo[i : i + 100]))
+
+    return web.json_response([
+        {'package': row['package'],
+         'suite': row['suite'],
+         'log_id': row['id']}
+        for row in rows])
+
+
+@docs()
+@routes.post('/mass-reschedule', name='admin-reschedule')
+async def handle_mass_reschedule(request):
+    check_admin(request)
+    result_code = request.match_info['result_code']
+    suite = request.match_info.get('suite')
+    description_re = request.match_info.get('description_re')
+    min_age = int(request.match_info.get('min_age', '0'))
+    rejected = 'rejected' in request.match_info
+    offset = int(request.match_info.get('offset', '0'))
+    refresh = 'refresh' in request.match_info
+    async with request.app.db.acquire() as conn:
+        query = """
+SELECT
+  package,
+  suite,
+  command,
+  finish_time - start_time AS duration
+FROM last_runs
+WHERE
+    branch_url IS NOT NULL AND
+    package IN (SELECT name FROM package WHERE NOT removed) AND
+"""
+        where = []
+        params = []
+        if result_code is not None:
+            params.append(result_code)
+            where.append("result_code = $%d" % len(params))
+        if suite:
+            params.append(suite)
+            where.append("suite = $%d" % len(params))
+        if rejected:
+            where.append("review_status = 'rejected'")
+        if description_re:
+            params.append(description_re)
+            where.append("description ~ $%d" % len(params))
+        if min_age:
+            params.append(datetime.utcnow() - timedelta(days=min_age))
+            where.append("finish_time < $%d" % len(params))
+        query += " AND ".join(where)
+        runs = await conn.fetch(query, *params)
+
+    async def do_reschedule():
+        async with request.app.db.acquire() as conn:
+            for run in runs:
+                logging.info("Rescheduling %s, %s" % (run['package'], run['suite']))
+                await do_schedule(
+                    conn,
+                    run['package'],
+                    run['suite'],
+                    command=run['command'],
+                    estimated_duration=run['duration'],
+                    requestor="reschedule",
+                    refresh=refresh,
+                    offset=offset,
+                    bucket="reschedule",
+                )
+
+    create_background_task(do_reschedule(), 'mass-reschedule')
+    return web.json_response([
+            {'package': run['package'], 'suite': run['suite']}
+            for run in runs])
 
 
 @docs()
