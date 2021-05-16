@@ -761,7 +761,8 @@ async def publish_from_policy(
             command=expected_command,
             bucket="update-new-mp",
             refresh=True,
-            requestor="publisher (changed policy)",
+            requestor="publisher (changed policy: %r => %r)" % (
+                run.command, expected_command),
         )
         return
 
