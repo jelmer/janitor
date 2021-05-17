@@ -18,7 +18,6 @@
 """Serve the janitor site."""
 
 import asyncio
-from datetime import datetime
 import logging
 import re
 import shutil
@@ -26,19 +25,21 @@ import tempfile
 import time
 import uuid
 from aiohttp.web_urldispatcher import (
-    PrefixResource,
-    ResourceRoute,
     URL,
-    UrlMappingMatchInfo,
 )
-from aiohttp import ClientTimeout, ClientConnectorError
+from aiohttp import web, ClientSession
 from aiohttp.web import middleware
+from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
 
 from ..config import get_suite_config
+from ..logs import get_log_manager
+from ..prometheus import setup_metrics
+from ..pubsub import pubsub_reader, pubsub_handler, Topic
 
 from . import (
     html_template,
+    is_admin,
     render_template_for_request,
 )
 
@@ -86,737 +87,698 @@ def setup_debsso(app):
 
 
 async def get_credentials(session, publisher_url):
-    url = urllib.parse.urljoin(publisher_url, "credentials")
+    url = URL(publisher_url) / "credentials"
     async with session.get(url=url) as resp:
         if resp.status != 200:
             raise Exception("unexpected response")
         return await resp.json()
 
 
-if __name__ == "__main__":
-    import argparse
-    import functools
-    import os
-    from janitor import state
-    from janitor.config import read_config
-    from janitor.logs import get_log_manager
-    from janitor.policy import read_policy
-    from janitor.prometheus import setup_metrics
-    from aiohttp import web, ClientSession
-    from aiohttp.web_middlewares import normalize_path_middleware
-    from ..pubsub import pubsub_reader, pubsub_handler, Topic
-    import urllib.parse
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--debugtoolbar", type=str, action="append", help="IP to allow debugtoolbar queries from.")
-    parser.add_argument("--host", type=str, help="Host to listen on")
-    parser.add_argument("--port", type=int, help="Port to listen on", default=8080)
-    parser.add_argument(
-        "--publisher-url",
-        type=str,
-        default="http://localhost:9912/",
-        help="URL for publisher.",
+async def handle_simple(templatename, request):
+    vs = {}
+    return web.Response(
+        content_type="text/html",
+        text=await render_template_for_request(templatename, request, vs),
+        headers={"Cache-Control": "max-age=3600"},
     )
-    parser.add_argument(
-        "--vcs-store-url",
-        type=str,
-        default="http://localhost:9921/",
-        help="URL for VCS store.",
+
+
+@html_template("generic-start.html")
+async def handle_generic_start(request):
+    return {"suite": request.match_info["suite"]}
+
+
+@html_template("generic-candidates.html", headers={"Cache-Control": "max-age=3600"})
+async def handle_generic_candidates(request):
+    from .common import generate_candidates
+
+    return await generate_candidates(
+        request.app.database, suite=request.match_info["suite"]
     )
-    parser.add_argument(
-        "--runner-url",
-        type=str,
-        default="http://localhost:9911/",
-        help="URL for runner.",
-    )
-    parser.add_argument(
-        "--archiver-url",
-        type=str,
-        default="http://localhost:9914/",
-        help="URL for runner.",
-    )
-    parser.add_argument(
-        "--differ-url",
-        type=str,
-        default="http://localhost:9920/",
-        help="URL for differ.",
-    )
-    parser.add_argument(
-        "--policy",
-        help="Policy file to read.",
-        type=str,
-        default=os.path.join(os.path.dirname(__file__), "..", "..", "policy.conf"),
-    )
-    parser.add_argument(
-        "--config", type=str, default="janitor.conf", help="Path to configuration."
-    )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debugging mode. For example, avoid minified JS.",
-    )
-    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
-    parser.add_argument("--external-url", type=str, default=None, help="External URL")
-    parser.add_argument(
-        "--zipkin-address", type=str, default=None,
-        help="Zipkin address to send traces to")
 
-    args = parser.parse_args()
 
-    if args.gcp_logging:
-        import google.cloud.logging
-        client = google.cloud.logging.Client()
-        client.get_default_handler()
-        client.setup_logging()
-    else:
-        logging.basicConfig(level=logging.INFO)
+@html_template("merge-proposals.html", headers={"Cache-Control": "max-age=60"})
+async def handle_merge_proposals(request):
+    from .merge_proposals import write_merge_proposals
 
-    if args.debug:
-        minified = ""
-    else:
-        minified = "min."
+    suite = request.match_info["suite"]
+    return await write_merge_proposals(request.app.database, suite)
 
-    with open(args.config, "r") as f:
-        config = read_config(f)
 
-    async def handle_simple(templatename, request):
-        vs = {}
-        return web.Response(
-            content_type="text/html",
-            text=await render_template_for_request(templatename, request, vs),
-            headers={"Cache-Control": "max-age=3600"},
-        )
+async def handle_apt_repo(request):
+    suite = request.match_info["suite"]
+    from .apt_repo import get_published_packages
 
-    @html_template("generic-start.html")
-    async def handle_generic_start(request):
-        return {"suite": request.match_info["suite"]}
-
-    @html_template("generic-candidates.html", headers={"Cache-Control": "max-age=3600"})
-    async def handle_generic_candidates(request):
-        from .common import generate_candidates
-
-        return await generate_candidates(
-            request.app.database, suite=request.match_info["suite"]
-        )
-
-    @html_template("merge-proposals.html", headers={"Cache-Control": "max-age=60"})
-    async def handle_merge_proposals(request):
-        from .merge_proposals import write_merge_proposals
-
-        suite = request.match_info["suite"]
-        return await write_merge_proposals(request.app.database, suite)
-
-    async def handle_apt_repo(request):
-        suite = request.match_info["suite"]
-        from .apt_repo import get_published_packages
-
-        async with request.app.database.acquire() as conn:
-            vs = {
-                "packages": await get_published_packages(conn, suite),
-                "suite": suite,
-                "suite_config": get_suite_config(request.app.config, suite),
-            }
-            text = await render_template_for_request(suite + ".html", request, vs)
-            return web.Response(
-                content_type="text/html",
-                text=text,
-                headers={"Cache-Control": "max-age=60"},
-            )
-
-    @html_template("history.html", headers={"Cache-Control": "max-age=10"})
-    async def handle_history(request):
-        limit = int(request.query.get("limit", "100"))
-        worker = request.query.get("worker", None)
-        return {
-            "count": limit,
-            "history": state.iter_runs(
-                request.app.database, worker=worker, limit=limit
-            ),
+    async with request.app.database.acquire() as conn:
+        vs = {
+            "packages": await get_published_packages(conn, suite),
+            "suite": suite,
+            "suite_config": get_suite_config(request.app.config, suite),
         }
-
-    @html_template("credentials.html", headers={"Cache-Control": "max-age=10"})
-    async def handle_credentials(request):
-        credentials = await get_credentials(
-            request.app.http_client_session, request.app.publisher_url
-        )
-        pgp_fprs = []
-        for keydata in credentials["pgp_keys"]:
-            result = request.app.gpg.key_import(keydata.encode("utf-8"))
-            pgp_fprs.extend([i.fpr for i in result.imports])
-
-        pgp_validity = {
-            gpg.constants.VALIDITY_FULL: "full",
-            gpg.constants.VALIDITY_MARGINAL: "marginal",
-            gpg.constants.VALIDITY_NEVER: "never",
-            gpg.constants.VALIDITY_ULTIMATE: "ultimate",
-            gpg.constants.VALIDITY_UNDEFINED: "undefined",
-            gpg.constants.VALIDITY_UNKNOWN: "unknown",
-        }
-
-        return {
-            "format_pgp_date": lambda ts: time.strftime("%Y-%m-%d", time.localtime(ts)),
-            "pgp_validity": pgp_validity.get,
-            "pgp_algo": gpg.core.pubkey_algo_name,
-            "ssh_keys": credentials["ssh_keys"],
-            "pgp_keys": request.app.gpg.keylist("\0".join(pgp_fprs)),
-            "hosting": credentials["hosting"],
-        }
-
-    async def handle_ssh_keys(request):
-        credentials = await get_credentials(
-            request.app.http_client_session, request.app.publisher_url
-        )
-        return web.Response(
-            text="\n".join(credentials["ssh_keys"]), content_type="text/plain"
-        )
-
-    async def handle_pgp_keys(request):
-        credentials = await get_credentials(
-            request.app.http_client_session, request.app.publisher_url
-        )
-        armored = request.match_info["extension"] == ".asc"
-        if armored:
-            return web.Response(
-                text="\n".join(credentials["pgp_keys"]),
-                content_type="application/pgp-keys",
-            )
-        else:
-            fprs = []
-            for keydata in credentials["pgp_keys"]:
-                result = request.app.gpg.key_import(keydata.encode("utf-8"))
-                fprs.extend([i.fpr for i in result.imports])
-            return web.Response(
-                body=request.app.gpg.key_export_minimal("\0".join(fprs)),
-                content_type="application/pgp-keys",
-            )
-
-    @html_template("publish-history.html", headers={"Cache-Control": "max-age=10"})
-    async def handle_publish_history(request):
-        limit = int(request.query.get("limit", "100"))
-        from .publish import write_history
-
-        async with request.app.database.acquire() as conn:
-            return await write_history(conn, limit=limit)
-
-    @html_template("queue.html", headers={"Cache-Control": "max-age=10"})
-    async def handle_queue(request):
-        limit = int(request.query.get("limit", "100"))
-        from .queue import write_queue
-
-        return await write_queue(
-            request.app.http_client_session,
-            request.app.database,
-            queue_status=app.runner_status,
-            limit=limit,
-        )
-
-    @html_template("maintainer-stats.html", headers={"Cache-Control": "max-age=60"})
-    async def handle_cupboard_maintainer_stats(request):
-        from .stats import write_maintainer_stats
-
-        async with request.app.database.acquire() as conn:
-            return await write_maintainer_stats(conn)
-
-    @html_template("maintainer-overview.html", headers={"Cache-Control": "max-age=60"})
-    async def handle_maintainer_overview(request):
-        from .stats import write_maintainer_overview
-
-        async with request.app.database.acquire() as conn:
-            return await write_maintainer_overview(
-                conn, request.match_info["maintainer"]
-            )
-
-    @html_template("never-processed.html", headers={"Cache-Control": "max-age=60"})
-    async def handle_never_processed(request):
-        suite = request.query.get("suite")
-        if suite is not None and suite.lower() == "_all":
-            suite = None
-        suites = [suite] if suite else None
-        async with request.app.database.acquire() as conn:
-            query = """\
-            select c.package, c.suite from candidate c
-            where not exists (
-                SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
-            """
-            args = []
-            if suites:
-                query += " AND suite = ANY($1::text[])"
-                args.append(suites)
-            return {"never_processed": await conn.fetch(query, *args)}
-
-    async def handle_result_codes(request):
-        from .result_codes import (
-            generate_result_code_index,
-            stats_by_result_codes,
-            )
-
-        suite = request.query.get("suite")
-        if suite is not None and suite.lower() == "_all":
-            suite = None
-        code = request.match_info.get("code")
-        all_suites = [s.name for s in config.suite]
-        async with request.app.database.acquire() as conn:
-            if not code:
-                stats = await stats_by_result_codes(conn, suite=suite)
-                never_processed = await conn.fetchval("""\
-select count(*) from candidate c
-where not exists (
-    SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
-AND suite = ANY($1::text[])
-""", [suite] if suite else all_suites)
-                vs = await generate_result_code_index(
-                    stats, never_processed, suite, all_suites=all_suites
-                )
-                text = await render_template_for_request(
-                    "result-code-index.html", request, vs
-                )
-            else:
-                query = 'SELECT * FROM last_runs WHERE result_code = $1'
-                args = [code]
-                if suite:
-                    query += ' AND suite = $2'
-                    args.append(suite)
-                runs = await conn.fetch(query, *args)
-                text = await render_template_for_request(
-                    "result-code.html",
-                    request,
-                    {
-                        "code": code,
-                        "runs": runs,
-                        "suite": suite,
-                        "all_suites": all_suites,
-                    },
-                )
+        text = await render_template_for_request(suite + ".html", request, vs)
         return web.Response(
             content_type="text/html",
             text=text,
-            headers={"Cache-Control": "max-age=600"},
+            headers={"Cache-Control": "max-age=60"},
         )
 
-    async def handle_login(request):
-        state = str(uuid.uuid4())
-        callback_path = request.app.router["oauth2-callback"].url_for()
-        if not request.app.openid_config:
-            raise web.HTTPNotFound(text='login is disabled on this instance')
-        location = URL(request.app.openid_config["authorization_endpoint"]).with_query(
-            {
-                "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
-                "redirect_uri": str(request.app.external_url.join(callback_path)),
-                "response_type": "code",
-                "scope": "openid",
-                "state": state,
-            }
-        )
-        response = web.HTTPFound(location)
-        response.set_cookie(
-            "state", state, max_age=60, path=callback_path, httponly=True, secure=True
-        )
-        if "url" in request.query:
-            try:
-                response.set_cookie("back_url", str(URL(request.query["url"]).relative()))
-            except ValueError:
-                # 'url' is not a URL
-                raise web.HTTPBadRequest(text='invalid url')
-        return response
 
-    async def handle_static_file(path, request):
-        return web.FileResponse(path)
+@html_template("history.html", headers={"Cache-Control": "max-age=10"})
+async def handle_history(request):
+    limit = int(request.query.get("limit", "100"))
+    worker = request.query.get("worker", None)
+    return {
+        "count": limit,
+        "history": state.iter_runs(
+            request.app.database, worker=worker, limit=limit
+        ),
+    }
 
-    @html_template("package-name-list.html", headers={"Cache-Control": "max-age=600"})
-    async def handle_pkg_list(request):
-        # TODO(jelmer): The javascript plugin thingy should just redirect to
-        # the right URL, not rely on query parameters here.
-        pkg = request.query.get("package")
-        if pkg:
-            async with request.app.database.acquire() as conn:
-                if not await conn.fetchrow('SELECT 1 FROM package WHERE name = $1', pkg):
-                    raise web.HTTPNotFound(text="No package with name %s" % pkg)
-            return web.HTTPFound(pkg)
 
-        async with request.app.database.acquire() as conn:
-            packages = [
-                row['name']
-                for row in await conn.fetch(
-                    'SELECT name, maintainer_email FROM package WHERE NOT removed ORDER BY name')]
-        return {'packages': packages}
-
-    @html_template(
-        "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600"}
+@html_template("credentials.html", headers={"Cache-Control": "max-age=10"})
+async def handle_credentials(request):
+    credentials = await get_credentials(
+        request.app.http_client_session, request.app.publisher_url
     )
-    async def handle_maintainer_list(request):
-        from .pkg import generate_maintainer_list
+    pgp_fprs = []
+    for keydata in credentials["pgp_keys"]:
+        result = request.app.gpg.key_import(keydata.encode("utf-8"))
+        pgp_fprs.extend([i.fpr for i in result.imports])
 
-        async with request.app.database.acquire() as conn:
-            packages = [
-                (row['name'], row['maintainer_email'])
-                for row in await conn.fetch(
-                    'SELECT name, maintainer_email FROM package WHERE NOT removed')]
-        return await generate_maintainer_list(packages)
+    pgp_validity = {
+        gpg.constants.VALIDITY_FULL: "full",
+        gpg.constants.VALIDITY_MARGINAL: "marginal",
+        gpg.constants.VALIDITY_NEVER: "never",
+        gpg.constants.VALIDITY_ULTIMATE: "ultimate",
+        gpg.constants.VALIDITY_UNDEFINED: "undefined",
+        gpg.constants.VALIDITY_UNKNOWN: "unknown",
+    }
 
-    @html_template("maintainer-index.html", headers={"Cache-Control": "max-age=600"})
-    async def handle_maintainer_index(request):
-        if request.user:
-            email = request.user.get("email")
-        else:
-            email = request.query.get("email")
-        if email and "/" in email:
-            raise web.HTTPBadRequest(text="invalid maintainer email")
-        if email:
-            raise web.HTTPFound(
-                request.app.router["maintainer-overview-short"].url_for(
-                    maintainer=email
-                )
+    return {
+        "format_pgp_date": lambda ts: time.strftime("%Y-%m-%d", time.localtime(ts)),
+        "pgp_validity": pgp_validity.get,
+        "pgp_algo": gpg.core.pubkey_algo_name,
+        "ssh_keys": credentials["ssh_keys"],
+        "pgp_keys": request.app.gpg.keylist("\0".join(pgp_fprs)),
+        "hosting": credentials["hosting"],
+    }
+
+
+async def handle_ssh_keys(request):
+    credentials = await get_credentials(
+        request.app.http_client_session, request.app.publisher_url
+    )
+    return web.Response(
+        text="\n".join(credentials["ssh_keys"]), content_type="text/plain"
+    )
+
+
+async def handle_pgp_keys(request):
+    credentials = await get_credentials(
+        request.app.http_client_session, request.app.publisher_url
+    )
+    armored = request.match_info["extension"] == ".asc"
+    if armored:
+        return web.Response(
+            text="\n".join(credentials["pgp_keys"]),
+            content_type="application/pgp-keys",
+        )
+    else:
+        fprs = []
+        for keydata in credentials["pgp_keys"]:
+            result = request.app.gpg.key_import(keydata.encode("utf-8"))
+            fprs.extend([i.fpr for i in result.imports])
+        return web.Response(
+            body=request.app.gpg.key_export_minimal("\0".join(fprs)),
+            content_type="application/pgp-keys",
+        )
+
+
+@html_template("publish-history.html", headers={"Cache-Control": "max-age=10"})
+async def handle_publish_history(request):
+    limit = int(request.query.get("limit", "100"))
+    from .publish import write_history
+
+    async with request.app.database.acquire() as conn:
+        return await write_history(conn, limit=limit)
+
+
+@html_template("queue.html", headers={"Cache-Control": "max-age=10"})
+async def handle_queue(request):
+    limit = int(request.query.get("limit", "100"))
+    from .queue import write_queue
+
+    return await write_queue(
+        request.app.http_client_session,
+        request.app.database,
+        queue_status=app['runner_status'],
+        limit=limit,
+    )
+
+
+@html_template("maintainer-stats.html", headers={"Cache-Control": "max-age=60"})
+async def handle_cupboard_maintainer_stats(request):
+    from .stats import write_maintainer_stats
+
+    async with request.app.database.acquire() as conn:
+        return await write_maintainer_stats(conn)
+
+
+@html_template("maintainer-overview.html", headers={"Cache-Control": "max-age=60"})
+async def handle_maintainer_overview(request):
+    from .stats import write_maintainer_overview
+
+    async with request.app.database.acquire() as conn:
+        return await write_maintainer_overview(
+            conn, request.match_info["maintainer"]
+        )
+
+
+@html_template("never-processed.html", headers={"Cache-Control": "max-age=60"})
+async def handle_never_processed(request):
+    suite = request.query.get("suite")
+    if suite is not None and suite.lower() == "_all":
+        suite = None
+    suites = [suite] if suite else None
+    async with request.app.database.acquire() as conn:
+        query = """\
+        select c.package, c.suite from candidate c
+        where not exists (
+            SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+        """
+        args = []
+        if suites:
+            query += " AND suite = ANY($1::text[])"
+            args.append(suites)
+        return {"never_processed": await conn.fetch(query, *args)}
+
+
+async def handle_result_codes(request):
+    from .result_codes import (
+        generate_result_code_index,
+        stats_by_result_codes,
+        )
+
+    suite = request.query.get("suite")
+    if suite is not None and suite.lower() == "_all":
+        suite = None
+    code = request.match_info.get("code")
+    all_suites = [s.name for s in config.suite]
+    async with request.app.database.acquire() as conn:
+        if not code:
+            stats = await stats_by_result_codes(conn, suite=suite)
+            never_processed = await conn.fetchval("""\
+select count(*) from candidate c
+where not exists (
+SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+AND suite = ANY($1::text[])
+""", [suite] if suite else all_suites)
+            vs = await generate_result_code_index(
+                stats, never_processed, suite, all_suites=all_suites
             )
-        return {}
+            text = await render_template_for_request(
+                "result-code-index.html", request, vs
+            )
+        else:
+            query = 'SELECT * FROM last_runs WHERE result_code = $1'
+            args = [code]
+            if suite:
+                query += ' AND suite = $2'
+                args.append(suite)
+            runs = await conn.fetch(query, *args)
+            text = await render_template_for_request(
+                "result-code.html",
+                request,
+                {
+                    "code": code,
+                    "runs": runs,
+                    "suite": suite,
+                    "all_suites": all_suites,
+                },
+            )
+    return web.Response(
+        content_type="text/html",
+        text=text,
+        headers={"Cache-Control": "max-age=600"},
+    )
 
-    @html_template("package-overview.html", headers={"Cache-Control": "max-age=600"})
-    async def handle_pkg(request):
-        from .pkg import generate_pkg_file
 
-        package_name = request.match_info["pkg"]
+async def handle_login(request):
+    state = str(uuid.uuid4())
+    callback_path = request.app.router["oauth2-callback"].url_for()
+    if not request.app.openid_config:
+        raise web.HTTPNotFound(text='login is disabled on this instance')
+    location = URL(request.app.openid_config["authorization_endpoint"]).with_query(
+        {
+            "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
+            "redirect_uri": str(request.app.external_url.join(callback_path)),
+            "response_type": "code",
+            "scope": "openid",
+            "state": state,
+        }
+    )
+    response = web.HTTPFound(location)
+    response.set_cookie(
+        "state", state, max_age=60, path=callback_path, httponly=True, secure=True
+    )
+    if "url" in request.query:
+        try:
+            response.set_cookie("back_url", str(URL(request.query["url"]).relative()))
+        except ValueError:
+            # 'url' is not a URL
+            raise web.HTTPBadRequest(text='invalid url')
+    return response
+
+
+async def handle_static_file(path, request):
+    return web.FileResponse(path)
+
+
+@html_template("package-name-list.html", headers={"Cache-Control": "max-age=600"})
+async def handle_pkg_list(request):
+    # TODO(jelmer): The javascript plugin thingy should just redirect to
+    # the right URL, not rely on query parameters here.
+    pkg = request.query.get("package")
+    if pkg:
         async with request.app.database.acquire() as conn:
-            package = await conn.fetchrow(
-                'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
-                'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
-            if package is None:
-                raise web.HTTPNotFound(text="No package with name %s" % package_name)
-            merge_proposals = await conn.fetch("""\
+            if not await conn.fetchrow('SELECT 1 FROM package WHERE name = $1', pkg):
+                raise web.HTTPNotFound(text="No package with name %s" % pkg)
+        return web.HTTPFound(pkg)
+
+    async with request.app.database.acquire() as conn:
+        packages = [
+            row['name']
+            for row in await conn.fetch(
+                'SELECT name, maintainer_email FROM package WHERE NOT removed ORDER BY name')]
+    return {'packages': packages}
+
+
+@html_template(
+    "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600"})
+async def handle_maintainer_list(request):
+    from .pkg import generate_maintainer_list
+
+    async with request.app.database.acquire() as conn:
+        packages = [
+            (row['name'], row['maintainer_email'])
+            for row in await conn.fetch(
+                'SELECT name, maintainer_email FROM package WHERE NOT removed')]
+    return await generate_maintainer_list(packages)
+
+
+@html_template("maintainer-index.html", headers={"Cache-Control": "max-age=600"})
+async def handle_maintainer_index(request):
+    if request.user:
+        email = request.user.get("email")
+    else:
+        email = request.query.get("email")
+    if email and "/" in email:
+        raise web.HTTPBadRequest(text="invalid maintainer email")
+    if email:
+        raise web.HTTPFound(
+            request.app.router["maintainer-overview-short"].url_for(
+                maintainer=email
+            )
+        )
+    return {}
+
+
+@html_template("package-overview.html", headers={"Cache-Control": "max-age=600"})
+async def handle_pkg(request):
+    from .pkg import generate_pkg_file
+
+    package_name = request.match_info["pkg"]
+    async with request.app.database.acquire() as conn:
+        package = await conn.fetchrow(
+            'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
+            'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
+        if package is None:
+            raise web.HTTPNotFound(text="No package with name %s" % package_name)
+        merge_proposals = await conn.fetch("""\
 SELECT DISTINCT ON (merge_proposal.url)
-    merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
+merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
 FROM
-    merge_proposal
+merge_proposal
 LEFT JOIN run
 ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 WHERE run.package = $1
 ORDER BY merge_proposal.url, run.finish_time DESC
 """, package['name'])
-            available_suites = await state.iter_publishable_suites(conn, package_name)
-        runs = state.iter_runs(request.app.database, package=package['name'])
-        return await generate_pkg_file(
-            request.app.database, request.app.config, package, merge_proposals, runs,
-            available_suites
-        )
-
-    @html_template(
-        "lintian-fixes-failed-list.html", headers={"Cache-Control": "max-age=600"}
+        available_suites = await state.iter_publishable_suites(conn, package_name)
+    runs = state.iter_runs(request.app.database, package=package['name'])
+    return await generate_pkg_file(
+        request.app.database, request.app.config, package, merge_proposals, runs,
+        available_suites
     )
-    async def handle_failed_lintian_brush_fixers_list(request):
-        from .lintian_fixes import generate_failing_fixers_list
 
-        return await generate_failing_fixers_list(request.app.database)
 
-    @html_template(
-        "lintian-fixes-failed.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_failed_lintian_brush_fixers(request):
-        from .lintian_fixes import generate_failing_fixer
+@html_template(
+    "lintian-fixes-failed-list.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_failed_lintian_brush_fixers_list(request):
+    from .lintian_fixes import generate_failing_fixers_list
 
-        fixer = request.match_info["fixer"]
-        return await generate_failing_fixer(request.app.database, fixer)
+    return await generate_failing_fixers_list(request.app.database)
 
-    @html_template(
-        "lintian-fixes-regressions.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_lintian_brush_regressions(request):
-        from .lintian_fixes import generate_regressions_list
 
-        return await generate_regressions_list(request.app.database)
+@html_template(
+    "lintian-fixes-failed.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_failed_lintian_brush_fixers(request):
+    from .lintian_fixes import generate_failing_fixer
 
-    @html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600"})
-    async def handle_vcs_regressions(request):
-        async with request.app.database.acquire() as conn:
-            query = """\
+    fixer = request.match_info["fixer"]
+    return await generate_failing_fixer(request.app.database, fixer)
+
+
+@html_template(
+    "lintian-fixes-regressions.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_lintian_brush_regressions(request):
+    from .lintian_fixes import generate_regressions_list
+
+    return await generate_regressions_list(request.app.database)
+
+
+@html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600"})
+async def handle_vcs_regressions(request):
+    async with request.app.database.acquire() as conn:
+        query = """\
 select
-  package.name,
-  run.suite,
-  run.id,
-  run.result_code,
-  package.vcswatch_status
+package.name,
+run.suite,
+run.id,
+run.result_code,
+package.vcswatch_status
 from
-  last_runs run left join package on run.package = package.name
+last_runs run left join package on run.package = package.name
 where
-  result_code in (
-    'branch-missing',
-    'branch-unavailable',
-    '401-unauthorized',
-    'hosted-on-alioth',
-    'missing-control-file'
-  )
+result_code in (
+'branch-missing',
+'branch-unavailable',
+'401-unauthorized',
+'hosted-on-alioth',
+'missing-control-file'
+)
 and
-  vcswatch_status in ('old', 'new', 'commits', 'ok')
+vcswatch_status in ('old', 'new', 'commits', 'ok')
 """
-            return {"regressions": await conn.fetch(query)}
+        return {"regressions": await conn.fetch(query)}
 
-    @html_template(
-        "broken-merge-proposals.html", headers={"Cache-Control": "max-age=600"}
-    )
-    async def handle_broken_mps(request):
-        async with request.app.database.acquire() as conn:
-            broken_mps = await conn.fetch(
-                """\
+
+@html_template(
+    "broken-merge-proposals.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_broken_mps(request):
+    async with request.app.database.acquire() as conn:
+        broken_mps = await conn.fetch(
+            """\
 select
-  url,
-  last_run.suite,
-  last_run.package,
-  last_run.id,
-  last_run.result_code,
-  last_run.finish_time,
-  last_run.description
+url,
+last_run.suite,
+last_run.package,
+last_run.id,
+last_run.result_code,
+last_run.finish_time,
+last_run.description
 from
-  (select
-     distinct on (url) url, run.suite, run.package, run.finish_time,
-     merge_proposal.revision as current_revision
-   from merge_proposal join run on
-     merge_proposal.revision = run.revision where status = 'open')
-   as current_run left join last_runs last_run
+(select
+ distinct on (url) url, run.suite, run.package, run.finish_time,
+ merge_proposal.revision as current_revision
+from merge_proposal join run on
+ merge_proposal.revision = run.revision where status = 'open')
+as current_run left join last_runs last_run
 on
-  current_run.suite = last_run.suite and
-  current_run.package = last_run.package
+current_run.suite = last_run.suite and
+current_run.package = last_run.package
 where
-  last_run.result_code not in ('success', 'nothing-to-do', 'nothing-new-to-do')
+last_run.result_code not in ('success', 'nothing-to-do', 'nothing-new-to-do')
 order by url, last_run.finish_time desc
 """
-            )
-
-        return {"broken_mps": broken_mps}
-
-    @html_template("run.html", headers={"Cache-Control": "max-age=3600"})
-    async def handle_run(request):
-        from .common import get_run
-        from .pkg import generate_run_file
-
-        run_id = request.match_info["run_id"]
-        pkg = request.match_info.get("pkg")
-        async with request.app.database.acquire() as conn:
-            run = await get_run(conn, run_id)
-            if run is None:
-                raise web.HTTPNotFound(text="No run with id %r" % run_id)
-        if pkg is not None and pkg != run['package']:
-            if run is None:
-                raise web.HTTPNotFound(text="No run with id %r" % run_id)
-        return await generate_run_file(
-            request.app.database,
-            request.app.http_client_session,
-            request.app.config,
-            request.app.differ_url,
-            request.app.logfile_manager,
-            run,
-            request.app.vcs_store_url,
-            is_admin=is_admin(request),
         )
 
-    async def handle_result_file(request):
-        pkg = request.match_info["pkg"]
-        filename = request.match_info["filename"]
-        run_id = request.match_info["run_id"]
-        if not re.match("^[a-z0-9+-\\.]+$", pkg) or len(pkg) < 2:
-            raise web.HTTPNotFound(text="Invalid package %s for run %s" % (pkg, run_id))
-        if not re.match("^[a-z0-9-]+$", run_id) or len(run_id) < 5:
-            raise web.HTTPNotFound(text="Invalid run run id %s" % (run_id,))
-        if filename.endswith(".log") or re.match(r".*\.log\.[0-9]+", filename):
-            if not re.match("^[+a-z0-9\\.]+$", filename) or len(filename) < 3:
-                raise web.HTTPNotFound(
-                    text="No log file %s for run %s" % (filename, run_id)
-                )
+    return {"broken_mps": broken_mps}
 
-            try:
-                logfile = await request.app.logfile_manager.get_log(pkg, run_id, filename)
-            except FileNotFoundError:
-                raise web.HTTPNotFound(
-                    text="No log file %s for run %s" % (filename, run_id)
-                )
-            else:
-                with logfile as f:
-                    text = f.read().decode("utf-8", "replace")
-            return web.Response(
-                content_type="text/plain",
-                text=text,
-                headers={"Cache-Control": "max-age=3600"},
+
+@html_template("run.html", headers={"Cache-Control": "max-age=3600"})
+async def handle_run(request):
+    from .common import get_run
+    from .pkg import generate_run_file
+
+    run_id = request.match_info["run_id"]
+    pkg = request.match_info.get("pkg")
+    async with request.app.database.acquire() as conn:
+        run = await get_run(conn, run_id)
+        if run is None:
+            raise web.HTTPNotFound(text="No run with id %r" % run_id)
+    if pkg is not None and pkg != run['package']:
+        if run is None:
+            raise web.HTTPNotFound(text="No run with id %r" % run_id)
+    return await generate_run_file(
+        request.app.database,
+        request.app.http_client_session,
+        request.app.config,
+        request.app.differ_url,
+        request.app.logfile_manager,
+        run,
+        request.app.vcs_store_url,
+        is_admin=is_admin(request),
+    )
+
+
+async def handle_result_file(request):
+    pkg = request.match_info["pkg"]
+    filename = request.match_info["filename"]
+    run_id = request.match_info["run_id"]
+    if not re.match("^[a-z0-9+-\\.]+$", pkg) or len(pkg) < 2:
+        raise web.HTTPNotFound(text="Invalid package %s for run %s" % (pkg, run_id))
+    if not re.match("^[a-z0-9-]+$", run_id) or len(run_id) < 5:
+        raise web.HTTPNotFound(text="Invalid run run id %s" % (run_id,))
+    if filename.endswith(".log") or re.match(r".*\.log\.[0-9]+", filename):
+        if not re.match("^[+a-z0-9\\.]+$", filename) or len(filename) < 3:
+            raise web.HTTPNotFound(
+                text="No log file %s for run %s" % (filename, run_id)
             )
-        else:
-            try:
-                artifact = await request.app.artifact_manager.get_artifact(
-                    run_id, filename
-                )
-            except FileNotFoundError:
-                raise web.HTTPNotFound("No artifact %s for run %s" % (filename, run_id))
-            with artifact as f:
-                return web.Response(
-                    body=f.read(), headers={"Cache-Control": "max-age=3600"}
-                )
-
-    @html_template("ready-list.html", headers={"Cache-Control": "max-age=60"})
-    async def handle_ready_proposals(request):
-        from .pkg import generate_ready_list
-
-        suite = request.match_info.get("suite")
-        review_status = request.query.get("review_status")
-        return await generate_ready_list(request.app.database, suite, review_status)
-
-    @html_template("generic-package.html", headers={"Cache-Control": "max-age=600"})
-    async def handle_generic_pkg(request):
-        from .common import generate_pkg_context
-
-        # TODO(jelmer): Handle Accept: text/diff
-        pkg = request.match_info["pkg"]
-        run_id = request.match_info.get("run_id")
-        return await generate_pkg_context(
-            request.app.database,
-            request.app.config,
-            request.match_info["suite"],
-            request.app.policy,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app.vcs_store_url,
-            pkg,
-            run_id,
-        )
-
-    @html_template("rejected.html")
-    async def handle_rejected(request):
-        from .review import generate_rejected
-
-        suite = request.query.get("suite")
-        async with request.app.database.acquire() as conn:
-            return await generate_rejected(conn, suite=suite)
-
-    async def handle_review_post(request):
-        from .review import generate_review
-        publishable_only = request.query.get("publishable_only", "true") == "true"
-
-        post = await request.post()
-        async with request.app.database.acquire() as conn:
-            run = await conn.fetchrow(
-                'SELECT package, suite FROM run WHERE id = $1',
-                post["run_id"])
-            review_status = post["review_status"].lower()
-            if review_status == "reschedule":
-                review_status = "rejected"
-                from ..schedule import do_schedule
-
-                await do_schedule(
-                    conn,
-                    run['package'],
-                    run['suite'],
-                    refresh=True,
-                    requestor="reviewer",
-                    bucket="default",
-                )
-            await conn.execute(
-                "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
-                review_status,
-                post.get("review_comment"),
-                post["run_id"],
-            )
-            text = await generate_review(
-                conn,
-                request,
-                request.app.http_client_session,
-                request.app.differ_url,
-                request.app.vcs_store_url,
-                suites=post.getall("suite", None),
-                publishable_only=publishable_only,
-            )
-            return web.Response(
-                content_type="text/html",
-                text=text,
-                headers={"Cache-Control": "no-cache"},
-            )
-
-    async def handle_review(request):
-        from .review import generate_review
-        publishable_only = request.query.get("publishable_only", "true") == "true"
-
-        suites = request.query.getall("suite", None)
-        async with request.app.database.acquire() as conn:
-            text = await generate_review(
-                conn,
-                request,
-                request.app.http_client_session,
-                request.app.differ_url,
-                request.app.vcs_store_url,
-                suites=suites,
-                publishable_only=publishable_only,
-            )
-        return web.Response(
-            content_type="text/html", text=text, headers={"Cache-Control": "no-cache"}
-        )
-
-    @html_template("repo-list.html")
-    async def handle_repo_list(request):
-        vcs = request.match_info["vcs"]
-        vcs_store_url = request.app.vcs_store_url
-        url = URL(vcs_store_url) / vcs
-        async with request.app.http_client_session.get(url) as resp:
-            return {"vcs": vcs, "repositories": await resp.json()}
-
-    async def handle_oauth_callback(request):
-        code = request.query.get("code")
-        state_code = request.query.get("state")
-        if request.cookies.get("state") != state_code:
-            return web.Response(status=400, text="state variable mismatch")
-        if not request.app.openid_config:
-            raise web.HTTPNotFound(text='login disabled')
-        token_url = URL(request.app.openid_config["token_endpoint"])
-        redirect_uri = (request.app.external_url or request.url).join(
-            request.app.router["oauth2-callback"].url_for()
-        )
-        params = {
-            "code": code,
-            "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
-            "client_secret": request.app.config.oauth2_provider.client_secret or os.environ['OAUTH2_CLIENT_SECRET'],
-            "grant_type": "authorization_code",
-            "redirect_uri": str(redirect_uri),
-        }
-        async with request.app.http_client_session.post(
-            token_url, params=params
-        ) as resp:
-            if resp.status != 200:
-                return web.json_response(
-                    status=resp.status, data={"error": "token-error"}
-                )
-            resp = await resp.json()
-            if resp["token_type"] != "Bearer":
-                return web.Response(
-                    status=500,
-                    text="Expected bearer token, got %s" % resp["token_type"],
-                )
-            refresh_token = resp["refresh_token"]  # noqa: F841
-            access_token = resp["access_token"]
 
         try:
-            back_url = request.cookies["back_url"]
-        except KeyError:
-            back_url = "/"
+            logfile = await request.app.logfile_manager.get_log(pkg, run_id, filename)
+        except FileNotFoundError:
+            raise web.HTTPNotFound(
+                text="No log file %s for run %s" % (filename, run_id)
+            )
+        else:
+            with logfile as f:
+                text = f.read().decode("utf-8", "replace")
+        return web.Response(
+            content_type="text/plain",
+            text=text,
+            headers={"Cache-Control": "max-age=3600"},
+        )
+    else:
+        try:
+            artifact = await request.app.artifact_manager.get_artifact(
+                run_id, filename
+            )
+        except FileNotFoundError:
+            raise web.HTTPNotFound("No artifact %s for run %s" % (filename, run_id))
+        with artifact as f:
+            return web.Response(
+                body=f.read(), headers={"Cache-Control": "max-age=3600"}
+            )
 
-        async with request.app.http_client_session.get(
-            request.app.openid_config["userinfo_endpoint"],
-            headers={"Authorization": "Bearer %s" % access_token},
-        ) as resp:
-            if resp.status != 200:
-                raise Exception(
-                    "unable to get user info (%s): %s"
-                    % (resp.status, await resp.read())
-                )
-            userinfo = await resp.json()
-        session_id = str(uuid.uuid4())
-        async with request.app.database.acquire() as conn:
-            await conn.execute("""
+
+@html_template("ready-list.html", headers={"Cache-Control": "max-age=60"})
+async def handle_ready_proposals(request):
+    from .pkg import generate_ready_list
+
+    suite = request.match_info.get("suite")
+    review_status = request.query.get("review_status")
+    return await generate_ready_list(request.app.database, suite, review_status)
+
+
+@html_template("generic-package.html", headers={"Cache-Control": "max-age=600"})
+async def handle_generic_pkg(request):
+    from .common import generate_pkg_context
+
+    # TODO(jelmer): Handle Accept: text/diff
+    pkg = request.match_info["pkg"]
+    run_id = request.match_info.get("run_id")
+    return await generate_pkg_context(
+        request.app.database,
+        request.app.config,
+        request.match_info["suite"],
+        request.app.policy,
+        request.app.http_client_session,
+        request.app.differ_url,
+        request.app.vcs_store_url,
+        pkg,
+        run_id,
+    )
+
+
+@html_template("rejected.html")
+async def handle_rejected(request):
+    from .review import generate_rejected
+
+    suite = request.query.get("suite")
+    async with request.app.database.acquire() as conn:
+        return await generate_rejected(conn, suite=suite)
+
+
+async def handle_review_post(request):
+    from .review import generate_review
+    publishable_only = request.query.get("publishable_only", "true") == "true"
+
+    post = await request.post()
+    async with request.app.database.acquire() as conn:
+        run = await conn.fetchrow(
+            'SELECT package, suite FROM run WHERE id = $1',
+            post["run_id"])
+        review_status = post["review_status"].lower()
+        if review_status == "reschedule":
+            review_status = "rejected"
+            from ..schedule import do_schedule
+
+            await do_schedule(
+                conn,
+                run['package'],
+                run['suite'],
+                refresh=True,
+                requestor="reviewer",
+                bucket="default",
+            )
+        await conn.execute(
+            "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
+            review_status,
+            post.get("review_comment"),
+            post["run_id"],
+        )
+        text = await generate_review(
+            conn,
+            request,
+            request.app.http_client_session,
+            request.app.differ_url,
+            request.app.vcs_store_url,
+            suites=post.getall("suite", None),
+            publishable_only=publishable_only,
+        )
+        return web.Response(
+            content_type="text/html",
+            text=text,
+            headers={"Cache-Control": "no-cache"},
+        )
+
+
+async def handle_review(request):
+    from .review import generate_review
+    publishable_only = request.query.get("publishable_only", "true") == "true"
+
+    suites = request.query.getall("suite", None)
+    async with request.app.database.acquire() as conn:
+        text = await generate_review(
+            conn,
+            request,
+            request.app.http_client_session,
+            request.app.differ_url,
+            request.app.vcs_store_url,
+            suites=suites,
+            publishable_only=publishable_only,
+        )
+    return web.Response(
+        content_type="text/html", text=text, headers={"Cache-Control": "no-cache"}
+    )
+
+
+@html_template("repo-list.html")
+async def handle_repo_list(request):
+    vcs = request.match_info["vcs"]
+    vcs_store_url = request.app.vcs_store_url
+    url = URL(vcs_store_url) / vcs
+    async with request.app.http_client_session.get(url) as resp:
+        return {"vcs": vcs, "repositories": await resp.json()}
+
+
+async def handle_oauth_callback(request):
+    code = request.query.get("code")
+    state_code = request.query.get("state")
+    if request.cookies.get("state") != state_code:
+        return web.Response(status=400, text="state variable mismatch")
+    if not request.app.openid_config:
+        raise web.HTTPNotFound(text='login disabled')
+    token_url = URL(request.app.openid_config["token_endpoint"])
+    redirect_uri = (request.app.external_url or request.url).join(
+        request.app.router["oauth2-callback"].url_for()
+    )
+    params = {
+        "code": code,
+        "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
+        "client_secret": request.app.config.oauth2_provider.client_secret or os.environ['OAUTH2_CLIENT_SECRET'],
+        "grant_type": "authorization_code",
+        "redirect_uri": str(redirect_uri),
+    }
+    async with request.app.http_client_session.post(
+        token_url, params=params
+    ) as resp:
+        if resp.status != 200:
+            return web.json_response(
+                status=resp.status, data={"error": "token-error"}
+            )
+        resp = await resp.json()
+        if resp["token_type"] != "Bearer":
+            return web.Response(
+                status=500,
+                text="Expected bearer token, got %s" % resp["token_type"],
+            )
+        refresh_token = resp["refresh_token"]  # noqa: F841
+        access_token = resp["access_token"]
+
+    try:
+        back_url = request.cookies["back_url"]
+    except KeyError:
+        back_url = "/"
+
+    async with request.app.http_client_session.get(
+        request.app.openid_config["userinfo_endpoint"],
+        headers={"Authorization": "Bearer %s" % access_token},
+    ) as resp:
+        if resp.status != 200:
+            raise Exception(
+                "unable to get user info (%s): %s"
+                % (resp.status, await resp.read())
+            )
+        userinfo = await resp.json()
+    session_id = str(uuid.uuid4())
+    async with request.app.database.acquire() as conn:
+        await conn.execute("""
 INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
 ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
 """, session_id, userinfo)
 
-        # TODO(jelmer): Store access token / refresh token?
+    # TODO(jelmer): Store access token / refresh token?
 
-        resp = web.HTTPFound(back_url)
+    resp = web.HTTPFound(back_url)
 
-        resp.del_cookie("state")
-        resp.del_cookie("back_url")
-        resp.set_cookie("session_id", session_id, secure=True, httponly=True)
-        return resp
+    resp.del_cookie("state")
+    resp.del_cookie("back_url")
+    resp.set_cookie("session_id", session_id, secure=True, httponly=True)
+    return resp
 
-    async def handle_health(request):
-        return web.Response(text='ok')
+
+async def handle_health(request):
+    return web.Response(text='ok')
+
+
+async def create_app(
+        config, policy_config, minified=False,
+        external_url=None, debugtoolbar=None,
+        runner_url=None, publisher_url=None,
+        archiver_url=None, vcs_store_url=None,
+        differ_url=None, zipkin_address=None,
+        listen_address=None, port=None):
+    if minified:
+        minified_prefix = ""
+    else:
+        minified_prefix = "min."
 
     async def start_gpg_context(app):
         gpg_home = tempfile.TemporaryDirectory()
@@ -846,25 +808,25 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
 
     async def start_pubsub_forwarder(app):
         async def listen_to_publisher_publish(app):
-            url = urllib.parse.urljoin(app.publisher_url, "ws/publish")
+            url = URL(app.publisher_url) / "ws/publish"
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(["publish", msg])
 
         async def listen_to_publisher_mp(app):
-            url = urllib.parse.urljoin(app.publisher_url, "ws/merge-proposal")
+            url = URL(app.publisher_url) / "ws/merge-proposal"
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(["merge-proposal", msg])
 
-        app.runner_status = None
+        app['runner_status'] = None
 
         async def listen_to_queue(app):
-            url = urllib.parse.urljoin(app.runner_url, "ws/queue")
+            url = URL(app.runner_url) / "ws/queue"
             async for msg in pubsub_reader(app.http_client_session, url):
-                app.runner_status = msg
+                app['runner_status'] = msg
                 app.topic_notifications.publish(["queue", msg])
 
         async def listen_to_result(app):
-            url = urllib.parse.urljoin(app.runner_url, "ws/result")
+            url = URL(app.runner_url) / "ws/result"
             async for msg in pubsub_reader(app.http_client_session, url):
                 app.topic_notifications.publish(["result", msg])
 
@@ -1058,7 +1020,7 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
         app.router.add_get(
             "/_static/%s.%s" % (name, kind),
             functools.partial(
-                handle_static_file, "%s.%s%s" % (basepath, minified, kind)
+                handle_static_file, "%s.%s%s" % (basepath, minified_prefix, kind)
             ),
         )
     app.router.add_get("/oauth/callback", handle_oauth_callback, name="oauth2-callback")
@@ -1066,29 +1028,26 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     from .api import create_app as create_api_app
     from .webhook import process_webhook, is_webhook_request
 
-    with open(args.policy, "r") as f:
-        policy_config = read_policy(f)
-
     async def handle_post_root(request):
         if is_webhook_request(request):
             return await process_webhook(request, request.app.database)
         raise web.HTTPMethodNotAllowed(method='POST', allowed_methods=['GET', 'HEAD'])
 
     app.topic_notifications = Topic("notifications")
-    app.runner_url = args.runner_url
-    app.archiver_url = args.archiver_url
-    app.differ_url = args.differ_url
+    app.runner_url = runner_url
+    app.archiver_url = archiver_url
+    app.differ_url = differ_url
     app.policy = policy_config
-    app.publisher_url = args.publisher_url
-    app.vcs_store_url = args.vcs_store_url
+    app.publisher_url = publisher_url
+    app.vcs_store_url = vcs_store_url
     if config.oauth2_provider and config.oauth2_provider.base_url:
         app.on_startup.append(discover_openid_config)
     else:
         app.openid_config = None
     app.on_startup.append(start_pubsub_forwarder)
     app.on_startup.append(start_gpg_context)
-    if args.external_url:
-        app.external_url = URL(args.external_url)
+    if external_url:
+        app.external_url = URL(external_url)
     else:
         app.external_url = None
     database = state.Database(config.database_location)
@@ -1097,7 +1056,7 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
 
     app.add_subapp("/cupboard/stats", stats_app(database, config, app.external_url))
     app.config = config
-    from janitor.site import env, is_admin
+    from janitor.site import env
 
     app.jinja_env = env
     from janitor.artifacts import get_artifact_manager
@@ -1121,11 +1080,11 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
         "/api",
         create_api_app(
             app.database,
-            args.publisher_url,
-            args.runner_url,  # type: ignore
-            args.archiver_url,
-            args.vcs_store_url,
-            args.differ_url,
+            publisher_url,
+            runner_url,  # type: ignore
+            archiver_url,
+            vcs_store_url,
+            differ_url,
             config,
             policy_config,
             external_url=(
@@ -1136,25 +1095,22 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     import aiohttp_apispec
     app.router.add_static('/static/swagger', os.path.join(os.path.dirname(aiohttp_apispec.__file__), "static"))
 
-    if args.debugtoolbar:
+    if debugtoolbar:
         import aiohttp_debugtoolbar
         # install aiohttp_debugtoolbar
-        aiohttp_debugtoolbar.setup(app, hosts=args.debugtoolbar)
-    if args.zipkin_address:
+        aiohttp_debugtoolbar.setup(app, hosts=debugtoolbar)
+    if zipkin_address:
         import aiozipkin
-        async def setup_aiozipkin(app):
-            endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=args.host, port=args.port)
-            tracer = await aiozipkin.create(args.zipkin_address, endpoint, sample_rate=1.0)
-            aiozipkin.setup(app, tracer)
-        app.on_startup.append(setup_aiozipkin)
+
+        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_address, port=port)
+        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        aiozipkin.setup(app, tracer)
+        trace_configs = [aiozipkin.make_trace_config(tracer)]
+    else:
+        trace_configs = None
 
     async def setup_client_session(app):
-        if args.zipkin_address:
-            import aiozipkin
-            trace_configs = [aiozipkin.make_trace_config(aiozipkin.get_tracer(app))]
-        else:
-            trace_configs = None
-        app.http_client_session = await ClientSession(trace_configs=trace_configs)
+        app.http_client_session = ClientSession(trace_configs=trace_configs)
 
     async def close_client_session(app):
         await app.http_client_session.close()
@@ -1163,12 +1119,101 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
     app.on_cleanup.append(close_client_session)
 
     async def setup_logfile_manager(app):
-        if args.zipkin_address:
-            import aiozipkin
-            trace_configs = [aiozipkin.make_trace_config(aiozipkin.get_tracer(app))]
-        else:
-            trace_configs = None
         app.logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
 
     app.on_startup.append(setup_logfile_manager)
+    return app
+
+
+if __name__ == "__main__":
+    import argparse
+    import functools
+    import os
+    from janitor import state
+    from janitor.config import read_config
+    from janitor.policy import read_policy
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--debugtoolbar", type=str, action="append", help="IP to allow debugtoolbar queries from.")
+    parser.add_argument("--host", type=str, help="Host to listen on")
+    parser.add_argument("--port", type=int, help="Port to listen on", default=8080)
+    parser.add_argument(
+        "--publisher-url",
+        type=str,
+        default="http://localhost:9912/",
+        help="URL for publisher.",
+    )
+    parser.add_argument(
+        "--vcs-store-url",
+        type=str,
+        default="http://localhost:9921/",
+        help="URL for VCS store.",
+    )
+    parser.add_argument(
+        "--runner-url",
+        type=str,
+        default="http://localhost:9911/",
+        help="URL for runner.",
+    )
+    parser.add_argument(
+        "--archiver-url",
+        type=str,
+        default="http://localhost:9914/",
+        help="URL for runner.",
+    )
+    parser.add_argument(
+        "--differ-url",
+        type=str,
+        default="http://localhost:9920/",
+        help="URL for differ.",
+    )
+    parser.add_argument(
+        "--policy",
+        help="Policy file to read.",
+        type=str,
+        default=os.path.join(os.path.dirname(__file__), "..", "..", "policy.conf"),
+    )
+    parser.add_argument(
+        "--config", type=str, default="janitor.conf", help="Path to configuration."
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debugging mode. For example, avoid minified JS.",
+    )
+    parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument("--external-url", type=str, default=None, help="External URL")
+    parser.add_argument(
+        "--zipkin-address", type=str, default=None,
+        help="Zipkin address to send traces to")
+
+    args = parser.parse_args()
+
+    if args.gcp_logging:
+        import google.cloud.logging
+        client = google.cloud.logging.Client()
+        client.get_default_handler()
+        client.setup_logging()
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    with open(args.config, "r") as f:
+        config = read_config(f)
+
+    with open(args.policy, "r") as f:
+        policy_config = read_policy(f)
+
+    app = create_app(
+        config, policy_config, minified=args.debug,
+        external_url=args.external_url,
+        debugtoolbar=args.debugtoolbar,
+        runner_url=args.runner_url,
+        publisher_url=args.publisher_url,
+        archiver_url=args.archiver_url,
+        vcs_store_url=args.vcs_store_url,
+        differ_url=args.differ_url,
+        zipkin_address=args.zipkin_address,
+        listen_address=args.host,
+        port=args.port)
+
     web.run_app(app, host=args.host, port=args.port)
