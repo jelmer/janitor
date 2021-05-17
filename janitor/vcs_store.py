@@ -578,7 +578,7 @@ async def handle_index(request):
     return web.Response(text='')
 
 
-def run_web_server(
+async def create_web_app(
     listen_addr: str,
     port: int,
     vcs_manager: VcsManager,
@@ -586,6 +586,7 @@ def run_web_server(
     config,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
+    zipkin_address: Optional[str] = None
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
@@ -617,7 +618,12 @@ def run_web_server(
     app.router.add_post("/remotes/git/{package}/{remote}", handle_set_git_remote, name='git-remote')
     app.router.add_post("/remotes/bzr/{package}/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
-    web.run_app(app, host=listen_addr, port=port)
+    if zipkin_address:
+        import aiozipkin
+        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_addr, port=port)
+        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        aiozipkin.setup(app, tracer)
+    return app
 
 
 def main(argv=None):
@@ -649,7 +655,11 @@ def main(argv=None):
         help="Maximum client body size (0 for no limit)",
     )
     parser.add_argument("--debug", action="store_true", help="Show debug info")
+    parser.add_argument("--vcs-path", default=None, type=str, help="Path to local vcs storage")
     parser.add_argument("--gcp-logging", action="store_true")
+    parser.add_argument(
+        "--zipkin-address", type=str, default=None,
+        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 
@@ -668,9 +678,9 @@ def main(argv=None):
 
     state.DEFAULT_URL = config.database_location
 
-    vcs_manager = LocalVcsManager(config.vcs_location)
+    vcs_manager = LocalVcsManager(args.vcs_path or config.vcs_location)
     db = state.Database(config.database_location)
-    run_web_server(
+    app = create_web_app(
         args.listen_address,
         args.port,
         vcs_manager,
@@ -678,7 +688,10 @@ def main(argv=None):
         config,
         dulwich_server=args.dulwich_server,
         client_max_size=args.client_max_size,
+        zipkin_address=args.zipkin_address,
     )
+
+    web.run_app(app, host=args.listen_address, port=args.port)
 
 
 if __name__ == "__main__":

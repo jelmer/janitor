@@ -508,13 +508,18 @@ class DifferWebApp(web.Application):
         return os.path.join(base_path, "%s_%s" % (old_id, new_id))
 
 
-async def run_web_server(app, listen_addr, port):
+async def run_web_server(app, listen_addr, port, zipkin_address=None):
     setup_metrics(app)
 
     async def connect_artifact_manager(app):
         await app.artifact_manager.__aenter__()
 
     app.on_startup.append(connect_artifact_manager)
+    if zipkin_address:
+        import aiozipkin
+        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_addr, port=port)
+        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -591,6 +596,9 @@ def main(argv=None):
         '--task-timeout', help='Task timeout (in seconds)',
         type=int, default=60)
     parser.add_argument('--gcp-logging', action='store_true')
+    parser.add_argument(
+        "--zipkin-address", type=str, default=None,
+        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 
@@ -622,7 +630,7 @@ def main(argv=None):
         task_timeout=args.task_timeout,
     )
 
-    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port))]
+    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, zipkin_address=args.zipkin_address))]
 
     if args.runner_url:
         tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))
