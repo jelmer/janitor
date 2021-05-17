@@ -1103,7 +1103,7 @@ def create_background_task(fn, title):
 
 @docs()
 @routes.post('/reprocess-logs', name='admin-reprocess-logs')
-def handle_reprocess_logs(request):
+async def handle_reprocess_logs(request):
     from ..reprocess_logs import reprocess_run_logs
     check_admin(request)
     dry_run = 'dry_run' in request.match_info

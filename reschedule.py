@@ -20,9 +20,10 @@ import argparse
 import asyncio
 from datetime import datetime, timedelta
 import logging
-from janitor import state
-from janitor.config import read_config
-from janitor.schedule import do_schedule
+import sys
+
+from aiohttp import ClientSession
+from yarl import URL
 
 parser = argparse.ArgumentParser("reschedule")
 parser.add_argument("result_code", type=str)
@@ -39,58 +40,32 @@ parser.add_argument("--suite", type=str, help="Suite to process.")
 parser.add_argument(
     "--min-age", type=int, default=0, help="Only reschedule runs older than N days."
 )
+parser.add_argument(
+    '--base-url', type=str, default='https://janitor.debian.net',
+    help='Instance URL')
 args = parser.parse_args()
-with open(args.config, "r") as f:
-    config = read_config(f)
-
 
 logging.basicConfig()
 
 
-async def main(db, result_code, suite, description_re, rejected, min_age=0):
-    async with db.acquire() as conn1:
-        query = """
-SELECT
-  package,
-  suite,
-  command,
-  finish_time - start_time AS duration
-FROM last_runs
-WHERE
-    branch_url IS NOT NULL AND
-    package IN (SELECT name FROM package WHERE NOT removed) AND
-"""
-        where = []
-        params = []
-        if result_code is not None:
-            params.append(result_code)
-            where.append("result_code = $%d" % len(params))
-        if suite:
-            params.append(suite)
-            where.append("suite = $%d" % len(params))
-        if rejected:
-            where.append("review_status = 'rejected'")
-        if description_re:
-            params.append(description_re)
-            where.append("description ~ $%d" % len(params))
-        if min_age:
-            params.append(datetime.utcnow() - timedelta(days=min_age))
-            where.append("finish_time < $%d" % len(params))
-        query += " AND ".join(where)
-        for run in await conn1.fetch(query, *params):
-            logging.info("Rescheduling %s, %s" % (run['package'], run['suite']))
-            await do_schedule(
-                conn1,
-                run['package'],
-                run['suite'],
-                command=run['command'],
-                estimated_duration=run['duration'],
-                requestor="reschedule",
-                refresh=args.refresh,
-                offset=args.offset,
-                bucket="reschedule",
-            )
+async def main(base_url, result_code, suite, description_re, rejected, min_age=0):
+    params = {
+        'result_code': result_code}
+    if suite:
+        params['suite'] = suite
+    if description_re:
+        params['description_re'] = description_re
+    if rejected:
+        params['rejected'] = '1'
+    if min_age:
+        params['min_age'] = str(min_age)
+    url = URL(base_url) / 'api/mass-reschedule'
+    async with ClientSession() as session, session.post(url, params=params) as resp:
+        if resp.status != 200:
+            logging.fatal('rescheduling failed: %d', resp.status)
+            return 1
+        for entry in await resp.json():
+            logging.info('%r', entry)
 
 
-db = state.Database(config.database_location)
-asyncio.run(main(db, args.result_code, args.suite, args.description_re, args.rejected, args.min_age))
+sys.exit(asyncio.run(main(args.base_url, args.result_code, args.suite, args.description_re, args.rejected, args.min_age)))
