@@ -16,23 +16,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import ClientSession
 import argparse
 import asyncio
 import logging
-import os
 import sys
-
-sys.path.insert(0, os.path.dirname(__file__))
-
-import silver_platter  # noqa: E402, F401
-from buildlog_consultant.common import find_build_failure_description  # noqa: E402
-from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E402
-from janitor import state  # noqa: E402
-from janitor.config import read_config  # noqa: E402
-from janitor.logs import get_log_manager  # noqa: E402
-from janitor.schedule import do_schedule  # noqa: E402
-from janitor.reprocess_logs import reprocess_run_logs  # noqa: E402
-
+from yarl import URL
 
 loop = asyncio.get_event_loop()
 
@@ -53,75 +42,30 @@ parser.add_argument(
     '--reschedule', action='store_true',
     help='Schedule rebuilds for runs for which result code has changed.')
 parser.add_argument('--dry-run', action='store_true')
+parser.add_argument(
+    '--base-url', type=str, default='https://janitor.debian.net',
+    help='Instance URL')
+
 args = parser.parse_args()
 
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 
-with open(args.config, "r") as f:
-    config = read_config(f)
+async def reprocess_logs(base_url, run_ids=None, dry_run=False, reschedule=False):
+    params = {}
+    if dry_run:
+        params['dry_run'] = '1'
+    if reschedule:
+        params['reschedule'] = '1'
+    if run_ids:
+        params['run_ids'] = run_ids
+    url = URL(base_url) / 'api/mass-reschedule'
+    async with ClientSession() as session, session.post(url, params=params) as resp:
+        if resp.status != 200:
+            logging.fatal('rescheduling failed: %d', resp.status)
+            return 1
+        for entry in await resp.json():
+            logging.info('%r', entry)
 
 
-logfile_manager = get_log_manager(config.logs_location)
-
-
-async def process_all_build_failures(db, dry_run=False, reschedule=False):
-    todo = []
-    async with db.acquire() as conn, conn.transaction():
-        query = """
-SELECT
-  package,
-  suite,
-  id,
-  command,
-  finish_time - start_time,
-  result_code,
-  description,
-  failure_details
-FROM run
-WHERE
-  (result_code = 'build-failed' OR
-   result_code LIKE 'build-failed-stage-%' OR
-   result_code LIKE 'autopkgtest-%' OR
-   result_code LIKE 'build-%' OR
-   result_code LIKE 'dist-%' OR
-   result_code LIKE 'unpack-%s' OR
-   result_code LIKE 'create-session-%' OR
-   result_code LIKE 'missing-%')
-   """
-        async for package, suite, log_id, command, duration, result_code, description, failure_details in (conn.cursor(query)):
-            todo.append(reprocess_run_logs(db, logfile_manager, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=dry_run, reschedule=reschedule, log_timeout=args.log_timeout))
-    for i in range(0, len(todo), 100):
-        await asyncio.wait(set(todo[i : i + 100]))
-
-
-async def process_builds(db, run_ids, dry_run=False, reschedule=False):
-    todo = []
-    async with db.acquire() as conn:
-        query = """
-SELECT
-  package,
-  suite,
-  id,
-  command,
-  finish_time - start_time,
-  result_code,
-  description,
-  failure_details
-FROM run
-WHERE
-  id = ANY($1::text[])
-"""
-        for package, suite, log_id, command, duration, result_code, description, failure_details in await conn.fetch(
-            query, run_ids
-        ):
-            todo.append(reprocess_run_logs(db, logfile_manager, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=dry_run, reschedule=reschedule, log_timeout=args.log_timeout))
-    if todo:
-        await asyncio.wait(todo)
-
-
-db = state.Database(config.database_location)
-if args.run_id:
-    loop.run_until_complete(process_builds(db, args.run_id, dry_run=args.dry_run, reschedule=args.reschedule))
-else:
-    loop.run_until_complete(process_all_build_failures(db, dry_run=args.dry_run, reschedule=args.reschedule))
+sys.exit(asyncio.run(reprocess_logs(args.base_url, args.run_id, dry_run=args.dry_run, reschedule=args.reschedule)))
