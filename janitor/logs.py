@@ -89,11 +89,11 @@ class LogRetrievalError(Exception):
 
 
 class S3LogFileManager(LogFileManager):
-    def __init__(self, endpoint_url, bucket_name="debian-janitor"):
+    def __init__(self, endpoint_url, bucket_name="debian-janitor", trace_configs=None):
         import boto3
 
         self.base_url = endpoint_url + ("/%s/" % bucket_name)
-        self.session = ClientSession()
+        self.session = ClientSession(trace_configs=trace_configs)
         self.s3 = boto3.resource("s3", endpoint_url=endpoint_url)
         self.s3_bucket = self.s3.Bucket(bucket_name)
 
@@ -143,11 +143,11 @@ class S3LogFileManager(LogFileManager):
 
 
 class GCSLogFilemanager(LogFileManager):
-    def __init__(self, location, creds_path=None):
+    def __init__(self, location, creds_path=None, trace_configs=None):
         from gcloud.aio.storage import Storage
 
         self.bucket_name = URL(location).host
-        self.session = ClientSession()
+        self.session = ClientSession(trace_configs=trace_configs)
         self.storage = Storage(service_file=creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
@@ -186,9 +186,9 @@ class GCSLogFilemanager(LogFileManager):
             raise
 
 
-def get_log_manager(location):
+def get_log_manager(location, trace_configs=None):
     if location.startswith("gs://"):
-        return GCSLogFilemanager(location)
+        return GCSLogFilemanager(location, trace_configs=trace_configs)
     if location.startswith("http:") or location.startswith("https:"):
-        return S3LogFileManager(location)
+        return S3LogFileManager(location, trace_configs=trace_configs)
     return FileSystemLogFileManager(location)

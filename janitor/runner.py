@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import aiozipkin
 import asyncio
 import asyncpg
 from datetime import datetime, timedelta
@@ -632,7 +633,6 @@ class ActiveRun(object):
     KEEPALIVE_INTERVAL = 60 * 10
 
     log_files: Dict[str, BinaryIO]
-    websockets: Set[web.WebSocketResponse]
     worker_name: str
     queue_item: state.QueueItem
     log_id: str
@@ -1152,27 +1152,39 @@ async def handle_status(request):
     return web.json_response(queue_processor.status_json())
 
 
-@routes.get("/log/{run_id}", name="log-index")
-async def handle_log_index(request):
+async def _find_active_run(request):
     queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
+    queue_id = request.query.get('queue_id')
+    worker_name = request.query.get('worker_name')
     try:
-        active_run = queue_processor.active_runs[run_id]
+        return queue_processor.active_runs[run_id]
     except KeyError:
-        return web.Response(text="No such current run: %s" % run_id, status=404)
+        pass
+    if not worker_name or not queue_id:
+        raise web.HTTPNotFound(text="No such current run: %s" % run_id)
+    async with queue_processor.database.acquire() as conn:
+        queue_item = await state.get_queue_item(conn, int(queue_id))
+    if queue_item is None:
+        raise web.HTTPNotFound(
+            text="Unable to find relevant queue item %r" % queue_id)
+    active_run = ActiveRun(worker_name=worker_name, queue_item=queue_item)
+    queue_processor.register_run(active_run)
+    return active_run
+
+
+@routes.get("/log/{run_id}", name="log-index")
+async def handle_log_index(request):
+    active_run = await _find_active_run(request)
     log_filenames = active_run.list_log_files()
     return web.json_response(log_filenames)
 
 
 @routes.post("/kill/{run_id}", name="kill")
 async def handle_kill(request):
-    queue_processor = request.app['queue_processor']
-    run_id = request.match_info["run_id"]
-    try:
-        ret = queue_processor.active_runs[run_id].json()
-        queue_processor.active_runs[run_id].kill()
-    except KeyError:
-        return web.Response(text="No such current run: %s" % run_id, status=404)
+    active_run = await _find_active_run(request)
+    ret = active_run.json()
+    active_run.kill()
     return web.json_response(ret)
 
 
@@ -1181,6 +1193,7 @@ async def handle_log(request):
     queue_processor = request.app['queue_processor']
     run_id = request.match_info["run_id"]
     filename = request.match_info["filename"]
+
     if "/" in filename:
         return web.Response(text="Invalid filename %s" % filename, status=400)
     try:
@@ -1449,7 +1462,7 @@ async def handle_finish(request):
     )
 
 
-async def run_web_server(listen_addr, port, queue_processor):
+async def run_web_server(listen_addr, port, queue_processor, zipkin_address=None):
     app = web.Application()
     app.router.add_routes(routes)
     app['queue_processor'] = queue_processor
@@ -1462,6 +1475,10 @@ async def run_web_server(listen_addr, port, queue_processor):
         "/ws/result", functools.partial(pubsub_handler, queue_processor.topic_result),
         name="ws-result"
     )
+    if zipkin_address:
+        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_addr, port=port)
+        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -1519,11 +1536,19 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
-        "--public-vcs-location", type=str, default="https://janitor.debian.net/"
+        "--public-vcs-location", type=str, default="https://janitor.debian.net/",
+        help="Public vcs location (used for URLs handed to worker)"
+    )
+    parser.add_argument(
+        "--vcs-store-url", type=str, default="http://localhost:9923/",
+        help="URL to vcs store"
     )
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
+    parser.add_argument(
+        "--zipkin-address", type=str, default=None,
+        help="Zipkin address to send traces to")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     args = parser.parse_args()
 
@@ -1542,8 +1567,8 @@ def main(argv=None):
 
     state.DEFAULT_URL = config.database_location
     public_vcs_manager = get_vcs_manager(args.public_vcs_location)
-    if config.vcs_location:
-        vcs_manager = get_vcs_manager(config.vcs_location)
+    if args.vcs_store_url:
+        vcs_manager = get_vcs_manager(args.vcs_store_url)
     else:
         vcs_manager = public_vcs_manager
     logfile_manager = get_log_manager(config.logs_location)
@@ -1589,7 +1614,7 @@ def main(argv=None):
         backup_logfile_manager=backup_logfile_manager,
     )
 
-    loop.create_task(run_web_server(args.listen_address, args.port, queue_processor))
+    loop.create_task(run_web_server(args.listen_address, args.port, queue_processor, zipkin_address=args.zipkin_address))
 
     loop.run_forever()
 

@@ -157,6 +157,9 @@ if __name__ == "__main__":
     )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("--external-url", type=str, default=None, help="External URL")
+    parser.add_argument(
+        "--zipkin-address", type=str, default=None,
+        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 
@@ -175,8 +178,6 @@ if __name__ == "__main__":
 
     with open(args.config, "r") as f:
         config = read_config(f)
-
-    logfile_manager = get_log_manager(config.logs_location)
 
     async def handle_simple(templatename, request):
         vs = {}
@@ -598,7 +599,7 @@ order by url, last_run.finish_time desc
             request.app.http_client_session,
             request.app.config,
             request.app.differ_url,
-            logfile_manager,
+            request.app.logfile_manager,
             run,
             request.app.vcs_store_url,
             is_admin=is_admin(request),
@@ -619,7 +620,7 @@ order by url, last_run.finish_time desc
                 )
 
             try:
-                logfile = await logfile_manager.get_log(pkg, run_id, filename)
+                logfile = await request.app.logfile_manager.get_log(pkg, run_id, filename)
             except FileNotFoundError:
                 raise web.HTTPNotFound(
                     text="No log file %s for run %s" % (filename, run_id)
@@ -745,7 +746,7 @@ order by url, last_run.finish_time desc
     async def handle_repo_list(request):
         vcs = request.match_info["vcs"]
         vcs_store_url = request.app.vcs_store_url
-        url = urllib.parse.urljoin(vcs_store_url, vcs)
+        url = URL(vcs_store_url) / vcs
         async with request.app.http_client_session.get(url) as resp:
             return {"vcs": vcs, "repositories": await resp.json()}
 
@@ -1073,7 +1074,6 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
             return await process_webhook(request, request.app.database)
         raise web.HTTPMethodNotAllowed(method='POST', allowed_methods=['GET', 'HEAD'])
 
-    app.http_client_session = ClientSession()
     app.topic_notifications = Topic("notifications")
     app.runner_url = args.runner_url
     app.archiver_url = args.archiver_url
@@ -1140,4 +1140,35 @@ ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
         import aiohttp_debugtoolbar
         # install aiohttp_debugtoolbar
         aiohttp_debugtoolbar.setup(app, hosts=args.debugtoolbar)
+    if args.zipkin_address:
+        import aiozipkin
+        async def setup_aiozipkin(app):
+            endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=args.host, port=args.port)
+            tracer = await aiozipkin.create(args.zipkin_address, endpoint, sample_rate=1.0)
+            aiozipkin.setup(app, tracer)
+        app.on_startup.append(setup_aiozipkin)
+
+    async def setup_client_session(app):
+        if args.zipkin_address:
+            import aiozipkin
+            trace_configs = [aiozipkin.make_trace_config(aiozipkin.get_tracer(app))]
+        else:
+            trace_configs = None
+        app.http_client_session = await ClientSession(trace_configs=trace_configs)
+
+    async def close_client_session(app):
+        await app.http_client_session.close()
+
+    app.on_startup.append(setup_client_session)
+    app.on_cleanup.append(close_client_session)
+
+    async def setup_logfile_manager(app):
+        if args.zipkin_address:
+            import aiozipkin
+            trace_configs = [aiozipkin.make_trace_config(aiozipkin.get_tracer(app))]
+        else:
+            trace_configs = None
+        app.logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
+
+    app.on_startup.append(setup_logfile_manager)
     web.run_app(app, host=args.host, port=args.port)

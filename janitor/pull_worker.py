@@ -40,6 +40,8 @@ import aiohttp
 from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError, web
 import yarl
 
+from jinja2 import Template
+
 from prometheus_client import REGISTRY, push_to_gateway
 
 from breezy import urlutils
@@ -307,7 +309,7 @@ async def get_assignment(
 
 class WatchdogPetter(object):
 
-    def __init__(self, base_url, auth, run_id):
+    def __init__(self, base_url, auth, run_id, queue_id=None):
         self.base_url = base_url
         self.auth = auth
         self.run_id = run_id
@@ -319,8 +321,9 @@ class WatchdogPetter(object):
         self._thread.start()
         self._tasks = []
         self._log_dir_tasks = {}
-        self._last_communication = datetime.now()
+        self._last_communication = datetime.utcnow()
         self.kill = None
+        self.queue_id = queue_id
 
     def _run(self):
         asyncio.set_event_loop(self.loop)
@@ -335,7 +338,7 @@ class WatchdogPetter(object):
         try:
             while True:
                 await asyncio.sleep(10)
-                if (datetime.now() - self._last_communication).total_seconds() > 60:
+                if (datetime.utcnow() - self._last_communication).total_seconds() > 60:
                     if not await self.send_keepalive():
                         logging.warning('failed to send keepalive')
         except BaseException:
@@ -345,10 +348,13 @@ class WatchdogPetter(object):
     async def _connection(self):
         ws_url = urljoin(
             self.base_url, "ws/active-runs/%s/progress" % self.run_id)
+        params = {}
+        if self.queue_id is not None:
+            params['queue_id'] = self.queue_id
         async with ClientSession(auth=self.auth) as session:
             while True:
                 try:
-                    self.ws = await session.ws_connect(ws_url)
+                    self.ws = await session.ws_connect(ws_url, params=params)
                 except (ClientResponseError, ClientConnectorError) as e:
                     self.ws = None
                     logging.warning("progress ws: Unable to connect: %s" % e)
@@ -393,7 +399,7 @@ class WatchdogPetter(object):
         else:
             logging.debug('Not sending keepalive; websocket is dead')
             return False
-        self._last_communication = datetime.now()
+        self._last_communication = datetime.utcnow()
 
     async def send_log_fragment(self, filename, data):
         if self.ws is None:
@@ -402,7 +408,7 @@ class WatchdogPetter(object):
             await self.ws.send_bytes(
                 b"\0".join([b"log", filename.encode("utf-8"), data])
             )
-        self._last_communication = datetime.now()
+        self._last_communication = datetime.utcnow()
 
     def track_log_directory(self, directory):
         task = self._forward_logs(directory)
@@ -429,8 +435,70 @@ class WatchdogPetter(object):
             raise
 
 
+INDEX_TEMPLATE = Template("""\
+<html>
+<head><title>Job</title></head>
+<body>
+
+<h1>Build Details</h1>
+
+<ul>
+<li><b>Command: </b>{{ assignment['command'] }}</li>
+<li><b>Start Time: </b>: {{ metadata['start_time'] }}
+<li><b>Current duration: </b>: {{ datetime.utcnow() - metadata['start_time'] }}
+</ul>
+
+<h1>Logs</h1>
+<ul>
+{% for name in names %}
+  <li><a href="/logs/{{ name }}">{{ name }}</a></li>
+{% endfor %}
+</ul>
+
+</body>
+</html>
+""")
+
+
 async def handle_index(request):
-    return web.Response(text='TODO', status=200)
+    return web.Response(text=INDEX_TEMPLATE.render(
+        assignment=request.app['assignment'],
+        metadata=request.app['metadata'],
+        datetime=datetime),
+        content_type='text/html', status=200)
+
+
+async def handle_assignment(request):
+    return web.json_response(request.app['assignment'])
+
+
+LOG_INDEX_TEMPLATE = Template("""\
+<html>
+<head><title>Log Index</title><head>
+<body>
+<h1>Logs</h1>
+<ul>
+{% for name in names %}
+  <li><a href="/logs/{{ name }}">{{ name }}</a></li>
+{% endfor %}
+</ul>
+</body>
+</html>
+""")
+
+
+async def handle_log_index(request):
+    if 'directory' not in request.app:
+        return web.Response("Log directory not created yet", status=404)
+    names = [entry.name for entry in os.scandir(request.app['directory'])
+             if entry.name.endswith('.log')]
+    return web.Response(
+        text=LOG_INDEX_TEMPLATE.render(names=names), content_type='text/html',
+        status=200)
+
+
+async def handle_log(request):
+    return web.FileResponse(os.path.join(request.app['directory'], request.match_info['filename']))
 
 
 async def handle_health(request):
@@ -557,24 +625,10 @@ async def main(argv=None):
 
         logging.debug("Got back assignment: %r", assignment)
 
-        watchdog_petter = WatchdogPetter(args.base_url, auth, assignment['id'])
+        watchdog_petter = WatchdogPetter(
+            args.base_url, auth, assignment['id'],
+            queue_id=assignment['queue_id'])
         watchdog_petter.start()
-
-        app = web.Application()
-        app.router.add_get('/', handle_index, name='index')
-        app.router.add_get('/health', handle_health, name='health')
-        setup_metrics(app)
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, args.listen_address, args.port)
-        await site.start()
-        (site_addr, site_port) = site._server.sockets[0].getsockname()
-        logging.info('Diagonistics available at http://%s:%d/', site_addr, site_port)
-
-        if "WORKSPACE" in os.environ:
-            desc_path = os.path.join(os.environ["WORKSPACE"], "description.txt")
-            with open(desc_path, "w") as f:
-                f.write(assignment["description"])
 
         suite = assignment["suite"]
         branch_url = assignment["branch"]["url"]
@@ -619,6 +673,22 @@ async def main(argv=None):
 
         with TemporaryDirectory(prefix='janitor') as output_directory:
             loop = asyncio.get_running_loop()
+            app = web.Application()
+            app['directory'] = output_directory
+            app['assignment'] = assignment
+            app['metadata'] = metadata
+            app.router.add_get('/', handle_index, name='index')
+            app.router.add_get('/assignment', handle_assignment, name='assignment')
+            app.router.add_get('/logs/', handle_log_index, name='log-index')
+            app.router.add_get('/logs/{filename}', handle_log, name='log')
+            app.router.add_get('/health', handle_health, name='health')
+            setup_metrics(app)
+            runner = web.AppRunner(app)
+            await runner.setup()
+            site = web.TCPSite(runner, args.listen_address, args.port)
+            await site.start()
+            (site_addr, site_port) = site._server.sockets[0].getsockname()
+            logging.info('Diagnostics available at http://%s:%d/', site_addr, site_port)
             watchdog_petter.track_log_directory(output_directory)
 
             start_time = datetime.utcnow()

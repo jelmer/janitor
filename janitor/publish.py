@@ -1242,6 +1242,7 @@ async def run_web_server(
     require_binary_diff: bool = False,
     push_limit: Optional[int] = None,
     modify_mp_limit: Optional[int] = None,
+    zipkin_address: Optional[str] = None,
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -1264,6 +1265,11 @@ async def run_web_server(
     app.router.add_get(
         "/ws/merge-proposal", functools.partial(pubsub_handler, topic_merge_proposal)
     )
+    if zipkin_address:
+        import aiozipkin
+        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_addr, port=port)
+        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -2343,6 +2349,10 @@ def main(argv=None):
         "--differ-url", type=str, help="Differ URL.", default="http://localhost:9920/"
     )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument("--vcs-path", default=None, type=str, help="Path to local vcs storage")
+    parser.add_argument(
+        "--zipkin-address", type=str, default=None,
+        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 
@@ -2373,7 +2383,7 @@ def main(argv=None):
     topic_merge_proposal = Topic("merge-proposal")
     topic_publish = Topic("publish")
     loop = asyncio.get_event_loop()
-    vcs_manager = get_vcs_manager(config.vcs_location)
+    vcs_manager = get_vcs_manager(args.vcs_path or config.vcs_location)
     db = state.Database(config.database_location)
     if args.once:
         loop.run_until_complete(
