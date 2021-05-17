@@ -1391,7 +1391,6 @@ async def handle_keepalive(request):
     return web.json_response({}, status=200)
 
 
-@routes.post("/finish/{run_id}", name="finish")
 @routes.post("/active-runs/{run_id}/finish", name="finish")
 async def handle_finish(request):
     queue_processor = request.app['queue_processor']
