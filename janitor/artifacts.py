@@ -118,9 +118,10 @@ class LocalArtifactManager(ArtifactManager):
 
 
 class GCSArtifactManager(ArtifactManager):
-    def __init__(self, location, creds_path=None):
+    def __init__(self, location, creds_path=None, trace_configs=None):
         self.bucket_name = URL(location).host
         self.creds_path = creds_path
+        self.trace_configs = trace_configs
 
     def __repr__(self):
         return "%s(%r)" % (type(self).__name__, "gs://%s/" % self.bucket_name)
@@ -128,7 +129,7 @@ class GCSArtifactManager(ArtifactManager):
     async def __aenter__(self):
         from gcloud.aio.storage import Storage
 
-        self.session = ClientSession()
+        self.session = ClientSession(trace_configs=self.trace_configs)
         await self.session.__aenter__()
         self.storage = Storage(service_file=self.creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
@@ -216,9 +217,9 @@ class GCSArtifactManager(ArtifactManager):
             raise
 
 
-def get_artifact_manager(location):
+def get_artifact_manager(location, trace_configs=None):
     if location.startswith("gs://"):
-        return GCSArtifactManager(location)
+        return GCSArtifactManager(location, trace_configs=trace_configs)
     # TODO(jelmer): Support uploading to GCS
     return LocalArtifactManager(location)
 

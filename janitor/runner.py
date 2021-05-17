@@ -1238,8 +1238,8 @@ async def handle_assign(request):
     item = None
     while item is None:
         item = await queue_processor.next_queue_item(1)
-        # TODO(jelmer): Handle the case where item is none. Send
-        # back an error of some sort?
+        if item is None:
+            return web.json_response({'reason': 'queue empty'}, status=503)
         active_run = ActiveRun(
             worker_name=worker,
             queue_item=item,
