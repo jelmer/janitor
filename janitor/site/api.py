@@ -957,7 +957,7 @@ async def handle_run_progress(request):
 
     run_id = request.match_info["run_id"].encode()
 
-    run_url = urllib.parse.urljoin(request.app.runner_url, "active-run/%s")
+    run_url = urllib.parse.urljoin(request.app.runner_url, "active-runs/%s" % run_id)
 
     ws = web.WebSocketResponse()
     await ws.prepare(request)
@@ -967,12 +967,12 @@ async def handle_run_progress(request):
             if msg.type == WSMsgType.BINARY:
                 if msg.data == b"keepalive":
                     logging.debug('%s is still alive', run_id.decode())
-                    async with request.app.http_client_session.post(run_url + '/keepalive', json={}) as resp:
+                    async with request.app.http_client_session.post(run_url + '/keepalive', params={'worker_name': worker_name}) as resp:
                         if resp.status != 200:
                             logging.warning('error sending keepalive for %s: %s', run_id, resp.status)
                 elif msg.data.startswith(b"log\0"):
                     (kind, name, payload) = msg.data.split(b"\0", 2)
-                    async with request.app.http_client_session.post(run_url + '/log/' + name.decode('utf-8'), data=payload) as resp:
+                    async with request.app.http_client_session.post(run_url + '/log/' + name.decode('utf-8'), params={'worker_name': worker_name}, data=payload) as resp:
                         if resp.status != 200:
                             logging.warning('error sending log for %s: %s', run_id, resp.status)
                 else:

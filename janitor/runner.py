@@ -1176,39 +1176,6 @@ async def handle_kill(request):
     return web.json_response(ret)
 
 
-@routes.get("/ws/progress", name="ws-progress")
-async def handle_progress_ws(request):
-    queue_processor = request.app['queue_processor']
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    # Messages on the progress bus:
-    # b'log\0<run-id>\0<logfilename>\0<logbytes>'
-    # b'keepalive\0<run-id>'
-
-    async for msg in ws:
-        if msg.type == WSMsgType.BINARY:
-            (run_id_bytes, rest) = msg.data.split(b"\0", 1)
-            run_id = run_id_bytes.decode("utf-8")
-            try:
-                active_run = queue_processor.active_runs[run_id]
-            except KeyError:
-                logging.warning("No such current run: %s" % run_id)
-                continue
-            if rest.startswith(b"log\0"):
-                (unused_kind, logname, data) = rest.split(b"\0", 2)
-                if active_run.append_log(logname.decode("utf-8"), data):
-                    # Make sure everybody is aware of the new log file.
-                    queue_processor.topic_queue.publish(queue_processor.status_json())
-                active_run.reset_keepalive()
-            elif rest == b"keepalive":
-                active_run.reset_keepalive()
-            else:
-                logging.warning("Unknown progress message %r for %s", rest, run_id)
-
-    return ws
-
-
 @routes.get("/log/{run_id}/{filename}", name="log")
 async def handle_log(request):
     queue_processor = request.app['queue_processor']
