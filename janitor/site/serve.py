@@ -231,7 +231,7 @@ async def handle_queue(request):
     return await write_queue(
         request.app.http_client_session,
         request.app.database,
-        queue_status=app['runner_status'],
+        queue_status=request.app['runner_status'],
         limit=limit,
     )
 
@@ -576,11 +576,11 @@ async def handle_result_file(request):
         )
     else:
         try:
-            artifact = await request.app.artifact_manager.get_artifact(
+            artifact = await request.app['artifact_manager'].get_artifact(
                 run_id, filename
             )
         except FileNotFoundError:
-            raise web.HTTPNotFound("No artifact %s for run %s" % (filename, run_id))
+            raise web.HTTPNotFound(text="No artifact %s for run %s" % (filename, run_id))
         with artifact as f:
             return web.Response(
                 body=f.read(), headers={"Cache-Control": "max-age=3600"}
@@ -780,6 +780,28 @@ async def create_app(
     else:
         minified_prefix = "min."
 
+    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
+    app = web.Application(middlewares=[trailing_slash_redirect])
+
+    if zipkin_address:
+        import aiozipkin
+
+        endpoint = aiozipkin.create_endpoint("janitor.site", ipv4=listen_address, port=port)
+        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        aiozipkin.setup(app, tracer)
+        trace_configs = [aiozipkin.make_trace_config(tracer)]
+    else:
+        trace_configs = None
+
+    async def setup_client_session(app):
+        app.http_client_session = ClientSession(trace_configs=trace_configs)
+
+    async def close_client_session(app):
+        await app.http_client_session.close()
+
+    app.on_startup.append(setup_client_session)
+    app.on_cleanup.append(close_client_session)
+
     async def start_gpg_context(app):
         gpg_home = tempfile.TemporaryDirectory()
         gpg_context = gpg.Context(home_dir=gpg_home.name)
@@ -843,9 +865,6 @@ async def create_app(
                 await listener
 
             app.on_cleanup.append(stop_listener)
-
-    trailing_slash_redirect = normalize_path_middleware(append_slash=True)
-    app = web.Application(middlewares=[trailing_slash_redirect])
 
     for path, templatename in [
         ("/", "index"),
@@ -1061,12 +1080,16 @@ async def create_app(
     app.jinja_env = env
     from janitor.artifacts import get_artifact_manager
 
-    app.artifact_manager = get_artifact_manager(config.artifact_location)
-
     async def startup_artifact_manager(app):
-        await app.artifact_manager.__aenter__()
+        app['artifact_manager'] = get_artifact_manager(
+            config.artifact_location, trace_configs=trace_configs)
+        await app['artifact_manager'].__aenter__()
+
+    async def turndown_artifact_manager(app):
+        await app['artifact_manager'].__aexit__(None, None, None)
 
     app.on_startup.append(startup_artifact_manager)
+    app.on_cleanup.append(turndown_artifact_manager)
     setup_debsso(app)
     setup_metrics(app)
     app.router.add_post("/", handle_post_root, name="root-post")
@@ -1099,24 +1122,6 @@ async def create_app(
         import aiohttp_debugtoolbar
         # install aiohttp_debugtoolbar
         aiohttp_debugtoolbar.setup(app, hosts=debugtoolbar)
-    if zipkin_address:
-        import aiozipkin
-
-        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_address, port=port)
-        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
-        aiozipkin.setup(app, tracer)
-        trace_configs = [aiozipkin.make_trace_config(tracer)]
-    else:
-        trace_configs = None
-
-    async def setup_client_session(app):
-        app.http_client_session = ClientSession(trace_configs=trace_configs)
-
-    async def close_client_session(app):
-        await app.http_client_session.close()
-
-    app.on_startup.append(setup_client_session)
-    app.on_cleanup.append(close_client_session)
 
     async def setup_logfile_manager(app):
         app.logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
