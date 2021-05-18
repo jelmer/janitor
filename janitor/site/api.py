@@ -19,6 +19,7 @@ import aiohttp
 from aiohttp import (
     web,
     ClientSession,
+    ClientTimeout,
     ContentTypeError,
     ClientConnectorError,
     ClientOSError,
@@ -1001,7 +1002,7 @@ async def handle_run_assign(request):
     url = URL(request.app.runner_url) / "assign"
     try:
         async with request.app.http_client_session.post(
-            url, json={"worker": worker_name}
+            url, json={"worker": worker_name}, timeout=ClientTimeout(20)
         ) as resp:
             if resp.status != 201:
                 try:
@@ -1016,6 +1017,8 @@ async def handle_run_assign(request):
             return web.json_response(assignment, status=201)
     except (ClientConnectorError, ServerDisconnectedError) as e:
         return web.json_response({"reason": "unable to contact runner: %s" % e}, status=502)
+    except asyncio.TimeoutError as e:
+        return web.json_response({"reason": "timeout contacting runner: %s" % e}, status=502)
 
 
 @docs()

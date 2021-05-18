@@ -58,8 +58,6 @@ from silver_platter.proposal import (
     get_hoster,
 )
 from silver_platter.utils import (
-    open_branch,
-    BranchMissing,
     BranchRateLimited,
     BranchUnavailable,
     full_branch_url,
@@ -100,8 +98,6 @@ from .vcs import (
     BranchOpenFailure,
     get_vcs_manager,
     UnsupportedVcs,
-    VcsManager,
-    import_branches,
 )
 
 routes = web.RouteTableDef()
@@ -575,6 +571,7 @@ async def open_branch_with_fallback(
     conn, pkg, vcs_type, vcs_url, possible_transports=None
 ):
     probers = select_preferred_probers(vcs_type)
+    logging.info('Opening branch %s with %r', vcs_url, probers)
     try:
         return open_branch_ext(
             vcs_url, possible_transports=possible_transports, probers=probers
@@ -1261,33 +1258,40 @@ async def handle_assign(request):
     async with queue_processor.database.acquire() as conn:
         build_env = await builder.build_env(conn, suite_config, item)
 
-        try:
-            main_branch = await open_branch_with_fallback(
-                conn,
-                item.package,
-                item.vcs_type,
-                item.branch_url,
-                possible_transports=possible_transports,
-            )
-        except BranchRateLimited as e:
-            main_branch_rate_limit_count.inc()
-            await abort(active_run, 'pull-rate-limited', str(e))
-            return web.json_response({'reason': str(e)}, status=429)
-        except BranchOpenFailure:
-            resume_branch = None
-            vcs_type = item.vcs_type
-        else:
-            active_run.main_branch_url = full_branch_url(main_branch).rstrip('/')
-            vcs_type = get_vcs_abbreviation(main_branch.repository)
-            if not item.refresh:
-                resume_branch = await open_resume_branch(
-                    main_branch,
-                    suite_config.branch_name,
+        # TODO(jelmer): Run this bit in a separate thread.
+        tracer = aiozipkin.get_tracer(request.app)
+        span = aiozipkin.request_span(request)
+
+        with tracer.new_child(span.context) as child_span:
+            child_span.name("branch:open")
+
+            try:
+                main_branch = await open_branch_with_fallback(
+                    conn,
                     item.package,
-                    possible_hosters=possible_hosters,
+                    item.vcs_type,
+                    item.branch_url,
+                    possible_transports=possible_transports,
                 )
-            else:
+            except BranchRateLimited as e:
+                main_branch_rate_limit_count.inc()
+                await abort(active_run, 'pull-rate-limited', str(e))
+                return web.json_response({'reason': str(e)}, status=429)
+            except BranchOpenFailure:
                 resume_branch = None
+                vcs_type = item.vcs_type
+            else:
+                active_run.main_branch_url = full_branch_url(main_branch).rstrip('/')
+                vcs_type = get_vcs_abbreviation(main_branch.repository)
+                if not item.refresh:
+                    resume_branch = await open_resume_branch(
+                        main_branch,
+                        suite_config.branch_name,
+                        item.package,
+                        possible_hosters=possible_hosters,
+                    )
+                else:
+                    resume_branch = None
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
@@ -1478,7 +1482,12 @@ async def run_web_server(listen_addr, port, queue_processor, zipkin_address=None
     if zipkin_address:
         endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=listen_addr, port=port)
         tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
-        aiozipkin.setup(app, tracer)
+        aiozipkin.setup(app, tracer, skip_routes=[
+            app.router['metrics'],
+            app.router['ws-queue'],
+            app.router['ws-result'],
+            ]
+        )
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
