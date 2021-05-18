@@ -55,6 +55,9 @@ message Config {
   optional string artifact_location = 10;
 
   optional string instance_name = 11;
+
+  // Location for zipkin server
+  optional string zipkin_address = 12;
 }
 
 message Env {

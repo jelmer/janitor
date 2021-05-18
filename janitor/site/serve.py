@@ -783,12 +783,23 @@ async def create_app(
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
 
+    setup_metrics(app)
+    app.topic_notifications = Topic("notifications")
+    app.router.add_get(
+        "/ws/notifications",
+        functools.partial(pubsub_handler, app.topic_notifications),  # type: ignore
+        name="ws-notifications",
+    )
+
     if zipkin_address:
         import aiozipkin
 
         endpoint = aiozipkin.create_endpoint("janitor.site", ipv4=listen_address, port=port)
         tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
-        aiozipkin.setup(app, tracer)
+        aiozipkin.setup(app, tracer, skip_routes=[
+            app.router['metrics'],
+            app.router['ws-notifications'],
+            ])
         trace_configs = [aiozipkin.make_trace_config(tracer)]
     else:
         trace_configs = None
@@ -1052,7 +1063,6 @@ async def create_app(
             return await process_webhook(request, request.app.database)
         raise web.HTTPMethodNotAllowed(method='POST', allowed_methods=['GET', 'HEAD'])
 
-    app.topic_notifications = Topic("notifications")
     app.runner_url = runner_url
     app.archiver_url = archiver_url
     app.differ_url = differ_url
@@ -1091,14 +1101,8 @@ async def create_app(
     app.on_startup.append(startup_artifact_manager)
     app.on_cleanup.append(turndown_artifact_manager)
     setup_debsso(app)
-    setup_metrics(app)
     app.router.add_post("/", handle_post_root, name="root-post")
     app.router.add_get("/health", handle_health, name="health")
-    app.router.add_get(
-        "/ws/notifications",
-        functools.partial(pubsub_handler, app.topic_notifications),  # type: ignore
-        name="ws-notifications",
-    )
     app.add_subapp(
         "/api",
         create_api_app(
