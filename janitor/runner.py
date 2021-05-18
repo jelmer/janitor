@@ -1259,12 +1259,9 @@ async def handle_assign(request):
         build_env = await builder.build_env(conn, suite_config, item)
 
         # TODO(jelmer): Run this bit in a separate thread.
-        tracer = aiozipkin.get_tracer(request.app)
         span = aiozipkin.request_span(request)
 
-        with tracer.new_child(span.context) as child_span:
-            child_span.name("branch:open")
-
+        with span.new_child('branch:open'):
             try:
                 main_branch = await open_branch_with_fallback(
                     conn,

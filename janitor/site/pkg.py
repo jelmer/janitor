@@ -109,7 +109,7 @@ async def get_publish_history(
 
 
 async def generate_run_file(
-    db, client, config, differ_url, logfile_manager, run, vcs_store_url, is_admin
+    db, client, config, differ_url, logfile_manager, run, vcs_store_url, is_admin, span
 ):
     kwargs = {}
     kwargs["run"] = run
@@ -121,16 +121,19 @@ async def generate_run_file(
             kwargs["unchanged_run"] = await get_unchanged_run(
                 conn, run['package'], run['main_branch_revision']
             )
-        (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, run['suite'], run['package']
-        )
-        package = await conn.fetchrow(
-            'SELECT name, vcs_type, vcs_url, branch_url, vcs_browse, vcswatch_version '
-            'FROM package WHERE name = $1', run['package'])
-        if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
-            publish_history = await get_publish_history(conn, run['revision'])
-        else:
-            publish_history = []
+        with span.new_child('sql:queue-position'):
+            (queue_position, queue_wait_time) = await state.get_queue_position(
+                conn, run['suite'], run['package']
+            )
+        with span.new_child('sql:package'):
+            package = await conn.fetchrow(
+                'SELECT name, vcs_type, vcs_url, branch_url, vcs_browse, vcswatch_version '
+                'FROM package WHERE name = $1', run['package'])
+        with span.new_child('sql:publish-history'):
+            if run['revision'] and run['result_code'] in ("success", "nothing-new-to-do"):
+                publish_history = await get_publish_history(conn, run['revision'])
+            else:
+                publish_history = []
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
     kwargs["vcs_type"] = package['vcs_type']
