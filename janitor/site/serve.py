@@ -17,6 +17,7 @@
 
 """Serve the janitor site."""
 
+import aiozipkin
 import asyncio
 import logging
 import re
@@ -543,6 +544,7 @@ async def handle_run(request):
         run,
         request.app.vcs_store_url,
         is_admin=is_admin(request),
+        span=aiozipkin.request_span(request),
     )
 
 
