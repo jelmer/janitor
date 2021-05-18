@@ -80,7 +80,7 @@ async def schedule_new_package(conn, upstream_info, policy, requestor=None, orig
         conn,
         [(package, 'debianize', None, DEFAULT_NEW_PACKAGE_PRIORITY,
           DEFAULT_SUCCESS_CHANCE)])
-    await sync_policy(conn, policy, package=package)
+    await sync_policy(conn, policy, selected_package=package)
     policy = await conn.fetchrow(
         "SELECT update_changelog, command "
         "FROM policy WHERE package = $1 AND suite = $2",
@@ -102,7 +102,7 @@ async def schedule_update_package(conn, policy, package, desired_version, reques
         "VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
         package, 'fresh-releases', None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
         DEFAULT_SUCCESS_CHANCE)
-    await sync_policy(conn, policy, package=package)
+    await sync_policy(conn, policy, selected_package=package)
     await do_schedule(conn, package, "fresh-releases", requestor=requestor, bucket='missing-deps')
 
 

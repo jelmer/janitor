@@ -517,7 +517,7 @@ async def run_web_server(app, listen_addr, port, zipkin_address=None):
     app.on_startup.append(connect_artifact_manager)
     if zipkin_address:
         import aiozipkin
-        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_addr, port=port)
+        endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=listen_addr, port=port)
         tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
