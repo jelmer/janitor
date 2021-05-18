@@ -1267,7 +1267,7 @@ async def run_web_server(
     )
     if zipkin_address:
         import aiozipkin
-        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_addr, port=port)
+        endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
         tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)

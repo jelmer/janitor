@@ -998,7 +998,7 @@ async def handle_run_progress(request):
 @routes.post("/active-runs", name="run-assign")
 async def handle_run_assign(request):
     worker_name = await check_worker_creds(request.app.db, request)
-    url = urllib.parse.urljoin(request.app.runner_url, "assign")
+    url = URL(request.app.runner_url) / "assign"
     try:
         async with request.app.http_client_session.post(
             url, json={"worker": worker_name}

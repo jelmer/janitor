@@ -308,7 +308,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.router.add_get("/health", handle_health, name="health")
     if zipkin_address:
         import aiozipkin
-        endpoint = aiozipkin.create_endpoint("janitor.archive", ipv4=listen_addr, port=port)
+        endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=listen_addr, port=port)
         tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)

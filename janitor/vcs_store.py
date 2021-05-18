@@ -620,7 +620,7 @@ async def create_web_app(
     logging.info("Listening on %s:%s", listen_addr, port)
     if zipkin_address:
         import aiozipkin
-        endpoint = aiozipkin.create_endpoint("aiohttp_server", ipv4=listen_addr, port=port)
+        endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
         tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer)
     return app
