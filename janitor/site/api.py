@@ -1280,11 +1280,12 @@ def create_app(
     config: Config,
     policy_config: PolicyConfig,
     external_url: Optional[URL] = None,
+    trace_configs=None,
 ) -> web.Application:
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.router.add_routes(routes)
-    app.http_client_session = ClientSession()
+    app.http_client_session = ClientSession(trace_configs=trace_configs)
     app.config = config
     app['logfile_manager'] = get_log_manager(config.logs_location)
     app.jinja_env = env
