@@ -1113,6 +1113,7 @@ async def create_app(
             external_url=(
                 app.external_url.join(URL("api")) if app.external_url else None
             ),
+            trace_configs=trace_configs,
         ),
     )
     import aiohttp_apispec
