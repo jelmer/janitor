@@ -596,9 +596,6 @@ def main(argv=None):
         '--task-timeout', help='Task timeout (in seconds)',
         type=int, default=60)
     parser.add_argument('--gcp-logging', action='store_true')
-    parser.add_argument(
-        "--zipkin-address", type=str, default=None,
-        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 
@@ -630,7 +627,7 @@ def main(argv=None):
         task_timeout=args.task_timeout,
     )
 
-    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, zipkin_address=args.zipkin_address))]
+    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, zipkin_address=config.zipkin_address))]
 
     if args.runner_url:
         tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))

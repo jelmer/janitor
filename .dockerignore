@@ -1,2 +1,6 @@
 credentials.*
 *.secret
+.mypy_cache
+.git
+.bzr
+.eggs

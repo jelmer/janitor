@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import aiozipkin
 from aiohttp import web, ClientConnectorError
 import asyncpg
 from datetime import datetime
@@ -62,11 +63,12 @@ async def handle_new_upstream_pkg(request):
         request.app.differ_url,
         request.app.vcs_store_url,
         pkg,
+        aiozipkin.request_span(request),
         run_id)
 
+
 @html_template(
-    "new-upstream-candidates.html", headers={"Cache-Control": "max-age=600"}
-)
+    "new-upstream-candidates.html", headers={"Cache-Control": "max-age=600"})
 async def handle_new_upstream_candidates(request):
     from .new_upstream import generate_candidates
 

@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import aiozipkin
 import asyncpg
 from typing import List, Dict
 from .common import generate_pkg_context, iter_candidates
@@ -18,7 +19,7 @@ renamed_tags = load_renamed_tags()
 
 
 async def generate_pkg_file(
-    db, config, policy, client, differ_url, vcs_store_url, package, run_id=None
+    db, config, policy, client, differ_url, vcs_store_url, package, span, run_id=None
 ):
     kwargs = await generate_pkg_context(
         db,
@@ -29,6 +30,7 @@ async def generate_pkg_file(
         differ_url,
         vcs_store_url,
         package,
+        span,
         run_id=run_id,
     )
     run = kwargs["run"]
@@ -331,6 +333,7 @@ async def handle_lintian_fixes_pkg(request):
         request.app.differ_url,
         request.app.vcs_store_url,
         pkg,
+        aiozipkin.request_span(request),
         run_id,
     )
 

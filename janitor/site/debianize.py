@@ -1,3 +1,4 @@
+import aiozipkin
 from . import html_template
 from ..config import get_suite_config
 from lintian_brush.lintian_overrides import load_renamed_tags
@@ -38,6 +39,7 @@ async def handle_debianize_pkg(request):
         request.app.differ_url,
         request.app.vcs_store_url,
         pkg,
+        aiozipkin.request_span(request),
         run_id,
     )
 

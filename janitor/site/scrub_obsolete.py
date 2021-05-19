@@ -1,3 +1,4 @@
+import aiozipkin
 from . import html_template
 
 
@@ -19,6 +20,7 @@ async def handle_scrub_obsolete_pkg(request):
         request.app.differ_url,
         request.app.vcs_store_url,
         pkg,
+        aiozipkin.request_span(request),
         run_id,
     )
 

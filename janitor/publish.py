@@ -1242,7 +1242,6 @@ async def run_web_server(
     require_binary_diff: bool = False,
     push_limit: Optional[int] = None,
     modify_mp_limit: Optional[int] = None,
-    zipkin_address: Optional[str] = None,
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -1265,10 +1264,10 @@ async def run_web_server(
     app.router.add_get(
         "/ws/merge-proposal", functools.partial(pubsub_handler, topic_merge_proposal)
     )
-    if zipkin_address:
+    if config.zipkin_address:
         import aiozipkin
         endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
-        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -2350,9 +2349,6 @@ def main(argv=None):
     )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("--vcs-path", default=None, type=str, help="Path to local vcs storage")
-    parser.add_argument(
-        "--zipkin-address", type=str, default=None,
-        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 

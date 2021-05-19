@@ -746,10 +746,11 @@ async def handle_global_policy(request):
 
 
 @docs()
-async def forward_to_runner(client, runner_url, path):
-    url = urllib.parse.urljoin(runner_url, path)
+@routes.get("/runner/status", name="runner-status")
+async def handle_runner_status(request):
+    url = URL(request.app.runner_url) / "status"
     try:
-        async with client.get(url) as resp:
+        async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
             return web.json_response(await resp.json(), status=resp.status)
     except ContentTypeError as e:
         return web.json_response({"reason": "runner returned error %s" % e}, status=400)
@@ -758,25 +759,19 @@ async def forward_to_runner(client, runner_url, path):
 
 
 @docs()
-@routes.get("/runner/status", name="runner-status")
-async def handle_runner_status(request):
-    return await forward_to_runner(
-        request.app.http_client_session, request.app.runner_url, "status"
-    )
-
-
-@docs()
 @routes.get("/active-runs/{run_id}/log/", name="run-log-list")
 async def handle_runner_log_index(request):
     run_id = request.match_info["run_id"]
-    url = urllib.parse.urljoin(request.app.runner_url, "log/%s" % run_id)
+    url = URL(request.app.runner_url) / "log" / run_id
     try:
-        async with request.app.http_client_session.get(url) as resp:
+        async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
             ret = await resp.json()
     except ContentTypeError as e:
         return web.json_response({"reason": "runner returned error %s" % e}, status=400)
     except ClientConnectorError as e:
         return web.json_response({"reason": "unable to contact runner", "details": repr(e)}, status=502)
+    except asyncio.TimeoutError:
+        return web.json_response({"reason": "timeout contacting runner"}, status=502)
 
     for accept in iter_accept(request):
         if accept in ('application/json', ):
@@ -803,12 +798,14 @@ async def handle_runner_kill(request):
     run_id = request.match_info["run_id"]
     url = urllib.parse.urljoin(request.app.runner_url, "kill/%s" % run_id)
     try:
-        async with request.app.http_client_session.post(url) as resp:
+        async with request.app.http_client_session.post(url, ClientTimeout(10)) as resp:
             return web.json_response(await resp.json(), status=resp.status)
     except ContentTypeError as e:
         return web.json_response({"reason": "runner returned error %s" % e}, status=400)
     except ClientConnectorError:
         return web.json_response({"reason": "unable to contact runner"}, status=502)
+    except asyncio.TimeoutError:
+        return web.Response(text="timeout contacting runner", status=502)
 
 
 @docs()
@@ -818,7 +815,7 @@ async def handle_runner_log(request):
     filename = request.match_info["filename"]
     url = urllib.parse.urljoin(request.app.runner_url, "log/%s/%s" % (run_id, filename))
     try:
-        async with request.app.http_client_session.get(url) as resp:
+        async with request.app.http_client_session.get(url, timeout=ClientTimeout(20)) as resp:
             body = await resp.read()
             return web.Response(
                 body=body, status=resp.status, content_type="text/plain"
@@ -827,6 +824,8 @@ async def handle_runner_log(request):
         return web.Response(text="runner returned error %s" % e, status=400)
     except ClientConnectorError:
         return web.Response(text="unable to contact runner", status=502)
+    except asyncio.TimeoutError:
+        return web.Response(text="timeout contacting runner", status=502)
 
 
 @docs()
@@ -922,7 +921,10 @@ async def handle_publish_ready(request):
     suite = request.match_info.get("suite")
     review_status = request.query.get("review-status")
     publishable_only = request.query.get("publishable_only", "true") == "true"
-    needs_review = 'needs-review' in request.query
+    if 'needs-review' in request.query:
+        needs_review = (request.query['needs-review'] == 'true')
+    else:
+        needs_review = None
     limit = request.query.get("limit", 200)
     if limit:
         limit = int(limit)
@@ -973,14 +975,20 @@ async def handle_run_progress(request):
             if msg.type == WSMsgType.BINARY:
                 if msg.data == b"keepalive":
                     logging.debug('%s is still alive', run_id)
-                    async with request.app.http_client_session.post(run_url + '/keepalive', params=params) as resp:
-                        if resp.status != 200:
-                            logging.warning('error sending keepalive for %s: %s', run_id, resp.status)
+                    try:
+                        async with request.app.http_client_session.post(run_url + '/keepalive', params=params, timeout=ClientTimeout(5)) as resp:
+                            if resp.status != 200:
+                                logging.warning('error sending keepalive for %s: %s', run_id, resp.status)
+                    except asyncio.TimeoutError:
+                        logging.warning('timeout sending keepalive for %s: %s', run_id, resp.status)
                 elif msg.data.startswith(b"log\0"):
                     (kind, name, payload) = msg.data.split(b"\0", 2)
-                    async with request.app.http_client_session.post(run_url + '/log/' + name.decode('utf-8'), params=params, data=payload) as resp:
-                        if resp.status != 200:
-                            logging.warning('error sending log for %s: %s', run_id, resp.status)
+                    try:
+                        async with request.app.http_client_session.post(run_url + '/log/' + name.decode('utf-8'), params=params, data=payload, timeout=ClientTimeout(10)) as resp:
+                            if resp.status != 200:
+                                logging.warning('error sending log for %s: %s', run_id, resp.status)
+                    except asyncio.TimeoutError:
+                        logging.warning('timeout sending logs for %s: %s', run_id, resp.status)
                 else:
                     logging.warning(
                         "Unknown websocket message from worker %s: %r",
@@ -1251,7 +1259,7 @@ WHERE
 @routes.get("/active-runs", name="active-runs-list")
 async def handle_list_active_runs(request):
     url = urllib.parse.urljoin(request.app.runner_url, "status")
-    async with request.app.http_client_session.get(url) as resp:
+    async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
         if resp.status != 200:
             return web.json_response(await resp.json(), status=resp.status)
         status = await resp.json()
@@ -1263,7 +1271,7 @@ async def handle_list_active_runs(request):
 async def handle_get_active_run(request):
     run_id = request.match_info["run_id"]
     url = urllib.parse.urljoin(request.app.runner_url, "status")
-    async with request.app.http_client_session.get(url) as resp:
+    async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
         if resp.status != 200:
             return web.json_response(await resp.json(), status=resp.status)
         processing = (await resp.json())["processing"]

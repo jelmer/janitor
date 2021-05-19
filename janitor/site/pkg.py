@@ -118,9 +118,10 @@ async def generate_run_file(
     kwargs["tracker_url"] = partial(tracker_url, config)
     async with db.acquire() as conn:
         if run['main_branch_revision']:
-            kwargs["unchanged_run"] = await get_unchanged_run(
-                conn, run['package'], run['main_branch_revision']
-            )
+            with span.new_child('sql:unchanged-run'):
+                kwargs["unchanged_run"] = await get_unchanged_run(
+                    conn, run['package'], run['main_branch_revision']
+                )
         with span.new_child('sql:queue-position'):
             (queue_position, queue_wait_time) = await state.get_queue_position(
                 conn, run['suite'], run['package']
@@ -268,7 +269,7 @@ async def generate_run_file(
     return kwargs
 
 
-async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites):
+async def generate_pkg_file(db, config, package, merge_proposals, runs, available_suites, span):
     kwargs = {}
     kwargs["package"] = package['name']
     kwargs["vcswatch_status"] = package['vcswatch_status']
@@ -283,10 +284,11 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     kwargs["tracker_url"] = partial(tracker_url, config)
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:
-        kwargs["candidates"] = {
-            row['suite']: (row['context'], row['value'], row['success_chance'])
-            for row in await iter_candidates(conn, packages=[package['name']])
-        }
+        with span.new_child('sql:candidates'):
+            kwargs["candidates"] = {
+                row['suite']: (row['context'], row['value'], row['success_chance'])
+                for row in await iter_candidates(conn, packages=[package['name']])
+            }
     return kwargs
 
 

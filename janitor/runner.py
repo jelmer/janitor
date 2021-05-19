@@ -80,6 +80,7 @@ from .debian import (
     find_changes,
     NoChangesFile,
     InconsistentChangesFiles,
+    dpkg_vendor,
 )
 from .logs import (
     get_log_manager,
@@ -216,8 +217,8 @@ class DebianResult(BuilderResult):
             logging.info("No changes file found: %s", e)
         else:
             logging.info(
-                    "Found changes files %r, source %s, build version %s, "
-                    "distribution: %s, binary packages: %r",
+                "Found changes files %r, source %s, build version %s, "
+                "distribution: %s, binary packages: %r",
                 self.source, self.changes_filenames, self.build_version,
                 self.build_distribution, self.binary_packages)
 
@@ -323,6 +324,9 @@ class DebianBuilder(Builder):
             env['LINTIAN_SUPPRESS_TAGS'] = ','.join(self.distro_config.lintian_suppress_tag)
 
         env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
+
+        env['DEB_VENDOR'] = self.distro_config.vendor or dpkg_vendor()
+
         return env
 
 
@@ -573,9 +577,9 @@ async def open_branch_with_fallback(
     probers = select_preferred_probers(vcs_type)
     logging.info('Opening branch %s with %r', vcs_url, probers)
     try:
-        return open_branch_ext(
-            vcs_url, possible_transports=possible_transports, probers=probers
-        )
+        return await asyncio.to_thread(
+            open_branch_ext,
+            vcs_url, possible_transports=possible_transports, probers=probers)
     except BranchOpenFailure as e:
         if e.code == "hosted-on-alioth":
             logging.info(
@@ -755,7 +759,7 @@ class ActiveRun(object):
         return ret
 
 
-async def open_resume_branch(main_branch, suite_name, package, possible_hosters=None):
+def open_resume_branch(main_branch, suite_name, package, possible_hosters=None):
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
@@ -798,39 +802,36 @@ async def open_resume_branch(main_branch, suite_name, package, possible_hosters=
 
 
 async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branch: Branch) -> Optional["ResumeInfo"]:
-    if resume_branch is not None:
-        row = await conn.fetchrow(
-            "SELECT result, branch_name, review_status, "
-            "array(SELECT row(role, remote_name, base_revision, revision) "
-            "FROM new_result_branch WHERE run_id = run.id) AS result_branches "
-            "FROM run "
-            "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
-            suite,
-            resume_branch.last_revision().decode("utf-8"),
-        )
-        if row is not None:
-            resume_branch_result = row['result']
-            resume_review_status = row['review_status']
-            resume_result_branches = [
-                (role, name,
-                 base_revision.encode("utf-8") if base_revision else None,
-                 revision.encode("utf-8") if revision else None)
-                for (role, name, base_revision, revision) in row['result_branches']]
-        else:
-            logging.warning(
-                'Unable to find resume branch %r in database',
-                resume_branch)
-            return None
-        if resume_review_status == "rejected":
-            logging.info("Unsetting resume branch, since last run was " "rejected.")
-            return None
-        return ResumeInfo(
-            resume_branch,
-            resume_branch_result,
-            resume_result_branches or [],
-        )
+    row = await conn.fetchrow(
+        "SELECT result, branch_name, review_status, "
+        "array(SELECT row(role, remote_name, base_revision, revision) "
+        "FROM new_result_branch WHERE run_id = run.id) AS result_branches "
+        "FROM run "
+        "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
+        suite,
+        resume_branch.last_revision().decode("utf-8"),
+    )
+    if row is not None:
+        resume_branch_result = row['result']
+        resume_review_status = row['review_status']
+        resume_result_branches = [
+            (role, name,
+             base_revision.encode("utf-8") if base_revision else None,
+             revision.encode("utf-8") if revision else None)
+            for (role, name, base_revision, revision) in row['result_branches']]
     else:
+        logging.warning(
+            'Unable to find resume branch %r in database',
+            resume_branch)
         return None
+    if resume_review_status == "rejected":
+        logging.info("Unsetting resume branch, since last run was rejected.")
+        return None
+    return ResumeInfo(
+        resume_branch,
+        resume_branch_result,
+        resume_result_branches or [],
+    )
 
 
 class ResumeInfo(object):
@@ -860,11 +861,6 @@ def queue_item_env(queue_item):
     if queue_item.upstream_branch_url:
         env["UPSTREAM_BRANCH_URL"] = queue_item.upstream_branch_url
     return env
-
-
-def dpkg_vendor():
-    import subprocess
-    return subprocess.check_output(['dpkg-vendor', '--query', 'vendor']).strip().decode()
 
 
 def cache_branch_name(distro_config, role):
@@ -1223,6 +1219,8 @@ async def handle_assign(request):
     possible_transports = []
     possible_hosters = []
 
+    span = aiozipkin.request_span(request)
+
     async def abort(active_run, code, description):
         result = active_run.create_result(
             branch_url=active_run.main_branch_url,
@@ -1234,7 +1232,8 @@ async def handle_assign(request):
     queue_processor = request.app['queue_processor']
     item = None
     while item is None:
-        item = await queue_processor.next_queue_item(1)
+        with span.new_child('sql:queue-item'):
+            item = await queue_processor.next_queue_item(1)
         if item is None:
             return web.json_response({'reason': 'queue empty'}, status=503)
         active_run = ActiveRun(
@@ -1256,13 +1255,11 @@ async def handle_assign(request):
     builder = get_builder(queue_processor.config, suite_config)
 
     async with queue_processor.database.acquire() as conn:
-        build_env = await builder.build_env(conn, suite_config, item)
+        with span.new_child('build-env'):
+            build_env = await builder.build_env(conn, suite_config, item)
 
-        # TODO(jelmer): Run this bit in a separate thread.
-        span = aiozipkin.request_span(request)
-
-        with span.new_child('branch:open'):
-            try:
+        try:
+            with span.new_child('branch:open'):
                 main_branch = await open_branch_with_fallback(
                     conn,
                     item.package,
@@ -1270,44 +1267,51 @@ async def handle_assign(request):
                     item.branch_url,
                     possible_transports=possible_transports,
                 )
-            except BranchRateLimited as e:
-                main_branch_rate_limit_count.inc()
-                await abort(active_run, 'pull-rate-limited', str(e))
-                return web.json_response({'reason': str(e)}, status=429)
-            except BranchOpenFailure:
-                resume_branch = None
-                vcs_type = item.vcs_type
-            else:
-                active_run.main_branch_url = full_branch_url(main_branch).rstrip('/')
-                vcs_type = get_vcs_abbreviation(main_branch.repository)
-                if not item.refresh:
-                    resume_branch = await open_resume_branch(
+        except BranchRateLimited as e:
+            main_branch_rate_limit_count.inc()
+            await abort(active_run, 'pull-rate-limited', str(e))
+            return web.json_response({'reason': str(e)}, status=429)
+        except BranchOpenFailure:
+            resume_branch = None
+            vcs_type = item.vcs_type
+        else:
+            active_run.main_branch_url = full_branch_url(main_branch).rstrip('/')
+            vcs_type = get_vcs_abbreviation(main_branch.repository)
+            if not item.refresh:
+                with span.new_child('resume-branch:open'):
+                    resume_branch = await asyncio.to_thread(
+                        open_resume_branch,
                         main_branch,
                         suite_config.branch_name,
                         item.package,
-                        possible_hosters=possible_hosters,
-                    )
-                else:
-                    resume_branch = None
+                        possible_hosters=possible_hosters)
+            else:
+                resume_branch = None
 
         if vcs_type is not None:
             vcs_type = vcs_type.lower()
 
         if resume_branch is None and not item.refresh:
-            resume_branch = queue_processor.public_vcs_manager.get_branch(
-                item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type
-            )
+            with span.new_child('resume-branch:open'):
+                resume_branch = await asyncio.to_thread(
+                    queue_processor.public_vcs_manager.get_branch,
+                    item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type)
 
-        resume = await check_resume_result(conn, item.suite, resume_branch)
-        if resume is not None:
-            if is_authenticated_url(resume.branch.user_url):
-                raise AssertionError('invalid resume branch %r' % (
-                    resume.branch))
+        if resume_branch is not None:
+            with span.new_child('resume-branch:check'):
+                resume = await check_resume_result(conn, item.suite, resume_branch)
+                if resume is not None:
+                    if is_authenticated_url(resume.branch.user_url):
+                        raise AssertionError('invalid resume branch %r' % (
+                            resume.branch))
+        else:
+            resume = None
 
     try:
-        cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-            item.package, cache_branch_name(queue_processor.config.distribution, "main"), vcs_type
-        )
+        with span.new_child('cache-branch:check'):
+            cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
+                item.package, cache_branch_name(queue_processor.config.distribution, "main"), vcs_type
+            )
     except UnsupportedVcs:
         cached_branch_url = None
 
@@ -1331,11 +1335,11 @@ async def handle_assign(request):
         "env": env,
         "command": item.command,
         "suite": item.suite,
-        "vendor": queue_processor.config.distribution.vendor or dpkg_vendor().lower(),
         "vcs_manager": queue_processor.public_vcs_manager.base_url,
     }
 
-    active_run.start_watchdog(queue_processor)
+    with span.new_child('start-watchdog'):
+        active_run.start_watchdog(queue_processor)
     return web.json_response(assignment, status=201)
 
 
@@ -1552,9 +1556,6 @@ def main(argv=None):
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
-    parser.add_argument(
-        "--zipkin-address", type=str, default=None,
-        help="Zipkin address to send traces to")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     args = parser.parse_args()
 
@@ -1620,7 +1621,7 @@ def main(argv=None):
         backup_logfile_manager=backup_logfile_manager,
     )
 
-    loop.create_task(run_web_server(args.listen_address, args.port, queue_processor, zipkin_address=args.zipkin_address))
+    loop.create_task(run_web_server(args.listen_address, args.port, queue_processor, zipkin_address=config.zipkin_address))
 
     loop.run_forever()
 

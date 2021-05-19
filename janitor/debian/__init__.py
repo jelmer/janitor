@@ -15,10 +15,11 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import logging
+import functools
 import os
 import itertools
 import re
+import subprocess
 
 from debian.changelog import Changelog, Version
 from debian.deb822 import Changes
@@ -168,3 +169,8 @@ def tree_set_changelog_version(
     cl.version = build_version
     with open(tree.abspath(cl_path), "w") as f:
         cl.write_to_open_file(f)
+
+
+@functools.cache
+def dpkg_vendor():
+    return subprocess.check_output(['dpkg-vendor', '--query', 'vendor']).strip().decode()
