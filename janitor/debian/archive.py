@@ -295,7 +295,7 @@ async def handle_index(request):
     return web.Response(text='')
 
 
-async def run_web_server(listen_addr, port, dists_dir, config, generator_manager, zipkin_address=None):
+async def run_web_server(listen_addr, port, dists_dir, config, generator_manager):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.config = config
@@ -306,10 +306,10 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
     app.router.add_get("/health", handle_health, name="health")
-    if zipkin_address:
+    if config.zipkin_address:
         import aiozipkin
         endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=listen_addr, port=port)
-        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -444,9 +444,6 @@ async def main(argv=None):
     parser.add_argument(
         "--runner-url", type=str, default=None, help="URL to reach runner at."
     )
-    parser.add_argument(
-        "--zipkin-address", type=str, default=None,
-        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
     if not args.dists_directory:
@@ -457,7 +454,7 @@ async def main(argv=None):
         import google.cloud.logging
         client = google.cloud.logging.Client()
         client.get_default_handler()
-        client.setup_logging() 
+        client.setup_logging()
     elif args.verbose:
         logging.basicConfig(level=logging.DEBUG)
     else:
@@ -494,7 +491,6 @@ async def main(argv=None):
                 args.dists_directory,
                 config,
                 generator_manager,
-                args.zipkin_address
             )
         ),
         loop.create_task(loop_publish(config, generator_manager)),

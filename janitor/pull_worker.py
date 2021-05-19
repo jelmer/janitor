@@ -662,7 +662,7 @@ async def main(argv=None):
 
         env = assignment["env"]
 
-        vendor = assignment.get('vendor', 'debian')
+        vendor = build_environment.get('DEB_VENDOR', 'debian')
 
         os.environ.update(env)
         os.environ.update(build_environment)

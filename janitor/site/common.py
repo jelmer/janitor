@@ -179,10 +179,11 @@ ORDER BY finish_time DESC
 
 
 async def generate_pkg_context(
-    db, config, suite, policy, client, differ_url, vcs_store_url, package, run_id=None
+    db, config, suite, policy, client, differ_url, vcs_store_url, package, span, run_id=None
 ):
     async with db.acquire() as conn:
-        package = await conn.fetchrow("""\
+        with span.new_child('sql:package'):
+            package = await conn.fetchrow("""\
 SELECT name, maintainer_email, uploader_emails, removed, branch_url, vcs_url, vcs_browse, vcswatch_version, update_changelog AS changelog_policy, publish AS publish_policy
 FROM package
 LEFT JOIN policy ON package.name = policy.package AND suite = $2
@@ -190,13 +191,16 @@ WHERE name = $1""", package, suite)
         if package is None:
             raise web.HTTPNotFound(text='no such package: %s' % package)
         if run_id is not None:
-            run = await get_run(conn, run_id)
+            with span.new_child('sql:run'):
+                run = await get_run(conn, run_id)
             if not run:
                 raise web.HTTPNotFound(text='no such run: %s' % run_id)
             merge_proposals = []
         else:
-            run = await get_last_unabsorbed_run(conn, package['name'], suite)
-            merge_proposals = await conn.fetch("""\
+            with span.new_child('sql:unchanged-run'):
+                run = await get_last_unabsorbed_run(conn, package['name'], suite)
+            with span.new_child('sql:merge-proposals'):
+                merge_proposals = await conn.fetch("""\
 SELECT
     DISTINCT ON (merge_proposal.url)
     merge_proposal.url AS url, merge_proposal.status AS status
@@ -213,23 +217,25 @@ WHERE run.package = $1 AND run.suite = $2
         else:
             run_id = run['id']
             if run['main_branch_revision']:
-                unchanged_run = await get_unchanged_run(
-                    conn, run['package'], run['main_branch_revision']
-                )
+                with span.new_child('sql:unchanged-run'):
+                    unchanged_run = await get_unchanged_run(
+                        conn, run['package'], run['main_branch_revision'])
             else:
                 unchanged_run = None
 
-        candidate = await get_candidate(conn, package['name'], suite)
+        with span.new_child('sql:candidate'):
+            candidate = await get_candidate(conn, package['name'], suite)
         if candidate is not None:
             (candidate_context, candidate_value, candidate_success_chance) = candidate
         else:
             candidate_context = None
             candidate_value = None
             candidate_success_chance = None
-        previous_runs = await get_previous_runs(conn, package['name'], suite)
-        (queue_position, queue_wait_time) = await state.get_queue_position(
-            conn, suite, package['name']
-        )
+        with span.new_child('sql:previous-runs'):
+            previous_runs = await get_previous_runs(conn, package['name'], suite)
+        with span.new_child('sql:queue-position'):
+            (queue_position, queue_wait_time) = await state.get_queue_position(
+                conn, suite, package['name'])
 
     async def show_diff(role):
         try:
@@ -282,7 +288,6 @@ WHERE run.package = $1 AND run.suite = $2
         "maintainer_email": package['maintainer_email'],
         "uploader_emails": package['uploader_emails'],
         "removed": package['removed'],
-        "vcs_url": package['branch_url'],
         "vcs_url": package['vcs_url'],
         "vcs_type": vcs_type,
         "vcs_browse": package['vcs_browse'],

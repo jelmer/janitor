@@ -39,12 +39,17 @@ async def generate_review(
     conn, request, client, differ_url, vcs_store_url, suites=None,
     publishable_only=True
 ):
+    if 'needs-review' in request.query:
+        needs_review = (request.query['needs-review'] == 'true')
+    else:
+        needs_review = None
+
     entries = [
         entry
         async for entry in state.iter_publish_ready(
             conn,
             review_status=["unreviewed"],
-            needs_review=True,
+            needs_review=needs_review,
             limit=10,
             suites=suites,
             publishable_only=publishable_only,

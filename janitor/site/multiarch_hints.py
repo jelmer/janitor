@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import aiozipkin
 import asyncpg
 from .common import generate_pkg_context, iter_candidates
 from . import html_template
@@ -8,7 +9,7 @@ SUITE = "multiarch-fixes"
 
 
 async def generate_pkg_file(
-    db, config, policy, client, differ_url, vcs_store_url, package, run_id=None
+    db, config, policy, client, differ_url, vcs_store_url, package, span, run_id=None
 ):
     return await generate_pkg_context(
         db,
@@ -19,6 +20,7 @@ async def generate_pkg_file(
         differ_url,
         vcs_store_url,
         package,
+        span,
         run_id=run_id,
     )
 
@@ -93,7 +95,7 @@ async def generate_candidates(db):
     "multiarch-fixes-start.html", headers={"Cache-Control": "max-age=3600"}
 )
 async def handle_multiarch_fixes(request):
-        return {"SUITE": SUITE}
+    return {"SUITE": SUITE}
 
 
 @html_template(
@@ -175,6 +177,7 @@ async def handle_multiarch_fixes_pkg(request):
         request.app.differ_url,
         request.app.vcs_store_url,
         pkg,
+        aiozipkin.request_span(request),
         run_id,
     )
 

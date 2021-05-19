@@ -17,6 +17,7 @@
 
 """Manage VCS repositories."""
 
+import aiozipkin
 import asyncio
 from io import BytesIO
 import logging
@@ -56,8 +57,10 @@ GIT_BACKEND_CHUNK_SIZE = 4096
 async def diff_request(request):
     run_id = request.match_info["run_id"]
     role = request.match_info["role"]
-    async with request.app.db.acquire() as conn:
-        row = await conn.fetchrow("""\
+    span = aiozipkin.request_span(request)
+    with span.new_child('sql:run'):
+        async with request.app.db.acquire() as conn:
+            row = await conn.fetchrow("""\
 SELECT
   package,
   new_result_branch.base_revision AS base_revision,
@@ -66,8 +69,8 @@ FROM run
 LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id
 WHERE id = $1 AND new_result_branch.role = $2
 """, run_id, role)
-        if not row:
-            raise web.HTTPNotFound(text="No such run: %r" % run_id)
+            if not row:
+                raise web.HTTPNotFound(text="No such run: %r" % run_id)
     try:
         repo = request.app.vcs_manager.get_repository(row['package'])
     except NotBranchError:
@@ -100,11 +103,12 @@ WHERE id = $1 AND new_result_branch.role = $2
             cwd=repo.user_transport.local_abspath('.'),
         )
 
-        # TODO(jelmer): Stream this
-        try:
-            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-        except asyncio.TimeoutError:
-            raise web.HTTPRequestTimeout(text='diff generation timed out')
+        with span.new_child('subprocess:git-diff'):
+            # TODO(jelmer): Stream this
+            try:
+                (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+            except asyncio.TimeoutError:
+                raise web.HTTPRequestTimeout(text='diff generation timed out')
 
         if p.returncode == 0:
             return web.Response(body=stdout, content_type="text/x-diff")
@@ -131,11 +135,12 @@ WHERE id = $1 AND new_result_branch.role = $2
             stdin=asyncio.subprocess.PIPE,
         )
 
-        # TODO(jelmer): Stream this
-        try:
-            (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-        except asyncio.TimeoutError:
-            raise web.HTTPRequestTimeout(text='diff generation timed out')
+        with span.new_child('subprocess:brz-diff'):
+            # TODO(jelmer): Stream this
+            try:
+                (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+            except asyncio.TimeoutError:
+                raise web.HTTPRequestTimeout(text='diff generation timed out')
 
         if p.returncode != 3:
             return web.Response(body=stdout, content_type="text/x-diff")
@@ -180,7 +185,9 @@ def _git_check_service(service: str, allow_writes: bool = False):
 async def handle_klaus(request):
     package = request.match_info["package"]
 
-    repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+    span = aiozipkin.request_span(request)
+    with span.new_child('open-repo'):
+        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
 
     from klaus import views, utils, KLAUS_VERSION
     from flask import Flask
@@ -249,7 +256,9 @@ async def handle_set_git_remote(request):
     package = request.match_info["package"]
     remote = request.match_info["remote"]
 
-    repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+    span = aiozipkin.request_span(request)
+    with span.new_child('open-repo'):
+        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
 
     post = await request.post()
     r = repo._git
@@ -289,7 +298,9 @@ async def git_backend(request):
     if service is not None:
         _git_check_service(service, allow_writes)
 
-    repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+    span = aiozipkin.request_span(request)
+    with span.new_child('open-repo'):
+        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
 
     args = ["/usr/bin/git"]
     if allow_writes:
@@ -384,15 +395,16 @@ async def git_backend(request):
 
             return response
 
-    try:
-        unused_stderr, response, unused_stdin = await asyncio.gather(*[
-            read_stderr(p.stderr), read_stdout(p.stdout),
-            feed_stdin(p.stdin),
-            ], return_exceptions=False)
-    except asyncio.CancelledError:
-        p.terminate()
-        await p.wait()
-        raise
+    with span.new_child('git-backend'):
+        try:
+            unused_stderr, response, unused_stdin = await asyncio.gather(*[
+                read_stderr(p.stderr), read_stdout(p.stdout),
+                feed_stdin(p.stdin),
+                ], return_exceptions=False)
+        except asyncio.CancelledError:
+            p.terminate()
+            await p.wait()
+            raise
 
     return response
 
@@ -402,7 +414,9 @@ async def dulwich_refs(request):
 
     allow_writes = await is_worker(request.app.db, request)
 
-    repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+    span = aiozipkin.request_span(request)
+    with span.new_child('open-repo'):
+        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
     r = repo._git
 
     service = request.query.get("service")
@@ -444,7 +458,9 @@ async def dulwich_service(request):
 
     allow_writes = await is_worker(request.app.db, request)
 
-    repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
+    span = aiozipkin.request_span(request)
+    with span.new_child('open-repo'):
+        repo = await _git_open_repo(request.app.vcs_manager, request.app.db, package)
 
     _git_check_service(service, allow_writes)
 
@@ -554,8 +570,10 @@ async def get_vcs_type(request):
 
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
-    names = list(request.app.vcs_manager.list_repositories(vcs))
-    names.sort()
+    span = aiozipkin.request_span(request)
+    with span.new_child('list-repositories'):
+        names = list(request.app.vcs_manager.list_repositories(vcs))
+        names.sort()
     for accept in iter_accept(request):
         if accept in ('application/json', ):
             return web.json_response(names)
@@ -586,7 +604,6 @@ async def create_web_app(
     config,
     dulwich_server: bool = False,
     client_max_size: Optional[int] = None,
-    zipkin_address: Optional[str] = None
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
@@ -618,10 +635,9 @@ async def create_web_app(
     app.router.add_post("/remotes/git/{package}/{remote}", handle_set_git_remote, name='git-remote')
     app.router.add_post("/remotes/bzr/{package}/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
-    if zipkin_address:
-        import aiozipkin
+    if config.zipkin_address:
         endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
-        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer)
     return app
 
@@ -657,9 +673,6 @@ def main(argv=None):
     parser.add_argument("--debug", action="store_true", help="Show debug info")
     parser.add_argument("--vcs-path", default=None, type=str, help="Path to local vcs storage")
     parser.add_argument("--gcp-logging", action="store_true")
-    parser.add_argument(
-        "--zipkin-address", type=str, default=None,
-        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 
@@ -688,7 +701,6 @@ def main(argv=None):
         config,
         dulwich_server=args.dulwich_server,
         client_max_size=args.client_max_size,
-        zipkin_address=args.zipkin_address,
     )
 
     web.run_app(app, host=args.listen_address, port=args.port)

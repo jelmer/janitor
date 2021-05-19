@@ -408,14 +408,18 @@ async def handle_maintainer_index(request):
 async def handle_pkg(request):
     from .pkg import generate_pkg_file
 
+    span = aiozipkin.request_span(request)
+
     package_name = request.match_info["pkg"]
     async with request.app.database.acquire() as conn:
-        package = await conn.fetchrow(
-            'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
-            'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
+        with span.new_child('sql:package'):
+            package = await conn.fetchrow(
+                'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
+                'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
         if package is None:
             raise web.HTTPNotFound(text="No package with name %s" % package_name)
-        merge_proposals = await conn.fetch("""\
+        with span.new_child('sql:merge-proposals'):
+            merge_proposals = await conn.fetch("""\
 SELECT DISTINCT ON (merge_proposal.url)
 merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
 FROM
@@ -425,11 +429,13 @@ ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 WHERE run.package = $1
 ORDER BY merge_proposal.url, run.finish_time DESC
 """, package['name'])
-        available_suites = await state.iter_publishable_suites(conn, package_name)
-    runs = state.iter_runs(request.app.database, package=package['name'])
+        with span.new_child('sql:publishable-suites'):
+            available_suites = await state.iter_publishable_suites(conn, package_name)
+    with span.new_child('sql:runs'):
+        runs = state.iter_runs(request.app.database, package=package['name'])
     return await generate_pkg_file(
         request.app.database, request.app.config, package, merge_proposals, runs,
-        available_suites
+        available_suites, span
     )
 
 
@@ -526,12 +532,14 @@ async def handle_run(request):
     from .common import get_run
     from .pkg import generate_run_file
 
+    span = aiozipkin.request_span(request)
     run_id = request.match_info["run_id"]
     pkg = request.match_info.get("pkg")
     async with request.app.database.acquire() as conn:
-        run = await get_run(conn, run_id)
-        if run is None:
-            raise web.HTTPNotFound(text="No run with id %r" % run_id)
+        with span.new_child('sql:run'):
+            run = await get_run(conn, run_id)
+            if run is None:
+                raise web.HTTPNotFound(text="No run with id %r" % run_id)
     if pkg is not None and pkg != run['package']:
         if run is None:
             raise web.HTTPNotFound(text="No run with id %r" % run_id)
@@ -544,7 +552,7 @@ async def handle_run(request):
         run,
         request.app.vcs_store_url,
         is_admin=is_admin(request),
-        span=aiozipkin.request_span(request),
+        span=span,
     )
 
 
@@ -614,6 +622,7 @@ async def handle_generic_pkg(request):
         request.app.differ_url,
         request.app.vcs_store_url,
         pkg,
+        aiozipkin.request_span(request),
         run_id,
     )
 
@@ -775,7 +784,7 @@ async def create_app(
         external_url=None, debugtoolbar=None,
         runner_url=None, publisher_url=None,
         archiver_url=None, vcs_store_url=None,
-        differ_url=None, zipkin_address=None,
+        differ_url=None,
         listen_address=None, port=None):
     if minified:
         minified_prefix = ""
@@ -793,11 +802,11 @@ async def create_app(
         name="ws-notifications",
     )
 
-    if zipkin_address:
+    if config.zipkin_address:
         import aiozipkin
 
         endpoint = aiozipkin.create_endpoint("janitor.site", ipv4=listen_address, port=port)
-        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
         aiozipkin.setup(app, tracer, skip_routes=[
             app.router['metrics'],
             app.router['ws-notifications'],
@@ -1195,9 +1204,6 @@ if __name__ == "__main__":
     )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("--external-url", type=str, default=None, help="External URL")
-    parser.add_argument(
-        "--zipkin-address", type=str, default=None,
-        help="Zipkin address to send traces to")
 
     args = parser.parse_args()
 
@@ -1224,7 +1230,6 @@ if __name__ == "__main__":
         archiver_url=args.archiver_url,
         vcs_store_url=args.vcs_store_url,
         differ_url=args.differ_url,
-        zipkin_address=args.zipkin_address,
         listen_address=args.host,
         port=args.port)
 
