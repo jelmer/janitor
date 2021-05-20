@@ -131,7 +131,7 @@ async def handle_publish(request):
     if mode:
         data["mode"] = mode
     try:
-        async with request.app.http_client_session.post(url, data=data) as resp:
+        async with request.app['http_client_session'].post(url, data=data) as resp:
             if resp.status in (200, 202):
                 return web.json_response(await resp.json(), status=resp.status)
             else:
@@ -359,7 +359,7 @@ async def handle_refresh_proposal_status(request):
 
     data = {"url": mp_url}
     url = urllib.parse.urljoin(request.app.publisher_url, "refresh-status")
-    async with request.app.http_client_session.post(url, data=data) as resp:
+    async with request.app['http_client_session'].post(url, data=data) as resp:
         if resp.status in (200, 202):
             return web.Response(text="Success", status=resp.status)
         return web.Response(text=(await resp.text()), status=resp.status)
@@ -437,7 +437,7 @@ async def handle_diff(request):
     vcs_store_url = request.app.vcs_store_url
     url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run_id, role))
     try:
-        async with request.app.http_client_session.get(url) as resp:
+        async with request.app['http_client_session'].get(url) as resp:
             if resp.status == 200:
                 diff = await resp.read()
                 if max_diff_size is not None and len(diff) > max_diff_size:
@@ -516,7 +516,7 @@ async def handle_archive_diff(request):
 
     try:
         debdiff, content_type = await get_archive_diff(
-            request.app.http_client_session,
+            request.app['http_client_session'],
             request.app.differ_url,
             run_id,
             unchanged_run_id,
@@ -597,7 +597,7 @@ async def handle_run_post(request):
             )
             if review_status == 'approved':
                 await consider_publishing(
-                    request.app.http_client_session, request.app.publisher_url,
+                    request.app['http_client_session'], request.app.publisher_url,
                     run_id)
     return web.json_response(
         {"review-status": review_status, "review-comment": review_comment}
@@ -666,7 +666,7 @@ async def handle_publish_scan(request):
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, "/scan")
     try:
-        async with request.app.http_client_session.post(url) as resp:
+        async with request.app['http_client_session'].post(url) as resp:
             return web.Response(body=await resp.read(), status=resp.status)
     except ClientConnectorError:
         return web.Response(text="unable to contact publisher", status=400)
@@ -679,7 +679,7 @@ async def handle_publish_autopublish(request):
     publisher_url = request.app.publisher_url
     url = urllib.parse.urljoin(publisher_url, "/autopublish")
     try:
-        async with request.app.http_client_session.post(url) as resp:
+        async with request.app['http_client_session'].post(url) as resp:
             return web.Response(body=await resp.read(), status=resp.status)
     except ClientConnectorError:
         return web.Response(text="unable to contact publisher", status=400)
@@ -750,7 +750,7 @@ async def handle_global_policy(request):
 async def handle_runner_status(request):
     url = URL(request.app.runner_url) / "status"
     try:
-        async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
+        async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
             return web.json_response(await resp.json(), status=resp.status)
     except ContentTypeError as e:
         return web.json_response({"reason": "runner returned error %s" % e}, status=400)
@@ -764,7 +764,7 @@ async def handle_runner_log_index(request):
     run_id = request.match_info["run_id"]
     url = URL(request.app.runner_url) / "log" / run_id
     try:
-        async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
+        async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
             ret = await resp.json()
     except ContentTypeError as e:
         return web.json_response({"reason": "runner returned error %s" % e}, status=400)
@@ -798,7 +798,7 @@ async def handle_runner_kill(request):
     run_id = request.match_info["run_id"]
     url = urllib.parse.urljoin(request.app.runner_url, "kill/%s" % run_id)
     try:
-        async with request.app.http_client_session.post(url, ClientTimeout(10)) as resp:
+        async with request.app['http_client_session'].post(url, ClientTimeout(10)) as resp:
             return web.json_response(await resp.json(), status=resp.status)
     except ContentTypeError as e:
         return web.json_response({"reason": "runner returned error %s" % e}, status=400)
@@ -815,7 +815,7 @@ async def handle_runner_log(request):
     filename = request.match_info["filename"]
     url = urllib.parse.urljoin(request.app.runner_url, "log/%s/%s" % (run_id, filename))
     try:
-        async with request.app.http_client_session.get(url, timeout=ClientTimeout(20)) as resp:
+        async with request.app['http_client_session'].get(url, timeout=ClientTimeout(20)) as resp:
             body = await resp.read()
             return web.Response(
                 body=body, status=resp.status, content_type="text/plain"
@@ -976,7 +976,7 @@ async def handle_run_progress(request):
                 if msg.data == b"keepalive":
                     logging.debug('%s is still alive', run_id)
                     try:
-                        async with request.app.http_client_session.post(run_url + '/keepalive', params=params, timeout=ClientTimeout(5)) as resp:
+                        async with request.app['http_client_session'].post(run_url + '/keepalive', params=params, timeout=ClientTimeout(5)) as resp:
                             if resp.status != 200:
                                 logging.warning('error sending keepalive for %s: %s', run_id, resp.status)
                     except asyncio.TimeoutError:
@@ -984,7 +984,7 @@ async def handle_run_progress(request):
                 elif msg.data.startswith(b"log\0"):
                     (kind, name, payload) = msg.data.split(b"\0", 2)
                     try:
-                        async with request.app.http_client_session.post(run_url + '/log/' + name.decode('utf-8'), params=params, data=payload, timeout=ClientTimeout(10)) as resp:
+                        async with request.app['http_client_session'].post(run_url + '/log/' + name.decode('utf-8'), params=params, data=payload, timeout=ClientTimeout(10)) as resp:
                             if resp.status != 200:
                                 logging.warning('error sending log for %s: %s', run_id, resp.status)
                     except asyncio.TimeoutError:
@@ -1009,7 +1009,7 @@ async def handle_run_assign(request):
     worker_name = await check_worker_creds(request.app.db, request)
     url = URL(request.app.runner_url) / "assign"
     try:
-        async with request.app.http_client_session.post(
+        async with request.app['http_client_session'].post(
             url, json={"worker": worker_name}, timeout=ClientTimeout(20)
         ) as resp:
             if resp.status != 201:
@@ -1073,7 +1073,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
 
     runner_url = urllib.parse.urljoin(request.app.runner_url, "active-runs/%s/finish" % run_id)
     try:
-        async with request.app.http_client_session.post(
+        async with request.app['http_client_session'].post(
             runner_url, data=runner_writer
         ) as resp:
             if resp.status == 404:
@@ -1259,7 +1259,7 @@ WHERE
 @routes.get("/active-runs", name="active-runs-list")
 async def handle_list_active_runs(request):
     url = urllib.parse.urljoin(request.app.runner_url, "status")
-    async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
+    async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
         if resp.status != 200:
             return web.json_response(await resp.json(), status=resp.status)
         status = await resp.json()
@@ -1271,7 +1271,7 @@ async def handle_list_active_runs(request):
 async def handle_get_active_run(request):
     run_id = request.match_info["run_id"]
     url = urllib.parse.urljoin(request.app.runner_url, "status")
-    async with request.app.http_client_session.get(url, timeout=ClientTimeout(10)) as resp:
+    async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
         if resp.status != 200:
             return web.json_response(await resp.json(), status=resp.status)
         processing = (await resp.json())["processing"]
@@ -1296,7 +1296,7 @@ def create_app(
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.router.add_routes(routes)
-    app.http_client_session = ClientSession(trace_configs=trace_configs)
+    app['http_client_session'] = ClientSession(trace_configs=trace_configs)
     app.config = config
     app['logfile_manager'] = get_log_manager(config.logs_location)
     app.jinja_env = env

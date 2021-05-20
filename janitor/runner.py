@@ -28,21 +28,17 @@ import os
 import ssl
 import sys
 import tempfile
-from typing import List, Any, Optional, BinaryIO, Dict, Tuple, Set, Type
+from typing import List, Any, Optional, BinaryIO, Dict, Tuple, Type
 import uuid
 
-from aiohttp import (
-    web,
-    WSMsgType,
-)
+from aiohttp import web
 
 from yarl import URL
 
 from breezy import debug
 from breezy.branch import Branch
 from breezy.errors import PermissionDenied, ConnectionError
-from breezy.propose import Hoster, HosterLoginRequired
-from breezy.transport import Transport, UnusableRedirect
+from breezy.transport import UnusableRedirect
 
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -51,7 +47,6 @@ from silver_platter.debian import (
 )
 from silver_platter.proposal import (
     find_existing_proposed,
-    enable_tag_pushing,
     UnsupportedHoster,
     HosterLoginRequired,
     NoSuchProject,
@@ -59,7 +54,6 @@ from silver_platter.proposal import (
 )
 from silver_platter.utils import (
     BranchRateLimited,
-    BranchUnavailable,
     full_branch_url,
 )
 
@@ -68,18 +62,16 @@ from . import (
 )
 from .artifacts import (
     get_artifact_manager,
-    ArtifactManager,
     LocalArtifactManager,
     store_artifacts_with_backup,
     upload_backup_artifacts,
 )
-from .config import read_config, get_suite_config, Config
+from .config import read_config, get_suite_config
 from .debian import (
     changes_filenames,
     open_guessed_salsa_branch,
     find_changes,
     NoChangesFile,
-    InconsistentChangesFiles,
     dpkg_vendor,
 )
 from .logs import (
