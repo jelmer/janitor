@@ -18,6 +18,7 @@
 import aiozipkin
 import asyncio
 import asyncpg
+from contextlib import AsyncExitStack
 from datetime import datetime, timedelta
 from email.utils import parseaddr
 import functools
@@ -1459,7 +1460,7 @@ async def handle_finish(request):
     )
 
 
-async def run_web_server(listen_addr, port, queue_processor, zipkin_address=None):
+async def create_app(queue_processor, tracer=None):
     app = web.Application()
     app.router.add_routes(routes)
     app['queue_processor'] = queue_processor
@@ -1472,22 +1473,17 @@ async def run_web_server(listen_addr, port, queue_processor, zipkin_address=None
         "/ws/result", functools.partial(pubsub_handler, queue_processor.topic_result),
         name="ws-result"
     )
-    if zipkin_address:
-        endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=listen_addr, port=port)
-        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+    if tracer:
         aiozipkin.setup(app, tracer, skip_routes=[
             app.router['metrics'],
             app.router['ws-queue'],
             app.router['ws-result'],
             ]
         )
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, listen_addr, port)
-    await site.start()
+    return app
 
 
-def main(argv=None):
+async def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(prog="janitor.runner")
@@ -1570,53 +1566,68 @@ def main(argv=None):
         vcs_manager = get_vcs_manager(args.vcs_store_url)
     else:
         vcs_manager = public_vcs_manager
-    logfile_manager = get_log_manager(config.logs_location)
-    artifact_manager = get_artifact_manager(config.artifact_location)
+
+    if config.zipkin_address:
+        endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+        trace_configs = [aiozipkin.make_trace_config(tracer)]
+    else:
+        trace_configs = None
+        tracer = None
+
+    logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
+    artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(artifact_manager.__aenter__())
 
-    if args.backup_directory:
-        backup_logfile_directory = os.path.join(args.backup_directory, "logs")
-        backup_artifact_directory = os.path.join(args.backup_directory, "artifacts")
-        if not os.path.isdir(backup_logfile_directory):
-            os.mkdir(backup_logfile_directory)
-        if not os.path.isdir(backup_artifact_directory):
-            os.mkdir(backup_artifact_directory)
-        backup_artifact_manager = LocalArtifactManager(backup_artifact_directory)
-        backup_logfile_manager = FileSystemLogFileManager(backup_logfile_directory)
-        loop.create_task(
-            upload_backup_artifacts(
-                backup_artifact_manager, artifact_manager, timeout=60 * 15
+    async with AsyncExitStack() as stack:
+        await stack.enter_async_context(artifact_manager)
+        if args.backup_directory:
+            backup_logfile_directory = os.path.join(args.backup_directory, "logs")
+            backup_artifact_directory = os.path.join(args.backup_directory, "artifacts")
+            if not os.path.isdir(backup_logfile_directory):
+                os.mkdir(backup_logfile_directory)
+            if not os.path.isdir(backup_artifact_directory):
+                os.mkdir(backup_artifact_directory)
+            backup_artifact_manager = LocalArtifactManager(backup_artifact_directory)
+            await stack.enter_async_context(backup_artifact_manager)
+            backup_logfile_manager = FileSystemLogFileManager(backup_logfile_directory)
+            loop.create_task(
+                upload_backup_artifacts(
+                    backup_artifact_manager, artifact_manager, timeout=60 * 15
+                )
             )
+        else:
+            backup_artifact_manager = None
+            backup_logfile_manager = None
+        db = state.Database(config.database_location)
+        with open(args.policy, 'r') as f:
+            policy = read_policy(f)
+        queue_processor = QueueProcessor(
+            db,
+            policy,
+            config,
+            args.worker,
+            args.dry_run,
+            logfile_manager,
+            artifact_manager,
+            vcs_manager,
+            public_vcs_manager,
+            args.use_cached_only,
+            overall_timeout=args.overall_timeout,
+            committer=config.committer,
+            backup_artifact_manager=backup_artifact_manager,
+            backup_logfile_manager=backup_logfile_manager,
         )
-    else:
-        backup_artifact_manager = None
-        backup_logfile_manager = None
-    db = state.Database(config.database_location)
-    with open(args.policy, 'r') as f:
-        policy = read_policy(f)
-    queue_processor = QueueProcessor(
-        db,
-        policy,
-        config,
-        args.worker,
-        args.dry_run,
-        logfile_manager,
-        artifact_manager,
-        vcs_manager,
-        public_vcs_manager,
-        args.use_cached_only,
-        overall_timeout=args.overall_timeout,
-        committer=config.committer,
-        backup_artifact_manager=backup_artifact_manager,
-        backup_logfile_manager=backup_logfile_manager,
-    )
 
-    loop.create_task(run_web_server(args.listen_address, args.port, queue_processor, zipkin_address=config.zipkin_address))
-
-    loop.run_forever()
+        app = await create_app(queue_processor, tracer=tracer)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, args.listen_address, port=args.port)
+        await site.start()
+        while True:
+            await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(asyncio.run(main(sys.argv)))

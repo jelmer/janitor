@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+import aiozipkin
 import asyncio
 from contextlib import ExitStack
 from datetime import datetime
@@ -295,7 +296,7 @@ async def handle_index(request):
     return web.Response(text='')
 
 
-async def run_web_server(listen_addr, port, dists_dir, config, generator_manager):
+async def run_web_server(listen_addr, port, dists_dir, config, generator_manager, tracer):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.config = config
@@ -306,10 +307,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
     app.router.add_get("/health", handle_health, name="health")
-    if config.zipkin_address:
-        import aiozipkin
-        endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=listen_addr, port=port)
-        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+    if tracer:
         aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -467,7 +465,16 @@ async def main(argv=None):
 
     db = state.Database(config.database_location)
 
-    artifact_manager = get_artifact_manager(config.artifact_location)
+    if config.zipkin_address:
+        import aiozipkin
+        endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=args.listen_address, port=args.port)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+        trace_configs = [aiozipkin.make_trace_config(tracer)]
+    else:
+        tracer = None
+        trace_configs = None
+
+    artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 
     gpg_context = gpg.Context()
 
@@ -491,6 +498,7 @@ async def main(argv=None):
                 args.dists_directory,
                 config,
                 generator_manager,
+                tracer,
             )
         ),
         loop.create_task(loop_publish(config, generator_manager)),

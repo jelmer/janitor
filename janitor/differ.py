@@ -508,17 +508,14 @@ class DifferWebApp(web.Application):
         return os.path.join(base_path, "%s_%s" % (old_id, new_id))
 
 
-async def run_web_server(app, listen_addr, port, zipkin_address=None):
+async def run_web_server(app, listen_addr, port, tracer):
     setup_metrics(app)
 
     async def connect_artifact_manager(app):
         await app.artifact_manager.__aenter__()
 
     app.on_startup.append(connect_artifact_manager)
-    if zipkin_address:
-        import aiozipkin
-        endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=listen_addr, port=port)
-        tracer = await aiozipkin.create(zipkin_address, endpoint, sample_rate=1.0)
+    if tracer:
         aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
@@ -610,7 +607,15 @@ def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    artifact_manager = get_artifact_manager(config.artifact_location)
+    if config.zipkin_address:
+        import aiozipkin
+        endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=args.listen_address, port=args.port)
+        tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
+        trace_configs = [aiozipkin.make_trace_config(tracer)]
+    else:
+        trace_configs = None
+
+    artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 
     db = state.Database(config.database_location)
     loop = asyncio.get_event_loop()
@@ -627,7 +632,7 @@ def main(argv=None):
         task_timeout=args.task_timeout,
     )
 
-    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, zipkin_address=config.zipkin_address))]
+    tasks = [loop.create_task(run_web_server(app, args.listen_address, args.port, tracer))]
 
     if args.runner_url:
         tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))

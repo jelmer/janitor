@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import aiozipkin
 from asyncio import TimeoutError
 from aiohttp import ClientConnectorError, ClientTimeout
 import urllib.parse
@@ -44,17 +45,20 @@ async def generate_review(
     else:
         needs_review = None
 
-    entries = [
-        entry
-        async for entry in state.iter_publish_ready(
-            conn,
-            review_status=["unreviewed"],
-            needs_review=needs_review,
-            limit=10,
-            suites=suites,
-            publishable_only=publishable_only,
-        )
-    ]
+    span = aiozipkin.request_span(request)
+
+    with span.new_child('sql:publish-ready'):
+        entries = [
+            entry
+            async for entry in state.iter_publish_ready(
+                conn,
+                review_status=["unreviewed"],
+                needs_review=needs_review,
+                limit=100,
+                suites=suites,
+                publishable_only=publishable_only,
+            )
+        ]
     if not entries:
         return await render_template_for_request("review-done.html", request, {})
 
@@ -98,9 +102,10 @@ async def generate_review(
             return "Timeout while retrieving diff; see it at %s" % external_url
 
     async def show_debdiff():
-        unchanged_run = await get_unchanged_run(
-            conn, run.package, run.main_branch_revision
-        )
+        with span.new_child("sql:unchanged-run"):
+            unchanged_run = await get_unchanged_run(
+                conn, run.package, run.main_branch_revision
+            )
         if unchanged_run is None:
             return "<p>No control run</p>"
         try:

@@ -69,7 +69,7 @@ class ArtifactManager(object):
         raise NotImplementedError(self.iter_ids)
 
     async def __aenter__(self):
-        pass
+        return self
 
     async def __aexit__(self, exc_type, exc, tb):
         return False
@@ -233,20 +233,19 @@ async def list_ids(manager):
 async def upload_backup_artifacts(
     backup_artifact_manager, artifact_manager, timeout=None
 ):
-    async with backup_artifact_manager, artifact_manager:
-        async for run_id in backup_artifact_manager.iter_ids():
-            with tempfile.TemporaryDirectory() as td:
-                await backup_artifact_manager.retrieve_artifacts(
-                    run_id, td, timeout=timeout
+    async for run_id in backup_artifact_manager.iter_ids():
+        with tempfile.TemporaryDirectory() as td:
+            await backup_artifact_manager.retrieve_artifacts(
+                run_id, td, timeout=timeout
+            )
+            try:
+                await artifact_manager.store_artifacts(run_id, td, timeout=timeout)
+            except Exception as e:
+                logging.warning(
+                    "Unable to upload backup artifacts (%r): %s", run_id, e
                 )
-                try:
-                    await artifact_manager.store_artifacts(run_id, td, timeout=timeout)
-                except Exception as e:
-                    logging.warning(
-                        "Unable to upload backup artifacts (%r): %s", run_id, e
-                    )
-                else:
-                    await backup_artifact_manager.delete_artifacts(run_id)
+            else:
+                await backup_artifact_manager.delete_artifacts(run_id)
 
 
 async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id, names):

@@ -26,6 +26,7 @@ from aiohttp import (
     ServerDisconnectedError,
     WSMsgType,
 )
+import aiozipkin
 import asyncio
 from datetime import datetime, timedelta
 import logging
@@ -570,6 +571,7 @@ async def consider_publishing(session, publisher_url, run_id):
 async def handle_run_post(request):
     run_id = request.match_info["run_id"]
     check_qa_reviewer(request)
+    span = aiozipkin.request_span(request)
     post = await request.post()
     review_status = post.get("review-status")
     review_comment = post.get("review-comment")
@@ -577,24 +579,27 @@ async def handle_run_post(request):
         async with request.app.db.acquire() as conn:
             review_status = review_status.lower()
             if review_status == "reschedule":
-                run = await conn.fetchrow(
-                    'SELECT package, suite FROM run WHERE id = $1',
-                    run_id)
-                await do_schedule(
-                    conn,
-                    run['package'],
-                    run['suite'],
-                    refresh=True,
-                    requestor="reviewer",
-                    bucket="default",
-                )
+                with span.new_child('sql:run'):
+                    run = await conn.fetchrow(
+                        'SELECT package, suite FROM run WHERE id = $1',
+                        run_id)
+                with span.new_child('schedule'):
+                    await do_schedule(
+                        conn,
+                        run['package'],
+                        run['suite'],
+                        refresh=True,
+                        requestor="reviewer",
+                        bucket="default",
+                    )
                 review_status = "rejected"
-            await conn.execute(
-                "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
-                review_status,
-                review_comment,
-                run_id,
-            )
+            with span.new_child('sql:update-run'):
+                await conn.execute(
+                    "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
+                    review_status,
+                    review_comment,
+                    run_id,
+                )
             if review_status == 'approved':
                 await consider_publishing(
                     request.app['http_client_session'], request.app.publisher_url,
@@ -920,6 +925,7 @@ ORDER BY package, suite, start_time DESC
 async def handle_publish_ready(request):
     suite = request.match_info.get("suite")
     review_status = request.query.get("review-status")
+    span = aiozipkin.request_span(request)
     publishable_only = request.query.get("publishable_only", "true") == "true"
     if 'needs-review' in request.query:
         needs_review = (request.query['needs-review'] == 'true')
@@ -932,24 +938,25 @@ async def handle_publish_ready(request):
         limit = None
     ret = []
     async with request.app.db.acquire() as conn:
-        async for (
-            run,
-            value,
-            maintainer_email,
-            uploader_emails,
-            changelog_mode,
-            command,
-            qa_review_policy,
-            needs_review,
-            unpublished_branches,
-        ) in state.iter_publish_ready(
-            conn,
-            suites=([suite] if suite else None),
-            review_status=review_status,
-            needs_review=needs_review,
-            publishable_only=publishable_only,
-        ):
-            ret.append((run.package, run.id, [rb[0] for rb in run.result_branches]))
+        with span.new_child('sql:publish-ready'):
+            async for (
+                run,
+                value,
+                maintainer_email,
+                uploader_emails,
+                changelog_mode,
+                command,
+                qa_review_policy,
+                needs_review,
+                unpublished_branches,
+            ) in state.iter_publish_ready(
+                conn,
+                suites=([suite] if suite else None),
+                review_status=review_status,
+                needs_review=needs_review,
+                publishable_only=publishable_only,
+            ):
+                ret.append((run.package, run.id, [rb[0] for rb in run.result_branches]))
     return web.json_response(ret, status=200)
 
 
