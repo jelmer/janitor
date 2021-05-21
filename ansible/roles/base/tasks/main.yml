@@ -10,7 +10,6 @@
      - python3-configobj
      - python3-debian
      - python3-protobuf
-     - python3-aiohttp-apispec
      - python3-iso8601
      - protobuf-compiler
      - python3-gpg
@@ -29,6 +28,9 @@
 - name: Install mypy-protobuf
   pip:
     name: mypy-protobuf
+- name: Install aiohttp-apispec
+  pip:
+    name: aiohttp-apispec
 - name: Create janitor user
   user:
     name: "{{ janitor_user }}"
