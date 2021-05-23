@@ -1,0 +1,15 @@
+{% macro package_input(name) %}
+<input id="sidebar-package" type="text" name="package" class="typeahead" placeholder="Package">
+
+<script>
+$.typeahead({
+  input: "#sidebar-package",
+  order: "asc",
+  source: {
+    packages: {
+      ajax: { url: '/api/pkgnames', path: '' },
+    }
+  }
+});
+</script>
+{% endmacro %}

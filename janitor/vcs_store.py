@@ -635,10 +635,12 @@ async def create_web_app(
     app.router.add_post("/remotes/git/{package}/{remote}", handle_set_git_remote, name='git-remote')
     app.router.add_post("/remotes/bzr/{package}/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
+    endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
-        endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
-        aiozipkin.setup(app, tracer)
+    else:
+        tracer = await aiozipkin.create_custom(endpoint)
+    aiozipkin.setup(app, tracer)
     return app
 
 

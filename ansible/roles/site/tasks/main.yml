@@ -6,6 +6,7 @@
     - libjs-jquery
     - libjs-moment
     - libjs-jquery-datatables
+    - libjs-jquery-typeahead
     - diffoscope
     - python3-pygments
    state: present

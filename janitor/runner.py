@@ -1473,13 +1473,12 @@ async def create_app(queue_processor, tracer=None):
         "/ws/result", functools.partial(pubsub_handler, queue_processor.topic_result),
         name="ws-result"
     )
-    if tracer:
-        aiozipkin.setup(app, tracer, skip_routes=[
-            app.router['metrics'],
-            app.router['ws-queue'],
-            app.router['ws-result'],
-            ]
-        )
+    aiozipkin.setup(app, tracer, skip_routes=[
+        app.router['metrics'],
+        app.router['ws-queue'],
+        app.router['ws-result'],
+        ]
+    )
     return app
 
 
@@ -1567,13 +1566,12 @@ async def main(argv=None):
     else:
         vcs_manager = public_vcs_manager
 
+    endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
-        endpoint = aiozipkin.create_endpoint("janitor.runner", ipv4=args.listen_address, port=args.port)
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
-        trace_configs = [aiozipkin.make_trace_config(tracer)]
     else:
-        trace_configs = None
-        tracer = None
+        tracer = await aiozipkin.create_custom(endpoint)
+    trace_configs = [aiozipkin.make_trace_config(tracer)]
 
     logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
     artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)

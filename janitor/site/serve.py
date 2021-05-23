@@ -802,18 +802,17 @@ async def create_app(
         name="ws-notifications",
     )
 
+    endpoint = aiozipkin.create_endpoint("janitor.site", ipv4=listen_address, port=port)
     if config.zipkin_address:
-        import aiozipkin
-
-        endpoint = aiozipkin.create_endpoint("janitor.site", ipv4=listen_address, port=port)
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
-        aiozipkin.setup(app, tracer, skip_routes=[
-            app.router['metrics'],
-            app.router['ws-notifications'],
-            ])
-        trace_configs = [aiozipkin.make_trace_config(tracer)]
     else:
-        trace_configs = None
+        tracer = await aiozipkin.create_custom(endpoint)
+    trace_configs = [aiozipkin.make_trace_config(tracer)]
+
+    aiozipkin.setup(app, tracer, skip_routes=[
+        app.router['metrics'],
+        app.router['ws-notifications'],
+        ])
 
     async def setup_client_session(app):
         app.http_client_session = ClientSession(trace_configs=trace_configs)

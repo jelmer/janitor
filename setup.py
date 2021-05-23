@@ -53,6 +53,7 @@ setup(
         'debian': ['python_debian', 'debmutate', 'silver-platter[debian]', 'ognibuild[debian]'],
     },
     install_requires=[
+        "aiozipkin",
         "lintian-brush",
         "breezy",
         "jinja2",

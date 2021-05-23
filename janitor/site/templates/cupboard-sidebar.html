@@ -1,3 +1,4 @@
+{% from "inputs.html" import package_input %}
 <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
 <div class="sphinxsidebarwrapper">
 <h1 class="logo"><a href="/">{{ site_name }}</a></h1>
@@ -34,22 +35,10 @@ Logged in as <a href="/cupboard/maintainer/{{ user['email'] }}">{{ user['name'] 
 See the status for a specific package:
 <div class="sidebar-packages" style="width:300px;">
 <form autocomplete="off" action="/cupboard/pkg">
-    <input id="sidebar-package" type="text" name="package" class="typeahead" placeholder="Package">
+    {{ package_input(name="package") }}
   <input type="submit" style="display: none">
 </form>
 </div>
 </p>
-
-<script>
-$('#sidebar-packages .typeahead').typeahead({
-  hint: true,
-  highlight: true,
-  minLength: 1,
-},
-{
-  name: 'sidebar-packages',
-  source: packageMatcher,
-});
-</script>
 
 </div></div>
