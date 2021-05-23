@@ -15,7 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import functools
+try:
+    from functools import cache
+except ImportError:  # python < 3.9
+    from functools import lru_cache
+
+    def cache(user_function, /):
+        return lru_cache(maxsize=None)(user_function)
+
+
 import os
 import itertools
 import re
@@ -171,6 +179,6 @@ def tree_set_changelog_version(
         cl.write_to_open_file(f)
 
 
-@functools.cache
+@cache
 def dpkg_vendor():
     return subprocess.check_output(['dpkg-vendor', '--query', 'vendor']).strip().decode()
