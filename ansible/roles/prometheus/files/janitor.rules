@@ -159,20 +159,20 @@ groups:
       severity: critical
       project: debian-janitor
 
-  - alert: UploadsFailing
-    expr: increase(upload_failed_total) > 0
-    labels:
-      severity: warning
-      project: debian-janitor
-    annotations:
-      description: "Some uploads are failing {{ $labels.instance }}"
-      summary: "Some uploads are failing"
+#  - alert: UploadsFailing
+#    expr: increase(upload_failed_total) > 0
+#    labels:
+#      severity: warning
+#      project: debian-janitor
+#    annotations:
+#      description: "Some uploads are failing {{ $labels.instance }}"
+#      summary: "Some uploads are failing"
 
-  - alert: UploadSignFailing
-    expr: increase(debsign_failed_total) > 0
-    labels:
-      severity: warning
-      project: debian-janitor
-    annotations:
-      description: "Some debsign commands are failing {{ $labels.instance }}"
-      summary: "Some debsign commands are failing"
+#  - alert: UploadSignFailing
+#    expr: increase(debsign_failed_total) > 0
+#    labels:
+#      severity: warning
+#      project: debian-janitor
+#    annotations:
+#      description: "Some debsign commands are failing {{ $labels.instance }}"
+#      summary: "Some debsign commands are failing"
