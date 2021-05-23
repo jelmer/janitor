@@ -94,6 +94,19 @@ from .vcs import (
     UnsupportedVcs,
 )
 
+try:
+    from asyncio import to_thread
+except ImportError:  # python < 3.8
+    from asyncio import events
+    import contextvars
+
+    async def to_thread(func, *args, **kwargs):
+        loop = events.get_running_loop()
+        ctx = contextvars.copy_context()
+        func_call = functools.partial(ctx.run, func, *args, **kwargs)
+        return await loop.run_in_executor(None, func_call)
+
+
 routes = web.RouteTableDef()
 packages_processed_count = Counter("package_count", "Number of packages processed.")
 last_success_gauge = Gauge(
@@ -570,7 +583,7 @@ async def open_branch_with_fallback(
     probers = select_preferred_probers(vcs_type)
     logging.info('Opening branch %s with %r', vcs_url, probers)
     try:
-        return await asyncio.to_thread(
+        return await to_thread(
             open_branch_ext,
             vcs_url, possible_transports=possible_transports, probers=probers)
     except BranchOpenFailure as e:
@@ -1272,7 +1285,7 @@ async def handle_assign(request):
             vcs_type = get_vcs_abbreviation(main_branch.repository)
             if not item.refresh:
                 with span.new_child('resume-branch:open'):
-                    resume_branch = await asyncio.to_thread(
+                    resume_branch = await to_thread(
                         open_resume_branch,
                         main_branch,
                         suite_config.branch_name,
@@ -1286,7 +1299,7 @@ async def handle_assign(request):
 
         if resume_branch is None and not item.refresh:
             with span.new_child('resume-branch:open'):
-                resume_branch = await asyncio.to_thread(
+                resume_branch = await to_thread(
                     queue_processor.public_vcs_manager.get_branch,
                     item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type)
 
