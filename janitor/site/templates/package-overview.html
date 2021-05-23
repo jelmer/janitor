@@ -51,7 +51,7 @@
 <ul class="simple">
 {% for run in runs %}
 {% if run.build_version %}
-<li>{{ run.build_version }} (for <a href="/{{ run.build_distribution }}">{{ run.build_distribution }}</a>)</li>
+<li>{{ run.build_version }} (for <a href="/{{ run.suite }}">{{ run.suite }}</a>)</li>
 {% endif %}
 {% endfor %}
 </ul>
