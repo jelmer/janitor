@@ -571,7 +571,7 @@ async def listen_to_runner(runner_url, app):
                     traceback.print_exc()
 
 
-def main(argv=None):
+async def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(prog="janitor.differ")
@@ -614,7 +614,8 @@ def main(argv=None):
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
 
-    artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
+    artifact_manager = get_artifact_manager(
+        config.artifact_location, trace_configs=trace_configs)
 
     db = state.Database(config.database_location)
     loop = asyncio.get_event_loop()
@@ -636,8 +637,9 @@ def main(argv=None):
     if args.runner_url:
         tasks.append(loop.create_task(listen_to_runner(args.runner_url, app)))
 
-    loop.run_until_complete(asyncio.gather(*tasks))
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    import asyncio
+    sys.exit(asyncio.run(main(sys.argv)))
