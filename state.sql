@@ -369,6 +369,7 @@ CREATE OR REPLACE VIEW publishable AS
    FROM new_result_branch rb
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
    WHERE rb.run_id = run.id AND revision NOT IN (SELECT revision FROM absorbed_revisions)
+   ORDER BY rb.role != 'main' DESC
   ) AS unpublished_branches
 FROM
   last_effective_runs AS run
