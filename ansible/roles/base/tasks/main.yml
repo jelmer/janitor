@@ -31,6 +31,9 @@
 - name: Install aiohttp-apispec
   pip:
     name: aiohttp-apispec
+- name: Install aiozipkin
+  pip:
+    name: aiozipkin
 - name: Create janitor user
   user:
     name: "{{ janitor_user }}"
