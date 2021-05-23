@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.web_middlewares import normalize_path_middleware
+import aiozipkin
 import asyncio
 from contextlib import ExitStack
 import json
@@ -515,8 +516,7 @@ async def run_web_server(app, listen_addr, port, tracer):
         await app.artifact_manager.__aenter__()
 
     app.on_startup.append(connect_artifact_manager)
-    if tracer:
-        aiozipkin.setup(app, tracer)
+    aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -607,13 +607,12 @@ def main(argv=None):
     with open(args.config, "r") as f:
         config = read_config(f)
 
+    endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
-        import aiozipkin
-        endpoint = aiozipkin.create_endpoint("janitor.differ", ipv4=args.listen_address, port=args.port)
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
-        trace_configs = [aiozipkin.make_trace_config(tracer)]
     else:
-        trace_configs = None
+        tracer = await aiozipkin.create_custom(endpoint)
+    trace_configs = [aiozipkin.make_trace_config(tracer)]
 
     artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 

@@ -307,8 +307,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
     app.router.add_get("/health", handle_health, name="health")
-    if tracer:
-        aiozipkin.setup(app, tracer)
+    aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
@@ -465,14 +464,12 @@ async def main(argv=None):
 
     db = state.Database(config.database_location)
 
+    endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=args.listen_address, port=args.port)
     if config.zipkin_address:
-        import aiozipkin
-        endpoint = aiozipkin.create_endpoint("janitor.debian.archive", ipv4=args.listen_address, port=args.port)
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
-        trace_configs = [aiozipkin.make_trace_config(tracer)]
     else:
-        tracer = None
-        trace_configs = None
+        tracer = await aiozipkin.create_custom(endpoint)
+    trace_configs = [aiozipkin.make_trace_config(tracer)]
 
     artifact_manager = get_artifact_manager(config.artifact_location, trace_configs=trace_configs)
 

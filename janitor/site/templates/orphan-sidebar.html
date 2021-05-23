@@ -1,3 +1,4 @@
+{% from "inputs.html" import package_input %}
 <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
 <div class="sphinxsidebarwrapper">
 <h1 class="logo"><a href="/">{{ site_name }}</a></h1>
@@ -20,25 +21,10 @@ Logged in as <a href="/m/{{ user['email'] }}">{{ user['name'] }}</a>
 See the status for a specific package:
 <form autocomplete="off" action="/orphan/pkg">
   <div class="sidebar-packages" style="width:300px;">
-    <input id="sidebar-package" type="text" name="package" class="typeahead" placeholder="Package">
+    {{ package_input(name="package") }}
   </div>
   <input type="submit" style="display: none">
 </form>
 </p>
-
-<script>
-$(document).ready(function() {
-var packages = new Bloodhound({
-  datumTokenizer: Bloodhound.tokenizers.whitespace,
-  queryTokenizer: Bloodhound.tokenizers.whitespace,
-  prefetch: '/api/pkgnames'
-});
-
-$('#sidebar-package').typeahead(null, {
-  name: 'sidebar-packages',
-  source: packages
-});
-});
-</script>
 
 </div></div>

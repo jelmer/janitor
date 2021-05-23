@@ -29,6 +29,7 @@ from typing import Dict, List, Optional, Any, Tuple, Set
 import uuid
 
 
+import aiozipkin
 from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 import asyncpg
@@ -1264,11 +1265,12 @@ async def run_web_server(
     app.router.add_get(
         "/ws/merge-proposal", functools.partial(pubsub_handler, topic_merge_proposal)
     )
+    endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
     if config.zipkin_address:
-        import aiozipkin
-        endpoint = aiozipkin.create_endpoint("janitor.publish", ipv4=listen_addr, port=port)
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
-        aiozipkin.setup(app, tracer)
+    else:
+        tracer = await aiozipkin.create_custom(endpoint)
+    aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, listen_addr, port)
