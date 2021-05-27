@@ -321,8 +321,6 @@ async def git_backend(request):
     if request.content_type is not None:
         env['CONTENT_TYPE'] = request.content_type
 
-    assert request.headers.get('Content-Encoding', 'identity') == 'identity'
-
     for key, value in request.headers.items():
         env["HTTP_" + key.replace("-", "_").upper()] = value
 
