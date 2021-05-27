@@ -6,6 +6,26 @@
 <div class="section" id="{{ code }}">
 <h1>{{ code }}</h1>
 {{ result_code_explanation(code) }}
+{% if is_admin %}
+<form id="mass_reschedule" method="POST" action="/api/mass-reschedule">
+    Description regex: <input type="text" name="description_re"/>
+    {% if suite %}<input type="hidden" name="suite" value="{{ suite }}"/>{% endif %}
+    Min age (days): <select name="min_age">{% for i in range(90) %}<option>{{ i }}</option>{% endfor %}</select>
+    Refresh: <input type="checkbox" name="refresh" value="1"/>
+    <input type="hidden" name="result_code" value="{{ code }}"/>
+    <input type="submit" value="Reschedule Matching"/>
+</form>
+<script>
+window.mass_reschedule.onsubmit = function(e) {
+$('form').submit(function(e){
+    e.preventDefault();
+    $.post("/api/mass-reschedule", $('form').serializeArray(), function(receivedData){
+        alert('Rescheduled ' + receivedData);
+    });
+});
+};
+</script>
+{% endif %}
 <table id="result-codes-t" class="display docutils" border="1">
 <colgroup>
 <col width="21%">
