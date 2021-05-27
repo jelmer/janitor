@@ -17,6 +17,10 @@ dependencies:
        static_configs:
        - targets:
          - "{{ janitor_publish_address }}:{{ janitor_publish_port }}"
+     - job_name: "janitor.vcs_store"
+       static_configs:
+       - targets:
+         - "{{ janitor_vcs_store_address }}:{{ janitor_vcs_store_port }}"
      - job_name: "janitor.archiver"
        static_configs:
        - targets:
