@@ -503,7 +503,7 @@ class DebianTarget(Target):
                     ).timestamp
                     try:
                         if not self.build_suffix:
-                            (changes_names, cl_version) = build_once(
+                            (changes_names, cl_entry) = build_once(
                                 ws.local_tree,
                                 self.build_distribution,
                                 output_directory,
@@ -512,7 +512,7 @@ class DebianTarget(Target):
                                 source_date_epoch=source_date_epoch,
                             )
                         else:
-                            (changes_names, cl_version) = build_incrementally(
+                            (changes_names, cl_entry) = build_incrementally(
                                 ws.local_tree,
                                 apt,
                                 "~" + self.build_suffix,
