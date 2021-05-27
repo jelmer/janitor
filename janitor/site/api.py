@@ -1129,9 +1129,10 @@ def create_background_task(fn, title):
 async def handle_reprocess_logs(request):
     from ..reprocess_logs import reprocess_run_logs
     check_admin(request)
-    dry_run = 'dry_run' in request.match_info
-    reschedule = 'reschedule' in request.match_info
-    run_ids = request.query.get_all('run_id')
+    post = await request.post()
+    dry_run = 'dry_run' in post
+    reschedule = 'reschedule' in post
+    run_ids = post.get_all('run_id')
 
     if run_ids:
         args = []
@@ -1202,13 +1203,17 @@ WHERE
 @routes.post('/mass-reschedule', name='admin-reschedule')
 async def handle_mass_reschedule(request):
     check_admin(request)
-    result_code = request.match_info['result_code']
-    suite = request.match_info.get('suite')
-    description_re = request.match_info.get('description_re')
-    min_age = int(request.match_info.get('min_age', '0'))
-    rejected = 'rejected' in request.match_info
-    offset = int(request.match_info.get('offset', '0'))
-    refresh = 'refresh' in request.match_info
+    post = await request.post()
+    try:
+        result_code = post['result_code']
+    except KeyError:
+        raise web.HTTPBadRequest(text='result_code not specified')
+    suite = post.get('suite')
+    description_re = post.get('description_re')
+    min_age = int(post.get('min_age', '0'))
+    rejected = 'rejected' in post
+    offset = int(post.get('offset', '0'))
+    refresh = 'refresh' in post
     async with request.app.db.acquire() as conn:
         query = """
 SELECT
