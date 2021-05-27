@@ -445,7 +445,7 @@ INDEX_TEMPLATE = Template("""\
 <ul>
 <li><b>Command: </b>{{ assignment['command'] }}</li>
 <li><b>Start Time: </b>: {{ metadata['start_time'] }}
-<li><b>Current duration: </b>: {{ datetime.utcnow() - metadata['start_time'] }}
+<li><b>Current duration: </b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
 </ul>
 
 <h1>Logs</h1>
@@ -548,15 +548,16 @@ async def main(argv=None):
         client = google.cloud.logging.Client()
         client.get_default_handler()
         client.setup_logging()
-    elif args.debug:
-        log_level = logging.DEBUG
     else:
-        log_level = logging.INFO
+        if args.debug:
+            log_level = logging.DEBUG
+        else:
+            log_level = logging.INFO
 
-    logging.basicConfig(
-        level=log_level,
-        format="[%(asctime)s] %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S")
+        logging.basicConfig(
+            level=log_level,
+            format="[%(asctime)s] %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S")
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
