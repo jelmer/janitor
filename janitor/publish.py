@@ -445,7 +445,7 @@ async def consider_publish_run(
                 "%s: No publish mode for branch with role %s", run.id, role
             )
             continue
-        if role == 'main' and None in actual_modes[role].values():
+        if role == 'main' and None in actual_modes.values():
             logger.warning(
                 "%s: Skipping branch with role %s, as not all "
                 "auxiliary branches were published.", run.id, role)
