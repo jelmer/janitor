@@ -10,7 +10,7 @@ from iniparse import RawConfigParser
 from janitor.config import read_config
 
 
-def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydata=True):
+def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydata=True, make_sbuild_tarball=None):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path, distro.archive_mirror_uri]
     cmd.append("--components=%s" % ','.join(distro.component))
     if eatmydata:
@@ -22,6 +22,8 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydat
         if not suite.debian_build:
             continue
         cmd.append("--alias=%s-%s-sbuild" % (suite.debian_build.build_distribution, sbuild_arch))
+    if make_sbuild_tarball:
+        cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
     subprocess.check_call(cmd)
 
 
@@ -34,6 +36,7 @@ parser.add_argument('--remove-old', action='store_true')
 parser.add_argument('--include', type=str, action='append', help='Include package.', default=[])
 parser.add_argument('--base-directory', type=str, help='Base directory for chroots')
 parser.add_argument('--user', type=str, help='User to create home directory for')
+parser.add_argument('--make-sbuild-tarball', type=str, help='Create sbuild tarball')
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
@@ -65,7 +68,7 @@ if args.remove_old:
                 shutil.rmtree(old_sbuild_path)
             os.unlink(entry.path)
 
-create_chroot(config.distribution, sbuild_path, config.suite, sbuild_arch, args.include)
+create_chroot(config.distribution, sbuild_path, config.suite, sbuild_arch, args.include, make_sbuild_tarball=args.make_sbuild_tarball)
 
 if args.user:
     subprocess.check_call(
