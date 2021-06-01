@@ -19,4 +19,5 @@ If you have the salsa(1) tool installed, run:
     git clone {{ old_vcs_url }} {{ package_name }}
     salsa --group={{ salsa_user }} push_repo {{ package_name }}
 {% endif %}
+{% endif %}
 {% endblock %}
