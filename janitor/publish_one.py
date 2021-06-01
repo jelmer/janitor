@@ -220,6 +220,8 @@ def publish(
         )
     except PermissionDenied as e:
         raise PublishFailure(description=str(e), code="permission-denied")
+    except TemplateSyntaxError as e:
+        raise PublishFailure(description=str(e), code="template-syntax-error")
     except MergeProposalExists as e:
         raise PublishFailure(description=str(e), code="merge-proposal-exists")
     except GitLabConflict:
