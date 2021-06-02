@@ -192,30 +192,24 @@ CREATE OR REPLACE VIEW last_effective_runs AS
   FROM
   run
   WHERE
-    NOT EXISTS (SELECT FROM package WHERE name = package and removed) AND
     result_code != 'nothing-new-to-do'
   ORDER BY package, suite, start_time DESC;
-
-CREATE OR REPLACE VIEW absorbed_revisions AS
-   SELECT revision FROM publish WHERE revision IS NOT NULL AND ((mode = 'push' and result_code = 'success') OR (mode = 'propose' AND result_code = 'empty-merge-proposal'))
- UNION
-   SELECT revision FROM merge_proposal WHERE revision IS NOT NULL AND status in ('merged', 'applied');
 
 -- The last "unabsorbed" change. An unabsorbed change is the last change that
 -- was not yet merged or pushed.
 CREATE OR REPLACE VIEW last_unabsorbed_runs AS
-  SELECT * FROM last_effective_runs WHERE
+  SELECT * FROM last_effective_runs INNER JOIN package ON package.name = last_effective_runs.package WHERE
      -- Either the last run is unabsorbed because it failed:
-     result_code NOT in ('nothing-to-do', 'success')
+     (result_code NOT in ('nothing-to-do', 'success')
      -- or because one of the result branch revisions has not been absorbed yet
-     OR id in (SELECT run_id from new_result_branch WHERE revision NOT IN (SELECT * FROM absorbed_revisions));
+      OR exists (SELECT from new_result_branch WHERE run_id = id and not absorbed)) AND NOT package.removed;
 
 create or replace view suites as select distinct suite as name from run;
 
 CREATE OR REPLACE VIEW absorbed_runs AS
   SELECT * FROM run WHERE result_code = 'success' and
   exists (select from new_result_branch WHERE run_id = run.id) and
-  not exists (select from new_result_branch WHERE run_id = run.id AND revision not in (SELECT revision FROM absorbed_revisions));
+  not exists (select from new_result_branch WHERE run_id = run.id AND not absorbed);
 
 CREATE OR REPLACE VIEW absorbed_lintian_fixes AS
   select absorbed_runs.*, x.summary, x.description as fix_description, x.certainty, x.fixed_lintian_tags from absorbed_runs, json_to_recordset((result->'applied')::json) as x("summary" text, "description" text, "certainty" text, "fixed_lintian_tags" text[]);
@@ -313,10 +307,12 @@ CREATE TABLE new_result_branch (
  remote_name text,
  base_revision text not null,
  revision text not null,
+ absorbed boolean default false,
  UNIQUE(run_id, role)
 );
 
 CREATE INDEX ON new_result_branch (revision);
+CREATE INDEX ON new_result_branch (absorbed);
 
 CREATE TABLE result_tag (
  actual_name text,
@@ -368,7 +364,7 @@ CREATE OR REPLACE VIEW publishable AS
    SELECT row(rb.role, remote_name, base_revision, revision, mode, frequency_days)::result_branch_with_policy
    FROM new_result_branch rb
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
-   WHERE rb.run_id = run.id AND revision NOT IN (SELECT revision FROM absorbed_revisions)
+   WHERE rb.run_id = run.id AND not absorbed
    ORDER BY rb.role != 'main' DESC
   ) AS unpublished_branches
 FROM

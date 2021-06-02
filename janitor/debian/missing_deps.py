@@ -78,10 +78,16 @@ def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[Ne
                                     'unable to find source package matching %s', r['name'])
                                 option = None
                                 break
-                            file, index = version.file_list.pop(0)
-                            records = apt_pkg.PackageRecords(apt_mgr.apt_cache._cache)
-                            records.lookup((file, index))
-                            option.append(UpdatePackage(records.source_pkg, r['version'][1]))
+                            for file, index in version.file_list:
+                                records = apt_pkg.PackageRecords(apt_mgr.apt_cache._cache)
+                                records.lookup((file, index))
+                                if records.source_pkg:
+                                    option.append(UpdatePackage(records.source_pkg, r['version'][1]))
+                                    break
+                            else:
+                                logging.warning("unable to find source package matching %s", r['name'])
+                                option = None
+                                break
                         else:
                             logging.warning("don't know what to do with constraint %r", r['version'])
                             option = None

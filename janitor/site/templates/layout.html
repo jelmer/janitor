@@ -25,7 +25,7 @@
     <div class="document">
      {% block sidebar %}{% endblock %}
       <div class="documentwrapper">
-        <div class="bodywrapper">
+	  <div class="{% if self.sidebar() %}bodywrapper{% else %}fullbodywraper{% endif %}">
 	  <main>
             {% block body %}{% endblock %}
 	  </main>
