@@ -16,6 +16,11 @@ div.document {
     margin: 30px auto 0 auto;
 }
 
+div.fulldocumentwrapper {
+    margin: 50px;
+    float: none;
+}
+
 div.documentwrapper {
     float: right;
     width: 80%;

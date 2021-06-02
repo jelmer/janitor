@@ -693,33 +693,41 @@ async def store_publish(
         revision = revision.decode("utf-8")
     if isinstance(main_branch_revision, bytes):
         main_branch_revision = main_branch_revision.decode("utf-8")
-    if merge_proposal_url:
+    async with conn.transaction():
+        if merge_proposal_url:
+            await conn.execute(
+                "INSERT INTO merge_proposal (url, package, status, "
+                "revision) VALUES ($1, $2, 'open', $3) ON CONFLICT (url) "
+                "DO UPDATE SET package = EXCLUDED.package, "
+                "revision = EXCLUDED.revision",
+                merge_proposal_url,
+                package,
+                revision,
+            )
+        else:
+            # TODO(jelmer): do something by branch instead?
+            if revision is None:
+                raise AssertionError
+            await conn.execute(
+                "UPDATE new_result_branch SET absorbed = true WHERE revision = $1",
+                revision)
         await conn.execute(
-            "INSERT INTO merge_proposal (url, package, status, "
-            "revision) VALUES ($1, $2, 'open', $3) ON CONFLICT (url) "
-            "DO UPDATE SET package = EXCLUDED.package, "
-            "revision = EXCLUDED.revision",
-            merge_proposal_url,
+            "INSERT INTO publish (package, branch_name, "
+            "main_branch_revision, revision, role, mode, result_code, "
+            "description, merge_proposal_url, id, requestor) "
+            "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ",
             package,
+            branch_name,
+            main_branch_revision,
             revision,
+            role,
+            mode,
+            result_code,
+            description,
+            merge_proposal_url,
+            publish_id,
+            requestor,
         )
-    await conn.execute(
-        "INSERT INTO publish (package, branch_name, "
-        "main_branch_revision, revision, role, mode, result_code, "
-        "description, merge_proposal_url, id, requestor) "
-        "values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ",
-        package,
-        branch_name,
-        main_branch_revision,
-        revision,
-        role,
-        mode,
-        result_code,
-        description,
-        merge_proposal_url,
-        publish_id,
-        requestor,
-    )
 
 
 async def publish_from_policy(
@@ -1591,20 +1599,25 @@ async def check_existing_mp(
             merged_by = None
             merged_at = None
         if not dry_run:
-            await conn.execute("""
-            INSERT INTO merge_proposal (
-                url, status, revision, package, merged_by, merged_at)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            ON CONFLICT (url)
-            DO UPDATE SET
-              status = EXCLUDED.status,
-              revision = EXCLUDED.revision,
-              package = EXCLUDED.package,
-              merged_by = EXCLUDED.merged_by,
-              merged_at = EXCLUDED.merged_at
-            """, mp.url, status,
-            (revision.decode("utf-8") if revision is not None else None),
-            package_name, merged_by, merged_at)
+            async with conn.transaction():
+                await conn.execute("""
+                INSERT INTO merge_proposal (
+                    url, status, revision, package, merged_by, merged_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (url)
+                DO UPDATE SET
+                  status = EXCLUDED.status,
+                  revision = EXCLUDED.revision,
+                  package = EXCLUDED.package,
+                  merged_by = EXCLUDED.merged_by,
+                  merged_at = EXCLUDED.merged_at
+                """, mp.url, status,
+                (revision.decode("utf-8") if revision is not None else None),
+                package_name, merged_by, merged_at)
+                if revision:
+                    await conn.execute("""
+                    UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
+                    """, (status == 'merged'), revision.decode('utf-8'))
 
             topic_merge_proposal.publish(
                 {
