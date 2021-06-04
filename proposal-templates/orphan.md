@@ -10,11 +10,11 @@ For details, see the [orphan bug](https://bugs.debian.org/{{ wnpp_bug }}).
 Please move the repository from {{ old_vcs_url }} to {{ new_vcs_url }}.
 
 {% if old_vcs_url.startswith('https://salsa.debian.org/') %}
-If you have the salsa(1) tool installed, run: 
+If you have the salsa(1) tool installed, run:
 
     salsa fork --group={{ salsa_user }} {{ path }}
 {% else %}
-If you have the salsa(1) tool installed, run: 
+If you have the salsa(1) tool installed, run:
 
     git clone {{ old_vcs_url }} {{ package_name }}
     salsa --group={{ salsa_user }} push_repo {{ package_name }}
