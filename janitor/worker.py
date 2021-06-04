@@ -698,8 +698,7 @@ def process_package(
     try:
         main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
     except BranchOpenFailure as e:
-        raise WorkerFailure(
-            "worker-%s" % e.code, e.description, details={'url': vcs_url})
+        raise WorkerFailure(e.code, e.description, details={'url': vcs_url})
 
     if cached_branch_url:
         try:
