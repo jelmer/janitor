@@ -52,6 +52,7 @@ from breezy.config import (
     PlainTextCredentialStore,
 )
 from breezy.errors import (
+    ConnectionError,
     NotBranchError,
     InvalidHttpResponse,
     UnexpectedHttpStatus,
@@ -253,7 +254,7 @@ def run_worker(
                     raise WorkerFailure(
                         "result-push-failed", "Failed to push result branch: %s" % e
                     )
-                except (InvalidHttpResponse, IncompleteRead, MirrorFailure) as e:
+                except (InvalidHttpResponse, IncompleteRead, MirrorFailure, ConnectionError) as e:
                     raise WorkerFailure(
                         "result-push-failed", "Failed to push result branch: %s" % e
                     )
@@ -261,8 +262,12 @@ def run_worker(
                     if str(e) == 'missing necessary objects':
                         raise WorkerFailure(
                             'result-push-git-missing-necessary-objects', str(e))
+                    elif str(e) == 'failed to updated ref':
+                        raise WorkerFailure(
+                            'result-push-git-ref-update-failed',
+                            str(e))
                     else:
-                        raise
+                        raise WorkerFailure("result-push-git-error", str(e))
 
                 logging.info("Pushing packaging branch cache to %s", cached_branch_url)
 
