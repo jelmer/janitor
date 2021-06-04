@@ -126,6 +126,7 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
 
     def create_dist(self, tree, package, version, target_dir):
         from silver_platter.debian.upstream import DistCommandFailed
+        from ognibuild.session import SessionSetupFailure
 
         os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
 
@@ -141,6 +142,8 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                 )
             except NotImplementedError:
                 return None
+            except SessionSetupFailure as e:
+                raise WorkerFailure('session-setup-failure', str(e))
             except NoBuildToolsFound:
                 logger.info("No build tools found, falling back to simple export.")
                 return None
