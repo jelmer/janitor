@@ -27,6 +27,7 @@ import json
 import logging
 import os
 import shlex
+import signal
 import socket
 import subprocess
 import sys
@@ -91,6 +92,14 @@ async def abort_run(session: ClientSession, base_url: str, run_id: str) -> None:
             raise Exception(
                 "Unable to abort run: %r: %d" % (await resp.text(), resp.status)
             )
+
+
+def handle_sigterm(loop, session, base_url, run_id):
+    logging.warning('Received signal, aborting and exiting...')
+    async def shutdown():
+        await abort_run(session, base_url, run_id)
+        sys.exit(1)
+    loop.create_task(shutdown())
 
 
 @contextmanager
@@ -191,6 +200,36 @@ def push_branch(
     )
 
 
+def _push_error_to_worker_failure(e):
+    if isinstance(e, UnexpectedHttpStatus):
+        if e.code == 502:
+            return WorkerFailure(
+                "result-push-bad-gateway",
+                "Failed to push result branch: %s" % e,
+            )
+        return WorkerFailure(
+            "result-push-failed", "Failed to push result branch: %s" % e
+        )
+    if (isinstance(e, InvalidHttpResponse) or
+           isinstance(e, IncompleteRead) or
+           isinstance(e, MirrorFailure) or
+           isinstance(e, ConnectionError)):
+        return WorkerFailure(
+            "result-push-failed", "Failed to push result branch: %s" % e
+        )
+    if isinstance(e, RemoteGitError):
+        if str(e) == 'missing necessary objects':
+            return WorkerFailure(
+                'result-push-git-missing-necessary-objects', str(e))
+        elif str(e) == 'failed to updated ref':
+            return WorkerFailure(
+                'result-push-git-ref-update-failed',
+                str(e))
+        else:
+            return WorkerFailure("result-push-git-error", str(e))
+    return e
+
+
 def run_worker(
     branch_url,
     run_id,
@@ -245,44 +284,30 @@ def run_worker(
                         result.branches,
                         result.tags,
                     )
-                except UnexpectedHttpStatus as e:
-                    if e.code == 502:
-                        raise WorkerFailure(
-                            "result-push-bad-gateway",
-                            "Failed to push result branch: %s" % e,
-                        )
-                    raise WorkerFailure(
-                        "result-push-failed", "Failed to push result branch: %s" % e
-                    )
-                except (InvalidHttpResponse, IncompleteRead, MirrorFailure, ConnectionError) as e:
-                    raise WorkerFailure(
-                        "result-push-failed", "Failed to push result branch: %s" % e
-                    )
-                except RemoteGitError as e:
-                    if str(e) == 'missing necessary objects':
-                        raise WorkerFailure(
-                            'result-push-git-missing-necessary-objects', str(e))
-                    elif str(e) == 'failed to updated ref':
-                        raise WorkerFailure(
-                            'result-push-git-ref-update-failed',
-                            str(e))
-                    else:
-                        raise WorkerFailure("result-push-git-error", str(e))
+                except Exception as e:
+                    raise _push_error_to_worker_failure(e)
 
                 logging.info("Pushing packaging branch cache to %s", cached_branch_url)
 
                 def tag_selector(tag_name):
                     return tag_name.startswith(vendor + '/') or tag_name.startswith('upstream/')
 
-                push_branch(
-                    ws.local_tree.branch,
-                    cached_branch_url,
-                    vcs_type=vcs_type.lower() if vcs_type is not None else None,
-                    possible_transports=possible_transports,
-                    stop_revision=ws.main_branch.last_revision(),
-                    tag_selector=tag_selector,
-                    overwrite=True,
-                )
+                try:
+                    push_branch(
+                        ws.local_tree.branch,
+                        cached_branch_url,
+                        vcs_type=vcs_type.lower() if vcs_type is not None else None,
+                        possible_transports=possible_transports,
+                        stop_revision=ws.main_branch.last_revision(),
+                        tag_selector=tag_selector,
+                        overwrite=True,
+                    )
+                except (InvalidHttpResponse, IncompleteRead, MirrorFailure,
+                        ConnectionError, UnexpectedHttpStatus, RemoteGitError) as e:
+                    logging.warning(
+                        "unable to push to cache URL %s: %s",
+                        cached_branch_url, e)
+
                 logging.info("All done.")
                 return result
         except WorkerFailure:
@@ -679,6 +704,12 @@ async def main(argv=None):
 
         with TemporaryDirectory(prefix='janitor') as output_directory:
             loop = asyncio.get_running_loop()
+            loop.add_signal_handler(
+                signal.SIGINT, handle_sigterm, session, args.base_url,
+                run_id)
+            loop.add_signal_handler(
+                signal.SIGTERM, handle_sigterm, session, args.base_url,
+                run_id)
             app = web.Application()
             app['directory'] = output_directory
             app['assignment'] = assignment
