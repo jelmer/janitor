@@ -69,7 +69,10 @@ async def reprocess_run_logs(db, logfile_manager, package, suite, log_id, comman
             new_description = description
             new_failure_details = None
         else:
-            new_code = 'dist-' + problem.kind
+            if problem.is_global:
+                new_code = problem.kind
+            else:
+                new_code = 'dist-' + problem.kind
             new_description = str(problem)
             try:
                 new_failure_details = problem.json()

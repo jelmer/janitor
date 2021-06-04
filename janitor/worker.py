@@ -145,7 +145,10 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
                 logger.info("No build tools found, falling back to simple export.")
                 return None
             except DetailedFailure as e:
-                error_code = "dist-" + e.error.kind
+                if e.error.is_global:
+                    error_code = e.error.kind
+                else:
+                    error_code = "dist-" + e.error.kind
                 error_description = str(e.error)
                 raise ChangerError(
                     summary=error_description, category=error_code, original=e
@@ -191,7 +194,10 @@ class DebianizeChanger(ActualDebianizeChanger):
                 logger.info("No build tools found, falling back to simple export.")
                 return None
             except DetailedFailure as e:
-                error_code = "dist-" + e.error.kind
+                if e.error.is_global:
+                    error_code = e.error.kind
+                else:
+                    error_code = "dist-" + e.error.kind
                 error_description = str(e.error)
                 raise ChangerError(
                     summary=error_description, category=error_code, original=e
