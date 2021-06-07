@@ -94,11 +94,12 @@ async def abort_run(session: ClientSession, base_url: str, run_id: str) -> None:
             )
 
 
-def handle_sigterm(loop, session, base_url, run_id):
+def handle_sigterm(session, base_url, run_id):
     logging.warning('Received signal, aborting and exiting...')
     async def shutdown():
         await abort_run(session, base_url, run_id)
         sys.exit(1)
+    loop = asyncio.get_event_loop()
     loop.create_task(shutdown())
 
 
