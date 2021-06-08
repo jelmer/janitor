@@ -432,6 +432,18 @@ class DebianTarget(Target):
         self.lintian_profile = env.get("LINTIAN_PROFILE")
         self.lintian_suppress_tags = env.get("LINTIAN_SUPPRESS_TAGS")
         self.committer = env.get("COMMITTER")
+        uc = env.get("DEB_UPDATE_CHANGELOG", "auto")
+        if uc == "auto":
+            self.update_changelog = None
+        elif uc == "update":
+            self.update_changelog = True
+        elif uc == "leave":
+            self.update_changelog = True
+        else:
+            logging.warning(
+                'Invalid value for DEB_UPDATE_CHANGELOG: %s, '
+                'defaulting to auto.', uc)
+            self.update_changelog = None
 
     def parse_args(self, argv):
         logging.info('Running %r', argv)
@@ -444,10 +456,6 @@ class DebianTarget(Target):
                 details={"subcommand": argv[0]})
 
         subparser = argparse.ArgumentParser(prog=changer_cls.name)
-        subparser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Dry run.')
         subparser.add_argument(
             "--no-update-changelog",
             action="store_false",
@@ -462,8 +470,14 @@ class DebianTarget(Target):
             help="force updating of the changelog",
             default=None,
         )
+        subparser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Dry run.')
         changer_cls.setup_parser(subparser)
         self.changer_args = subparser.parse_args(argv[1:])
+        if self.changer_args.update_changelog is not None:
+            self.update_changelog = self.changer_args.update_changelog
         self.changer = changer_cls.from_args(self.changer_args)
 
     def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
@@ -473,7 +487,7 @@ class DebianTarget(Target):
                 local_tree,
                 subpath=subpath,
                 committer=committer,
-                update_changelog=self.changer_args.update_changelog,
+                update_changelog=self.update_changelog,
                 reporter=reporter,
             )
         except ChangerError as e:
@@ -532,7 +546,7 @@ class DebianTarget(Target):
                                 committer=self.committer,
                                 subpath=subpath,
                                 source_date_epoch=source_date_epoch,
-                                update_changelog=self.changer_args.update_changelog,
+                                update_changelog=self.update_changelog,
                                 max_iterations=MAX_BUILD_ITERATIONS
                             )
                     except MissingUpstreamTarball:
