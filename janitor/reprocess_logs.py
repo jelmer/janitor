@@ -17,7 +17,7 @@
 
 from __future__ import absolute_import
 
-import loggin
+import logging
 
 import silver_platter  # noqa: E402, F401
 from buildlog_consultant.common import find_build_failure_description  # noqa: E402
@@ -28,7 +28,10 @@ from janitor.logs import get_log_manager  # noqa: E402
 from janitor.schedule import do_schedule  # noqa: E402
 
 
-async def reprocess_run_logs(db, logfile_manager, package, suite, log_id, command, duration, result_code, description, failure_details, dry_run=False, reschedule=False, log_timeout=None):
+async def reprocess_run_logs(
+        db, logfile_manager, package, suite, log_id, command, duration,
+        result_code, description, failure_details, dry_run=False,
+        reschedule=False, log_timeout=None):
     if result_code in ('dist-no-tarball', ):
         return
     if result_code.startswith('dist-'):
