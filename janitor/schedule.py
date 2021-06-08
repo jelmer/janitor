@@ -116,14 +116,11 @@ def full_command(update_changelog: str, command: str) -> str:
       full list of arguments
     """
     entry_command = shlex.split(command)
-    if update_changelog == "update":
-        entry_command.append("--update-changelog")
-    elif update_changelog == "leave":
-        entry_command.append("--no-update-changelog")
-    elif update_changelog == "auto":
-        pass
-    else:
-        raise ValueError("Invalid value %r for update_changelog" % update_changelog)
+    if update_changelog is not None:
+        if update_changelog not in ("update", "leave", "auto"):
+            raise ValueError(
+                'invalid value for update_changelog: %s' % update_changelog)
+        entry_command.insert(0, "DEB_UPDATE_CHANGELOG=%s" % update_changelog)
     return shlex_join(entry_command)
 
 
