@@ -155,7 +155,7 @@ async def get_packages(db, info_provider, suite_name, component, arch):
             "debian_build.source, debian_build.run_id, debian_build.distribution, "
             "debian_build.version FROM debian_build "
             "INNER JOIN run ON run.id = debian_build.run_id "
-            "WHERE run.suite = $1 "
+            "WHERE run.suite = $1 AND run.review_status != 'rejected' "
             "ORDER BY debian_build.source, debian_build.version DESC",
             suite_name,
         )
