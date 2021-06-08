@@ -26,6 +26,7 @@ import json
 from io import BytesIO
 import logging
 import os
+import shlex
 import ssl
 import sys
 import tempfile
@@ -869,6 +870,15 @@ def queue_item_env(queue_item):
     return env
 
 
+def splitout_env(command):
+    args = shlex.split(command)
+    env = {}
+    while len(args) > 0 and '=' in args[0]:
+        (key, value) = args.pop(0).split('=', 1)
+        env[key] = value
+    return env, shlex.join(args)
+
+
 def cache_branch_name(distro_config, role):
     if role != 'main':
         raise ValueError(role)
@@ -1326,6 +1336,9 @@ async def handle_assign(request):
     if queue_processor.committer:
         env.update(committer_env(queue_processor.committer))
 
+    extra_env, command = splitout_env(item.command)
+    env.update(extra_env)
+
     assignment = {
         "id": active_run.log_id,
         "description": "%s on %s" % (item.suite, item.package),
@@ -1339,7 +1352,7 @@ async def handle_assign(request):
         "resume": resume.json() if resume else None,
         "build": {"target": builder.kind, "environment": build_env},
         "env": env,
-        "command": item.command,
+        "command": command,
         "suite": item.suite,
         "vcs_manager": queue_processor.public_vcs_manager.base_url,
     }
