@@ -1132,9 +1132,12 @@ async def handle_reprocess_logs(request):
     post = await request.post()
     dry_run = 'dry_run' in post
     reschedule = 'reschedule' in post
-    run_ids = post.get_all('run_id')
+    try:
+        run_ids = post.getall('run_id')
+    except KeyError:
+        run_ids = None
 
-    if run_ids:
+    if not run_ids:
         args = []
         query = """
 SELECT
@@ -1177,16 +1180,15 @@ WHERE
         rows = await conn.fetch(query, *args)
 
     async def do_reprocess():
-        todo = []
-        async for row in rows:
-            todo.append(
-                reprocess_run_logs(
-                    request.app.db,
-                    request.app['logfile_manager'],
-                    row['package'], row['suite'], row['id'],
-                    row['command'], row['duration'], row['result_code'],
-                    row['description'], row['failure_details'],
-                    dry_run=dry_run, reschedule=reschedule))
+        todo = [
+            reprocess_run_logs(
+                request.app.db,
+                request.app['logfile_manager'],
+                row['package'], row['suite'], row['id'],
+                row['command'], row['duration'], row['result_code'],
+                row['description'], row['failure_details'],
+                dry_run=dry_run, reschedule=reschedule)
+            for row in rows]
         for i in range(0, len(todo), 100):
             await asyncio.wait(set(todo[i : i + 100]))
 
