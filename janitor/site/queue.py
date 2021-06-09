@@ -97,6 +97,8 @@ async def get_queue(
 ]:
     async for row in iter_queue_with_last_run(db, limit=limit):
         command = shlex.split(row["command"])
+        while command and '=' in command[0]:
+            command.pop(0)
         expecting = None
         if command[0] == "new-upstream":
             if "--snapshot" in command:
