@@ -27,6 +27,8 @@ from typing import Optional, List, Any, Dict
 
 import logging
 
+import shlex
+
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -424,22 +426,26 @@ def publish_one(
     result_tags=None,
 ):
 
+    args = shlex.split(command)
+    while args and '=' in args[0]:
+        args.pop(0)
+
     subrunner: Publisher
-    if command.startswith("new-upstream"):
+    if args[0] == "new-upstream":
         subrunner = NewUpstreamPublisher()
-    elif command.startswith("lintian-brush"):
+    elif args[0] == "lintian-brush":
         subrunner = LintianBrushPublisher()
-    elif command.startswith("apply-multiarch-hints"):
+    elif args[0] == "apply-multiarch-hints":
         subrunner = MultiArchHintsPublisher()
-    elif command.startswith("orphan"):
+    elif args[0] == "orphan":
         subrunner = OrphanPublisher()
-    elif command.startswith("import-upload"):
+    elif args[0] == "import-upload":
         subrunner = UncommittedPublisher()
-    elif command.startswith("scrub-obsolete"):
+    elif args[0] == "scrub-obsolete":
         subrunner = ScrubObsoletePublisher()
-    elif command.startswith("mia"):
+    elif args[0] == "mia":
         subrunner = MIAPublisher()
-    elif command.startswith("cme-fix"):
+    elif args[0] == "cme-fix":
         subrunner = CMEPublisher()
     else:
         raise AssertionError("unknown command %r" % command)
