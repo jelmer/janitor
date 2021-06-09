@@ -67,7 +67,7 @@ from breezy.propose import (
     HosterLoginRequired,
 )
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateSyntaxError
 
 from .debian.debdiff import (
     debdiff_is_empty,
