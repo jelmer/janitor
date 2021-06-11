@@ -22,7 +22,7 @@ import errno
 import json
 import logging
 import os
-import subprocess
+import shlex
 import sys
 import traceback
 from typing import Dict, List, Optional, Any, Type, Iterator, Tuple
@@ -33,6 +33,13 @@ from breezy.transport import Transport
 
 from silver_platter.workspace import Workspace
 
+from silver_platter.apply import (
+    script_runner as generic_script_runner,
+    DetailedFailure,
+    ScriptFailed,
+    ScriptMadeNoChanges,
+    )
+from silver_platter.debian.apply import script_runner as debian_script_runner
 from silver_platter.debian import (
     MissingUpstreamTarball,
     pick_additional_colocated_branches,
@@ -42,8 +49,6 @@ from silver_platter.changer import (
     ChangerError,
     ChangerResult,
     ChangerReporter,
-    GenericChanger,
-    changer_subcommand as _generic_changer_subcommand,
     )
 from silver_platter.debian.changer import (
     DebianChanger,
@@ -264,43 +269,6 @@ class DummyDebianChanger(DebianChanger):
         return "Build without changes"
 
 
-class DummyGenericChanger(DebianChanger):
-
-    name = "just-build"
-
-    @classmethod
-    def setup_parser(cls, parser):
-        parser.add_argument("--revision", type=str, help="Specific revision to build.")
-
-    @classmethod
-    def from_args(cls, args):
-        return cls(revision=args.revision)
-
-    def __init__(self, revision=None):
-        self.revision = revision
-
-    def suggest_branch_name(self):
-        return "unchanged"
-
-    def make_changes(
-        self,
-        local_tree,
-        subpath,
-        reporter,
-        committer,
-        base_proposal=None,
-    ):
-        if self.revision:
-            local_tree.update(revision=self.revision.encode("utf-8"))
-        return ChangerResult(
-            description="Nothing changed", mutator=None, branches=[], tags=[]
-        )
-
-    @classmethod
-    def describe_command(cls, command):
-        return "Build without changes"
-
-
 class WorkerResult(object):
     def __init__(
         self,
@@ -369,18 +337,6 @@ def debian_changer_subcommand(n):
         return _debian_changer_subcommand(n)
 
 
-CUSTOM_GENERIC_SUBCOMMANDS = {
-    "just-build": DummyGenericChanger,
-}
-
-
-def generic_changer_subcommand(n):
-    try:
-        return CUSTOM_GENERIC_SUBCOMMANDS[n]
-    except KeyError:
-        return _generic_changer_subcommand(n)
-
-
 class WorkerReporter(ChangerReporter):
     def __init__(self, metadata_subworker, resume_result, provide_context, remotes):
         self.metadata_subworker = metadata_subworker
@@ -413,6 +369,39 @@ class Target(object):
 
     def directory_name(self) -> str:
         raise NotImplementedError(self.directory_name)
+
+
+class DebianScriptChanger(object):
+
+    def __init__(self, args):
+        self.args = args
+
+    def make_changes(
+        self,
+        local_tree,
+        subpath,
+        update_changelog,
+        reporter,
+        committer,
+        base_proposal=None,
+    ):
+        script = shlex.join(self.args)
+        command_result = debian_script_runner(
+            local_tree, script=script, commit_pending=None,
+            resume_metadata=reporter.resume_result, subpath=subpath,
+            update_changelog=update_changelog)
+        return ChangerResult(
+            description=command_result.description,
+            mutator=command_result.context,
+            branches=[
+                ('main', local_tree.branch.name, command_result.old_revision,
+                 command_result.new_revision)],
+            tags=dict(command_result.tags) if command_result.tags else None,
+            value=command_result.value,
+            proposed_commit_message=None,  # TODO(jelmer: Get proposed_commit_message from recipe
+            title=None,  # TODO(jelmer): Get title from recipe
+            labels=None,  # TODO(jelmer): Get labels from recipe
+            sufficient_for_proposal=None)  # TODO(jelmer): use value_threshold in config
 
 
 class DebianTarget(Target):
@@ -451,34 +440,32 @@ class DebianTarget(Target):
         try:
             changer_cls = debian_changer_subcommand(argv[0])
         except KeyError:
-            raise WorkerFailure(
-                "unknown-subcommand", "unknown subcommand %s" % argv[0],
-                details={"subcommand": argv[0]})
-
-        subparser = argparse.ArgumentParser(prog=changer_cls.name)
-        subparser.add_argument(
-            "--no-update-changelog",
-            action="store_false",
-            default=None,
-            dest="update_changelog",
-            help="do not update the changelog",
-        )
-        subparser.add_argument(
-            "--update-changelog",
-            action="store_true",
-            dest="update_changelog",
-            help="force updating of the changelog",
-            default=None,
-        )
-        subparser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Dry run.')
-        changer_cls.setup_parser(subparser)
-        self.changer_args = subparser.parse_args(argv[1:])
-        if self.changer_args.update_changelog is not None:
-            self.update_changelog = self.changer_args.update_changelog
-        self.changer = changer_cls.from_args(self.changer_args)
+            self.changer = DebianScriptChanger(argv)
+        else:
+            subparser = argparse.ArgumentParser(prog=changer_cls.name)
+            subparser.add_argument(
+                "--no-update-changelog",
+                action="store_false",
+                default=None,
+                dest="update_changelog",
+                help="do not update the changelog",
+            )
+            subparser.add_argument(
+                "--update-changelog",
+                action="store_true",
+                dest="update_changelog",
+                help="force updating of the changelog",
+                default=None,
+            )
+            subparser.add_argument(
+                '--dry-run',
+                action='store_true',
+                help='Dry run.')
+            changer_cls.setup_parser(subparser)
+            changer_args = subparser.parse_args(argv[1:])
+            if changer_args.update_changelog is not None:
+                self.update_changelog = changer_args.update_changelog
+            self.changer = changer_cls.from_args(changer_args)
 
     def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
         self.changer.log_directory = log_directory
@@ -609,34 +596,33 @@ class GenericTarget(Target):
         self.chroot = env.get("CHROOT")
 
     def parse_args(self, argv):
-        changer_cls: Type[GenericChanger]
-        try:
-            changer_cls = generic_changer_subcommand(argv[0])
-        except KeyError:
-            raise WorkerFailure(
-                "unknown-subcommand", "unknown subcommand %s" % argv[0],
-                details={"subcommand": argv[0]})
-
-        subparser = argparse.ArgumentParser(prog=changer_cls.name)
-        subparser.add_argument(
-            '--dry-run',
-            action='store_true',
-            help='Dry run.')
-        changer_cls.setup_parser(subparser)
-        self.changer_args = subparser.parse_args(argv[1:])
-        self.changer = changer_cls.from_args(self.changer_args)
+        self.argv = argv
 
     def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
-        self.changer.log_directory = log_directory
+        script = shlex.join(self.argv)
         try:
-            return self.changer.make_changes(
-                local_tree,
-                subpath=subpath,
-                committer=committer,
-                reporter=reporter,
-            )
-        except ChangerError as e:
-            raise WorkerFailure(e.category, e.summary, details=e.details)
+            command_result = generic_script_runner(
+                local_tree, script=script, commit_pending=None,
+                resume_metadata=reporter.resume_result, subpath=subpath)
+        except ScriptMadeNoChanges:
+            raise WorkerFailure('nothing-to-do', 'No changes made')
+        except DetailedFailure as e:
+            raise WorkerFailure(e.result_code, e.description, e.details)
+        except ScriptFailed as e:
+            raise WorkerFailure(
+                'command-failed', 'Script %s failed to run with code %s' % e.args)
+        return ChangerResult(
+            description=command_result.description,
+            mutator=command_result.context,
+            branches=[
+                ('main', local_tree.branch.name, command_result.old_revision,
+                 command_result.new_revision)],
+            tags=dict(command_result.tags) if command_result.tags else None,
+            value=command_result.value,
+            proposed_commit_message=None,  # TODO(jelmer: Get proposed_commit_message from recipe
+            title=None,  # TODO(jelmer): Get title from recipe
+            labels=None,  # TODO(jelmer): Get labels from recipe
+            sufficient_for_proposal=None)  # TODO(jelmer): use value_threshold in config
 
     def additional_colocated_branches(self, main_branch):
         return []
