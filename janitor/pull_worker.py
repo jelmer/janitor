@@ -85,19 +85,24 @@ class ResultUploadFailure(Exception):
         self.reason = reason
 
 
-async def abort_run(session: ClientSession, base_url: str, run_id: str) -> None:
-    abort_url = urljoin(base_url, "active-runs/%s/abort" % run_id)
-    async with session.post(abort_url) as resp:
-        if resp.status not in (201, 200):
-            raise Exception(
-                "Unable to abort run: %r: %d" % (await resp.text(), resp.status)
-            )
+async def abort_run(
+        session: ClientSession, base_url: str, run_id: str,
+        metadata: Any, description: str) -> None:
+    metadata['code'] = 'aborted'
+    metadata['description'] = description
+    finish_time = datetime.utcnow()
+    metadata["finish_time"] = finish_time.isoformat()
+
+    with TemporaryDirectory() as td:
+        await upload_results(session, base_url, run_id, metadata, td)
 
 
-def handle_sigterm(session, base_url, run_id):
+def handle_sigterm(session, base_url, run_id, metadata):
     logging.warning('Received signal, aborting and exiting...')
+
     async def shutdown():
-        await abort_run(session, base_url, run_id)
+        await abort_run(
+            session, base_url, run_id, metadata, "Killed by signal")
         sys.exit(1)
     loop = asyncio.get_event_loop()
     loop.create_task(shutdown())
@@ -707,10 +712,10 @@ async def main(argv=None):
             loop = asyncio.get_running_loop()
             loop.add_signal_handler(
                 signal.SIGINT, handle_sigterm, session, args.base_url,
-                run_id)
+                run_id, metadata)
             loop.add_signal_handler(
                 signal.SIGTERM, handle_sigterm, session, args.base_url,
-                run_id)
+                run_id, metadata)
             app = web.Application()
             app['directory'] = output_directory
             app['assignment'] = assignment
