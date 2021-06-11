@@ -1295,6 +1295,31 @@ async def handle_get_active_run(request):
         return web.json_response({}, status=404)
 
 
+@docs()
+@routes.post("/vcswatch", name="vcswatch")
+async def handle_vcswatch(request):
+    json = await request.json()
+    # Keys set:
+    # * old-hash
+    # * new-hash
+    # * package
+    # * status
+    # * branch
+    # * url
+
+    package = json['package']
+
+    rescheduled = []
+    requestor = "vcwatch notification"
+    async with request.app.db.acquire() as conn:
+        for suite in await state.iter_publishable_suites(conn, package):
+            await do_schedule(
+                conn, package, suite, requestor=requestor, bucket="webhook")
+            rescheduled.append(suite)
+
+    return web.json_response({}, status=200)
+
+
 def create_app(
     db,
     publisher_url: str,
