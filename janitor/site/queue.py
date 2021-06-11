@@ -21,7 +21,6 @@ import shlex
 from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
 
 from janitor import state
-from janitor.worker import debian_changer_subcommand, generic_changer_subcommand
 
 
 def lintian_tag_link(tag: str) -> str:
@@ -118,11 +117,7 @@ async def get_queue(
                     map(lintian_tag_link, row["context"].split(" "))
                 )
         else:
-            try:
-                cs = debian_changer_subcommand(command[0])
-            except KeyError:
-                cs = generic_changer_subcommand(command[0])
-            description = cs.describe_command(command)
+            description = ' '.join(command)
         if expecting is not None:
             description += ", " + expecting
         if row["refresh"]:
