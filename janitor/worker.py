@@ -35,7 +35,7 @@ from silver_platter.workspace import Workspace
 
 from silver_platter.apply import (
     script_runner as generic_script_runner,
-    DetailedFailure,
+    DetailedFailure as GenericDetailedFailure,
     ScriptFailed,
     ScriptMadeNoChanges,
     )
@@ -606,7 +606,7 @@ class GenericTarget(Target):
                 resume_metadata=reporter.resume_result, subpath=subpath)
         except ScriptMadeNoChanges:
             raise WorkerFailure('nothing-to-do', 'No changes made')
-        except DetailedFailure as e:
+        except GenericDetailedFailure as e:
             raise WorkerFailure(e.result_code, e.description, e.details)
         except ScriptFailed as e:
             raise WorkerFailure(
