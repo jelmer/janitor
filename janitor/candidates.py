@@ -87,6 +87,8 @@ async def main():
     with open(args.config, "r") as f:
         config = read_config(f)
 
+    suite_names = [suite.name for suite in config.suite]
+
     db = state.Database(config.database_location)
 
     async with db.acquire() as conn:
@@ -114,6 +116,9 @@ async def main():
                 logging.warning(
                     'ignoring candidate %s/%s; package unknown',
                     package, entry[1])
+                continue
+            if entry[1] not in suite_names:
+                logging.warning('unknown suite %r', entry[1])
                 continue
             candidates.append(entry)
         await store_candidates(conn, candidates)
