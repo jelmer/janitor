@@ -47,6 +47,7 @@ DEFAULT_SCHEDULE_OFFSET = -1.0
 
 TRANSIENT_ERROR_RESULT_CODES = [
     "cancelled",
+    "aborted",
     "install-deps-file-fetch-failure",
     "apt-get-update-file-fetch-failure",
     "build-failed-stage-apt-get-update",
