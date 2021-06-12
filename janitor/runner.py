@@ -1133,14 +1133,13 @@ class QueueProcessor(object):
         last_success_gauge.set_to_current_time()
         await followup_run(self.config, self.database, self.policy, item, result)
 
-    async def next_queue_item(self, n) -> Optional[state.QueueItem]:
-        async with self.database.acquire() as conn:
-            limit = len(self.active_runs) + n + 2
-            async for item in state.iter_queue(conn, limit=limit):
-                if self.queue_item_assigned(item.id):
-                    continue
-                return item
-            return None
+    async def next_queue_item(self, conn, n) -> Optional[state.QueueItem]:
+        limit = len(self.active_runs) + n + 2
+        async for item in state.iter_queue(conn, limit=limit):
+            if self.queue_item_assigned(item.id):
+                continue
+            return item
+        return None
 
     def queue_item_assigned(self, queue_item_id: int) -> bool:
         """Check if a queue item has been assigned already."""
@@ -1241,31 +1240,32 @@ async def handle_assign(request):
         await queue_processor.finish_run(active_run.queue_item, result)
 
     queue_processor = request.app['queue_processor']
-    item = None
-    while item is None:
-        with span.new_child('sql:queue-item'):
-            item = await queue_processor.next_queue_item(1)
-        if item is None:
-            return web.json_response({'reason': 'queue empty'}, status=503)
-        active_run = ActiveRun(
-            worker_name=worker,
-            queue_item=item,
-            jenkins_metadata=json.get("jenkins"),
-        )
-
-        queue_processor.register_run(active_run)
-
-        if item.branch_url is None:
-            # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
-            await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
-            item = None
-
-    suite_config = get_suite_config(queue_processor.config, item.suite)
-
-    # This is simple for now, since we only support one distribution.
-    builder = get_builder(queue_processor.config, suite_config)
 
     async with queue_processor.database.acquire() as conn:
+        item = None
+        while item is None:
+            with span.new_child('sql:queue-item'):
+                item = await queue_processor.next_queue_item(conn, 1)
+            if item is None:
+                return web.json_response({'reason': 'queue empty'}, status=503)
+            active_run = ActiveRun(
+                worker_name=worker,
+                queue_item=item,
+                jenkins_metadata=json.get("jenkins"),
+            )
+
+            queue_processor.register_run(active_run)
+
+            if item.branch_url is None:
+                # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
+                await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
+                item = None
+
+        suite_config = get_suite_config(queue_processor.config, item.suite)
+
+        # This is simple for now, since we only support one distribution.
+        builder = get_builder(queue_processor.config, suite_config)
+
         with span.new_child('build-env'):
             build_env = await builder.build_env(conn, suite_config, item)
 
