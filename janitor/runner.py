@@ -645,7 +645,6 @@ class ActiveRun(object):
     queue_item: state.QueueItem
     log_id: str
     start_time: datetime
-    transaction: asyncpg.Transaction
 
     def __init__(
         self,
