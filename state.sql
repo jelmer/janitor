@@ -200,7 +200,7 @@ CREATE TRIGGER refresh_last_runs
 -- The last effective run per package/suite; i.e. the last run that
 -- wasn't an attempt to incrementally improve things that yielded no new
 -- changes.
-CREATE OR REPLACE VIEW last_effective_runs AS
+CREATE MATERIALIZED VIEW last_effective_runs AS
   SELECT DISTINCT ON (package, suite)
   *
   FROM
@@ -209,9 +209,23 @@ CREATE OR REPLACE VIEW last_effective_runs AS
     result_code != 'nothing-new-to-do'
   ORDER BY package, suite, start_time DESC;
 
+CREATE OR REPLACE FUNCTION refresh_last_effective_runs()
+  RETURNS TRIGGER LANGUAGE plpgsql
+  AS $$
+  BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY last_effective_runs;
+  RETURN NULL;
+  END $$;
+
+CREATE TRIGGER refresh_last_effective_runs
+  AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+  ON run
+  FOR EACH STATEMENT
+  EXECUTE PROCEDURE refresh_last_effective_runs();
+
 -- The last "unabsorbed" change. An unabsorbed change is the last change that
 -- was not yet merged or pushed.
-CREATE OR REPLACE MATERIALIZED VIEW last_unabsorbed_runs AS
+CREATE MATERIALIZED VIEW last_unabsorbed_runs AS
   SELECT last_effective_runs.* FROM last_effective_runs INNER JOIN package ON package.name = last_effective_runs.package WHERE
      -- Either the last run is unabsorbed because it failed:
      (result_code NOT in ('nothing-to-do', 'success')
