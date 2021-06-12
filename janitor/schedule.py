@@ -72,6 +72,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "post-build-testbed-chroot-disappeared",
     "post-build-file-fetch-failure",
     "post-build-apt-file-fetch-failure",
+    "pull-rate-limited",
 ]
 
 # In some cases, we want to ignore certain results when guessing
