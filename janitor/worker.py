@@ -39,7 +39,10 @@ from silver_platter.apply import (
     ScriptFailed,
     ScriptMadeNoChanges,
     )
-from silver_platter.debian.apply import script_runner as debian_script_runner
+from silver_platter.debian.apply import (
+    script_runner as debian_script_runner,
+    DetailedFailure as DebianDetailedFailure,
+    )
 from silver_platter.debian import (
     MissingUpstreamTarball,
     pick_additional_colocated_branches,
@@ -386,10 +389,19 @@ class DebianScriptChanger(object):
         base_proposal=None,
     ):
         script = shlex.join(self.args)
-        command_result = debian_script_runner(
-            local_tree, script=script, commit_pending=None,
-            resume_metadata=reporter.resume_result, subpath=subpath,
-            update_changelog=update_changelog)
+        try:
+            command_result = debian_script_runner(
+                local_tree, script=script, commit_pending=None,
+                resume_metadata=reporter.resume_result, subpath=subpath,
+                update_changelog=update_changelog)
+        except ScriptMadeNoChanges:
+            raise WorkerFailure('nothing-to-do', 'No changes made')
+        except DebianDetailedFailure as e:
+            raise WorkerFailure(e.result_code, e.description, e.details)
+        except ScriptFailed as e:
+            raise WorkerFailure(
+                'command-failed',
+                'Script %s failed to run with code %s' % e.args)
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
@@ -610,7 +622,8 @@ class GenericTarget(Target):
             raise WorkerFailure(e.result_code, e.description, e.details)
         except ScriptFailed as e:
             raise WorkerFailure(
-                'command-failed', 'Script %s failed to run with code %s' % e.args)
+                'command-failed',
+                'Script %s failed to run with code %s' % e.args)
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
