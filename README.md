@@ -17,9 +17,12 @@ otherwise.
 Design
 ======
 
-The janitor is made up out of multiple components:
+The janitor is made up out of multiple components. The majority of these
+are not Debian-specific. The janitor is built on top of
+[silver-platter](https://github.com/jelmer/silver-platter) and relies
+on that project for most of the grunt work.
 
-Several cron jobs that run daily:
+There are several cron jobs that run daily:
 
 * the *package_metadata* syncer imports package metadata from UDD
 * the *candidate* syncer determines candidates
@@ -69,9 +72,13 @@ Contributing
 ============
 
 The easiest way to get started with contributing to the Janitor is to work on
-identifying issues and adding fixers. There is
+identifying issues and adding fixers for lintian-brush. There is
 [a guide](https://salsa.debian.org/jelmer/lintian-brush/-/blob/master/doc/fixer-writing-guide.rst)
-on identifying good candidates and writing fixers
-in the lintian-brush repository.
+on identifying good candidates and writing fixers in the lintian-brush
+repository.
 
-Some of us hang out in the ``#debian-janitor`` IRC channel on OFTC (irc.oftc.net).
+If you're interested in working on adding another suite, see
+[adding-a-new-suite](devnotes/adding-a-new-suite.rst).
+
+Some of us hang out in the ``#debian-janitor`` IRC channel on OFTC
+(irc.oftc.net).

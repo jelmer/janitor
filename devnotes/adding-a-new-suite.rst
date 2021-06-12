@@ -1,17 +1,23 @@
 Adding a new suite
 ==================
 
-Add a "changer" in silver-platter
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Create a new mutators script
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Add a worker class in silver-platter, probably in
-``silver_platter/debian/some-name.py``.
+At the core of every suite is a script that can make changes
+to a version controlled branch.
 
-The worker class should derive from ``DebianChanger`` in
-``silver_platter.debian.changer``. See e.g. rrr.py for an example.
+This script will be executed in a version controlled checkout of
+a source package, and can make changes to the package as it sees fit.
+See [this blog post](https://www.jelmer.uk/silver-platter-intro.html) for more
+information about creating mutator scripts.
 
-You can test the worker class independently by running silver-platter, e.g.
-``./debian-svp some-name pkg-name --dry-run --diff``
+You can test the script independently by running silver-platter, e.g.
+
+``./debian-svp apply --command=myscript --dry-run --diff`` (from a checkout)
+or
+
+``./debian-svp run --command=myscript --dry-run --diff package-name``
 
 Add configuration for the suite
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -35,7 +41,7 @@ In policy.conf, add a default stanza:
 policy {
   suite {
    name: "some-name"  # This is the name of the suite
-   command: "some-name"  # This is the silver-platter subcommand to run
+   command: "some-name"  # This is the mutator script to run
    publish { mode: propose }  # Default publishing mode
   }
 }
