@@ -91,7 +91,7 @@ policy {
   suite: {
     name: "uncommitted"
     publish { mode: build_only }
-    command: "import-upload"
+    command: "deb-import-uncommitted"
     qa_review: required;
   }
 

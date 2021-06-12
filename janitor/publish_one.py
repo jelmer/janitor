@@ -439,7 +439,7 @@ def publish_one(
         subrunner = MultiArchHintsPublisher()
     elif args[0] == "orphan":
         subrunner = OrphanPublisher()
-    elif args[0] == "import-upload":
+    elif args[0] == "deb-import-uncommitted":
         subrunner = UncommittedPublisher()
     elif args[0] == "scrub-obsolete":
         subrunner = ScrubObsoletePublisher()
