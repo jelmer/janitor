@@ -645,6 +645,7 @@ class ActiveRun(object):
     queue_item: state.QueueItem
     log_id: str
     start_time: datetime
+    transaction: asyncpg.Transaction
 
     def __init__(
         self,
@@ -1043,7 +1044,6 @@ class QueueProcessor(object):
         database,
         policy,
         config,
-        worker_kind,
         dry_run=False,
         logfile_manager=None,
         artifact_manager=None,
@@ -1056,14 +1056,10 @@ class QueueProcessor(object):
         backup_logfile_manager=None,
     ):
         """Create a queue processor.
-
-        Args:
-          worker_kind: The kind of worker to run ('local', 'gcb')
         """
         self.database = database
         self.policy = policy
         self.config = config
-        self.worker_kind = worker_kind
         self.dry_run = dry_run
         self.logfile_manager = logfile_manager
         self.artifact_manager = artifact_manager
@@ -1531,13 +1527,6 @@ async def main(argv=None):
         default=False,
     )
     parser.add_argument(
-        "--worker",
-        type=str,
-        default="local",
-        choices=["local", "gcb"],
-        help="Worker to use.",
-    )
-    parser.add_argument(
         "--use-cached-only", action="store_true", help="Use cached branches only."
     )
     parser.add_argument(
@@ -1631,7 +1620,6 @@ async def main(argv=None):
             db,
             policy,
             config,
-            args.worker,
             args.dry_run,
             logfile_manager,
             artifact_manager,
