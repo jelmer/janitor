@@ -175,13 +175,27 @@ CREATE TABLE worker (
 );
 
 -- The last run per package/suite
-CREATE VIEW last_runs AS
+CREATE MATERIALIZED VIEW last_runs AS
   SELECT DISTINCT ON (package, suite)
   *
   FROM
   run
   WHERE NOT EXISTS (SELECT FROM package WHERE name = package and removed)
   ORDER BY package, suite, start_time DESC;
+
+CREATE OR REPLACE FUNCTION refresh_last_runs()
+  RETURNS TRIGGER LANGUAGE plpgsql
+  AS $$
+  BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY last_runs;
+  RETURN NULL;
+  END $$;
+
+CREATE TRIGGER refresh_last_runs
+  AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+  ON run
+  FOR EACH STATEMENT
+  EXECUTE PROCEDURE refresh_last_runs();
 
 -- The last effective run per package/suite; i.e. the last run that
 -- wasn't an attempt to incrementally improve things that yielded no new
@@ -197,12 +211,26 @@ CREATE OR REPLACE VIEW last_effective_runs AS
 
 -- The last "unabsorbed" change. An unabsorbed change is the last change that
 -- was not yet merged or pushed.
-CREATE OR REPLACE VIEW last_unabsorbed_runs AS
-  SELECT * FROM last_effective_runs INNER JOIN package ON package.name = last_effective_runs.package WHERE
+CREATE OR REPLACE MATERIALIZED VIEW last_unabsorbed_runs AS
+  SELECT last_effective_runs.* FROM last_effective_runs INNER JOIN package ON package.name = last_effective_runs.package WHERE
      -- Either the last run is unabsorbed because it failed:
      (result_code NOT in ('nothing-to-do', 'success')
      -- or because one of the result branch revisions has not been absorbed yet
       OR exists (SELECT from new_result_branch WHERE run_id = id and not absorbed)) AND NOT package.removed;
+
+CREATE OR REPLACE FUNCTION refresh_last_unabsorbed_runs()
+  RETURNS TRIGGER LANGUAGE plpgsql
+  AS $$
+  BEGIN
+  REFRESH MATERIALIZED VIEW CONCURRENTLY last_unabsorbed_runs;
+  RETURN NULL;
+  END $$;
+
+CREATE TRIGGER refresh_last_unabsorbed_runs
+  AFTER INSERT OR UPDATE OR DELETE OR TRUNCATE
+  ON run
+  FOR EACH STATEMENT
+  EXECUTE PROCEDURE refresh_last_unabsorbed_runs();
 
 create or replace view suites as select distinct suite as name from run;
 
