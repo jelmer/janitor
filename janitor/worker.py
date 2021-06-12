@@ -38,6 +38,7 @@ from silver_platter.apply import (
     DetailedFailure as GenericDetailedFailure,
     ScriptFailed,
     ScriptMadeNoChanges,
+    ResultFileFormatError,
     )
 from silver_platter.debian.apply import (
     script_runner as debian_script_runner,
@@ -394,6 +395,9 @@ class DebianScriptChanger(object):
                 local_tree, script=script, commit_pending=None,
                 resume_metadata=reporter.resume_result, subpath=subpath,
                 update_changelog=update_changelog)
+        except ResultFileFormatError as e:
+            raise WorkerFailure(
+                'result-file-format', 'Result file was invalid: %s' % e)
         except ScriptMadeNoChanges:
             raise WorkerFailure('nothing-to-do', 'No changes made')
         except DebianDetailedFailure as e:
@@ -616,6 +620,9 @@ class GenericTarget(Target):
             command_result = generic_script_runner(
                 local_tree, script=script, commit_pending=None,
                 resume_metadata=reporter.resume_result, subpath=subpath)
+        except ResultFileFormatError as e:
+            raise WorkerFailure(
+                'result-file-format', 'Result file was invalid: %s' % e)
         except ScriptMadeNoChanges:
             raise WorkerFailure('nothing-to-do', 'No changes made')
         except GenericDetailedFailure as e:
