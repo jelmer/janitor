@@ -27,6 +27,7 @@ from breezy.patches import (
     InsertLine,
     RemoveLine,
     ContextLine,
+    MalformedHunkHeader,
 )
 
 
@@ -61,9 +62,12 @@ def filter_boring_udiff(udiff, old_version, new_version, display_version):
 
 def filter_boring_detail(detail, old_version, new_version, display_version):
     if detail["unified_diff"] is not None:
-        detail["unified_diff"] = filter_boring_udiff(
-            detail["unified_diff"], old_version, new_version, display_version
-        )
+        try:
+            detail["unified_diff"] = filter_boring_udiff(
+                detail["unified_diff"], old_version, new_version, display_version
+            )
+        except MalformedHunkHeader as e:
+            logging.warning('Error parsing hunk: %r', e)
     detail["source1"] = detail["source1"].replace(old_version, display_version)
     detail["source2"] = detail["source2"].replace(new_version, display_version)
     if detail.get("details"):
