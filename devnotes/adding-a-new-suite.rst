@@ -9,7 +9,7 @@ to a version controlled branch.
 
 This script will be executed in a version controlled checkout of
 a source package, and can make changes to the package as it sees fit.
-See [this blog post](https://www.jelmer.uk/silver-platter-intro.html) for more
+See `this blog post <https://www.jelmer.uk/silver-platter-intro.html>`_ for more
 information about creating mutator scripts.
 
 You can test the script independently by running silver-platter, e.g.
@@ -22,30 +22,26 @@ or
 Add configuration for the suite
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In janitor.conf, add a section for the suite. E.g.:
+In janitor.conf, add a section for the suite. E.g.::
 
-```
-suite {
-  name: "some-name"
-  branch_name: "some-name"
-  debian_build {
-    archive_description: "Description for use in apt"
-    build_suffix: "suf"
-  }
-}
-```
+    suite {
+      name: "some-name"
+      branch_name: "some-name"
+      debian_build {
+        archive_description: "Description for use in apt"
+        build_suffix: "suf"
+      }
+    }
 
-In policy.conf, add a default stanza:
+In policy.conf, add a default stanza::
 
-```
-policy {
-  suite {
-   name: "some-name"  # This is the name of the suite
-   command: "some-name"  # This is the mutator script to run
-   publish { mode: propose }  # Default publishing mode
-  }
-}
-```
+    policy {
+      suite {
+       name: "some-name"  # This is the name of the suite
+       command: "some-name"  # This is the mutator script to run
+       publish { mode: propose }  # Default publishing mode
+      }
+    }
 
 Add script for finding candidates
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
