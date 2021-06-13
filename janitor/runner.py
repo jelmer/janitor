@@ -1133,8 +1133,8 @@ class QueueProcessor(object):
         last_success_gauge.set_to_current_time()
         await followup_run(self.config, self.database, self.policy, item, result)
 
-    async def next_queue_item(self, conn, n) -> Optional[state.QueueItem]:
-        limit = len(self.active_runs) + n + 2
+    async def next_queue_item(self, conn) -> Optional[state.QueueItem]:
+        limit = len(self.active_runs) + 3
         async for item in state.iter_queue(conn, limit=limit):
             if self.queue_item_assigned(item.id):
                 continue
@@ -1245,7 +1245,7 @@ async def handle_assign(request):
         item = None
         while item is None:
             with span.new_child('sql:queue-item'):
-                item = await queue_processor.next_queue_item(conn, 1)
+                item = await queue_processor.next_queue_item(conn)
             if item is None:
                 return web.json_response({'reason': 'queue empty'}, status=503)
             active_run = ActiveRun(
