@@ -406,6 +406,11 @@ class DebianScriptChanger(object):
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
+        if suite_config.merge_proposal and suite_config.merge_proposal.value_threshold is not None:
+            sufficient_for_proposal = (
+                command_result.value >= suite_config.merge_proposal.value_threshold)
+        else:
+            sufficient_for_proposal = None
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
@@ -414,10 +419,11 @@ class DebianScriptChanger(object):
                  command_result.new_revision)],
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value,
-            proposed_commit_message=None,  # TODO(jelmer: Get proposed_commit_message from recipe
-            title=None,  # TODO(jelmer): Get title from recipe
-            labels=None,  # TODO(jelmer): Get labels from recipe
-            sufficient_for_proposal=None)  # TODO(jelmer): use value_threshold in config
+            proposed_commit_message=(
+                suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
+            title=suite_config.merge_proposal.title if suite_config.merge_proposal else None,
+            labels=suite_config.merge_proposal.label if suite_config.label else None,
+            sufficient_for_proposal=sufficient_for_proposal)
 
 
 class DebianTarget(Target):
@@ -631,6 +637,12 @@ class GenericTarget(Target):
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
+        if (suite_config.merge_proposal is not None and
+                suite_config.merge_proposal.value_threshold is not None):
+            sufficient_for_proposal = (
+                command_result.value >= suite_config.merge_proposal.value_threshold)
+        else:
+            sufficient_for_proposal = None
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
@@ -639,10 +651,11 @@ class GenericTarget(Target):
                  command_result.new_revision)],
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value,
-            proposed_commit_message=None,  # TODO(jelmer: Get proposed_commit_message from recipe
-            title=None,  # TODO(jelmer): Get title from recipe
-            labels=None,  # TODO(jelmer): Get labels from recipe
-            sufficient_for_proposal=None)  # TODO(jelmer): use value_threshold in config
+            proposed_commit_message=(
+                suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
+            title=suite_config.merge_proposal.title if suite_config.merge_proposal else None,
+            labels=suite_config.merge_proposal.label if suite_config.merge_proposal else None,
+            sufficient_for_proposal=sufficient_for_proposal)
 
     def additional_colocated_branches(self, main_branch):
         return []

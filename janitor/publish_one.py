@@ -67,7 +67,7 @@ from breezy.propose import (
     HosterLoginRequired,
 )
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateSyntaxError
+from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateSyntaxError, Template
 
 from .debian.debdiff import (
     debdiff_is_empty,
@@ -286,52 +286,6 @@ class LintianBrushPublisher(Publisher):
         return self.applied and not self.add_on_only
 
 
-class MultiArchHintsPublisher(Publisher):
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        return "Apply multi-arch hints."
-
-    def allow_create_proposal(self):
-        return True
-
-
-class OrphanPublisher(Publisher):
-
-    # TODO(jelmer): Check that the wnpp bug is still open.
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        return "Move package to the QA team."
-
-    def allow_create_proposal(self):
-        return True
-
-
-class MIAPublisher(Publisher):
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        return "Remove MIA uploaders."
-
-    def allow_create_proposal(self):
-        return True
-
-
-class UncommittedPublisher(Publisher):
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        return "Import archive changes missing from the VCS."
-
-    def allow_create_proposal(self):
-        return True
-
-
-class ScrubObsoletePublisher(Publisher):
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        return "Remove unnecessary constraints."
-
-    def allow_create_proposal(self):
-        return True
-
-
 class NewUpstreamPublisher(Publisher):
     def read_worker_result(self, result):
         self._upstream_version = result["upstream_version"]
@@ -353,12 +307,19 @@ class NewUpstreamPublisher(Publisher):
         return True
 
 
-class CMEPublisher(Publisher):
+class DefaultPublisher(Publisher):
+
+    def __init__(self, commit_message_template):
+        self.commit_message_template = commit_message_template
+
+    def read_worker_result(self, result: Any) -> None:
+        self.result = result
+
     def get_proposal_commit_message(self, role, existing_commit_message):
-        return "Run CME fix."
+        return Template(self.commit_message_template).render(self.result)
 
     def allow_create_proposal(self):
-        # CME doesn't provide enough information
+        # TODO(jelmer): check value threshold
         return True
 
 
@@ -424,31 +385,21 @@ def publish_one(
     allow_create_proposal=None,
     reviewers=None,
     result_tags=None,
+    commit_message_template=None,
 ):
 
     args = shlex.split(command)
     while args and '=' in args[0]:
         args.pop(0)
 
+    # TODO(jelmer): Migrate new upstream and lintian-brush as well
     subrunner: Publisher
     if args[0] == "new-upstream":
         subrunner = NewUpstreamPublisher()
     elif args[0] == "lintian-brush":
         subrunner = LintianBrushPublisher()
-    elif args[0] == "apply-multiarch-hints":
-        subrunner = MultiArchHintsPublisher()
-    elif args[0] == "orphan":
-        subrunner = OrphanPublisher()
-    elif args[0] == "deb-import-uncommitted":
-        subrunner = UncommittedPublisher()
-    elif args[0] == "scrub-obsolete":
-        subrunner = ScrubObsoletePublisher()
-    elif args[0] == "mia":
-        subrunner = MIAPublisher()
-    elif args[0] == "cme-fix":
-        subrunner = CMEPublisher()
     else:
-        raise AssertionError("unknown command %r" % command)
+        subrunner = DefaultPublisher(commit_message_template)
 
     try:
         local_branch = open_branch(
@@ -651,6 +602,7 @@ if __name__ == "__main__":
             reviewers=request.get("reviewers"),
             revision=request["revision"].encode("utf-8"),
             result_tags=request.get("tags"),
+            commit_message_template=request.get("commit_message_template"),
         )
     except PublishFailure as e:
         json.dump({"code": e.code, "description": e.description}, sys.stdout)

@@ -306,6 +306,7 @@ async def publish_one(
     reviewers: Optional[List[str]] = None,
     derived_owner: Optional[str] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
+    commit_message_template: Optional[str] = None,
 ):
     """Publish a single run in some form.
 
@@ -343,6 +344,7 @@ async def publish_one(
         "derived-owner": derived_owner,
         "revision": revision.decode("utf-8"),
         "reviewers": reviewers,
+        "commit_message_template": commit_message_template,
     }
 
     if result_tags:
@@ -865,6 +867,8 @@ async def publish_from_policy(
             possible_transports=possible_transports,
             rate_limiter=rate_limiter,
             result_tags=run.result_tags,
+            commit_message_template=(
+                suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
         )
     except PublishFailure as e:
         code, description = await handle_publish_failure(
@@ -990,6 +994,8 @@ async def publish_and_store(
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter,
                 result_tags=run.result_tags,
+                commit_message_template=(
+                    suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
             )
         except PublishFailure as e:
             await store_publish(
@@ -1974,6 +1980,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 topic_merge_proposal=topic_merge_proposal,
                 rate_limiter=rate_limiter,
                 result_tags=last_run.result_tags,
+                commit_message_template=(
+                    suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
             )
         except PublishFailure as e:
             code, description = await handle_publish_failure(
