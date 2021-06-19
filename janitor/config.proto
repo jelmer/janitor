@@ -65,12 +65,26 @@ message Env {
   optional string value = 2;
 };
 
+message MergeProposalConfig {
+   optional int32 value_threshold = 1;
+
+   optional string commit_message = 2;
+
+   optional string title = 3;
+
+   repeated string label = 4;
+
+   // TODO(jelmer): Full description
+};
+
 message Suite {
   // Name of the suite. E.g. "lintian-fixes"
   optional string name = 1;
 
   // VCS branch name to use
   optional string branch_name = 2;
+
+  optional MergeProposalConfig merge_proposal = 5;
 
   oneof build {
     DebianBuild debian_build = 3;
