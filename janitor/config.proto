@@ -73,8 +73,6 @@ message MergeProposalConfig {
    optional string title = 3;
 
    repeated string label = 4;
-
-   // TODO(jelmer): Full description
 };
 
 message Suite {
