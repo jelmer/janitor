@@ -312,7 +312,8 @@ class DefaultPublisher(Publisher):
         self.result = result
 
     def get_proposal_commit_message(self, role, existing_commit_message):
-        return Template(self.commit_message_template).render(self.result)
+        return Template(self.commit_message_template).render(
+            self.result or {})
 
     def allow_create_proposal(self):
         # TODO(jelmer): check value threshold

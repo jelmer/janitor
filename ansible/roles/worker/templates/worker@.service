@@ -9,8 +9,7 @@ User={{ janitor_user }}
 Type=simple
 Environment=TMPDIR=/home/janitor/tmp
 EnvironmentFile={{ janitor_home }}/env
-ExecStart=PATH={{ janitor_code_path }}/lintian-brush/scripts:{{ janitor_code_path }}/debmutate/scripts:{{ janitor_code_path }}/breezy-debian/scripts:$PATH python3 -m janitor.pull_worker --credentials={{ janitor_home }}/credentials.json{% if janitor_site_external_url %} --base-url={{ janitor_site_external_url }}api/{%+ endif %}
-
+ExecStart=bash -c 'PATH={{ janitor_code_path }}/lintian-brush/scripts:{{ janitor_code_path }}/debmutate/scripts:{{ janitor_code_path }}/breezy-debian/scripts:$PATH python3 -m janitor.pull_worker --credentials={{ janitor_home }}/credentials.json{% if janitor_site_external_url %} --base-url={{ janitor_site_external_url }}api/{%+ endif %}'
 Restart=always
 MemoryAccounting=yes
 MemoryHigh=10G
