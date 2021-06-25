@@ -73,6 +73,10 @@
     src: "{{ janitor_policy }}"
     dest: "{{ janitor_home }}/policy.conf"
   when: janitor_policy is defined
+- name: janitor proposal templates
+  copy:
+    src: "{{ janitor_local_proposal_template_path }}"
+    dest: "{{ janitor_home }}/proposal-templates"
 - name: env file
   template:
     src: env
