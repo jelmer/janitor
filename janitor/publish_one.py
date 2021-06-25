@@ -90,11 +90,6 @@ SUPPORTED_MODES = [
     MODE_SKIP,
 ]
 
-template_env = Environment(
-    loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), '..', "proposal-templates")),
-    autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False),
-)
-
 
 class PublishFailure(Exception):
     def __init__(self, code, description):
@@ -119,6 +114,7 @@ class DebdiffRetrievalError(Exception):
 
 
 def publish(
+    template_env,
     suite: str,
     pkg: str,
     subrunner: "Publisher",
@@ -364,6 +360,7 @@ def get_debdiff(differ_url: str, log_id: str) -> bytes:
 
 
 def publish_one(
+    template_env,
     suite,
     pkg,
     command,
@@ -528,6 +525,7 @@ def publish_one(
 
     try:
         publish_result = publish(
+            template_env,
             suite,
             pkg,
             subrunner,
@@ -573,14 +571,27 @@ if __name__ == "__main__":
     import sys
 
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--template-env-path',
+        type=str,
+        default=os.path.join(
+            os.path.dirname(__file__), '..', "proposal-templates"),
+        help='Path to templates')
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, stream=sys.stderr)
 
     request = json.load(sys.stdin)
 
+    template_env = Environment(
+        loader=FileSystemLoader(args.template_env_path),
+        autoescape=select_autoescape(disabled_extensions=('txt', 'md'), default=False),
+    )
+
+
     try:
         publish_result, branch_name = publish_one(
+            template_env,
             suite=request["suite"],
             pkg=request["package"],
             derived_branch_name=request["derived_branch_name"],
