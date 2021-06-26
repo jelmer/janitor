@@ -38,7 +38,7 @@ cd {{ package }}
 {% else %}
 <p>Try this locally:</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
-{{ clone_command(vcs, vcs_url, package)
+{{ clone_command(vcs, vcs_url, package) }}
 cd {{ package }}
 {{ command }}
 </pre></div></div>

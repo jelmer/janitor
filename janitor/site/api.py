@@ -1251,17 +1251,22 @@ WHERE
         async with request.app.db.acquire() as conn:
             for run in runs:
                 logging.info("Rescheduling %s, %s" % (run['package'], run['suite']))
-                await do_schedule(
-                    conn,
-                    run['package'],
-                    run['suite'],
-                    command=run['command'],
-                    estimated_duration=run['duration'],
-                    requestor="reschedule",
-                    refresh=refresh,
-                    offset=offset,
-                    bucket="reschedule",
-                )
+                try:
+                    await do_schedule(
+                        conn,
+                        run['package'],
+                        run['suite'],
+                        command=run['command'],
+                        estimated_duration=run['duration'],
+                        requestor="reschedule",
+                        refresh=refresh,
+                        offset=offset,
+                        bucket="reschedule",
+                    )
+                except PolicyUnavailable:
+                    logging.debug(
+                        'Not rescheduling %s/%s: policy unavailable',
+                        run['package'], run['suite'])
 
     create_background_task(do_reschedule(), 'mass-reschedule')
     return web.json_response([
@@ -1310,14 +1315,22 @@ async def handle_vcswatch(request):
     package = json['package']
 
     rescheduled = []
+    policy_unavailable = []
     requestor = "vcwatch notification"
     async with request.app.db.acquire() as conn:
         for suite in await state.iter_publishable_suites(conn, package):
-            await do_schedule(
-                conn, package, suite, requestor=requestor, bucket="webhook")
-            rescheduled.append(suite)
+            try:
+                await do_schedule(
+                    conn, package, suite, requestor=requestor, bucket="webhook")
+            except PolicyUnavailable:
+                policy_unavailable.append(suite)
+            else:
+                rescheduled.append(suite)
 
-    return web.json_response({}, status=200)
+    return web.json_response({
+        'rescheduled': rescheduled,
+        'policy-unavailable': policy_unavailable,
+        }, status=200)
 
 
 def create_app(
