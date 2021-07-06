@@ -309,7 +309,7 @@ ON absorbed.tag = unabsorbed.tag
 )
 async def handle_lintian_fixes(request):
     import lintian_brush
-    from silver_platter.debian.lintian import DEFAULT_ADDON_FIXERS
+    from lintian_brush.__main__ import DEFAULT_ADDON_FIXERS
 
     return {
         "SUITE": SUITE,
