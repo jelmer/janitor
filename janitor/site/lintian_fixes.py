@@ -4,7 +4,7 @@ import aiozipkin
 import asyncpg
 from typing import List, Dict
 from .common import generate_pkg_context, iter_candidates
-from silver_platter.debian.lintian import (
+from lintian_brush import (
     available_lintian_fixers,
 )
 from lintian_brush.lintian_overrides import load_renamed_tags
