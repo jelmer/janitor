@@ -49,13 +49,11 @@ from silver_platter.debian import (
     pick_additional_colocated_branches,
     control_files_in_root,
 )
-from silver_platter.changer import (
+from silver_platter.debian.changer import (
+    DebianChanger,
     ChangerError,
     ChangerResult,
     ChangerReporter,
-    )
-from silver_platter.debian.changer import (
-    DebianChanger,
     changer_subcommand as _debian_changer_subcommand,
 )
 from silver_platter.debian.debianize import (
