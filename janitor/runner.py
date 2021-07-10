@@ -62,6 +62,7 @@ from silver_platter.utils import (
 from . import (
     state,
 )
+from .compat import shlex_join
 from .artifacts import (
     get_artifact_manager,
     LocalArtifactManager,
@@ -876,7 +877,7 @@ def splitout_env(command):
     while len(args) > 0 and '=' in args[0]:
         (key, value) = args.pop(0).split('=', 1)
         env[key] = value
-    return env, shlex.join(args)
+    return env, shlex_join(args)
 
 
 def cache_branch_name(distro_config, role):

@@ -79,6 +79,7 @@ from ognibuild.debian.build import (
     DetailedDebianBuildFailure,
     UnidentifiedDebianBuildError,
 )
+from .compat import shlex_join
 from .debian import tree_set_changelog_version
 from ognibuild import (
     DetailedFailure,
@@ -387,7 +388,7 @@ class DebianScriptChanger(object):
         committer,
         base_proposal=None,
     ):
-        script = shlex.join(self.args)
+        script = shlex_join(self.args)
         try:
             command_result = debian_script_runner(
                 local_tree, script=script, commit_pending=None,
@@ -609,7 +610,7 @@ class GenericTarget(Target):
         self.argv = argv
 
     def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
-        script = shlex.join(self.argv)
+        script = shlex_join(self.argv)
         try:
             command_result = generic_script_runner(
                 local_tree, script=script, commit_pending=None,
