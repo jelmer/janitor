@@ -35,6 +35,7 @@ import asyncpg
 from . import (
     state,
 )
+from .compat import shlex_join
 from .config import read_config
 
 FIRST_RUN_BONUS = 100.0
@@ -98,14 +99,6 @@ PUBLISH_MODE_VALUE = {
     "attempt-push": 450,
     "bts": 100,
 }
-
-
-# Backwards compatibility for python < 3.6
-try:
-    shlex_join = shlex.join
-except AttributeError:
-    def shlex_join(args):
-        return ' '.join(shlex.quote(arg) for arg in args)
 
 
 def full_command(update_changelog: str, command: str) -> str:
