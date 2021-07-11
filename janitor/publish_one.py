@@ -67,7 +67,14 @@ from breezy.propose import (
     HosterLoginRequired,
 )
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape, TemplateSyntaxError, Template
+from jinja2 import (
+    Environment,
+    FileSystemLoader,
+    select_autoescape,
+    TemplateSyntaxError,
+    Template,
+    TemplateNotFound,
+    )
 
 from .debian.debdiff import (
     debdiff_is_empty,
@@ -218,6 +225,8 @@ def publish(
         )
     except PermissionDenied as e:
         raise PublishFailure(description=str(e), code="permission-denied")
+    except TemplateNotFound as e:
+        raise PublishFailure(description=str(e), code="template-not-found")
     except TemplateSyntaxError as e:
         raise PublishFailure(description=str(e), code="template-syntax-error")
     except MergeProposalExists as e:
