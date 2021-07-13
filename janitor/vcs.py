@@ -154,7 +154,7 @@ def open_branch_ext(
 ) -> Branch:
     try:
         return open_branch(vcs_url, possible_transports, probers=probers)
-    except (BranchUnavailable, BranchMissing, BranchUnsupported) as e:
+    except (BranchUnavailable, BranchMissing, BranchUnsupported, BranchRateLimited) as e:
         raise _convert_branch_exception(vcs_url, e)
 
 
@@ -163,7 +163,7 @@ def open_branch_containing_ext(
 ) -> Tuple[Branch, str]:
     try:
         return open_branch_containing(vcs_url, possible_transports, probers=probers)
-    except (BranchUnavailable, BranchMissing, BranchUnsupported) as e:
+    except (BranchUnavailable, BranchMissing, BranchUnsupported, BranchRateLimited) as e:
         raise _convert_branch_exception(vcs_url, e)
 
 
