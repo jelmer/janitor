@@ -1631,19 +1631,19 @@ async def check_existing_mp(
         if not dry_run:
             async with conn.transaction():
                 await conn.execute("""
-                INSERT INTO merge_proposal (
-                    url, status, revision, package, merged_by, merged_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-                ON CONFLICT (url)
-                DO UPDATE SET
-                  status = EXCLUDED.status,
-                  revision = EXCLUDED.revision,
-                  package = EXCLUDED.package,
-                  merged_by = EXCLUDED.merged_by,
-                  merged_at = EXCLUDED.merged_at
-                """, mp.url, status,
-                (revision.decode("utf-8") if revision is not None else None),
-                package_name, merged_by, merged_at)
+                    INSERT INTO merge_proposal (
+                        url, status, revision, package, merged_by, merged_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (url)
+                    DO UPDATE SET
+                      status = EXCLUDED.status,
+                      revision = EXCLUDED.revision,
+                      package = EXCLUDED.package,
+                      merged_by = EXCLUDED.merged_by,
+                      merged_at = EXCLUDED.merged_at
+                    """, mp.url, status, (
+                        revision.decode("utf-8") if revision is not None else None),
+                    package_name, merged_by, merged_at)
                 if revision:
                     await conn.execute("""
                     UPDATE new_result_branch SET absorbed = $1 WHERE revision = $2
