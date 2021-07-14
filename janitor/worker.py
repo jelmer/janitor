@@ -43,6 +43,7 @@ from silver_platter.apply import (
 from silver_platter.debian.apply import (
     script_runner as debian_script_runner,
     DetailedFailure as DebianDetailedFailure,
+    MissingChangelog,
     )
 from silver_platter.debian import (
     MissingUpstreamTarball,
@@ -228,50 +229,6 @@ class DebianizeChanger(ActualDebianizeChanger):
                     )
 
 
-class DummyDebianChanger(DebianChanger):
-
-    name = "just-build"
-
-    @classmethod
-    def setup_parser(cls, parser):
-        parser.add_argument("--revision", type=str, help="Specific revision to build.")
-
-    @classmethod
-    def from_args(cls, args):
-        return cls(revision=args.revision)
-
-    def __init__(self, revision=None):
-        self.revision = revision
-
-    def suggest_branch_name(self):
-        return "unchanged"
-
-    def make_changes(
-        self,
-        local_tree,
-        subpath,
-        update_changelog,
-        reporter,
-        committer,
-        base_proposal=None,
-    ):
-        if self.revision:
-            local_tree.update(revision=self.revision.encode("utf-8"))
-        if control_files_in_root(local_tree, subpath):
-            raise ChangerError(
-                "control-files-in-root",
-                "control files live in root rather than debian/ " "(LarstIQ mode)",
-            )
-
-        return ChangerResult(
-            description="Nothing changed", mutator=None, branches=[], tags=[]
-        )
-
-    @classmethod
-    def describe_command(cls, command):
-        return "Build without changes"
-
-
 class WorkerResult(object):
     def __init__(
         self,
@@ -326,7 +283,6 @@ class WorkerFailure(Exception):
 
 
 CUSTOM_DEBIAN_SUBCOMMANDS = {
-    "just-build": DummyDebianChanger,
     "new-upstream": NewUpstreamChanger,
     "debianize": DebianizeChanger,
 }
@@ -399,6 +355,9 @@ class DebianScriptChanger(object):
                 'result-file-format', 'Result file was invalid: %s' % e)
         except ScriptMadeNoChanges:
             raise WorkerFailure('nothing-to-do', 'No changes made')
+        except MissingChangelog as e:
+            raise WorkerFailure(
+                'missing-changelog', 'No changelog present: %s' % e.args[0])
         except DebianDetailedFailure as e:
             raise WorkerFailure(e.result_code, e.description, e.details)
         except ScriptFailed as e:
@@ -818,14 +777,16 @@ def process_package(
         finally:
             metadata["revision"] = ws.local_tree.branch.last_revision().decode()
 
-        if command[0] != "just-build":
+        if (command[0:2] == ["bzr", "up"] or command == ["true"] or
+                command[0] == "just-build"):
+            should_build = True
+        else:
             if not changer_result.branches:
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
 
-        should_build = (
-            command[0] == "just-build" or
-            any([(role is None or role == 'main')
-                 for (role, name, br, r) in changer_result.branches]))
+            should_build = (
+                any([(role is None or role == 'main')
+                     for (role, name, br, r) in changer_result.branches]))
 
         if should_build:
             build_target_details = build_target.build(
