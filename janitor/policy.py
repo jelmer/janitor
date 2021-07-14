@@ -225,8 +225,10 @@ async def sync_policy(conn, policy, selected_package=None):
     else:
         release_stages_passed = None
     num_updated = 0
+    logging.info('Creating current policy')
     async for (package, suite, cur_pol) in iter_policy(conn, package=selected_package):
         current_policy[(package, suite)] = cur_pol
+    logging.info('Updating policy')
     for package in await iter_packages(conn, package=selected_package):
         updated = False
         for suite in suites:
