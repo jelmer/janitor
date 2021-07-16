@@ -497,7 +497,7 @@ async def do_schedule_control(
     requestor: Optional[str] = None,
     estimated_duration: Optional[timedelta] = None
 ) -> Tuple[float, Optional[timedelta]]:
-    command = ["bzr up"]
+    command = ["brz", "up"]
     if main_branch_revision is not None:
         command.append("--revision=%s" % main_branch_revision.decode("utf-8"))
     return await do_schedule(
