@@ -777,7 +777,7 @@ def process_package(
         finally:
             metadata["revision"] = ws.local_tree.branch.last_revision().decode()
 
-        if (command[0:2] == ["bzr", "up"] or command == ["true"] or
+        if (command[0:2] == ["brz", "up"] or command == ["true"] or
                 command[0] == "just-build"):
             should_build = True
         else:
