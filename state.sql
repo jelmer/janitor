@@ -463,9 +463,10 @@ CREATE VIEW lintian_results AS
 
 create view last_missing_apt_dependencies as select id, package, suite, relation.* from last_unabsorbed_runs, json_array_elements(failure_details->'relations') as relations, json_to_recordset(relations) as relation(name text, archqual text, version text[], arch text, restrictions text) where result_code = 'install-deps-unsatisfied-apt-dependencies';
 
-CREATE IF NOT EXISTS TABLE review (
+CREATE TABLE IF NOT EXISTS review (
  run_id text not null references run (id),
  comment text,
  reviewer text,
- review_status review_status not null default 'unreviewed',
+ review_status review_status not null default 'unreviewed'
 );
+CREATE INDEX ON review (run_id);
