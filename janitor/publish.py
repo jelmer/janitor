@@ -1424,6 +1424,7 @@ async def autopublish_request(request):
         await publish_pending_new(
             request.app['db'],
             request.app['config'],
+            request.app['template_env_path'],
             request.app['rate_limiter'],
             request.app['vcs_manager'],
             dry_run=request.app['dry_run'],
