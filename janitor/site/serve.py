@@ -42,6 +42,7 @@ from . import (
     html_template,
     is_admin,
     render_template_for_request,
+    check_qa_reviewer,
 )
 
 
@@ -637,8 +638,9 @@ async def handle_rejected(request):
 
 
 async def handle_review_post(request):
-    from .review import generate_review
+    from .review import generate_review, store_review
     publishable_only = request.query.get("publishable_only", "true") == "true"
+    check_qa_reviewer(request)
 
     post = await request.post()
     async with request.app.database.acquire() as conn:
@@ -658,12 +660,8 @@ async def handle_review_post(request):
                 requestor="reviewer",
                 bucket="default",
             )
-        await conn.execute(
-            "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
-            review_status,
-            post.get("review_comment"),
-            post["run_id"],
-        )
+        review_comment = post.get("review_comment")
+        await store_review(conn, post["run_id"], review_comment, review_status, request.user)
         text = await generate_review(
             conn,
             request,

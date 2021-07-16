@@ -1,0 +1,44 @@
+name: Python package
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: '0 6 * * *'  # Daily 6AM UTC build
+
+jobs:
+  build:
+
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: [3.7, 3.8, 3.9]
+      fail-fast: false
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        sudo apt install devscripts cython3 bzr
+        python -m pip install --upgrade pip
+        pip install -U pip setuptools flake8 mypy debmutate pyyaml testtools
+        mkdir $HOME/.config/breezy/plugins -p
+        bzr branch lp:brz-debian ~/.config/breezy/plugins/debian
+        python setup.py develop
+    - name: Style checks
+      run: |
+        python -m flake8
+    - name: Typing checks
+      run: |
+        python -m pip install mypy
+        python -m mypy janitor
+    - name: Test suite run
+      run: |
+        make check
+      env:
+        PYTHONHASHSEED: random

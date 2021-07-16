@@ -569,6 +569,7 @@ async def consider_publishing(session, publisher_url, run_id):
 @routes.post("/run/{run_id}", name="run-update")
 @routes.post("/pkg/{package}/run/{run_id}", name="package-run-update")
 async def handle_run_post(request):
+    from .review import store_review
     run_id = request.match_info["run_id"]
     check_qa_reviewer(request)
     span = aiozipkin.request_span(request)
@@ -594,12 +595,7 @@ async def handle_run_post(request):
                     )
                 review_status = "rejected"
             with span.new_child('sql:update-run'):
-                await conn.execute(
-                    "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
-                    review_status,
-                    review_comment,
-                    run_id,
-                )
+                await store_review(conn, run_id, review_status, review_comment, request.user)
             if review_status == 'approved':
                 await consider_publishing(
                     request.app['http_client_session'], request.app.publisher_url,
