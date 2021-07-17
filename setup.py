@@ -54,6 +54,8 @@ setup(
     },
     install_requires=[
         "aiozipkin",
+        "klaus",
+        "loggerhead",
         "lintian-brush",
         "breezy",
         "jinja2",
