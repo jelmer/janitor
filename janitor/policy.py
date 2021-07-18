@@ -100,7 +100,7 @@ def apply_policy(
     uploaders: List[str],
     in_base: bool,
     release_stages_passed: Set[str]
-) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, str, Optional[str]]:
+) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, Optional[str], Optional[str]]:
     publish_mode = {}
     update_changelog = policy_pb2.auto
     command = None

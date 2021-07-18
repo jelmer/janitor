@@ -102,7 +102,7 @@ except ImportError:  # python < 3.8
     from asyncio import events
     import contextvars
 
-    async def to_thread(func, *args, **kwargs):
+    async def to_thread(func, *args, **kwargs):  # type: ignore
         loop = events.get_running_loop()
         ctx = contextvars.copy_context()
         func_call = functools.partial(ctx.run, func, *args, **kwargs)

@@ -366,6 +366,9 @@ class Target(object):
 
     name: str
 
+    def parse_args(self, argv):
+        raise NotImplementedError(self.parse_args)
+
     def build(self, ws, subpath, output_directory, env):
         raise NotImplementedError(self.build)
 
@@ -374,6 +377,9 @@ class Target(object):
 
     def directory_name(self) -> str:
         raise NotImplementedError(self.directory_name)
+
+    def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
+        raise NotImplementedError(self.make_changes)
 
 
 class DebianScriptChanger(object):
@@ -709,6 +715,7 @@ def process_package(
 
     metadata["command"] = command
 
+    build_target: Target
     if target == "debian":
         build_target = DebianTarget(env)
     elif target == "generic":
@@ -901,7 +908,7 @@ def bundle_results(metadata: Any, directory: str):
         with MultipartWriter("form-data") as mpwriter:
             mpwriter.append_json(
                 metadata,
-                headers=[
+                headers=[  # type: ignore
                     (
                         "Content-Disposition",
                         'attachment; filename="result.json"; '
@@ -915,7 +922,7 @@ def bundle_results(metadata: Any, directory: str):
                     es.enter_context(f)
                     mpwriter.append(
                         BytesIO(f.read()),
-                        headers=[
+                        headers=[  # type: ignore
                             (
                                 "Content-Disposition",
                                 'attachment; filename="%s"; '
