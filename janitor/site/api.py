@@ -93,7 +93,7 @@ class PolicySchema(Schema):
 async def handle_policy(request):
     package = request.match_info["package"]
     suite_policies = {}
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         rows = await conn.fetch(
             "SELECT suite, publish, update_changelog, command "
             "FROM policy WHERE package = $1", package)
@@ -111,7 +111,7 @@ async def handle_policy(request):
 @docs()
 @routes.post("/{suite}/pkg/{package}/publish", name="package-publish")
 async def handle_publish(request):
-    publisher_url = request.app.publisher_url
+    publisher_url = request.app['publisher_url']
     package = request.match_info["package"]
     suite = request.match_info["suite"]
     post = await request.post()
@@ -119,11 +119,11 @@ async def handle_publish(request):
     if mode not in (None, "push-derived", "push", "propose", "attempt-push"):
         return web.json_response({"error": "Invalid mode", "mode": mode}, status=400)
     url = urllib.parse.urljoin(publisher_url, "%s/%s/publish" % (suite, package))
-    if request.user:
+    if request['user']:
         try:
-            requestor = request.user["email"]
+            requestor = request['user']["email"]
         except KeyError:
-            requestor = request.user["name"]
+            requestor = request['user']["name"]
     else:
         requestor = "user from web UI"
     data = {"requestor": requestor}
@@ -153,7 +153,7 @@ async def handle_webhook(request):
             text=text,
             headers={"Cache-Control": "max-age=600"},
         )
-    return await process_webhook(request, request.app.db)
+    return await process_webhook(request, request.app['db'])
 
 
 class ScheduleResultSchema(Schema):
@@ -178,16 +178,16 @@ async def handle_schedule(request):
         refresh = bool(int(post.get("refresh", "0")))
     except ValueError:
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         package = await conn.fetchrow(
             'SELECT name, branch_url FROM package WHERE name = $1', package)
         if package is None:
             return web.json_response({"reason": "Package not found"}, status=404)
-        if request.user:
+        if request['user']:
             try:
-                requestor = request.user["email"]
+                requestor = request['user']["email"]
             except KeyError:
-                requestor = request.user["name"]
+                requestor = request['user']["name"]
         else:
             requestor = "user from web UI"
         if package['branch_url'] is None:
@@ -230,15 +230,15 @@ async def handle_schedule_control(request):
         refresh = bool(int(post.get("refresh", "0")))
     except ValueError:
         return web.json_response({"error": "invalid boolean for refresh"}, status=400)
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
             "SELECT main_branch_revision, package, branch_url FROM run "
             "LEFT JOIN package ON package.name = run.package WHERE id = $1",
             run_id)
         if run is None:
             return web.json_response({"reason": "Run not found"}, status=404)
-        if request.user:
-            requestor = request.user["email"]
+        if request['user']:
+            requestor = request['user']["email"]
         else:
             requestor = "user from web UI"
         if run['branch_url'] is None:
@@ -277,7 +277,7 @@ class PackageListEntrySchema(Schema):
 async def handle_package_list(request):
     name = request.match_info.get("package")
     response_obj = []
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         query = 'SELECT name, maintainer_email, branch_url FROM package WHERE NOT removed'
         args = []
         if name:
@@ -298,7 +298,7 @@ async def handle_package_list(request):
 @routes.get("/pkgnames", name="package-names")
 async def handle_packagename_list(request):
     response_obj = []
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         for row in await conn.fetch('SELECT name FROM package WHERE NOT removed'):
             response_obj.append(row['name'])
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
@@ -341,7 +341,7 @@ class MergeProposalSchema(Schema):
 @routes.get("/merge-proposals", name="merge-proposals")
 async def handle_merge_proposal_list(request):
     response_obj = []
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         for row in await get_proposals(conn, request.match_info.get("package"), request.match_info.get("suite")):
             response_obj.append({"package": row['package'], "url": row['url'], "status": row['status']})
     return web.json_response(response_obj)
@@ -357,7 +357,7 @@ async def handle_refresh_proposal_status(request):
         raise web.HTTPBadRequest(text="No URL specified")
 
     data = {"url": mp_url}
-    url = urllib.parse.urljoin(request.app.publisher_url, "refresh-status")
+    url = urllib.parse.urljoin(request.app['publisher_url'], "refresh-status")
     async with request.app['http_client_session'].post(url, data=data) as resp:
         if resp.status in (200, 202):
             return web.Response(text="Success", status=resp.status)
@@ -380,7 +380,7 @@ async def handle_queue(request):
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         async for entry in await conn.fetch("""
 SELECT
    queue.id AS queue_id,
@@ -420,7 +420,7 @@ async def handle_diff(request):
     except KeyError:
         package = request.match_info["package"]
         suite = request.match_info["suite"]
-        async with request.app.db.acquire() as conn:
+        async with request.app['db'].acquire() as conn:
             run_id = await conn.fetchval(
                 'SELECT id FROM last_unabsorbed_runs WHERE package = $1 AND suite = $2',
                 package, suite)
@@ -433,7 +433,7 @@ async def handle_diff(request):
         max_diff_size = int(request.query["max_diff_size"])
     except KeyError:
         max_diff_size = None
-    vcs_store_url = request.app.vcs_store_url
+    vcs_store_url = request.app['vcs_store_url']
     url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run_id, role))
     try:
         async with request.app['http_client_session'].get(url) as resp:
@@ -487,7 +487,7 @@ async def handle_diff(request):
 async def handle_archive_diff(request):
     run_id = request.match_info["run_id"]
     kind = request.match_info["kind"]
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
             'select id, package, suite, main_branch_revision, result_code from run where id = $1',
             run_id)
@@ -516,7 +516,7 @@ async def handle_archive_diff(request):
     try:
         debdiff, content_type = await get_archive_diff(
             request.app['http_client_session'],
-            request.app.differ_url,
+            request.app['differ_url'],
             run_id,
             unchanged_run_id,
             kind=kind,
@@ -575,7 +575,7 @@ async def handle_run_post(request):
     review_status = post.get("review-status")
     review_comment = post.get("review-comment")
     if review_status:
-        async with request.app.db.acquire() as conn:
+        async with request.app['db'].acquire() as conn:
             review_status = review_status.lower()
             if review_status == "reschedule":
                 with span.new_child('sql:run'):
@@ -593,10 +593,10 @@ async def handle_run_post(request):
                     )
                 review_status = "rejected"
             with span.new_child('sql:update-run'):
-                await store_review(conn, run_id, review_status, review_comment, request.user)
+                await store_review(conn, run_id, review_status, review_comment, request['user'])
             if review_status == 'approved':
                 await consider_publishing(
-                    request.app['http_client_session'], request.app.publisher_url,
+                    request.app['http_client_session'], request.app['publisher_url'],
                     run_id)
     return web.json_response(
         {"review-status": review_status, "review-comment": review_comment}
@@ -634,7 +634,7 @@ async def handle_run(request):
         limit = int(limit)
     response_obj = []
     async for run in state.iter_runs(
-        request.app.db, package, run_id=run_id, limit=limit
+        request.app['db'], package, run_id=run_id, limit=limit
     ):
         if run.build_version:
             build_info = {
@@ -662,7 +662,7 @@ async def handle_run(request):
 @routes.post("/publish/scan", name="publish-scan")
 async def handle_publish_scan(request):
     check_admin(request)
-    publisher_url = request.app.publisher_url
+    publisher_url = request.app['publisher_url']
     url = urllib.parse.urljoin(publisher_url, "/scan")
     try:
         async with request.app['http_client_session'].post(url) as resp:
@@ -675,7 +675,7 @@ async def handle_publish_scan(request):
 @routes.post("/publish/autopublish", name="publish-autopublish")
 async def handle_publish_autopublish(request):
     check_admin(request)
-    publisher_url = request.app.publisher_url
+    publisher_url = request.app['publisher_url']
     url = urllib.parse.urljoin(publisher_url, "/autopublish")
     try:
         async with request.app['http_client_session'].post(url) as resp:
@@ -688,7 +688,7 @@ async def handle_publish_autopublish(request):
 @routes.get("/package-branch", name="package-branch")
 async def handle_package_branch(request):
     response_obj = []
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         for row in await conn.fetch("""
 SELECT
   name,
@@ -717,7 +717,7 @@ LEFT JOIN branch ON package.branch_url = branch.url
 async def handle_published_packages(request):
     from .apt_repo import get_published_packages
     suite = request.match_info["suite"]
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         response_obj = []
         for (
             package,
@@ -739,7 +739,7 @@ async def handle_published_packages(request):
 async def handle_global_policy(request):
     return web.Response(
         content_type="text/protobuf",
-        text=str(request.app.policy_config),
+        text=str(request.app['policy_config']),
         headers={"Cache-Control": "max-age=60"},
     )
 
@@ -747,7 +747,7 @@ async def handle_global_policy(request):
 @docs()
 @routes.get("/runner/status", name="runner-status")
 async def handle_runner_status(request):
-    url = URL(request.app.runner_url) / "status"
+    url = URL(request.app['runner_url']) / "status"
     try:
         async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
             return web.json_response(await resp.json(), status=resp.status)
@@ -761,7 +761,7 @@ async def handle_runner_status(request):
 @routes.get("/active-runs/{run_id}/log/", name="run-log-list")
 async def handle_runner_log_index(request):
     run_id = request.match_info["run_id"]
-    url = URL(request.app.runner_url) / "log" / run_id
+    url = URL(request.app['runner_url']) / "log" / run_id
     try:
         async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
             ret = await resp.json()
@@ -795,7 +795,7 @@ async def handle_runner_log_index(request):
 async def handle_runner_kill(request):
     check_admin(request)
     run_id = request.match_info["run_id"]
-    url = urllib.parse.urljoin(request.app.runner_url, "kill/%s" % run_id)
+    url = urllib.parse.urljoin(request.app['runner_url'], "kill/%s" % run_id)
     try:
         async with request.app['http_client_session'].post(url, ClientTimeout(10)) as resp:
             return web.json_response(await resp.json(), status=resp.status)
@@ -812,7 +812,7 @@ async def handle_runner_kill(request):
 async def handle_runner_log(request):
     run_id = request.match_info["run_id"]
     filename = request.match_info["filename"]
-    url = urllib.parse.urljoin(request.app.runner_url, "log/%s/%s" % (run_id, filename))
+    url = urllib.parse.urljoin(request.app['runner_url'], "log/%s/%s" % (run_id, filename))
     try:
         async with request.app['http_client_session'].get(url, timeout=ClientTimeout(20)) as resp:
             body = await resp.read()
@@ -831,7 +831,7 @@ async def handle_runner_log(request):
 @routes.get("/publish/{publish_id}", name="publish-details")
 async def handle_publish_id(request):
     publish_id = request.match_info["publish_id"]
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         row = await conn.fetchrow("""
 SELECT
   package,
@@ -866,7 +866,7 @@ async def handle_report(request):
     suite = request.match_info["suite"]
     report = {}
     merge_proposal = {}
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         for package, url in await conn.fetch("""
 SELECT
     DISTINCT ON (merge_proposal.url)
@@ -931,7 +931,7 @@ async def handle_publish_ready(request):
     else:
         limit = None
     ret = []
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         with span.new_child('sql:publish-ready'):
             async for (
                 run,
@@ -957,11 +957,11 @@ async def handle_publish_ready(request):
 @docs()
 @routes.get("/ws/active-runs/{run_id}/progress", name="run-progress")
 async def handle_run_progress(request):
-    worker_name = await check_worker_creds(request.app.db, request)
+    worker_name = await check_worker_creds(request.app['db'], request)
 
     run_id = request.match_info["run_id"]
 
-    run_url = urllib.parse.urljoin(request.app.runner_url, "active-runs/%s" % run_id)
+    run_url = urllib.parse.urljoin(request.app['runner_url'], "active-runs/%s" % run_id)
 
     params = {'worker_name': worker_name}
     queue_id = request.query.get('queue_id')
@@ -1007,8 +1007,8 @@ async def handle_run_progress(request):
 @docs()
 @routes.post("/active-runs", name="run-assign")
 async def handle_run_assign(request):
-    worker_name = await check_worker_creds(request.app.db, request)
-    url = URL(request.app.runner_url) / "assign"
+    worker_name = await check_worker_creds(request.app['db'], request)
+    url = URL(request.app['runner_url']) / "assign"
     try:
         async with request.app['http_client_session'].post(
             url, json={"worker": worker_name}, timeout=ClientTimeout(20)
@@ -1033,7 +1033,7 @@ async def handle_run_assign(request):
 @docs()
 @routes.post("/active-runs/{run_id}/finish", name="run-finish")
 async def handle_run_finish(request: web.Request) -> web.Response:
-    worker_name = await check_worker_creds(request.app.db, request)
+    worker_name = await check_worker_creds(request.app['db'], request)
     run_id = request.match_info["run_id"]
     reader = await request.multipart()
     result = None
@@ -1072,7 +1072,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
         ],
     )
 
-    runner_url = urllib.parse.urljoin(request.app.runner_url, "active-runs/%s/finish" % run_id)
+    runner_url = urllib.parse.urljoin(request.app['runner_url'], "active-runs/%s/finish" % run_id)
     try:
         async with request.app['http_client_session'].post(
             runner_url, data=runner_writer
@@ -1170,13 +1170,13 @@ FROM run
 WHERE
   id = ANY($1::text[])
 """
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         rows = await conn.fetch(query, *args)
 
     async def do_reprocess():
         todo = [
             reprocess_run_logs(
-                request.app.db,
+                request.app['db'],
                 request.app['logfile_manager'],
                 row['package'], row['suite'], row['id'],
                 row['command'], row['duration'], row['result_code'],
@@ -1210,7 +1210,7 @@ async def handle_mass_reschedule(request):
     rejected = 'rejected' in post
     offset = int(post.get('offset', '0'))
     refresh = 'refresh' in post
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         query = """
 SELECT
   package,
@@ -1242,7 +1242,7 @@ WHERE
         runs = await conn.fetch(query, *params)
 
     async def do_reschedule():
-        async with request.app.db.acquire() as conn:
+        async with request.app['db'].acquire() as conn:
             for run in runs:
                 logging.info("Rescheduling %s, %s" % (run['package'], run['suite']))
                 try:
@@ -1271,7 +1271,7 @@ WHERE
 @docs()
 @routes.get("/active-runs", name="active-runs-list")
 async def handle_list_active_runs(request):
-    url = urllib.parse.urljoin(request.app.runner_url, "status")
+    url = urllib.parse.urljoin(request.app['runner_url'], "status")
     async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
         if resp.status != 200:
             return web.json_response(await resp.json(), status=resp.status)
@@ -1283,7 +1283,7 @@ async def handle_list_active_runs(request):
 @routes.get("/active-runs/{run_id}", name="active-run-get")
 async def handle_get_active_run(request):
     run_id = request.match_info["run_id"]
-    url = urllib.parse.urljoin(request.app.runner_url, "status")
+    url = urllib.parse.urljoin(request.app['runner_url'], "status")
     async with request.app['http_client_session'].get(url, timeout=ClientTimeout(10)) as resp:
         if resp.status != 200:
             return web.json_response(await resp.json(), status=resp.status)
@@ -1311,7 +1311,7 @@ async def handle_vcswatch(request):
     rescheduled = []
     policy_unavailable = []
     requestor = "vcwatch notification"
-    async with request.app.db.acquire() as conn:
+    async with request.app['db'].acquire() as conn:
         for suite in await state.iter_publishable_suites(conn, package):
             try:
                 await do_schedule(
@@ -1331,7 +1331,6 @@ def create_app(
     db,
     publisher_url: str,
     runner_url: str,
-    archiver_url: str,
     vcs_store_url: str,
     differ_url: str,
     config: Config,
@@ -1343,17 +1342,16 @@ def create_app(
     app = web.Application(middlewares=[trailing_slash_redirect])
     app.router.add_routes(routes)
     app['http_client_session'] = ClientSession(trace_configs=trace_configs)
-    app.config = config
+    app['config'] = config
     app['logfile_manager'] = get_log_manager(config.logs_location)
-    app.jinja_env = env
-    app.db = db
-    app.external_url = external_url
-    app.policy_config = policy_config
-    app.publisher_url = publisher_url
-    app.vcs_store_url = vcs_store_url
-    app.runner_url = runner_url
-    app.differ_url = differ_url
-    app.archiver_url = archiver_url
+    app['jinja_env'] = env
+    app['db'] = db
+    app['external_url'] = external_url
+    app['policy_config'] = policy_config
+    app['publisher_url'] = publisher_url
+    app['vcs_store_url'] = vcs_store_url
+    app['runner_url'] = runner_url
+    app['differ_url'] = differ_url
     app.router.add_get('/', lambda req: web.HTTPFound(location='docs'))
 
     setup_aiohttp_apispec(

@@ -21,7 +21,7 @@ import shlex
 
 # Backwards compatibility for python < 3.8
 try:
-    shlex_join = shlex.join
+    shlex_join = shlex.join  # type: ignore
 except AttributeError:
     def shlex_join(args):
         return ' '.join(shlex.quote(arg) for arg in args)

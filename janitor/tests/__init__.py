@@ -27,7 +27,6 @@ def test_suite():
     names = [
         "artifacts",
         "debdiff",
-        "runner",
         "site",
         "vcs",
         "worker",

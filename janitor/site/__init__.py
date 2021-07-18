@@ -52,14 +52,14 @@ def json_chart_data(max_age=None):
 def update_vars_from_request(vs, request):
     vs["is_admin"] = is_admin(request)
     vs["is_qa_reviewer"] = is_qa_reviewer(request)
-    vs["user"] = request.user
+    vs["user"] = request['user']
     vs["rel_url"] = request.rel_url
-    vs["suites"] = request.app.config.suite
-    vs["site_name"] = request.app.config.instance_name or "Debian Janitor"
+    vs["suites"] = request.app['config'].suite
+    vs["site_name"] = request.app['config'].instance_name or "Debian Janitor"
     vs["openid_configured"] = bool(getattr(request.app, "openid_config", None))
-    if request.app.external_url is not None:
-        vs["url"] = request.app.external_url.join(request.rel_url)
-        vs["vcs_manager"] = RemoteVcsManager(str(request.app.external_url))
+    if request.app['external_url'] is not None:
+        vs["url"] = request.app['external_url'].join(request.rel_url)
+        vs["vcs_manager"] = RemoteVcsManager(str(request.app['external_url']))
     else:
         vs["url"] = request.url
         vs["vcs_manager"] = RemoteVcsManager(str(request.url.with_path("/")))
@@ -74,7 +74,7 @@ async def render_template_for_request(templatename, request, vs):
 def html_template(template_name, headers={}):
     def decorator(fn):
         async def handle(request):
-            template = request.app.jinja_env.get_template(template_name)
+            template = request.app['jinja_env'].get_template(template_name)
             vs = await fn(request)
             if isinstance(vs, web.Response):
                 return vs
@@ -200,12 +200,12 @@ async def get_archive_diff(
 
 
 def is_admin(request: web.Request) -> bool:
-    if not request.user:
+    if not request['user']:
         return False
-    admin_group = request.app.config.oauth2_provider.admin_group
+    admin_group = request.app['config'].oauth2_provider.admin_group
     if admin_group is None:
         return True
-    return admin_group in request.user["groups"]
+    return admin_group in request['user']["groups"]
 
 
 def check_qa_reviewer(request: web.Request) -> None:
@@ -214,12 +214,12 @@ def check_qa_reviewer(request: web.Request) -> None:
 
 
 def is_qa_reviewer(request: web.Request) -> bool:
-    if not request.user:
+    if not request['user']:
         return False
-    qa_reviewer_group = request.app.config.oauth2_provider.qa_reviewer_group
+    qa_reviewer_group = request.app['config'].oauth2_provider.qa_reviewer_group
     if qa_reviewer_group is None:
         return True
-    return qa_reviewer_group in request.user["groups"]
+    return qa_reviewer_group in request['user']["groups"]
 
 
 def check_admin(request: web.Request) -> None:
