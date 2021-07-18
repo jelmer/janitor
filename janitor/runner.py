@@ -97,7 +97,7 @@ from .vcs import (
 )
 
 try:
-    from asyncio import to_thread
+    from asyncio import to_thread  # type: ignore
 except ImportError:  # python < 3.8
     from asyncio import events
     import contextvars
