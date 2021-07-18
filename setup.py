@@ -61,7 +61,7 @@ setup(
         "breezy",
         "jinja2",
         "ognibuild",
-        "prometheus_client",
+        "prometheus-client",
         "buildlog-consultant",
         "upstream-ontologist",
         "silver-platter",
