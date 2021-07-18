@@ -338,7 +338,7 @@ class DebianBuilder(Builder):
         return env
 
 
-BUILDER_CLASSES = [DebianBuilder, GenericBuilder]
+BUILDER_CLASSES: List[Type[Builder]] = [DebianBuilder, GenericBuilder]
 RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 

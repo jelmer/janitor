@@ -921,7 +921,6 @@ async def publish_from_policy(
         # main branch URL
         pass
 
-    publish_delay: Optional[timedelta]
     if code == "success":
         publish_delay = datetime.utcnow() - run.finish_time
         publish_latency.observe(publish_delay.total_seconds())

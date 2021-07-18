@@ -79,7 +79,7 @@ async def openid_middleware(request, handler):
                 userinfo = None
     else:
         userinfo = None
-    request.user = userinfo
+    request['user'] = userinfo
     resp = await handler(request)
     return resp
 
@@ -135,7 +135,7 @@ async def handle_apt_repo(request):
         vs = {
             "packages": await get_published_packages(conn, suite),
             "suite": suite,
-            "suite_config": get_suite_config(request.app.config, suite),
+            "suite_config": get_suite_config(request.app['config'], suite),
         }
         text = await render_template_for_request(suite + ".html", request, vs)
         return web.Response(
@@ -332,8 +332,8 @@ async def handle_login(request):
         raise web.HTTPNotFound(text='login is disabled on this instance')
     location = URL(request.app['openid_config']["authorization_endpoint"]).with_query(
         {
-            "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
-            "redirect_uri": str(request.app.external_url.join(callback_path)),
+            "client_id": request.app['config'].oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
+            "redirect_uri": str(request.app['external_url'].join(callback_path)),
             "response_type": "code",
             "scope": "openid",
             "state": state,
@@ -390,8 +390,8 @@ async def handle_maintainer_list(request):
 
 @html_template("maintainer-index.html", headers={"Cache-Control": "max-age=600"})
 async def handle_maintainer_index(request):
-    if request.user:
-        email = request.user.get("email")
+    if request['user']:
+        email = request['user'].get("email")
     else:
         email = request.query.get("email")
     if email and "/" in email:
@@ -435,7 +435,7 @@ ORDER BY merge_proposal.url, run.finish_time DESC
     with span.new_child('sql:runs'):
         runs = state.iter_runs(request.app.database, package=package['name'])
     return await generate_pkg_file(
-        request.app.database, request.app.config, package, merge_proposals, runs,
+        request.app.database, request.app['config'], package, merge_proposals, runs,
         available_suites, span
     )
 
@@ -547,7 +547,7 @@ async def handle_run(request):
     return await generate_run_file(
         request.app.database,
         request.app.http_client_session,
-        request.app.config,
+        request.app['config'],
         request.app.differ_url,
         request.app.logfile_manager,
         run,
@@ -616,7 +616,7 @@ async def handle_generic_pkg(request):
     run_id = request.match_info.get("run_id")
     return await generate_pkg_context(
         request.app.database,
-        request.app.config,
+        request.app['config'],
         request.match_info["suite"],
         request.app.policy,
         request.app.http_client_session,
@@ -661,7 +661,7 @@ async def handle_review_post(request):
                 bucket="default",
             )
         review_comment = post.get("review_comment")
-        await store_review(conn, post["run_id"], review_comment, review_status, request.user)
+        await store_review(conn, post["run_id"], review_comment, review_status, request['user'])
         text = await generate_review(
             conn,
             request,
@@ -715,13 +715,13 @@ async def handle_oauth_callback(request):
     if not request.app['openid_config']:
         raise web.HTTPNotFound(text='login disabled')
     token_url = URL(request.app['openid_config']["token_endpoint"])
-    redirect_uri = (request.app.external_url or request.url).join(
+    redirect_uri = (request.app['external_url'] or request.url).join(
         request.app.router["oauth2-callback"].url_for()
     )
     params = {
         "code": code,
-        "client_id": request.app.config.oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
-        "client_secret": request.app.config.oauth2_provider.client_secret or os.environ['OAUTH2_CLIENT_SECRET'],
+        "client_id": request.app['config'].oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
+        "client_secret": request.app['config'].oauth2_provider.client_secret or os.environ['OAUTH2_CLIENT_SECRET'],
         "grant_type": "authorization_code",
         "redirect_uri": str(redirect_uri),
     }
@@ -833,7 +833,7 @@ async def create_app(
         app.on_cleanup.append(cleanup_gpg)
 
     async def discover_openid_config(app):
-        url = URL(app.config.oauth2_provider.base_url).join(
+        url = URL(app['config'].oauth2_provider.base_url).join(
             URL("/.well-known/openid-configuration")
         )
         async with app.http_client_session.get(url) as resp:
@@ -1083,18 +1083,18 @@ async def create_app(
     app.on_startup.append(start_pubsub_forwarder)
     app.on_startup.append(start_gpg_context)
     if external_url:
-        app.external_url = URL(external_url)
+        app['external_url'] = URL(external_url)
     else:
-        app.external_url = None
+        app['external_url'] = None
     database = state.Database(config.database_location)
     app.database = database
     from .stats import stats_app
 
-    app.add_subapp("/cupboard/stats", stats_app(database, config, app.external_url))
-    app.config = config
+    app.add_subapp("/cupboard/stats", stats_app(database, config, app['external_url']))
+    app['config'] = config
     from janitor.site import env
 
-    app.jinja_env = env
+    app['jinja_env'] = env
     from janitor.artifacts import get_artifact_manager
 
     async def startup_artifact_manager(app):
@@ -1122,7 +1122,7 @@ async def create_app(
             config,
             policy_config,
             external_url=(
-                app.external_url.join(URL("api")) if app.external_url else None
+                app['external_url'].join(URL("api")) if app['external_url'] else None
             ),
             trace_configs=trace_configs,
         ),
@@ -1223,7 +1223,6 @@ if __name__ == "__main__":
         debugtoolbar=args.debugtoolbar,
         runner_url=args.runner_url,
         publisher_url=args.publisher_url,
-        archiver_url=args.archiver_url,
         vcs_store_url=args.vcs_store_url,
         differ_url=args.differ_url,
         listen_address=args.host,

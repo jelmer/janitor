@@ -605,7 +605,7 @@ async def create_web_app(
 ):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(
-        middlewares=[trailing_slash_redirect], client_max_size=client_max_size
+        middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
     )
     app.vcs_manager = vcs_manager
     app.db = db

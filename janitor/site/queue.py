@@ -46,7 +46,7 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
 
 async def iter_queue_with_last_run(
     db: state.Database, limit: Optional[int] = None
-) -> AsyncIterator[Tuple[state.QueueItem, Optional[str], Optional[str]]]:
+):
     query = """
 SELECT
       queue.package AS package,

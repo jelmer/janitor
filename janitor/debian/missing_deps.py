@@ -62,7 +62,7 @@ def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[Ne
                     if not versions:
                         upstream = find_upstream(apt_req)
                         if upstream:
-                            option.append(NewPackage(upstream))
+                            option.append(NewPackage(upstream))  # type: ignore
                         else:
                             option = None
                             break
@@ -82,7 +82,7 @@ def resolve_requirement(apt_mgr, requirement: Requirement) -> List[List[Union[Ne
                                 records = apt_pkg.PackageRecords(apt_mgr.apt_cache._cache)
                                 records.lookup((file, index))
                                 if records.source_pkg:
-                                    option.append(UpdatePackage(records.source_pkg, r['version'][1]))
+                                    option.append(UpdatePackage(records.source_pkg, r['version'][1]))  # type: ignore
                                     break
                             else:
                                 logging.warning("unable to find source package matching %s", r['name'])
