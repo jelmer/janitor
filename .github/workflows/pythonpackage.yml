@@ -36,7 +36,7 @@ jobs:
         python -m flake8
     - name: Typing checks
       run: |
-        python -m pip install mypy types-PyYAML
+        python -m pip install mypy types-PyYAML types-protobuf
         python -m mypy janitor
     - name: Test suite run
       run: |
