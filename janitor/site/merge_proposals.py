@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-from typing import Optional
-
 import asyncpg
 
 

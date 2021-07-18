@@ -18,7 +18,6 @@
 import aiozipkin
 import asyncio
 from contextlib import ExitStack
-from datetime import datetime
 import hashlib
 import logging
 import gzip

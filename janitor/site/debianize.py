@@ -1,4 +1,5 @@
 import aiozipkin
+from typing import Dict, List
 from . import html_template
 from ..config import get_suite_config
 from lintian_brush.lintian_overrides import load_renamed_tags

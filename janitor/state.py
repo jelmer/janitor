@@ -18,12 +18,9 @@
 import datetime
 from debian.changelog import Version
 import json
-import logging
-import shlex
 import asyncpg
 from contextlib import asynccontextmanager
-from typing import Optional, Tuple, List, Any, Union, Callable, AsyncIterable, Set, Dict
-from breezy import urlutils
+from typing import Optional, Tuple, List, Any, Union, AsyncIterable, Dict
 
 
 class Database(object):

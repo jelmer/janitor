@@ -641,5 +641,4 @@ async def main(argv=None):
 
 
 if __name__ == "__main__":
-    import asyncio
     sys.exit(asyncio.run(main(sys.argv)))

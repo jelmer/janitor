@@ -9,7 +9,6 @@ from lintian_brush import (
 )
 from lintian_brush.lintian_overrides import load_renamed_tags
 
-from .. import state
 from . import html_template
 
 

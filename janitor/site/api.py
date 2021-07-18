@@ -37,11 +37,9 @@ from aiohttp.web_middlewares import normalize_path_middleware
 import asyncpg
 from aiohttp_apispec import (
     docs,
-    request_schema,
     response_schema,
     setup_aiohttp_apispec,
     )
-from aiohttp_apispec import validation_middleware as apispec_validation_middleware
 
 from marshmallow import Schema, fields
 from yarl import URL

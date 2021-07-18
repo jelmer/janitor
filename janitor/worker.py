@@ -32,7 +32,7 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Thread
 import traceback
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Type, Iterator, Tuple
 from urllib.parse import urljoin
 
 import aiohttp
@@ -45,7 +45,6 @@ from prometheus_client import REGISTRY, push_to_gateway
 
 import argparse
 import asyncio
-from typing import Dict, Type, Iterator, Tuple
 
 from breezy.transport import Transport
 
@@ -66,7 +65,6 @@ from silver_platter.debian.apply import (
 from silver_platter.debian import (
     MissingUpstreamTarball,
     pick_additional_colocated_branches,
-    control_files_in_root,
 )
 from silver_platter.debian.changer import (
     DebianChanger,
@@ -1006,9 +1004,9 @@ def _push_error_to_worker_failure(e):
             "result-push-failed", "Failed to push result branch: %s" % e
         )
     if (isinstance(e, InvalidHttpResponse) or
-           isinstance(e, IncompleteRead) or
-           isinstance(e, MirrorFailure) or
-           isinstance(e, ConnectionError)):
+            isinstance(e, IncompleteRead) or
+            isinstance(e, MirrorFailure) or
+            isinstance(e, ConnectionError)):
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e
         )

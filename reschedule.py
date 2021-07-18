@@ -18,7 +18,6 @@
 
 import argparse
 import asyncio
-from datetime import datetime, timedelta
 import logging
 import sys
 

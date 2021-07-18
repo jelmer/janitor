@@ -11,7 +11,7 @@ from janitor.config import read_config
 sys.path.insert(0, os.path.dirname(__file__))
 
 from janitor import state  # noqa: E402
-from janitor.debian.debdiff import markdownify_debdiff, debdiff_is_empty
+from janitor.debian.debdiff import markdownify_debdiff, debdiff_is_empty  # noqa: E402
 
 loop = asyncio.get_event_loop()
 

@@ -6,9 +6,7 @@ import asyncpg
 from datetime import datetime
 import urllib.parse
 
-from functools import partial
-from janitor import state
-from . import tracker_url, html_template, render_template_for_request
+from . import html_template, render_template_for_request
 from ..config import get_suite_config
 
 
@@ -94,7 +92,7 @@ async def handle_fresh_builds(request):
             else:
                 last_publish_time = {}
     except ClientConnectorError:
-            last_publish_time = {}
+        last_publish_time = {}
 
     async with request.app.database.acquire() as conn:
         for suite in SUITES:
@@ -112,6 +110,7 @@ async def handle_fresh_builds(request):
             "suites": SUITES,
             "last_publish_time": last_publish_time,
         }
+
 
 async def handle_fresh(request):
     return web.HTTPPermanentRedirect("/fresh-builds")

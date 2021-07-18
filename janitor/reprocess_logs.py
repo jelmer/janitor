@@ -22,9 +22,6 @@ import logging
 import silver_platter  # noqa: E402, F401
 from buildlog_consultant.common import find_build_failure_description  # noqa: E402
 from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E402
-from janitor import state  # noqa: E402
-from janitor.config import read_config  # noqa: E402
-from janitor.logs import get_log_manager  # noqa: E402
 from janitor.schedule import do_schedule  # noqa: E402
 
 
