@@ -10,7 +10,7 @@ export PYTHONPATH=$WD/ognibuild:$WD:$WD/breezy:$WD/silver-platter:$WD/lintian-br
 
 if [ -n "${JANITOR_CREDENTIALS}" ];
 then
-   python3 -m janitor.pull_worker --credentials="${JANITOR_CREDENTIALS}" "$@"
+   python3 -m janitor.worker --credentials="${JANITOR_CREDENTIALS}" "$@"
 else
-   python3 -m janitor.pull_worker "$@"
+   python3 -m janitor.worker "$@"
 fi

@@ -12,4 +12,4 @@ COPY sbuildrc /root/.sbuildrc
 RUN mkdir /chroots && /code/create-sbuild-chroot.py --config=/code/janitor.conf /chroots/unstable-amd64-sbuild --make-sbuild-tarball=/chroots/unstable-amd64-sbuild.tar.gz
 # Hack for statoverride issue
 EXPOSE 8080
-ENTRYPOINT ["python3", "-m", "janitor.pull_worker", "--port=8080", "--listen-address=0.0.0.0"]
+ENTRYPOINT ["python3", "-m", "janitor.worker", "--port=8080", "--listen-address=0.0.0.0"]
