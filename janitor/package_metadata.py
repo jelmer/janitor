@@ -20,7 +20,7 @@
 from __future__ import absolute_import
 
 import logging
-from typing import List, Tuple
+from typing import List, Tuple, Sequence
 
 from debian.changelog import Version
 from google.protobuf import text_format  # type: ignore
@@ -153,7 +153,7 @@ WHERE name = $1 AND distribution = $2 AND archive_version <= $3
             if removal.name in existing_packages])
 
 
-def iter_packages_from_script(stdin) -> Tuple[List[PackageMetadata], List[PackageRemoval]]:
+def iter_packages_from_script(stdin) -> Tuple[Sequence[PackageMetadata], Sequence[PackageRemoval]]:
     package_list = text_format.Parse(stdin.read(), PackageList())
     return package_list.package, package_list.removal
 
