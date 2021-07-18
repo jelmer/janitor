@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 try:
-    from functools import cache
+    from functools import cache  # type: ignore
 except ImportError:  # python < 3.9
     from functools import lru_cache
 

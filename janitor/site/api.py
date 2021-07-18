@@ -1062,7 +1062,7 @@ async def handle_run_finish(request: web.Request) -> web.Response:
 
     result["worker_name"] = worker_name
 
-    part = runner_writer.append_json(
+    part = runner_writer.append_json(  # type: ignore
         result,
         headers=[  # type: ignore
             ("Content-Disposition",
