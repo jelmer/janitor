@@ -577,7 +577,6 @@ def publish_one(
 if __name__ == "__main__":
     import argparse
     import json
-    import os
     import sys
 
     parser = argparse.ArgumentParser()

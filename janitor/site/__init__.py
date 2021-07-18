@@ -22,7 +22,6 @@ from typing import Optional
 import urllib.parse
 from yarl import URL
 
-from janitor import state
 from janitor.config import Config
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import RemoteVcsManager

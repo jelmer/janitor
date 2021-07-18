@@ -20,7 +20,7 @@
 from __future__ import absolute_import
 
 import logging
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 
 from debian.changelog import Version
 from google.protobuf import text_format  # type: ignore

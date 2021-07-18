@@ -21,7 +21,6 @@ from aiohttp import (
     ClientTimeout,
     ServerDisconnectedError,
 )
-import asyncio
 import gzip
 from io import BytesIO
 import os

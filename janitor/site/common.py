@@ -4,7 +4,7 @@ from aiohttp import ClientConnectorError
 from aiohttp import web
 import asyncpg
 from functools import partial
-from typing import Optional, List, Tuple, AsyncIterable
+from typing import Optional, List
 import urllib.parse
 
 from janitor import state
@@ -50,9 +50,9 @@ async def get_candidate(conn: asyncpg.Connection, package, suite):
 
 
 async def iter_candidates(
-    conn: asyncpg.Connection,
-    packages: Optional[List[str]] = None,
-    suite: Optional[str] = None):
+        conn: asyncpg.Connection,
+        packages: Optional[List[str]] = None,
+        suite: Optional[str] = None):
     query = """
 SELECT
   candidate.package AS package,

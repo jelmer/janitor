@@ -19,22 +19,17 @@ from __future__ import absolute_import
 
 __all__ = [
     "bulk_add_to_queue",
-    "schedule_from_candidates",
 ]
 
 from datetime import datetime, timedelta
 import logging
 import shlex
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple
 
 from debian.changelog import Version
-from debian.deb822 import PkgRelation
 
 import asyncpg
 
-from . import (
-    state,
-)
 from .compat import shlex_join
 from .config import read_config
 
