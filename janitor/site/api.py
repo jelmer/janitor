@@ -369,7 +369,7 @@ class QueueItemSchema(Schema):
     queue_id = fields.Int(description="Queue identifier")
     branch_url = fields.Str(description="Branch URL")
     package = fields.Str(description="Package name")
-    context = fields.Str(description="Run context")
+    context = fields.Str(description="Run context")  # type: ignore
     command = fields.Str(description="Command")
 
 
@@ -1035,14 +1035,14 @@ async def handle_run_assign(request):
 async def handle_run_finish(request: web.Request) -> web.Response:
     worker_name = await check_worker_creds(request.app['db'], request)
     run_id = request.match_info["run_id"]
-    reader = await request.multipart()
+    reader: aiohttp.MultipartReader = await request.multipart()
     result = None
     with aiohttp.MultipartWriter("mixed") as runner_writer:
         while True:
             part = await reader.next()
             if part is None:
                 break
-            if part.filename is None:
+            if part.filename is None:  # type: ignore
                 logging.warning(
                     "No filename for part with headers %r", part.headers)
                 return web.json_response(
@@ -1052,10 +1052,10 @@ async def handle_run_finish(request: web.Request) -> web.Response:
                     },
                     status=400,
                 )
-            if part.filename == "result.json":
-                result = await part.json()
+            if part.filename == "result.json":  # type: ignore
+                result = await part.json()  # type: ignore
             else:
-                runner_writer.append(await part.read(), headers=part.headers)
+                runner_writer.append(await part.read(), headers=part.headers)  # type: ignore
 
     if result is None:
         return web.json_response({"reason": "missing result.json"}, status=400)
@@ -1064,12 +1064,9 @@ async def handle_run_finish(request: web.Request) -> web.Response:
 
     part = runner_writer.append_json(
         result,
-        headers=[
-            (
-                "Content-Disposition",
-                'attachment; filename="result.json"; ' "filename*=utf-8''result.json",
-            )
-        ],
+        headers=[  # type: ignore
+            ("Content-Disposition",
+             'attachment; filename="result.json"; ' "filename*=utf-8''result.json")]
     )
 
     runner_url = urllib.parse.urljoin(request.app['runner_url'], "active-runs/%s/finish" % run_id)
@@ -1352,7 +1349,11 @@ def create_app(
     app['vcs_store_url'] = vcs_store_url
     app['runner_url'] = runner_url
     app['differ_url'] = differ_url
-    app.router.add_get('/', lambda req: web.HTTPFound(location='docs'))
+
+    async def redirect_docs(req):
+        raise web.HTTPFound(location='docs')
+
+    app.router.add_get('/', redirect_docs)
 
     setup_aiohttp_apispec(
         app=app,
