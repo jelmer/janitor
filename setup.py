@@ -52,6 +52,7 @@ setup(
     extras_require={
         'debian': ['python_debian', 'debmutate', 'silver-platter[debian]', 'ognibuild[debian]'],
     },
+    tests_require=['asynctest'],
     install_requires=[
         "aiozipkin",
         "asyncpg",
