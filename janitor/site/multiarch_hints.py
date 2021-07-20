@@ -171,7 +171,7 @@ async def handle_multiarch_fixes_pkg(request):
     run_id = request.match_info.get("run_id")
     return await generate_pkg_file(
         request.app.database,
-        request.app.config,
+        request.app['config'],
         request.app.policy,
         request.app.http_client_session,
         request.app.differ_url,

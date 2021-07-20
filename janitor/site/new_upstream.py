@@ -54,7 +54,7 @@ async def handle_new_upstream_pkg(request):
     run_id = request.match_info.get("run_id")
     return await generate_pkg_context(
         request.app.database,
-        request.app.config,
+        request.app['config'],
         suite,
         request.app.policy,
         request.app.http_client_session,
@@ -102,7 +102,7 @@ async def handle_fresh_builds(request):
                 suite_version.setdefault(suite, {})[name] = jv
         return {
             "base_distribution": get_suite_config(
-                request.app.config, SUITES[0]
+                request.app['config'], SUITES[0]
             ).debian_build.base_distribution,
             "archive_version": archive_version,
             "suite_version": suite_version,
@@ -124,7 +124,7 @@ async def handle_apt_repo(request):
         vs = {
             "packages": await get_published_packages(conn, suite),
             "suite": suite,
-            "suite_config": get_suite_config(request.app.config, suite),
+            "suite_config": get_suite_config(request.app['config'], suite),
         }
         text = await render_template_for_request(suite + ".html", request, vs)
         return web.Response(

@@ -284,6 +284,7 @@ class WorkerResult(object):
         tags: Optional[Dict[str, bytes]],
         target: str,
         target_details: Optional[Any],
+        context: Any,
     ) -> None:
         self.description = description
         self.value = value
@@ -291,10 +292,12 @@ class WorkerResult(object):
         self.tags = tags
         self.target = target
         self.target_details = target_details
+        self.context = context
 
     def json(self):
         return {
             "value": self.value,
+            "context": self.context,
             "description": self.description,
             "branches": [
                 (f, n, br.decode("utf-8") if br else None, r.decode("utf-8"))
@@ -884,6 +887,7 @@ def process_package(
             branches,
             changer_result.tags,
             build_target.name, build_target_details,
+            changer_result.mutator
         )
         yield ws, wr
 

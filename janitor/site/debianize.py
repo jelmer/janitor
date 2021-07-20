@@ -18,7 +18,7 @@ where run.suite = 'debianize'
 order by source, version desc
 """),
             "suite": 'debianize',
-            "suite_config": get_suite_config(request.app.config, 'debianize'),
+            "suite_config": get_suite_config(request.app['config'], 'debianize'),
         }
 
 
@@ -33,7 +33,7 @@ async def handle_debianize_pkg(request):
     run_id = request.match_info.get("run_id")
     return await generate_pkg_context(
         request.app.database,
-        request.app.config,
+        request.app['config'],
         "debianize",
         request.app.policy,
         request.app.http_client_session,

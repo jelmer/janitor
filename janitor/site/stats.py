@@ -267,7 +267,7 @@ async def handle_package_hosters(request, conn):
 def stats_app(database, config, external_url):
     app = web.Application()
     app.jinja_env = env
-    app.config = config
+    app['config'] = config
     app.external_url = external_url
     app.database = database
     app.router.add_get("/", handle_stats, name="index")
