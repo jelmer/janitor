@@ -1116,7 +1116,6 @@ async def create_app(
             app.database,
             publisher_url,
             runner_url,  # type: ignore
-            archiver_url,
             vcs_store_url,
             differ_url,
             config,
