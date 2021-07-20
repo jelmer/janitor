@@ -593,7 +593,11 @@ async def handle_run_post(request):
                     )
                 review_status = "rejected"
             with span.new_child('sql:update-run'):
-                await store_review(conn, run_id, review_status, review_comment, request['user'])
+                try:
+                    user = request['user']['email']
+                except KeyError:
+                    user = request['user']['name']
+                await store_review(conn, run_id, review_status, review_comment, user)
             if review_status == 'approved':
                 await consider_publishing(
                     request.app['http_client_session'], request.app['publisher_url'],
