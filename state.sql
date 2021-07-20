@@ -467,6 +467,7 @@ CREATE TABLE IF NOT EXISTS review (
  run_id text not null references run (id),
  comment text,
  reviewer text,
- review_status review_status not null default 'unreviewed'
+ review_status review_status not null default 'unreviewed',
+ reviewed_at timestamp not null default now()
 );
 CREATE INDEX ON review (run_id);
