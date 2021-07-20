@@ -13,7 +13,7 @@ async def handle_scrub_obsolete_pkg(request):
     run_id = request.match_info.get("run_id")
     return await generate_pkg_context(
         request.app.database,
-        request.app.config,
+        request.app['config'],
         "scrub-obsolete",
         request.app.policy,
         request.app.http_client_session,

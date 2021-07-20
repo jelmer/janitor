@@ -221,6 +221,57 @@ async def handle_schedule(request):
 
 
 @response_schema(ScheduleResultSchema())
+@routes.post("/run/{run_id}/reschedule", name="run-reschedule")
+async def handle_run_reschedule(request):
+    run_id = request.match_info["run_id"]
+    post = await request.post()
+    offset = post.get("offset")
+    try:
+        refresh = bool(int(post.get("refresh", "0")))
+    except ValueError:
+        return web.json_response({"error": "invalid boolean for refresh"}, status=400)
+    if request['user']:
+        try:
+            requestor = request['user']["email"]
+        except KeyError:
+            requestor = request['user']["name"]
+    else:
+        requestor = "user from web UI"
+    async with request.app['db'].acquire() as conn:
+        run = await conn.fetchrow(
+            "SELECT suite, package FROM run WHERE id = $1",
+            run_id)
+        if run is None:
+            return web.json_response({"reason": "Run not found"}, status=404)
+        try:
+            offset, estimated_duration = await do_schedule(
+                conn,
+                run['package'],
+                run['suite'],
+                offset,
+                refresh=refresh,
+                requestor=requestor,
+                bucket="manual",
+            )
+        except PolicyUnavailable:
+            return web.json_response(
+                {"reason": "Publish policy not yet available."}, status=503
+            )
+        (queue_position, queue_wait_time) = await state.get_queue_position(
+            conn, run['suite'], run['package']
+        )
+    response_obj = {
+        "package": run['package'],
+        "suite": run['suite'],
+        "offset": offset,
+        "estimated_duration_seconds": estimated_duration.total_seconds(),
+        "queue_position": queue_position,
+        "queue_wait_time": queue_wait_time.total_seconds(),
+    }
+    return web.json_response(response_obj)
+
+
+@response_schema(ScheduleResultSchema())
 @routes.post("/run/{run_id}/schedule-control", name="run-schedule-control")
 async def handle_schedule_control(request):
     run_id = request.match_info["run_id"]
