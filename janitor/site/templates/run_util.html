@@ -1,5 +1,4 @@
 {% macro local_command(command, package, vcs, vcs_url) %}
-{% if command.startswith('lintian-brush') %}
 <p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 debcheckout {{ package }}
@@ -8,48 +7,7 @@ cd {{ package }}
 </pre>
 </div>
 </div>
-{% elif command.startswith('apply-multiarch-hints') %}
-<p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>
-debcheckout {{ package }}
-cd {{ package }}
-{{ command }}
-</pre>
-</div>
-</div>
-{% elif command.startswith('scrub-obsolete') %}
-<p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>
-debcheckout {{ package }}
-cd {{ package }}
-deb-{{ command }}
-</pre>
-</div>
-</div>
-{% elif command.startswith('debianize') %}
-<p>Try this locally (using the <a href="https://packages.debian.org/lintian-brush">lintian-brush</a> package):</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>
-{{ clone_command(vcs, vcs_url, package) }}
-cd {{ package }}
-{{ command }} -x
-</pre>
-</div>
-</div>
-{% else %}
-<p>Try this locally:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre>
-{{ clone_command(vcs, vcs_url, package) }}
-cd {{ package }}
-{{ command }}
-</pre></div></div>
-{% endif %}
 {% endmacro %}
-
-{% macro clone_command(vcs, vcs_url, package) %}{% set vcs = vcs_type() -%}
-{%- if not vcs or vcs.lower() == 'git' %}git clone {{ vcs_url }} {{ package }}
-{%- elif vcs.lower() == 'bzr' %}bzr clone {{ vcs_url }} {{ package }}
-{%- else %}# unsupported vcs {{ vcs }}{% endif %}
-{%- endmacro %}
 
 {% macro merge_command(package, suite, result_branches, vcs) %}
 {% set vcs = vcs_type() %}

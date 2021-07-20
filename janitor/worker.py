@@ -694,6 +694,13 @@ class GenericTarget(Target):
         return "package"
 
 
+def _drop_env(command):
+    ret = list(command)
+    while ret and '=' in ret[0]:
+        ret.pop(0)
+    return ret
+
+
 @contextmanager
 def process_package(
     vcs_url: str,
@@ -830,8 +837,10 @@ def process_package(
         finally:
             metadata["revision"] = ws.local_tree.branch.last_revision().decode()
 
-        if (command[0:2] == ["brz", "up"] or command == ["true"] or
-                command[0] == "just-build"):
+        actual_command = _drop_env(command)
+
+        if (actual_command[0:2] == ["brz", "up"] or actual_command == ["true"] or
+                actual_command[0] == "just-build"):
             should_build = True
         else:
             if not changer_result.branches:
