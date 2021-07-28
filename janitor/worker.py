@@ -46,10 +46,6 @@ from prometheus_client import REGISTRY, push_to_gateway
 import argparse
 import asyncio
 
-from breezy.errors import UnexpectedHttpStatus
-from breezy.transform import MalformedTransform
-from breezy.transport import Transport
-
 from silver_platter.workspace import Workspace
 
 from silver_platter.apply import (
@@ -125,6 +121,8 @@ from breezy.errors import (
 )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir
+from breezy.transform import MalformedTransform
+from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
 
