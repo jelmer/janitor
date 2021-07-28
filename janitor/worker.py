@@ -909,8 +909,10 @@ def process_package(
             changer_result.mutator
         )
         yield ws, wr
-    finally:
-        ws.__exit__()
+    except:
+        ws.__exit__(*sys.exc_info())
+    else:
+        ws.__exit__(None, None, None)
 
 
 async def abort_run(
