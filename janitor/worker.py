@@ -46,6 +46,8 @@ from prometheus_client import REGISTRY, push_to_gateway
 import argparse
 import asyncio
 
+from breezy.errors import UnexpectedHttpStatus
+from breezy.transform import MalformedTransform
 from breezy.transport import Transport
 
 from silver_platter.workspace import Workspace
@@ -780,7 +782,7 @@ def process_package(
     else:
         resume_branch = None
 
-    with Workspace(
+    ws = Workspace(
         main_branch,
         resume_branch=resume_branch,
         cached_branch=cached_branch,
@@ -791,7 +793,24 @@ def process_package(
         resume_branch_additional_colocated_branches=(
             [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
         ),
-    ) as ws:
+    )
+
+    try:
+        ws.__enter__()
+    except IncompleteRead as e:
+        traceback.print_exc()
+        raise WorkerFailure("worker-clone-incomplete-read", str(e))
+    except MalformedTransform as e:
+        traceback.print_exc()
+        raise WorkerFailure("worker-clone-malformed-transform", str(e))
+    except UnexpectedHttpStatus as e:
+        traceback.print_exc()
+        if e.code == 502:
+            raise WorkerFailure("worker-clone-bad-gateway", str(e))
+        else:
+            raise WorkerFailure("worker-clone-http-%s" % e.code, str(e))
+
+    try:
         logger.info('Workspace ready - starting.')
 
         if ws.local_tree.has_changes():
@@ -890,6 +909,8 @@ def process_package(
             changer_result.mutator
         )
         yield ws, wr
+    finally:
+        ws.__exit__()
 
 
 async def abort_run(
