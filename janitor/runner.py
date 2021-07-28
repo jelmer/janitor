@@ -708,10 +708,10 @@ class ActiveRun(object):
             duration = datetime.utcnow() - self.last_keepalive
             if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
                 logging.warning(
-                    "No keepalives received from %s for %s in %d, aborting.",
+                    "No keepalives received from %s for %s in %s, aborting.",
                     self.worker_name,
                     self.log_id,
-                    duration.total_seconds(),
+                    duration,
                 )
                 result = self.create_result(
                     branch_url=self.queue_item.branch_url,
@@ -720,7 +720,7 @@ class ActiveRun(object):
                     logfilenames=[],
                 )
                 await queue_processor.finish_run(self, result)
-                return
+                break
 
     def kill(self) -> None:
         raise NotImplementedError(self.kill)
