@@ -910,7 +910,8 @@ def process_package(
         )
         yield ws, wr
     except:
-        ws.__exit__(*sys.exc_info())
+        if ws.__exit__(*sys.exc_info()) is not True:
+            raise
     else:
         ws.__exit__(None, None, None)
 
