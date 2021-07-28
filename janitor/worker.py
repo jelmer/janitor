@@ -907,7 +907,7 @@ def process_package(
             changer_result.mutator
         )
         yield ws, wr
-    except:
+    except BaseException:
         if ws.__exit__(*sys.exc_info()) is not True:
             raise
     else:
