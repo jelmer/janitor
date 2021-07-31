@@ -134,6 +134,12 @@ async def get_queue(
         )
 
 
+async def get_buckets(db):
+    async with db.acquire() as conn:
+        for row in await conn.fetch("SELECT bucket, count(*) FROM queue GROUP BY bucket ORDER BY bucket ASC"):
+            yield row[0], row[1]
+
+
 async def write_queue(
     client,
     db: state.Database,
@@ -149,6 +155,7 @@ async def write_queue(
         active_queue_ids = set()
     return {
         "queue": get_queue(db, limit),
+        "buckets": get_buckets(db),
         "active_queue_ids": active_queue_ids,
         "processing": processing,
     }
