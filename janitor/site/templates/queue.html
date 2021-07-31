@@ -12,6 +12,25 @@ tr.old-keepalive {
 }
 </style>
 
+<div name="buckets">
+<h2>Entries per bucket</h2>
+<table class="docutils" border="1">
+<thead valign="bottom">
+    <tr class="row-odd">
+       <th class="head">Name</th>
+       <th class="head">Number of entries</th>
+    </tr>
+</thead>
+<tbody valign="top" id="bucket-table">
+{% for name, count in buckets %}
+<tr id="bucket-{{ name }}">
+    <td>{{ name }}</td>
+    <td>{{ count }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
 <div name="current">
 <h2>Currently processing</h2>
 <table class="docutils" border="1">
