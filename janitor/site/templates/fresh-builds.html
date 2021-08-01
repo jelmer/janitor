@@ -53,6 +53,46 @@ gets uploaded to the official Debian APT repository, it will replace the package
 in this archive.</p>
 </div>
 
+<div class="section" id="status">
+<h1>Status</h1>
+
+<canvas id="fresh-releases-results-chart" style="float: left" width="200"></canvas>
+<canvas id="fresh-snapshots-results-chart" style="float: left" width="200"></canvas>
+<script>
+$.getJSON("/fresh-releases/+chart/results", function (json) {
+new Chart($("#fresh-releases-results-chart"), {
+    type: 'pie',
+    data: {
+       labels: $.map(json, function(a) { return a[0]; }),
+       datasets: [{
+          backgroundColor: $.map(window.chartColors, function(val, key) { return val; }),
+          data: $.map(json, function(a) { return a[1]; }),
+       }],
+    },
+    options: {
+      title: { text: "Fresh Releases Status", display: true },
+    },
+});
+});
+
+$.getJSON("/fresh-snapshots/+chart/results", function (json) {
+new Chart($("#fresh-snapshots-results-chart"), {
+    type: 'pie',
+    data: {
+       labels: $.map(json, function(a) { return a[0]; }),
+       datasets: [{
+          backgroundColor: $.map(window.chartColors, function(val, key) { return val; }),
+          data: $.map(json, function(a) { return a[1]; }),
+       }],
+    },
+    options: {
+      title: { text: "Fresh Snapshots Status", display: true },
+    },
+});
+});
+
+</script>
+
 <div class="section" id="faq">
 <h2>FAQ</h2>
 <div class="contents local topic" id="contents">

@@ -8,6 +8,7 @@ import urllib.parse
 
 from . import html_template, render_template_for_request
 from ..config import get_suite_config
+from ..schedule import TRANSIENT_ERROR_RESULT_CODES
 
 
 async def get_proposals(conn: asyncpg.Connection, package, suite):
@@ -116,6 +117,12 @@ async def handle_fresh(request):
     return web.HTTPPermanentRedirect("/fresh-builds")
 
 
+@html_template("new-upstream-stats.html", headers={"Cache-Control": "max-age=60"})
+async def handle_stats(request):
+    suite = request.match_info["suite"]
+    return {"suite": suite}
+
+
 async def handle_apt_repo(request):
     suite = request.match_info["suite"]
     from .apt_repo import get_published_packages
@@ -134,10 +141,44 @@ async def handle_apt_repo(request):
         )
 
 
+async def summarize_results(db, suite):
+    results = {
+        'success': 0,
+        'nothing-to-do': 0,
+        'error': 0,
+        'upstream-vcs-unsupported': 0,
+        'transient-error': 0}
+    async with db.acquire() as conn:
+        for result_code, c in await conn.fetch(
+                "SELECT result_code, count(*) from last_runs "
+                "where suite = $1 group by result_code", suite):
+            if result_code in ('success', 'nothing-to-do'):
+                results[result_code] += c
+            elif result_code.startswith('upstream-unsupported-vcs'):
+                results['upstream-vcs-unsupported'] += c
+            elif result_code in TRANSIENT_ERROR_RESULT_CODES:
+                results['transient-error'] += c
+            else:
+                results['error'] += c
+    return results
+
+
+async def handle_chart_results(request):
+    suite = request.match_info["suite"]
+    return web.json_response(
+        list((await summarize_results(request.app.database, suite)).items()))
+
+
 def register_new_upstream_endpoints(router):
     NEW_UPSTREAM_REGEX = "fresh-(releases|snapshots)"
     router.add_get(
         "/{suite:%s}/" % NEW_UPSTREAM_REGEX, handle_apt_repo, name="new-upstream-start"
+    )
+    router.add_get(
+        "/{suite:%s}/stats" % NEW_UPSTREAM_REGEX, handle_stats, name="new-upstream-stats"
+    )
+    router.add_get(
+        "/{suite:%s}/+chart/results" % NEW_UPSTREAM_REGEX, handle_chart_results, name="new-upstream-chart-results"
     )
     router.add_get("/fresh-builds", handle_fresh_builds, name="fresh-builds")
     router.add_get("/fresh", handle_fresh, name="fresh")
