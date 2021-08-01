@@ -1221,6 +1221,7 @@ if __name__ == "__main__":
         external_url=args.external_url,
         debugtoolbar=args.debugtoolbar,
         runner_url=args.runner_url,
+        archiver_url=args.archiver_url,
         publisher_url=args.publisher_url,
         vcs_store_url=args.vcs_store_url,
         differ_url=args.differ_url,
