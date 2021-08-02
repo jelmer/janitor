@@ -153,7 +153,7 @@ async def get_unchanged_run(conn: asyncpg.Connection, package, main_branch_revis
 SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
-    debian_build.distribution AS build_distribution, result_code,
+    debian_build.distribution AS build_distribution, result_code, value,
     main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
