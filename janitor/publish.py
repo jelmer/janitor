@@ -303,7 +303,7 @@ async def publish_one(
     require_binary_diff: bool = False,
     possible_hosters=None,
     possible_transports: Optional[List[Transport]] = None,
-    allow_create_proposal: Optional[bool] = None,
+    allow_create_proposal: bool = False,
     reviewers: Optional[List[str]] = None,
     derived_owner: Optional[str] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
@@ -861,6 +861,7 @@ async def publish_from_policy(
             run.package,
             run.command,
             run.result,
+            run.value,
             main_branch_url,
             mode,
             role,
@@ -979,6 +980,12 @@ async def publish_and_store(
     remote_branch_name, base_revision, revision = run.get_result_branch(role)
 
     main_branch_url = role_branch_url(run.branch_url, remote_branch_name)
+
+    if allow_create_proposal is None:
+        if suite_config.merge_proposal is not None and suite_config.merge_proposal.value_threshold:
+            allow_create_proposal = (run.value >= suite_config.merge_proposal.value_threshold)
+        else:
+            allow_create_proposal = True
 
     async with db.acquire() as conn:
         try:
@@ -1116,7 +1123,7 @@ async def consider_request(request):
 
     async def run():
         async with request.app['db'].acquire() as conn:
-            async for (run, value, maintainer_email, uploader_emails, update_changelog, command, qa_review_policy, needs_review, unpublished_branches) in state.iter_publish_ready(
+            async for (run, maintainer_email, uploader_emails, update_changelog, command, qa_review_policy, needs_review, unpublished_branches) in state.iter_publish_ready(
                     conn, review_status=review_status, publishable_only=True,
                     needs_review=False, run_id=run_id):
                 break
@@ -1311,6 +1318,11 @@ async def run_web_server(
     site = web.TCPSite(runner, listen_addr, port)
     logger.info("Listening on %s:%s", listen_addr, port)
     await site.start()
+
+
+@routes.get("/health", name="health")
+async def handle_health(request):
+    return web.Response("OK")
 
 
 @routes.post("/check-proposal", name='check-proposal')
@@ -2194,7 +2206,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code,
-    branch_name, main_branch_revision, revision, context, result, suite,
+    value, branch_name, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
