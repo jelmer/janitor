@@ -264,9 +264,6 @@ class Publisher(object):
     def read_worker_result(self, result: Any) -> None:
         pass
 
-    def allow_create_proposal(self) -> bool:
-        raise NotImplementedError(self.allow_create_proposal)
-
 
 class LintianBrushPublisher(Publisher):
 
@@ -285,10 +282,6 @@ class LintianBrushPublisher(Publisher):
     def read_worker_result(self, result):
         self.applied = result["applied"]
         self.failed = result["failed"]
-        self.add_on_only = result["add_on_only"]
-
-    def allow_create_proposal(self):
-        return self.applied and not self.add_on_only
 
 
 class NewUpstreamPublisher(Publisher):
@@ -307,10 +300,6 @@ class NewUpstreamPublisher(Publisher):
         else:
             raise KeyError(role)
 
-    def allow_create_proposal(self):
-        # No upstream release too small...
-        return True
-
 
 class DefaultPublisher(Publisher):
 
@@ -323,10 +312,6 @@ class DefaultPublisher(Publisher):
     def get_proposal_commit_message(self, role, existing_commit_message):
         return Template(self.commit_message_template).render(
             self.result or {})
-
-    def allow_create_proposal(self):
-        # TODO(jelmer): check value threshold
-        return True
 
 
 class DebdiffMissingRun(Exception):
@@ -496,9 +481,6 @@ def publish_one(
                 ),
                 code="permission-denied",
             )
-
-    if allow_create_proposal is None:
-        allow_create_proposal = subrunner.allow_create_proposal()
 
     debdiff: Optional[bytes]
     try:
