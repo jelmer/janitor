@@ -1378,6 +1378,11 @@ async def handle_upload_log(request):
     return web.json_response({}, status=200)
 
 
+@routes.get("/health", name="health")
+async def handle_health(request):
+    return web.Response("OK")
+
+
 @routes.post("/active-runs/{run_id}/keepalive", name="keepalive")
 async def handle_keepalive(request):
     queue_processor = request.app['queue_processor']

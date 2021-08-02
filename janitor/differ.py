@@ -483,6 +483,11 @@ where
     return web.Response(status=202, text="Precache started (todo: %d)" % len(todo))
 
 
+@routes.get("/health", name="health")
+async def handle_health(request):
+    return web.Response("OK")
+
+
 class DifferWebApp(web.Application):
     def __init__(self, db, config, cache_path, artifact_manager, task_memory_limit=None, task_timeout=None):
         trailing_slash_redirect = normalize_path_middleware(append_slash=True)

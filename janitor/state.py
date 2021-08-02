@@ -87,6 +87,7 @@ class Run(object):
         "build_version",
         "build_distribution",
         "result_code",
+        "value",
         "main_branch_revision",
         "revision",
         "context",
@@ -113,6 +114,7 @@ class Run(object):
         build_version,
         build_distribution,
         result_code,
+        value,
         main_branch_revision,
         revision,
         context,
@@ -136,6 +138,7 @@ class Run(object):
         self.build_version = build_version
         self.build_distribution = build_distribution
         self.result_code = result_code
+        self.value = value
         self.main_branch_revision = main_branch_revision
         self.revision = revision
         self.context = context
@@ -187,6 +190,7 @@ class Run(object):
             revision=(row['revision'].encode("utf-8") if row['revision'] else None),
             context=row['context'],
             result=row['result'],
+            value=row['value'],
             suite=row['suite'],
             instigated_context=row['instigated_context'],
             branch_url=row['branch_url'],
@@ -212,6 +216,7 @@ class Run(object):
             self.build_version,
             self.build_distribution,
             self.result_code,
+            self.value,
             self.main_branch_revision,
             self.revision,
             self.context,
@@ -279,7 +284,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code,
-    main_branch_revision, revision, context, result, suite,
+    value, main_branch_revision, revision, context, result, suite,
     instigated_context, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
