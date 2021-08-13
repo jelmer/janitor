@@ -485,7 +485,7 @@ where
 
 @routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response("OK")
+    return web.Response(text="OK")
 
 
 class DifferWebApp(web.Application):

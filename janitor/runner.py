@@ -1380,7 +1380,7 @@ async def handle_upload_log(request):
 
 @routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response("OK")
+    return web.Response(text="OK")
 
 
 @routes.post("/active-runs/{run_id}/keepalive", name="keepalive")

@@ -873,7 +873,7 @@ async def create_app(
 
         for cb, title in [
             (listen_to_publisher_publish, 'publisher publish listening'),
-            (listen_to_publisher_mp, 'merge proposal listiening'),
+            (listen_to_publisher_mp, 'merge proposal listening'),
             (listen_to_queue, 'queue listening'),
             (listen_to_result, 'result listening'),
         ]:
