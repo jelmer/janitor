@@ -1321,7 +1321,7 @@ async def run_web_server(
 
 @routes.get("/health", name="health")
 async def handle_health(request):
-    return web.Response("OK")
+    return web.Response(text="OK")
 
 
 @routes.post("/check-proposal", name='check-proposal')
