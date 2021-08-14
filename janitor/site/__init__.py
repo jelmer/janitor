@@ -109,21 +109,6 @@ def format_timestamp(ts):
     return ts.isoformat(timespec="minutes")
 
 
-async def get_vcs_type(client, vcs_store_url, package):
-    url = urllib.parse.urljoin(vcs_store_url, "vcs-type/%s" % package)
-    try:
-        async with client.get(url) as resp:
-            if resp.status == 200:
-                ret = (await resp.read()).decode("utf-8", "replace")
-                if ret == "":
-                    ret = None
-            else:
-                ret = None
-        return ret
-    except ClientConnectorError as e:
-        return "Unable to retrieve diff; error %s" % e
-
-
 env = Environment(
     loader=PackageLoader("janitor.site", "templates"),
     autoescape=select_autoescape(["html", "xml"]),

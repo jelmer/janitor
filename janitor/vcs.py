@@ -423,15 +423,6 @@ class VcsManager(object):
     def get_repository_url(self, codebase: str, vcs_type: str) -> str:
         raise NotImplementedError(self.get_repository_url)
 
-    def get_vcs_type(self, codebase: str) -> Optional[str]:
-        try:
-            repo = self.get_repository(codebase)
-        except NotBranchError:
-            return None
-        if repo is None:
-            return None
-        return get_vcs_abbreviation(repo)
-
     def list_repositories(self, vcs_type: str) -> Iterable[str]:
         raise NotImplementedError(self.list_repositories)
 
