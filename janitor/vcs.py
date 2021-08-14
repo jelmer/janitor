@@ -456,22 +456,25 @@ class LocalVcsManager(VcsManager):
 
 class RemoteVcsManager(VcsManager):
     def __init__(self, git_base_url: str, bzr_base_url: str):
-        self.bzr_base_url = bzr_base_url
-        self.git_base_url = git_base_url
+        self.base_urls = {}
+        if git_base_url:
+            self.base_urls['git'] = git_base_url
+        if bzr_base_url:
+            self.base_urls['bzr'] = bzr_base_url
 
     @classmethod
     def from_single_url(cls, url: str):
         return cls(urlutils.join(url, 'git'), urlutils.join(url, 'bzr'))
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.git_base_url, self.bzr_base_url)
+        return "%s(%r, %r)" % (type(self).__name__, self.base_urls['git'], self.base_urls['bzr'])
 
     def get_branch(self, codebase, branch_name, vcs_type=None):
-        if vcs_type == 'git':
-            return get_cached_branch(self.git_base_url, codebase, branch_name, vcs_type)
-        elif vcs_type == 'bzr':
-            return get_cached_branch(self.bzr_base_url, codebase, branch_name, vcs_type)
-        for vcs_type, base_url in [('git', self.git_base_url), ('bzr', self.bzr_base_url)]:
+        if vcs_type:
+            if vcs_type in self.base_urls:
+                return get_cached_branch(self.base_urls[vcs_type], codebase, branch_name, vcs_type)
+            raise UnsupportedVcs(vcs_type)
+        for vcs_type, base_url in self.base_urls.items():
             branch = get_cached_branch(base_url, codebase, branch_name, vcs_type)
             if branch:
                 return branch
@@ -479,17 +482,13 @@ class RemoteVcsManager(VcsManager):
             return None
 
     def get_branch_url(self, codebase, branch_name, vcs_type) -> str:
-        if vcs_type == 'git':
-            return get_cached_branch_url(self.git_base_url, vcs_type, codebase, branch_name)
-        elif vcs_type == 'bzr':
-            return get_cached_branch_url(self.bzr_base_url, vcs_type, codebase, branch_name)
+        if vcs_type in self.base_urls:
+            return get_cached_branch_url(self.base_urls[vcs_type], vcs_type, codebase, branch_name)
         raise UnsupportedVcs(vcs_type)
 
     def get_repository_url(self, codebase: str, vcs_type: str) -> str:
-        if vcs_type == 'git':
-            return get_cached_repository_url(self.git_base_url, vcs_type, codebase)
-        elif vcs_type == 'bzr':
-            return get_cached_repository_url(self.bzr_base_url, vcs_type, codebase)
+        if vcs_type in self.base_urls:
+            return get_cached_repository_url(self.base_urls[vcs_type], vcs_type, codebase)
         raise UnsupportedVcs(vcs_type)
 
 
