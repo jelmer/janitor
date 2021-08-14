@@ -467,7 +467,9 @@ class RemoteVcsManager(VcsManager):
         return cls(urlutils.join(url, 'git'), urlutils.join(url, 'bzr'))
 
     def __repr__(self):
-        return "%s(%r, %r)" % (type(self).__name__, self.base_urls['git'], self.base_urls['bzr'])
+        return "%s(%r, %r)" % (
+            type(self).__name__, self.base_urls.get('git'),
+            self.base_urls.get('bzr'))
 
     def get_branch(self, codebase, branch_name, vcs_type=None):
         if vcs_type:
