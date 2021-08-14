@@ -36,7 +36,6 @@ from janitor.logs import LogRetrievalError
 from janitor.site import (
     get_archive_diff,
     BuildDiffUnavailable,
-    get_vcs_type,
     DebdiffRetrievalError,
     tracker_url,
 )
@@ -196,10 +195,6 @@ async def generate_run_file(
 
     kwargs["read_file"] = read_file
 
-    async def vcs_type():
-        return await get_vcs_type(client, vcs_store_url, run['package'])
-
-    kwargs["vcs_type"] = vcs_type
     kwargs["in_line_boundaries"] = in_line_boundaries
 
     cache_logs = {}
