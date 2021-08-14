@@ -370,6 +370,7 @@ class JanitorResult(object):
         finish_time=None,
         worker_name=None,
         worker_link=None,
+        vcs_type=None,
     ):
         self.package = pkg
         self.suite = suite
@@ -380,6 +381,7 @@ class JanitorResult(object):
         self.logfilenames = logfilenames or []
         self.worker_name = worker_name
         self.worker_link = worker_link
+        self.vcs_type = vcs_type
         if worker_result:
             self.context = worker_result.context
             if self.code is None:
@@ -665,6 +667,7 @@ class ActiveRun(object):
         self.worker_name = worker_name
         self.log_files = {}
         self.main_branch_url = self.queue_item.branch_url
+        self.vcs_type = self.queue_item.vcs_type
         self.resume_branch_name = None
         self.reset_keepalive()
         self._watch_dog = None
@@ -721,6 +724,7 @@ class ActiveRun(object):
                 )
                 result = self.create_result(
                     branch_url=self.queue_item.branch_url,
+                    vcs_type=self.queue_item.vcs_type,
                     description=("No keepalives received in %s." % duration),
                     code="worker-timeout",
                     logfilenames=[],
@@ -896,6 +900,7 @@ async def store_run(
     conn: asyncpg.Connection,
     run_id: str,
     name: str,
+    vcs_type: str,
     vcs_url: str,
     start_time: datetime,
     finish_time: datetime,
@@ -921,6 +926,7 @@ async def store_run(
     Args:
       run_id: Run id
       name: Package name
+      vcs_type: VCS type
       vcs_url: Upstream branch URL
       start_time: Start time
       finish_time: Finish time
@@ -950,10 +956,10 @@ async def store_run(
         "INSERT INTO run (id, command, description, result_code, "
         "start_time, finish_time, package, instigated_context, context, "
         "main_branch_revision, "
-        "revision, result, suite, branch_url, logfilenames, "
+        "revision, result, suite, vcs_type, branch_url, logfilenames, "
         "value, worker, worker_link, result_tags, "
         "failure_details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
         run_id,
         command,
         description,
@@ -967,6 +973,7 @@ async def store_run(
         revision.decode("utf-8") if revision else None,
         subworker_result if subworker_result else None,
         suite,
+        vcs_type,
         vcs_url,
         logfilenames,
         value,
@@ -1108,6 +1115,7 @@ class QueueProcessor(object):
                     conn,
                     result.log_id,
                     item.package,
+                    result.vcs_type,
                     result.branch_url,
                     result.start_time,
                     result.finish_time,
@@ -1241,6 +1249,7 @@ async def handle_assign(request):
     async def abort(active_run, code, description):
         result = active_run.create_result(
             branch_url=active_run.main_branch_url,
+            vcs_type=active_run.vcs_type,
             code=code,
             description=description
         )
