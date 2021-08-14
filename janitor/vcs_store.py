@@ -673,7 +673,7 @@ async def create_web_app(
     app.router.add_post("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
     app.router.add_post("/git/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
-    app.router.add_post("/bzr/{package}/diff", git_diff_request, name='git-diff')
+    app.router.add_post("/git/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_post("/bzr/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
     endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)

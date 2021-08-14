@@ -2,12 +2,13 @@
 
 import aiozipkin
 from asyncio import TimeoutError
-from aiohttp import ClientConnectorError, ClientTimeout
+from aiohttp import ClientConnectorError
 import urllib.parse
 
 from janitor import state
 from . import (
     get_archive_diff,
+    get_vcs_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     render_template_for_request,
@@ -79,25 +80,18 @@ async def generate_review(
             (remote_name, base_revid, revid) = run.get_result_branch(role)
         except KeyError:
             return ""
-        if base_revid == revid:
-            return ""
-        url = urllib.parse.urljoin(vcs_store_url, "%s/diff/%s?old=%s&new=%s" % (
-            run.vcs_type, run.package, base_revid.decode('utf-8'),
-            revid.decode('utf-8')))
-        external_url = "/api/run/%s/diff?role=%s" % (run.id, role)
         try:
-            async with client.get(url, timeout=ClientTimeout(30)) as resp:
-                if resp.status == 200:
-                    diff = (await resp.read()).decode("utf-8", "replace")
-                    if len(diff) > MAX_DIFF_SIZE:
-                        return "Diff too large (%d). See it at %s" % (
-                            len(diff),
-                            external_url,
-                        )
-                    else:
-                        return diff
-                else:
-                    return "Unable to retrieve diff; error %d" % resp.status
+            diff = (await get_vcs_diff(
+                client, vcs_store_url, run.vcs_type, run.package, base_revid,
+                revid)).decode("utf-8", "replace")
+            external_url = "/api/run/%s/diff?role=%s" % (run.id, role)
+            if len(diff) > MAX_DIFF_SIZE:
+                return "Diff too large (%d). See it at %s" % (
+                    len(diff),
+                    external_url,
+                )
+            else:
+                return diff
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
         except TimeoutError:
