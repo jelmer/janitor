@@ -207,53 +207,15 @@ class Run(object):
             result_tags=row['result_tags'],
         )
 
-    def __len__(self) -> int:
-        return len(self.__slots__)
-
-    def __tuple__(self):
-        return (
-            self.id,
-            self.start_time,
-            self.finish_time,
-            self.command,
-            self.description,
-            self.package,
-            self.build_version,
-            self.build_distribution,
-            self.result_code,
-            self.value,
-            self.main_branch_revision,
-            self.revision,
-            self.context,
-            self.result,
-            self.suite,
-            self.instigated_context,
-            self.vcS_tye,
-            self.branch_url,
-            self.logfilenames,
-            self.review_status,
-            self.review_comment,
-            self.worker_name,
-            self.result_branches,
-            self.result_tags,
-        )
-
     def __eq__(self, other) -> bool:
         if isinstance(other, Run):
-            return self.__tuple__() == other.__tuple__()
-        if isinstance(other, tuple):
-            return self.id == other[0]
+            return self.id == other.id
         return False
 
     def __lt__(self, other) -> bool:
         if not isinstance(other, type(self)):
             raise TypeError(other)
-        return self.__tuple__() < other.__tuple__()
-
-    def __getitem__(self, i):
-        if isinstance(i, slice):
-            return tuple(self).__getitem__(i)
-        return getattr(self, self.__slots__[i])
+        return self.id < other.id
 
 
 async def iter_runs(

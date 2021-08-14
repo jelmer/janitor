@@ -204,7 +204,7 @@ async def _git_open_repo(vcs_manager, db, package):
     if repo is None:
         async with db.acquire() as conn:
             if not await package_exists(conn, package):
-                raise web.HTTPNotFound()
+                raise web.HTTPNotFound(text='no such package: %s' % package)
         controldir = ControlDir.create(
             vcs_manager.get_repository_url(package, "git"),
             format=format_registry.get("git-bare")(),
@@ -548,7 +548,7 @@ async def package_exists(conn, package):
 async def _bzr_open_repo(vcs_manager, db, package):
     async with db.acquire() as conn:
         if not await package_exists(conn, package):
-            raise web.HTTPNotFound()
+            raise web.HTTPNotFound(text='no such package: %s' % package)
     repo = vcs_manager.get_repository(package, "bzr")
     if repo is None:
         controldir = ControlDir.create(

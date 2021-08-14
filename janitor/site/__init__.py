@@ -153,7 +153,7 @@ class BuildDiffUnavailable(Exception):
         self.unavailable_run_id = unavailable_run_id
 
 
-async def get_vcs_diff(client, vcs_store_url, vcs_type, package, old_revid, new_revid):
+async def get_vcs_diff(client, vcs_store_url: str, vcs_type: str, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
     if old_revid == new_revid:
         return b""
     if vcs_type == 'bzr':
@@ -163,8 +163,8 @@ async def get_vcs_diff(client, vcs_store_url, vcs_type, package, old_revid, new_
     elif vcs_type == 'git':
         url = urllib.parse.urljoin(vcs_store_url, "git/%s/diff?old=%s&new=%s" % (
             package,
-            old_revid.decode('utf-8')[len('git-v1:'):],
-            new_revid.decode('utf-8')[len('git-v1:'):]))
+            old_revid[len(b'git-v1:'):].decode('utf-8'),
+            new_revid[len('git-v1:'):].decode('utf-8')))
     else:
         raise NotImplementedError('vcs type %s' % vcs_type)
     async with client.get(url, timeout=ClientTimeout(30)) as resp:

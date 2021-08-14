@@ -130,7 +130,7 @@ SELECT
     debian_build.binary_packages AS binary_packages,
     result_code,
     branch_name, main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames, review_status,
+    instigated_context, vcs_type, branch_url, logfilenames, review_status,
     review_comment,
     run.worker AS worker_name,
     worker.link AS worker_link,

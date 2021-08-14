@@ -148,7 +148,7 @@ async def generate_run_file(
     async def show_diff(role):
         try:
             (remote_name, base_revid, revid) = state.get_result_branch(
-                    run['result_branches'], role)
+                run['result_branches'], role)
         except KeyError:
             return "No branch with role %s" % role
         if base_revid == revid:
@@ -156,7 +156,7 @@ async def generate_run_file(
         try:
             diff = await get_vcs_diff(
                 client, vcs_store_url, run['vcs_type'], run['package'],
-                base_revid, revid)
+                base_revid.encode('utf-8'), revid.encode('utf-8'))
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
         return diff.decode("utf-8", "replace")
