@@ -32,6 +32,7 @@ from breezy.controldir import ControlDir, format_registry
 from breezy.errors import NotBranchError
 from breezy.bzr.smart import medium
 from breezy.transport import get_transport_from_url
+from dulwich.objects import valid_hexsha
 from dulwich.web import HTTPGitApplication
 from dulwich.protocol import ReceivableProtocol
 from dulwich.server import (
@@ -52,6 +53,106 @@ from .vcs import (
 
 
 GIT_BACKEND_CHUNK_SIZE = 4096
+
+
+async def bzr_diff_helper(repo, old_revid, new_revid):
+    # Fall back to breezy
+    args = [
+        sys.executable,
+        '-m',
+        'breezy',
+        "diff",
+        '-rrevid:%s..revid:%s' % (
+            old_revid.decode(),
+            new_revid.decode(),
+        ),
+        repo.user_url
+    ]
+
+    p = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE,
+    )
+
+    # TODO(jelmer): Stream this
+    try:
+        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+    except asyncio.TimeoutError:
+        raise web.HTTPRequestTimeout(text='diff generation timed out')
+
+    if p.returncode != 3:
+        return web.Response(body=stdout, content_type="text/x-diff")
+    logging.warning('bzr diff failed: %s', stderr.decode())
+    raise web.HTTPInternalServerError(text='bzr diff failed: %s' % stderr)
+
+
+async def bzr_diff_request(request):
+    package = request.match_info["package"]
+    old_revid = request.query.get('old')
+    if old_revid is not None:
+        old_revid = old_revid.encode('utf-8')
+    new_revid = request.query.get('new')
+    if new_revid is not None:
+        new_revid = new_revid.encode('utf-8')
+    try:
+        repo = request.app.vcs_manager.get_repository(package)
+    except NotBranchError:
+        repo = None
+    if repo is None:
+        raise web.HTTPServiceUnavailable(
+            text="Local VCS repository for %s temporarily inaccessible" %
+            package)
+    return await bzr_diff_helper(repo, old_revid, new_revid)
+
+
+async def git_diff_request(request):
+    package = request.match_info["package"]
+    old_sha = request.query.get('old')
+    if old_sha is not None:
+        old_sha = old_sha.encode('utf-8')
+    new_sha = request.query.get('new')
+    if new_sha is not None:
+        new_sha = new_sha.encode('utf-8')
+    try:
+        repo = request.app.vcs_manager.get_repository(package)
+    except NotBranchError:
+        repo = None
+    if repo is None:
+        raise web.HTTPServiceUnavailable(
+            text="Local VCS repository for %s temporarily inaccessible" %
+            package)
+    if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
+        raise web.HTTPBadRequest(text='invalid shas specified')
+    return await git_diff_helper(repo, old_sha, new_sha)
+
+
+async def git_diff_helper(repo, old_sha, new_sha):
+    args = [
+        "git",
+        "diff",
+        old_sha, new_sha
+    ]
+
+    p = await asyncio.create_subprocess_exec(
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        stdin=asyncio.subprocess.PIPE,
+        cwd=repo.user_transport.local_abspath('.'),
+    )
+
+    # TODO(jelmer): Stream this
+    try:
+        (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
+    except asyncio.TimeoutError:
+        raise web.HTTPRequestTimeout(text='diff generation timed out')
+
+    if p.returncode == 0:
+        return web.Response(body=stdout, content_type="text/x-diff")
+    logging.warning('git diff failed: %s', stderr.decode())
+    raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
 
 
 async def diff_request(request):
@@ -88,64 +189,13 @@ WHERE id = $1 AND new_result_branch.role = $2
             old_revid.startswith(b'git-v1:') and
             new_revid.startswith(b'git-v1:')):
 
-        args = [
-            "git",
-            "diff",
-            old_revid.decode()[len('git-v1:'):],
-            new_revid.decode()[len('git-v1:'):],
-        ]
-
-        p = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            stdin=asyncio.subprocess.PIPE,
-            cwd=repo.user_transport.local_abspath('.'),
-        )
-
         with span.new_child('subprocess:git-diff'):
-            # TODO(jelmer): Stream this
-            try:
-                (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-            except asyncio.TimeoutError:
-                raise web.HTTPRequestTimeout(text='diff generation timed out')
-
-        if p.returncode == 0:
-            return web.Response(body=stdout, content_type="text/x-diff")
-        logging.warning('git diff failed: %s', stderr.decode())
-        raise web.HTTPInternalServerError(text='git diff failed: %s' % stderr)
+            return await git_diff_helper(
+                repo, old_revid.decode()[len('git-v1:'):],
+                new_revid.decode()[len('git-v1:'):])
     else:
-        # Fall back to breezy
-        args = [
-            sys.executable,
-            '-m',
-            'breezy',
-            "diff",
-            '-rrevid:%s..revid:%s' % (
-                old_revid.decode(),
-                new_revid.decode(),
-            ),
-            repo.user_url
-        ]
-
-        p = await asyncio.create_subprocess_exec(
-            *args,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            stdin=asyncio.subprocess.PIPE,
-        )
-
         with span.new_child('subprocess:brz-diff'):
-            # TODO(jelmer): Stream this
-            try:
-                (stdout, stderr) = await asyncio.wait_for(p.communicate(b""), 30.0)
-            except asyncio.TimeoutError:
-                raise web.HTTPRequestTimeout(text='diff generation timed out')
-
-        if p.returncode != 3:
-            return web.Response(body=stdout, content_type="text/x-diff")
-        logging.warning('bzr diff failed: %s', stderr.decode())
-        raise web.HTTPInternalServerError(text='bzr diff failed: %s' % stderr)
+            return await bzr_diff_helper(repo, old_revid, new_revid)
 
 
 async def _git_open_repo(vcs_manager, db, package):
@@ -620,8 +670,10 @@ async def create_web_app(
     app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
+    app.router.add_post("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
     app.router.add_post("/git/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
+    app.router.add_post("/bzr/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_post("/bzr/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
     endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
