@@ -1523,7 +1523,7 @@ async def main(argv=None):
         if args.vcs_location:
             vcs_manager = LocalVcsManager(args.vcs_location)
         else:
-            vcs_manager = RemoteVcsManager(assignment["vcs_manager"])
+            vcs_manager = RemoteVcsManager.from_single_url(assignment["vcs_manager"])
         run_id = assignment["id"]
 
         possible_transports = []

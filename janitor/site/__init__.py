@@ -59,10 +59,10 @@ def update_vars_from_request(vs, request):
     vs["openid_configured"] = bool(getattr(request.app, "openid_config", None))
     if request.app['external_url'] is not None:
         vs["url"] = request.app['external_url'].join(request.rel_url)
-        vs["vcs_manager"] = RemoteVcsManager(str(request.app['external_url']))
+        vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.app['external_url']))
     else:
         vs["url"] = request.url
-        vs["vcs_manager"] = RemoteVcsManager(str(request.url.with_path("/")))
+        vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.url.with_path("/")))
 
 
 async def render_template_for_request(templatename, request, vs):
