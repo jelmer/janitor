@@ -162,7 +162,7 @@ async def get_archive_diff(
         differ_url, "%s/%s/%s" % (kind, unchanged_run_id, run_id)
     )
     params = {
-        "jquery_url": "https://janitor.debian.org/_static/jquery.js",
+        "jquery_url": "/_static/jquery.js",
     }
     # TODO(jelmer): Set css_url
     if filter_boring:
