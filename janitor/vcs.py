@@ -527,7 +527,7 @@ def get_vcs_manager(url: str) -> VcsManager:
     parsed = urlutils.URL.from_string(url)
     if parsed.scheme in ("", "file"):
         return LocalVcsManager(parsed.path)
-    return RemoteVcsManager(url)
+    return RemoteVcsManager.from_single_url(url)
 
 
 def bzr_to_browse_url(url: str) -> str:
