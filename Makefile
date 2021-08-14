@@ -1,4 +1,4 @@
-export PYTHONPATH=ognibuild:buildlog-consultant:.:breezy:silver-platter:lintian-brush:python-debian/lib:debmutate:dulwich
+export PYTHONPATH=$(shell pwd)/ognibuild:$(shell pwd)/buildlog-consultant:$(shell pwd):$(shell pwd)/breezy:$(shell pwd)/silver-platter:$(shell pwd)/lintian-brush:$(shell pwd)/python-debian/lib:$(shell pwd)/debmutate:$(shell pwd)/dulwich
 
 PB2_PY_OUTPUT = janitor/policy_pb2.py janitor/config_pb2.py janitor/package_overrides_pb2.py janitor/candidates_pb2.py janitor/package_metadata_pb2.py
 
