@@ -81,7 +81,9 @@ async def generate_review(
             return ""
         if base_revid == revid:
             return ""
-        url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run.id, role))
+        url = urllib.parse.urljoin(vcs_store_url, "%s/diff/%s?old=%s&new=%s" % (
+            run.vcs_type, run.package, base_revid.decode('utf-8'),
+            revid.decode('utf-8')))
         external_url = "/api/run/%s/diff?role=%s" % (run.id, role)
         try:
             async with client.get(url, timeout=ClientTimeout(30)) as resp:

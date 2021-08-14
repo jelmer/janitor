@@ -154,7 +154,7 @@ SELECT
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code, value,
     main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames, review_status,
+    instigated_context, vcs_type, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id) AS result_branches,

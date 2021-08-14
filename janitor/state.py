@@ -69,6 +69,7 @@ class Run(object):
     result: Optional[Any]
     suite: str
     instigated_context: Optional[str]
+    vcs_type: str
     branch_url: str
     logfilenames: Optional[List[str]]
     review_status: str
@@ -94,6 +95,7 @@ class Run(object):
         "result",
         "suite",
         "instigated_context",
+        "vcs_type",
         "branch_url",
         "logfilenames",
         "review_status",
@@ -121,6 +123,7 @@ class Run(object):
         result,
         suite,
         instigated_context,
+        vcs_type,
         branch_url,
         logfilenames,
         review_status,
@@ -145,6 +148,7 @@ class Run(object):
         self.result = result
         self.suite = suite
         self.instigated_context = instigated_context
+        self.vcs_type = vcs_type
         self.branch_url = branch_url
         self.logfilenames = logfilenames
         self.review_status = review_status
@@ -193,6 +197,7 @@ class Run(object):
             value=row['value'],
             suite=row['suite'],
             instigated_context=row['instigated_context'],
+            vcs_type=row['vcs_type'],
             branch_url=row['branch_url'],
             logfilenames=row['logfilenames'],
             review_status=row['review_status'],
@@ -223,6 +228,7 @@ class Run(object):
             self.result,
             self.suite,
             self.instigated_context,
+            self.vcS_tye,
             self.branch_url,
             self.logfilenames,
             self.review_status,
@@ -285,7 +291,7 @@ SELECT
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code,
     value, main_branch_revision, revision, context, result, suite,
-    instigated_context, branch_url, logfilenames, review_status,
+    instigated_context, vcs_type, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
