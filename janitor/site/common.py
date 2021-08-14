@@ -11,7 +11,6 @@ from janitor import state
 from janitor.site import (
     get_archive_diff,
     BuildDiffUnavailable,
-    get_vcs_type,
     DebdiffRetrievalError,
     tracker_url,
 )
@@ -184,7 +183,7 @@ async def generate_pkg_context(
     async with db.acquire() as conn:
         with span.new_child('sql:package'):
             package = await conn.fetchrow("""\
-SELECT name, maintainer_email, uploader_emails, removed, branch_url, vcs_url, vcs_browse, vcswatch_version, update_changelog AS changelog_policy, publish AS publish_policy
+SELECT name, maintainer_email, uploader_emails, removed, branch_url, vcs_type, vcs_url, vcs_browse, vcswatch_version, update_changelog AS changelog_policy, publish AS publish_policy
 FROM package
 LEFT JOIN policy ON package.name = policy.package AND suite = $2
 WHERE name = $1""", package, suite)
@@ -275,9 +274,6 @@ WHERE run.package = $1 AND run.suite = $2
         except DebdiffRetrievalError as e:
             return "Error retrieving debdiff: %s" % e
 
-    async def vcs_type():
-        return await get_vcs_type(client, vcs_store_url, run['package'])
-
     kwargs = {}
     if run:
         kwargs.update(run)
@@ -289,7 +285,7 @@ WHERE run.package = $1 AND run.suite = $2
         "uploader_emails": package['uploader_emails'],
         "removed": package['removed'],
         "vcs_url": package['vcs_url'],
-        "vcs_type": vcs_type,
+        "vcs_type": package['vcs_type'],
         "vcs_browse": package['vcs_browse'],
         "vcswatch_version": package['vcswatch_version'],
         "run_id": run_id,
