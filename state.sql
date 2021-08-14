@@ -431,8 +431,6 @@ SELECT
     instigated_context,
     branch_url,
     logfilenames,
-    review_status,
-    review_comment,
     worker,
     result_tags
 FROM
