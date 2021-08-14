@@ -213,7 +213,7 @@ $("#{{ propose_id }}").click(function() {
 {% for pp in publish_policy %}{% if publish_policy|length > 1 %}{{ role }}: {% endif %}<b>{{ pp['mode'] }}{% if pp['frequency_days'] %} (every {{ pp['frequency_days'] }} days){% endif %}</b>{% if not loop.last %}, {% endif %}{% endfor %}
 {% endmacro %}
 
-{% macro display_vcs_diffs(get_diff, branches, tags=None) %}
+{% macro display_vcs_diffs(show_diff, branches, tags=None) %}
 {% if branches %}
 <h3>Diff</h3>
 
