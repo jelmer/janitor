@@ -1365,7 +1365,7 @@ async def handle_assign(request):
         "env": env,
         "command": command,
         "suite": item.suite,
-        "vcs_manager": queue_processor.public_vcs_manager.base_url,
+        "vcs_manager": queue_processor.public_vcs_manager.base_urls.get(item.vcs_type),
     }
 
     with span.new_child('start-watchdog'):

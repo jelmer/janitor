@@ -1523,7 +1523,10 @@ async def main(argv=None):
         if args.vcs_location:
             vcs_manager = LocalVcsManager(args.vcs_location)
         else:
-            vcs_manager = RemoteVcsManager.from_single_url(assignment["vcs_manager"])
+            if vcs_type == 'git':
+                vcs_manager = RemoteVcsManager(assignment["vcs_manager"], None)
+            elif vcs_type == 'bzr':
+                vcs_manager = RemoteVcsManager(None, assignment["vcs_manager"])
         run_id = assignment["id"]
 
         possible_transports = []
