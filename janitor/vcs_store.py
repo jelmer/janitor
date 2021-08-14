@@ -558,14 +558,6 @@ async def bzr_backend(request):
     return response
 
 
-async def get_vcs_type(request):
-    package = request.match_info["package"]
-    vcs_type = request.app.vcs_manager.get_vcs_type(package)
-    if vcs_type is None:
-        raise web.HTTPNotFound()
-    return web.Response(body=vcs_type.encode("utf-8"))
-
-
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
     span = aiozipkin.request_span(request)
@@ -629,7 +621,6 @@ async def create_web_app(
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
     app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
-    app.router.add_get("/vcs-type/{package}", get_vcs_type, name='vcs-type')
     app.router.add_post("/git/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
     app.router.add_post("/bzr/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
