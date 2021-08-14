@@ -35,6 +35,7 @@ from buildlog_consultant.sbuild import (
 from janitor.logs import LogRetrievalError
 from janitor.site import (
     get_archive_diff,
+    get_vcs_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     tracker_url,
@@ -152,15 +153,13 @@ async def generate_run_file(
             return "No branch with role %s" % role
         if base_revid == revid:
             return ""
-        url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run['id'], role))
         try:
-            async with client.get(url) as resp:
-                if resp.status == 200:
-                    return (await resp.read()).decode("utf-8", "replace")
-                else:
-                    return "Unable to retrieve diff; error %d" % resp.status
+            diff = await get_vcs_diff(
+                client, vcs_store_url, run['vcs_type'], run['package'],
+                base_revid, revid)
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
+        return diff.decode("utf-8", "replace")
 
     kwargs["show_diff"] = show_diff
 

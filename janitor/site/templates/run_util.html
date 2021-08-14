@@ -10,7 +10,6 @@ cd {{ package }}
 {% endmacro %}
 
 {% macro merge_command(package, suite, result_branches, vcs) %}
-{% set vcs = vcs_type() %}
 {% if vcs == 'git' %}
 <p>Merge these changes:</p>
 <div class="highlight-default notranslate"><div class="highlight">

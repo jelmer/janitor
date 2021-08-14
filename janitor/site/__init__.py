@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import aiohttp
-from aiohttp import ClientConnectorError, web, BasicAuth
+from aiohttp import ClientConnectorError, web, BasicAuth, ClientTimeout
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Optional
 import urllib.parse
@@ -151,6 +151,27 @@ class BuildDiffUnavailable(Exception):
 
     def __init__(self, unavailable_run_id):
         self.unavailable_run_id = unavailable_run_id
+
+
+async def get_vcs_diff(client, vcs_store_url, vcs_type, package, old_revid, new_revid):
+    if old_revid == new_revid:
+        return b""
+    if vcs_type == 'bzr':
+        url = urllib.parse.urljoin(vcs_store_url, "bzr/%s/diff?old=%s&new=%s" % (
+            package, old_revid.decode('utf-8'),
+            new_revid.decode('utf-8')))
+    elif vcs_type == 'git':
+        url = urllib.parse.urljoin(vcs_store_url, "git/%s/diff?old=%s&new=%s" % (
+            package,
+            old_revid.decode('utf-8')[len('git-v1:'):],
+            new_revid.decode('utf-8')[len('git-v1:'):]))
+    else:
+        raise NotImplementedError('vcs type %s' % vcs_type)
+    async with client.get(url, timeout=ClientTimeout(30)) as resp:
+        if resp.status == 200:
+            return await resp.read()
+        else:
+            return b"Unable to retrieve diff; error %d" % resp.status
 
 
 async def get_archive_diff(
