@@ -182,6 +182,8 @@ class GCSLogFilemanager(LogFileManager):
         except ClientResponseError as e:
             if e.status == 503:
                 raise ServiceUnavailable()
+            if e.status == 403:
+                raise PermissionError(e.message)
             raise
 
 
