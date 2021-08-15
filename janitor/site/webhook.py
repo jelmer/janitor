@@ -182,7 +182,7 @@ async def process_webhook(request, db):
             ):
                 if suite not in rescheduled.get(package['name'], []):
                     await do_schedule(
-                        conn, package['name'], suite, requestor=requestor, bucket="webhook"
+                        conn, package['name'], suite, requestor=requestor, bucket="hook"
                     )
                     rescheduled.setdefault(package['name'], []).append(suite)
 
@@ -197,7 +197,7 @@ async def process_webhook(request, db):
                     continue
                 if suite not in rescheduled.get(package['name'], []):
                     await do_schedule(
-                        conn, package['name'], suite, requestor=requestor, bucket="webhook"
+                        conn, package['name'], suite, requestor=requestor, bucket="hook"
                     )
                     rescheduled.setdefault(package['name'], []).append(suite)
 

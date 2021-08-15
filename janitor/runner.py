@@ -1366,7 +1366,7 @@ async def handle_assign(request):
         "command": command,
         "suite": item.suite,
         # TODO(jelmer): Don't let this depend on the suite name
-        "control-build": (item.suite == 'unchanged'),
+        "always-build": (item.suite in ('unchanged', 'control')),
         "vcs_manager": queue_processor.public_vcs_manager.base_urls.get(item.vcs_type),
     }
 
