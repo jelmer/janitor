@@ -124,7 +124,7 @@ CREATE INDEX ON publish (revision);
 CREATE INDEX ON publish (merge_proposal_url);
 CREATE INDEX ON publish (timestamp);
 CREATE TYPE queue_bucket AS ENUM(
-    'update-existing-mp', 'webhook', 'manual', 'control', 'reschedule', 'update-new-mp', 'missing-deps', 'default');
+    'update-existing-mp', 'manual', 'control', 'hook', 'reschedule', 'update-new-mp', 'missing-deps', 'default');
 CREATE TABLE IF NOT EXISTS queue (
    id serial,
    bucket queue_bucket default 'default',

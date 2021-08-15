@@ -1387,7 +1387,7 @@ async def handle_vcswatch(request):
         for suite in await state.iter_publishable_suites(conn, package):
             try:
                 await do_schedule(
-                    conn, package, suite, requestor=requestor, bucket="webhook")
+                    conn, package, suite, requestor=requestor, bucket="hook")
             except PolicyUnavailable:
                 policy_unavailable.append(suite)
             else:
