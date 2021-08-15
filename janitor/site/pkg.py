@@ -21,7 +21,6 @@ from functools import partial
 from io import BytesIO
 
 from typing import Optional, Tuple
-import urllib.parse
 
 from aiohttp import ClientConnectorError
 import asyncpg
