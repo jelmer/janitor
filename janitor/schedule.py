@@ -498,7 +498,7 @@ async def do_schedule_control(
     return await do_schedule(
         conn,
         package,
-        "unchanged",
+        "control",
         offset=offset,
         refresh=refresh,
         bucket=bucket,
