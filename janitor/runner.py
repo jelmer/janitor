@@ -1365,6 +1365,8 @@ async def handle_assign(request):
         "env": env,
         "command": command,
         "suite": item.suite,
+        # TODO(jelmer): Don't let this depend on the suite name
+        "control-build": (item.suite == 'unchanged'),
         "vcs_manager": queue_processor.public_vcs_manager.base_urls.get(item.vcs_type),
     }
 
@@ -1479,6 +1481,7 @@ async def handle_finish(request):
             worker_name=worker_name,
             worker_link=worker_link,
             branch_url=main_branch_url,
+            vcs_type=queue_item.vcs_type,
             worker_result=worker_result,
             logfilenames=logfilenames,
             )

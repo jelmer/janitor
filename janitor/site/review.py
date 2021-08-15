@@ -3,7 +3,6 @@
 import aiozipkin
 from asyncio import TimeoutError
 from aiohttp import ClientConnectorError
-import urllib.parse
 
 from janitor import state
 from . import (
