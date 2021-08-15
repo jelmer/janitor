@@ -722,7 +722,7 @@ def process_package(
     cached_branch_url: Optional[str] = None,
     extra_resume_branches: Optional[List[Tuple[str, str]]] = None,
     resume_subworker_result: Any = None,
-    is_control_build: bool = False
+    force_build: bool = False
 ) -> Iterator[Tuple[Workspace, WorkerResult]]:
     committer = env.get("COMMITTER")
 
@@ -855,7 +855,7 @@ def process_package(
             if e.code == "nothing-to-do":
                 if resume_subworker_result is not None:
                     raise WorkerFailure("nothing-new-to-do", e.description)
-                elif is_control_build:
+                elif force_build:
                     changer_result = ChangerResult(
                         description='No change build',
                         mutator=None,
@@ -873,7 +873,7 @@ def process_package(
 
         logging.info('Actual command: %r', actual_command)
 
-        if is_control_build:
+        if force_build:
             should_build = True
         else:
             if not changer_result.branches:
@@ -1096,7 +1096,7 @@ def run_worker(
     resume_subworker_result=None,
     resume_branches=None,
     possible_transports=None,
-    is_control_build=False
+    force_build=False
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -1119,7 +1119,7 @@ def run_worker(
                 if resume_branches
                 else None,
                 possible_transports=possible_transports,
-                is_control_build=is_control_build
+                force_build=force_build
             ) as (ws, result):
                 enable_tag_pushing(ws.local_tree.branch)
                 logging.info("Pushing result branch to %r", vcs_manager)
@@ -1514,7 +1514,7 @@ async def main(argv=None):
         suite = assignment["suite"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
-        is_control_build = assignment.get('control-build', False)
+        force_build = assignment.get('force-build', False)
         subpath = assignment["branch"].get("subpath", "") or ""
         if assignment["resume"]:
             resume_result = assignment["resume"].get("result")
@@ -1604,7 +1604,7 @@ async def main(argv=None):
                     cached_branch_url=cached_branch_url,
                     resume_subworker_result=resume_result,
                     possible_transports=possible_transports,
-                    is_control_build=is_control_build
+                    force_build=force_build
                 ),
             )
             watchdog_petter.kill = main_task.cancel
