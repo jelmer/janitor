@@ -22,15 +22,11 @@
     <script src="/_static/chart.js"></script>
     <script src="/_static/janitor.js"></script>
     {% include "analytics.html" ignore missing without context %}
-    <div class="document">
+    <div class="plain-document">
      {% block sidebar %}{% endblock %}
-      <div class="documentwrapper">
-         <div class="bodywrapper">
-           <main>
-            {% block body %}{% endblock %}
-           </main>
-        </div>
-      </div>
+      <main>
+        {% block body %}{% endblock %}
+      </main>
     </div>
     {% include "footer.html" %}
   </body>

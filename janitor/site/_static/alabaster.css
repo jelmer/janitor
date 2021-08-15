@@ -11,14 +11,12 @@ body {
     padding: 0;
 }
 
-
 div.document {
     margin: 30px auto 0 auto;
 }
 
-div.fulldocumentwrapper {
-    margin: 50px;
-    float: none;
+div.plain-document {
+    width: 90%;
 }
 
 div.documentwrapper {
@@ -457,7 +455,7 @@ div.sphinxsidebar {
         font-size: medium;
         line-height: normal;
     }
-    
+
     li.toctree-l1 { display: inline; font-size: small;  }
 
     div.sphinxsidebar h3, div.sphinxsidebar h4, div.sphinxsidebar p,
@@ -511,7 +509,6 @@ div.sphinxsidebar {
         display: none;
     }
 }
-
 
 /* misc. */
 
