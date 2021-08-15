@@ -286,7 +286,10 @@ class LintianBrushPublisher(Publisher):
 
 class NewUpstreamPublisher(Publisher):
     def read_worker_result(self, result):
-        self._upstream_version = result["upstream_version"]
+        try:
+            self._upstream_version = result["upstream_version"]
+        except KeyError:
+            self._upstream_version = result["new_upstream_version"]
 
     def get_proposal_commit_message(self, role, existing_commit_message):
         if role == "pristine-tar":
