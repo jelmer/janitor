@@ -152,7 +152,7 @@ async def summarize_results(db, suite):
         for result_code, c in await conn.fetch(
                 "SELECT result_code, count(*) from last_runs "
                 "where suite = $1 group by result_code", suite):
-            if result_code in ('success', 'nothing-to-do'):
+            if result_code in ('success', 'nothing-to-do', 'native-package'):
                 results[result_code] += c
             elif result_code.startswith('upstream-unsupported-vcs'):
                 results['upstream-vcs-unsupported'] += c

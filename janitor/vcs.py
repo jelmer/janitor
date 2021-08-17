@@ -29,6 +29,7 @@ from breezy.diff import show_diff_trees
 from breezy.errors import (
     ConnectionError,
     NotBranchError,
+    NoSuchFile,
     NoSuchRevision,
     NoRepositoryPresent,
     IncompatibleRepositories,
@@ -285,7 +286,10 @@ def import_branches_bzr(
                 target_branch_path,
                 {"branch": urlutils.escape(fn, safe='')}).rstrip('/')
         transport = get_transport(target_branch_path)
-        transport.create_prefix()
+        try:
+            transport.ensure_base()
+        except NoSuchFile:
+            transport.create_prefix()
         try:
             target_branch = Branch.open_from_transport(transport)
         except NotBranchError:
