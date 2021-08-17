@@ -53,6 +53,7 @@ from . import (
     env,
     highlight_diff,
     get_archive_diff,
+    get_vcs_diff,
     iter_accept,
     render_template_for_request,
     BuildDiffUnavailable,
@@ -466,64 +467,76 @@ queue.id ASC
 @routes.get("/pkg/{package}/run/{run_id}/diff", name="package-run-diff")
 @routes.get("/run/{run_id}/diff", name="run-diff")
 async def handle_diff(request):
-    try:
-        run_id = request.match_info["run_id"]
-    except KeyError:
-        package = request.match_info["package"]
-        suite = request.match_info["suite"]
-        async with request.app['db'].acquire() as conn:
-            run_id = await conn.fetchval(
-                'SELECT id FROM last_unabsorbed_runs WHERE package = $1 AND suite = $2',
-                package, suite)
-        if run_id is None:
-            return web.Response(
-                text="no unabsorbed run for %s/%s" % (package, suite), status=404
-            )
     role = request.query.get("role", "main")
+    async with request.app['db'].acquire() as conn:
+        try:
+            run_id = request.match_info["run_id"]
+        except KeyError:
+            package = request.match_info["package"]
+            suite = request.match_info["suite"]
+            run = await conn.fetchrow(
+                'SELECT id, package, vcs_type, base_revision, revision FROM last_unabsorbed_runs '
+                'LEFT JOIN new_result_branch ON '
+                'new_result_branch.run_id = last_unabsorbed_runs.id '
+                'WHERE package = $1 AND suite = $2 AND role = $3',
+                package, suite, role)
+            if run is None:
+                return web.Response(
+                    text="no unabsorbed run for %s/%s" % (package, suite), status=404
+                )
+        else:
+            run = await conn.fetchrow(
+                'SELECT id, package, vcs_type, '
+                'new_result_branch.base_revision AS base_revision, '
+                'new_result_branch.revision AS revision FROM run '
+                'LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id '
+                'WHERE id = $1 AND role = $2', run_id, role)
+            if run is None:
+                return web.Response(
+                    text="no run %s" % (run_id, ), status=404
+                )
+
     try:
         max_diff_size = int(request.query["max_diff_size"])
     except KeyError:
         max_diff_size = None
-    vcs_store_url = request.app['vcs_store_url']
-    url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run_id, role))
     try:
-        async with request.app['http_client_session'].get(url) as resp:
-            if resp.status == 200:
-                diff = await resp.read()
-                if max_diff_size is not None and len(diff) > max_diff_size:
-                    return web.Response(
-                        status=413,
-                        text="Diff too large (%d bytes). See it at %s"
-                        % (
-                            len(diff),
-                            request.app.router["run-diff"].url_for(run_id=run_id),
-                        ),
-                    )
+        diff = await get_vcs_diff(
+            request.app['http_client_session'], request.app['vcs_store_url'],
+            run['vcs_type'], run['package'], run['base_revision'].encode('utf-8'),
+            run['revision'].encode('utf-8'))
+        if max_diff_size is not None and len(diff) > max_diff_size:
+            return web.Response(
+                status=413,
+                text="Diff too large (%d bytes). See it at %s"
+                % (
+                    len(diff),
+                    request.app.router["run-diff"].url_for(run_id=run_id),
+                ),
+            )
 
-                for accept in iter_accept(request):
-                    if accept in ("text/x-diff", "text/plain", "*/*"):
-                        return web.Response(
-                            body=diff,
-                            content_type="text/x-diff",
-                            headers={
-                                "Cache-Control": "max-age=3600",
-                                "Vary": "Accept",
-                            },
-                        )
-                    if accept == "text/html":
-                        return web.Response(
-                            text=highlight_diff(diff.decode("utf-8", "replace")),
-                            content_type="text/html",
-                            headers={
-                                "Cache-Control": "max-age=3600",
-                                "Vary": "Accept",
-                            },
-                        )
-                raise web.HTTPNotAcceptable(
-                    text="Acceptable content types: " "text/html, text/x-diff"
+        for accept in iter_accept(request):
+            if accept in ("text/x-diff", "text/plain", "*/*"):
+                return web.Response(
+                    body=diff,
+                    content_type="text/x-diff",
+                    headers={
+                        "Cache-Control": "max-age=3600",
+                        "Vary": "Accept",
+                    },
                 )
-            else:
-                return web.Response(body=await resp.read(), status=400)
+            if accept == "text/html":
+                return web.Response(
+                    text=highlight_diff(diff.decode("utf-8", "replace")),
+                    content_type="text/html",
+                    headers={
+                        "Cache-Control": "max-age=3600",
+                        "Vary": "Accept",
+                    },
+                )
+        raise web.HTTPNotAcceptable(
+            text="Acceptable content types: " "text/html, text/x-diff"
+        )
     except ContentTypeError as e:
         return web.Response(text="publisher returned error %d" % e.code, status=400)
     except ClientConnectorError:

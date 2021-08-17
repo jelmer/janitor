@@ -1,5 +1,5 @@
 FROM eu.gcr.io/debian-janitor/base
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9914
-RUN apt updat e&& apt install -y dpkg-dev
+RUN apt update && apt install -y dpkg-dev
 ENTRYPOINT ["python3", "-m", "janitor.debian.archive", "--port=9914", "--listen-address=0.0.0.0"]

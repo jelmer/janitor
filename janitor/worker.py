@@ -1369,7 +1369,7 @@ LOG_INDEX_TEMPLATE = Template("""\
 
 async def handle_log_index(request):
     if 'directory' not in request.app:
-        raise web.HTTPNotFoundResponse(text="Log directory not created yet")
+        raise web.HTTPNotFound(text="Log directory not created yet")
     names = [entry.name for entry in os.scandir(request.app['directory'])
              if entry.name.endswith('.log')]
     return web.Response(

@@ -5,11 +5,11 @@ from aiohttp import web
 import asyncpg
 from functools import partial
 from typing import Optional, List
-import urllib.parse
 
 from janitor import state
 from janitor.site import (
     get_archive_diff,
+    get_vcs_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     tracker_url,
@@ -99,6 +99,7 @@ SELECT
   result,
   suite,
   instigated_context,
+  vcs_type,
   branch_url,
   logfilenames,
   review_status,
@@ -243,13 +244,11 @@ WHERE run.package = $1 AND run.suite = $2
             return "no result branch with role %s" % role
         if base_revid == revid:
             return ""
-        url = urllib.parse.urljoin(vcs_store_url, "diff/%s/%s" % (run['id'], role))
         try:
-            async with client.get(url) as resp:
-                if resp.status == 200:
-                    return (await resp.read()).decode("utf-8", "replace")
-                else:
-                    return "Unable to retrieve diff; error %d" % resp.status
+            diff = await get_vcs_diff(
+                client, vcs_store_url, run['vcs_type'], run['package'],
+                base_revid.encode('utf-8'), revid.encode('utf-8'))
+            return diff.decode("utf-8", "replace")
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
 
