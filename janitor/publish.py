@@ -879,7 +879,8 @@ async def publish_from_policy(
             rate_limiter=rate_limiter,
             result_tags=run.result_tags,
             commit_message_template=(
-                suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
+                suite_config.merge_proposal.commit_message
+                if suite_config.merge_proposal else None),
         )
     except PublishFailure as e:
         code, description = await handle_publish_failure(

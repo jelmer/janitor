@@ -936,7 +936,10 @@ async def abort_run(
     metadata["finish_time"] = finish_time.isoformat()
 
     with TemporaryDirectory() as td:
-        await upload_results(session, base_url, run_id, metadata, td)
+        try:
+            await upload_results(session, base_url, run_id, metadata, td)
+        except ResultUploadFailure as e:
+            logging.warning('Result upload for abort failed: %s', e)
 
 
 def handle_sigterm(session, base_url, run_id, metadata):
