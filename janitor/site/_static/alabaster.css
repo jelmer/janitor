@@ -17,6 +17,7 @@ div.document {
 
 div.plain-document {
     width: 90%;
+    margin: auto;
 }
 
 div.documentwrapper {
