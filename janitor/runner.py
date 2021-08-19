@@ -96,6 +96,9 @@ from .vcs import (
     UnsupportedVcs,
 )
 
+DEFAULT_RETRY_AFTER = 120
+
+
 try:
     from asyncio import to_thread  # type: ignore
 except ImportError:  # python < 3.8
@@ -1297,7 +1300,9 @@ async def handle_assign(request):
         except BranchRateLimited as e:
             main_branch_rate_limit_count.inc()
             await abort(active_run, 'pull-rate-limited', str(e))
-            return web.json_response({'reason': str(e)}, status=429)
+            return web.json_response(
+                {'reason': str(e)}, status=429, headers={
+                    'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
         except BranchOpenFailure:
             resume_branch = None
             vcs_type = item.vcs_type

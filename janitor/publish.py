@@ -2146,7 +2146,7 @@ async def check_existing(
 
     modified_mps = 0
     check_only = False
-    hoster_ratelimited: Set[Hoster] = set()
+    hoster_ratelimited: Dict[Hoster, int] = {}
 
     for hoster, mp, status in iter_all_mps():
         status_count[status] += 1
@@ -2172,11 +2172,11 @@ async def check_existing(
         except NoRunForMergeProposal as e:
             logger.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
             modified = False
-        except BranchRateLimited:
+        except BranchRateLimited as e:
             logger.warning(
                 "Rate-limited accessing %s. Skipping %r for this cycle.",
                 mp.url, hoster)
-            hoster_ratelimited.add(hoster)
+            hoster_ratelimited[hoster] = e.retry_after
             continue
 
         if modified:
