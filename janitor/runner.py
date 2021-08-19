@@ -37,7 +37,7 @@ from aiohttp import web
 
 from yarl import URL
 
-from breezy import debug
+from breezy import debug, urlutils
 from breezy.branch import Branch
 from breezy.errors import PermissionDenied, ConnectionError
 from breezy.transport import UnusableRedirect
@@ -120,7 +120,7 @@ last_success_gauge = Gauge(
 build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
 run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
 active_run_count = Gauge("active_runs", "Number of active runs")
-main_branch_rate_limit_count = Counter("main_branch_rate_limit_count", "Rate limiting of main branch")
+rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
 
 
 class BuilderResult(object):
@@ -1089,6 +1089,7 @@ class QueueProcessor(object):
         self.active_runs: Dict[str, ActiveRun] = {}
         self.backup_artifact_manager = backup_artifact_manager
         self.backup_logfile_manager = backup_logfile_manager
+        self.rate_limit_hosts = {}
 
     def status_json(self) -> Any:
         return {
@@ -1151,15 +1152,29 @@ class QueueProcessor(object):
         last_success_gauge.set_to_current_time()
         await followup_run(self.config, self.database, self.policy, item, result)
 
+    def rate_limited(self, host, retry_after):
+        rate_limited_count.labels(host=host).inc()
+        self.rate_limit_hosts[host] = (
+            retry_after or (datetime.now() + timedelta(seconds=DEFAULT_RETRY_AFTER)))
+
+    def is_queue_item_rate_limited(self, url):
+        host = urlutils.URL.from_string(url).host
+        until = self.rate_limit_hosts.get(host)
+        if not until:
+            return False
+        return until > datetime.now()
+
     async def next_queue_item(self, conn) -> Optional[state.QueueItem]:
         limit = len(self.active_runs) + 3
         async for item in state.iter_queue(conn, limit=limit):
-            if self.queue_item_assigned(item.id):
+            if self.is_queue_item_assigned(item.id):
+                continue
+            if self.is_queue_item_rate_limited(item.branch_url):
                 continue
             return item
         return None
 
-    def queue_item_assigned(self, queue_item_id: int) -> bool:
+    def is_queue_item_assigned(self, queue_item_id: int) -> bool:
         """Check if a queue item has been assigned already."""
         for active_run in self.active_runs.values():
             if active_run.queue_item.id == queue_item_id:
@@ -1298,7 +1313,9 @@ async def handle_assign(request):
                     possible_transports=possible_transports,
                 )
         except BranchRateLimited as e:
-            main_branch_rate_limit_count.inc()
+            host = urlutils.URL.from_string(item.branch_url).host
+            logging.warning('Rate limiting for %s: %r', host, e)
+            queue_processor.rate_limited(host, e.retry_after)
             await abort(active_run, 'pull-rate-limited', str(e))
             return web.json_response(
                 {'reason': str(e)}, status=429, headers={
@@ -1513,6 +1530,7 @@ async def handle_finish(request):
 async def create_app(queue_processor, tracer=None):
     app = web.Application()
     app.router.add_routes(routes)
+    app['rate-limited'] = {}
     app['queue_processor'] = queue_processor
     setup_metrics(app)
     app.router.add_get(
