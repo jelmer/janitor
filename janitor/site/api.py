@@ -721,6 +721,8 @@ async def handle_run(request):
                 "package": run.package,
                 "build_info": build_info,
                 "result_code": run.result_code,
+                "vcs_type": run.vcs_type,
+                "branch_url": run.branch_url,
             }
         )
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
@@ -1360,6 +1362,24 @@ async def handle_list_active_runs(request):
                 return web.json_response(await resp.json(), status=resp.status)
             status = await resp.json()
             return web.json_response(status["processing"], status=200)
+
+
+@docs()
+@routes.get("/result-codes/{result_code}", name="result-code")
+async def handle_result_code(request):
+    result_code = request.match_info["result_code"]
+    ret = []
+    async with request.app['db'].acquire() as conn:
+        for row in await conn.fetch(
+                'SELECT id, package, vcs_type, branch_url FROM last_runs '
+                'WHERE result_code = $1', result_code):
+            ret.append({
+                'run_id': row['id'],
+                'package': row['package'],
+                'vcs_type': row['vcs_type'],
+                'branch_url': row['branch_url'],
+                })
+    return web.json_response(ret)
 
 
 @docs()
