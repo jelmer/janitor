@@ -26,6 +26,7 @@ for package, (vcs_type, url) in runs.items():
             grep = subprocess.check_output(['brz', 'grep', '-Xdebian/*', '(github.com|bitbucket.org|gitlab.com|gitlab|sf.net)'], cwd=td)
             grep += subprocess.check_output(['brz', 'grep', '-Xdebian/*', '(CVS|Subversion|svn|SVN|Git|Bazaar|bzr|fossil)'], cwd=td)
             sys.stdout.buffer.write(grep)
+            sys.stdout.flush()
             if grep:
                 subprocess.check_call(['/bin/bash'], cwd=td)
                 result = "yes"
