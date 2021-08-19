@@ -79,11 +79,11 @@ async def generate_review(
             (remote_name, base_revid, revid) = run.get_result_branch(role)
         except KeyError:
             return ""
+        external_url = "/api/run/%s/diff?role=%s" % (run.id, role)
         try:
             diff = (await get_vcs_diff(
                 client, vcs_store_url, run.vcs_type, run.package, base_revid,
                 revid)).decode("utf-8", "replace")
-            external_url = "/api/run/%s/diff?role=%s" % (run.id, role)
             if len(diff) > MAX_DIFF_SIZE:
                 return "Diff too large (%d). See it at %s" % (
                     len(diff),
