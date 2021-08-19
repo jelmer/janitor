@@ -2,7 +2,6 @@
 
 import tdb
 import json
-import os
 from urllib.request import urlopen
 import subprocess
 from tempfile import TemporaryDirectory
