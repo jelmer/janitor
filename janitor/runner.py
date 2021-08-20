@@ -1342,9 +1342,12 @@ async def handle_assign(request):
 
         if resume_branch is None and not item.refresh:
             with span.new_child('resume-branch:open'):
-                resume_branch = await to_thread(
-                    queue_processor.public_vcs_manager.get_branch,
-                    item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type)
+                try:
+                    resume_branch = await to_thread(
+                        queue_processor.public_vcs_manager.get_branch,
+                        item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type)
+                except UnsupportedVcs:
+                    resume_branch = None
 
         if resume_branch is not None:
             with span.new_child('resume-branch:check'):
