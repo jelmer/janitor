@@ -8,6 +8,11 @@ from tempfile import TemporaryDirectory
 from os import O_RDWR, O_CREAT
 import sys
 
+# Skip these repositories since they're very large.
+BANNED_URLS = [
+    'https://salsa.debian.org/haskell-team/DHG_packages.git',
+    ]
+
 check = tdb.open('checked.tdb', flags=O_RDWR | O_CREAT)
 
 runs = {}
@@ -17,6 +22,8 @@ with urlopen('https://janitor.debian.net/api/result-codes/upstream-branch-unknow
 
 for package, (vcs_type, url) in runs.items():
     if package.encode('utf-8') in check:
+        continue
+    if url.rstrip('/') in BANNED_URLS:
         continue
     print('package: %s (%s)' % (package, url))
     with TemporaryDirectory() as td:
