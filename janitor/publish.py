@@ -17,6 +17,7 @@
 
 """Publishing VCS changes."""
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import asyncio
 import functools
@@ -281,6 +282,14 @@ def branches_match(url_a, url_b):
     return open_branch(url_a).name == open_branch(url_b).name
 
 
+@dataclass
+class PublishResult:
+
+    is_new: bool = False
+    proposal_url: Optional[str] = None
+    branch_name: Optional[str] = None
+
+
 async def publish_one(
     template_env_path: Optional[str],
     suite: str,
@@ -308,7 +317,7 @@ async def publish_one(
     derived_owner: Optional[str] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
     commit_message_template: Optional[str] = None,
-):
+) -> PublishResult:
     """Publish a single run in some form.
 
     Args:
@@ -391,7 +400,8 @@ async def publish_one(
             rate_limiter.inc(maintainer_email)
             open_proposal_count.labels(maintainer=maintainer_email).inc()
 
-        return proposal_url, branch_name, is_new
+        return PublishResult(
+            proposal_url=proposal_url, branch_name=branch_name, is_new=is_new)
 
     raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
 
@@ -855,7 +865,7 @@ async def publish_from_policy(
         "Publishing %s / %r / %s (mode: %s)", run.package, run.command, role, mode
     )
     try:
-        proposal_url, branch_name, is_new = await publish_one(
+        publish_result = await publish_one(
             template_env_path,
             run.suite,
             run.package,
@@ -886,8 +896,7 @@ async def publish_from_policy(
         code, description = await handle_publish_failure(
             e, conn, run, bucket="update-new-mp"
         )
-        branch_name = None
-        proposal_url = None
+        publish_result = PublishResult()
         if e.code == "nothing-to-do":
             logger.info('Nothing to do.')
         else:
@@ -897,7 +906,7 @@ async def publish_from_policy(
         description = "Success"
 
     if mode == MODE_ATTEMPT_PUSH:
-        if proposal_url:
+        if publish_result.proposal_url:
             mode = MODE_PROPOSE
         else:
             mode = MODE_PUSH
@@ -905,14 +914,14 @@ async def publish_from_policy(
     await store_publish(
         conn,
         run.package,
-        branch_name,
+        publish_result.branch_name,
         base_revision,
         revision,
         role,
         mode,
         code,
         description,
-        proposal_url if proposal_url else None,
+        publish_result.proposal_url if publish_result.proposal_url else None,
         publish_id=publish_id,
         requestor=requestor,
     )
@@ -932,11 +941,11 @@ async def publish_from_policy(
         "id": publish_id,
         "package": run.package,
         "suite": run.suite,
-        "proposal_url": proposal_url or None,
+        "proposal_url": publish_result.proposal_url or None,
         "mode": mode,
         "main_branch_url": main_branch_url,
         "main_branch_browse_url": bzr_to_browse_url(main_branch_url),
-        "branch_name": branch_name,
+        "branch_name": publish_result.branch_name,
         "result_code": code,
         "result": run.result,
         "run_id": run.id,
@@ -989,7 +998,7 @@ async def publish_and_store(
 
     async with db.acquire() as conn:
         try:
-            proposal_url, branch_name, is_new = await publish_one(
+            publish_result = await publish_one(
                 template_env_path,
                 run.suite,
                 run.package,
@@ -1047,7 +1056,7 @@ async def publish_and_store(
             return
 
         if mode == MODE_ATTEMPT_PUSH:
-            if proposal_url:
+            if publish_result.proposal_url:
                 mode = MODE_PROPOSE
             else:
                 mode = MODE_PUSH
@@ -1055,14 +1064,14 @@ async def publish_and_store(
         await store_publish(
             conn,
             run.package,
-            branch_name,
+            publish_result.branch_name,
             run.main_branch_revision,
             run.revision,
             role,
             mode,
             "success",
             "Success",
-            proposal_url if proposal_url else None,
+            publish_result.proposal_url if publish_result.proposal_url else None,
             publish_id=publish_id,
             requestor=requestor,
         )
@@ -1075,11 +1084,11 @@ async def publish_and_store(
                 "id": publish_id,
                 "package": run.package,
                 "suite": run.suite,
-                "proposal_url": proposal_url or None,
+                "proposal_url": publish_result.proposal_url or None,
                 "mode": mode,
                 "main_branch_url": run.branch_url,
                 "main_branch_browse_url": bzr_to_browse_url(run.branch_url),
-                "branch_name": branch_name,
+                "branch_name": publish_result.branch_name,
                 "result_code": "success",
                 "result": run.result,
                 "role": role,
@@ -1552,7 +1561,6 @@ SELECT
     rb.revision AS revision
 FROM new_result_branch rb
 RIGHT JOIN run ON rb.run_id = run.id
-LEFT JOIN debian_build ON run.id = debian_build.run_id
 WHERE rb.revision IN (
     SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
 ORDER BY run.finish_time DESC
@@ -1995,7 +2003,7 @@ This merge proposal will be closed, since the branch has moved to %s.
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(conn, suite_config, last_run, mp_run['role'])
         try:
-            mp_url, branch_name, is_new = await publish_one(
+            publish_result = await publish_one(
                 template_env_path,
                 last_run.suite,
                 last_run.package,
@@ -2085,22 +2093,22 @@ applied independently.
                 await store_publish(
                     conn,
                     last_run.package,
-                    branch_name,
+                    publish_result.branch_name,
                     last_run_base_revision,
                     last_run_revision,
                     mp_run['role'],
                     MODE_PROPOSE,
                     "success",
                     "Succesfully updated",
-                    mp_url,
+                    publish_result.mp_url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
                 )
 
-            if is_new:
+            if publish_result.is_new:
                 # This can happen when the default branch changes
                 logger.warning(
-                    "Intended to update proposal %r, but created %r", mp.url, mp_url
+                    "Intended to update proposal %r, but created %r", mp.url, publish_result.proposal_url
                 )
         return True
     else:
