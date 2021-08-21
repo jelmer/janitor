@@ -459,7 +459,7 @@ class LocalVcsManager(VcsManager):
 
 
 class RemoteVcsManager(VcsManager):
-    def __init__(self, git_base_url: str, bzr_base_url: str):
+    def __init__(self, git_base_url: Optional[str], bzr_base_url: Optional[str]):
         self.base_urls = {}
         if git_base_url:
             self.base_urls['git'] = git_base_url
