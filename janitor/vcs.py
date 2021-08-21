@@ -206,7 +206,7 @@ def mirror_branches(
                     revision_id=revid,
                 )
             except NoSuchRevision as e:
-                raise MirrorFailure(target_branch_name, e)
+                raise MirrorFailure(target_branch_name, str(e))
     elif vcs == "bzr":
         path = vcs_manager.get_repository_url(codebase, vcs)
         try:
@@ -237,7 +237,7 @@ def mirror_branches(
             try:
                 from_branch.push(target_branch, overwrite=True, stop_revision=revid)
             except NoSuchRevision as e:
-                raise MirrorFailure(target_branch_name, e)
+                raise MirrorFailure(target_branch_name, str(e))
     else:
         raise AssertionError("unsupported vcs %s" % vcs)
 
@@ -381,7 +381,7 @@ def get_local_vcs_branch_url(
         raise AssertionError("unknown vcs type %r" % vcs)
 
 
-def get_local_vcs_branch(vcs_directory: str, codebase: str, branch_name: str) -> Branch:
+def get_local_vcs_branch(vcs_directory: str, codebase: str, branch_name: str) -> Optional[Branch]:
     for vcs in SUPPORTED_VCSES:
         if os.path.exists(os.path.join(vcs_directory, vcs, codebase)):
             break
@@ -501,7 +501,7 @@ class RemoteVcsManager(VcsManager):
 def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
     f = BytesIO()
     try:
-        repo = vcs_manager.get_repository(run.package)
+        repo = vcs_manager.get_repository(run.package)  # type: Optional[Repository]
     except NotBranchError:
         repo = None
     if repo is None:

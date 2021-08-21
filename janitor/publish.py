@@ -2100,7 +2100,7 @@ applied independently.
                     MODE_PROPOSE,
                     "success",
                     "Succesfully updated",
-                    publish_result.mp_url,
+                    publish_result.proposal_url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
                 )
