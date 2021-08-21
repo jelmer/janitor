@@ -1544,6 +1544,8 @@ async def main(argv=None):
                 vcs_manager = RemoteVcsManager(assignment["vcs_manager"], None)
             elif vcs_type == 'bzr':
                 vcs_manager = RemoteVcsManager(None, assignment["vcs_manager"])
+            else:
+                raise NotImplementedError
         run_id = assignment["id"]
 
         possible_transports = []
