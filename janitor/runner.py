@@ -1158,6 +1158,8 @@ class QueueProcessor(object):
             retry_after or (datetime.now() + timedelta(seconds=DEFAULT_RETRY_AFTER)))
 
     def is_queue_item_rate_limited(self, url):
+        if url is None:
+            return False
         host = urlutils.URL.from_string(url).host
         until = self.rate_limit_hosts.get(host)
         if not until:
