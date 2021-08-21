@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
 import logging
 import os
 import sys
@@ -33,7 +33,7 @@ from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
 
-from silver_platter.changer import ChangerError
+from silver_platter.debian.changer import ChangerError
 from breezy.plugins.debian.upstream.branch import (
     DistCommandFailed,
     )
@@ -61,9 +61,13 @@ def redirect_output(to_file):
 def create_dist(
         log_directory, tree, package, version, target_dir, schroot=None,
         packaging_tree=None, packaging_debian_path=None):
-    os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
+    if version:
+        os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
 
-    with open(os.path.join(log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
+    with ExitStack() as es:
+        if log_directory:
+            distf = es.enter_context(open(os.path.join(log_directory, 'dist.log'), 'wb'))
+            es.enter_context(redirect_output(distf))
         try:
             return create_dist_schroot(
                 tree,
@@ -105,4 +109,40 @@ def create_dist(
 
 
 if __name__ == '__main__':
-    pass
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--log-directory', type=str, default=None,
+        help='Write logs to files in specified directory rather than standard out')
+    parser.add_argument(
+        '--schroot', type=str, default=None,
+        help='Schroot to use')
+    parser.add_argument(
+        '--target-dir', type=str, default='..',
+        help='Directory to write to')
+    parser.add_argument(
+        '--packaging', type=str, default=None,
+        help='Location of packaging')
+    parser.add_argument(
+        '--directory', '-d',
+        type=str, default='.',
+        help='Path to tree to create dist tarball for')
+    args = parser.parse_args()
+
+    import breezy.bzr
+    import breezy.git
+    from breezy.workingtree import WorkingTree
+
+    tree = WorkingTree.open(args.directory)
+
+    if args.packaging:
+        packaging_tree, packaging_debian_path = WorkingTree.open_containing(args.packaging)
+    else:
+        packaging_tree = None
+        packaging_debian_path = None
+
+    result = create_dist(
+        args.log_directory, tree, os.environ.get('PACKAGE'), os.environ.get('VERSION'),
+        os.path.abspath(os.path.join(args.directory, args.target_dir)),
+        schroot=args.schroot, packaging_tree=packaging_tree,
+        packaging_debian_path=packaging_debian_path)
