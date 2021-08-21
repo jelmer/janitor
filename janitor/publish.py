@@ -1555,7 +1555,7 @@ RIGHT JOIN run ON rb.run_id = run.id
 LEFT JOIN debian_build ON run.id = debian_build.run_id
 WHERE rb.revision IN (
     SELECT revision from merge_proposal WHERE merge_proposal.url = $1)
-ORDER BY run.finish_time ASC
+ORDER BY run.finish_time DESC
 LIMIT 1
 """
     return await conn.fetchrow(query, mp_url)

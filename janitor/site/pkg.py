@@ -158,6 +158,8 @@ async def generate_run_file(
                 base_revid.encode('utf-8'), revid.encode('utf-8'))
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
+        except NotImplementedError:
+            return "Unable to retrieve diff; unsupported vcs"
         return diff.decode("utf-8", "replace")
 
     kwargs["show_diff"] = show_diff
