@@ -101,10 +101,6 @@ from ognibuild.buildsystem import (
 from ognibuild import (
     UnidentifiedError,
 )
-from ognibuild.dist import (
-    create_dist_schroot,
-    DistNoTarball,
-)
 
 from breezy import urlutils
 from breezy.branch import Branch
@@ -131,6 +127,7 @@ from .debian import tree_set_changelog_version
 from ognibuild import (
     DetailedFailure,
 )
+from .dist import create_dist as create_dist_real
 from .prometheus import setup_metrics
 from .vcs import (
     LocalVcsManager,
@@ -160,70 +157,15 @@ MAX_BUILD_ITERATIONS = 50
 logger = logging.getLogger(__name__)
 
 
-@contextmanager
-def redirect_output(to_file):
-    sys.stdout.flush()
-    sys.stderr.flush()
-    old_stdout = os.dup(sys.stdout.fileno())
-    old_stderr = os.dup(sys.stderr.fileno())
-    os.dup2(to_file.fileno(), sys.stdout.fileno())  # type: ignore
-    os.dup2(to_file.fileno(), sys.stderr.fileno())  # type: ignore
-    try:
-        yield
-    finally:
-        sys.stdout.flush()
-        sys.stderr.flush()
-        os.dup2(old_stdout, sys.stdout.fileno())
-        os.dup2(old_stderr, sys.stderr.fileno())
-
-
 class NewUpstreamChanger(ActualNewUpstreamChanger):
 
     def create_dist(self, tree, package, version, target_dir):
-        from silver_platter.debian.upstream import DistCommandFailed
-        from ognibuild.session import SessionSetupFailure
-
-        os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
-
-        with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
-            try:
-                return create_dist_schroot(
-                    tree,
-                    subdir=package,
-                    target_dir=target_dir,
-                    packaging_tree=self.packaging_tree,
-                    packaging_subpath=self.packaging_debian_path,
-                    chroot=self.schroot,
-                )
-            except NotImplementedError:
-                return None
-            except SessionSetupFailure as e:
-                raise WorkerFailure('session-setup-failure', str(e))
-            except NoBuildToolsFound:
-                logger.info("No build tools found, falling back to simple export.")
-                return None
-            except DetailedFailure as e:
-                if e.error.is_global:
-                    error_code = e.error.kind
-                else:
-                    error_code = "dist-" + e.error.kind
-                error_description = str(e.error)
-                raise ChangerError(
-                    summary=error_description, category=error_code, original=e
-                )
-            except DistNoTarball as e:
-                raise ChangerError('dist-no-tarball', str(e))
-            except UnidentifiedError as e:
-                lines = [line for line in e.lines if line]
-                if e.secondary:
-                    raise DistCommandFailed(e.secondary.line)
-                elif len(lines) == 1:
-                    raise DistCommandFailed(lines[0])
-                else:
-                    raise DistCommandFailed(
-                        "%r failed with unidentified error "
-                        "(return code %d)" % (e.argv, e.retcode)
-                    )
+        return create_dist_real(
+            self.log_directory,
+            tree, package, version, target_dir,
+            packaging_tree=self.packaging_tree,
+            packaging_debian_path=self.packaging_debian_path,
+            schroot=self.schroot)
 
     def make_changes(self, local_tree, subpath, *args, **kwargs):
         self.packaging_tree = local_tree
@@ -234,45 +176,10 @@ class NewUpstreamChanger(ActualNewUpstreamChanger):
 class DebianizeChanger(ActualDebianizeChanger):
 
     def create_dist(self, tree, package, version, target_dir):
-        from silver_platter.debian.upstream import DistCommandFailed
-
-        os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
-
-        with open(os.path.join(self.log_directory, 'dist.log'), 'wb') as distf, redirect_output(distf):
-            try:
-                return create_dist_schroot(
-                    tree,
-                    subdir=package,
-                    target_dir=target_dir,
-                    chroot=self.schroot,
-                )
-            except NotImplementedError:
-                return None
-            except NoBuildToolsFound:
-                logger.info("No build tools found, falling back to simple export.")
-                return None
-            except DetailedFailure as e:
-                if e.error.is_global:
-                    error_code = e.error.kind
-                else:
-                    error_code = "dist-" + e.error.kind
-                error_description = str(e.error)
-                raise ChangerError(
-                    summary=error_description, category=error_code, original=e
-                )
-            except DistNoTarball as e:
-                raise ChangerError('dist-no-tarball', str(e))
-            except UnidentifiedError as e:
-                lines = [line for line in e.lines if line]
-                if e.secondary:
-                    raise DistCommandFailed(e.secondary.line)
-                elif len(lines) == 1:
-                    raise DistCommandFailed(lines[0])
-                else:
-                    raise DistCommandFailed(
-                        "%r failed with unidentified error "
-                        "(return code %d)" % (e.argv, e.retcode)
-                    )
+        return create_dist_real(
+            self.log_directory,
+            tree, package, version, target_dir,
+            schroot=self.schroot)
 
 
 class WorkerResult(object):

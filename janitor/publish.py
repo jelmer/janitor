@@ -285,6 +285,7 @@ def branches_match(url_a, url_b):
 @dataclass
 class PublishResult:
 
+    description: str
     is_new: bool = False
     proposal_url: Optional[str] = None
     branch_name: Optional[str] = None
@@ -390,6 +391,7 @@ async def publish_one(
         proposal_url = response.get("proposal_url")
         branch_name = response.get("branch_name")
         is_new = response.get("is_new")
+        description = response.get('description')
 
         if proposal_url and is_new:
             topic_merge_proposal.publish(
@@ -401,7 +403,8 @@ async def publish_one(
             open_proposal_count.labels(maintainer=maintainer_email).inc()
 
         return PublishResult(
-            proposal_url=proposal_url, branch_name=branch_name, is_new=is_new)
+            proposal_url=proposal_url, branch_name=branch_name, is_new=is_new,
+            description=description)
 
     raise PublishFailure(mode, "publisher-invalid-response", stderr.decode())
 
@@ -888,6 +891,7 @@ async def publish_from_policy(
             possible_transports=possible_transports,
             rate_limiter=rate_limiter,
             result_tags=run.result_tags,
+            allow_create_proposal=run_allow_proposal_creation(suite_config, run),
             commit_message_template=(
                 suite_config.merge_proposal.commit_message
                 if suite_config.merge_proposal else None),
@@ -896,7 +900,7 @@ async def publish_from_policy(
         code, description = await handle_publish_failure(
             e, conn, run, bucket="update-new-mp"
         )
-        publish_result = PublishResult()
+        publish_result = PublishResult(description="Nothing to do")
         if e.code == "nothing-to-do":
             logger.info('Nothing to do.')
         else:
@@ -966,6 +970,13 @@ def role_branch_url(url, remote_branch_name):
     return urlutils.join_segment_parameters(base_url, params)
 
 
+def run_allow_proposal_creation(suite_config, run):
+    if suite_config.merge_proposal is not None and suite_config.merge_proposal.value_threshold:
+        return (run.value >= suite_config.merge_proposal.value_threshold)
+    else:
+        return True
+
+
 async def publish_and_store(
     db,
     suite_config,
@@ -991,10 +1002,7 @@ async def publish_and_store(
     main_branch_url = role_branch_url(run.branch_url, remote_branch_name)
 
     if allow_create_proposal is None:
-        if suite_config.merge_proposal is not None and suite_config.merge_proposal.value_threshold:
-            allow_create_proposal = (run.value >= suite_config.merge_proposal.value_threshold)
-        else:
-            allow_create_proposal = True
+        allow_create_proposal = run_allow_proposal_creation(suite_config, run)
 
     async with db.acquire() as conn:
         try:
@@ -2096,7 +2104,7 @@ applied independently.
                     mp_run['role'],
                     MODE_PROPOSE,
                     "success",
-                    "Succesfully updated",
+                    publish_result.description or "Succesfully updated",
                     publish_result.proposal_url,
                     publish_id=publish_id,
                     requestor="publisher (regular refresh)",
