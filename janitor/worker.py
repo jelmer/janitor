@@ -892,7 +892,7 @@ def process_package(
         branches: Optional[List[Tuple[str, str, bytes, bytes]]]
         if changer_result.branches is not None:
             branches = [
-                (f, n or main_branch.name, br, r)
+                (f, n or main_branch.name, br, r)  # type: ignore
                 for (f, n, br, r) in changer_result.branches
             ]
             if not ws.refreshed and extra_resume_branches:
