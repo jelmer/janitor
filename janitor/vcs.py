@@ -18,7 +18,7 @@
 from io import BytesIO
 import logging
 import os
-from typing import Optional, List, Tuple, Iterable
+from typing import Optional, List, Tuple, Iterable, Dict
 
 import urllib.parse
 import breezy.git  # noqa: F401
@@ -469,6 +469,10 @@ class RemoteVcsManager(VcsManager):
     @classmethod
     def from_single_url(cls, url: str):
         return cls(urlutils.join(url, 'git'), urlutils.join(url, 'bzr'))
+
+    @classmethod
+    def from_urls(cls, urls: Dict[str, str]):
+        return cls(urls.get('git'), urls.get('bzr'))
 
     def __repr__(self):
         return "%s(%r, %r)" % (
