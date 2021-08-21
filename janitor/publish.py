@@ -1924,13 +1924,10 @@ applied independently.
             )
             await update_proposal_status(mp, "abandoned", revision, package_name)
             try:
-                mp.post_comment(
-                    """
+                mp.post_comment("""
 This merge proposal will be closed, since the branch for the role '%s'
-has changed to %s.
-"""
-                    % (mp_run['role'], last_run_remote_branch_name)
-                )
+has changed from %s to %s.
+""" % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name))
             except PermissionDenied as e:
                 logger.warning(
                     "Permission denied posting comment to %s: %s", mp.url, e
