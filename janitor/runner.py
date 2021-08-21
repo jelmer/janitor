@@ -1396,9 +1396,10 @@ async def handle_assign(request):
         "env": env,
         "command": command,
         "suite": item.suite,
-        # TODO(jelmer): Don't let this depend on the suite name
         "force-build": suite_config.force_build,
+        # TODO(jelmer): Deprecate vcs_manager
         "vcs_manager": queue_processor.public_vcs_manager.base_urls.get(item.vcs_type),
+        "vcs_store": queue_processor.public_vcs_manager.base_urls,
     }
 
     with span.new_child('start-watchdog'):

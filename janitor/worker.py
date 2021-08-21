@@ -1548,26 +1548,8 @@ async def main(argv=None):
         if args.vcs_location:
             vcs_manager = LocalVcsManager(args.vcs_location)
         else:
-            if vcs_type == 'git':
-                vcs_manager = RemoteVcsManager(assignment["vcs_manager"], None)
-            elif vcs_type == 'bzr':
-                vcs_manager = RemoteVcsManager(None, assignment["vcs_manager"])
-            else:
-                metadata["code"] = "unsupported-vcs"
-                metadata["description"] = "Unsupported vcs: %s" % vcs_type
-                metadata['finish_time'] = datetime.utcnow().isoformat()
-                try:
-                    result = await upload_results(
-                        session,
-                        args.base_url,
-                        assignment["id"],
-                        metadata,
-                        output_directory=None,
-                    )
-                except ResultUploadFailure as e:
-                    sys.stderr.write(str(e))
-                    sys.exit(1)
-                return 0
+            vcs_manager = RemoteVcsManager.from_urls(assignment["vcs_store"])
+
         run_id = assignment["id"]
 
         possible_transports = []
