@@ -638,6 +638,10 @@ async def import_logs(
                 logging.warning("Unable to upload logfile %s: %s", entry.name, e)
                 if backup_logfile_manager:
                     await backup_logfile_manager.import_log(pkg, log_id, entry.path)
+            except asyncio.TimeoutError as e:
+                logging.warning("Timeout uploading logfile %s: %s", entry.name, e)
+                if backup_logfile_manager:
+                    await backup_logfile_manager.import_log(pkg, log_id, entry.path)
             except PermissionDenied as e:
                 logging.warning(
                     "Permission denied error while uploading logfile %s: %s",
