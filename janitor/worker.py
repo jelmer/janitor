@@ -935,11 +935,10 @@ async def abort_run(
     finish_time = datetime.utcnow()
     metadata["finish_time"] = finish_time.isoformat()
 
-    with TemporaryDirectory() as td:
-        try:
-            await upload_results(session, base_url, run_id, metadata, td)
-        except ResultUploadFailure as e:
-            logging.warning('Result upload for abort failed: %s', e)
+    try:
+        await upload_results(session, base_url, run_id, metadata, None)
+    except ResultUploadFailure as e:
+        logging.warning('Result upload for abort failed: %s', e)
 
 
 def handle_sigterm(session, base_url, run_id, metadata):
@@ -1538,7 +1537,11 @@ async def main(argv=None):
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 
-        metadata = {"queue_id": assignment["queue_id"]}
+        start_time = datetime.utcnow()
+        metadata = {
+            "queue_id": assignment["queue_id"],
+            "start_time": start_time.isoformat()
+        }
         if jenkins_metadata:
             metadata["jenkins"] = jenkins_metadata
 
@@ -1552,6 +1555,7 @@ async def main(argv=None):
             else:
                 metadata["code"] = "unsupported-vcs"
                 metadata["description"] = "Unsupported vcs: %s" % vcs_type
+                metadata['finish_time'] = datetime.utcnow().isoformat()
                 try:
                     result = await upload_results(
                         session,
@@ -1601,7 +1605,6 @@ async def main(argv=None):
             logging.info('Diagnostics available at http://%s:%d/', site_addr, site_port)
             watchdog_petter.track_log_directory(output_directory)
 
-            start_time = datetime.utcnow()
             main_task = loop.run_in_executor(
                 None,
                 partial(
@@ -1627,7 +1630,6 @@ async def main(argv=None):
                 ),
             )
             watchdog_petter.kill = main_task.cancel
-            metadata["start_time"] = start_time.isoformat()
             try:
                 result = await main_task
             except WorkerFailure as e:
