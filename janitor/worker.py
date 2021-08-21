@@ -954,7 +954,7 @@ def handle_sigterm(session, base_url, run_id, metadata):
 
 
 @contextmanager
-def bundle_results(metadata: Any, directory: str):
+def bundle_results(metadata: Any, directory: Optional[str] = None):
     with ExitStack() as es:
         with MultipartWriter("form-data") as mpwriter:
             mpwriter.append_json(
@@ -967,20 +967,21 @@ def bundle_results(metadata: Any, directory: str):
                     )
                 ],
             )  # type: ignore
-            for entry in os.scandir(directory):
-                if entry.is_file():
-                    f = open(entry.path, "rb")
-                    es.enter_context(f)
-                    mpwriter.append(
-                        BytesIO(f.read()),
-                        headers=[  # type: ignore
-                            (
-                                "Content-Disposition",
-                                'attachment; filename="%s"; '
-                                "filename*=utf-8''%s" % (entry.name, entry.name),
-                            )
-                        ],
-                    )  # type: ignore
+            if directory is not None:
+                for entry in os.scandir(directory):
+                    if entry.is_file():
+                        f = open(entry.path, "rb")
+                        es.enter_context(f)
+                        mpwriter.append(
+                            BytesIO(f.read()),
+                            headers=[  # type: ignore
+                                (
+                                    "Content-Disposition",
+                                    'attachment; filename="%s"; '
+                                    "filename*=utf-8''%s" % (entry.name, entry.name),
+                                )
+                            ],
+                        )  # type: ignore
         yield mpwriter
 
 
@@ -989,7 +990,7 @@ async def upload_results(
     base_url: str,
     run_id: str,
     metadata: Any,
-    output_directory: str,
+    output_directory: Optional[str] = None,
 ) -> Any:
     with bundle_results(metadata, output_directory) as mpwriter:
         finish_url = urljoin(base_url, "active-runs/%s/finish" % run_id)
@@ -1537,6 +1538,10 @@ async def main(argv=None):
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 
+        metadata = {"queue_id": assignment["queue_id"]}
+        if jenkins_metadata:
+            metadata["jenkins"] = jenkins_metadata
+
         if args.vcs_location:
             vcs_manager = LocalVcsManager(args.vcs_location)
         else:
@@ -1545,7 +1550,20 @@ async def main(argv=None):
             elif vcs_type == 'bzr':
                 vcs_manager = RemoteVcsManager(None, assignment["vcs_manager"])
             else:
-                raise NotImplementedError
+                metadata["code"] = "unsupported-vcs"
+                metadata["description"] = "Unsupported vcs: %s" % vcs_type
+                try:
+                    result = await upload_results(
+                        session,
+                        args.base_url,
+                        assignment["id"],
+                        metadata,
+                        output_directory=None,
+                    )
+                except ResultUploadFailure as e:
+                    sys.stderr.write(str(e))
+                    sys.exit(1)
+                return 0
         run_id = assignment["id"]
 
         possible_transports = []
@@ -1556,10 +1574,6 @@ async def main(argv=None):
 
         os.environ.update(env)
         os.environ.update(build_environment)
-
-        metadata = {"queue_id": assignment["queue_id"]}
-        if jenkins_metadata:
-            metadata["jenkins"] = jenkins_metadata
 
         with TemporaryDirectory(prefix='janitor') as output_directory:
             loop = asyncio.get_running_loop()
