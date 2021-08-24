@@ -42,6 +42,7 @@ import yarl
 from jinja2 import Template
 
 from prometheus_client import REGISTRY, push_to_gateway
+import socket
 
 import argparse
 import asyncio
@@ -155,6 +156,24 @@ MAX_BUILD_ITERATIONS = 50
 
 
 logger = logging.getLogger(__name__)
+
+
+def is_gce_instance():
+    try:
+        socket.getaddrinfo('metadata.google.internal', 80)
+    except socket.gaierror:
+        return False
+    return True
+
+
+def gce_external_ip():
+    from urllib.request import Request, urlopen
+    req = Request(
+        'http://metadata.google.internal/computeMetadata/v1'
+        '/instance/network-interfaces/0/access-configs/0/external-ip',
+        headers={'Metadata-Flavor': 'Google'})
+    resp = urlopen(req)
+    return resp.read().decode()
 
 
 class NewUpstreamChanger(ActualNewUpstreamChanger):
@@ -1090,6 +1109,9 @@ async def get_assignment(
     json: Any = {"node": node_name, "archs": [build_arch]}
     if jenkins_metadata:
         json["jenkins"] = jenkins_metadata
+        json["worker_link"] = jenkins_metadata.get("build_url")
+    elif is_gce_instance():
+        json["worker_link"] = 'http://%s/' % gce_external_ip()
     logging.debug("Sending assignment request: %r", json)
     async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
