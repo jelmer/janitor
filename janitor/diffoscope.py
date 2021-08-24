@@ -110,7 +110,7 @@ def filter_irrelevant(diff):
 
 
 async def format_diffoscope(
-    root_difference, content_type, title, jquery_url=None, css_url=None
+    root_difference, content_type, title, css_url=None
 ):
     if content_type == "application/json":
         return json.dumps(root_difference)
@@ -126,7 +126,7 @@ async def format_diffoscope(
         old_argv = sys.argv
         sys.argv = title.split(" ")
         try:
-            p.output_html("-", root_difference, jquery_url=jquery_url, css_url=css_url)
+            p.output_html("-", root_difference, css_url=css_url)
         finally:
             sys.stdout = old_stdout
             sys.argv = old_argv

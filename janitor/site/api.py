@@ -1412,11 +1412,20 @@ async def handle_vcswatch(request):
     # * url
 
     package = json['package']
+    url = json['url']
 
     rescheduled = []
     policy_unavailable = []
     requestor = "vcwatch notification"
     async with request.app['db'].acquire() as conn:
+        if await state.has_cotenants(conn, package, url):
+            # TODO(jelmer): Have vcswatch pass along path, and only
+            # notify for changes under path
+            return web.json_response({
+                'rescheduled': [],
+                'policy-unavailable': [],
+                'ignored': 'package is in repository with cotenants',
+                }, status=200)
         for suite in await state.iter_publishable_suites(conn, package):
             try:
                 await do_schedule(

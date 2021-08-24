@@ -658,6 +658,7 @@ class ActiveRun(object):
 
     log_files: Dict[str, BinaryIO]
     worker_name: str
+    worker_link: Optional[str]
     queue_item: state.QueueItem
     log_id: str
     start_time: datetime
@@ -666,6 +667,7 @@ class ActiveRun(object):
         self,
         queue_item: state.QueueItem,
         worker_name: str,
+        worker_link: Optional[str] = None,
         jenkins_metadata: Optional[Dict[str, str]] = None,
     ):
         self.queue_item = queue_item
@@ -678,13 +680,8 @@ class ActiveRun(object):
         self.resume_branch_name = None
         self.reset_keepalive()
         self._watch_dog = None
+        self.worker_link = worker_link
         self._jenkins_metadata = jenkins_metadata
-
-    @property
-    def worker_link(self):
-        if self._jenkins_metadata is not None:
-            return self._jenkins_metadata["build_url"]
-        return None
 
     @property
     def current_duration(self):
@@ -1264,6 +1261,7 @@ async def handle_log(request):
 async def handle_assign(request):
     json = await request.json()
     worker = json["worker"]
+    worker_link = json.get("worker_link")
 
     possible_transports = []
     possible_hosters = []
@@ -1292,6 +1290,7 @@ async def handle_assign(request):
                 worker_name=worker,
                 queue_item=item,
                 jenkins_metadata=json.get("jenkins"),
+                worker_link=worker_link
             )
 
             queue_processor.register_run(active_run)

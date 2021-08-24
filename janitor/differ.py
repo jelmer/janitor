@@ -349,7 +349,6 @@ async def handle_diffoscope(request):
         diffoscope_diff,
         content_type,
         title=title,
-        jquery_url=request.query.get("jquery_url"),
         css_url=request.query.get("css_url"),
     )
 

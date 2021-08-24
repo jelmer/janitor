@@ -238,34 +238,13 @@ class PublishFailure(Exception):
         self.description = description
 
 
-async def has_cotenants(
-    conn: asyncpg.Connection, package: str, url: str
-) -> Optional[bool]:
-    url = urlutils.split_segment_parameters(url)[0].rstrip("/")
-    rows = await conn.fetch(
-        "SELECT name FROM package where "
-        "branch_url = $1 or "
-        "branch_url like $1 || ',branch=%' or "
-        "branch_url like $1 || '/,branch=%'",
-        url,
-    )
-    if len(rows) > 1:
-        return True
-    elif len(rows) == 1 and rows[0][0] == package:
-        return False
-    else:
-        # Uhm, we actually don't really know
-        logging.warning("Unable to figure out if %s has cotenants on %s", package, url)
-        return None
-
-
 async def derived_branch_name(conn, suite_config, run, role):
     if len(run.result_branches) == 1:
         name = suite_config.branch_name
     else:
         name = "%s/%s" % (suite_config.branch_name, role)
 
-    if await has_cotenants(conn, run.package, run.branch_url):
+    if await state.has_cotenants(conn, run.package, run.branch_url):
         return name + "/" + run.package
     else:
         return name

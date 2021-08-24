@@ -28,11 +28,15 @@ without the involvement of the maintainer.</p>
 {% if 'orphan' in suite_names %}
   <li><a href="orphan">Moving orphaned packages to the QA team</a></li>
 {% endif %}
+{% if 'fresh-releases' in suite_names or 'fresh-snapshots' in suite_names %}
+  <li><a href="fresh">Fresh releases and snapshots:</a>
+    <ul>
 {% if 'fresh-releases' in suite_names %}
-  <li><a href="fresh-releases">Packages of new upstream releases</a></li>
+      <li><a href="fresh-releases">Packages of new upstream releases</a></li>
 {% endif %}
 {% if 'fresh-snapshots' in suite_names %}
-  <li><a href="fresh-snapshots">Packages of new upstream snapshots</a></li>
+      <li><a href="fresh-snapshots">Packages of new upstream snapshots</a></li>
+{% endif %}
 {% endif %}
 {% if 'scrub-obsolete' in suite_names %}
   <li><a href="scrub-obsolete">Scrubbing of obsolete dependencies and configuration file entries</a></li>
