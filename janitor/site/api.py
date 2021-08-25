@@ -433,7 +433,7 @@ async def handle_queue(request):
         limit = int(limit)
     response_obj = []
     async with request.app['db'].acquire() as conn:
-        async for entry in await conn.fetch("""
+        for entry in await conn.fetch("""
 SELECT
    queue.id AS queue_id,
    package.branch_url AS branch_url,
