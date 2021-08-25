@@ -63,6 +63,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "worker-resume-branch-unavailable",
     "explain-bd-uninstallable-apt-file-fetch-failure",
     "worker-timeout",
+    "worker-clone-bad-gateway",
     "result-push-failed",
     "result-push-bad-gateway",
     "dist-apt-file-fetch-failure",
