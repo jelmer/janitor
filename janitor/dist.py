@@ -68,15 +68,22 @@ def create_dist(
         if log_directory:
             distf = es.enter_context(open(os.path.join(log_directory, 'dist.log'), 'wb'))
             es.enter_context(redirect_output(distf))
+        args = (tree, )
+        kwargs = {
+            'subdir': package,
+            'target_dir': target_dir,
+            'chroot': schroot,
+            'packaging_tree': packaging_tree,
+            'packaging_subpath': packaging_debian_path,
+            }
+
         try:
-            return create_dist_schroot(
-                tree,
-                subdir=package,
-                target_dir=target_dir,
-                chroot=schroot,
-                packaging_tree=packaging_tree,
-                packaging_subpath=packaging_debian_path,
-            )
+            try:
+                return create_dist_schroot(*args, **kwargs)
+            except DetailedFailure as e:
+                if e.error.kind == 'vcs-control-directory-needed':
+                    return create_dist_schroot(*args, **kwargs, include_controldir=True)
+                raise
         except NotImplementedError:
             return None
         except SessionSetupFailure as e:
