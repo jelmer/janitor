@@ -154,7 +154,8 @@ SELECT DISTINCT ON (package)
   branch_url,
   array(SELECT row(role, remote_name, base_revision,
    revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-  result_tags
+  result_tags,
+  suite
 FROM
   last_unabsorbed_runs
 WHERE suite = $1 AND package = ANY($2::text[])
