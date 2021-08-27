@@ -60,9 +60,10 @@ SUPPORTED_VCSES = ["git", "bzr"]
 class BranchOpenFailure(Exception):
     """Failure to open a branch."""
 
-    def __init__(self, code: str, description: str):
+    def __init__(self, code: str, description: str, retry_after: Optional[int] = None):
         self.code = code
         self.description = description
+        self.retry_after = retry_after
 
 
 def get_vcs_abbreviation(repository: Repository) -> str:
@@ -86,6 +87,7 @@ def is_alioth_url(url: str) -> bool:
 def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
     if isinstance(e, BranchRateLimited):
         code = "too-many-requests"
+        return BranchOpenFailure(code, str(e), retry_after=e.retry_after)
     elif isinstance(e, BranchUnavailable):
         if "http code 429: Too Many Requests" in str(e):
             code = "too-many-requests"
@@ -286,10 +288,11 @@ def import_branches_bzr(
                 target_branch_path,
                 {"branch": urlutils.escape(fn, safe='')}).rstrip('/')
         transport = get_transport(target_branch_path)
-        try:
-            transport.ensure_base()
-        except NoSuchFile:
-            transport.create_prefix()
+        if not transport.has('.'):
+            try:
+                transport.ensure_base()
+            except NoSuchFile:
+                transport.create_prefix()
         try:
             target_branch = Branch.open_from_transport(transport)
         except NotBranchError:
