@@ -136,6 +136,7 @@ from .vcs import (
     MirrorFailure,
     import_branches,
     BranchOpenFailure,
+    BranchRateLimited,
     open_branch_ext,
 )
 
@@ -669,7 +670,10 @@ def process_package(
     try:
         main_branch = open_branch_ext(vcs_url, possible_transports=possible_transports)
     except BranchOpenFailure as e:
-        raise WorkerFailure(e.code, e.description, details={'url': vcs_url})
+        raise WorkerFailure(e.code, e.description, details={
+            'url': vcs_url,
+            'retry_after': e.retry_after,
+            })
 
     if cached_branch_url:
         try:
