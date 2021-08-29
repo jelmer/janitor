@@ -42,7 +42,6 @@ import yarl
 from jinja2 import Template
 
 from prometheus_client import REGISTRY, push_to_gateway
-import socket
 
 import argparse
 import asyncio
@@ -70,15 +69,9 @@ from silver_platter.debian.changer import (
     ChangerError,
     ChangerResult,
     ChangerReporter,
-    changer_subcommand as _debian_changer_subcommand,
-)
-from silver_platter.debian.debianize import (
-    DebianizeChanger as ActualDebianizeChanger,
+    changer_subcommand as debian_changer_subcommand,
 )
 
-from silver_platter.debian.upstream import (
-    NewUpstreamChanger as ActualNewUpstreamChanger,
-)
 from silver_platter.proposal import Hoster
 
 from silver_platter.utils import (
@@ -128,7 +121,6 @@ from .debian import tree_set_changelog_version
 from ognibuild import (
     DetailedFailure,
 )
-from .dist import create_dist as create_dist_real
 from .prometheus import setup_metrics
 from .vcs import (
     LocalVcsManager,
@@ -175,31 +167,6 @@ def gce_external_ip():
         headers={'Metadata-Flavor': 'Google'})
     resp = urlopen(req)
     return resp.read().decode()
-
-
-class NewUpstreamChanger(ActualNewUpstreamChanger):
-
-    def create_dist(self, tree, package, version, target_dir):
-        return create_dist_real(
-            self.log_directory,
-            tree, package, version, target_dir,
-            packaging_tree=self.packaging_tree,
-            packaging_debian_path=self.packaging_debian_path,
-            schroot=self.schroot)
-
-    def make_changes(self, local_tree, subpath, *args, **kwargs):
-        self.packaging_tree = local_tree
-        self.packaging_debian_path = os.path.join(subpath, 'debian')
-        return super(NewUpstreamChanger, self).make_changes(local_tree, subpath, *args, **kwargs)
-
-
-class DebianizeChanger(ActualDebianizeChanger):
-
-    def create_dist(self, tree, package, version, target_dir):
-        return create_dist_real(
-            self.log_directory,
-            tree, package, version, target_dir,
-            schroot=self.schroot)
 
 
 class WorkerResult(object):
@@ -258,20 +225,6 @@ class WorkerFailure(Exception):
         return ret
 
 
-CUSTOM_DEBIAN_SUBCOMMANDS = {
-    "new-upstream": NewUpstreamChanger,
-    "debianize": DebianizeChanger,
-}
-
-
-# TODO(jelmer): Just invoke the silver-platter subcommand
-def debian_changer_subcommand(n):
-    try:
-        return CUSTOM_DEBIAN_SUBCOMMANDS[n]
-    except KeyError:
-        return _debian_changer_subcommand(n)
-
-
 class WorkerReporter(ChangerReporter):
     def __init__(self, metadata_subworker, resume_result, provide_context, remotes):
         self.metadata_subworker = metadata_subworker
@@ -327,11 +280,17 @@ class DebianScriptChanger(object):
         base_proposal=None,
     ):
         script = shlex_join(self.args)
+        dist_command = 'PYTHONPATH=%s %s -m janitor.dist' % (
+            ':'.join(sys.path), sys.executable)
+        if local_tree.has(os.path.join(subpath, 'debian')):
+            dist_command += ' --packaging=%s' % local_tree.abspath(
+                os.path.join(subpath, 'debian'))
         try:
             command_result = debian_script_runner(
                 local_tree, script=script, commit_pending=None,
                 resume_metadata=reporter.resume_result, subpath=subpath,
-                update_changelog=update_changelog)
+                update_changelog=update_changelog,
+                extra_env={'DIST': dist_command})
         except ResultFileFormatError as e:
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e)
