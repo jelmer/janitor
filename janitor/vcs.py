@@ -245,8 +245,10 @@ def mirror_branches(
 
 
 def import_branches_git(
-    vcs_manager, local_branch, package, suite, log_id, branches, tags
-):
+        vcs_manager: "VcsManager", local_branch: Branch, package: str,
+        suite: str, log_id: str,
+        branches: List[Tuple[str, str, Optional[bytes], bytes]],
+        tags: Dict[str, bytes]):
     repo_url = vcs_manager.get_repository_url(package, "git")
 
     # The server is expected to have repositories ready for us, so we don't create
@@ -263,13 +265,7 @@ def import_branches_git(
             branchname = ("refs/heads/%s/%s" % (suite, fn)).encode("utf-8")
             # TODO(jelmer): Ideally this would be a symref:
             changed_refs[branchname] = changed_refs[tagname]
-        for taginfo in tags:
-            if len(taginfo) == 3:
-                (fn, n, r) = taginfo
-            elif len(taginfo) == 2:
-                (n, r) = taginfo
-            else:
-                raise ValueError(taginfo)
+        for n, r in tags.items():
             tagname = ("refs/tags/%s" % (n, )).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
@@ -312,7 +308,11 @@ def import_branches_bzr(
                 target_branch.tags.set_tag(name, revision)
 
 
-def import_branches(vcs_manager, local_branch, package, suite, log_id, branches, tags):
+def import_branches(
+        vcs_manager: "VcsManager", local_branch: Branch, package: str,
+        suite: str, log_id: str,
+        branches: List[Tuple[str, str, Optional[bytes], bytes]],
+        tags: Dict[str, bytes]):
     vcs_type = get_vcs_abbreviation(local_branch.repository)
     if vcs_type == "git":
         import_branches_git(
