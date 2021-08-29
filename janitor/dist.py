@@ -122,7 +122,7 @@ if __name__ == '__main__':
         '--log-directory', type=str, default=None,
         help='Write logs to files in specified directory rather than standard out')
     parser.add_argument(
-        '--schroot', type=str, default=None,
+        '--schroot', type=str, default=os.environ.get('SCHROOT'),
         help='Schroot to use')
     parser.add_argument(
         '--target-dir', type=str, default='..',
