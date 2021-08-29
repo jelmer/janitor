@@ -282,7 +282,7 @@ class DebianScriptChanger(object):
         script = shlex_join(self.args)
         dist_command = 'PYTHONPATH=%s %s -m janitor.dist' % (
             ':'.join(sys.path), sys.executable)
-        if local_tree.has(os.path.join(subpath, 'debian')):
+        if local_tree.has_filename(os.path.join(subpath, 'debian')):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
         try:
