@@ -71,6 +71,7 @@ TRANSIENT_ERROR_RESULT_CODES = [
     "post-build-file-fetch-failure",
     "post-build-apt-file-fetch-failure",
     "pull-rate-limited",
+    "session-setup-failure",
 ]
 
 # In some cases, we want to ignore certain results when guessing
