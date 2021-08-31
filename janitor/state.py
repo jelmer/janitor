@@ -19,6 +19,7 @@ import datetime
 from debian.changelog import Version
 import json
 import asyncpg
+import logging
 from contextlib import asynccontextmanager
 from typing import Optional, Tuple, List, Any, Union, AsyncIterable, Dict
 
