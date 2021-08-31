@@ -56,6 +56,11 @@ uploads the .debs and optionally proposes a change.
 The publisher is responsible for enforcing rate limiting, i.e. making sure
 that there are no more than X pull requests open per maintainer.
 
+Worker
+======
+The actual changes are made by various worker scripts that implement
+the [silver-platter protocol](https://github.com/jelmer/silver-platter/blob/master/devnotes/mutators.rst).
+
 Web site
 ========
 
