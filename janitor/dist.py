@@ -16,13 +16,14 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from contextlib import contextmanager, ExitStack
+import errno
 import logging
 import os
 import sys
 
 from ognibuild.session import SessionSetupFailure
 from ognibuild.dist import (
-    create_dist_schroot,
+    dist,
     DistNoTarball,
 )
 from ognibuild import (
@@ -33,10 +34,13 @@ from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
 
-from silver_platter.debian.changer import ChangerError
 from breezy.plugins.debian.upstream.branch import (
     DistCommandFailed,
     )
+
+from buildlog_consultant.common import (
+    NoSpaceOnDevice,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -58,61 +62,14 @@ def redirect_output(to_file):
         os.dup2(old_stderr, sys.stderr.fileno())
 
 
-def create_dist(
-        log_directory, tree, package, version, target_dir, schroot=None,
-        packaging_tree=None, packaging_debian_path=None):
-    if version:
-        os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
-
-    with ExitStack() as es:
-        if log_directory:
-            distf = es.enter_context(open(os.path.join(log_directory, 'dist.log'), 'wb'))
-            es.enter_context(redirect_output(distf))
-        args = (tree, )
-        kwargs = {
-            'subdir': package,
-            'target_dir': target_dir,
-            'chroot': schroot,
-            'packaging_tree': packaging_tree,
-            'packaging_subpath': packaging_debian_path,
-            }
-
-        try:
-            try:
-                return create_dist_schroot(*args, **kwargs)
-            except DetailedFailure as e:
-                if e.error.kind == 'vcs-control-directory-needed':
-                    return create_dist_schroot(*args, **kwargs, include_controldir=True)
-                raise
-        except NotImplementedError:
-            return None
-        except SessionSetupFailure as e:
-            raise ChangerError('session-setup-failure', str(e))
-        except NoBuildToolsFound:
-            logger.info("No build tools found, falling back to simple export.")
-            return None
-        except DetailedFailure as e:
-            if e.error.is_global:
-                error_code = e.error.kind
-            else:
-                error_code = "dist-" + e.error.kind
-            error_description = str(e.error)
-            raise ChangerError(
-                summary=error_description, category=error_code, original=e
-            )
-        except DistNoTarball as e:
-            raise ChangerError('dist-no-tarball', str(e))
-        except UnidentifiedError as e:
-            lines = [line for line in e.lines if line]
-            if e.secondary:
-                raise DistCommandFailed(e.secondary.line)
-            elif len(lines) == 1:
-                raise DistCommandFailed(lines[0])
-            else:
-                raise DistCommandFailed(
-                    "%r failed with unidentified error "
-                    "(return code %d)" % (e.argv, e.retcode)
-                )
+def report_failure(kind, description, original):
+    logging.fatal('%s: %s', kind, description)
+    if 'DIST_RESULT' in os.environ:
+        import json
+        with open(os.environ['DIST_RESULT'], 'w') as f:
+            json.dump({
+                'result_code': kind,
+                'description': description}, f)
 
 
 if __name__ == '__main__':
@@ -136,20 +93,87 @@ if __name__ == '__main__':
         help='Path to tree to create dist tarball for')
     args = parser.parse_args()
 
+    from ognibuild.session.schroot import SchrootSession
+
     import breezy.bzr
     import breezy.git
+    from breezy.errors import NotBranchError
     from breezy.workingtree import WorkingTree
 
-    tree = WorkingTree.open(args.directory)
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
 
-    if args.packaging:
-        packaging_tree, packaging_debian_path = WorkingTree.open_containing(args.packaging)
-    else:
-        packaging_tree = None
-        packaging_debian_path = None
+    package = os.environ.get('PACKAGE')
+    version = os.environ.get('VERSION')
 
-    result = create_dist(
-        args.log_directory, tree, os.environ.get('PACKAGE'), os.environ.get('VERSION'),
-        os.path.abspath(os.path.join(args.directory, args.target_dir)),
-        schroot=args.schroot, packaging_tree=packaging_tree,
-        packaging_debian_path=packaging_debian_path)
+    with ExitStack() as es:
+        subdir = package or "package"
+
+        session = es.enter_context(SchrootSession(args.schroot))
+        try:
+            try:
+                tree = WorkingTree.open(args.directory)
+            except NotBranchError:
+                export_directory, reldir = session.setup_from_directory(
+                    args.directory, subdir)
+            else:
+                export_directory, reldir = session.setup_from_vcs(
+                    tree, include_controldir=True, subdir=subdir
+                )
+        except OSError as e:
+            if e.errno == errno.ENOSPC:
+                raise DetailedFailure(1, ["mkdtemp"], NoSpaceOnDevice())
+            raise
+
+        if args.packaging:
+            packaging_tree, packaging_debian_path = WorkingTree.open_containing(args.packaging)
+            from ognibuild.debian import satisfy_build_deps
+
+            satisfy_build_deps(session, packaging_tree, packaging_debian_path)
+        else:
+            packaging_tree = None
+            packaging_debian_path = None
+
+        try:
+            if version:
+                os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'] = version
+
+            if args.log_directory:
+                distf = es.enter_context(open(os.path.join(args.log_directory, 'dist.log'), 'wb'))
+                es.enter_context(redirect_output(distf))
+
+            target_dir = os.path.abspath(os.path.join(args.directory, args.target_dir))
+
+            try:
+                dist(session, export_directory, reldir, target_dir)
+            except NotImplementedError:
+                sys.exit(2)
+            except NoBuildToolsFound:
+                logger.info("No build tools found, falling back to simple export.")
+                sys.exit(2)
+            except UnidentifiedError as e:
+                lines = [line for line in e.lines if line]
+                if e.secondary:
+                    raise DistCommandFailed(e.secondary.line)
+                elif len(lines) == 1:
+                    raise DistCommandFailed(lines[0])
+                else:
+                    raise DistCommandFailed(
+                        "%r failed with unidentified error "
+                        "(return code %d)" % (e.argv, e.retcode)
+                    )
+        except SessionSetupFailure as e:
+            report_failure('session-setup-failure', str(e), e)
+            sys.exit(1)
+        except DetailedFailure as e:
+            if e.error.is_global:
+                error_code = e.error.kind
+            else:
+                error_code = "dist-" + e.error.kind
+            error_description = str(e.error)
+            report_failure(error_code, error_description, e)
+            sys.exit(1)
+        except DistNoTarball as e:
+            report_failure('dist-no-tarball', str(e), e)
+            sys.exit(1)
+
+    sys.exit(0)
