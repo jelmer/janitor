@@ -128,7 +128,6 @@ from .vcs import (
     MirrorFailure,
     import_branches,
     BranchOpenFailure,
-    BranchRateLimited,
     open_branch_ext,
 )
 
