@@ -95,8 +95,8 @@ if __name__ == '__main__':
 
     from ognibuild.session.schroot import SchrootSession
 
-    import breezy.bzr
-    import breezy.git
+    import breezy.bzr  # noqa: F401
+    import breezy.git  # noqa: F401
     from breezy.errors import NotBranchError
     from breezy.workingtree import WorkingTree
 
