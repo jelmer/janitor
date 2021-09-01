@@ -1298,7 +1298,6 @@ async def handle_mass_reschedule(request):
 SELECT
   package,
   suite,
-  command,
   finish_time - start_time AS duration
 FROM last_runs
 WHERE
@@ -1333,7 +1332,6 @@ WHERE
                         conn,
                         run['package'],
                         run['suite'],
-                        command=run['command'],
                         estimated_duration=run['duration'],
                         requestor="reschedule",
                         refresh=refresh,
