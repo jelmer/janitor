@@ -1837,7 +1837,6 @@ applied independently.
                 conn,
                 last_run.package,
                 last_run.suite,
-                command=last_run.command,
                 bucket="update-existing-mp",
                 refresh=False,
                 requestor="publisher (transient error)",
@@ -1853,7 +1852,6 @@ applied independently.
                 conn,
                 last_run.package,
                 last_run.suite,
-                command=last_run.command,
                 bucket="update-existing-mp",
                 refresh=False,
                 requestor="publisher (retrying failed run after %d days)"
@@ -2106,7 +2104,6 @@ applied independently.
                     conn,
                     mp_run['package'],
                     mp_run['suite'],
-                    command=mp_run['command'],
                     bucket="update-existing-mp",
                     refresh=True,
                     requestor="publisher (merge conflict)",

@@ -105,7 +105,6 @@ async def reprocess_run_logs(
                         conn,
                         package,
                         suite,
-                        command=command,
                         estimated_duration=duration,
                         requestor="reprocess-build-results",
                         bucket="reschedule",
