@@ -150,17 +150,18 @@ if __name__ == '__main__':
             except NoBuildToolsFound:
                 logger.info("No build tools found, falling back to simple export.")
                 sys.exit(2)
-            except UnidentifiedError as e:
-                lines = [line for line in e.lines if line]
-                if e.secondary:
-                    raise DistCommandFailed(e.secondary.line)
-                elif len(lines) == 1:
-                    raise DistCommandFailed(lines[0])
-                else:
-                    raise DistCommandFailed(
-                        "%r failed with unidentified error "
-                        "(return code %d)" % (e.argv, e.retcode)
-                    )
+        except UnidentifiedError as e:
+            lines = [line for line in e.lines if line]
+            if e.secondary:
+                report_failure('dist-command-failed', e.secondary.line, e)
+            elif len(lines) == 1:
+                report_failure('dist-command-failed', lines[0], e)
+            else:
+                report_failure(
+                    'dist-command-failed',
+                    "%r failed with unidentified error "
+                    "(return code %d)" % (e.argv, e.retcode), e)
+            sys.exit(1)
         except SessionSetupFailure as e:
             report_failure('session-setup-failure', str(e), e)
             sys.exit(1)
