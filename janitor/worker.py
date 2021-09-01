@@ -266,8 +266,9 @@ class Target(object):
 
 class DebianScriptChanger(object):
 
-    def __init__(self, args):
+    def __init__(self, args, schroot):
         self.args = args
+        self.schroot = schroot
 
     def make_changes(
         self,
@@ -279,8 +280,8 @@ class DebianScriptChanger(object):
         base_proposal=None,
     ):
         script = shlex_join(self.args)
-        dist_command = 'PYTHONPATH=%s %s -m janitor.dist' % (
-            ':'.join(sys.path), sys.executable)
+        dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
+            self.schroot, ':'.join(sys.path), sys.executable)
         if local_tree.has_filename(os.path.join(subpath, 'debian')):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
@@ -350,7 +351,7 @@ class DebianTarget(Target):
         try:
             changer_cls = debian_changer_subcommand(argv[0])
         except KeyError:
-            self.changer = DebianScriptChanger(argv)
+            self.changer = DebianScriptChanger(argv, self.chroot)
         else:
             subparser = argparse.ArgumentParser(prog=changer_cls.name)
             subparser.add_argument(
