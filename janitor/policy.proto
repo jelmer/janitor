@@ -39,6 +39,14 @@ enum ReviewPolicy {
     // TODO(jelmer): perhaps support optional post-landing review for QA purposes?
 };
 
+enum NotifyMode {
+    none = 0;
+
+    email = 1;
+
+    // TODO(jelmer): support debianbts
+};
+
 message Match {
     // Maintainer e-mail
     repeated string maintainer = 1;
@@ -76,6 +84,8 @@ message SuitePolicy {
     optional ReviewPolicy qa_review = 5;
 
     repeated PublishPolicy publish = 4;
+
+    optional NotifyMode broken_notify = 6;
 };
 
 message Policy {

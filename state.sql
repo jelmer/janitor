@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS merge_proposal (
 CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
-CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected');
+CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'abstained');
 CREATE TABLE IF NOT EXISTS run (
    id text not null primary key,
    command text,

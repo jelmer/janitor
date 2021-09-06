@@ -138,12 +138,13 @@ async def generate_review(
 
 async def store_review(conn, run_id, status, comment, reviewer):
     async with conn.transaction():
-        await conn.execute(
-            "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
-            status,
-            comment,
-            run_id,
-        )
+        if status != 'abstained':
+            await conn.execute(
+                "UPDATE run SET review_status = $1, review_comment = $2 WHERE id = $3",
+                status,
+                comment,
+                run_id,
+            )
         await conn.execute(
             "INSERT INTO review (run_id, comment, reviewer, review_status) VALUES "
             " ($1, $2, $3, $4)", run_id, comment, reviewer, status)

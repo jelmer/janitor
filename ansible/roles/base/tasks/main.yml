@@ -1,4 +1,4 @@
-- name: Install required dependencies
+- name: Install required dependencies (apt)
   apt:
     state: present
     name:
@@ -27,18 +27,14 @@
      - python3-marshmallow
      - rustc
      - cargo
-- name: Install mypy-protobuf
+- name: Install required dependencies (pip)
   pip:
-    name: mypy-protobuf
-- name: Install aiohttp-apispec
-  pip:
-    name: aiohttp-apispec
-- name: Install aiozipkin
-  pip:
-    name: aiozipkin
-- name: Install setuptools-rust
-  pip:
-    name: setuptools-rust
+    name:
+     - mypy-protobuf
+     - aiohttp-apispec
+     - aiozipkin
+     - setuptools-rust
+     - fastbencode
 - name: Create janitor user
   user:
     name: "{{ janitor_user }}"

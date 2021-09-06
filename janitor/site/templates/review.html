@@ -122,9 +122,10 @@ function submitReview(elem, status) {
 <input type="hidden" name="suites[]" value="{{ s }}"/>
 {% endfor %}
 {% endif %}
-<input class='review-button' type="submit" name="review_status" value="Approved" accesskey="a" onclick="submitReview(this, 'approved')">
-<input class='review-button' type="submit" name="review_status" value="Rejected" accesskey="r" onclick="submitReview(this, 'rejected')">
+<input class='review-button' type="submit" name="review_status" value="Approve" accesskey="a" onclick="submitReview(this, 'approved')">
+<input class='review-button' type="submit" name="review_status" value="Reject" accesskey="r" onclick="submitReview(this, 'rejected')">
 <input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview(this, 'reschedule')">
+<input class='review-button' type="submit" name="review_status" value="Abstain" accesskey="n" onclick="submitReview(this, 'abstained')">
 </form>
 
 <p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}" id="full-run-link">Full Run</a></p>
