@@ -7,7 +7,7 @@
 {%- endmacro -%}
 
 {% macro local_command(command, package, vcs, vcs_url) %}
-{% let pkg = needed_package(command) %}
+{% set pkg = needed_package(command) %}
 <p>Try this locally {% if pkg %}(using the <a href="https://packages.debian.org/{{ pkg }}">{{ pkg }}</a> {% endif %}package):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 debcheckout {{ package }}
