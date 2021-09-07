@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
+import asyncpg
 import aiozipkin
 from asyncio import TimeoutError
 from aiohttp import ClientConnectorError
+from typing import List, Optional, Tuple, Any, AsyncIterable
 
 from janitor import state
 from . import (
@@ -15,6 +17,55 @@ from . import (
 from .common import get_unchanged_run
 
 MAX_DIFF_SIZE = 200 * 1024
+
+
+async def iter_needs_review(
+        conn: asyncpg.Connection,
+        suites: Optional[List[str]] = None,
+        limit: Optional[int] = None,
+        publishable_only: bool = False,
+        required_only: Optional[bool] = None,
+        reviewer: Optional[str] = None):
+    args: List[Any] = []
+    query = """
+SELECT id, package, suite, vcs_type, result_branches, main_branch_revision, value FROM publish_ready
+"""
+    conditions = []
+    if suites is not None:
+        args.append(suites)
+        conditions.append("suite = ANY($%d::text[])" % len(args))
+
+    publishable_condition = (
+        "exists (select from unnest(unpublished_branches) where "
+        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
+    )
+
+    order_by = []
+
+    if publishable_only:
+        conditions.append(publishable_condition)
+    else:
+        order_by.append(publishable_condition + " DESC")
+
+    if required_only is not None:
+        args.append(required_only)
+        conditions.append('needs_review = $%d' % (len(args)))
+
+    if reviewer is not None:
+        args.append(reviewer)
+        conditions.append('not exists (select from review where reviewer = $%d and run_id = id)' % (len(args)))
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
+
+    if order_by:
+        query += " ORDER BY " + ", ".join(order_by) + " "
+
+    if limit is not None:
+        query += " LIMIT %d" % limit
+    return await conn.fetch(query, *args)
 
 
 async def generate_rejected(conn, suite=None):
@@ -40,50 +91,52 @@ async def generate_review(
     conn, request, client, differ_url, vcs_store_url, suites=None,
     publishable_only=True
 ):
-    if 'needs-review' in request.query:
-        needs_review = (request.query['needs-review'] == 'true')
+    if 'required_only' in request.query:
+        required_only = (request.query['required_only'] == 'true')
     else:
-        needs_review = None
+        required_only = None
+
+    limit = int(request.query.get('limit', '100'))
 
     span = aiozipkin.request_span(request)
 
-    with span.new_child('sql:publish-ready'):
-        entries = [
-            entry
-            async for entry in state.iter_publish_ready(
-                conn,
-                review_status=["unreviewed"],
-                needs_review=needs_review,
-                limit=100,
-                suites=suites,
-                publishable_only=publishable_only,
-            )
-        ]
+    if request.get('user'):
+        reviewer = request['user']['email']
+    else:
+        reviewer = None
+
+    with span.new_child('sql:needs-review'):
+        entries = await iter_needs_review(
+            conn,
+            limit=limit,
+            suites=suites,
+            publishable_only=publishable_only,
+            required_only=required_only,
+            reviewer=reviewer
+        )
     if not entries:
         return await render_template_for_request("review-done.html", request, {})
 
     (
-        run,
+        run_id,
+        package,
+        suite,
+        vcs_type,
+        result_branches,
+        main_branch_revision,
         value,
-        maintainer_email,
-        uploader_emails,
-        changelog_mode,
-        command,
-        qa_review_policy,
-        needs_review,
-        unpublished_branches,
     ) = entries.pop(0)
 
     async def show_diff(role):
         try:
-            (remote_name, base_revid, revid) = run.get_result_branch(role)
+            (remote_name, base_revid, revid) = state.get_result_branch(result_branches, role)
         except KeyError:
             return ""
-        external_url = "/api/run/%s/diff?role=%s" % (run.id, role)
+        external_url = "/api/run/%s/diff?role=%s" % (run_id, role)
         try:
             diff = (await get_vcs_diff(
-                client, vcs_store_url, run.vcs_type, run.package, base_revid,
-                revid)).decode("utf-8", "replace")
+                client, vcs_store_url, vcs_type, package, base_revid.encode('utf-8') if base_revid else None,
+                revid.encode('utf-8'))).decode("utf-8", "replace")
             if len(diff) > MAX_DIFF_SIZE:
                 return "Diff too large (%d). See it at %s" % (
                     len(diff),
@@ -99,7 +152,7 @@ async def generate_review(
     async def show_debdiff():
         with span.new_child("sql:unchanged-run"):
             unchanged_run = await get_unchanged_run(
-                conn, run.package, run.main_branch_revision
+                conn, package, main_branch_revision.encode('utf-8')
             )
         if unchanged_run is None:
             return "<p>No control run</p>"
@@ -107,7 +160,7 @@ async def generate_review(
             text, unused_content_type = await get_archive_diff(
                 client,
                 differ_url,
-                run.id,
+                run_id,
                 unchanged_run.id,
                 kind="debdiff",
                 filter_boring=True,
@@ -122,15 +175,20 @@ async def generate_review(
     kwargs = {
         "show_diff": show_diff,
         "show_debdiff": show_debdiff,
-        "package_name": run.package,
-        "run_id": run.id,
-        "branches": run.result_branches,
-        "suite": run.suite,
+        "package_name": package,
+        "run_id": run_id,
+        "branches": result_branches,
+        "suite": suite,
         "suites": suites,
+        "value": value,
         "MAX_DIFF_SIZE": MAX_DIFF_SIZE,
         "todo": [
-            (entry[0].package, entry[0].id, [rb[0] for rb in entry[0].result_branches])
-            for entry in entries
+            {
+                'package': entry['package'],
+                'id': entry['id'],
+                'branches': [rb[0] for rb in entry['result_branches']],
+                'value': entry['value']
+            } for entry in entries
         ],
     }
     return await render_template_for_request("review.html", request, kwargs)
