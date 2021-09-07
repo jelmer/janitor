@@ -5,6 +5,8 @@
 <div class="section" id="review">
 <h1>Review</h1>
 
+<div class="score">Score: <span id="score">{{ value }}</div></div>
+
 {% for role, remote_branch_name, base_revision, revision in branches %}
 <div class="diff" id='diff-{{ role }}'>
 {{highlight_diff(show_diff(role))|safe}}
@@ -16,7 +18,7 @@
 </div>
 
 <script type="text/javascript">
-function loadRun(package, run_id, roles) {
+function loadRun(package, run_id, roles, value) {
     $('.review-button').blur()
     $('.review-button').disabled = "disabled";
     $('.diff').remove();
@@ -40,6 +42,7 @@ function loadRun(package, run_id, roles) {
     $.when.apply($, deferreds).done(function() {
       $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
       $('#run-id').attr('value', run_id);
+      $('#score').text(value);
       $('#package-name').attr('value', package);
       $('.review-button').disabled = "enabled";
    });
@@ -55,19 +58,20 @@ $(function() {
 
 function loadNewJob() {
   if ((newJob = todo.shift()) !== undefined) {
-    loadRun(newJob[0], newJob[1], newJob[2]);
+    loadRun(newJob.package, newJob.id, newJob.branches, newJob.value);
   } else {
     $('.diff').replaceWith('All done!');
     $('#debdiff').replaceWith('');
     $('#options').remove();
     $('#full-run-link').remove();
+    $('#score').remove();
   }
 }
 
 function refreshData(cb) {
   console.log("Updating backlog of todo items");
   $.ajax({
-     url: '/api/{% if suite %}{{ suite }}/{% endif %}publish-ready?needs-review=true&review-status=unreviewed&publishable_only={{ 'true' if publishable_only else 'false' }}',
+     url: '/api/{% if suite %}{{ suite }}/{% endif %}needs-review?required_only=true&{% if user %}&reviewer={{ user['email'] }}{% endif %}&publishable_only={{ 'true' if publishable_only else 'false' }}',
      dataType: 'json',
      success: function(data) {
          data.forEach(function(entry) {

@@ -993,6 +993,53 @@ ORDER BY package, suite, start_time DESC
 
 
 @docs()
+@routes.get("/needs-review", name="needs-review")
+@routes.get("/{suite:" + SUITE_REGEX + "}/needs-review", name="needs-review-suite")
+async def handle_needs_review(request):
+    from .review import iter_needs_review
+    suite = request.match_info.get("suite")
+    reviewer = request.query.get("reviewer")
+    if reviewer is None and request.get('user'):
+        reviewer = request['user'].get('email')
+    span = aiozipkin.request_span(request)
+    publishable_only = request.query.get("publishable_only", "true") == "true"
+    if 'required_only' in request.query:
+        required_only = (request.query['required_only'] == 'true')
+    else:
+        required_only = None
+    limit = request.query.get("limit", '200')
+    if limit:
+        limit = int(limit)
+    else:
+        limit = None
+    ret = []
+    async with request.app['db'].acquire() as conn:
+        with span.new_child('sql:needs-review'):
+            for (
+                run_id,
+                package,
+                suite,
+                vcs_type,
+                result_branches,
+                main_branch_revision,
+                value,
+            ) in await iter_needs_review(
+                conn,
+                suites=([suite] if suite else None),
+                required_only=required_only,
+                publishable_only=publishable_only,
+                reviewer=reviewer,
+                limit=limit
+            ):
+                ret.append({
+                    'package': package,
+                    'id': run_id,
+                    'branches': [rb[0] for rb in result_branches],
+                    'value': value})
+    return web.json_response(ret, status=200)
+
+
+@docs()
 @routes.get("/publish-ready", name="publish-ready")
 @routes.get("/{suite:" + SUITE_REGEX + "}/publish-ready", name="publish-ready-suite")
 async def handle_publish_ready(request):
@@ -1028,6 +1075,7 @@ async def handle_publish_ready(request):
                 review_status=review_status,
                 needs_review=needs_review,
                 publishable_only=publishable_only,
+                limit=limit,
             ):
                 ret.append((run.package, run.id, [rb[0] for rb in run.result_branches]))
     return web.json_response(ret, status=200)
