@@ -1040,48 +1040,6 @@ async def handle_needs_review(request):
 
 
 @docs()
-@routes.get("/publish-ready", name="publish-ready")
-@routes.get("/{suite:" + SUITE_REGEX + "}/publish-ready", name="publish-ready-suite")
-async def handle_publish_ready(request):
-    suite = request.match_info.get("suite")
-    review_status = request.query.get("review-status")
-    span = aiozipkin.request_span(request)
-    publishable_only = request.query.get("publishable_only", "true") == "true"
-    if 'needs-review' in request.query:
-        needs_review = (request.query['needs-review'] == 'true')
-    else:
-        needs_review = None
-    limit = request.query.get("limit", 200)
-    if limit:
-        limit = int(limit)
-    else:
-        limit = None
-    ret = []
-    async with request.app['db'].acquire() as conn:
-        with span.new_child('sql:publish-ready'):
-            async for (
-                run,
-                value,
-                maintainer_email,
-                uploader_emails,
-                changelog_mode,
-                command,
-                qa_review_policy,
-                needs_review,
-                unpublished_branches,
-            ) in state.iter_publish_ready(
-                conn,
-                suites=([suite] if suite else None),
-                review_status=review_status,
-                needs_review=needs_review,
-                publishable_only=publishable_only,
-                limit=limit,
-            ):
-                ret.append((run.package, run.id, [rb[0] for rb in run.result_branches]))
-    return web.json_response(ret, status=200)
-
-
-@docs()
 @routes.get("/ws/active-runs/{run_id}/progress", name="run-progress")
 async def handle_run_progress(request):
     worker_name = await check_worker_creds(request.app['db'], request)
