@@ -101,7 +101,7 @@ async def generate_review(
     span = aiozipkin.request_span(request)
 
     if request.get('user'):
-        reviewer = request['user']['email']
+        reviewer = request['user'].get('email')
     else:
         reviewer = None
 
@@ -144,6 +144,8 @@ async def generate_review(
                 )
             else:
                 return diff
+        except NotImplementedError as e:
+            return str(e)
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
         except TimeoutError:
