@@ -1147,6 +1147,24 @@ async def consider_request(request):
     return web.json_response({}, status=200)
 
 
+async def get_publish_policy(
+    conn: asyncpg.Connection, package: str, suite: str
+) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:
+    row = await conn.fetchrow(
+        "SELECT publish, update_changelog, command "
+        "FROM policy WHERE package = $1 AND suite = $2",
+        package,
+        suite,
+    )
+    if row:
+        return (  # type: ignore
+            {k: (v, f) for k, v, f in row['publish']},
+            row['update_changelog'],
+            row['command']
+        )
+    return None, None, None
+
+
 @routes.post("/{suite}/{package}/publish", name='publish')
 async def publish_request(request):
     dry_run = request.app['dry_run']
@@ -1168,7 +1186,7 @@ async def publish_request(request):
         if run is None:
             return web.json_response({}, status=400)
 
-        publish_policy = (await state.get_publish_policy(conn, package['name'], suite))[0]
+        publish_policy = (await get_publish_policy(conn, package['name'], suite))[0]
 
         logger.info("Handling request to publish %s/%s", package['name'], suite)
 
@@ -2265,7 +2283,7 @@ async def listen_to_runner(
     require_binary_diff: bool = False,
 ):
     async def process_run(conn, run, maintainer_email, uploader_emails, branch_url):
-        publish_policy, update_changelog, command = await state.get_publish_policy(
+        publish_policy, update_changelog, command = await get_publish_policy(
             conn, run.package, run.suite
         )
         for role, (mode, max_frequency_days) in publish_policy.items():

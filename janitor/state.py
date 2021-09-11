@@ -368,24 +368,6 @@ SELECT * FROM publish_ready
         )
 
 
-async def get_publish_policy(
-    conn: asyncpg.Connection, package: str, suite: str
-) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:
-    row = await conn.fetchrow(
-        "SELECT publish, update_changelog, command "
-        "FROM policy WHERE package = $1 AND suite = $2",
-        package,
-        suite,
-    )
-    if row:
-        return (  # type: ignore
-            {k: (v, f) for k, v, f in row['publish']},
-            row['update_changelog'],
-            row['command']
-        )
-    return None, None, None
-
-
 async def iter_publishable_suites(
     conn: asyncpg.Connection,
     package: str
