@@ -46,6 +46,7 @@ from yarl import URL
 
 from janitor import state, SUITE_REGEX
 from janitor.config import Config
+from janitor.queue import get_queue_position
 from . import (
     check_admin,
     check_qa_reviewer,
@@ -207,7 +208,7 @@ async def handle_schedule(request):
             return web.json_response(
                 {"reason": "Publish policy not yet available."}, status=503
             )
-        (queue_position, queue_wait_time) = await state.get_queue_position(
+        (queue_position, queue_wait_time) = await get_queue_position(
             conn, suite, package['name']
         )
     response_obj = {
@@ -258,7 +259,7 @@ async def handle_run_reschedule(request):
             return web.json_response(
                 {"reason": "Publish policy not yet available."}, status=503
             )
-        (queue_position, queue_wait_time) = await state.get_queue_position(
+        (queue_position, queue_wait_time) = await get_queue_position(
             conn, run['suite'], run['package']
         )
     response_obj = {
@@ -302,7 +303,7 @@ async def handle_schedule_control(request):
             requestor=requestor,
             main_branch_revision=run['main_branch_revision'],
         )
-        (queue_position, queue_wait_time) = await state.get_queue_position(
+        (queue_position, queue_wait_time) = await get_queue_position(
             conn, "unchanged", run['package']
         )
     response_obj = {

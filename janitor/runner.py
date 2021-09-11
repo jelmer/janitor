@@ -26,6 +26,7 @@ import json
 from io import BytesIO
 import logging
 import os
+from .queue import QueueItem, get_queue_item, iter_queue
 import shlex
 import ssl
 import sys
@@ -659,13 +660,13 @@ class ActiveRun(object):
     log_files: Dict[str, BinaryIO]
     worker_name: str
     worker_link: Optional[str]
-    queue_item: state.QueueItem
+    queue_item: QueueItem
     log_id: str
     start_time: datetime
 
     def __init__(
         self,
-        queue_item: state.QueueItem,
+        queue_item: QueueItem,
         worker_name: str,
         worker_link: Optional[str] = None,
         jenkins_metadata: Optional[Dict[str, str]] = None,
@@ -1105,7 +1106,7 @@ class QueueProcessor(object):
         active_run_count.inc()
         packages_processed_count.inc()
 
-    async def finish_run(self, item: state.QueueItem, result: JanitorResult) -> None:
+    async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
         active_run_count.dec()
         run_result_count.labels(
             package=item.package,
@@ -1167,9 +1168,9 @@ class QueueProcessor(object):
             return False
         return until > datetime.now()
 
-    async def next_queue_item(self, conn) -> Optional[state.QueueItem]:
+    async def next_queue_item(self, conn) -> Optional[QueueItem]:
         limit = len(self.active_runs) + 3
-        async for item in state.iter_queue(conn, limit=limit):
+        async for item in iter_queue(conn, limit=limit):
             if self.is_queue_item_assigned(item.id):
                 continue
             if self.is_queue_item_rate_limited(item.branch_url):
@@ -1203,7 +1204,7 @@ async def _find_active_run(request):
     if not worker_name or not queue_id:
         raise web.HTTPNotFound(text="No such current run: %s" % run_id)
     async with queue_processor.database.acquire() as conn:
-        queue_item = await state.get_queue_item(conn, int(queue_id))
+        queue_item = await get_queue_item(conn, int(queue_id))
     if queue_item is None:
         raise web.HTTPNotFound(
             text="Unable to find relevant queue item %r" % queue_id)
@@ -1488,7 +1489,7 @@ async def handle_finish(request):
 
         if queue_item is None:
             async with queue_processor.database.acquire() as conn:
-                queue_item = await state.get_queue_item(conn, worker_result.queue_id)
+                queue_item = await get_queue_item(conn, worker_result.queue_id)
             if queue_item is None:
                 return web.json_response(
                     {"reason": "Unable to find relevant queue item %r" % worker_result.queue_id}, status=404)
