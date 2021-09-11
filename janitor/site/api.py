@@ -692,41 +692,51 @@ class RunSchema(Schema):
 
 @docs()
 @routes.get("/run", name="run-list")
-@routes.get("/run/{run_id}", name="run")
-@routes.get("/pkg/{package}/run", name="package-run-list")
-@routes.get("/pkg/{package}/run/{run_id}", name="package-run")
-async def handle_run(request):
-    package = request.match_info.get("package")
-    run_id = request.match_info.get("run_id")
+async def handle_run_list(request):
     limit = request.query.get("limit")
     if limit is not None:
         limit = int(limit)
     response_obj = []
-    async for run in state.iter_runs(
-        request.app['db'], package, run_id=run_id, limit=limit
-    ):
-        if run.build_version:
-            build_info = {
-                "version": str(run.build_version),
-                "distribution": run.build_distribution,
-            }
-        else:
-            build_info = None
-        response_obj.append(
-            {
-                "run_id": run.id,
-                "start_time": run.start_time.isoformat(),
-                "finish_time": run.finish_time.isoformat(),
-                "command": run.command,
-                "description": run.description,
-                "package": run.package,
-                "build_info": build_info,
-                "result_code": run.result_code,
-                "vcs_type": run.vcs_type,
-                "branch_url": run.branch_url,
-            }
-        )
+    async with request.app['db'].acquire() as conn:
+        for row in await conn.fetch('SELECT id FROM run'):
+            response_obj.append({'run_id': row['id']})
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
+
+
+@docs()
+@routes.get("/pkg/{package}/run", name="package-run-list")
+@routes.get("/pkg/{package}/run/{run_id}", name="package-run")
+async def handle_run(request):
+    run_id = request.match_info.get("run_id")
+    async with request.app['db'].acquire() as conn:
+        run = await conn.fetchrow(
+            'SELECT id, start_time, finish_time, command, description, '
+            'package, build_info, result_code, vcs_type, branch_url '
+            'debian_build.version as build_version, '
+            'debian_build.distribution as build_distribution '
+            'FROM run LEFT JOIN debian_build ON debian_build.run_id = run.id '
+            'WHERE id = $1', run_id)
+    if run is None:
+        raise web.HTTPNotFound(text='no such run')
+    if run['build_version']:
+        build_info = {
+            "version": str(run['build_version']),
+            "distribution": run['build_distribution'],
+        }
+    else:
+        build_info = None
+    return web.json_response({
+            "run_id": run['id'],
+            "start_time": run['start_time'].isoformat(),
+            "finish_time": run['finish_time'].isoformat(),
+            "command": run['command'],
+            "description": run['description'],
+            "package": run['package'],
+            "build_info": build_info,
+            "result_code": run['result_code'],
+            "vcs_type": run['vcs_type'],
+            "branch_url": run['branch_url'],
+        }, headers={"Cache-Control": "max-age=600"})
 
 
 @docs()
