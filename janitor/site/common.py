@@ -7,6 +7,7 @@ from functools import partial
 from typing import Optional, List
 
 from janitor import state
+from janitor.queue import get_queue_position
 from janitor.site import (
     get_archive_diff,
     get_vcs_diff,
@@ -234,7 +235,7 @@ WHERE run.package = $1 AND run.suite = $2
         with span.new_child('sql:previous-runs'):
             previous_runs = await get_previous_runs(conn, package['name'], suite)
         with span.new_child('sql:queue-position'):
-            (queue_position, queue_wait_time) = await state.get_queue_position(
+            (queue_position, queue_wait_time) = await get_queue_position(
                 conn, suite, package['name'])
 
     async def show_diff(role):
