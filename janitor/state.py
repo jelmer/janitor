@@ -221,20 +221,6 @@ class Run(object):
         return self.id < other.id
 
 
-async def iter_runs(
-    db: Database,
-    package: Optional[str] = None,
-    run_id: Optional[str] = None,
-    worker: Optional[str] = None,
-    limit: Optional[int] = None,
-):
-    async with db.acquire() as conn:
-        async for run in _iter_runs(
-            conn, package=package, run_id=run_id, worker=worker, limit=limit
-        ):
-            yield run
-
-
 async def _iter_runs(
     conn: asyncpg.Connection,
     package: Optional[str] = None,
