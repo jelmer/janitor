@@ -190,12 +190,7 @@ ORDER BY finish_time DESC
 async def get_run_pair(db, old_id, new_id):
     async with db.acquire() as conn:
         new_run = await get_run(conn, new_id)
-        if old_id == "BASE":
-            old_run = await get_unchanged_run(
-                conn, new_run['package'], new_run['main_branch_revision']
-            )
-        else:
-            old_run = await get_run(conn, old_id)
+        old_run = await get_run(conn, old_id)
 
     if old_run is None or old_run['result_code'] != 'success':
         raise web.HTTPNotFound(

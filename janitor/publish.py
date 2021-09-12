@@ -281,6 +281,7 @@ async def publish_one(
     role: str,
     revision: bytes,
     log_id: str,
+    unchanged_id: str,
     derived_branch_name: str,
     maintainer_email: str,
     vcs_manager: VcsManager,
@@ -327,6 +328,7 @@ async def publish_one(
         "mode": mode,
         "role": role,
         "log_id": log_id,
+        "unchanged_id": unchanged_id,
         "require-binary-diff": require_binary_diff,
         "allow_create_proposal": allow_create_proposal,
         "external_url": external_url,
@@ -831,7 +833,7 @@ async def publish_from_policy(
         return
 
     unchanged_run = await conn.fetchrow(
-        "SELECT result_code FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
+        "SELECT id, result_code FROM last_runs WHERE package = $1 AND revision = $2 AND result_code = 'success'",
         run.package, base_revision.decode('utf-8'))
 
     # TODO(jelmer): Make this more generic
@@ -858,6 +860,7 @@ async def publish_from_policy(
             role=role,
             revision=revision,
             log_id=run.id,
+            unchanged_id=(unchanged_run['id'] if unchanged_run else None),
             derived_branch_name=await derived_branch_name(conn, suite_config, run, role),
             maintainer_email=maintainer_email,
             vcs_manager=vcs_manager,
@@ -984,6 +987,13 @@ async def publish_and_store(
         allow_create_proposal = run_allow_proposal_creation(suite_config, run)
 
     async with db.acquire() as conn:
+        unchanged_run_id = await conn.fetchval(
+            "SELECT id FROM run "
+            "WHERE revision = $2 AND package = $1 and result_code = 'success' "
+            "ORDER BY finish_time DESC LIMIT 1",
+            run.package, run.main_branch_revision.decode('utf-8')
+        )
+
         try:
             publish_result = await publish_one(
                 template_env_path,
@@ -996,6 +1006,7 @@ async def publish_and_store(
                 role,
                 revision,
                 run.id,
+                unchanged_run_id,
                 await derived_branch_name(conn, suite_config, run, role),
                 maintainer_email,
                 vcs_manager,
@@ -2002,6 +2013,14 @@ This merge proposal will be closed, since the branch has moved to %s.
         suite_config = get_suite_config(config, mp_run['suite'])
         if source_branch_name is None:
             source_branch_name = await derived_branch_name(conn, suite_config, last_run, mp_run['role'])
+
+        unchanged_run_id = await conn.fetchval(
+            "SELECT id FROM run "
+            "WHERE revision = $2 AND package = $1 and result_code = 'success' "
+            "ORDER BY finish_time DESC LIMIT 1",
+            last_run.package, last_run.main_branch_revision.decode('utf-8')
+        )
+
         try:
             publish_result = await publish_one(
                 template_env_path,
@@ -2014,6 +2033,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 last_run_revision,
                 last_run.id,
+                unchanged_run_id,
                 source_branch_name,
                 maintainer_email,
                 vcs_manager=vcs_manager,

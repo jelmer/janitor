@@ -331,9 +331,9 @@ class DifferUnavailable(Exception):
         self.reason = reason
 
 
-def get_debdiff(differ_url: str, log_id: str) -> bytes:
+def get_debdiff(differ_url: str, unchanged_id: str, log_id: str) -> bytes:
     debdiff_url = urllib.parse.urljoin(
-        differ_url, "/debdiff/BASE/%s?filter_boring=1" % log_id
+        differ_url, "/debdiff/%s/%s?filter_boring=1" % (unchanged_id, log_id)
     )
     headers = {"Accept": "text/plain"}
 
@@ -368,6 +368,7 @@ def publish_one(
     role,
     revision: bytes,
     log_id,
+    unchanged_id,
     local_branch_url,
     differ_url: str,
     external_url: str,
@@ -487,7 +488,7 @@ def publish_one(
 
     debdiff: Optional[bytes]
     try:
-        debdiff = get_debdiff(differ_url, log_id)
+        debdiff = get_debdiff(differ_url, unchanged_id, log_id)
     except DebdiffRetrievalError as e:
         raise PublishFailure(
             description="Error from differ for build diff: %s" % e.reason,
@@ -595,6 +596,7 @@ if __name__ == "__main__":
             mode=request["mode"],
             role=request["role"],
             log_id=request["log_id"],
+            unchanged_id=request["unchanged_id"],
             external_url=request["external_url"].rstrip("/"),
             local_branch_url=request["local_branch_url"],
             dry_run=request["dry-run"],

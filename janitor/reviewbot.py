@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ClientResponseError
 
 
 async def fetch_diffs(session, base_url, run_id, branches):
@@ -33,8 +33,14 @@ async def review_unreviewed(session, base_url, reviewer, do_review):
             run_id = entry['id']
             branches = entry['branches']
             diff = await fetch_diffs(session, base_url, run_id, branches)
-            async with session.get('%s/api/run/%s/debdiff' % (base_url, run_id)) as resp:
-                debdiff = await resp.read()
+            try:
+                async with session.get('%s/api/run/%s/debdiff' % (base_url, run_id)) as resp:
+                    debdiff = await resp.read()
+            except ClientResponseError as e:
+                if e.status == 404:
+                    debdiff = None
+                else:
+                    raise
             status, comment = do_review(package, run_id, diff, debdiff)
             await session.post(
                 '%s/api/run/%s' % (base_url, run_id),
