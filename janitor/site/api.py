@@ -502,10 +502,13 @@ async def handle_diff(request):
     except KeyError:
         max_diff_size = None
     try:
-        diff = await get_vcs_diff(
-            request.app['http_client_session'], request.app['vcs_store_url'],
-            run['vcs_type'], run['package'], run['base_revision'].encode('utf-8'),
-            run['revision'].encode('utf-8'))
+        try:
+            diff = await get_vcs_diff(
+                request.app['http_client_session'], request.app['vcs_store_url'],
+                run['vcs_type'], run['package'], run['base_revision'].encode('utf-8'),
+                run['revision'].encode('utf-8'))
+        except NotImplementedError:
+            raise web.HTTPBadRequest(text="unsupported vcs %s" % run['vcs_type'])
         if max_diff_size is not None and len(diff) > max_diff_size:
             return web.Response(
                 status=413,
@@ -691,21 +694,49 @@ class RunSchema(Schema):
 
 
 @docs()
-@routes.get("/run", name="run-list")
+@routes.get("/run/+index", name="run-list")
+@routes.get("/pkg/{package}/run", name="package-run-list")
 async def handle_run_list(request):
+    query = 'SELECT id FROM run'
     limit = request.query.get("limit")
+    package = request.match_info.get('package')
+    args = []
+    if package is not None:
+        query += ' WHERE package = $1'
+        args.append(package)
     if limit is not None:
-        limit = int(limit)
+        query += ' LIMIT %d' % int(limit)
     response_obj = []
     async with request.app['db'].acquire() as conn:
-        for row in await conn.fetch('SELECT id FROM run'):
+        for row in await conn.fetch(query, *args):
             response_obj.append({'run_id': row['id']})
     return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
 
 
 @docs()
-@routes.get("/pkg/{package}/run", name="package-run-list")
+@routes.get("/run/+success", name="run-success-list")
+async def handle_run_success_list(request):
+    query = (
+        'select id, '
+        'array(select role from new_result_branch where run_id = id) as branches, '
+        'result, review_status from run where result_code = \'success\'')
+    limit = request.query.get("limit")
+    if limit is not None:
+        query += ' limit %d' % int(limit)
+    response_obj = []
+    async with request.app['db'].acquire() as conn:
+        for row in await conn.fetch(query):
+            response_obj.append({
+                'run_id': row['id'],
+                'result': row['result'],
+                'branches': row['branches'],
+                'review_status': row['review_status']})
+    return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
+
+
+@docs()
 @routes.get("/pkg/{package}/run/{run_id}", name="package-run")
+@routes.get("/run/{run_id}", name="run")
 async def handle_run(request):
     run_id = request.match_info.get("run_id")
     async with request.app['db'].acquire() as conn:
