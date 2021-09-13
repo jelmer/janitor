@@ -661,12 +661,13 @@ def process_package(
         cached_branch = None
 
     if resume_branch_url:
+        logger.info('Using resume branch: %s', resume_branch_url)
         try:
             resume_branch = open_branch(
                 resume_branch_url, possible_transports=possible_transports
             )
         except BranchUnavailable as e:
-            logger.info('Resume branch URL: %s', e.url)
+            logger.info('Resume branch URL unavailable: %s', e.url, e)
             traceback.print_exc()
             raise WorkerFailure(
                 "worker-resume-branch-unavailable", str(e),
