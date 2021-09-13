@@ -752,7 +752,7 @@ def process_package(
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
         except WorkerFailure as e:
             if e.code == "nothing-to-do":
-                if ws.changes_since_resume():
+                if ws.changes_since_main():
                     raise WorkerFailure("nothing-new-to-do", e.description)
                 elif force_build:
                     changer_result = ChangerResult(
