@@ -302,6 +302,10 @@ class DebianScriptChanger(object):
         except DebianDetailedFailure as e:
             raise WorkerFailure(e.result_code, e.description, e.details)
         except ScriptFailed as e:
+            if e.args[1] == 127:
+                raise WorkerFailure(
+                    'command-not-found',
+                    'Command %s not found' % e.args[0])
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
@@ -525,6 +529,10 @@ class GenericTarget(Target):
         except GenericDetailedFailure as e:
             raise WorkerFailure(e.result_code, e.description, e.details)
         except ScriptFailed as e:
+            if e.args[1] == 127:
+                raise WorkerFailure(
+                    'command-not-found',
+                    'Command %s not found' % e.args[0])
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
@@ -744,7 +752,7 @@ def process_package(
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
         except WorkerFailure as e:
             if e.code == "nothing-to-do":
-                if resume_subworker_result is not None:
+                if ws.changes_since_resume():
                     raise WorkerFailure("nothing-new-to-do", e.description)
                 elif force_build:
                     changer_result = ChangerResult(
@@ -1411,7 +1419,7 @@ async def main(argv=None):
         force_build = assignment.get('force-build', False)
         subpath = assignment["branch"].get("subpath", "") or ""
         if assignment["resume"]:
-            resume_result = assignment["resume"].get("result")
+            resume_result = assignment["resume"]["result"]
             resume_branch_url = assignment["resume"]["branch_url"].rstrip("/")
             resume_branches = [
                 (role, name, base.encode("utf-8"), revision.encode("utf-8"))

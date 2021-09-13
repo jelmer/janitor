@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from aiohttp import ClientSession, ClientResponseError
+from aiohttp import ClientResponseError
 
 
 async def fetch_diffs(session, base_url, run_id, branches):
@@ -27,6 +27,7 @@ async def fetch_diffs(session, base_url, run_id, branches):
 
 
 async def review_unreviewed(session, base_url, reviewer, do_review):
+    # TODO(jelmer): Authentication
     async with session.get('%s/api/needs-review' % base_url, params={'reviewer': reviewer}, raise_for_status=True) as resp:
         for entry in await resp.json():
             package = entry['package']
@@ -42,8 +43,6 @@ async def review_unreviewed(session, base_url, reviewer, do_review):
                 else:
                     raise
             status, comment = do_review(package, run_id, diff, debdiff)
-            print('%s => %s,%s' % (run_id, status, comment))
-            continue
             await session.post(
                 '%s/api/run/%s' % (base_url, run_id),
                 data={'review-status': status, 'review-comment': comment})
