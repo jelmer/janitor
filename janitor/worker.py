@@ -740,6 +740,8 @@ def process_package(
                 ws.local_tree, subpath, reporter, output_directory,
                 committer=committer
             )
+            if not changer_result.branches:
+                raise WorkerFailure("nothing-to-do", "Nothing to do.")
         except WorkerFailure as e:
             if e.code == "nothing-to-do":
                 if resume_subworker_result is not None:
@@ -765,9 +767,6 @@ def process_package(
         if force_build:
             should_build = True
         else:
-            if not changer_result.branches:
-                raise WorkerFailure("nothing-to-do", "Nothing to do.")
-
             should_build = (
                 any([(role is None or role == 'main')
                      for (role, name, br, r) in changer_result.branches]))
