@@ -4,7 +4,7 @@ import asyncpg
 import aiozipkin
 from asyncio import TimeoutError
 from aiohttp import ClientConnectorError, ClientResponseError
-from typing import List, Optional, Tuple, Any, AsyncIterable
+from typing import List, Optional, Any
 
 from janitor import state
 from . import (

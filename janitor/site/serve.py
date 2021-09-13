@@ -447,7 +447,7 @@ ORDER BY merge_proposal.url, run.finish_time DESC
             runs = await conn.fetch(
                 "SELECT id, finish_time, result_code, suite FROM run "
                 "LEFT JOIN debian_build ON run.id = debian_build.run_id "
-                "WHERE package = $1", package['name'])
+                "WHERE package = $1 ORDER BY finish_time DESC", package['name'])
     return await generate_pkg_file(
         request.app.database, request.app['config'], package, merge_proposals, runs,
         available_suites, span

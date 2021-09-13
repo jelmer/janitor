@@ -34,10 +34,6 @@ from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
 
-from breezy.plugins.debian.upstream.branch import (
-    DistCommandFailed,
-    )
-
 from buildlog_consultant.common import (
     NoSpaceOnDevice,
 )
