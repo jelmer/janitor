@@ -18,6 +18,7 @@
 import aiohttp
 from aiohttp import (
     web,
+    ClientResponseError,
     ClientSession,
     ClientTimeout,
     ContentTypeError,
@@ -507,6 +508,8 @@ async def handle_diff(request):
                 request.app['http_client_session'], request.app['vcs_store_url'],
                 run['vcs_type'], run['package'], run['base_revision'].encode('utf-8'),
                 run['revision'].encode('utf-8'))
+        except ClientResponseError as e:
+            return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError:
             raise web.HTTPBadRequest(text="unsupported vcs %s" % run['vcs_type'])
         if max_diff_size is not None and len(diff) > max_diff_size:
