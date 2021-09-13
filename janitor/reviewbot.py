@@ -42,6 +42,8 @@ async def review_unreviewed(session, base_url, reviewer, do_review):
                 else:
                     raise
             status, comment = do_review(package, run_id, diff, debdiff)
+            print('%s => %s,%s' % (run_id, status, comment))
+            continue
             await session.post(
                 '%s/api/run/%s' % (base_url, run_id),
                 data={'review-status': status, 'review-comment': comment})

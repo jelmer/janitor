@@ -152,14 +152,14 @@ async def handle_history(request):
 
     query = (
         'SELECT finish_time, package, suite, worker_link, '
-        'worker_name, finish_time - start_time AS duration, '
+        'worker as worker_name, finish_time - start_time AS duration, '
         'result_code, id, description FROM run '
         'ORDER BY finish_time DESC')
     if offset:
         query += ' OFFSET %d' % offset
     if limit:
         query += ' LIMIT %d' % limit
-    async with request.app['db'].acquire() as conn:
+    async with request.app.database.acquire() as conn:
         runs = await conn.fetch(query)
     return {
         "count": limit,
