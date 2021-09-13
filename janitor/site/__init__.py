@@ -167,11 +167,8 @@ async def get_vcs_diff(client, vcs_store_url: str, vcs_type: str, package: str, 
             new_revid[len('git-v1:'):].decode('utf-8')))
     else:
         raise NotImplementedError('vcs type %s' % vcs_type)
-    async with client.get(url, timeout=ClientTimeout(30)) as resp:
-        if resp.status == 200:
-            return await resp.read()
-        else:
-            return b"Unable to retrieve diff; error %d" % resp.status
+    async with client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+        return await resp.read()
 
 
 async def get_archive_diff(

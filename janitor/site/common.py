@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from aiohttp import ClientConnectorError
+from aiohttp import ClientConnectorError, ClientResponseError
 from aiohttp import web
 import asyncpg
 from functools import partial
@@ -250,6 +250,8 @@ WHERE run.package = $1 AND run.suite = $2
                 client, vcs_store_url, run['vcs_type'], run['package'],
                 base_revid.encode('utf-8'), revid.encode('utf-8'))
             return diff.decode("utf-8", "replace")
+        except ClientResponseError as e:
+            return b"Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
 

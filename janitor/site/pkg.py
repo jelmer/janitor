@@ -22,7 +22,7 @@ from io import BytesIO
 
 from typing import Optional, Tuple
 
-from aiohttp import ClientConnectorError
+from aiohttp import ClientConnectorError, ClientResponseError
 import asyncpg
 
 from janitor.queue import get_queue_position
@@ -157,6 +157,8 @@ async def generate_run_file(
             diff = await get_vcs_diff(
                 client, vcs_store_url, run['vcs_type'], run['package'],
                 base_revid.encode('utf-8'), revid.encode('utf-8'))
+        except ClientResponseError as e:
+            return "Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
             return "Unable to retrieve diff; error %s" % e
         except NotImplementedError:

@@ -3,7 +3,7 @@
 import asyncpg
 import aiozipkin
 from asyncio import TimeoutError
-from aiohttp import ClientConnectorError
+from aiohttp import ClientConnectorError, ClientResponseError
 from typing import List, Optional, Tuple, Any, AsyncIterable
 
 from janitor import state
@@ -144,6 +144,8 @@ async def generate_review(
                 )
             else:
                 return diff
+        except ClientResponseError as e:
+            return "Unable to retrieve diff; error code %d" % e.status
         except NotImplementedError as e:
             return str(e)
         except ClientConnectorError as e:
