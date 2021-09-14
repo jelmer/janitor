@@ -41,6 +41,7 @@ from yarl import URL
 from breezy import debug, urlutils
 from breezy.branch import Branch
 from breezy.errors import PermissionDenied, ConnectionError
+from breezy.propose import Hoster
 from breezy.transport import UnusableRedirect
 
 from prometheus_client import Counter, Gauge, Histogram
@@ -375,6 +376,7 @@ class JanitorResult(object):
         worker_name=None,
         worker_link=None,
         vcs_type=None,
+        resume_from=None,
     ):
         self.package = pkg
         self.suite = suite
@@ -404,6 +406,10 @@ class JanitorResult(object):
             self.start_time = worker_result.start_time
             self.finish_time = worker_result.finish_time
             self.followup_actions = worker_result.followup_actions
+            if worker_result.refreshed:
+                self.resume_from = None
+            else:
+                self.resume_from = resume_from
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -418,6 +424,7 @@ class JanitorResult(object):
             self.failure_details = None
             self.remotes = {}
             self.followup_actions = []
+            self.resume_from = None
 
     @property
     def duration(self):
@@ -439,6 +446,7 @@ class JanitorResult(object):
             "subworker": self.subworker_result,
             "value": self.value,
             "remotes": self.remotes,
+            "resume": {"run_id": self.resume_from} if self.resume_from else None,
             "branches": (
                 [
                     (fn, n, br.decode("utf-8"), r.decode("utf-8"))
@@ -494,6 +502,7 @@ class WorkerResult(object):
         queue_id=None,
         worker_name=None,
         followup_actions=None,
+        refreshed=False,
     ):
         self.code = code
         self.description = description
@@ -512,6 +521,7 @@ class WorkerResult(object):
         self.queue_id = queue_id
         self.worker_name = worker_name
         self.followup_actions = followup_actions
+        self.refreshed = refreshed
 
     @classmethod
     def from_file(cls, path):
@@ -570,7 +580,8 @@ class WorkerResult(object):
             if 'finish_time' in worker_result else None,
             worker_result.get("queue_id"),
             worker_result.get("worker_name"),
-            worker_result.get("followup_actions")
+            worker_result.get("followup_actions"),
+            worker_result.get("refreshed", False),
         )
 
 
@@ -683,6 +694,7 @@ class ActiveRun(object):
         self._watch_dog = None
         self.worker_link = worker_link
         self._jenkins_metadata = jenkins_metadata
+        self.resume_from = None
 
     @property
     def current_duration(self):
@@ -758,6 +770,7 @@ class ActiveRun(object):
             log_id=self.log_id,
             worker_name=self.worker_name,
             worker_link=self.worker_link,
+            resume_from=self.resume_from,
             **kwargs)
 
     def json(self) -> Any:
@@ -782,7 +795,9 @@ class ActiveRun(object):
         return ret
 
 
-def open_resume_branch(main_branch, suite_name, package, possible_hosters=None):
+def open_resume_branch(
+        main_branch: Branch, suite_name: str, package: str,
+        possible_hosters: Optional[List[Hoster]] = None) -> Optional[Branch]:
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
     except UnsupportedHoster as e:
@@ -807,7 +822,7 @@ def open_resume_branch(main_branch, suite_name, package, possible_hosters=None):
                     unused_overwrite,
                     unused_existing_proposal,
                 ) = find_existing_proposed(
-                        main_branch, hoster, suite_name,
+                        main_branch, hoster, option,
                         preferred_schemes=['https', 'git', 'bzr'])
                 if resume_branch:
                     break
@@ -824,17 +839,21 @@ def open_resume_branch(main_branch, suite_name, package, possible_hosters=None):
             return resume_branch
 
 
-async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branch: Branch) -> Optional["ResumeInfo"]:
+async def check_resume_result(
+        conn: asyncpg.Connection, suite: str,
+        resume_branch: Branch) -> Optional["ResumeInfo"]:
     row = await conn.fetchrow(
-        "SELECT result, branch_name, review_status, "
+        "SELECT id, result, branch_name, review_status, "
         "array(SELECT row(role, remote_name, base_revision, revision) "
         "FROM new_result_branch WHERE run_id = run.id) AS result_branches "
         "FROM run "
-        "WHERE suite = $1 AND revision = $2 AND result_code = 'success'",
+        "WHERE suite = $1 AND revision = $2 AND result_code = 'success' "
+        "ORDER BY finish_time DESC LIMIT 1",
         suite,
         resume_branch.last_revision().decode("utf-8"),
     )
     if row is not None:
+        resume_run_id = row['id']
         resume_branch_result = row['result']
         resume_review_status = row['review_status']
         resume_result_branches = [
@@ -851,14 +870,13 @@ async def check_resume_result(conn: asyncpg.Connection, suite: str, resume_branc
         logging.info("Unsetting resume branch, since last run was rejected.")
         return None
     return ResumeInfo(
-        resume_branch,
-        resume_branch_result,
-        resume_result_branches or [],
-    )
+        resume_run_id, resume_branch, resume_branch_result,
+        resume_result_branches or [])
 
 
 class ResumeInfo(object):
-    def __init__(self, branch, result, resume_result_branches):
+    def __init__(self, run_id, branch, result, resume_result_branches):
+        self.run_id = run_id
         self.branch = branch
         self.result = result
         self.resume_result_branches = resume_result_branches
@@ -869,6 +887,7 @@ class ResumeInfo(object):
 
     def json(self):
         return {
+            "run_id": self.run_id,
             "result": self.result,
             "branch_url": self.resume_branch_url,
             "branches": [
@@ -924,6 +943,7 @@ async def store_run(
     worker_link: Optional[str],
     result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
+    resume_from: Optional[str] = None,
     failure_details: Optional[Any] = None
 ):
     """Store a run.
@@ -950,6 +970,7 @@ async def store_run(
       worker_link: Link to worker URL
       result_branches: Result branches
       result_tags: Result tags
+      resume_from: Run this one was resumed from
       failure_details: Result failure details
     """
     if result_tags is None:
@@ -963,8 +984,9 @@ async def store_run(
         "main_branch_revision, "
         "revision, result, suite, vcs_type, branch_url, logfilenames, "
         "value, worker, worker_link, result_tags, "
-        "failure_details) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21)",
+        "resume_from, failure_details) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
         run_id,
         command,
         description,
@@ -985,6 +1007,7 @@ async def store_run(
         worker_name,
         worker_link,
         result_tags_updated,
+        resume_from,
         failure_details,
     )
 
@@ -1106,8 +1129,14 @@ class QueueProcessor(object):
         active_run_count.inc()
         packages_processed_count.inc()
 
-    async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
+    async def unclaim_run(self, log_id: str) -> None:
         active_run_count.dec()
+        try:
+            del self.active_runs[log_id]
+        except KeyError:
+            pass
+
+    async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
         run_result_count.labels(
             package=item.package,
             suite=item.suite,
@@ -1141,15 +1170,13 @@ class QueueProcessor(object):
                     result_branches=result.branches,
                     result_tags=result.tags,
                     failure_details=result.failure_details,
+                    resume_from=result.resume_from,
                 )
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
                 await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
         self.topic_result.publish(result.json())
-        try:
-            del self.active_runs[result.log_id]
-        except KeyError:
-            pass
+        await self.unclaim_run(result.log_id)
         self.topic_queue.publish(self.status_json())
         last_success_gauge.set_to_current_time()
         await followup_run(self.config, self.database, self.policy, item, result)
@@ -1169,7 +1196,7 @@ class QueueProcessor(object):
         return until > datetime.now()
 
     async def next_queue_item(self, conn) -> Optional[QueueItem]:
-        limit = len(self.active_runs) + 3
+        limit = len(self.active_runs) + 300
         async for item in iter_queue(conn, limit=limit):
             if self.is_queue_item_assigned(item.id):
                 continue
@@ -1258,10 +1285,14 @@ async def handle_log(request):
     return response
 
 
-@routes.post("/assign", name="assign")
+@routes.post("/{mode:assign|peek}", name="assign")
 async def handle_assign(request):
+    mode = request.match_info['mode']
     json = await request.json()
-    worker = json["worker"]
+    if mode == 'assign':
+        worker = json["worker"]
+    else:
+        worker = None
     worker_link = json.get("worker_link")
 
     possible_transports = []
@@ -1330,6 +1361,8 @@ async def handle_assign(request):
             resume_branch = None
             vcs_type = item.vcs_type
         else:
+            # We try the public branch first, since perhaps a maintainer
+            # has made changes to the branch there.
             active_run.main_branch_url = full_branch_url(main_branch).rstrip('/')
             vcs_type = get_vcs_abbreviation(main_branch.repository)
             if not item.refresh:
@@ -1353,6 +1386,9 @@ async def handle_assign(request):
                         queue_processor.public_vcs_manager.get_branch,
                         item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type)
                 except UnsupportedVcs:
+                    logging.warning(
+                        'Unsupported vcs %s for resume branch of %s',
+                        vcs_type, item.package)
                     resume_branch = None
 
         if resume_branch is not None:
@@ -1362,6 +1398,10 @@ async def handle_assign(request):
                     if is_authenticated_url(resume.branch.user_url):
                         raise AssertionError('invalid resume branch %r' % (
                             resume.branch))
+                    active_run.resume_from = resume.run_id
+                    logging.info(
+                        'Resuming %s/%s from run %s', item.package, item.suite,
+                        resume.run_id)
         else:
             resume = None
 
@@ -1397,13 +1437,14 @@ async def handle_assign(request):
         "command": command,
         "suite": item.suite,
         "force-build": suite_config.force_build,
-        # TODO(jelmer): Deprecate vcs_manager
-        "vcs_manager": queue_processor.public_vcs_manager.base_urls.get(item.vcs_type),
         "vcs_store": queue_processor.public_vcs_manager.base_urls,
     }
 
-    with span.new_child('start-watchdog'):
-        active_run.start_watchdog(queue_processor)
+    if mode == 'assign':
+        with span.new_child('start-watchdog'):
+            active_run.start_watchdog(queue_processor)
+    else:
+        await queue_processor.unclaim_run(active_run.log_id)
     return web.json_response(assignment, status=201)
 
 

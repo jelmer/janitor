@@ -1135,6 +1135,31 @@ async def handle_run_progress(request):
 
 
 @docs()
+@routes.get("/active-runs/+peek")
+async def handle_run_peek(request):
+    span = aiozipkin.request_span(request)
+    url = URL(request.app['runner_url']) / "peek"
+    with span.new_child('forward-runner'):
+        try:
+            async with request.app['http_client_session'].post(url, json={}) as resp:
+                if resp.status != 201:
+                    try:
+                        internal_error = await resp.json()
+                    except ContentTypeError:
+                        internal_error = await resp.text()
+                    return web.json_response(
+                        {"internal-status": resp.status, "internal-result": internal_error},
+                        status=400,
+                    )
+                assignment = await resp.json()
+                return web.json_response(assignment, status=201)
+        except (ClientConnectorError, ServerDisconnectedError) as e:
+            return web.json_response({"reason": "unable to contact runner: %s" % e}, status=502)
+        except asyncio.TimeoutError as e:
+            return web.json_response({"reason": "timeout contacting runner: %s" % e}, status=502)
+
+
+@docs()
 @routes.post("/active-runs", name="run-assign")
 async def handle_run_assign(request):
     span = aiozipkin.request_span(request)
