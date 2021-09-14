@@ -178,6 +178,7 @@ class WorkerResult(object):
         target: str,
         target_details: Optional[Any],
         subworker: Any,
+        refreshed: bool,
     ) -> None:
         self.description = description
         self.value = value
@@ -186,6 +187,7 @@ class WorkerResult(object):
         self.target = target
         self.target_details = target_details
         self.subworker = subworker
+        self.refreshed = refreshed
 
     def json(self):
         return {
@@ -201,6 +203,7 @@ class WorkerResult(object):
                 "name": self.target,
                 "details": self.target_details,
             },
+            "refreshed": self.refreshed,
         }
 
 
@@ -667,7 +670,7 @@ def process_package(
                 resume_branch_url, possible_transports=possible_transports
             )
         except BranchUnavailable as e:
-            logger.info('Resume branch URL unavailable: %s', e.url, e)
+            logger.info('Resume branch URL %s unavailable: %s', e.url, e)
             traceback.print_exc()
             raise WorkerFailure(
                 "worker-resume-branch-unavailable", str(e),
@@ -814,7 +817,8 @@ def process_package(
             branches,
             changer_result.tags,
             build_target.name, build_target_details,
-            subworker=changer_result.mutator
+            subworker=changer_result.mutator,
+            refreshed=ws.refreshed
         )
         yield ws, wr
     except BaseException:
@@ -1067,6 +1071,13 @@ def run_worker(
             raise
 
 
+class AssignmentFailure(Exception):
+    """Assignment failed."""
+
+    def __init__(self, reason):
+        self.reason = reason
+
+
 async def get_assignment(
     session: ClientSession,
     base_url: str,
@@ -1086,7 +1097,8 @@ async def get_assignment(
     logging.debug("Sending assignment request: %r", json)
     async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
-            raise ValueError("Unable to get assignment: %r" % await resp.text())
+            data = await resp.json()
+            raise AssignmentFailure(data['reason'])
         return await resp.json()
 
 
@@ -1403,6 +1415,9 @@ async def main(argv=None):
             assignment = await get_assignment(
                 session, args.base_url, node_name, jenkins_metadata=jenkins_metadata
             )
+        except AssignmentFailure as e:
+            logging.fatal("failed to get assignment: %s", e.reason)
+            return 1
         except asyncio.TimeoutError as e:
             logging.fatal("timeout while retrieving assignment: %s", e)
             return 1

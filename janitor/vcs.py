@@ -485,10 +485,10 @@ class RemoteVcsManager(VcsManager):
     def get_branch(self, codebase, branch_name, vcs_type=None):
         if vcs_type:
             if vcs_type in self.base_urls:
-                return get_cached_branch(self.base_urls[vcs_type], codebase, branch_name, vcs_type)
+                return get_cached_branch(self.base_urls[vcs_type], vcs_type, codebase, branch_name)
             raise UnsupportedVcs(vcs_type)
         for vcs_type, base_url in self.base_urls.items():
-            branch = get_cached_branch(base_url, codebase, branch_name, vcs_type)
+            branch = get_cached_branch(base_url, vcs_type, codebase, branch_name)
             if branch:
                 return branch
         else:
