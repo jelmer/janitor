@@ -68,23 +68,19 @@ SELECT id, package, suite, vcs_type, result_branches, main_branch_revision, valu
     return await conn.fetch(query, *args)
 
 
-async def generate_rejected(conn, suite=None):
+async def generate_rejected(conn, config, suite=None):
     if suite is None:
-        suites = None
+        suites = [s.name for s in config.suite]
     else:
         suites = [suite]
-    entries = [
-        entry
-        async for entry in state.iter_publish_ready(
-            conn, review_status=["rejected"], needs_review=False, suites=suites, publishable_only=False
-        )
-    ]
 
-    def entry_key(entry):
-        return entry[0].finish_time
+    runs = await conn.fetch(
+        "SELECT id, suite, package, review_comment FROM run "
+        "WHERE review_status = 'rejected' AND suite = ANY($1::text[]) "
+        "ORDER BY finish_time DESC",
+        suites)
 
-    entries.sort(key=entry_key, reverse=True)
-    return {"entries": entries, "suite": suite}
+    return {"runs": runs, "suite": suite}
 
 
 async def generate_review(
