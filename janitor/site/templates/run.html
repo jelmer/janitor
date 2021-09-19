@@ -27,6 +27,7 @@
 <li>Review Status: {% if is_qa_reviewer %}<select id="review-status" name='review-status' onchange="submit_review(this.value)">
   <option value="unreviewed"{% if run.review_status == 'unreviewed' %} selected="true"{% endif %}>Unreviewed</option>
   <option value="approved"{% if run.review_status == 'approved' %} selected="true"{% endif %}>Approved</option>
+  <option value="abstained"{% if run.review_status == 'abstained' %} selected="true"{% endif %}>Abstained</option>
   <option value="rejected"{% if run.review_status == 'rejected' %} selected="true"{% endif %}>Rejected</option>
 </select>
 <script>
