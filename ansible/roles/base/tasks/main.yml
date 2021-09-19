@@ -16,6 +16,7 @@
      - gnupg2
      - python3-pip
      - python3-yaml
+     - python3-tqdm
      - python3-launchpadlib
      - python3-keyrings.alt
      - python3-distro-info
