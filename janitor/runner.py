@@ -1331,8 +1331,15 @@ async def handle_assign(request):
                 # TODO(jelmer): Try URLs in possible_salsa_urls_from_package_name
                 await abort(active_run, 'not-in-vcs', "No VCS URL known for package.")
                 item = None
+                continue
 
-        suite_config = get_suite_config(queue_processor.config, item.suite)
+            try:
+                suite_config = get_suite_config(queue_processor.config, item.suite)
+            except KeyError:
+                logging.warning(
+                    'Unable to find details for suite %r', item.suite)
+                item = None
+                continue
 
         # This is simple for now, since we only support one distribution.
         builder = get_builder(queue_processor.config, suite_config)
