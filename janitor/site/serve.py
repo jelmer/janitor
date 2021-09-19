@@ -288,36 +288,26 @@ async def handle_never_processed(request):
 
 @html_template("result-code-index.html", headers={"Cache-Control": "max-age=60"})
 async def handle_result_codes(request):
-    from .result_codes import (
-        generate_result_code_index,
-        stats_by_result_codes,
-        )
-
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
         suite = None
     all_suites = [s.name for s in config.suite]
     async with request.app.database.acquire() as conn:
-        by_code = await stats_by_result_codes(conn, suite=suite)
         query = """\
-    select (
-        case when result_code = 'nothing-new-to-do' then 'success'
-        else result_code end), count(result_code) from last_runs
+    (select (
+            case when result_code = 'nothing-new-to-do' then 'success'
+            else result_code end), count(result_code) from last_runs
+        where suite = ANY($1::text[]) group by 1)
+    union
+    select "never-processed", count(*) from candidate c
+        where not exists (
+            SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
+        and suite = ANY($1::text[]) order by 2 desc
     """
-        args = []
-        if suite:
-            args.append(suite)
-            query += " WHERE suite = $1"
-        query += " group by 1 order by 2 desc"
-        by_code = [(row[0], row[1]) for row in await conn.fetch(query, *args)]
-        never_processed = await conn.fetchval("""\
-select count(*) from candidate c
-where not exists (
-SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
-AND suite = ANY($1::text[])
-""", [suite] if suite else all_suites)
-        by_code.append(("never-processed", never_processed))
-        return {"result_codes": by_code, "suite": suite, "all_suites": all_suites}
+        return {
+            "result_codes": await conn.fetch(
+                query, [suite] if suite else all_suites),
+            "suite": suite, "all_suites": all_suites}
 
 
 @html_template("result-code.html", headers={"Cache-Control": "max-age=60"})
@@ -327,17 +317,16 @@ async def handle_result_code(request):
         suite = None
     code = request.match_info.get("code")
     query = ('SELECT * FROM last_runs '
-             'WHERE result_code = $1 AND suite = ANY($1::text[])')
-    args = [code]
-    all_suites = [s.name for s in config.suite]
-    if suite:
-        args.append([suite])
+             'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])')
+    if code == 'success':
+        codes = ['success', 'nothing-to-do']
     else:
-        args.append(all_suites)
+        codes = [code]
+    all_suites = [s.name for s in config.suite]
     async with request.app.database.acquire() as conn:
         return {
             "code": code,
-            "runs": await conn.fetch(query, *args),
+            "runs": await conn.fetch(query, codes, [suite] if suite else all_suites),
             "suite": suite,
             "all_suites": all_suites}
 
