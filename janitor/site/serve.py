@@ -299,7 +299,7 @@ async def handle_result_codes(request):
             else result_code end), count(result_code) from last_runs
         where suite = ANY($1::text[]) group by 1)
     union
-    select "never-processed", count(*) from candidate c
+    select 'never-processed', count(*) from candidate c
         where not exists (
             SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
         and suite = ANY($1::text[]) order by 2 desc
