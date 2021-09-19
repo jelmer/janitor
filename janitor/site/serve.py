@@ -20,6 +20,7 @@
 import aiozipkin
 import asyncio
 import logging
+import operator
 import re
 import shutil
 import tempfile
@@ -285,6 +286,7 @@ async def handle_never_processed(request):
         return {"never_processed": await conn.fetch(query, *args)}
 
 
+@html_template("result-code-index.html", headers={"Cache-Control": "max-age=60"})
 async def handle_result_codes(request):
     from .result_codes import (
         generate_result_code_index,
@@ -294,45 +296,50 @@ async def handle_result_codes(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
         suite = None
-    code = request.match_info.get("code")
     all_suites = [s.name for s in config.suite]
     async with request.app.database.acquire() as conn:
-        if not code:
-            stats = await stats_by_result_codes(conn, suite=suite)
-            never_processed = await conn.fetchval("""\
+        by_code = await stats_by_result_codes(conn, suite=suite)
+        query = """\
+    select (
+        case when result_code = 'nothing-new-to-do' then 'success'
+        else result_code end), count(result_code) from last_runs
+    """
+        args = []
+        if suite:
+            args.append(suite)
+            query += " WHERE suite = $1"
+        query += " group by 1 order by 2 desc"
+        by_code = [(row[0], row[1]) for row in await conn.fetch(query, *args)]
+        never_processed = await conn.fetchval("""\
 select count(*) from candidate c
 where not exists (
 SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
 AND suite = ANY($1::text[])
 """, [suite] if suite else all_suites)
-            vs = await generate_result_code_index(
-                stats, never_processed, suite, all_suites=all_suites
-            )
-            text = await render_template_for_request(
-                "result-code-index.html", request, vs
-            )
-        else:
-            query = 'SELECT * FROM last_runs WHERE result_code = $1'
-            args = [code]
-            if suite:
-                query += ' AND suite = $2'
-                args.append(suite)
-            runs = await conn.fetch(query, *args)
-            text = await render_template_for_request(
-                "result-code.html",
-                request,
-                {
-                    "code": code,
-                    "runs": runs,
-                    "suite": suite,
-                    "all_suites": all_suites,
-                },
-            )
-    return web.Response(
-        content_type="text/html",
-        text=text,
-        headers={"Cache-Control": "max-age=600"},
-    )
+        by_code.append(("never-processed", never_processed))
+        return {"result_codes": by_code, "suite": suite, "all_suites": all_suites}
+
+
+@html_template("result-code.html", headers={"Cache-Control": "max-age=60"})
+async def handle_result_code(request):
+    suite = request.query.get("suite")
+    if suite is not None and suite.lower() == "_all":
+        suite = None
+    code = request.match_info.get("code")
+    query = ('SELECT * FROM last_runs '
+             'WHERE result_code = $1 AND suite = ANY($1::text[])')
+    args = [code]
+    all_suites = [s.name for s in config.suite]
+    if suite:
+        args.append([suite])
+    else:
+        args.append(all_suites)
+    async with request.app.database.acquire() as conn:
+        return {
+            "code": code,
+            "runs": await conn.fetch(query, *args),
+            "suite": suite,
+            "all_suites": all_suites}
 
 
 async def handle_login(request):
@@ -956,7 +963,7 @@ async def create_app(
         "/cupboard/result-codes/", handle_result_codes, name="result-code-list"
     )
     app.router.add_get(
-        "/cupboard/result-codes/{code}", handle_result_codes, name="result-code"
+        "/cupboard/result-codes/{code}", handle_result_code, name="result-code"
     )
     app.router.add_get(
         "/cupboard/never-processed", handle_never_processed, name="never-processed"
