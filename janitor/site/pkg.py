@@ -135,6 +135,10 @@ async def generate_run_file(
                 publish_history = await get_publish_history(conn, run['revision'])
             else:
                 publish_history = []
+        with span.new_child('sql:reviews'):
+            kwargs['reviews'] = await conn.fetch(
+                'SELECT status, comment, reviewer FROM review WHERE run_id = $1',
+                run['id'])
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
     kwargs["vcs_type"] = package['vcs_type']
