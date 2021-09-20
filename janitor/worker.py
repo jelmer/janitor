@@ -69,7 +69,6 @@ from silver_platter.debian.changer import (
     ChangerError,
     ChangerResult,
     ChangerReporter,
-    changer_subcommand as debian_changer_subcommand,
 )
 
 from silver_platter.proposal import Hoster
@@ -312,12 +311,13 @@ class DebianScriptChanger(object):
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
+        branches = [
+            ('main', None, command_result.old_revision,
+             command_result.new_revision)]
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
-            branches=[
-                ('main', local_tree.branch.name, command_result.old_revision,
-                 command_result.new_revision)],
+            branches=branches,
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value)
 
@@ -354,12 +354,9 @@ class DebianTarget(Target):
 
     def parse_args(self, argv):
         logging.info('Running %r', argv)
-        changer_cls: Type[DebianChanger]
-        try:
-            changer_cls = debian_changer_subcommand(argv[0])
-        except KeyError:
-            self.changer = DebianScriptChanger(argv, self.chroot)
-        else:
+        if argv[0] == 'orphan':
+            from silver_platter.debian.orphan import OrphanChanger
+            changer_cls = OrphanChanger
             subparser = argparse.ArgumentParser(prog=changer_cls.name)
             subparser.add_argument(
                 "--no-update-changelog",
@@ -384,6 +381,8 @@ class DebianTarget(Target):
             if changer_args.update_changelog is not None:
                 self.update_changelog = changer_args.update_changelog
             self.changer = changer_cls.from_args(changer_args)
+        else:
+            self.changer = DebianScriptChanger(argv, self.chroot)
 
     def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
         self.changer.log_directory = log_directory
@@ -543,7 +542,7 @@ class GenericTarget(Target):
             description=command_result.description,
             mutator=command_result.context,
             branches=[
-                ('main', local_tree.branch.name, command_result.old_revision,
+                ('main', None, command_result.old_revision,
                  command_result.new_revision)],
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value)
