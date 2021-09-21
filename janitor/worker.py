@@ -772,8 +772,11 @@ def process_package(
             try:
                 role = roles[name]
             except KeyError:
-                logging.warning('Unable to find role for branch %s', name)
-                continue
+                if name is None:
+                    role = 'main'
+                else:
+                    logging.warning('Unable to find role for branch %s', name)
+                    continue
             result_branches.append((role, name, base_revision, revision))
 
         actual_command = _drop_env(command)
