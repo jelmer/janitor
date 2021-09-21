@@ -311,9 +311,6 @@ class DebianScriptChanger(object):
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
-        branches = [
-            ('main', None, command_result.old_revision,
-             command_result.new_revision)]
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
@@ -541,9 +538,7 @@ class GenericTarget(Target):
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
-            branches=[
-                ('main', None, command_result.old_revision,
-                 command_result.new_revision)],
+            branches=None,
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value)
 
@@ -683,14 +678,15 @@ def process_package(
     else:
         resume_branch = None
 
+    additional_colocated_branches = build_target.additional_colocated_branches(main_branch)
+    roles = {b: r for (r, b) in additional_colocated_branches.items()}
+
     ws = Workspace(
         main_branch,
         resume_branch=resume_branch,
         cached_branch=cached_branch,
         path=os.path.join(output_directory, build_target.directory_name()),
-        additional_colocated_branches=(
-            build_target.additional_colocated_branches(main_branch)
-        ),
+        additional_colocated_branches=[b for (r, b) in additional_colocated_branches],
         resume_branch_additional_colocated_branches=(
             [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
         ),
@@ -751,7 +747,15 @@ def process_package(
                 ws.local_tree, subpath, reporter, output_directory,
                 committer=committer
             )
-            if not changer_result.branches:
+            result_branches = []
+            for (name, base_revision, revision) in ws.result_branches():
+                try:
+                    role = roles[name]
+                except KeyError:
+                    logging.warning('Unable to find role for branch %s', name)
+                    continue
+                result_branches.append((role, name, base_revision, revision))
+            if not result_branches:
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
         except WorkerFailure as e:
             if e.code == "nothing-to-do":
@@ -780,7 +784,7 @@ def process_package(
         else:
             should_build = (
                 any([(role is None or role == 'main')
-                     for (role, name, br, r) in changer_result.branches]))
+                     for (role, name, br, r) in result_branches]))
 
         if should_build:
             build_target_details = build_target.build(
@@ -788,32 +792,10 @@ def process_package(
         else:
             build_target_details = None
 
-        branches: Optional[List[Tuple[str, str, bytes, bytes]]]
-        if changer_result.branches is not None:
-            branches = [
-                (f, n or main_branch.name, br, r)  # type: ignore
-                for (f, n, br, r) in changer_result.branches
-            ]
-            if not ws.refreshed and extra_resume_branches:
-                # Preserve resume branches that weren't returned by the worker
-                for (f, n) in extra_resume_branches:
-                    if any([b[1] == n for b in branches]):
-                        continue
-                    try:
-                        br = resume_branch.controldir.open_branch(n).last_revision()
-                    except NotBranchError:
-                        br = None
-                    branches.append(
-                        (f, n,
-                         br,
-                         ws.local_tree.controldir.open_branch(n).last_revision()))
-        else:
-            branches = None
-
         wr = WorkerResult(
             changer_result.description,
             changer_result.value,
-            branches,
+            result_branches,
             changer_result.tags,
             build_target.name, build_target_details,
             subworker=changer_result.mutator,
