@@ -314,7 +314,7 @@ class DebianScriptChanger(object):
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
-            branches=branches,
+            branches=None,
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value)
 
