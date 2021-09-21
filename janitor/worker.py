@@ -775,6 +775,8 @@ def process_package(
                 else:
                     logging.warning('Unable to find role for branch %s', name)
                     continue
+            if base_revision == revision:
+                continue
             result_branches.append((role, name, base_revision, revision))
 
         actual_command = _drop_env(command)
