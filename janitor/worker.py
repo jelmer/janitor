@@ -747,15 +747,7 @@ def process_package(
                 ws.local_tree, subpath, reporter, output_directory,
                 committer=committer
             )
-            result_branches = []
-            for (name, base_revision, revision) in ws.result_branches():
-                try:
-                    role = roles[name]
-                except KeyError:
-                    logging.warning('Unable to find role for branch %s', name)
-                    continue
-                result_branches.append((role, name, base_revision, revision))
-            if not result_branches:
+            if not ws.any_branch_changes():
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
         except WorkerFailure as e:
             if e.code == "nothing-to-do":
@@ -765,7 +757,7 @@ def process_package(
                     changer_result = ChangerResult(
                         description='No change build',
                         mutator=None,
-                        branches=[],
+                        branches=None,
                         tags={},
                         value=0)
                 else:
@@ -774,6 +766,15 @@ def process_package(
                 raise
         finally:
             metadata["revision"] = ws.local_tree.branch.last_revision().decode()
+
+        result_branches = []
+        for (name, base_revision, revision) in ws.result_branches():
+            try:
+                role = roles[name]
+            except KeyError:
+                logging.warning('Unable to find role for branch %s', name)
+                continue
+            result_branches.append((role, name, base_revision, revision))
 
         actual_command = _drop_env(command)
 
