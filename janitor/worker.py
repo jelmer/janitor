@@ -679,7 +679,7 @@ def process_package(
         resume_branch = None
 
     additional_colocated_branches = build_target.additional_colocated_branches(main_branch)
-    roles = {b: r for (r, b) in additional_colocated_branches.items()}
+    roles = {b: r for (r, b) in additional_colocated_branches}
 
     ws = Workspace(
         main_branch,
