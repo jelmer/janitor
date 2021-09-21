@@ -600,7 +600,9 @@ async def open_branch_with_fallback(
     conn, pkg, vcs_type, vcs_url, possible_transports=None
 ):
     probers = select_preferred_probers(vcs_type)
-    logging.info('Opening branch %s with %r', vcs_url, probers)
+    logging.info(
+        'Opening branch %s with %r', vcs_url,
+        [type(p).__name__ for p in probers])
     try:
         return await to_thread(
             open_branch_ext,
@@ -1566,7 +1568,7 @@ async def handle_finish(request):
             logfilenames=logfilenames,
             )
 
-        if worker_result.code is None:
+        if result.builder_result:
             result.builder_result.from_directory(output_directory)
 
             artifact_names = result.builder_result.artifact_filenames()
