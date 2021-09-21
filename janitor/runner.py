@@ -1506,11 +1506,13 @@ async def handle_finish(request):
         worker_name = active_run.worker_name
         worker_link = active_run.worker_link
         main_branch_url = active_run.main_branch_url
+        resume_from = active_run.resume_from
     else:
         queue_item = None
         worker_name = None
         worker_link = None
         main_branch_url = None
+        resume_from = None
 
     reader = await request.multipart()
     worker_result = None
@@ -1566,6 +1568,7 @@ async def handle_finish(request):
             vcs_type=queue_item.vcs_type,
             worker_result=worker_result,
             logfilenames=logfilenames,
+            resume_from=resume_from,
             )
 
         if result.builder_result:
