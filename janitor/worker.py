@@ -32,7 +32,7 @@ import sys
 from tempfile import TemporaryDirectory
 from threading import Thread
 import traceback
-from typing import Any, Optional, List, Dict, Type, Iterator, Tuple
+from typing import Any, Optional, List, Dict, Iterator, Tuple
 from urllib.parse import urljoin
 
 import aiohttp
@@ -65,7 +65,6 @@ from silver_platter.debian import (
     pick_additional_colocated_branches,
 )
 from silver_platter.debian.changer import (
-    DebianChanger,
     ChangerError,
     ChangerResult,
     ChangerReporter,

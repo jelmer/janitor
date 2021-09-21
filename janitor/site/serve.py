@@ -20,7 +20,6 @@
 import aiozipkin
 import asyncio
 import logging
-import operator
 import re
 import shutil
 import tempfile
