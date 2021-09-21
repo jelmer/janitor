@@ -36,7 +36,7 @@ from typing import Any, Optional, List, Dict, Type, Iterator, Tuple
 from urllib.parse import urljoin
 
 import aiohttp
-from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError, web
+from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError, web, ContentTypeError
 import yarl
 
 from jinja2 import Template
@@ -1080,8 +1080,13 @@ async def get_assignment(
     logging.debug("Sending assignment request: %r", json)
     async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
-            data = await resp.json()
-            raise AssignmentFailure(data['reason'])
+            try:
+                data = await resp.json()
+            except ContentTypeError:
+                data = await resp.text()
+                raise AssignmentFailure(data)
+            else:
+                raise AssignmentFailure(data['reason'])
         return await resp.json()
 
 
