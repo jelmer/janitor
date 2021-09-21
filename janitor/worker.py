@@ -673,8 +673,6 @@ def process_package(
             raise WorkerFailure(
                 "worker-resume-branch-missing", str(e),
                 details={'url': e.url})
-        else:
-            logger.info("Resuming from branch %s", full_branch_url(resume_branch))
     else:
         resume_branch = None
 
