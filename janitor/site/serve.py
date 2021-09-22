@@ -643,7 +643,7 @@ async def handle_rejected(request):
 
     suite = request.query.get("suite")
     async with request.app.database.acquire() as conn:
-        return await generate_rejected(conn, request.app.config, suite=suite)
+        return await generate_rejected(conn, request.app['config'], suite=suite)
 
 
 async def handle_review_post(request):
