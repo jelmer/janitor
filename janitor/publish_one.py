@@ -56,7 +56,7 @@ from silver_platter.publish import (
 )
 
 from breezy.branch import Branch
-from breezy.errors import DivergedBranches
+from breezy.errors import DivergedBranches, NoSuchRevision
 from breezy.plugins.gitlab.hoster import (
     ForkingDisabled,
     GitLabConflict,
@@ -174,8 +174,13 @@ def publish(
         return subrunner.get_proposal_commit_message(role, existing_commit_message)
 
     with main_branch.lock_read(), local_branch.lock_read():
-        if merge_conflicts(main_branch, local_branch, stop_revision):
-            raise MergeConflict(main_branch, local_branch)
+        try:
+            if merge_conflicts(main_branch, local_branch, stop_revision):
+                raise MergeConflict(main_branch, local_branch)
+        except NoSuchRevision as e:
+            raise PublishFailure(
+                description="Revision missing: %s" % e.revision,
+                code="revision-missing")
 
     labels: Optional[List[str]]
 
