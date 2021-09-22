@@ -159,6 +159,7 @@ CREATE TABLE IF NOT EXISTS publish_policy (
    frequency_days int,
    unique(role)
 );
+CREATE TYPE notify_mode AS ENUM('no_notifications', 'email');
 CREATE TABLE IF NOT EXISTS policy (
    package text not null,
    suite suite_name not null,
@@ -166,6 +167,7 @@ CREATE TABLE IF NOT EXISTS policy (
    publish publish_policy[],
    command text,
    review_policy qa_review,
+   notify_mode broken_notify,
    foreign key (package) references package(name),
    unique(package, suite)
 );
@@ -472,3 +474,4 @@ CREATE TABLE IF NOT EXISTS review (
  reviewed_at timestamp not null default now()
 );
 CREATE INDEX ON review (run_id);
+CREATE UNIQUE INDEX ON review (run_id, reviewer);
