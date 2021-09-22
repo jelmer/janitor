@@ -748,7 +748,10 @@ class ActiveRun(object):
                     code="worker-timeout",
                     logfilenames=[],
                 )
-                await queue_processor.finish_run(self, result)
+                try:
+                    await queue_processor.finish_run(self, result)
+                except RunExists:
+                    logging.warning('Watchdog was not stopped?')
                 break
 
     def kill(self) -> None:
@@ -1081,6 +1084,13 @@ async def followup_run(config, database, policy, item, result: JanitorResult):
             logging.info('TODO: attempt to find a resolution for %r', requirement)
 
 
+class RunExists(Exception):
+    """Run already exists."""
+
+    def __init__(self, run_id):
+        self.run_id = run_id
+
+
 class QueueProcessor(object):
     def __init__(
         self,
@@ -1148,32 +1158,35 @@ class QueueProcessor(object):
         )
         if not self.dry_run:
             async with self.database.acquire() as conn, conn.transaction():
-                await store_run(
-                    conn,
-                    result.log_id,
-                    item.package,
-                    result.vcs_type,
-                    result.branch_url,
-                    result.start_time,
-                    result.finish_time,
-                    item.command,
-                    result.description,
-                    item.context,
-                    result.context,
-                    result.main_branch_revision,
-                    result.code,
-                    revision=result.revision,
-                    subworker_result=result.subworker_result,
-                    suite=item.suite,
-                    logfilenames=result.logfilenames,
-                    value=result.value,
-                    worker_name=result.worker_name,
-                    worker_link=result.worker_link,
-                    result_branches=result.branches,
-                    result_tags=result.tags,
-                    failure_details=result.failure_details,
-                    resume_from=result.resume_from,
-                )
+                try:
+                    await store_run(
+                        conn,
+                        result.log_id,
+                        item.package,
+                        result.vcs_type,
+                        result.branch_url,
+                        result.start_time,
+                        result.finish_time,
+                        item.command,
+                        result.description,
+                        item.context,
+                        result.context,
+                        result.main_branch_revision,
+                        result.code,
+                        revision=result.revision,
+                        subworker_result=result.subworker_result,
+                        suite=item.suite,
+                        logfilenames=result.logfilenames,
+                        value=result.value,
+                        worker_name=result.worker_name,
+                        worker_link=result.worker_link,
+                        result_branches=result.branches,
+                        result_tags=result.tags,
+                        failure_details=result.failure_details,
+                        resume_from=result.resume_from,
+                    )
+                except asyncpg.UniqueViolationError as e:
+                    raise RunExists(result.log_id)
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
                 await conn.execute("DELETE FROM queue WHERE id = $1", item.id)
@@ -1309,7 +1322,10 @@ async def handle_assign(request):
             code=code,
             description=description
         )
-        await queue_processor.finish_run(active_run.queue_item, result)
+        try:
+            await queue_processor.finish_run(active_run.queue_item, result)
+        except RunExists:
+            pass
 
     queue_processor = request.app['queue_processor']
 
@@ -1583,7 +1599,14 @@ async def handle_finish(request):
                 artifact_names,
             )
 
-    await queue_processor.finish_run(queue_item, result)
+    try:
+        await queue_processor.finish_run(queue_item, result)
+    except RunExists as e:
+        return web.json_response(
+            {"id": run_id, "filenames": filenames, "result": result.json(), 'reason': str(e)},
+            status=409,
+        )
+
     return web.json_response(
         {"id": run_id, "filenames": filenames, "result": result.json()},
         status=201,
