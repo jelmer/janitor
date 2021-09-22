@@ -65,9 +65,7 @@ from silver_platter.debian import (
     pick_additional_colocated_branches,
 )
 from silver_platter.debian.changer import (
-    ChangerError,
     ChangerResult,
-    ChangerReporter,
 )
 
 from silver_platter.proposal import Hoster
@@ -225,25 +223,6 @@ class WorkerFailure(Exception):
         return ret
 
 
-class WorkerReporter(ChangerReporter):
-    def __init__(self, metadata_subworker, resume_result, provide_context, remotes):
-        self.metadata_subworker = metadata_subworker
-        self.resume_result = resume_result
-        self.report_context = provide_context
-        self.remotes = remotes
-
-    def report_remote(self, name, url):
-        self.remotes[name] = {"url": url}
-
-    def report_metadata(self, key, value):
-        self.metadata_subworker[key] = value
-
-    def get_base_metadata(self, key, default_value=None):
-        if not self.resume_result:
-            return default_value
-        return self.resume_result.get(key, default_value)
-
-
 class Target(object):
     """A build target."""
 
@@ -261,7 +240,7 @@ class Target(object):
     def directory_name(self) -> str:
         raise NotImplementedError(self.directory_name)
 
-    def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
+    def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
         raise NotImplementedError(self.make_changes)
 
 
@@ -276,7 +255,7 @@ class DebianScriptChanger(object):
         local_tree,
         subpath,
         update_changelog,
-        reporter,
+        resume_metadata,
         committer,
         base_proposal=None,
     ):
@@ -289,7 +268,7 @@ class DebianScriptChanger(object):
         try:
             command_result = debian_script_runner(
                 local_tree, script=script, commit_pending=None,
-                resume_metadata=reporter.resume_result, subpath=subpath,
+                resume_metadata=resume_metadata, subpath=subpath,
                 update_changelog=update_changelog,
                 extra_env={'DIST': dist_command})
         except ResultFileFormatError as e:
@@ -313,9 +292,85 @@ class DebianScriptChanger(object):
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
-            branches=None,
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value)
+
+
+class OrphanChanger:
+
+    def __init__(
+        self,
+        update_vcs=True,
+        salsa_push=True,
+        salsa_user="debian",
+        dry_run=False,
+        check_wnpp=True,
+    ):
+        self.update_vcs = update_vcs
+        self.salsa_push = salsa_push
+        self.salsa_user = salsa_user
+        self.dry_run = dry_run
+        self.check_wnpp = check_wnpp
+
+    @classmethod
+    def from_args(cls, args):
+        return cls(
+            update_vcs=not args.no_update_vcs,
+            dry_run=args.dry_run,
+            salsa_user=args.salsa_user,
+            salsa_push=not args.just_update_headers,
+            check_wnpp=not args.no_check_wnpp,
+        )
+
+    def make_changes(  # noqa: C901
+        self,
+        local_tree,
+        subpath,
+        resume_metadata,
+        update_changelog,
+        committer,
+        base_proposal=None,
+    ):
+        from silver_platter.debian.orphan import (
+            orphan, AlreadyOrphaned, NoWnppBug,
+            FormattingUnpreservable, ChangeConflict, GeneratedFile)
+        try:
+            result = orphan(
+                local_tree,
+                subpath,
+                update_changelog,
+                committer,
+                update_vcs=self.update_vcs,
+                salsa_push=self.salsa_push,
+                salsa_user=self.salsa_user,
+                dry_run=self.dry_run,
+                check_wnpp=self.check_wnpp
+                )
+        except AlreadyOrphaned:
+            raise WorkerFailure("nothing-to-do", "Already orphaned")
+        except NoWnppBug as e:
+            raise WorkerFailure(
+                "nothing-to-do",
+                "Package %s is purported to be orphaned, "
+                "but no open wnpp bug exists." % e.package,
+            )
+        except FormattingUnpreservable as e:
+            raise WorkerFailure(
+                "formatting-unpreservable",
+                "unable to preserve formatting while editing %s" % e.path,
+            )
+        except (ChangeConflict, GeneratedFile) as e:
+            raise WorkerFailure(
+                "generated-file", "unable to edit generated file: %r" % e
+            )
+
+        return ChangerResult(
+            description="Move package to QA team.",
+            mutator=result.json(),
+            tags={},
+            proposed_commit_message=("Set the package maintainer to the QA team."),
+        )
+
 
 
 class DebianTarget(Target):
@@ -351,47 +406,20 @@ class DebianTarget(Target):
     def parse_args(self, argv):
         logging.info('Running %r', argv)
         if argv[0] == 'orphan':
-            from silver_platter.debian.orphan import OrphanChanger
-            changer_cls = OrphanChanger
-            subparser = argparse.ArgumentParser(prog=changer_cls.name)
-            subparser.add_argument(
-                "--no-update-changelog",
-                action="store_false",
-                default=None,
-                dest="update_changelog",
-                help="do not update the changelog",
-            )
-            subparser.add_argument(
-                "--update-changelog",
-                action="store_true",
-                dest="update_changelog",
-                help="force updating of the changelog",
-                default=None,
-            )
-            subparser.add_argument(
-                '--dry-run',
-                action='store_true',
-                help='Dry run.')
-            changer_cls.setup_parser(subparser)
-            changer_args = subparser.parse_args(argv[1:])
-            if changer_args.update_changelog is not None:
-                self.update_changelog = changer_args.update_changelog
-            self.changer = changer_cls.from_args(changer_args)
+            self.changer = OrphanChanger(argv)
         else:
             self.changer = DebianScriptChanger(argv, self.chroot)
 
-    def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
+    def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
         self.changer.log_directory = log_directory
         try:
             return self.changer.make_changes(
                 local_tree,
                 subpath=subpath,
+                resume_metadata=resume_metadata,
                 committer=committer,
                 update_changelog=self.update_changelog,
-                reporter=reporter,
             )
-        except ChangerError as e:
-            raise WorkerFailure(e.category, e.summary, details=e.details)
         except MemoryError as e:
             raise WorkerFailure('memory-error', str(e))
 
@@ -513,12 +541,12 @@ class GenericTarget(Target):
     def parse_args(self, argv):
         self.argv = argv
 
-    def make_changes(self, local_tree, subpath, reporter, log_directory, committer=None):
+    def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
         script = shlex_join(self.argv)
         try:
             command_result = generic_script_runner(
                 local_tree, script=script, commit_pending=None,
-                resume_metadata=reporter.resume_result, subpath=subpath)
+                resume_metadata=resume_metadata, subpath=subpath)
         except ResultFileFormatError as e:
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e)
@@ -537,7 +565,6 @@ class GenericTarget(Target):
         return ChangerResult(
             description=command_result.description,
             mutator=command_result.context,
-            branches=None,
             tags=dict(command_result.tags) if command_result.tags else None,
             value=command_result.value)
 
@@ -730,18 +757,11 @@ def process_package(
             # don't need to pass in the subworker result.
             resume_subworker_result = None
 
-        reporter = WorkerReporter(
-            metadata["subworker"],
-            resume_subworker_result,
-            provide_context,
-            metadata["remotes"],
-        )
-
-        reporter.report_remote("origin", main_branch.user_url)
+        metadata["remotes"]["origin"] = {"url": main_branch.user_url}
 
         try:
             changer_result = build_target.make_changes(
-                ws.local_tree, subpath, reporter, output_directory,
+                ws.local_tree, subpath, resume_subworker_result, output_directory,
                 committer=committer
             )
             if not ws.any_branch_changes():
@@ -754,7 +774,6 @@ def process_package(
                     changer_result = ChangerResult(
                         description='No change build',
                         mutator=None,
-                        branches=None,
                         tags={},
                         value=0)
                 else:
