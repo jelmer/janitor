@@ -251,6 +251,8 @@ def import_branches_git(
         tags: Dict[str, bytes]):
     repo_url = vcs_manager.get_repository_url(package, "git")
 
+    from dulwich.objects import ZERO_SHA
+
     # The server is expected to have repositories ready for us, so we don't create
     # the repository if it is missing.
     vcs_result_controldir = ControlDir.open(repo_url)
@@ -261,7 +263,10 @@ def import_branches_git(
         changed_refs = {}
         for (fn, n, br, r) in branches:
             tagname = ("refs/tags/%s/%s" % (log_id, fn)).encode("utf-8")
-            changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
+            if r is None:
+                changed_refs[tagname] = (ZERO_SHA, r)
+            else:
+                changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
             branchname = ("refs/heads/%s/%s" % (suite, fn)).encode("utf-8")
             # TODO(jelmer): Ideally this would be a symref:
             changed_refs[branchname] = changed_refs[tagname]
