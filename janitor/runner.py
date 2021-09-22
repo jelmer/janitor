@@ -602,7 +602,7 @@ async def open_branch_with_fallback(
     probers = select_preferred_probers(vcs_type)
     logging.info(
         'Opening branch %s with %r', vcs_url,
-        [type(p).__name__ for p in probers])
+        [p.__name__ for p in probers])
     try:
         return await to_thread(
             open_branch_ext,
