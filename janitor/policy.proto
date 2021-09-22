@@ -40,7 +40,7 @@ enum ReviewPolicy {
 };
 
 enum NotifyMode {
-    none = 0;
+    no_notification = 0;
 
     email = 1;
 
@@ -85,7 +85,7 @@ message SuitePolicy {
 
     repeated PublishPolicy publish = 4;
 
-    optional NotifyMode broken_notify = 6;
+    optional NotifyMode broken_notify = 6 [ default=no_notification ];
 };
 
 message Policy {
