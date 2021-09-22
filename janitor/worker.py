@@ -586,6 +586,7 @@ def process_package(
 
     additional_colocated_branches = build_target.additional_colocated_branches(main_branch)
     roles = {b: r for (r, b) in additional_colocated_branches}
+    roles[main_branch.name] = 'main'
 
     ws = Workspace(
         main_branch,
@@ -667,11 +668,8 @@ def process_package(
             try:
                 role = roles[name]
             except KeyError:
-                if name is None:
-                    role = 'main'
-                else:
-                    logging.warning('Unable to find role for branch %s', name)
-                    continue
+                logging.warning('Unable to find role for branch %s', name)
+                continue
             if base_revision == revision:
                 continue
             result_branches.append((role, name, base_revision, revision))
