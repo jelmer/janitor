@@ -50,6 +50,7 @@ from silver_platter.workspace import Workspace
 
 from silver_platter.apply import (
     script_runner as generic_script_runner,
+    CommandResult as GenericCommandResult,
     DetailedFailure as GenericDetailedFailure,
     ScriptFailed,
     ScriptMadeNoChanges,
@@ -63,9 +64,6 @@ from silver_platter.debian.apply import (
 from silver_platter.debian import (
     MissingUpstreamTarball,
     pick_additional_colocated_branches,
-)
-from silver_platter.debian.changer import (
-    ChangerResult,
 )
 
 from silver_platter.proposal import Hoster
@@ -257,7 +255,6 @@ class DebianScriptChanger(object):
         update_changelog,
         resume_metadata,
         committer,
-        base_proposal=None,
     ):
         script = shlex_join(self.args)
         dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
@@ -266,7 +263,7 @@ class DebianScriptChanger(object):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
         try:
-            command_result = debian_script_runner(
+            return debian_script_runner(
                 local_tree, script=script, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath,
                 update_changelog=update_changelog,
@@ -289,11 +286,6 @@ class DebianScriptChanger(object):
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
-        return ChangerResult(
-            description=command_result.description,
-            mutator=command_result.context,
-            tags=dict(command_result.tags) if command_result.tags else None,
-            value=command_result.value)
 
 
 class OrphanChanger:
@@ -329,7 +321,6 @@ class OrphanChanger:
         resume_metadata,
         update_changelog,
         committer,
-        base_proposal=None,
     ):
         from silver_platter.debian.orphan import (
             orphan, AlreadyOrphaned, NoWnppBug,
@@ -364,13 +355,11 @@ class OrphanChanger:
                 "generated-file", "unable to edit generated file: %r" % e
             )
 
-        return ChangerResult(
+        return GenericCommandResult(
             description="Move package to QA team.",
-            mutator=result.json(),
-            tags={},
-            proposed_commit_message=("Set the package maintainer to the QA team."),
+            context=result.json(),
+            tags=[],
         )
-
 
 
 class DebianTarget(Target):
@@ -544,7 +533,7 @@ class GenericTarget(Target):
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
         script = shlex_join(self.argv)
         try:
-            command_result = generic_script_runner(
+            return generic_script_runner(
                 local_tree, script=script, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath)
         except ResultFileFormatError as e:
@@ -562,11 +551,6 @@ class GenericTarget(Target):
             raise WorkerFailure(
                 'command-failed',
                 'Script %s failed to run with code %s' % e.args)
-        return ChangerResult(
-            description=command_result.description,
-            mutator=command_result.context,
-            tags=dict(command_result.tags) if command_result.tags else None,
-            value=command_result.value)
 
     def additional_colocated_branches(self, main_branch):
         return []
@@ -749,9 +733,6 @@ def process_package(
         metadata["subworker"] = {}
         metadata["remotes"] = {}
 
-        def provide_context(c):
-            metadata["context"] = c
-
         if ws.resume_branch is None:
             # If the resume branch was discarded for whatever reason, then we
             # don't need to pass in the subworker result.
@@ -771,10 +752,10 @@ def process_package(
                 if ws.changes_since_main():
                     raise WorkerFailure("nothing-new-to-do", e.description)
                 elif force_build:
-                    changer_result = ChangerResult(
+                    changer_result = GenericCommandResult(
                         description='No change build',
-                        mutator=None,
-                        tags={},
+                        context=None,
+                        tags=[],
                         value=0)
                 else:
                     raise
@@ -820,7 +801,7 @@ def process_package(
             result_branches,
             changer_result.tags,
             build_target.name, build_target_details,
-            subworker=changer_result.mutator,
+            subworker=changer_result.context,
             refreshed=ws.refreshed
         )
         yield ws, wr
