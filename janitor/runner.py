@@ -1356,6 +1356,7 @@ async def handle_assign(request):
             except KeyError:
                 logging.warning(
                     'Unable to find details for suite %r', item.suite)
+                await abort(active_run, 'unknown-suite', "Suite %s unknown" % item.suite)
                 item = None
                 continue
 
