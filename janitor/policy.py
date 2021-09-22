@@ -84,6 +84,12 @@ REVIEW_POLICY_STR = {
 }
 
 
+NOTIFY_MODE_STR = {
+    policy_pb2.no_notification: "no_notification",
+    policy_pb2.email: "email",
+}
+
+
 POLICY_MODE_STR = {
     policy_pb2.auto: "auto",
     policy_pb2.update_changelog: "update",
@@ -100,11 +106,12 @@ def apply_policy(
     uploaders: List[str],
     in_base: bool,
     release_stages_passed: Set[str]
-) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, Optional[str], Optional[str]]:
+) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, Optional[str], Optional[str], Optional[str]]:
     publish_mode = {}
     update_changelog = policy_pb2.auto
     command = None
     qa_review = None
+    broken_notify = policy_pb2.no_notification
     for policy in config.policy:
         if policy.match and not any(
             [
@@ -126,11 +133,14 @@ def apply_policy(
             command = s.command
         if s.qa_review:
             qa_review = s.qa_review
+        if s.HasField("broken_notify"):
+            broken_notify = s.broken_notify
     return (
         {k: (PUBLISH_MODE_STR[v[0]], v[1]) for (k, v) in publish_mode.items()},
         POLICY_MODE_STR[update_changelog],
         command,
-        REVIEW_POLICY_STR[qa_review]
+        REVIEW_POLICY_STR[qa_review],
+        NOTIFY_MODE_STR[broken_notify],
     )
 
 
@@ -160,27 +170,30 @@ async def update_policy(
     changelog_mode: str,
     command: List[str],
     qa_review: Optional[str],
+    broken_notify: Optional[str],
 ) -> None:
     await conn.execute(
         "INSERT INTO policy "
-        "(package, suite, update_changelog, command, publish, qa_review) "
-        "VALUES ($1, $2, $3, $4, $5, $6) "
+        "(package, suite, update_changelog, command, publish, qa_review, broken_notify) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7) "
         "ON CONFLICT (package, suite) DO UPDATE SET "
         "update_changelog = EXCLUDED.update_changelog, "
         "command = EXCLUDED.command, "
         "publish = EXCLUDED.publish, "
-        "qa_review = EXCLUDED.qa_review",
+        "qa_review = EXCLUDED.qa_review, "
+        "broken_notify = EXCLUDED.broken_notify",
         name,
         suite,
         changelog_mode,
         command,
         [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
-        qa_review
+        qa_review,
+        broken_notify,
     )
 
 
 async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
-    query = "SELECT package, suite, publish, update_changelog, command, qa_review FROM policy"
+    query = "SELECT package, suite, publish, update_changelog, command, qa_review, broken_notify FROM policy"
     args = []
     if package:
         query += " WHERE package = $1"
@@ -194,6 +207,7 @@ async def iter_policy(conn: asyncpg.Connection, package: Optional[str] = None):
                 row['update_changelog'],
                 row['command'],
                 row['qa_review'],
+                row['broken_notify'],
             ),
         )
 
