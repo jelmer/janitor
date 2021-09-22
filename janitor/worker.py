@@ -697,7 +697,7 @@ def process_package(
             changer_result.description,
             changer_result.value,
             result_branches,
-            changer_result.tags,
+            dict(changer_result.tags) if changer_result.tags else None,
             build_target.name, build_target_details,
             subworker=changer_result.context,
             refreshed=ws.refreshed
