@@ -207,4 +207,6 @@ async def store_review(conn, run_id, status, comment, reviewer):
             )
         await conn.execute(
             "INSERT INTO review (run_id, comment, reviewer, review_status) VALUES "
-            " ($1, $2, $3, $4)", run_id, comment, reviewer, status)
+            " ($1, $2, $3, $4) ON CONFLICT (run_id, reviewer) "
+            "DO UPDATE SET review_status = EXCLUDED.review_status, comment = EXCLUDED.comment, "
+            "reviewed_at = NOW()", run_id, comment, reviewer, status)
