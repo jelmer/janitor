@@ -242,126 +242,6 @@ class Target(object):
         raise NotImplementedError(self.make_changes)
 
 
-class DebianScriptChanger(object):
-
-    def __init__(self, args, schroot):
-        self.args = args
-        self.schroot = schroot
-
-    def make_changes(
-        self,
-        local_tree,
-        subpath,
-        update_changelog,
-        resume_metadata,
-        committer,
-    ):
-        script = shlex_join(self.args)
-        dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
-            self.schroot, ':'.join(sys.path), sys.executable)
-        if local_tree.has_filename(os.path.join(subpath, 'debian')):
-            dist_command += ' --packaging=%s' % local_tree.abspath(
-                os.path.join(subpath, 'debian'))
-        try:
-            return debian_script_runner(
-                local_tree, script=script, commit_pending=None,
-                resume_metadata=resume_metadata, subpath=subpath,
-                update_changelog=update_changelog,
-                extra_env={'DIST': dist_command})
-        except ResultFileFormatError as e:
-            raise WorkerFailure(
-                'result-file-format', 'Result file was invalid: %s' % e)
-        except ScriptMadeNoChanges:
-            raise WorkerFailure('nothing-to-do', 'No changes made')
-        except MissingChangelog as e:
-            raise WorkerFailure(
-                'missing-changelog', 'No changelog present: %s' % e.args[0])
-        except DebianDetailedFailure as e:
-            raise WorkerFailure(e.result_code, e.description, e.details)
-        except ScriptFailed as e:
-            if e.args[1] == 127:
-                raise WorkerFailure(
-                    'command-not-found',
-                    'Command %s not found' % e.args[0])
-            raise WorkerFailure(
-                'command-failed',
-                'Script %s failed to run with code %s' % e.args)
-
-
-class OrphanChanger:
-
-    def __init__(
-        self,
-        update_vcs=True,
-        salsa_push=True,
-        salsa_user="debian",
-        dry_run=False,
-        check_wnpp=True,
-    ):
-        self.update_vcs = update_vcs
-        self.salsa_push = salsa_push
-        self.salsa_user = salsa_user
-        self.dry_run = dry_run
-        self.check_wnpp = check_wnpp
-
-    @classmethod
-    def from_args(cls, args):
-        return cls(
-            update_vcs=not args.no_update_vcs,
-            dry_run=args.dry_run,
-            salsa_user=args.salsa_user,
-            salsa_push=not args.just_update_headers,
-            check_wnpp=not args.no_check_wnpp,
-        )
-
-    def make_changes(  # noqa: C901
-        self,
-        local_tree,
-        subpath,
-        resume_metadata,
-        update_changelog,
-        committer,
-    ):
-        from silver_platter.debian.orphan import (
-            orphan, AlreadyOrphaned, NoWnppBug,
-            FormattingUnpreservable, ChangeConflict, GeneratedFile)
-        try:
-            result = orphan(
-                local_tree,
-                subpath,
-                update_changelog,
-                committer,
-                update_vcs=self.update_vcs,
-                salsa_push=self.salsa_push,
-                salsa_user=self.salsa_user,
-                dry_run=self.dry_run,
-                check_wnpp=self.check_wnpp
-                )
-        except AlreadyOrphaned:
-            raise WorkerFailure("nothing-to-do", "Already orphaned")
-        except NoWnppBug as e:
-            raise WorkerFailure(
-                "nothing-to-do",
-                "Package %s is purported to be orphaned, "
-                "but no open wnpp bug exists." % e.package,
-            )
-        except FormattingUnpreservable as e:
-            raise WorkerFailure(
-                "formatting-unpreservable",
-                "unable to preserve formatting while editing %s" % e.path,
-            )
-        except (ChangeConflict, GeneratedFile) as e:
-            raise WorkerFailure(
-                "generated-file", "unable to edit generated file: %r" % e
-            )
-
-        return GenericCommandResult(
-            description="Move package to QA team.",
-            context=result.json(),
-            tags=[],
-        )
-
-
 class DebianTarget(Target):
     """Debian target."""
 
@@ -393,22 +273,40 @@ class DebianTarget(Target):
             self.update_changelog = None
 
     def parse_args(self, argv):
-        logging.info('Running %r', argv)
-        if argv[0] == 'orphan':
-            self.changer = OrphanChanger(argv)
-        else:
-            self.changer = DebianScriptChanger(argv, self.chroot)
+        self.argv = argv
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
-        self.changer.log_directory = log_directory
+        logging.info('Running %r', self.argv)
+        script = shlex_join(self.argv)
+        dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
+            self.chroot, ':'.join(sys.path), sys.executable)
+        if local_tree.has_filename(os.path.join(subpath, 'debian')):
+            dist_command += ' --packaging=%s' % local_tree.abspath(
+                os.path.join(subpath, 'debian'))
         try:
-            return self.changer.make_changes(
-                local_tree,
-                subpath=subpath,
-                resume_metadata=resume_metadata,
-                committer=committer,
+            return debian_script_runner(
+                local_tree, script=script, commit_pending=None,
+                resume_metadata=resume_metadata, subpath=subpath,
                 update_changelog=self.update_changelog,
-            )
+                extra_env={'DIST': dist_command})
+        except ResultFileFormatError as e:
+            raise WorkerFailure(
+                'result-file-format', 'Result file was invalid: %s' % e)
+        except ScriptMadeNoChanges:
+            raise WorkerFailure('nothing-to-do', 'No changes made')
+        except MissingChangelog as e:
+            raise WorkerFailure(
+                'missing-changelog', 'No changelog present: %s' % e.args[0])
+        except DebianDetailedFailure as e:
+            raise WorkerFailure(e.result_code, e.description, e.details)
+        except ScriptFailed as e:
+            if e.args[1] == 127:
+                raise WorkerFailure(
+                    'command-not-found',
+                    'Command %s not found' % e.args[0])
+            raise WorkerFailure(
+                'command-failed',
+                'Script %s failed to run with code %s' % e.args)
         except MemoryError as e:
             raise WorkerFailure('memory-error', str(e))
 
