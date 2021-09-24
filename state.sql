@@ -92,6 +92,7 @@ CREATE TABLE IF NOT EXISTS run (
    result_tags result_tag[],
    subpath text,
    failure_details json,
+   target_branch_url text,
    resume_from text references run (id),
    foreign key (package) references package(name)
 );

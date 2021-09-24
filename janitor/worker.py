@@ -173,6 +173,7 @@ class WorkerResult(object):
         target_details: Optional[Any],
         subworker: Any,
         refreshed: bool,
+        target_branch_url: Optional[str] = None
     ) -> None:
         self.description = description
         self.value = value
@@ -180,6 +181,7 @@ class WorkerResult(object):
         self.tags = tags
         self.target = target
         self.target_details = target_details
+        self.target_branch_url = target_branch_url
         self.subworker = subworker
         self.refreshed = refreshed
 
@@ -198,6 +200,7 @@ class WorkerResult(object):
                 "details": self.target_details,
             },
             "refreshed": self.refreshed,
+            "target_branch_url": self.target_branch_url,
         }
 
 
@@ -698,6 +701,7 @@ def process_package(
             dict(changer_result.tags) if changer_result.tags else {},
             build_target.name, build_target_details,
             subworker=changer_result.context,
+            target_branch_url=changer_result.target_branch_url,
             refreshed=ws.refreshed
         )
         yield ws, wr

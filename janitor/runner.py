@@ -410,6 +410,7 @@ class JanitorResult(object):
                 self.resume_from = None
             else:
                 self.resume_from = resume_from
+            self.target_branch_url = worker_result.target_branch_url
         else:
             self.start_time = start_time
             self.finish_time = finish_time
@@ -422,6 +423,7 @@ class JanitorResult(object):
             self.branches = None
             self.tags = None
             self.failure_details = None
+            self.target_branch_url = None
             self.remotes = {}
             self.followup_actions = []
             self.resume_from = None
@@ -503,6 +505,7 @@ class WorkerResult(object):
         worker_name=None,
         followup_actions=None,
         refreshed=False,
+        target_branch_url=None,
     ):
         self.code = code
         self.description = description
@@ -522,6 +525,7 @@ class WorkerResult(object):
         self.worker_name = worker_name
         self.followup_actions = followup_actions
         self.refreshed = refreshed
+        self.target_branch_url = target_branch_url
 
     @classmethod
     def from_file(cls, path):
@@ -582,6 +586,7 @@ class WorkerResult(object):
             worker_result.get("worker_name"),
             worker_result.get("followup_actions"),
             worker_result.get("refreshed", False),
+            worker_result.get("target_branch_url", None),
         )
 
 
@@ -949,7 +954,8 @@ async def store_run(
     result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
     resume_from: Optional[str] = None,
-    failure_details: Optional[Any] = None
+    failure_details: Optional[Any] = None,
+    target_branch_url: Optional[str] = None,
 ):
     """Store a run.
 
@@ -977,6 +983,7 @@ async def store_run(
       result_tags: Result tags
       resume_from: Run this one was resumed from
       failure_details: Result failure details
+      target_branch_url: 
     """
     if result_tags is None:
         result_tags_updated = None
@@ -989,9 +996,9 @@ async def store_run(
         "main_branch_revision, "
         "revision, result, suite, vcs_type, branch_url, logfilenames, "
         "value, worker, worker_link, result_tags, "
-        "resume_from, failure_details) "
+        "resume_from, failure_details, target_branch_url) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)",
         run_id,
         command,
         description,
@@ -1014,6 +1021,7 @@ async def store_run(
         result_tags_updated,
         resume_from,
         failure_details,
+        target_branch_url,
     )
 
     if result_branches:
@@ -1184,6 +1192,7 @@ class QueueProcessor(object):
                         result_tags=result.tags,
                         failure_details=result.failure_details,
                         resume_from=result.resume_from,
+                        target_branch_url=result.target_branch_url,
                     )
                 except asyncpg.UniqueViolationError as e:
                     raise RunExists(result.log_id)
