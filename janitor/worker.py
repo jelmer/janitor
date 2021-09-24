@@ -236,7 +236,7 @@ class Target(object):
         raise NotImplementedError(self.build)
 
     def additional_colocated_branches(self, main_branch):
-        return []
+        return {}
 
     def directory_name(self) -> str:
         raise NotImplementedError(self.directory_name)
@@ -454,7 +454,7 @@ class GenericTarget(Target):
                 'Script %s failed to run with code %s' % e.args)
 
     def additional_colocated_branches(self, main_branch):
-        return []
+        return {}
 
     def build(self, ws, subpath, output_directory, env):
         from ognibuild.build import run_build
@@ -588,7 +588,7 @@ def process_package(
         resume_branch = None
 
     additional_colocated_branches = build_target.additional_colocated_branches(main_branch)
-    roles = {b: r for (r, b) in additional_colocated_branches}
+    roles = {b: r for (r, b) in additional_colocated_branches.items()}
     roles[main_branch.name] = 'main'
 
     ws = Workspace(
