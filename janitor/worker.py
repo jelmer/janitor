@@ -596,7 +596,7 @@ def process_package(
         resume_branch=resume_branch,
         cached_branch=cached_branch,
         path=os.path.join(output_directory, build_target.directory_name()),
-        additional_colocated_branches=[b for (r, b) in additional_colocated_branches],
+        additional_colocated_branches=[b for (r, b) in additional_colocated_branches.items()],
         resume_branch_additional_colocated_branches=(
             [n for (f, n) in extra_resume_branches] if extra_resume_branches else None
         ),
