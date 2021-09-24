@@ -197,6 +197,7 @@ async def generate_run_file(
     kwargs["show_debdiff"] = show_debdiff
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
+    kwargs["resume_from"] = run['resume_from']
 
     def read_file(f):
         return [line.decode("utf-8", "replace") for line in f.readlines()]

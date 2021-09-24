@@ -42,7 +42,7 @@ SELECT id, package, suite, vcs_type, result_branches, main_branch_revision, valu
 
     order_by = []
 
-    order_by.append("(SELECT COUNT(*) FROM review WHERE run_id = id)")
+    order_by.append("(SELECT COUNT(*) FROM review WHERE run_id = id) ASC")
 
     if publishable_only:
         conditions.append(publishable_condition)
