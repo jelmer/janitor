@@ -307,13 +307,21 @@ async def generate_ready_list(
     db, suite: Optional[str], review_status: Optional[str] = None
 ):
     async with db.acquire() as conn:
-        runs = [
-            row
-            async for row in state.iter_publish_ready(
-                conn,
-                suites=([suite] if suite else None),
-                review_status=review_status,
-                publishable_only=True,
-            )
-        ]
+        query = 'SELECT package, id, command, result FROM publish_ready'
+
+        conditions = [
+            "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"]
+        args = []
+        if suite:
+            args.append(suite)
+            conditions.append('suite = $%d' % len(args))
+        if review_status:
+            args.append(review_status)
+            conditions.append('review_status = %d' % len(args))
+
+        query += " WHERE " + " AND ".join(conditions)
+
+        query += " ORDER BY package ASC"
+
+        runs = await conn.fetch(query, *args)
     return {"runs": runs, "suite": suite}
