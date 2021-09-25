@@ -124,7 +124,7 @@ def publish(
     template_env,
     suite: str,
     pkg: str,
-    subrunner: "Publisher",
+    commit_message_template: Optional[str],
     subworker_result: Any,
     mode: str,
     role: str,
@@ -165,13 +165,11 @@ def publish(
         return template.render(vs)
 
     def get_proposal_commit_message(existing_proposal):
-        if existing_proposal:
-            existing_commit_message = getattr(
-                existing_proposal, "get_commit_message", lambda: None
-            )()
+        if commit_message_template:
+            template = Template(commit_message_template)
+            return template.render(subworker_result or {})
         else:
-            existing_commit_message = None
-        return subrunner.get_proposal_commit_message(role, existing_commit_message)
+            return None
 
     with main_branch.lock_read(), local_branch.lock_read():
         try:
@@ -260,68 +258,6 @@ def publish(
         raise PublishNothingToDo('not enough changes for a new merge proposal')
 
 
-class Publisher(object):
-    def get_proposal_commit_message(
-        self, role: str, format: str
-    ) -> str:
-        raise NotImplementedError(self.get_proposal_commit_message)
-
-    def read_worker_result(self, result: Any) -> None:
-        pass
-
-
-class LintianBrushPublisher(Publisher):
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        applied = []
-        for result in self.applied:
-            applied.append((result["fixed_lintian_tags"], result["summary"]))
-        if existing_commit_message and not existing_commit_message.startswith(
-            "Fix lintian issues: "
-        ):
-            # The commit message is something we haven't set - let's leave it
-            # alone.
-            return
-        return "Fix lintian issues: " + (", ".join(sorted([l for r, l in applied])))
-
-    def read_worker_result(self, result):
-        self.applied = result["applied"]
-        self.failed = result["failed"]
-
-
-class NewUpstreamPublisher(Publisher):
-    def read_worker_result(self, result):
-        try:
-            self._upstream_version = result["upstream_version"]
-        except KeyError:
-            self._upstream_version = result["new_upstream_version"]
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        if role == "pristine-tar":
-            return "pristine-tar data for new upstream version %s." % (
-                self._upstream_version
-            )
-        elif role == "upstream":
-            return "Import of new upstream version %s." % (self._upstream_version)
-        elif role == "main":
-            return "Merge new upstream version %s." % self._upstream_version
-        else:
-            raise KeyError(role)
-
-
-class DefaultPublisher(Publisher):
-
-    def __init__(self, commit_message_template):
-        self.commit_message_template = commit_message_template
-
-    def read_worker_result(self, result: Any) -> None:
-        self.result = result
-
-    def get_proposal_commit_message(self, role, existing_commit_message):
-        return Template(self.commit_message_template).render(
-            self.result or {})
-
-
 class DebdiffMissingRun(Exception):
     """Raised when the debdiff was missing a run."""
 
@@ -362,6 +298,11 @@ def get_debdiff(differ_url: str, unchanged_id: str, log_id: str) -> bytes:
         raise DebdiffRetrievalError(str(e))
 
 
+def _drop_env(args):
+    while args and '=' in args[0]:
+        args.pop(0)
+
+
 def publish_one(
     template_env,
     suite,
@@ -390,17 +331,7 @@ def publish_one(
 ):
 
     args = shlex.split(command)
-    while args and '=' in args[0]:
-        args.pop(0)
-
-    # TODO(jelmer): Migrate new upstream and lintian-brush as well
-    subrunner: Publisher
-    if args[0] == "new-upstream":
-        subrunner = NewUpstreamPublisher()
-    elif args[0] == "lintian-brush":
-        subrunner = LintianBrushPublisher()
-    else:
-        subrunner = DefaultPublisher(commit_message_template)
+    _drop_env(args)
 
     try:
         local_branch = open_branch(
@@ -421,8 +352,6 @@ def publish_one(
         raise PublishFailure("branch-unavailable", str(e))
     except BranchMissing as e:
         raise PublishFailure("branch-missing", str(e))
-
-    subrunner.read_worker_result(subworker_result)
 
     try:
         if mode == MODE_BTS:
@@ -529,7 +458,7 @@ def publish_one(
             template_env,
             suite,
             pkg,
-            subrunner,
+            commit_message_template,
             subworker_result,
             mode,
             role,
