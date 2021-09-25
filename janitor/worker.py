@@ -241,7 +241,7 @@ class Target(object):
     def directory_name(self) -> str:
         raise NotImplementedError(self.directory_name)
 
-    def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
+    def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
         raise NotImplementedError(self.make_changes)
 
 
@@ -253,6 +253,7 @@ class DebianTarget(Target):
     DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
     def __init__(self, env):
+        self.env = env
         self.build_distribution = env.get("BUILD_DISTRIBUTION")
         self.build_command = env.get("BUILD_COMMAND") or self.DEFAULT_BUILD_COMMAND
         self.build_suffix = env.get("BUILD_SUFFIX")
@@ -278,7 +279,7 @@ class DebianTarget(Target):
     def parse_args(self, argv):
         self.argv = argv
 
-    def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
+    def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
         logging.info('Running %r', self.argv)
         script = shlex_join(self.argv)
         dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
@@ -286,12 +287,15 @@ class DebianTarget(Target):
         if local_tree.has_filename(os.path.join(subpath, 'debian')):
             dist_command += ' --packaging=%s' % local_tree.abspath(
                 os.path.join(subpath, 'debian'))
+
+        extra_env = {'DIST': dist_command}
+        extra_env.update(self.env)
         try:
             return debian_script_runner(
                 local_tree, script=script, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath,
                 update_changelog=self.update_changelog,
-                extra_env={'DIST': dist_command})
+                extra_env=extra_env, committer=self.committer)
         except ResultFileFormatError as e:
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e)
@@ -427,16 +431,18 @@ class GenericTarget(Target):
 
     def __init__(self, env):
         self.chroot = env.get("CHROOT")
+        self.env = env
 
     def parse_args(self, argv):
         self.argv = argv
 
-    def make_changes(self, local_tree, subpath, resume_metadata, log_directory, committer=None):
+    def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
         script = shlex_join(self.argv)
         try:
             return generic_script_runner(
                 local_tree, script=script, commit_pending=None,
-                resume_metadata=resume_metadata, subpath=subpath)
+                resume_metadata=resume_metadata, subpath=subpath,
+                committer=self.env.get('COMMITER'), extra_env=self.env)
         except ResultFileFormatError as e:
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e)
@@ -526,8 +532,6 @@ def process_package(
     resume_subworker_result: Any = None,
     force_build: bool = False
 ) -> Iterator[Tuple[Workspace, WorkerResult]]:
-    committer = env.get("COMMITTER")
-
     metadata["command"] = command
 
     build_target: Target
@@ -645,7 +649,6 @@ def process_package(
         try:
             changer_result = build_target.make_changes(
                 ws.local_tree, subpath, resume_subworker_result, output_directory,
-                committer=committer
             )
             if not ws.any_branch_changes():
                 raise WorkerFailure("nothing-to-do", "Nothing to do.")
