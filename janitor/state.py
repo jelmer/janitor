@@ -80,6 +80,7 @@ class Run(object):
     worker_name: Optional[str]
     result_branches: Optional[List[Tuple[str, str, bytes, bytes]]]
     result_tags: Optional[List[Tuple[str, bytes]]]
+    target_branch_url: Optional[str]
 
     __slots__ = [
         "id",
@@ -106,6 +107,7 @@ class Run(object):
         "worker_name",
         "result_branches",
         "result_tags",
+        "target_branch_url",
     ]
 
     def __init__(
@@ -134,6 +136,7 @@ class Run(object):
         worker_name,
         result_branches,
         result_tags,
+        target_branch_url,
     ):
         self.id = run_id
         self.start_time = start_time
@@ -173,6 +176,7 @@ class Run(object):
             self.result_tags = result_tags
         else:
             self.result_tags = [(name, r.encode("utf-8")) for (name, r) in result_tags]
+        self.target_branch_url = target_branch_url
 
     @property
     def duration(self) -> datetime.timedelta:
@@ -208,6 +212,7 @@ class Run(object):
             worker_name=row['worker'],
             result_branches=row['result_branches'],
             result_tags=row['result_tags'],
+            target_branch_url=row['target_branch_url'],
         )
 
     def __eq__(self, other) -> bool:
@@ -246,7 +251,7 @@ SELECT
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags
+    result_tags, target_branch_url
 FROM
     run
 LEFT JOIN
@@ -273,85 +278,6 @@ LEFT JOIN
         query += " LIMIT %d" % limit
     for row in await conn.fetch(query, *args):
         yield Run.from_row(row)
-
-
-async def iter_publish_ready(
-    conn: asyncpg.Connection,
-    suites: Optional[List[str]] = None,
-    review_status: Optional[Union[str, List[str]]] = None,
-    limit: Optional[int] = None,
-    publishable_only: bool = False,
-    needs_review: Optional[bool] = None,
-    run_id: Optional[str] = None,
-) -> AsyncIterable[
-    Tuple[
-        Run,
-        int,
-        str,
-        List[str],
-        str,
-        str,
-        Optional[str],
-        bool,
-        List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int], Optional[str]]],
-    ]
-]:
-    args: List[Any] = []
-    query = """
-SELECT * FROM publish_ready
-"""
-    conditions = []
-    if suites is not None:
-        args.append(suites)
-        conditions.append("suite = ANY($%d::text[])" % len(args))
-    if run_id is not None:
-        args.append(run_id)
-        conditions.append("id = $%d" % len(args))
-    if review_status is not None:
-        if not isinstance(review_status, list):
-            review_status = [review_status]
-        args.append(review_status)
-        conditions.append("review_status = ANY($%d::review_status[])" % (len(args),))
-
-    publishable_condition = (
-        "exists (select from unnest(unpublished_branches) where "
-        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
-    )
-
-    order_by = []
-
-    if publishable_only:
-        conditions.append(publishable_condition)
-    else:
-        order_by.append(publishable_condition + " DESC")
-
-    if needs_review is not None:
-        args.append(needs_review)
-        conditions.append('needs_review = $%d' % (len(args)))
-
-    if conditions:
-        query += " WHERE " + " AND ".join(conditions)
-
-    order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
-
-    if order_by:
-        query += " ORDER BY " + ", ".join(order_by) + " "
-
-    if limit is not None:
-        query += " LIMIT %d" % limit
-    for record in await conn.fetch(query, *args):
-        yield tuple(  # type: ignore
-            [Run.from_row(record),
-             record['value'],
-             record['maintainer_email'],
-             record['uploader_emails'],
-             record['update_changelog'],
-             record['policy_command'],
-             record['qa_review_policy'],
-             record['needs_review'],
-             record['unpublished_branches']
-             ]
-        )
 
 
 async def iter_publishable_suites(

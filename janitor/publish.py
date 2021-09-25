@@ -26,7 +26,7 @@ import logging
 import os
 import sys
 import time
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable
 import uuid
 
 
@@ -481,6 +481,79 @@ async def consider_publish_run(
     return actual_modes
 
 
+async def iter_publish_ready(
+    conn: asyncpg.Connection,
+    suites: Optional[List[str]] = None,
+    review_status: Optional[List[str]] = None,
+    limit: Optional[int] = None,
+    needs_review: Optional[bool] = None,
+    run_id: Optional[str] = None,
+) -> AsyncIterable[
+    Tuple[
+        state.Run,
+        int,
+        str,
+        List[str],
+        str,
+        str,
+        Optional[str],
+        bool,
+        List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int], Optional[str]]],
+    ]
+]:
+    args: List[Any] = []
+    query = """
+SELECT * FROM publish_ready
+"""
+    conditions = []
+    if suites is not None:
+        args.append(suites)
+        conditions.append("suite = ANY($%d::text[])" % len(args))
+    if run_id is not None:
+        args.append(run_id)
+        conditions.append("id = $%d" % len(args))
+    if review_status is not None:
+        args.append(review_status)
+        conditions.append("review_status = ANY($%d::review_status[])" % (len(args),))
+
+    publishable_condition = (
+        "exists (select from unnest(unpublished_branches) where "
+        "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"
+    )
+
+    order_by = []
+
+    conditions.append(publishable_condition)
+
+    if needs_review is not None:
+        args.append(needs_review)
+        conditions.append('needs_review = $%d' % (len(args)))
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    order_by.extend(["value DESC NULLS LAST", "finish_time DESC"])
+
+    if order_by:
+        query += " ORDER BY " + ", ".join(order_by) + " "
+
+    if limit is not None:
+        query += " LIMIT %d" % limit
+    for record in await conn.fetch(query, *args):
+        yield tuple(  # type: ignore
+            [state.Run.from_row(record),
+             record['value'],
+             record['maintainer_email'],
+             record['uploader_emails'],
+             record['update_changelog'],
+             record['policy_command'],
+             record['qa_review_policy'],
+             record['needs_review'],
+             record['unpublished_branches']
+             ]
+        )
+
+
 async def publish_pending_new(
     db,
     config,
@@ -517,8 +590,8 @@ async def publish_pending_new(
             qa_review_policy,
             needs_review,
             unpublished_branches,
-        ) in state.iter_publish_ready(
-            conn1, review_status=review_status, publishable_only=True,
+        ) in iter_publish_ready(
+            conn1, review_status=review_status,
             needs_review=False,
         ):
             actual_modes = await consider_publish_run(
@@ -1130,8 +1203,8 @@ async def consider_request(request):
 
     async def run():
         async with request.app['db'].acquire() as conn:
-            async for (run, value, maintainer_email, uploader_emails, update_changelog, command, qa_review_policy, needs_review, unpublished_branches) in state.iter_publish_ready(
-                    conn, review_status=review_status, publishable_only=True,
+            async for (run, value, maintainer_email, uploader_emails, update_changelog, command, qa_review_policy, needs_review, unpublished_branches) in iter_publish_ready(
+                    conn, review_status=review_status,
                     needs_review=False, run_id=run_id):
                 break
             else:
@@ -2238,7 +2311,7 @@ SELECT
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
      revision) FROM new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags
+    result_tags, target_branch_url
 FROM
     run
 LEFT JOIN
