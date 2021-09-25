@@ -161,7 +161,7 @@ SELECT
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision, revision) FROM
      new_result_branch WHERE run_id = id) AS result_branches,
-    result_tags
+    result_tags, target_branch_url
 FROM
     last_runs
 LEFT JOIN

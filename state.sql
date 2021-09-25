@@ -399,7 +399,8 @@ CREATE OR REPLACE VIEW publishable AS
     LEFT JOIN UNNEST(policy.publish) pp ON pp.role = rb.role
    WHERE rb.run_id = run.id AND not absorbed
    ORDER BY rb.role != 'main' DESC
-  ) AS unpublished_branches
+  ) AS unpublished_branches,
+  target_branch_url
 FROM
   last_effective_runs AS run
 INNER JOIN package ON package.name = run.package
