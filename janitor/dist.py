@@ -117,14 +117,22 @@ if __name__ == '__main__':
                 )
         except OSError as e:
             if e.errno == errno.ENOSPC:
-                raise DetailedFailure(1, ["mkdtemp"], NoSpaceOnDevice())
+                report_failure(
+                    'no-space-on-device', 'No space on device running mkdtemp',
+                    e)
+                sys.exit(1)
             raise
 
         if args.packaging:
             packaging_tree, packaging_debian_path = WorkingTree.open_containing(args.packaging)
             from ognibuild.debian import satisfy_build_deps
 
-            satisfy_build_deps(session, packaging_tree, packaging_debian_path)
+            try:
+                satisfy_build_deps(session, packaging_tree, packaging_debian_path)
+            except DetailedFailure as e:
+                logging.warning(
+                    'Ignoring error installing declared build dependencies '
+                    '(%s): %s', e.error.kind, str(e.error))
         else:
             packaging_tree = None
             packaging_debian_path = None
