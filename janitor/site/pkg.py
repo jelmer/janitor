@@ -310,7 +310,7 @@ async def generate_ready_list(
         query = 'SELECT package, id, command, result FROM publish_ready'
 
         conditions = [
-            "mode in ('propose', 'attempt-push', 'push-derived', 'push'))"]
+            "mode in ('propose', 'attempt-push', 'push-derived', 'push')"]
         args = []
         if suite:
             args.append(suite)
