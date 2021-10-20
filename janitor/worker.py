@@ -442,7 +442,7 @@ class GenericTarget(Target):
             return generic_script_runner(
                 local_tree, script=script, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath,
-                committer=self.env.get('COMMITER'), extra_env=self.env)
+                committer=self.env.get('COMMITTER'), extra_env=self.env)
         except ResultFileFormatError as e:
             raise WorkerFailure(
                 'result-file-format', 'Result file was invalid: %s' % e)
