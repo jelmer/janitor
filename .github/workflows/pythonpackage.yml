@@ -26,9 +26,9 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run: |
-        sudo apt install devscripts cython3 bzr python3-paste python3-aiohttp protobuf-compiler libapt-pkg-dev
+        sudo apt install devscripts cython3 bzr python3-paste python3-aiohttp protobuf-compiler libapt-pkg-dev python3-gpg
         python -m pip install --upgrade pip
-        pip install -U pip setuptools setuptools-rust flake8 mypy debmutate pyyaml testtools Paste aiohttp mypy-protobuf git+https://salsa.debian.org/apt-team/python-apt asynctest cython fastbencode tqdm
+        pip install -U pip setuptools setuptools-rust flake8 mypy debmutate pyyaml testtools Paste aiohttp mypy-protobuf git+https://salsa.debian.org/apt-team/python-apt asynctest cython fastbencode tqdm gpg
         mkdir $HOME/.config/breezy/plugins -p
         bzr branch lp:brz-debian ~/.config/breezy/plugins/debian
         python setup.py develop
