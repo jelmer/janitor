@@ -34,9 +34,6 @@ from ognibuild.buildsystem import (
     NoBuildToolsFound,
 )
 
-from buildlog_consultant.common import (
-    NoSpaceOnDevice,
-)
 
 logger = logging.getLogger(__name__)
 

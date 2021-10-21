@@ -21,7 +21,7 @@ import json
 import asyncpg
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional, Tuple, List, Any, Union, AsyncIterable
+from typing import Optional, Tuple, List, Any
 
 from breezy import urlutils
 

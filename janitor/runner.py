@@ -1194,7 +1194,7 @@ class QueueProcessor(object):
                         resume_from=result.resume_from,
                         target_branch_url=result.target_branch_url,
                     )
-                except asyncpg.UniqueViolationError as e:
+                except asyncpg.UniqueViolationError:
                     raise RunExists(result.log_id)
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
