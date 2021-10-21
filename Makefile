@@ -23,10 +23,10 @@ check:: style
 
 check-it-all:: test-it-all
 
-test-it-all:: 
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest dulwich.tests.test_suite
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest breezy.tests.test_suite
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest lintian_brush.tests.test_suite
+test-it-all::
+	$(MAKE) -C dulwich check
+	$(MAKE) -C breezy check PYTHONPATH=$(PYTHONPATH)
+	$(MAKE) -C lintian-brush check
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest silver_platter.tests.test_suite
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest ognibuild.tests.test_suite
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest buildlog_consultant.tests.test_suite
