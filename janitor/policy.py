@@ -222,10 +222,12 @@ SELECT
   in_base
 FROM
   package
+WHERE
+  NOT removed
 """
     args = []
     if package:
-        query += " WHERE name = $1"
+        query += " AND name = $1"
         args.append(package)
     return await conn.fetch(query, *args)
 
@@ -256,7 +258,7 @@ async def sync_policy(conn, policy, selected_package=None):
                 package['in_base'],
                 release_stages_passed
             )
-            stored_policy = current_policy.get((package['name'], suite))
+            stored_policy = current_policy.pop((package['name'], suite))
             if stored_policy != intended_policy:
                 logging.debug("%s/%s -> %r" % (package['name'], suite, intended_policy))
                 await update_policy(
@@ -265,6 +267,10 @@ async def sync_policy(conn, policy, selected_package=None):
                 updated = True
         if updated:
             num_updated += 1
+    await conn.executemany(
+        'DELETE FROM policy WHERE package = $1 AND suite = $2',
+        current_policy.keys())
+    logging.info('Deleted %d from policy', len(current_policy.keys()))
     return num_updated
 
 
