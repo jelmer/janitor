@@ -969,7 +969,7 @@ async def get_assignment(
     session: ClientSession,
     base_url: str,
     node_name: str,
-    jenkins_metadata: Optional[Dict[str, str]],
+    jenkins_metadata: Optional[Dict[str, str]] = None,
 ) -> Any:
     assign_url = urljoin(base_url, "active-runs")
     build_arch = subprocess.check_output(
@@ -979,8 +979,14 @@ async def get_assignment(
     if jenkins_metadata:
         json["jenkins"] = jenkins_metadata
         json["worker_link"] = jenkins_metadata.get("build_url")
+        json["health_check"] = None
     elif is_gce_instance():
         json["worker_link"] = 'http://%s/' % gce_external_ip()
+        json["health_check"] = {
+            'kind': 'http',
+            'url': 'http://%s/health' % gce_external_ip()}
+    else:
+        json["health_check"] = None
     logging.debug("Sending assignment request: %r", json)
     async with session.post(assign_url, json=json) as resp:
         if resp.status != 201:
@@ -1222,6 +1228,10 @@ async def main(argv=None):
     )
     parser.add_argument(
         '--port', type=int, default=0, help="Port to use for diagnostics web server")
+    parser.add_argument(
+        '--health-check-kind', type=str, help='Health check kind')
+    parser.add_argument(
+        '--health-check-url', type=str, help='Health check URL')
 
     # Unused, here for backwards compatibility.
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
@@ -1305,7 +1315,8 @@ async def main(argv=None):
     async with ClientSession(auth=auth) as session:
         try:
             assignment = await get_assignment(
-                session, args.base_url, node_name, jenkins_metadata=jenkins_metadata
+                session, args.base_url, node_name,
+                jenkins_metadata=jenkins_metadata,
             )
         except AssignmentFailure as e:
             logging.fatal("failed to get assignment: %s", e.reason)
