@@ -324,7 +324,7 @@ class DebianTarget(Target):
         except ScriptFailed as e:
             raise _convert_script_failed(e)
         except MemoryError as e:
-            raise WorkerFailure('memory-error', str(e))
+            raise WorkerFailure('out-of-memory', str(e))
 
     def additional_colocated_branches(self, main_branch):
         return pick_additional_colocated_branches(main_branch)
