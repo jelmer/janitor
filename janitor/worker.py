@@ -226,14 +226,14 @@ class WorkerFailure(Exception):
 
 def _convert_script_failed(e: ScriptFailed) -> WorkerFailure:
     if e.args[1] == 127:
-        raise WorkerFailure(
+        return WorkerFailure(
             'command-not-found',
             'Command %s not found' % e.args[0])
     elif e.args[1] == 137:
-        raise WorkerFailure(
+        return WorkerFailure(
             'out-of-memory',
             'Ran out of memory running command')
-    raise WorkerFailure(
+    return WorkerFailure(
         'command-failed',
         'Script %s failed to run with code %s' % e.args)
 
