@@ -224,6 +224,21 @@ class WorkerFailure(Exception):
         return ret
 
 
+def _convert_script_failed(e: ScriptFailed) -> WorkerFailure:
+    if e.args[1] == 127:
+        raise WorkerFailure(
+            'command-not-found',
+            'Command %s not found' % e.args[0])
+    elif e.args[1] == 137:
+        raise WorkerFailure(
+            'out-of-memory',
+            'Ran out of memory running command')
+    raise WorkerFailure(
+        'command-failed',
+        'Script %s failed to run with code %s' % e.args)
+
+
+
 class Target(object):
     """A build target."""
 
@@ -307,13 +322,7 @@ class DebianTarget(Target):
         except DebianDetailedFailure as e:
             raise WorkerFailure(e.result_code, e.description, e.details)
         except ScriptFailed as e:
-            if e.args[1] == 127:
-                raise WorkerFailure(
-                    'command-not-found',
-                    'Command %s not found' % e.args[0])
-            raise WorkerFailure(
-                'command-failed',
-                'Script %s failed to run with code %s' % e.args)
+            raise _convert_script_failed(e)
         except MemoryError as e:
             raise WorkerFailure('memory-error', str(e))
 
@@ -451,13 +460,7 @@ class GenericTarget(Target):
         except GenericDetailedFailure as e:
             raise WorkerFailure(e.result_code, e.description, e.details)
         except ScriptFailed as e:
-            if e.args[1] == 127:
-                raise WorkerFailure(
-                    'command-not-found',
-                    'Command %s not found' % e.args[0])
-            raise WorkerFailure(
-                'command-failed',
-                'Script %s failed to run with code %s' % e.args)
+            raise _convert_script_failed(e)
 
     def additional_colocated_branches(self, main_branch):
         return {}
