@@ -3,8 +3,11 @@ the specific configuration & infrastructure for the instance running on
 janitor.debian.net. Any code that is more generic should probably be
 in either ``silver-platter``, ``lintian-brush`` or ``breezy``.
 
-To change what packages the janitor considers for merge proposals,
-edit the [policy file](policy.conf).
+There are several instances of the Janitor. For their configuration, see:
+
+* [Debian Janitor](https://salsa.debian.org/jelmer/janitor.debian.net)
+* Kali Janitor (repository is private)
+* [Upstream Janitor](https://github.com/jelmer/janitor.jelmer.uk)
 
 Philosophy
 ==========
