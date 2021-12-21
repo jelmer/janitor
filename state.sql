@@ -167,13 +167,13 @@ CREATE TABLE IF NOT EXISTS policy (
    update_changelog changelog_mode default 'auto',
    publish publish_policy[],
    command text,
-   review_policy qa_review,
-   notify_mode broken_notify,
+   qa_review review_policy,
+   broken_notify notify_mode,
    foreign key (package) references package(name),
    unique(package, suite)
 );
 CREATE INDEX ON candidate (suite);
-CREATE TABLE worker (
+CREATE TABLE IF NOT EXISTS worker (
    name text not null unique,
    password text not null,
    link text
@@ -429,7 +429,6 @@ SELECT
     debian_build.distribution AS build_distribution,
     debian_build.lintian_result AS lintian_result,
     result_code,
-    branch_name,
     main_branch_revision,
     revision,
     context,
