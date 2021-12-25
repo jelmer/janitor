@@ -2306,7 +2306,7 @@ SELECT
     id, command, start_time, finish_time, description, package,
     debian_build.version AS build_version,
     debian_build.distribution AS build_distribution, result_code,
-    value, branch_name, main_branch_revision, revision, context, result, suite,
+    value, main_branch_revision, revision, context, result, suite,
     instigated_context, vcs_type, branch_url, logfilenames, review_status,
     review_comment, worker,
     array(SELECT row(role, remote_name, base_revision,
