@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS publish_policy (
    frequency_days int,
    unique(role)
 );
-CREATE TYPE notify_mode AS ENUM('no_notification', 'email');
+CREATE TYPE notify_mode AS ENUM('no_notification', 'email', 'bts');
 CREATE TABLE IF NOT EXISTS policy (
    package text not null,
    suite suite_name not null,
