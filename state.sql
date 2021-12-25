@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS debversion;
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE DOMAIN distribution_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TABLE IF NOT EXISTS upstream (
    name text,
@@ -15,7 +16,6 @@ CREATE TABLE IF NOT EXISTS codebase (
    vcs_type vcs_type,
    unique(branch_url, subpath)
 );
-CREATE UNIQUE INDEX ON codebase (name);
 CREATE INDEX ON codebase (branch_url);
 CREATE TABLE IF NOT EXISTS package (
    name debian_package_name not null primary key,
