@@ -258,7 +258,7 @@ async def sync_policy(conn, policy, selected_package=None):
                 package['in_base'],
                 release_stages_passed
             )
-            stored_policy = current_policy.pop((package['name'], suite))
+            stored_policy = current_policy.pop((package['name'], suite), None)
             if stored_policy != intended_policy:
                 logging.debug("%s/%s -> %r" % (package['name'], suite, intended_policy))
                 await update_policy(
