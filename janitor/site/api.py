@@ -1147,10 +1147,10 @@ async def handle_run_peek(request):
                         internal_error = await resp.json()
                     except ContentTypeError:
                         internal_error = await resp.text()
-                    return web.json_response(
-                        {"internal-status": resp.status, "internal-result": internal_error},
-                        status=400,
-                    )
+                    ret = {"internal-status": resp.status, "internal-result": internal_error}
+                    if 'reason' in internal_error:
+                        ret['reason'] = internal_error['reason']
+                    return web.json_response(ret, status=400)
                 assignment = await resp.json()
                 return web.json_response(assignment, status=201)
         except (ClientConnectorError, ServerDisconnectedError) as e:
@@ -1176,10 +1176,10 @@ async def handle_run_assign(request):
                         internal_error = await resp.json()
                     except ContentTypeError:
                         internal_error = await resp.text()
-                    return web.json_response(
-                        {"internal-status": resp.status, "internal-result": internal_error},
-                        status=400,
-                    )
+                    ret = {"internal-status": resp.status, "internal-result": internal_error}
+                    if 'reason' in internal_error:
+                        ret['reason'] = internal_error['reason']
+                    return web.json_response(ret, status=400)
                 assignment = await resp.json()
                 return web.json_response(assignment, status=201)
         except (ClientConnectorError, ServerDisconnectedError) as e:
