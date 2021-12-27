@@ -138,9 +138,7 @@ INNER JOIN policy ON
     policy.suite = candidate.suite
 WHERE
   NOT package.removed AND
-  package.branch_url IS NOT NULL AND
-  command != '' AND EXISTS (
-        SELECT FROM publish WHERE mode != 'skip')
+  package.branch_url IS NOT NULL
 """
     args = []
     if suite is not None and packages is not None:
@@ -447,6 +445,7 @@ async def main():
     parser.add_argument("--suite", type=str, help="Restrict to a specific suite.")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("packages", help="Package to process.", nargs="*")
+    parser.add_argument("--debug", action="store_true")
 
     args = parser.parse_args()
 
@@ -456,7 +455,11 @@ async def main():
         client.get_default_handler()
         client.setup_logging()
     else:
-        logging.basicConfig(level=logging.INFO, format="%(message)s")
+        if args.debug:
+            level = logging.DEBUG
+        else:
+            level = logging.INFO
+        logging.basicConfig(level=level, format="%(message)s")
 
     last_success_gauge = Gauge(
         "job_last_success_unixtime", "Last time a batch job successfully finished"
@@ -476,7 +479,7 @@ async def main():
             for row in
             await iter_candidates_with_policy(
                 conn, packages=(args.packages or None), suite=args.suite)]
-        logging.info('Adding to queue')
+        logging.info('Adding %d items to queue', len(todo))
         await bulk_add_to_queue(conn, todo, dry_run=args.dry_run)
 
     last_success_gauge.set_to_current_time()
