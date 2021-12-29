@@ -1311,7 +1311,12 @@ async def handle_log(request):
 
 @routes.post("/active-runs", name="assign")
 async def handle_assign(request):
-    return await next_item(request, 'assign')
+    json = await request.json()
+    return await next_item(
+        request, 'assign', worker=json.get("worker"),
+        worker_link=json.get("worker_link"),
+        jenkins_metadata=json.get("jenkins"),
+        )
 
 
 @routes.get("/active-runs/+peek", name="peek")
@@ -1319,14 +1324,7 @@ async def handle_peek(request):
     return await next_item(request, 'peek')
 
 
-async def next_item(request, mode):
-    json = await request.json()
-    if mode == 'assign':
-        worker = json["worker"]
-    else:
-        worker = None
-    worker_link = json.get("worker_link")
-
+async def next_item(request, mode, worker=None, worker_link=None, jenkins_metadata=None):
     possible_transports = []
     possible_hosters = []
 
@@ -1356,7 +1354,7 @@ async def next_item(request, mode):
             active_run = ActiveRun(
                 worker_name=worker,
                 queue_item=item,
-                jenkins_metadata=json.get("jenkins"),
+                jenkins_metadata=jenkins_metadata,
                 worker_link=worker_link
             )
 
