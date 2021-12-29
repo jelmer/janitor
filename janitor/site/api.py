@@ -1138,10 +1138,10 @@ async def handle_run_progress(request):
 @routes.get("/active-runs/+peek")
 async def handle_run_peek(request):
     span = aiozipkin.request_span(request)
-    url = URL(request.app['runner_url']) / "peek"
+    url = URL(request.app['runner_url']) / "active-runs/+peek"
     with span.new_child('forward-runner'):
         try:
-            async with request.app['http_client_session'].post(url, json={}) as resp:
+            async with request.app['http_client_session'].get(url) as resp:
                 if resp.status != 201:
                     try:
                         internal_error = await resp.json()
@@ -1165,7 +1165,7 @@ async def handle_run_assign(request):
     span = aiozipkin.request_span(request)
     with span.new_child('check-worker-creds'):
         worker_name = await check_worker_creds(request.app['db'], request)
-    url = URL(request.app['runner_url']) / "assign"
+    url = URL(request.app['runner_url'])
     with span.new_child('forward-runner'):
         try:
             async with request.app['http_client_session'].post(

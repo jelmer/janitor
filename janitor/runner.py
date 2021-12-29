@@ -1309,9 +1309,17 @@ async def handle_log(request):
     return response
 
 
-@routes.post("/{mode:assign|peek}", name="assign")
+@routes.post("/active-runs", name="assign")
 async def handle_assign(request):
-    mode = request.match_info['mode']
+    return await next_item(request, 'assign')
+
+
+@routes.get("/active-runs/+peek", name="peek")
+async def handle_peek(request):
+    return await next_item(request, 'peek')
+
+
+async def next_item(request, mode):
     json = await request.json()
     if mode == 'assign':
         worker = json["worker"]
