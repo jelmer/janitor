@@ -111,7 +111,6 @@ from breezy.transport import Transport
 from silver_platter.proposal import enable_tag_pushing
 
 from .compat import shlex_join
-from .debian import tree_set_changelog_version
 from ognibuild import (
     DetailedFailure,
 )
@@ -334,6 +333,7 @@ class DebianTarget(Target):
         from ognibuild.session import SessionSetupFailure
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
+        from .debian import tree_set_changelog_version
 
         if not ws.local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
             raise WorkerFailure("not-debian-package", "Not a Debian package")
