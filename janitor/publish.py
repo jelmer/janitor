@@ -395,7 +395,7 @@ async def consider_publish_run(
         vcs_manager, rate_limiter, external_url, differ_url,
         topic_publish, topic_merge_proposal,
         run, maintainer_email,
-        uploader_emails, unpublished_branches, update_changelog, command,
+        uploader_emails, unpublished_branches, command,
         push_limit=None, require_binary_diff=False,
         possible_transports=None, possible_hosters=None, dry_run=False):
     if run.revision is None:
@@ -466,7 +466,6 @@ async def consider_publish_run(
             topic_merge_proposal,
             publish_mode,
             max_frequency_days,
-            update_changelog,
             command,
             possible_hosters=possible_hosters,
             possible_transports=possible_transports,
@@ -545,7 +544,6 @@ SELECT * FROM publish_ready
              record['value'],
              record['maintainer_email'],
              record['uploader_emails'],
-             record['update_changelog'],
              record['policy_command'],
              record['qa_review_policy'],
              record['needs_review'],
@@ -585,7 +583,6 @@ async def publish_pending_new(
             value,
             maintainer_email,
             uploader_emails,
-            update_changelog,
             command,
             qa_review_policy,
             needs_review,
@@ -602,7 +599,6 @@ async def publish_pending_new(
                 external_url=external_url, differ_url=differ_url,
                 topic_publish=topic_publish, topic_merge_proposal=topic_merge_proposal,
                 run=run,
-                update_changelog=update_changelog,
                 command=command,
                 maintainer_email=maintainer_email,
                 uploader_emails=uploader_emails,
@@ -823,7 +819,6 @@ async def publish_from_policy(
     topic_merge_proposal,
     mode: str,
     max_frequency_days: Optional[int],
-    update_changelog: str,
     command: str,
     dry_run: bool,
     external_url: str,
@@ -837,25 +832,24 @@ async def publish_from_policy(
     if not command:
         logger.warning("no command set for %s", run.id)
         return
-    expected_command = full_command(update_changelog, command)
-    if expected_command != run.command:
+    if command != run.command:
         logger.warning(
             "Not publishing %s/%s: command is different (policy changed?). "
             "Build used %r, now: %r. Rescheduling.",
             run.package,
             run.suite,
             run.command,
-            expected_command,
+            command,
         )
         await do_schedule(
             conn,
             run.package,
             run.suite,
-            command=expected_command,
+            command=command,
             bucket="update-new-mp",
             refresh=True,
             requestor="publisher (changed policy: %r => %r)" % (
-                run.command, expected_command),
+                run.command, command),
         )
         return
 
@@ -1203,7 +1197,7 @@ async def consider_request(request):
 
     async def run():
         async with request.app['db'].acquire() as conn:
-            async for (run, value, maintainer_email, uploader_emails, update_changelog, command, qa_review_policy, needs_review, unpublished_branches) in iter_publish_ready(
+            async for (run, value, maintainer_email, uploader_emails, command, qa_review_policy, needs_review, unpublished_branches) in iter_publish_ready(
                     conn, review_status=review_status,
                     needs_review=False, run_id=run_id):
                 break
@@ -1219,7 +1213,6 @@ async def consider_request(request):
                 topic_publish=request.app['topic_publish'],
                 topic_merge_proposal=request.app['topic_merge_proposal'],
                 run=run,
-                update_changelog=update_changelog,
                 command=command,
                 maintainer_email=maintainer_email,
                 uploader_emails=uploader_emails,
@@ -1235,7 +1228,7 @@ async def get_publish_policy(
     conn: asyncpg.Connection, package: str, suite: str
 ) -> Tuple[Optional[Dict[str, Tuple[str, Optional[int]]]], Optional[str], Optional[List[str]]]:
     row = await conn.fetchrow(
-        "SELECT publish, update_changelog, command "
+        "SELECT publish, command "
         "FROM policy WHERE package = $1 AND suite = $2",
         package,
         suite,
@@ -1243,7 +1236,6 @@ async def get_publish_policy(
     if row:
         return (  # type: ignore
             {k: (v, f) for k, v, f in row['publish']},
-            row['update_changelog'],
             row['command']
         )
     return None, None, None
@@ -2376,7 +2368,7 @@ async def listen_to_runner(
     require_binary_diff: bool = False,
 ):
     async def process_run(conn, run, maintainer_email, uploader_emails, branch_url):
-        publish_policy, update_changelog, command = await get_publish_policy(
+        publish_policy, command = await get_publish_policy(
             conn, run.package, run.suite
         )
         for role, (mode, max_frequency_days) in publish_policy.items():
@@ -2395,7 +2387,6 @@ async def listen_to_runner(
                 topic_merge_proposal,
                 mode,
                 max_frequency_days,
-                update_changelog,
                 command,
                 dry_run=dry_run,
                 external_url=external_url,

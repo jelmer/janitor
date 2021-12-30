@@ -98,24 +98,6 @@ PUBLISH_MODE_VALUE = {
 }
 
 
-def full_command(update_changelog: str, command: str) -> str:
-    """Generate the full command to run.
-
-    Args:
-      update_changelog: changelog updating policy
-      command: Command to run (as list of arguments)
-    Returns:
-      full list of arguments
-    """
-    entry_command = shlex.split(command)
-    if update_changelog is not None:
-        if update_changelog not in ("update", "leave", "auto"):
-            raise ValueError(
-                'invalid value for update_changelog: %s' % update_changelog)
-        entry_command.insert(0, "DEB_UPDATE_CHANGELOG=%s" % update_changelog)
-    return shlex_join(entry_command)
-
-
 async def iter_candidates_with_policy(
         conn: asyncpg.Connection,
         packages: Optional[List[str]] = None,
@@ -129,7 +111,6 @@ SELECT
   candidate.value AS value,
   candidate.success_chance AS success_chance,
   policy.publish AS publish,
-  policy.update_changelog AS update_changelog,
   policy.command AS command
 FROM candidate
 INNER JOIN package on package.name = candidate.package
@@ -158,9 +139,7 @@ def queue_item_from_candidate_and_policy(row):
     for entry in row['publish']:
         value += PUBLISH_MODE_VALUE[entry['mode']]
 
-    entry_command = full_command(row['update_changelog'], row['command'])
-
-    return (row['package'], row['context'], entry_command, row['suite'],
+    return (row['package'], row['context'], row['command'], row['suite'],
             value, row['success_chance'])
 
 
@@ -533,12 +512,12 @@ async def do_schedule(
         offset = DEFAULT_SCHEDULE_OFFSET
     if command is None:
         policy = await conn.fetchrow(
-            "SELECT update_changelog, command "
+            "SELECT command "
             "FROM policy WHERE package = $1 AND suite = $2",
             package, suite)
         if not policy:
             raise PolicyUnavailable(suite, package)
-        command = full_command(policy['update_changelog'], policy['command'])
+        command = policy['command']
     if estimated_duration is None:
         estimated_duration = await estimate_duration(conn, package, suite)
     await _add_to_queue(

@@ -81,7 +81,6 @@ class PublishPolicySchema(Schema):
 class PolicySchema(Schema):
 
     publish_policy = fields.Dict(keys=fields.Str(), values=fields.Nested(PublishPolicySchema))
-    changelog_policy = fields.Str(description='changelog policy')
     command = fields.Str(description='command to run')
 
 
@@ -98,14 +97,13 @@ async def handle_policy(request):
     suite_policies = {}
     async with request.app['db'].acquire() as conn:
         rows = await conn.fetch(
-            "SELECT suite, publish, update_changelog, command "
+            "SELECT suite, publish, command "
             "FROM policy WHERE package = $1", package)
     if not rows:
         return web.json_response({"reason": "Package not found"}, status=404)
     for row in rows:
         suite_policies[row['suite']] = {
             "publish_policy": {p['role']: {'mode': p['mode']} for p in row['publish']},
-            "changelog_policy": row['update_changelog'],
             "command": row['command'],
         }
     return web.json_response({"by_suite": suite_policies})

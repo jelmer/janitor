@@ -63,8 +63,8 @@ from silver_platter.utils import (
 
 from . import (
     state,
+    splitout_env,
 )
-from .compat import shlex_join
 from .artifacts import (
     get_artifact_manager,
     LocalArtifactManager,
@@ -913,15 +913,6 @@ def queue_item_env(queue_item):
     if queue_item.upstream_branch_url:
         env["UPSTREAM_BRANCH_URL"] = queue_item.upstream_branch_url
     return env
-
-
-def splitout_env(command):
-    args = shlex.split(command)
-    env = {}
-    while len(args) > 0 and '=' in args[0]:
-        (key, value) = args.pop(0).split('=', 1)
-        env[key] = value
-    return env, shlex_join(args)
 
 
 def cache_branch_name(distro_config, role):

@@ -82,13 +82,12 @@ async def schedule_new_package(conn, upstream_info, policy, requestor=None, orig
           DEFAULT_SUCCESS_CHANCE)])
     await sync_policy(conn, policy, selected_package=package)
     policy = await conn.fetchrow(
-        "SELECT update_changelog, command "
+        "SELECT command "
         "FROM policy WHERE package = $1 AND suite = $2",
         package, 'debianize')
     command = policy['command']
     if upstream_info['version']:
         command += ' --upstream-version=%s' % upstream_info['version']
-    command = full_command(policy['update_changelog'], command)
     await do_schedule(conn, package, "debianize", requestor=requestor, bucket='missing-deps', command=command)
 
 
