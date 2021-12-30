@@ -170,7 +170,7 @@ async def update_policy(
     await conn.execute(
         "INSERT INTO policy "
         "(package, suite, command, publish, qa_review, broken_notify) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7) "
+        "VALUES ($1, $2, $3, $4, $5, $6) "
         "ON CONFLICT (package, suite) DO UPDATE SET "
         "command = EXCLUDED.command, "
         "publish = EXCLUDED.publish, "
