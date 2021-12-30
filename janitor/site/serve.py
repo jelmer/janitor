@@ -148,13 +148,13 @@ async def handle_apt_repo(request):
 @html_template("history.html", headers={"Cache-Control": "max-age=10"})
 async def handle_history(request):
     limit = int(request.query.get("limit", "100"))
-    offset = int(request.query.get("offset", "100"))
+    offset = int(request.query.get("offset", "0"))
 
-    query = (
-        'SELECT finish_time, package, suite, worker_link, '
-        'worker as worker_name, finish_time - start_time AS duration, '
-        'result_code, id, description FROM run '
-        'ORDER BY finish_time DESC')
+    query = """\
+SELECT finish_time, package, suite, worker_link,
+worker as worker_name, finish_time - start_time AS duration,
+result_code, id, description FROM run
+ORDER BY finish_time DESC"""
     if offset:
         query += ' OFFSET %d' % offset
     if limit:
