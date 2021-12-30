@@ -28,7 +28,7 @@ import uuid
 from aiohttp.web_urldispatcher import (
     URL,
 )
-from aiohttp import web, ClientSession
+from aiohttp import web, ClientSession, ClientConnectorError
 from aiohttp.web import middleware
 from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
@@ -169,9 +169,12 @@ ORDER BY finish_time DESC"""
 
 @html_template("credentials.html", headers={"Cache-Control": "max-age=10"})
 async def handle_credentials(request):
-    credentials = await get_credentials(
-        request.app.http_client_session, request.app.publisher_url
-    )
+    try:
+        credentials = await get_credentials(
+            request.app.http_client_session, request.app.publisher_url
+        )
+    except ClientConnectorError:
+        return web.Response(status=500, text='Unable to retrieve credentials')
     pgp_fprs = []
     for keydata in credentials["pgp_keys"]:
         result = request.app.gpg.key_import(keydata.encode("utf-8"))
