@@ -19,6 +19,9 @@
 from breezy.transport import http as _mod_http
 from breezy.transport.http import urllib as _mod_urllib
 
+import shlex
+from .compat import shlex_join
+
 
 version_info = (0, 1, 0)
 version_string = ".".join(map(str, version_info))
@@ -35,3 +38,12 @@ _mod_urllib.AbstractHTTPHandler._default_headers["User-agent"] = user_agent()
 
 
 SUITE_REGEX = "[a-z0-9-]+"
+
+
+def splitout_env(command):
+    args = shlex.split(command)
+    env = {}
+    while len(args) > 0 and '=' in args[0]:
+        (key, value) = args.pop(0).split('=', 1)
+        env[key] = value
+    return env, shlex_join(args)

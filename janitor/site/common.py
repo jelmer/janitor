@@ -6,7 +6,7 @@ import asyncpg
 from functools import partial
 from typing import Optional, List
 
-from janitor import state
+from janitor import state, splitout_env
 from janitor.queue import get_queue_position
 from janitor.site import (
     get_archive_diff,
@@ -185,7 +185,7 @@ async def generate_pkg_context(
     async with db.acquire() as conn:
         with span.new_child('sql:package'):
             package = await conn.fetchrow("""\
-SELECT name, maintainer_email, uploader_emails, removed, branch_url, vcs_type, vcs_url, vcs_browse, vcswatch_version, update_changelog AS changelog_policy, publish AS publish_policy
+SELECT name, maintainer_email, uploader_emails, removed, branch_url, vcs_type, vcs_url, vcs_browse, vcswatch_version, publish AS publish_policy
 FROM package
 LEFT JOIN policy ON package.name = policy.package AND suite = $2
 WHERE name = $1""", package, suite)
@@ -279,6 +279,10 @@ WHERE run.package = $1 AND run.suite = $2
     kwargs = {}
     if run:
         kwargs.update(run)
+        env, plain_command = splitout_env(run['command'])
+        kwargs['env'] = env
+        kwargs['plain_command'] = plain_command
+
     kwargs.update({
         "package": package['name'],
         "unchanged_run": unchanged_run,
@@ -302,7 +306,7 @@ WHERE run.package = $1 AND run.suite = $2
         "queue_position": queue_position,
         "queue_wait_time": queue_wait_time,
         "publish_policy": package['publish_policy'],
-        "changelog_policy": package['changelog_policy'],
+        "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
         "tracker_url": partial(tracker_url, config),
     })
     return kwargs

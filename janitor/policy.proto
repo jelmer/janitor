@@ -23,14 +23,6 @@ enum Mode {
     skip = 6;
 }
 
-enum ChangelogMode {
-    auto = 0;
-
-    update_changelog = 1;
-
-    leave_changelog = 2;
-}
-
 enum ReviewPolicy {
     not_required = 1;
 
@@ -88,13 +80,17 @@ message SuitePolicy {
     optional NotifyMode broken_notify = 6 [ default=no_notification ];
 };
 
+message Environment {
+    optional string name = 1;
+    optional string value = 2;
+};
+
 message Policy {
     repeated Match match = 1;
 
     repeated SuitePolicy suite = 2;
 
-    // Changelog update mode
-    optional ChangelogMode changelog = 3;
+    repeated Environment env = 3;
 }
 
 message PolicyConfig {

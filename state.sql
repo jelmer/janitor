@@ -153,7 +153,6 @@ CREATE TABLE IF NOT EXISTS candidate (
    unique(package, suite),
    foreign key (package) references package(name)
 );
-CREATE TYPE changelog_mode AS ENUM('auto', 'update', 'leave');
 CREATE TABLE IF NOT EXISTS publish_policy (
    role text not null,
    mode publish_mode default 'build-only',
@@ -164,7 +163,6 @@ CREATE TYPE notify_mode AS ENUM('no_notification', 'email', 'bts');
 CREATE TABLE IF NOT EXISTS policy (
    package text not null,
    suite suite_name not null,
-   update_changelog changelog_mode default 'auto',
    publish publish_policy[],
    command text,
    qa_review review_policy,
@@ -389,7 +387,6 @@ CREATE OR REPLACE VIEW publishable AS
   run.value AS value,
   package.maintainer_email AS maintainer_email,
   package.uploader_emails AS uploader_emails,
-  policy.update_changelog AS update_changelog,
   policy.command AS policy_command,
   policy.qa_review AS qa_review_policy,
   (policy.qa_review = 'required' AND review_status = 'unreviewed') as needs_review,
