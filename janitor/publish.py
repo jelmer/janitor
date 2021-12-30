@@ -77,7 +77,6 @@ from .config import read_config, get_suite_config
 from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .schedule import (
-    full_command,
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
 )
