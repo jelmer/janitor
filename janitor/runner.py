@@ -853,7 +853,7 @@ async def check_resume_result(
         conn: asyncpg.Connection, suite: str,
         resume_branch: Branch) -> Optional["ResumeInfo"]:
     row = await conn.fetchrow(
-        "SELECT id, result, branch_name, review_status, "
+        "SELECT id, result, review_status, "
         "array(SELECT row(role, remote_name, base_revision, revision) "
         "FROM new_result_branch WHERE run_id = run.id) AS result_branches "
         "FROM run "
