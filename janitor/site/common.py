@@ -283,7 +283,7 @@ WHERE run.package = $1 AND run.suite = $2
         kwargs['env'] = env
         kwargs['plain_command'] = plain_command
     else:
-        env = None
+        env = {}
 
     kwargs.update({
         "package": package['name'],
