@@ -282,6 +282,8 @@ WHERE run.package = $1 AND run.suite = $2
         env, plain_command = splitout_env(run['command'])
         kwargs['env'] = env
         kwargs['plain_command'] = plain_command
+    else:
+        env = None
 
     kwargs.update({
         "package": package['name'],
