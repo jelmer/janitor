@@ -228,12 +228,6 @@ order by finish_time desc
     return await conn.fetch(query, fixer)
 
 
-async def generate_failing_fixer(db, fixer):
-    async with db.acquire() as conn:
-        failures = await iter_lintian_brush_fixer_failures(conn, fixer)
-        return {"failures": failures, "fixer": fixer}
-
-
 async def iter_failed_lintian_fixers(db):
     query = """
 select json_object_keys((result->'failed')::json), count(*) from last_runs
@@ -244,10 +238,6 @@ where
     async with db.acquire() as conn:
         for row in await conn.fetch(query):
             yield row
-
-
-async def generate_failing_fixers_list(db):
-    return {"fixers": iter_failed_lintian_fixers(db)}
 
 
 async def iter_lintian_fixes_regressions(conn):
@@ -261,12 +251,6 @@ SELECT l.package, l.id, u.id, l.result_code FROM last_runs l
     u.result_code = 'success'
 """
     return await conn.fetch(query)
-
-
-async def generate_regressions_list(db):
-    async with db.acquire() as conn:
-        packages = await iter_lintian_fixes_regressions(conn)
-    return {"packages": packages}
 
 
 async def iter_lintian_fixes_counts(conn):
@@ -429,6 +413,32 @@ group by 1 order by 1 desc
     }
 
 
+@html_template(
+    "lintian-fixes-failed-list.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_failed_lintian_brush_fixers_list(request):
+    return {"fixers": iter_failed_lintian_fixers(request.app.database)}
+
+
+@html_template(
+    "lintian-fixes-failed.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_failed_lintian_brush_fixers(request):
+    fixer = request.match_info["fixer"]
+    async with request.app.database.acquire() as conn:
+        failures = await iter_lintian_brush_fixer_failures(conn, fixer)
+        return {"failures": failures, "fixer": fixer}
+
+
+@html_template(
+    "lintian-fixes-regressions.html", headers={"Cache-Control": "max-age=600"}
+)
+async def handle_lintian_brush_regressions(request):
+    async with request.app.database.acquire() as conn:
+        packages = await iter_lintian_fixes_regressions(conn)
+    return {"packages": packages}
+
+
 def register_lintian_fixes_endpoints(router):
     router.add_get(
         "/lintian-fixes/", handle_lintian_fixes, name="lintian-fixes-start"
@@ -471,4 +481,19 @@ def register_lintian_fixes_endpoints(router):
     )
     router.add_get(
         "/lintian-fixes/stats", handle_lintian_fixes_stats, name="lintian-fixes-stats"
+    )
+    router.add_get(
+        "/lintian-fixes/failed-fixers/",
+        handle_failed_lintian_brush_fixers_list,
+        name="failed-lintian-brush-fixer-list",
+    )
+    router.add_get(
+        "/lintian-fixes/failed-fixers/{fixer}",
+        handle_failed_lintian_brush_fixers,
+        name="failed-lintian-brush-fixer",
+    )
+    router.add_get(
+        "/lintian-fixes/regressions/",
+        handle_lintian_brush_regressions,
+        name="lintian-brush-regressions",
     )

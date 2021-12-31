@@ -452,34 +452,6 @@ ORDER BY merge_proposal.url, run.finish_time DESC
     )
 
 
-@html_template(
-    "lintian-fixes-failed-list.html", headers={"Cache-Control": "max-age=600"}
-)
-async def handle_failed_lintian_brush_fixers_list(request):
-    from .lintian_fixes import generate_failing_fixers_list
-
-    return await generate_failing_fixers_list(request.app.database)
-
-
-@html_template(
-    "lintian-fixes-failed.html", headers={"Cache-Control": "max-age=600"}
-)
-async def handle_failed_lintian_brush_fixers(request):
-    from .lintian_fixes import generate_failing_fixer
-
-    fixer = request.match_info["fixer"]
-    return await generate_failing_fixer(request.app.database, fixer)
-
-
-@html_template(
-    "lintian-fixes-regressions.html", headers={"Cache-Control": "max-age=600"}
-)
-async def handle_lintian_brush_regressions(request):
-    from .lintian_fixes import generate_regressions_list
-
-    return await generate_regressions_list(request.app.database)
-
-
 @html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600"})
 async def handle_vcs_regressions(request):
     async with request.app.database.acquire() as conn:
@@ -992,21 +964,6 @@ async def create_app(
     app.router.add_get("/cupboard/rejected", handle_rejected, name="cupboard-rejected")
     app.router.add_post(
         "/cupboard/review", handle_review_post, name="cupboard-review-post"
-    )
-    app.router.add_get(
-        "/cupboard/failed-lintian-brush-fixers/",
-        handle_failed_lintian_brush_fixers_list,
-        name="failed-lintian-brush-fixer-list",
-    )
-    app.router.add_get(
-        "/cupboard/failed-lintian-brush-fixers/{fixer}",
-        handle_failed_lintian_brush_fixers,
-        name="failed-lintian-brush-fixer",
-    )
-    app.router.add_get(
-        "/cupboard/lintian-brush-regressions/",
-        handle_lintian_brush_regressions,
-        name="lintian-brush-regressions",
     )
     app.router.add_get(
         "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
