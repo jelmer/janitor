@@ -999,7 +999,10 @@ async def get_assignment(
                 data = await resp.text()
                 raise AssignmentFailure(data)
             else:
-                raise AssignmentFailure(data['reason'])
+                if 'reason' in data:
+                    raise AssignmentFailure(data['reason'])
+                else:
+                    raise AssignmentFailure(data)
         return await resp.json()
 
 
