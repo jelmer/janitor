@@ -1163,7 +1163,7 @@ async def handle_run_assign(request):
     span = aiozipkin.request_span(request)
     with span.new_child('check-worker-creds'):
         worker_name = await check_worker_creds(request.app['db'], request)
-    url = URL(request.app['runner_url'])
+    url = URL(request.app['runner_url']) / "active-runs"
     with span.new_child('forward-runner'):
         try:
             async with request.app['http_client_session'].post(
