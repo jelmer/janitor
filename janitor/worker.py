@@ -102,6 +102,7 @@ from breezy.errors import (
     NotBranchError,
     InvalidHttpResponse,
     UnexpectedHttpStatus,
+    TransportNotPossible,
 )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir
@@ -947,7 +948,8 @@ def run_worker(
                         overwrite=True,
                     )
                 except (InvalidHttpResponse, IncompleteRead, MirrorFailure,
-                        ConnectionError, UnexpectedHttpStatus, RemoteGitError) as e:
+                        ConnectionError, UnexpectedHttpStatus, RemoteGitError,
+                        TransportNotPossible) as e:
                     logging.warning(
                         "unable to push to cache URL %s: %s",
                         cached_branch_url, e)
