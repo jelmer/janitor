@@ -9,9 +9,16 @@ export AUTOPKGTEST=$WD/autopkgtest-wrapper
 export PATH=$WD/debmutate/scripts:$WD/breezy-debian/scripts:$PATH
 export PYTHONPATH=$WD/ognibuild:$WD:$WD/breezy:$WD/silver-platter:$WD/lintian-brush:$WD/dulwich:$WD/debmutate:$WD/python-debian/lib:$WD/upstream-ontologist:$WD/buildlog-consultant
 
-if [ -n "${JANITOR_CREDENTIALS}" ];
+if [ -z "${JANITOR_CREDENTIALS}" ]
 then
-   python3 -m janitor.worker --credentials="${JANITOR_CREDENTIALS}" "$@"
-else
-   python3 -m janitor.worker "$@"
+   echo "Please set JANITOR_CREDENTIALS"
+   exit 1
 fi
+
+if [ -z "${JANITOR_BASE_URL}" ]
+then
+   echo "Please set JANITOR_BASE_URL"
+   exit 1
+fi
+
+python3 -m janitor.worker --credentials="${JANITOR_CREDENTIALS}" --base-url="${JANITOR_BASE_URL}" "$@"
