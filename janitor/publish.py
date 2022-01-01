@@ -2263,6 +2263,9 @@ async def check_existing(
         except NoRunForMergeProposal as e:
             logger.warning("Unable to find local metadata for %s, skipping.", e.mp.url)
             modified = False
+        except HosterLoginRequired as e:
+            logger.warning('Login required for hoster %s, skipping.', e)
+            modified = False
         except BranchRateLimited as e:
             logger.warning(
                 "Rate-limited accessing %s. Skipping %r for this cycle.",
