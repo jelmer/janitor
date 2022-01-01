@@ -339,10 +339,11 @@ async def handle_set_bzr_remote(request):
     return web.Response()
 
 
-async def git_backend(request, allow_writes):
+async def git_backend(request):
     package = request.match_info["package"]
     subpath = request.match_info["subpath"]
 
+    allow_writes = request.app.allow_writes
     if allow_writes is None:
         allow_writes = await is_worker(request.app.db, request)
     service = request.query.get("service")
@@ -458,9 +459,10 @@ async def git_backend(request, allow_writes):
     return response
 
 
-async def dulwich_refs(request, allow_writes):
+async def dulwich_refs(request):
     package = request.match_info["package"]
 
+    allow_writes = request.app.allow_writes
     if allow_writes is None:
         allow_writes = await is_worker(request.app.db, request)
 
@@ -502,10 +504,11 @@ async def dulwich_refs(request, allow_writes):
     return response
 
 
-async def dulwich_service(request, allow_writes):
+async def dulwich_service(request):
     package = request.match_info["package"]
     service = request.match_info["service"]
 
+    allow_writes = request.app.allow_writes
     if allow_writes is None:
         allow_writes = await is_worker(request.app.db, request)
 
@@ -561,7 +564,7 @@ async def _bzr_open_repo(vcs_manager, db, package):
     return repo
 
 
-async def bzr_backend(request, allow_writes):
+async def bzr_backend(request):
     vcs_manager = request.app.vcs_manager
     package = request.match_info["package"]
     branch_name = request.match_info.get("branch")
@@ -575,6 +578,7 @@ async def bzr_backend(request, allow_writes):
     else:
         transport = repo.user_transport
     transport.ensure_base()
+    allow_writes = request.app.allow_writes
     if allow_writes is None:
         allow_writes = await is_worker(request.app.db, request)
     if allow_writes:
@@ -656,62 +660,70 @@ async def create_web_app(
     )
     app.vcs_manager = vcs_manager
     app.db = db
+    app.allow_writes = True
     app.config = config
+    public_app = web.Application(
+        middlewares=[trailing_slash_redirect], client_max_size=(client_max_size or 0)
+    )
+    public_app.vcs_manager = vcs_manager
+    public_app.db = db
+    public_app.allow_writes = None
+    public_app.config = config
     setup_metrics(app)
     app.router.add_get("/diff/{run_id}/{role}", diff_request, name='diff')
     if dulwich_server:
         app.router.add_post(
             "/git/{package}/{service:git-receive-pack|git-upload-pack}",
-            lambda req: dulwich_service(req, allow_writes=True),
+            dulwich_service,
             name='dulwich-service'
         )
-        app.router.add_post(
-            "/public/git/{package}/{service:git-receive-pack|git-upload-pack}",
-            lambda req: dulwich_service(req, allow_writes=None),
+        public_app.router.add_post(
+            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
+            dulwich_service,
             name='dulwich-service-public'
         )
         app.router.add_get(
             "/git/{package}/info/refs",
-            lambda req: dulwich_refs(req, allow_writes=True), name='dulwich-refs')
+            dulwich_refs, name='dulwich-refs')
         app.router.add_get(
             "/public/git/{package}/info/refs",
-            lambda req: dulwich_refs(req, allow_writes=True), name='dulwich-refs-public')
+            dulwich_refs, name='dulwich-refs-public')
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
                 method, "/git/{package}{subpath:" + regex.pattern + "}",
-                lambda req: git_backend(req, allow_writes=True)
+                git_backend,
             )
             app.router.add_route(
                 method, "/public/git/{package}{subpath:" + regex.pattern + "}",
-                lambda req: git_backend(req, allow_writes=None),
+                git_backend,
             )
 
 
     app.router.add_get("/", handle_index, name="index")
-    app.router.add_get("/public/{vcs:git|bzr}/", handle_repo_list, name='public-repo-list')
+    public_app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
-    app.router.add_post("/public/bzr/{package}/{branch}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=None), name='bzr-branch-public')
-    app.router.add_post("/public/bzr/{package}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=None), name='bzr-repo-public')
-    app.router.add_post("/bzr/{package}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=True), name='bzr-repo')
-    app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=True), name='bzr-branch')
+    public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
+    public_app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo-public')
+    app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
+    app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
     app.router.add_post("/git/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
     app.router.add_post("/bzr/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
-    logging.info("Listening on %s:%s", listen_addr, port)
     endpoint = aiozipkin.create_endpoint("janitor.vcs_store", ipv4=listen_addr, port=port)
     if config.zipkin_address:
         tracer = await aiozipkin.create(config.zipkin_address, endpoint, sample_rate=1.0)
     else:
         tracer = await aiozipkin.create_custom(endpoint)
     aiozipkin.setup(app, tracer)
-    return app
+    aiozipkin.setup(public_app, tracer)
+    return app, public_app
 
 
-def main(argv=None):
+async def main(argv=None):
     import argparse
 
     parser = argparse.ArgumentParser(prog="janitor.vcs_store")
@@ -722,6 +734,8 @@ def main(argv=None):
         "--listen-address", type=str, help="Listen address", default="localhost"
     )
     parser.add_argument("--port", type=int, help="Listen port", default=9923)
+    parser.add_argument(
+        "--public-port", type=int, help="Public listen port", default=9924)
     parser.add_argument(
         "--dulwich-server",
         action="store_true",
@@ -762,7 +776,7 @@ def main(argv=None):
 
     vcs_manager = LocalVcsManager(args.vcs_path or config.vcs_location)
     db = state.Database(config.database_location)
-    app = create_web_app(
+    app, public_app = await create_web_app(
         args.listen_address,
         args.port,
         vcs_manager,
@@ -772,10 +786,21 @@ def main(argv=None):
         client_max_size=args.client_max_size,
     )
 
-    web.run_app(app, host=args.listen_address, port=args.port)
+    runner = web.AppRunner(app)
+    public_runner = web.AppRunner(public_app)
+    await runner.setup()
+    await public_runner.setup()
+    site = web.TCPSite(runner, args.listen_address, port=args.port)
+    await site.start()
+    logging.info("Listening on %s:%s", args.listen_address, args.port)
+    site = web.TCPSite(public_runner, args.listen_address, port=args.public_port)
+    await site.start()
+    logging.info("Listening on %s:%s", args.listen_address, args.public_port)
+    while True:
+        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
     import sys
 
-    sys.exit(main(sys.argv))
+    sys.exit(asyncio.run(main(sys.argv)))
