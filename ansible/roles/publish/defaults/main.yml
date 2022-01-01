@@ -2,6 +2,7 @@
 janitor_publish_port: 9912
 janitor_publish_address: "::1"
 janitor_vcs_store_port: 9923
+janitor_vcs_store_public_port: 9924
 janitor_vcs_store_address: "::1"
 # Maximum number of open merge proposals per maintainer (0 to disable)
 janitor_publish_max_mps_per_maintainer: 0
