@@ -339,11 +339,12 @@ async def handle_set_bzr_remote(request):
     return web.Response()
 
 
-async def git_backend(request):
+async def git_backend(request, allow_writes):
     package = request.match_info["package"]
     subpath = request.match_info["subpath"]
 
-    allow_writes = await is_worker(request.app.db, request)
+    if allow_writes is None:
+        allow_writes = await is_worker(request.app.db, request)
     service = request.query.get("service")
     if service is not None:
         _git_check_service(service, allow_writes)
@@ -457,10 +458,11 @@ async def git_backend(request):
     return response
 
 
-async def dulwich_refs(request):
+async def dulwich_refs(request, allow_writes):
     package = request.match_info["package"]
 
-    allow_writes = await is_worker(request.app.db, request)
+    if allow_writes is None:
+        allow_writes = await is_worker(request.app.db, request)
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
@@ -500,11 +502,12 @@ async def dulwich_refs(request):
     return response
 
 
-async def dulwich_service(request):
+async def dulwich_service(request, allow_writes):
     package = request.match_info["package"]
     service = request.match_info["service"]
 
-    allow_writes = await is_worker(request.app.db, request)
+    if allow_writes is None:
+        allow_writes = await is_worker(request.app.db, request)
 
     span = aiozipkin.request_span(request)
     with span.new_child('open-repo'):
@@ -558,7 +561,7 @@ async def _bzr_open_repo(vcs_manager, db, package):
     return repo
 
 
-async def bzr_backend(request):
+async def bzr_backend(request, allow_writes):
     vcs_manager = request.app.vcs_manager
     package = request.match_info["package"]
     branch_name = request.match_info.get("branch")
@@ -572,7 +575,9 @@ async def bzr_backend(request):
     else:
         transport = repo.user_transport
     transport.ensure_base()
-    if await is_worker(request.app.db, request):
+    if allow_writes is None:
+        allow_writes = await is_worker(request.app.db, request)
+    if allow_writes:
         backing_transport = transport
     else:
         backing_transport = get_transport_from_url("readonly+" + transport.base)
@@ -656,23 +661,44 @@ async def create_web_app(
     app.router.add_get("/diff/{run_id}/{role}", diff_request, name='diff')
     if dulwich_server:
         app.router.add_post(
-            "/git/{package}/{service:git-receive-pack|git-upload-pack}", dulwich_service, name='dulwich-service'
+            "/git/{package}/{service:git-receive-pack|git-upload-pack}",
+            lambda req: dulwich_service(req, allow_writes=True),
+            name='dulwich-service'
         )
-        app.router.add_get("/git/{package}/info/refs", dulwich_refs, name='dulwich-refs')
+        app.router.add_post(
+            "/public/git/{package}/{service:git-receive-pack|git-upload-pack}",
+            lambda req: dulwich_service(req, allow_writes=None),
+            name='dulwich-service-public'
+        )
+        app.router.add_get(
+            "/git/{package}/info/refs",
+            lambda req: dulwich_refs(req, allow_writes=True), name='dulwich-refs')
+        app.router.add_get(
+            "/public/git/{package}/info/refs",
+            lambda req: dulwich_refs(req, allow_writes=True), name='dulwich-refs-public')
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
             app.router.add_route(
-                method, "/git/{package}{subpath:" + regex.pattern + "}", git_backend
+                method, "/git/{package}{subpath:" + regex.pattern + "}",
+                lambda req: git_backend(req, allow_writes=True)
+            )
+            app.router.add_route(
+                method, "/public/git/{package}{subpath:" + regex.pattern + "}",
+                lambda req: git_backend(req, allow_writes=None),
             )
 
+
     app.router.add_get("/", handle_index, name="index")
+    app.router.add_get("/public/{vcs:git|bzr}/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
-    app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
-    app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch')
+    app.router.add_post("/public/bzr/{package}/{branch}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=None), name='bzr-branch-public')
+    app.router.add_post("/public/bzr/{package}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=None), name='bzr-repo-public')
+    app.router.add_post("/bzr/{package}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=True), name='bzr-repo')
+    app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", lambda req: bzr_backend(req, allow_writes=True), name='bzr-branch')
     app.router.add_post("/git/{package}/remotes/{remote}", handle_set_git_remote, name='git-remote')
     app.router.add_post("/bzr/{package}/remotes/{remote}", handle_set_bzr_remote, name='bzr-remote')
     logging.info("Listening on %s:%s", listen_addr, port)
