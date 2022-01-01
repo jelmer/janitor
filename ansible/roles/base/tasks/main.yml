@@ -58,6 +58,9 @@
 - name: Build C extensions for Breezy
   make:
     chdir: "{{ janitor_code_path }}/breezy"
+    params:
+      # libgit2 has an unstable API, and that leads to segfaults.
+      CARGO_NET_GIT_FETCH_WITH_CLI: "true"
   become: yes
   become_user: "{{ janitor_static_owner }}"
 - name: Build C extensions for Dulwich
