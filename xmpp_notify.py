@@ -18,21 +18,21 @@
 
 from aiohttp.client import ClientSession
 import logging
-import slixmpp
-
-from prometheus_client import Counter
-
-from janitor.pubsub import pubsub_reader
-from janitor.prometheus import run_prometheus_server
-
 import re
 import sys
 from urllib.parse import urljoin
+
+from prometheus_client import Counter
+import slixmpp
+
+from janitor.pubsub import pubsub_reader
+from janitor.prometheus import run_prometheus_server
 
 xmpp_messages_sent = Counter("xmpp_messages_sent", "Number of messages sent to XMPP")
 
 
 class JanitorNotifier(slixmpp.ClientXMPP):
+
     def __init__(self, jid, password, channel, publisher_url):
         slixmpp.ClientXMPP.__init__(self, jid, password)
         self.channel = channel
