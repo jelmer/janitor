@@ -1210,7 +1210,7 @@ async def main(argv=None):
         "--base-url",
         type=str,
         help="Base URL",
-        default="https://janitor.debian.net/api/",
+        default=None,
     )
     parser.add_argument(
         "--output-directory", type=str, help="Output directory", default="."
@@ -1242,6 +1242,9 @@ async def main(argv=None):
     parser.add_argument("--listen-address", type=str, default="127.0.0.1")
 
     args = parser.parse_args(argv)
+
+    if args.base_url is None:
+        parser.error('please specify --base-url')
 
     if args.gcp_logging:
         import google.cloud.logging
