@@ -1690,10 +1690,7 @@ async def main(argv=None):
         "--public-vcs-location", type=str, default="https://janitor.debian.net/",
         help="Public vcs location (used for URLs handed to worker)"
     )
-    parser.add_argument(
-        "--vcs-store-url", type=str, default="http://localhost:9923/",
-        help="URL to vcs store"
-    )
+    parser.add_argument( "--vcs-store-url", type=str, help="URL to vcs store")
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
