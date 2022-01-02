@@ -26,6 +26,7 @@ from typing import Optional
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
+from aiohttp_openmetrics import setup_metrics
 from http.client import parse_headers  # type: ignore
 
 from breezy.controldir import ControlDir, format_registry
@@ -44,7 +45,6 @@ from . import (
 )
 
 from .config import read_config, get_suite_config
-from .prometheus import setup_metrics
 from .site import is_worker, iter_accept, env as site_env
 from .vcs import (
     VcsManager,

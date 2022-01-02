@@ -61,8 +61,6 @@ async def metrics_middleware(request, handler):
         raise
     except Exception:
         request_exceptions.labels(request.method, route).inc()
-        import traceback
-        traceback.print_exc()
         raise
     finally:
         resp_time = time.time() - start_time

@@ -66,5 +66,6 @@ setup(
         "buildlog-consultant",
         "upstream-ontologist",
         "silver-platter",
+        "aiohttp-openmetrics",
     ],
 )

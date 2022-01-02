@@ -17,9 +17,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.client import ClientSession
-from prometheus_client import Counter
 
-from janitor.prometheus import run_prometheus_server
+from aiohttp_openmetrics import run_prometheus_server, Counter
 
 from janitor.pubsub import pubsub_reader
 

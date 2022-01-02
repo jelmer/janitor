@@ -35,13 +35,14 @@ from aiohttp.web_middlewares import normalize_path_middleware
 from aiohttp import web
 import asyncpg
 
-from prometheus_client import (
+from aiohttp_openmetrics import (
     Counter,
     Gauge,
     Histogram,
-    push_to_gateway,
     REGISTRY,
+    setup_metrics,
 )
+from prometheus_client import push_to_gateway
 
 from breezy import urlutils
 import gpg
@@ -74,7 +75,6 @@ from . import (
     state,
 )
 from .config import read_config, get_suite_config
-from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .schedule import (
     do_schedule,

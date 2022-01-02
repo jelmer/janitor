@@ -46,7 +46,7 @@ from .diffoscope import (
     format_diffoscope,
 )
 from .pubsub import pubsub_reader
-from .prometheus import setup_metrics
+from aiohttp_openmetrics import setup_metrics
 
 
 suite_check = re.compile("^[a-z0-9-]+$")

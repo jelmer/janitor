@@ -38,13 +38,13 @@ from aiohttp import web
 
 from yarl import URL
 
+from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
+
 from breezy import debug, urlutils
 from breezy.branch import Branch
 from breezy.errors import PermissionDenied, ConnectionError
 from breezy.propose import Hoster
 from breezy.transport import UnusableRedirect
-
-from prometheus_client import Counter, Gauge, Histogram
 
 from silver_platter.debian import (
     select_preferred_probers,
@@ -86,7 +86,6 @@ from .logs import (
     FileSystemLogFileManager,
 )
 from .policy import read_policy
-from .prometheus import setup_metrics
 from .pubsub import Topic, pubsub_handler
 from .schedule import do_schedule_control, do_schedule
 from .vcs import (

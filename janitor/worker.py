@@ -41,7 +41,7 @@ import yarl
 
 from jinja2 import Template
 
-from prometheus_client import REGISTRY, push_to_gateway
+from prometheus_client import push_to_gateway
 
 import argparse
 import asyncio
@@ -115,7 +115,7 @@ from .compat import shlex_join
 from ognibuild import (
     DetailedFailure,
 )
-from .prometheus import setup_metrics
+from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
     LocalVcsManager,
     RemoteVcsManager,
@@ -1251,6 +1251,8 @@ async def main(argv=None):
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
     parser.add_argument("--gcp-logging", action="store_true")
     parser.add_argument("--listen-address", type=str, default="127.0.0.1")
+    parser.add_argument(
+        "--k8s", action="store_true", help="Only return 0 when queue is empty")
 
     args = parser.parse_args(argv)
 
@@ -1337,6 +1339,8 @@ async def main(argv=None):
             )
         except EmptyQueue:
             logging.fatal('queue is empty')
+            if args.k8s:
+                return 0
             return 1
         except AssignmentFailure as e:
             logging.fatal("failed to get assignment: %s", e.reason)
@@ -1458,6 +1462,8 @@ async def main(argv=None):
                 # This is a failure for the worker, but returning 0 will cause
                 # jenkins to mark the job having failed, which is not really
                 # true.  We're happy if we get to successfully POST to /finish
+                if args.k8s:
+                    return 1
                 return 0
             except OSError as e:
                 if e.errno == errno.ENOSPC:
@@ -1476,6 +1482,8 @@ async def main(argv=None):
                 metadata.update(result.json())
                 logging.info("%s", result.description)
 
+                if args.k8s:
+                    return 1
                 return 0
             finally:
                 finish_time = datetime.utcnow()
