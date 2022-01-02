@@ -25,11 +25,13 @@ from typing import Optional, List
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
 
-from prometheus_client import Counter
+from aiohttp_openmetrics import (
+    Counter,
+    setup_metrics,
+    )
 
 from ..artifacts import get_artifact_manager, ArtifactsMissing
 from ..config import read_config
-from ..prometheus import setup_metrics
 from ..pubsub import pubsub_reader
 
 

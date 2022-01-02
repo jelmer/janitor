@@ -24,7 +24,7 @@ from typing import Optional, Set, AsyncIterator, Any
 import aiohttp
 from aiohttp import web
 from aiohttp.client_exceptions import ClientResponseError, ClientConnectorError
-from prometheus_client import Gauge
+from aiohttp_openmetrics import Gauge
 
 
 subscription_count = Gauge(
