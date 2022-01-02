@@ -42,14 +42,14 @@ from debian.deb822 import Release, Packages
 import gpg
 from gpg.constants.sig import mode as gpg_mode
 
-from prometheus_client import (
+from aiohttp_openmetrics import (
     Gauge,
+    setup_metrics,
 )
 
 from .. import state
 from ..artifacts import get_artifact_manager, ArtifactsMissing
 from ..config import read_config, get_suite_config
-from ..prometheus import setup_metrics
 from ..pubsub import pubsub_reader
 
 
