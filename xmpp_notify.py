@@ -22,11 +22,10 @@ import re
 import sys
 from urllib.parse import urljoin
 
-from prometheus_client import Counter
 import slixmpp
 
 from janitor.pubsub import pubsub_reader
-from janitor.prometheus import run_prometheus_server
+from aiohttp_openmetrics import run_prometheus_server, Counter
 
 xmpp_messages_sent = Counter("xmpp_messages_sent", "Number of messages sent to XMPP")
 
