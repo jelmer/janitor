@@ -402,7 +402,7 @@ async def deps_satisfied(conn: asyncpg.Connection, suite: str, dependencies) -> 
 async def main():
     import argparse
     from janitor import state
-    from prometheus_client import (
+    from aiohttp_openmetrics import (
         Gauge,
         push_to_gateway,
         REGISTRY,
@@ -463,7 +463,7 @@ async def main():
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(args.prometheus, job="janitor.schedule", registry=REGISTRY)
+        await push_to_gateway(args.prometheus, job="janitor.schedule", registry=REGISTRY)
 
 
 async def do_schedule_control(

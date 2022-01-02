@@ -162,7 +162,7 @@ async def main():
     import argparse
     import sys
     from janitor.package_overrides import read_package_overrides
-    from prometheus_client import (
+    from aiohtt_openmetrics import (
         Gauge,
         push_to_gateway,
         REGISTRY,
@@ -232,7 +232,7 @@ async def main():
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(
+        await push_to_gateway(
             args.prometheus, job="janitor.package_metadata", registry=REGISTRY
         )
 
