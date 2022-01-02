@@ -54,7 +54,7 @@ async def store_candidates(conn: asyncpg.Connection, entries):
 
 async def main():
     import argparse
-    from prometheus_client import (
+    from aiohttp_openmetrics import (
         Gauge,
         push_to_gateway,
         REGISTRY,
@@ -125,7 +125,8 @@ async def main():
 
     last_success_gauge.set_to_current_time()
     if args.prometheus:
-        push_to_gateway(args.prometheus, job="janitor.candidates", registry=REGISTRY)
+        await push_to_gateway(
+            args.prometheus, job="janitor.candidates", registry=REGISTRY)
 
 
 if __name__ == "__main__":

@@ -41,7 +41,7 @@ import yarl
 
 from jinja2 import Template
 
-from prometheus_client import push_to_gateway
+from aiohttp_openmetrics import push_to_gateway
 
 import argparse
 import asyncio
@@ -1508,7 +1508,7 @@ async def main(argv=None):
                     logging.debug("Result: %r", result)
 
                 if args.prometheus:
-                    push_to_gateway(
+                    await push_to_gateway(
                         args.prometheus, job="janitor.worker",
                         registry=REGISTRY)
 

@@ -41,8 +41,8 @@ from aiohttp_openmetrics import (
     Histogram,
     REGISTRY,
     setup_metrics,
+    push_to_gateway
 )
-from prometheus_client import push_to_gateway
 
 from breezy import urlutils
 import gpg
@@ -2564,7 +2564,9 @@ def main(argv=None):
             )
         )
         if args.prometheus:
-            push_to_gateway(args.prometheus, job="janitor.publish", registry=REGISTRY)
+            loop.run_until_complete(
+                push_to_gateway(
+                    args.prometheus, job="janitor.publish", registry=REGISTRY))
     else:
         tasks = [
             loop.create_task(
