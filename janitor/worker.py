@@ -134,6 +134,10 @@ class ResultUploadFailure(Exception):
         self.reason = reason
 
 
+class EmptyQueue(Exception):
+    """Queue was empty."""
+
+
 # Whether to trust packages enough to run code from them,
 # e.g. when guessing repo location.
 TRUST_PACKAGE = False
@@ -1002,6 +1006,8 @@ async def get_assignment(
                 raise AssignmentFailure(data)
             else:
                 if 'reason' in data:
+                    if resp.status == 503 and data['reason'] == 'queue empty':
+                        raise EmptyQueue()
                     raise AssignmentFailure(data['reason'])
                 else:
                     raise AssignmentFailure(data)
@@ -1329,6 +1335,9 @@ async def main(argv=None):
                 session, args.base_url, node_name,
                 jenkins_metadata=jenkins_metadata,
             )
+        except EmptyQueue:
+            logging.fatal('queue is empty')
+            return 1
         except AssignmentFailure as e:
             logging.fatal("failed to get assignment: %s", e.reason)
             return 1
