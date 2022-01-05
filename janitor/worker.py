@@ -997,28 +997,30 @@ async def get_assignment(
     else:
         json["health_check"] = None
     logging.debug("Sending assignment request: %r", json)
-    async with session.post(assign_url, json=json) as resp:
-        if resp.status != 201:
-            try:
-                data = await resp.json()
-            except ContentTypeError:
-                data = await resp.text()
-                raise AssignmentFailure(data)
-            else:
-                if 'reason' in data:
-                    if resp.status == 503 and data['reason'] == 'queue empty':
-                        raise EmptyQueue()
-                    raise AssignmentFailure(data['reason'])
-                else:
+    try:
+        async with session.post(assign_url, json=json) as resp:
+            if resp.status != 201:
+                try:
+                    data = await resp.json()
+                except ContentTypeError:
+                    data = await resp.text()
                     raise AssignmentFailure(data)
-        return await resp.json()
+                else:
+                    if 'reason' in data:
+                        if resp.status == 503 and data['reason'] == 'queue empty':
+                            raise EmptyQueue()
+                        raise AssignmentFailure(data['reason'])
+                    else:
+                        raise AssignmentFailure(data)
+            return await resp.json()
+    except asyncio.TimeoutError as e:
+        raise AssignmentFailure("timeout while retrieving assignment: %s", e)
 
 
 class WatchdogPetter(object):
 
-    def __init__(self, base_url, auth, run_id, queue_id=None):
+    def __init__(self, session, base_url, run_id, queue_id=None):
         self.base_url = base_url
-        self.auth = auth
         self.run_id = run_id
         self._task = None
         self._log_cached = []
@@ -1058,10 +1060,10 @@ class WatchdogPetter(object):
         params = {}
         if self.queue_id is not None:
             params['queue_id'] = self.queue_id
-        async with ClientSession(auth=self.auth) as session:
+        async with self.session:
             while True:
                 try:
-                    self.ws = await session.ws_connect(ws_url, params=params)
+                    self.ws = await self.session.ws_connect(ws_url, params=params)
                 except (ClientResponseError, ClientConnectorError) as e:
                     self.ws = None
                     logging.warning("progress ws: Unable to connect: %s" % e)
@@ -1169,14 +1171,14 @@ INDEX_TEMPLATE = Template("""\
 
 async def handle_index(request):
     return web.Response(text=INDEX_TEMPLATE.render(
-        assignment=request.app['assignment'],
-        metadata=request.app['metadata'],
+        assignment=request.app['workitem']['assignment'],
+        metadata=request.app['workitem']['metadata'],
         datetime=datetime),
         content_type='text/html', status=200)
 
 
 async def handle_assignment(request):
-    return web.json_response(request.app['assignment'])
+    return web.json_response(request.app['workitem']['assignment'])
 
 
 LOG_INDEX_TEMPLATE = Template("""\
@@ -1195,9 +1197,9 @@ LOG_INDEX_TEMPLATE = Template("""\
 
 
 async def handle_log_index(request):
-    if 'directory' not in request.app:
+    if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Log directory not created yet")
-    names = [entry.name for entry in os.scandir(request.app['directory'])
+    names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
              if entry.name.endswith('.log')]
     return web.Response(
         text=LOG_INDEX_TEMPLATE.render(names=names), content_type='text/html',
@@ -1205,11 +1207,164 @@ async def handle_log_index(request):
 
 
 async def handle_log(request):
-    return web.FileResponse(os.path.join(request.app['directory'], request.match_info['filename']))
+    return web.FileResponse(os.path.join(request.app['workitem']['directory'], request.match_info['filename']))
 
 
 async def handle_health(request):
     return web.Response(text='ok', status=200)
+
+
+async def process_single_item(
+        session, base_url, node_name, workitem,
+        jenkins_metadata=None, prometheus=None, vcs_manager=None):
+    assignment = await get_assignment(
+        session, base_url, node_name,
+        jenkins_metadata=jenkins_metadata,
+    )
+
+    logging.debug("Got back assignment: %r", assignment)
+
+    watchdog_petter = WatchdogPetter(
+        session, base_url, assignment['id'],
+        queue_id=assignment['queue_id'])
+    watchdog_petter.start()
+
+    suite = assignment["suite"]
+    branch_url = assignment["branch"]["url"]
+    vcs_type = assignment["branch"]["vcs_type"]
+    force_build = assignment.get('force-build', False)
+    subpath = assignment["branch"].get("subpath", "") or ""
+    if assignment["resume"]:
+        resume_result = assignment["resume"]["result"]
+        resume_branch_url = assignment["resume"]["branch_url"].rstrip("/")
+        resume_branches = [
+            (role, name, base.encode("utf-8"), revision.encode("utf-8"))
+            for (role, name, base, revision) in assignment["resume"]["branches"]
+        ]
+    else:
+        resume_result = None
+        resume_branch_url = None
+        resume_branches = None
+    cached_branch_url = assignment["branch"].get("cached_url")
+    command = assignment["command"]
+    if isinstance(command, str):
+        command = shlex.split(command)
+    target = assignment["build"]["target"]
+    build_environment = assignment["build"].get("environment", {})
+
+    start_time = datetime.utcnow()
+    metadata = {
+        "queue_id": assignment["queue_id"],
+        "start_time": start_time.isoformat()
+    }
+    if jenkins_metadata:
+        metadata["jenkins"] = jenkins_metadata
+
+    if vcs_manager is None:
+        vcs_manager = RemoteVcsManager.from_urls(assignment["vcs_store"])
+
+    run_id = assignment["id"]
+
+    possible_transports = []
+
+    env = assignment["env"]
+
+    vendor = build_environment.get('DEB_VENDOR', 'debian')
+
+    os.environ.update(env)
+    os.environ.update(build_environment)
+
+    with TemporaryDirectory(prefix='janitor') as output_directory:
+        workitem['directory'] = output_directory
+        workitem['assignment'] = assignment
+        workitem['metadata'] = metadata
+        loop = asyncio.get_running_loop()
+        loop.add_signal_handler(
+            signal.SIGINT, handle_sigterm, session, base_url,
+            run_id, metadata)
+        loop.add_signal_handler(
+            signal.SIGTERM, handle_sigterm, session, base_url,
+            run_id, metadata)
+
+        watchdog_petter.track_log_directory(output_directory)
+
+        main_task = loop.run_in_executor(
+            None,
+            partial(
+                run_worker,
+                branch_url,
+                run_id,
+                subpath,
+                vcs_type,
+                os.environ,
+                command,
+                output_directory,
+                metadata,
+                vcs_manager,
+                vendor,
+                suite,
+                target=target,
+                resume_branch_url=resume_branch_url,
+                resume_branches=resume_branches,
+                cached_branch_url=cached_branch_url,
+                resume_subworker_result=resume_result,
+                possible_transports=possible_transports,
+                force_build=force_build
+            ),
+        )
+        watchdog_petter.kill = main_task.cancel
+        try:
+            result = await main_task
+        except WorkerFailure as e:
+            metadata.update(e.json())
+            logging.info("Worker failed (%s): %s", e.code, e.description)
+            # This is a failure for the worker, but returning 0 will cause
+            # jenkins to mark the job having failed, which is not really
+            # true.  We're happy if we get to successfully POST to /finish
+            return
+        except OSError as e:
+            if e.errno == errno.ENOSPC:
+                metadata["code"] = "no-space-on-device"
+                metadata["description"] = str(e)
+            else:
+                metadata["code"] = "worker-exception"
+                metadata["description"] = str(e)
+                raise
+        except BaseException as e:
+            metadata["code"] = "worker-failure"
+            metadata["description"] = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
+            raise
+        else:
+            metadata["code"] = None
+            metadata.update(result.json())
+            logging.info("%s", result.description)
+            return
+        finally:
+            finish_time = datetime.utcnow()
+            metadata["finish_time"] = finish_time.isoformat()
+            logging.info("Elapsed time: %s", finish_time - start_time)
+
+            result = await upload_results(
+                session,
+                base_url,
+                assignment["id"],
+                metadata,
+                output_directory,
+            )
+
+            logging.info('Results uploaded')
+
+            logging.debug("Result: %r", result)
+
+            if prometheus:
+                await push_to_gateway(
+                    prometheus, job="janitor.worker",
+                    grouping_key={
+                        'run_id': assignment['id'],
+                        'suite': suite,
+                    },
+                    registry=REGISTRY)
+            workitem.clear()
 
 
 async def main(argv=None):
@@ -1252,7 +1407,7 @@ async def main(argv=None):
     parser.add_argument("--gcp-logging", action="store_true")
     parser.add_argument("--listen-address", type=str, default="127.0.0.1")
     parser.add_argument(
-        "--k8s", action="store_true", help="Only return 0 when queue is empty")
+        "--loop", action="store_true", help="Keep building until the queue is empty")
 
     args = parser.parse_args(argv)
 
@@ -1274,6 +1429,21 @@ async def main(argv=None):
             level=log_level,
             format="[%(asctime)s] %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S")
+
+    app = web.Application()
+    app['workitem'] = {}
+    app.router.add_get('/', handle_index, name='index')
+    app.router.add_get('/assignment', handle_assignment, name='assignment')
+    app.router.add_get('/logs/', handle_log_index, name='log-index')
+    app.router.add_get('/logs/{filename}', handle_log, name='log')
+    app.router.add_get('/health', handle_health, name='health')
+    setup_metrics(app)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, args.listen_address, args.port)
+    await site.start()
+    (site_addr, site_port) = site._server.sockets[0].getsockname()
+    logging.info('Diagnostics available at http://%s:%d/', site_addr, site_port)
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
@@ -1331,190 +1501,32 @@ async def main(argv=None):
     if not node_name:
         node_name = socket.gethostname()
 
+    if args.vcs_location:
+        vcs_manager = LocalVcsManager(args.vcs_location)
+    else:
+        vcs_manager = None
+
     async with ClientSession(auth=auth) as session:
-        try:
-            assignment = await get_assignment(
-                session, args.base_url, node_name,
-                jenkins_metadata=jenkins_metadata,
-            )
-        except EmptyQueue:
-            logging.fatal('queue is empty')
-            if args.k8s:
-                return 0
-            return 1
-        except AssignmentFailure as e:
-            logging.fatal("failed to get assignment: %s", e.reason)
-            return 1
-        except asyncio.TimeoutError as e:
-            logging.fatal("timeout while retrieving assignment: %s", e)
-            return 1
-
-        logging.debug("Got back assignment: %r", assignment)
-
-        watchdog_petter = WatchdogPetter(
-            args.base_url, auth, assignment['id'],
-            queue_id=assignment['queue_id'])
-        watchdog_petter.start()
-
-        suite = assignment["suite"]
-        branch_url = assignment["branch"]["url"]
-        vcs_type = assignment["branch"]["vcs_type"]
-        force_build = assignment.get('force-build', False)
-        subpath = assignment["branch"].get("subpath", "") or ""
-        if assignment["resume"]:
-            resume_result = assignment["resume"]["result"]
-            resume_branch_url = assignment["resume"]["branch_url"].rstrip("/")
-            resume_branches = [
-                (role, name, base.encode("utf-8"), revision.encode("utf-8"))
-                for (role, name, base, revision) in assignment["resume"]["branches"]
-            ]
-        else:
-            resume_result = None
-            resume_branch_url = None
-            resume_branches = None
-        cached_branch_url = assignment["branch"].get("cached_url")
-        command = assignment["command"]
-        if isinstance(command, str):
-            command = shlex.split(command)
-        target = assignment["build"]["target"]
-        build_environment = assignment["build"].get("environment", {})
-
-        start_time = datetime.utcnow()
-        metadata = {
-            "queue_id": assignment["queue_id"],
-            "start_time": start_time.isoformat()
-        }
-        if jenkins_metadata:
-            metadata["jenkins"] = jenkins_metadata
-
-        if args.vcs_location:
-            vcs_manager = LocalVcsManager(args.vcs_location)
-        else:
-            vcs_manager = RemoteVcsManager.from_urls(assignment["vcs_store"])
-
-        run_id = assignment["id"]
-
-        possible_transports = []
-
-        env = assignment["env"]
-
-        vendor = build_environment.get('DEB_VENDOR', 'debian')
-
-        os.environ.update(env)
-        os.environ.update(build_environment)
-
-        with TemporaryDirectory(prefix='janitor') as output_directory:
-            loop = asyncio.get_running_loop()
-            loop.add_signal_handler(
-                signal.SIGINT, handle_sigterm, session, args.base_url,
-                run_id, metadata)
-            loop.add_signal_handler(
-                signal.SIGTERM, handle_sigterm, session, args.base_url,
-                run_id, metadata)
-            app = web.Application()
-            app['directory'] = output_directory
-            app['assignment'] = assignment
-            app['metadata'] = metadata
-            app.router.add_get('/', handle_index, name='index')
-            app.router.add_get('/assignment', handle_assignment, name='assignment')
-            app.router.add_get('/logs/', handle_log_index, name='log-index')
-            app.router.add_get('/logs/{filename}', handle_log, name='log')
-            app.router.add_get('/health', handle_health, name='health')
-            setup_metrics(app)
-            runner = web.AppRunner(app)
-            await runner.setup()
-            site = web.TCPSite(runner, args.listen_address, args.port)
-            await site.start()
-            (site_addr, site_port) = site._server.sockets[0].getsockname()
-            logging.info('Diagnostics available at http://%s:%d/', site_addr, site_port)
-            watchdog_petter.track_log_directory(output_directory)
-
-            main_task = loop.run_in_executor(
-                None,
-                partial(
-                    run_worker,
-                    branch_url,
-                    run_id,
-                    subpath,
-                    vcs_type,
-                    os.environ,
-                    command,
-                    output_directory,
-                    metadata,
-                    vcs_manager,
-                    vendor,
-                    suite,
-                    target=target,
-                    resume_branch_url=resume_branch_url,
-                    resume_branches=resume_branches,
-                    cached_branch_url=cached_branch_url,
-                    resume_subworker_result=resume_result,
-                    possible_transports=possible_transports,
-                    force_build=force_build
-                ),
-            )
-            watchdog_petter.kill = main_task.cancel
+        while True:
             try:
-                result = await main_task
-            except WorkerFailure as e:
-                metadata.update(e.json())
-                logging.info("Worker failed (%s): %s", e.code, e.description)
-                # This is a failure for the worker, but returning 0 will cause
-                # jenkins to mark the job having failed, which is not really
-                # true.  We're happy if we get to successfully POST to /finish
-                if args.k8s:
-                    return 1
+                await process_single_item(
+                    session, base_url=args.base_url,
+                    node_name=node_name,
+                    workitem=app['workitem'],
+                    jenkins_metadata=jenkins_metadata,
+                    prometheus=args.prometheus,
+                    vcs_manager=vcs_manager)
+            except AssignmentFailure as e:
+                logging.fatal("failed to get assignment: %s", e.reason)
+                return 1
+            except EmptyQueue:
+                logging.info('queue is empty')
                 return 0
-            except OSError as e:
-                if e.errno == errno.ENOSPC:
-                    metadata["code"] = "no-space-on-device"
-                    metadata["description"] = str(e)
-                else:
-                    metadata["code"] = "worker-exception"
-                    metadata["description"] = str(e)
-                    raise
-            except BaseException as e:
-                metadata["code"] = "worker-failure"
-                metadata["description"] = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
-                raise
-            else:
-                metadata["code"] = None
-                metadata.update(result.json())
-                logging.info("%s", result.description)
-
-                if args.k8s:
-                    return 1
+            except ResultUploadFailure as e:
+                sys.stderr.write(str(e))
+                return 1
+            if not args.loop:
                 return 0
-            finally:
-                finish_time = datetime.utcnow()
-                metadata["finish_time"] = finish_time.isoformat()
-                logging.info("Elapsed time: %s", finish_time - start_time)
-
-                try:
-                    result = await upload_results(
-                        session,
-                        args.base_url,
-                        assignment["id"],
-                        metadata,
-                        output_directory,
-                    )
-                except ResultUploadFailure as e:
-                    sys.stderr.write(str(e))
-                    sys.exit(1)
-
-                logging.info('Results uploaded')
-
-                if args.debug:
-                    logging.debug("Result: %r", result)
-
-                if args.prometheus:
-                    await push_to_gateway(
-                        args.prometheus, job="janitor.worker",
-                        grouping_key={
-                            'run_id': assignment['id'],
-                            'suite': suite,
-                        },
-                        registry=REGISTRY)
 
 
 if __name__ == "__main__":
