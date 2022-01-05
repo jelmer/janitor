@@ -1053,57 +1053,60 @@ class WatchdogPetter(object):
                 if (datetime.utcnow() - self._last_communication).total_seconds() > 60:
                     if not await self.send_keepalive():
                         logging.warning('failed to send keepalive')
+        except asyncio.CancelledError:
+            pass
         except BaseException:
             logging.exception('sending keepalives')
             raise
-        except asyncio.CancelledError:
-            pass
 
     async def _connection(self):
-        ws_url = urljoin(
-            self.base_url, "ws/active-runs/%s/progress" % self.run_id)
-        params = {}
-        if self.queue_id is not None:
-            params['queue_id'] = self.queue_id
-        async with self.session:
-            while True:
-                try:
-                    self.ws = await self.session.ws_connect(ws_url, params=params)
-                except (ClientResponseError, ClientConnectorError) as e:
-                    self.ws = None
-                    logging.warning("progress ws: Unable to connect: %s" % e)
-                    await asyncio.sleep(5)
-                    continue
-
-                for (fn, data) in self._log_cached:
-                    await self.send_log_fragment(fn, data)
-                self._log_cached = []
-
+        try:
+            ws_url = urljoin(
+                self.base_url, "ws/active-runs/%s/progress" % self.run_id)
+            params = {}
+            if self.queue_id is not None:
+                params['queue_id'] = self.queue_id
+            async with self.session:
                 while True:
-                    msg = await self.ws.receive()
+                    try:
+                        self.ws = await self.session.ws_connect(ws_url, params=params)
+                    except (ClientResponseError, ClientConnectorError) as e:
+                        self.ws = None
+                        logging.warning("progress ws: Unable to connect: %s" % e)
+                        await asyncio.sleep(5)
+                        continue
 
-                    if msg.type == aiohttp.WSMsgType.text:
-                        logging.warning("Unknown websocket message: %r", msg.data)
-                    elif msg.type == aiohttp.WSMsgType.BINARY:
-                        if msg.data == b'kill':
-                            logging.info('Received kill over websocket, exiting..')
-                            if self.kill:
-                                self.kill()
-                        else:
+                    for (fn, data) in self._log_cached:
+                        await self.send_log_fragment(fn, data)
+                    self._log_cached = []
+
+                    while True:
+                        msg = await self.ws.receive()
+
+                        if msg.type == aiohttp.WSMsgType.text:
                             logging.warning("Unknown websocket message: %r", msg.data)
-                    elif msg.type == aiohttp.WSMsgType.closed:
-                        break
-                    elif msg.type == aiohttp.WSMsgType.error:
-                        logging.warning("Error on websocket: %s", self.ws.exception())
-                        break
-                    elif msg.type == aiohttp.WSMsgType.close:
-                        logging.info('Request to close websocket.')
-                        await self.ws.close()
-                        break
-                    else:
-                        logging.warning("Ignoring ws message type %r", msg.type)
-                self.ws = None
-                await asyncio.sleep(5)
+                        elif msg.type == aiohttp.WSMsgType.BINARY:
+                            if msg.data == b'kill':
+                                logging.info('Received kill over websocket, exiting..')
+                                if self.kill:
+                                    self.kill()
+                            else:
+                                logging.warning("Unknown websocket message: %r", msg.data)
+                        elif msg.type == aiohttp.WSMsgType.closed:
+                            break
+                        elif msg.type == aiohttp.WSMsgType.error:
+                            logging.warning("Error on websocket: %s", self.ws.exception())
+                            break
+                        elif msg.type == aiohttp.WSMsgType.close:
+                            logging.info('Request to close websocket.')
+                            await self.ws.close()
+                            break
+                        else:
+                            logging.warning("Ignoring ws message type %r", msg.type)
+                    self.ws = None
+                    await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            pass
 
     async def send_keepalive(self):
         if self.ws is not None:
