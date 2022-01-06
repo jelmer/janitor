@@ -162,7 +162,7 @@ async def main():
     import argparse
     import sys
     from janitor.package_overrides import read_package_overrides
-    from aiohtt_openmetrics import (
+    from aiohttp_openmetrics import (
         Gauge,
         push_to_gateway,
         REGISTRY,
