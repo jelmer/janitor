@@ -63,6 +63,8 @@ def create_background_task(fn, title):
             future.result()
         except BaseException:
             logging.exception('%s failed', title)
+        except asyncio.CancelledError:
+            logging.debug('%s cancelled', title)
         else:
             logging.debug('%s succeeded', title)
     task.add_done_callback(log_result)
