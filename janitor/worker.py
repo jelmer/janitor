@@ -1459,6 +1459,7 @@ async def process_single_item(
 
 
 async def main(argv=None):
+    import os
     parser = argparse.ArgumentParser(
         prog="janitor-worker",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -1467,13 +1468,14 @@ async def main(argv=None):
         "--base-url",
         type=str,
         help="Base URL",
-        default=None,
+        default=os.environ.get('JANITOR_BASE_URL'),
     )
     parser.add_argument(
         "--output-directory", type=str, help="Output directory", default="."
     )
     parser.add_argument(
-        "--credentials", help="Path to credentials file (JSON).", type=str, default=None
+        "--credentials", help="Path to credentials file (JSON).", type=str,
+        default=os.environ.get('JANITOR_CREDENTIALS')
     )
     parser.add_argument(
         "--vcs-location", help="Override VCS location.", type=str)
