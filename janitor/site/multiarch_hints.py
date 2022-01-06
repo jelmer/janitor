@@ -9,7 +9,7 @@ SUITE = "multiarch-fixes"
 
 
 async def generate_pkg_file(
-    db, config, policy, client, differ_url, vcs_store_url, package, span, run_id=None
+    db, config, policy, client, differ_url, vcs_manager, package, span, run_id=None
 ):
     return await generate_pkg_context(
         db,
@@ -18,7 +18,7 @@ async def generate_pkg_file(
         policy,
         client,
         differ_url,
-        vcs_store_url,
+        vcs_manager,
         package,
         span,
         run_id=run_id,
@@ -175,7 +175,7 @@ async def handle_multiarch_fixes_pkg(request):
         request.app.policy,
         request.app.http_client_session,
         request.app.differ_url,
-        request.app.vcs_store_url,
+        request.app['vcs_manager'],
         pkg,
         aiozipkin.request_span(request),
         run_id,

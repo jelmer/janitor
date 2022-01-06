@@ -24,7 +24,7 @@ from yarl import URL
 
 from janitor.config import Config
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
-from janitor.vcs import RemoteVcsManager
+from janitor.vcs import RemoteVcsManager, VcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
@@ -153,19 +153,11 @@ class BuildDiffUnavailable(Exception):
         self.unavailable_run_id = unavailable_run_id
 
 
-async def get_vcs_diff(client, vcs_store_url: str, vcs_type: str, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
+async def get_vcs_diff(client, vcs_manager: VcsManager, vcs_type: str, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
     if old_revid == new_revid:
         return b""
-    if vcs_type == 'bzr':
-        url = urllib.parse.urljoin(vcs_store_url, "bzr/%s/diff?old=%s&new=%s" % (
-            package, old_revid.decode('utf-8'),
-            new_revid.decode('utf-8')))
-    elif vcs_type == 'git':
-        url = urllib.parse.urljoin(vcs_store_url, "git/%s/diff?old=%s&new=%s" % (
-            package,
-            old_revid[len(b'git-v1:'):].decode('utf-8'),
-            new_revid[len('git-v1:'):].decode('utf-8')))
-    else:
+    url = vcs_manager.get_diff_url(package, old_revid, new_revid, vcs_type)
+    if url is None:
         raise NotImplementedError('vcs type %s' % vcs_type)
     async with client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
         return await resp.read()

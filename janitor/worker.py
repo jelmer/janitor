@@ -33,7 +33,6 @@ from tempfile import TemporaryDirectory
 from threading import Thread
 import traceback
 from typing import Any, Optional, List, Dict, Iterator, Tuple
-from urllib.parse import urljoin
 
 import aiohttp
 from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError, web, ContentTypeError
@@ -117,7 +116,7 @@ from ognibuild import (
 )
 from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
-    LocalVcsManager,
+    get_vcs_manager,
     RemoteVcsManager,
     MirrorFailure,
     import_branches,
@@ -158,11 +157,17 @@ def is_gce_instance():
 
 def gce_external_ip():
     from urllib.request import Request, urlopen
+    from urllib.error import HTTPError
     req = Request(
         'http://metadata.google.internal/computeMetadata/v1'
         '/instance/network-interfaces/0/access-configs/0/external-ip',
         headers={'Metadata-Flavor': 'Google'})
-    resp = urlopen(req)
+    try:
+        resp = urlopen(req)
+    except HTTPError as e:
+        if e.status == 404:
+            return None
+        raise
     return resp.read().decode()
 
 
@@ -724,7 +729,7 @@ def process_package(
 
 
 async def abort_run(
-        session: ClientSession, base_url: str, run_id: str,
+        session: ClientSession, base_url: yarl.URL, run_id: str,
         metadata: Any, description: str) -> None:
     metadata['code'] = 'aborted'
     metadata['description'] = description
@@ -737,12 +742,13 @@ async def abort_run(
         logging.warning('Result upload for abort failed: %s', e)
 
 
-def handle_sigterm(session, base_url, run_id, metadata):
-    logging.warning('Received signal, aborting and exiting...')
+def handle_sigterm(session, base_url: yarl.URL, workitem, signum):
+    logging.warning('Received signal %d, aborting and exiting...', signum)
 
     async def shutdown():
-        await abort_run(
-            session, base_url, run_id, metadata, "Killed by signal")
+        if workitem:
+            await abort_run(
+                session, base_url, workitem['assignment']['id'], workitem['metadata'], "Killed by signal")
         sys.exit(1)
     loop = asyncio.get_event_loop()
     loop.create_task(shutdown())
@@ -782,13 +788,13 @@ def bundle_results(metadata: Any, directory: Optional[str] = None):
 
 async def upload_results(
     session: ClientSession,
-    base_url: str,
+    base_url: yarl.URL,
     run_id: str,
     metadata: Any,
     output_directory: Optional[str] = None,
 ) -> Any:
     with bundle_results(metadata, output_directory) as mpwriter:
-        finish_url = urljoin(base_url, "active-runs/%s/finish" % run_id)
+        finish_url = base_url / "active-runs" / run_id / "finish"
         async with session.post(
             finish_url, data=mpwriter, timeout=DEFAULT_UPLOAD_TIMEOUT
         ) as resp:
@@ -976,11 +982,11 @@ class AssignmentFailure(Exception):
 
 async def get_assignment(
     session: ClientSession,
-    base_url: str,
+    base_url: yarl.URL,
     node_name: str,
     jenkins_metadata: Optional[Dict[str, str]] = None,
 ) -> Any:
-    assign_url = urljoin(base_url, "active-runs")
+    assign_url = base_url / "active-runs"
     build_arch = subprocess.check_output(
         ["dpkg-architecture", "-qDEB_BUILD_ARCH"]
     ).decode().strip()
@@ -990,10 +996,12 @@ async def get_assignment(
         json["worker_link"] = jenkins_metadata.get("build_url")
         json["health_check"] = None
     elif is_gce_instance():
-        json["worker_link"] = 'http://%s/' % gce_external_ip()
-        json["health_check"] = {
-            'kind': 'http',
-            'url': 'http://%s/health' % gce_external_ip()}
+        external_ip = gce_external_ip()
+        if external_ip:
+            json["worker_link"] = 'http://%s/' % external_ip
+            json["health_check"] = {
+                'kind': 'http',
+                'url': 'http://%s/health' % gce_external_ip()}
     else:
         json["health_check"] = None
     logging.debug("Sending assignment request: %r", json)
@@ -1061,8 +1069,7 @@ class WatchdogPetter(object):
 
     async def _connection(self):
         try:
-            ws_url = urljoin(
-                self.base_url, "ws/active-runs/%s/progress" % self.run_id)
+            ws_url = self.base_url / "ws/active-runs" / self.run_id / "progress"
             params = {}
             if self.queue_id is not None:
                 params['queue_id'] = self.queue_id
@@ -1179,14 +1186,14 @@ INDEX_TEMPLATE = Template("""\
 
 async def handle_index(request):
     return web.Response(text=INDEX_TEMPLATE.render(
-        assignment=request.app['workitem']['assignment'],
-        metadata=request.app['workitem']['metadata'],
+        assignment=request.app['workitem'].get('assignment'),
+        metadata=request.app['workitem'].get('metadata'),
         datetime=datetime),
         content_type='text/html', status=200)
 
 
 async def handle_assignment(request):
-    return web.json_response(request.app['workitem']['assignment'])
+    return web.json_response(request.app['workitem'].get('assignment'))
 
 
 LOG_INDEX_TEMPLATE = Template("""\
@@ -1229,14 +1236,17 @@ async def process_single_item(
         session, base_url, node_name,
         jenkins_metadata=jenkins_metadata,
     )
+    workitem['assignment'] = assignment
 
     logging.debug("Got back assignment: %r", assignment)
 
     watchdog_petter = WatchdogPetter(
         session, base_url, assignment['id'],
         queue_id=assignment['queue_id'])
-    watchdog_petter.start()
-    try:
+    with ExitStack() as es:
+        es.callback(workitem.clear)
+        watchdog_petter.start()
+        es.callback(watchdog_petter.cancel)
         suite = assignment["suite"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
@@ -1265,6 +1275,7 @@ async def process_single_item(
             "queue_id": assignment["queue_id"],
             "start_time": start_time.isoformat()
         }
+        workitem['metadata'] = metadata
         if jenkins_metadata:
             metadata["jenkins"] = jenkins_metadata
 
@@ -1282,104 +1293,93 @@ async def process_single_item(
         os.environ.update(env)
         os.environ.update(build_environment)
 
-        with TemporaryDirectory(prefix='janitor') as output_directory:
-            workitem['directory'] = output_directory
-            workitem['assignment'] = assignment
-            workitem['metadata'] = metadata
-            loop = asyncio.get_running_loop()
-            loop.add_signal_handler(
-                signal.SIGINT, handle_sigterm, session, base_url,
-                run_id, metadata)
-            loop.add_signal_handler(
-                signal.SIGTERM, handle_sigterm, session, base_url,
-                run_id, metadata)
+        output_directory = es.enter_context(TemporaryDirectory(prefix='janitor'))
+        workitem['directory'] = output_directory
+        loop = asyncio.get_running_loop()
+        watchdog_petter.track_log_directory(output_directory)
 
-            watchdog_petter.track_log_directory(output_directory)
-
-            main_task = loop.run_in_executor(
-                None,
-                partial(
-                    run_worker,
-                    branch_url,
-                    run_id,
-                    subpath,
-                    vcs_type,
-                    os.environ,
-                    command,
-                    output_directory,
-                    metadata,
-                    vcs_manager,
-                    vendor,
-                    suite,
-                    target=target,
-                    resume_branch_url=resume_branch_url,
-                    resume_branches=resume_branches,
-                    cached_branch_url=cached_branch_url,
-                    resume_subworker_result=resume_result,
-                    possible_transports=possible_transports,
-                    force_build=force_build
-                ),
-            )
-            watchdog_petter.kill = main_task.cancel
-            try:
-                result = await main_task
-            except WorkerFailure as e:
-                metadata.update(e.json())
-                logging.info("Worker failed (%s): %s", e.code, e.description)
-                # This is a failure for the worker, but returning 0 will cause
-                # jenkins to mark the job having failed, which is not really
-                # true.  We're happy if we get to successfully POST to /finish
-                return
-            except OSError as e:
-                if e.errno == errno.ENOSPC:
-                    metadata["code"] = "no-space-on-device"
-                    metadata["description"] = str(e)
-                else:
-                    metadata["code"] = "worker-exception"
-                    metadata["description"] = str(e)
-                    raise
-            except BaseException as e:
-                metadata["code"] = "worker-failure"
-                metadata["description"] = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
-                raise
+        main_task = loop.run_in_executor(
+            None,
+            partial(
+                run_worker,
+                branch_url,
+                run_id,
+                subpath,
+                vcs_type,
+                os.environ,
+                command,
+                output_directory,
+                metadata,
+                vcs_manager,
+                vendor,
+                suite,
+                target=target,
+                resume_branch_url=resume_branch_url,
+                resume_branches=resume_branches,
+                cached_branch_url=cached_branch_url,
+                resume_subworker_result=resume_result,
+                possible_transports=possible_transports,
+                force_build=force_build
+            ),
+        )
+        watchdog_petter.kill = main_task.cancel
+        try:
+            result = await main_task
+        except WorkerFailure as e:
+            metadata.update(e.json())
+            logging.info("Worker failed (%s): %s", e.code, e.description)
+            # This is a failure for the worker, but returning 0 will cause
+            # jenkins to mark the job having failed, which is not really
+            # true.  We're happy if we get to successfully POST to /finish
+            return
+        except OSError as e:
+            if e.errno == errno.ENOSPC:
+                metadata["code"] = "no-space-on-device"
+                metadata["description"] = str(e)
             else:
-                metadata["code"] = None
-                metadata.update(result.json())
-                logging.info("%s", result.description)
-                return
-            finally:
-                finish_time = datetime.utcnow()
-                metadata["finish_time"] = finish_time.isoformat()
-                logging.info("Elapsed time: %s", finish_time - start_time)
+                metadata["code"] = "worker-exception"
+                metadata["description"] = str(e)
+            return
+        except BaseException as e:
+            metadata["code"] = "worker-failure"
+            metadata["description"] = ''.join(traceback.format_exception_only(type(e), e)).rstrip('\n')
+            return
+        else:
+            metadata["code"] = None
+            metadata.update(result.json())
+            logging.info("%s", result.description)
+            return
+        finally:
+            finish_time = datetime.utcnow()
+            metadata["finish_time"] = finish_time.isoformat()
+            logging.info("Elapsed time: %s", finish_time - start_time)
 
-                result = await upload_results(
-                    session,
-                    base_url,
-                    assignment["id"],
-                    metadata,
-                    output_directory,
-                )
+            result = await upload_results(
+                session,
+                base_url,
+                assignment["id"],
+                metadata,
+                output_directory,
+            )
 
-                logging.info('Results uploaded')
+            logging.info('Results uploaded')
 
-                logging.debug("Result: %r", result)
+            logging.debug("Result: %r", result)
 
-                if prometheus:
-                    await push_to_gateway(
-                        prometheus, job="janitor.worker",
-                        grouping_key={
-                            'run_id': assignment['id'],
-                            'suite': suite,
-                        },
-                        registry=REGISTRY)
-                workitem.clear()
-    finally:
-        watchdog_petter.cancel()
+            if prometheus:
+                await push_to_gateway(
+                    prometheus, job="janitor.worker",
+                    grouping_key={
+                        'run_id': assignment['id'],
+                        'suite': suite,
+                    },
+                    registry=REGISTRY)
+            workitem.clear()
 
 
 async def main(argv=None):
     parser = argparse.ArgumentParser(
-        prog="janitor-pull-worker",
+        prog="janitor-worker",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -1512,15 +1512,23 @@ async def main(argv=None):
         node_name = socket.gethostname()
 
     if args.vcs_location:
-        vcs_manager = LocalVcsManager(args.vcs_location)
+        vcs_manager = get_vcs_manager(args.vcs_location)
     else:
         vcs_manager = None
 
+    loop = asyncio.get_event_loop()
     async with ClientSession(auth=auth) as session:
+        loop.add_signal_handler(
+            signal.SIGINT, handle_sigterm, session, base_url,
+            app['workitem'], signal.SIGINT)
+        loop.add_signal_handler(
+            signal.SIGTERM, handle_sigterm, session, base_url,
+            app['workitem'], signal.SIGTERM)
+
         while True:
             try:
                 await process_single_item(
-                    session, base_url=args.base_url,
+                    session, base_url=base_url,
                     node_name=node_name,
                     workitem=app['workitem'],
                     jenkins_metadata=jenkins_metadata,

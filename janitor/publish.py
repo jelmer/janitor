@@ -74,6 +74,7 @@ import breezy.plugins.github  # noqa: F401
 from . import (
     state,
 )
+from .compat import to_thread
 from .config import read_config, get_suite_config
 from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .schedule import (
@@ -1414,20 +1415,24 @@ async def handle_health(request):
     return web.Response(text="OK")
 
 
+async def get_mp_status(mp):
+    if await to_thread(mp.is_merged):
+        return "merged"
+    elif await to_thread(mp.is_closed):
+        return "closed"
+    else:
+        return "open"
+
+
 @routes.post("/check-proposal", name='check-proposal')
 async def check_mp_request(request):
     post = await request.post()
     url = post["url"]
     try:
-        mp = get_proposal_by_url(url)
+        mp = await to_thread(get_proposal_by_url, url)
     except UnsupportedHoster:
         raise web.HTTPNotFound()
-    if mp.is_merged():
-        status = "merged"
-    elif mp.is_closed():
-        status = "closed"
-    else:
-        status = "open"
+    status = await get_mp_status(mp)
     async with request.app['db'].acquire() as conn:
         try:
             modified = await check_existing_mp(
@@ -1486,14 +1491,9 @@ async def refresh_proposal_status_request(request):
     logger.info("Request to refresh proposal status for %s", url)
 
     async def scan():
-        mp = get_proposal_by_url(url)
+        mp = await to_thread(get_proposal_by_url, url)
         async with request.app['db'].acquire() as conn:
-            if mp.is_merged():
-                status = "merged"
-            elif mp.is_closed():
-                status = "closed"
-            else:
-                status = "open"
+            status = await get_mp_status(mp)
             try:
                 await check_existing_mp(
                     conn,
@@ -1597,9 +1597,9 @@ async def process_queue_loop(
             await asyncio.sleep(to_wait)
 
 
-def is_conflicted(mp):
+async def is_conflicted(mp):
     try:
-        return not mp.can_be_merged()
+        return not await to_thread(mp.can_be_merged)
     except NotImplementedError:
         # TODO(jelmer): Download and attempt to merge locally?
         return None
@@ -1774,8 +1774,8 @@ async def check_existing_mp(
         old_status = None
         maintainer_email = None
         package_name = None
-    revision = mp.get_source_revision()
-    source_branch_url = mp.get_source_branch_url()
+    revision = await to_thread(mp.get_source_revision)
+    source_branch_url = await to_thread(mp.get_source_branch_url)
     if revision is None:
         if source_branch_url is None:
             logger.warning("No source branch for %r", mp)
@@ -1783,14 +1783,14 @@ async def check_existing_mp(
             source_branch_name = None
         else:
             try:
-                source_branch = open_branch(
-                    source_branch_url, possible_transports=possible_transports
-                )
+                source_branch = await to_thread(
+                    open_branch,
+                    source_branch_url, possible_transports=possible_transports)
             except (BranchMissing, BranchUnavailable):
                 revision = None
                 source_branch_name = None
             else:
-                revision = source_branch.last_revision()
+                revision = await to_thread(source_branch.last_revision)
                 source_branch_name = source_branch.name
     else:
         source_branch_name = None
@@ -1802,7 +1802,7 @@ async def check_existing_mp(
     if revision is None:
         revision = old_revision
     if maintainer_email is None:
-        target_branch_url = mp.get_target_branch_url()
+        target_branch_url = await to_thread(mp.get_target_branch_url)
         row = await guess_package_from_branch_url(conn, target_branch_url)
         if row is not None:
             maintainer_email = row['maintainer_email']
@@ -1842,14 +1842,15 @@ async def check_existing_mp(
     mp_remote_branch_name = mp_run['remote_branch_name']
 
     if mp_remote_branch_name is None:
-        target_branch_url = mp.get_target_branch_url()
+        target_branch_url = await to_thread(mp.get_target_branch_url)
         if target_branch_url is None:
             logger.warning("No target branch for %r", mp)
         else:
             try:
-                mp_remote_branch_name = open_branch(
-                    target_branch_url, possible_transports=possible_transports
-                ).name
+                mp_remote_branch_name = (await to_thread(
+                        open_branch,
+                        target_branch_url, possible_transports=possible_transports)
+                    ).name
             except (BranchMissing, BranchUnavailable):
                 pass
 
@@ -1871,7 +1872,8 @@ async def check_existing_mp(
         )
         if not dry_run:
             try:
-                mp.post_comment(
+                await to_thread(
+                    mp.post_comment,
                     """
 This merge proposal will be closed, since the package has been removed from the
 archive.
@@ -1882,7 +1884,7 @@ archive.
                     "Permission denied posting comment to %s: %s", mp.url, e
                 )
             try:
-                mp.close()
+                await to_thread(mp.close)
             except PermissionDenied as e:
                 logger.warning(
                     "Permission denied closing merge request %s: %s", mp.url, e
@@ -1899,7 +1901,8 @@ archive.
         if not dry_run:
             await update_proposal_status(mp, "applied", revision, package_name)
             try:
-                mp.post_comment(
+                await to_thread(
+                    mp.post_comment,
                     """
 This merge proposal will be closed, since all remaining changes have been
 applied independently.
@@ -1910,7 +1913,7 @@ applied independently.
                     "Permission denied posting comment to %s: %s", mp.url, e
                 )
             try:
-                mp.close()
+                await to_thread(mp.close)
             except PermissionDenied as e:
                 logger.warning(
                     "Permission denied closing merge request %s: %s", mp.url, e
@@ -2002,7 +2005,7 @@ applied independently.
             )
             await update_proposal_status(mp, "abandoned", revision, package_name)
             try:
-                mp.post_comment("""
+                await to_thread(mp.post_comment, """
 This merge proposal will be closed, since the branch for the role '%s'
 has changed from %s to %s.
 """ % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name))
@@ -2011,7 +2014,7 @@ has changed from %s to %s.
                     "Permission denied posting comment to %s: %s", mp.url, e
                 )
             try:
-                mp.close()
+                await to_thread(mp.close)
             except PermissionDenied as e:
                 logger.warning(
                     "Permission denied closing merge request %s: %s", mp.url, e
@@ -2019,7 +2022,7 @@ has changed from %s to %s.
                 return False
         return False
 
-    if not branches_match(mp_run['branch_url'], last_run.branch_url):
+    if not await to_thread(branches_match, mp_run['branch_url'], last_run.branch_url):
         logger.warning(
             "%s: Remote branch URL appears to have have changed: "
             "%s => %s, skipping.",
@@ -2035,7 +2038,8 @@ has changed from %s to %s.
         if not dry_run:
             await update_proposal_status(mp, "abandoned", revision, package_name)
             try:
-                mp.post_comment(
+                await to_thread(
+                    mp.post_comment,
                     """
 This merge proposal will be closed, since the branch has moved to %s.
 """
@@ -2046,7 +2050,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                     "Permission denied posting comment to %s: %s", mp.url, e
                 )
             try:
-                mp.close()
+                await to_thread(mp.close)
             except PermissionDenied as e:
                 logger.warning(
                     "Permission denied closing merge request %s: %s", mp.url, e
@@ -2127,7 +2131,8 @@ This merge proposal will be closed, since the branch has moved to %s.
                 if not dry_run:
                     await update_proposal_status(mp, "applied", revision, package_name)
                     try:
-                        mp.post_comment(
+                        await to_thread(
+                            mp.post_comment,
                             """
 This merge proposal will be closed, since all remaining changes have been
 applied independently.
@@ -2138,7 +2143,7 @@ applied independently.
                             "Permission denied posting comment to %s: %s", mp.url, f
                         )
                     try:
-                        mp.close()
+                        await to_thread(mp.close)
                     except PermissionDenied as f:
                         logger.warning(
                             "Permission denied closing merge request %s: %s", mp.url, f
@@ -2199,7 +2204,7 @@ applied independently.
         # It may take a while for the 'conflicted' bit on the proposal to
         # be refreshed, so only check it if we haven't made any other
         # changes.
-        if is_conflicted(mp):
+        if await is_conflicted(mp):
             logger.info("%s is conflicted. Rescheduling.", mp.url)
             if not dry_run:
                 await do_schedule(

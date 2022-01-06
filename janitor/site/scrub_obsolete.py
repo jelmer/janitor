@@ -18,7 +18,7 @@ async def handle_scrub_obsolete_pkg(request):
         request.app.policy,
         request.app.http_client_session,
         request.app.differ_url,
-        request.app.vcs_store_url,
+        request.app['vcs_manager'],
         pkg,
         aiozipkin.request_span(request),
         run_id,

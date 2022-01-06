@@ -109,7 +109,7 @@ async def get_publish_history(
 
 
 async def generate_run_file(
-    db, client, config, differ_url, logfile_manager, run, vcs_store_url, is_admin, span
+    db, client, config, differ_url, logfile_manager, run, vcs_manager, is_admin, span
 ):
     kwargs = {}
     kwargs["run"] = run
@@ -160,7 +160,7 @@ async def generate_run_file(
             return ""
         try:
             diff = await get_vcs_diff(
-                client, vcs_store_url, run['vcs_type'], run['package'],
+                client, vcs_manager, run['vcs_type'], run['package'],
                 base_revid.encode('utf-8'), revid.encode('utf-8'))
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
@@ -310,7 +310,9 @@ async def generate_ready_list(
         query = 'SELECT package, id, command, result FROM publish_ready'
 
         conditions = [
-            "mode in ('propose', 'attempt-push', 'push-derived', 'push')"]
+            "EXISTS (SELECT * FROM unnest(unpublished_branches) "
+            "WHERE mode in "
+            "('propose', 'attempt-push', 'push-derived', 'push'))"]
         args = []
         if suite:
             args.append(suite)

@@ -71,6 +71,7 @@ from .artifacts import (
     store_artifacts_with_backup,
     upload_backup_artifacts,
 )
+from .compat import to_thread
 from .config import read_config, get_suite_config
 from .debian import (
     changes_filenames,
@@ -98,19 +99,6 @@ from .vcs import (
 )
 
 DEFAULT_RETRY_AFTER = 120
-
-
-try:
-    from asyncio import to_thread  # type: ignore
-except ImportError:  # python < 3.8
-    from asyncio import events
-    import contextvars
-
-    async def to_thread(func, *args, **kwargs):  # type: ignore
-        loop = events.get_running_loop()
-        ctx = contextvars.copy_context()
-        func_call = functools.partial(ctx.run, func, *args, **kwargs)
-        return await loop.run_in_executor(None, func_call)
 
 
 routes = web.RouteTableDef()
@@ -1689,7 +1677,7 @@ async def main(argv=None):
         "--public-vcs-location", type=str, default="https://janitor.debian.net/",
         help="Public vcs location (used for URLs handed to worker)"
     )
-    parser.add_argument( "--vcs-store-url", type=str, help="URL to vcs store")
+    parser.add_argument("--vcs-store-url", type=str, help="URL to vcs store")
     parser.add_argument(
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
