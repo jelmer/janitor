@@ -116,8 +116,6 @@ from ognibuild import (
 )
 from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
-    get_vcs_manager,
-    RemoteVcsManager,
     MirrorFailure,
     BranchOpenFailure,
     open_branch_ext,
@@ -527,12 +525,12 @@ def _drop_env(command):
 
 
 def import_branches_git(
-        vcs_manager: "VcsManager", local_branch: Branch, package: str,
+        vcs_store_url, local_branch: Branch, package: str,
         suite: str, log_id: str,
         branches: List[Tuple[str, str, Optional[bytes], bytes]],
         tags: Dict[str, bytes]):
     from breezy.repository import InterRepository
-    repo_url = vcs_manager.get_repository_url(package, "git")
+    repo_url = urlutils.join(vcs_store_url, package)
 
     from dulwich.objects import ZERO_SHA
 
@@ -563,12 +561,12 @@ def import_branches_git(
 
 
 def import_branches_bzr(
-    vcs_manager, local_branch, package, suite, log_id, branches, tags
+    vcs_store_url, local_branch, package, suite, log_id, branches, tags
 ):
     from breezy.errors import NoSuchFile, NoSuchRevision
     from breezy.transport import get_transport
     for fn, n, br, r in branches:
-        target_branch_path = vcs_manager.get_branch_url(package, suite, "bzr")
+        target_branch_path = urlutils.join(vcs_store_url, package, suite)
         if fn is not None:
             target_branch_path = urlutils.join_segment_parameters(
                 target_branch_path,
@@ -963,7 +961,7 @@ def run_worker(
     command,
     output_directory,
     metadata,
-    vcs_manager,
+    vcs_store_urls,
     vendor,
     suite,
     target,
@@ -998,7 +996,7 @@ def run_worker(
                 force_build=force_build
             ) as (ws, result):
                 enable_tag_pushing(ws.local_tree.branch)
-                logging.info("Pushing result branch to %r", vcs_manager)
+                logging.info("Pushing result branch to %r", vcs_store_urls)
 
                 try:
                     # TODO(jelmer): Force runner to always specify vcs_type
@@ -1010,12 +1008,12 @@ def run_worker(
                             vcs_type = "bzr"
                     if vcs_type.lower() == "git":
                         import_branches_git(
-                            vcs_manager, ws.local_tree.branch, env['PACKAGE'],
+                            vcs_store_urls["git"], ws.local_tree.branch, env['PACKAGE'],
                             suite, run_id, result.branches, result.tags
                         )
                     elif vcs_type.lower() == "bzr":
                         import_branches_bzr(
-                            vcs_manager, ws.local_tree.branch, env['PACKAGE'],
+                            vcs_store_urls["bzr"], ws.local_tree.branch, env['PACKAGE'],
                             suite, run_id, result.branches, result.tags
                         )
                     else:
@@ -1312,7 +1310,7 @@ async def handle_health(request):
 
 async def process_single_item(
         session, base_url, node_name, workitem,
-        jenkins_metadata=None, prometheus=None, vcs_manager=None):
+        jenkins_metadata=None, prometheus=None, vcs_store_urls=None):
     assignment = await get_assignment(
         session, base_url, node_name,
         jenkins_metadata=jenkins_metadata,
@@ -1360,8 +1358,8 @@ async def process_single_item(
         if jenkins_metadata:
             metadata["jenkins"] = jenkins_metadata
 
-        if vcs_manager is None:
-            vcs_manager = RemoteVcsManager.from_urls(assignment["vcs_store"])
+        if vcs_store_urls is None:
+            vcs_store_urls = assignment["vcs_store"]
 
         run_id = assignment["id"]
 
@@ -1391,7 +1389,7 @@ async def process_single_item(
                 command,
                 output_directory,
                 metadata,
-                vcs_manager,
+                vcs_store_urls,
                 vendor,
                 suite,
                 target=target,
@@ -1595,9 +1593,10 @@ async def main(argv=None):
         node_name = socket.gethostname()
 
     if args.vcs_location:
-        vcs_manager = get_vcs_manager(args.vcs_location)
+        vcs_store_urls = dict(
+            x.split('=', 1) for x in args.vcs_location.split(','))
     else:
-        vcs_manager = None
+        vcs_store_urls = None
 
     loop = asyncio.get_event_loop()
     async with ClientSession(auth=auth) as session:
@@ -1616,7 +1615,7 @@ async def main(argv=None):
                     workitem=app['workitem'],
                     jenkins_metadata=jenkins_metadata,
                     prometheus=args.prometheus,
-                    vcs_manager=vcs_manager)
+                    vcs_store_urls=vcs_store_urls)
             except AssignmentFailure as e:
                 logging.fatal("failed to get assignment: %s", e.reason)
                 return 1
