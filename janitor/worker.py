@@ -780,11 +780,11 @@ def process_package(
             build_target_details = None
 
         wr = WorkerResult(
-            changer_result.description,
-            changer_result.value,
-            result_branches,
-            dict(changer_result.tags) if changer_result.tags else {},
-            build_target.name, build_target_details,
+            description=changer_result.description,
+            value=changer_result.value,
+            branches=result_branches,
+            tags=(dict(changer_result.tags) if changer_result.tags else {}),
+            target=build_target.name, target_details=build_target_details,
             subworker=changer_result.context,
             target_branch_url=changer_result.target_branch_url,
             refreshed=ws.refreshed
