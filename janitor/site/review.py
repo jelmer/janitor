@@ -86,7 +86,7 @@ async def generate_rejected(conn, config, suite=None):
 
 
 async def generate_review(
-    conn, request, client, differ_url, vcs_store_url, suites=None,
+    conn, request, client, differ_url, vcs_manager, suites=None,
     publishable_only=True
 ):
     if 'required_only' in request.query:
@@ -133,7 +133,7 @@ async def generate_review(
         external_url = "/api/run/%s/diff?role=%s" % (run_id, role)
         try:
             diff = (await get_vcs_diff(
-                client, vcs_store_url, vcs_type, package, base_revid.encode('utf-8') if base_revid else None,
+                client, vcs_manager, vcs_type, package, base_revid.encode('utf-8') if base_revid else None,
                 revid.encode('utf-8'))).decode("utf-8", "replace")
             if len(diff) > MAX_DIFF_SIZE:
                 return "Diff too large (%d). See it at %s" % (

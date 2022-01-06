@@ -487,6 +487,19 @@ class RemoteVcsManager(VcsManager):
             type(self).__name__, self.base_urls.get('git'),
             self.base_urls.get('bzr'))
 
+    def get_diff_url(self, codebase, old_revid, new_revid, vcs_type=None):
+        if vcs_type == 'bzr':
+            return urllib.parse.urljoin(self.base_urls['bzr'], "%s/diff?old=%s&new=%s" % (
+                codebase, old_revid.decode('utf-8'),
+                new_revid.decode('utf-8')))
+        elif vcs_type == 'git':
+            return urllib.parse.urljoin(self.base_urls['git'], "%s/diff?old=%s&new=%s" % (
+                codebase,
+                old_revid[len(b'git-v1:'):].decode('utf-8'),
+                new_revid[len('git-v1:'):].decode('utf-8')))
+        else:
+            return None
+
     def get_branch(self, codebase, branch_name, vcs_type=None):
         if vcs_type:
             if vcs_type in self.base_urls:
@@ -541,10 +554,17 @@ def get_run_diff(vcs_manager: VcsManager, run, role) -> bytes:
 
 
 def get_vcs_manager(url: str) -> VcsManager:
-    parsed = urlutils.URL.from_string(url)
-    if parsed.scheme in ("", "file"):
-        return LocalVcsManager(parsed.path)
-    return RemoteVcsManager.from_single_url(url)
+    if "=" in url:
+        urls = {}
+        for element in url.split(','):
+            (vcs, url) = element.split('=', 1)
+            urls[vcs] = url
+        return RemoteVcsManager.from_urls(urls)
+    else:
+        parsed = urlutils.URL.from_string(url)
+        if parsed.scheme in ("", "file"):
+            return LocalVcsManager(parsed.path)
+        return RemoteVcsManager.from_single_url(url)
 
 
 def bzr_to_browse_url(url: str) -> str:

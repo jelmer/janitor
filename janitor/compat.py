@@ -17,6 +17,7 @@
 
 """Backwards compatibility."""
 
+import functools
 import shlex
 
 # Backwards compatibility for python < 3.8
@@ -25,3 +26,17 @@ try:
 except AttributeError:
     def shlex_join(args):
         return ' '.join(shlex.quote(arg) for arg in args)
+
+
+try:
+    from asyncio import to_thread  # type: ignore
+except ImportError:  # python < 3.8
+    from asyncio import events
+    import contextvars
+
+    async def to_thread(func, *args, **kwargs):  # type: ignore
+        loop = events.get_running_loop()
+        ctx = contextvars.copy_context()
+        func_call = functools.partial(ctx.run, func, *args, **kwargs)
+        return await loop.run_in_executor(None, func_call)
+

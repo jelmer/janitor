@@ -131,7 +131,9 @@ def apply_policy(
             qa_review = s.qa_review
         if s.HasField("broken_notify"):
             broken_notify = s.broken_notify
-    command = ' '.join('%s=%s' % e for e in sorted(env.items()))
+    command = ' '.join(
+        ['%s=%s' % e for e in sorted(env.items())] +
+        [command])
     return (
         {k: (PUBLISH_MODE_STR[v[0]], v[1]) for (k, v) in publish_mode.items()},
         command,

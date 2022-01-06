@@ -29,14 +29,15 @@ from aiohttp.web_urldispatcher import (
     URL,
 )
 from aiohttp import web, ClientSession, ClientConnectorError
+from aiohttp_openmetrics import setup_metrics
 from aiohttp.web import middleware
 from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
 
 from ..config import get_suite_config
 from ..logs import get_log_manager
-from ..prometheus import setup_metrics
 from ..pubsub import pubsub_reader, pubsub_handler, Topic
+from ..vcs import get_vcs_manager
 
 from . import (
     html_template,
@@ -535,7 +536,7 @@ async def handle_run(request):
         request.app.differ_url,
         request.app.logfile_manager,
         run,
-        request.app.vcs_store_url,
+        request.app['vcs_manager'],
         is_admin=is_admin(request),
         span=span,
     )
@@ -605,7 +606,7 @@ async def handle_generic_pkg(request):
         request.app.policy,
         request.app.http_client_session,
         request.app.differ_url,
-        request.app.vcs_store_url,
+        request.app['vcs_manager'],
         pkg,
         aiozipkin.request_span(request),
         run_id,
@@ -651,7 +652,7 @@ async def handle_review_post(request):
             request,
             request.app.http_client_session,
             request.app.differ_url,
-            request.app.vcs_store_url,
+            request.app['vcs_manager'],
             suites=post.getall("suite", None),
             publishable_only=publishable_only,
         )
@@ -673,7 +674,7 @@ async def handle_review(request):
             request,
             request.app.http_client_session,
             request.app.differ_url,
-            request.app.vcs_store_url,
+            request.app['vcs_manager'],
             suites=suites,
             publishable_only=publishable_only,
         )
@@ -685,8 +686,7 @@ async def handle_review(request):
 @html_template("repo-list.html")
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
-    vcs_store_url = request.app.vcs_store_url
-    url = URL(vcs_store_url) / vcs
+    url = request.app['vcs_manager'].base_urls[vcs]
     async with request.app.http_client_session.get(url) as resp:
         return {"vcs": vcs, "repositories": await resp.json()}
 
@@ -767,7 +767,7 @@ async def create_app(
         config, policy_config, minified=False,
         external_url=None, debugtoolbar=None,
         runner_url=None, publisher_url=None,
-        archiver_url=None, vcs_store_url=None,
+        archiver_url=None, vcs_manager=None,
         differ_url=None,
         listen_address=None, port=None):
     if minified:
@@ -1047,7 +1047,7 @@ async def create_app(
     app.differ_url = differ_url
     app.policy = policy_config
     app.publisher_url = publisher_url
-    app.vcs_store_url = vcs_store_url
+    app['vcs_manager'] = vcs_manager
     app['openid_config'] = None
     if config.oauth2_provider and config.oauth2_provider.base_url:
         app.on_startup.append(discover_openid_config)
@@ -1087,7 +1087,7 @@ async def create_app(
             app.database,
             publisher_url,
             runner_url,  # type: ignore
-            vcs_store_url,
+            vcs_manager,
             differ_url,
             config,
             policy_config,
@@ -1194,7 +1194,7 @@ if __name__ == "__main__":
         runner_url=args.runner_url,
         archiver_url=args.archiver_url,
         publisher_url=args.publisher_url,
-        vcs_store_url=args.vcs_store_url,
+        vcs_manager=get_vcs_manager(args.vcs_store_url),
         differ_url=args.differ_url,
         listen_address=args.host,
         port=args.port)

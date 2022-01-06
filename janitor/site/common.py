@@ -180,7 +180,7 @@ ORDER BY finish_time DESC
 
 
 async def generate_pkg_context(
-    db, config, suite, policy, client, differ_url, vcs_store_url, package, span, run_id=None
+    db, config, suite, policy, client, differ_url, vcs_manager, package, span, run_id=None
 ):
     async with db.acquire() as conn:
         with span.new_child('sql:package'):
@@ -247,7 +247,7 @@ WHERE run.package = $1 AND run.suite = $2
             return ""
         try:
             diff = await get_vcs_diff(
-                client, vcs_store_url, run['vcs_type'], run['package'],
+                client, vcs_manager, run['vcs_type'], run['package'],
                 base_revid.encode('utf-8'), revid.encode('utf-8'))
             return diff.decode("utf-8", "replace")
         except ClientResponseError as e:

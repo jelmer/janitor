@@ -69,6 +69,7 @@ from ..schedule import (
     do_schedule_control,
     PolicyUnavailable,
 )
+from ..vcs import VcsManager
 
 routes = web.RouteTableDef()
 
@@ -475,7 +476,8 @@ async def handle_diff(request):
             package = request.match_info["package"]
             suite = request.match_info["suite"]
             run = await conn.fetchrow(
-                'SELECT id, package, vcs_type, base_revision, revision FROM last_unabsorbed_runs '
+                'SELECT id, package, vcs_type, last_unabsorbed_runs.base_revision, '
+                'last_unabsorbed_runs.revision FROM last_unabsorbed_runs '
                 'LEFT JOIN new_result_branch ON '
                 'new_result_branch.run_id = last_unabsorbed_runs.id '
                 'WHERE package = $1 AND suite = $2 AND role = $3',
@@ -503,7 +505,7 @@ async def handle_diff(request):
     try:
         try:
             diff = await get_vcs_diff(
-                request.app['http_client_session'], request.app['vcs_store_url'],
+                request.app['http_client_session'], request.app['vcs_manager'],
                 run['vcs_type'], run['package'], run['base_revision'].encode('utf-8'),
                 run['revision'].encode('utf-8'))
         except ClientResponseError as e:
@@ -1522,7 +1524,7 @@ def create_app(
     db,
     publisher_url: str,
     runner_url: str,
-    vcs_store_url: str,
+    vcs_manager: VcsManager,
     differ_url: str,
     config: Config,
     policy_config: PolicyConfig,
@@ -1540,7 +1542,7 @@ def create_app(
     app['external_url'] = external_url
     app['policy_config'] = policy_config
     app['publisher_url'] = publisher_url
-    app['vcs_store_url'] = vcs_store_url
+    app['vcs_manager'] = vcs_manager
     app['runner_url'] = runner_url
     app['differ_url'] = differ_url
 
