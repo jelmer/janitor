@@ -1593,8 +1593,10 @@ async def main(argv=None):
         node_name = socket.gethostname()
 
     if args.vcs_location:
-        vcs_store_urls = dict(
-            x.split('=', 1) for x in args.vcs_location.split(','))
+        vcs_store_urls = {}
+        for entry in args.vcs_location.split(','):
+            (vcs_type, url) = entry.split('=', 1)
+            vcs_store_urls[vcs_type] = url
     else:
         vcs_store_urls = None
 
