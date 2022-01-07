@@ -1549,6 +1549,8 @@ async def handle_finish(request):
         if worker_result is None:
             return web.json_response({"reason": "Missing result JSON"}, status=400)
 
+        logging.debug('worker result: %r', worker_result)
+
         if queue_item is None:
             async with queue_processor.database.acquire() as conn:
                 queue_item = await get_queue_item(conn, worker_result.queue_id)
@@ -1682,6 +1684,7 @@ async def main(argv=None):
         "--policy", type=str, default="policy.conf", help="Path to policy."
     )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
+    parser.add_argument("--debug", action="store_true", help="Print debugging info")
     args = parser.parse_args()
 
     if args.gcp_logging:
@@ -1690,7 +1693,10 @@ async def main(argv=None):
         client.get_default_handler()
         client.setup_logging()
     else:
-        logging.basicConfig(level=logging.INFO)
+        if args.debug:
+            logging.basicConfig(level=logging.DEBUG)
+        else:
+            logging.basicConfig(level=logging.INFO)
 
     debug.set_debug_flags_from_config()
 
