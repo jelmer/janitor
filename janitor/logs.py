@@ -41,6 +41,9 @@ class LogFileManager(object):
     async def import_log(self, pkg, run_id, orig_path, timeout=None):
         raise NotImplementedError(self.import_log)
 
+    async def iter_ids(self):
+        raise NotImplementedError(self.iter_ids)
+
 
 class FileSystemLogFileManager(LogFileManager):
     def __init__(self, log_directory):
@@ -53,6 +56,11 @@ class FileSystemLogFileManager(LogFileManager):
             os.path.join(self.log_directory, pkg, run_id, name),
             os.path.join(self.log_directory, pkg, run_id, name) + ".gz",
         ]
+
+    async def iter_ids(self):
+        for pkg in os.scandir(self.log_directory):
+            for entry in os.scandir(pkg.path):
+                yield entry.name
 
     async def has_log(self, pkg, run_id, name):
         return any(map(os.path.exists, self._get_paths(pkg, run_id, name)))
@@ -149,6 +157,14 @@ class GCSLogFilemanager(LogFileManager):
         self.session = ClientSession(trace_configs=trace_configs)
         self.storage = Storage(service_file=creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
+
+    async def iter_ids(self):
+        ids = set()
+        for name in await self.bucket.list_blobs():
+            log_id = name.split("/")[0]
+            if log_id not in ids:
+                yield log_id
+            ids.add(log_id)
 
     def _get_object_name(self, pkg, run_id, name):
         return "%s/%s/%s.gz" % (pkg, run_id, name)
