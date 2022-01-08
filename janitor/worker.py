@@ -1265,6 +1265,38 @@ async def handle_assignment(request):
     return web.json_response(request.app['workitem'].get('assignment'))
 
 
+ARTIFACT_INDEX_TEMPLATE = Template("""\
+<html>
+<head><title>Artifact Index</title><head>
+<body>
+<h1>Artifacts</h1>
+<ul>
+{% for name in names %}
+  <li><a href="/artifacts/{{ name }}">{{ name }}</a></li>
+{% endfor %}
+</ul>
+</body>
+</html>
+""")
+
+
+async def handle_artifact_index(request):
+    if 'directory' not in request.app['workitem']:
+        raise web.HTTPNotFound(text="Output directory not created yet")
+    names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
+             if not entry.name.endswith('.log') and entry.is_file()]
+    return web.Response(
+        text=ARTIFACT_INDEX_TEMPLATE.render(names=names), content_type='text/html',
+        status=200)
+
+
+async def handle_artifact(request):
+    if 'directory' not in request.app['workitem']:
+        raise web.HTTPNotFound(text="Artifact directory not created yet")
+    p = os.path.join(request.app['workitem']['directory'], request.match_info['filename'])
+    return web.FileResponse(p)
+
+
 LOG_INDEX_TEMPLATE = Template("""\
 <html>
 <head><title>Log Index</title><head>
@@ -1291,7 +1323,10 @@ async def handle_log_index(request):
 
 
 async def handle_log(request):
-    return web.FileResponse(os.path.join(request.app['workitem']['directory'], request.match_info['filename']))
+    if 'directory' not in request.app['workitem']:
+        raise web.HTTPNotFound(text="Log directory not created yet")
+    p = os.path.join(request.app['workitem']['directory'], request.match_info['filename'])
+    return web.FileResponse(p)
 
 
 async def handle_health(request):
@@ -1517,6 +1552,8 @@ async def main(argv=None):
     app.router.add_get('/assignment', handle_assignment, name='assignment')
     app.router.add_get('/logs/', handle_log_index, name='log-index')
     app.router.add_get('/logs/{filename}', handle_log, name='log')
+    app.router.add_get('/artifacts/', handle_artifact_index, name='artifact-index')
+    app.router.add_get('/artifacts/{filename}', handle_artifact, name='artifact')
     app.router.add_get('/health', handle_health, name='health')
     setup_metrics(app)
     runner = web.AppRunner(app)
