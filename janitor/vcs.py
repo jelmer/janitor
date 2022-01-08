@@ -107,6 +107,8 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
             code = "unsupported-vcs-hg"
         elif str(e).startswith("Darcs branches are not yet"):
             code = "unsupported-vcs-darcs"
+        elif str(e).startswith("Fossil branches are not yet"):
+            code = "unsupported-vcs-fossil"
         else:
             code = "branch-unavailable"
         msg = str(e)
@@ -142,6 +144,8 @@ def _convert_branch_exception(vcs_url: str, e: Exception) -> Exception:
                 code = "unsupported-vcs-hg"
             elif str(e).startswith("Darcs branches are not yet"):
                 code = "unsupported-vcs-darcs"
+            elif str(e).startswith("Fossil branches are not yet"):
+                code = "unsupported-vcs-fossil"
             else:
                 code = "unsupported-vcs"
         msg = str(e)
