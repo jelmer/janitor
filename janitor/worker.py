@@ -116,7 +116,6 @@ from ognibuild import (
 )
 from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
-    MirrorFailure,
     BranchOpenFailure,
     open_branch_ext,
 )
@@ -582,10 +581,7 @@ def import_branches_bzr(
         except NotBranchError:
             target_branch = ControlDir.create_branch_convenience(
                 target_branch_path, possible_transports=[transport])
-        try:
-            local_branch.push(target_branch, overwrite=True)
-        except NoSuchRevision as e:
-            raise MirrorFailure(target_branch_path, e)
+        local_branch.push(target_branch, overwrite=True)
 
         target_branch.tags.set_tag(log_id, local_branch.last_revision())
 
@@ -929,7 +925,6 @@ def _push_error_to_worker_failure(e):
         )
     if (isinstance(e, InvalidHttpResponse) or
             isinstance(e, IncompleteRead) or
-            isinstance(e, MirrorFailure) or
             isinstance(e, ConnectionError)):
         return WorkerFailure(
             "result-push-failed", "Failed to push result branch: %s" % e
@@ -1031,7 +1026,7 @@ def run_worker(
                         tag_selector=tag_selector,
                         overwrite=True,
                     )
-                except (InvalidHttpResponse, IncompleteRead, MirrorFailure,
+                except (InvalidHttpResponse, IncompleteRead,
                         ConnectionError, UnexpectedHttpStatus, RemoteGitError,
                         TransportNotPossible) as e:
                     logging.warning(
