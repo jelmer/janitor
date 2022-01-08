@@ -110,7 +110,6 @@ from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
 
-from .compat import shlex_join
 from ognibuild import (
     DetailedFailure,
 )
@@ -243,7 +242,6 @@ def _convert_script_failed(e: ScriptFailed) -> WorkerFailure:
         'Script %s failed to run with code %s' % e.args)
 
 
-
 class Target(object):
     """A build target."""
 
@@ -301,7 +299,6 @@ class DebianTarget(Target):
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
         logging.info('Running %r', self.argv)
-        script = shlex_join(self.argv)
         dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
             self.chroot, ':'.join(sys.path), sys.executable)
         if local_tree.has_filename(os.path.join(subpath, 'debian')):
@@ -312,7 +309,7 @@ class DebianTarget(Target):
         extra_env.update(self.env)
         try:
             return debian_script_runner(
-                local_tree, script=script, commit_pending=None,
+                local_tree, script=self.argv, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath,
                 update_changelog=self.update_changelog,
                 extra_env=extra_env, committer=self.committer)
@@ -452,10 +449,9 @@ class GenericTarget(Target):
         self.argv = argv
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
-        script = shlex_join(self.argv)
         try:
             return generic_script_runner(
-                local_tree, script=script, commit_pending=None,
+                local_tree, script=self.argv, commit_pending=None,
                 resume_metadata=resume_metadata, subpath=subpath,
                 committer=self.env.get('COMMITTER'), extra_env=self.env)
         except ResultFileFormatError as e:
