@@ -707,11 +707,6 @@ def process_package(
         logger.info('Workspace ready - starting.')
 
         if ws.local_tree.has_changes():
-            if list(ws.local_tree.iter_references()):
-                raise WorkerFailure(
-                    "requires-nested-tree-support",
-                    "Missing support for nested trees in Breezy.",
-                )
             raise AssertionError
 
         metadata["revision"] = metadata[
