@@ -797,7 +797,8 @@ async def abort_run(
     metadata["finish_time"] = finish_time.isoformat()
 
     try:
-        await upload_results(session, base_url, run_id, metadata, None)
+        await upload_results(
+            session, base_url=base_url, run_id=run_id, metadata=metadata)
     except ResultUploadFailure as e:
         logging.warning('Result upload for abort failed: %s', e)
 
@@ -865,7 +866,17 @@ async def upload_results(
                 raise ResultUploadFailure(
                     "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
                 )
-            return await resp.json()
+            result = await resp.json()
+            if output_directory is not None:
+                local_filenames = set(
+                    [e.name for e in os.scandir(output_directory) if e.is_file()])
+                runner_filenames = set(result.get('filenames', []))
+                if local_filenames != runner_filenames:
+                    logging.warning(
+                        'Difference between local filenames and '
+                        'runner reported filenames: %r != %r',
+                        local_filenames, runner_filenames)
+            return result
 
 
 @contextmanager
@@ -1460,10 +1471,10 @@ async def process_single_item(
 
             result = await upload_results(
                 session,
-                base_url,
-                assignment["id"],
-                metadata,
-                output_directory,
+                base_url=base_url,
+                run_id=assignment["id"],
+                metadata=metadata,
+                output_directory=output_directory,
             )
 
             logging.info('Results uploaded')
