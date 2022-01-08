@@ -1051,6 +1051,7 @@ class AssignmentFailure(Exception):
 
 async def get_assignment(
     session: ClientSession,
+    my_url: yarl.URL,
     base_url: yarl.URL,
     node_name: str,
     jenkins_metadata: Optional[Dict[str, str]] = None,
@@ -1064,14 +1065,13 @@ async def get_assignment(
         json["jenkins"] = jenkins_metadata
         json["worker_link"] = jenkins_metadata.get("build_url")
         json["health_check"] = None
-    elif is_gce_instance():
-        external_ip = gce_external_ip()
-        if external_ip:
-            json["worker_link"] = 'http://%s/' % external_ip
-            json["health_check"] = {
-                'kind': 'http',
-                'url': 'http://%s/health' % gce_external_ip()}
+    elif my_url:
+        json["worker_link"] = my_url
+        json["health_check"] = {
+            'kind': 'http',
+            'url': str(my_url / "health")}
     else:
+        json["worker_link"] = None
         json["health_check"] = None
     logging.debug("Sending assignment request: %r", json)
     try:
@@ -1334,10 +1334,10 @@ async def handle_health(request):
 
 
 async def process_single_item(
-        session, base_url, node_name, workitem,
+        session, my_url: yarl.URL, base_url: yarl.URL, node_name, workitem,
         jenkins_metadata=None, prometheus=None, vcs_store_urls=None):
     assignment = await get_assignment(
-        session, base_url, node_name,
+        session, my_url, base_url, node_name,
         jenkins_metadata=jenkins_metadata,
     )
     workitem['assignment'] = assignment
@@ -1623,6 +1623,16 @@ async def main(argv=None):
     else:
         vcs_store_urls = None
 
+    if is_gce_instance():
+        external_ip = gce_external_ip()
+        if external_ip:
+            my_url = yarl.URL('http://%s:%d/' % (external_ip, site_port))
+        else:
+            my_url = None
+    # TODO(jelmer): Find out kubernetes IP?
+    else:
+        my_url = None
+
     loop = asyncio.get_event_loop()
     async with ClientSession(auth=auth) as session:
         loop.add_signal_handler(
@@ -1635,7 +1645,8 @@ async def main(argv=None):
         while True:
             try:
                 await process_single_item(
-                    session, base_url=base_url,
+                    session, my_url=my_url,
+                    base_url=base_url,
                     node_name=node_name,
                     workitem=app['workitem'],
                     jenkins_metadata=jenkins_metadata,
