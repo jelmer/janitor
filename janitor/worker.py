@@ -34,8 +34,17 @@ from threading import Thread
 import traceback
 from typing import Any, Optional, List, Dict, Iterator, Tuple
 
-import aiohttp
-from aiohttp import ClientSession, MultipartWriter, BasicAuth, ClientTimeout, ClientResponseError, ClientConnectorError, web, ContentTypeError
+from aiohttp import (
+    MultipartWriter,
+    BasicAuth,
+    ClientSession,
+    ClientTimeout,
+    ClientResponseError,
+    ClientConnectorError,
+    ContentTypeError,
+    web,
+    WSMsgType,
+    )
 import yarl
 
 from jinja2 import Template
@@ -74,21 +83,6 @@ from silver_platter.utils import (
     BranchUnavailable,
 )
 
-from ognibuild.debian.fix_build import build_incrementally
-from ognibuild.debian.build import (
-    build_once,
-    MissingChangesFile,
-    DetailedDebianBuildFailure,
-    UnidentifiedDebianBuildError,
-)
-from ognibuild.buildsystem import (
-    NoBuildToolsFound,
-    detect_buildsystems,
-)
-from ognibuild import (
-    UnidentifiedError,
-)
-
 from breezy import urlutils
 from breezy.branch import Branch
 from breezy.config import (
@@ -110,9 +104,6 @@ from breezy.transport import Transport
 
 from silver_platter.proposal import enable_tag_pushing
 
-from ognibuild import (
-    DetailedFailure,
-)
 from aiohttp_openmetrics import setup_metrics, REGISTRY
 from .vcs import (
     BranchOpenFailure,
@@ -333,9 +324,17 @@ class DebianTarget(Target):
 
     def build(self, ws, subpath, output_directory, env):
         from ognibuild.debian.apt import AptManager
+        from ognibuild.debian.fix_build import build_incrementally
         from ognibuild.session import SessionSetupFailure
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
+        from ognibuild.debian.build import (
+            build_once,
+            MissingChangesFile,
+            DetailedDebianBuildFailure,
+            UnidentifiedDebianBuildError,
+        )
+
         from .debian import tree_set_changelog_version
 
         if not ws.local_tree.has_filename(os.path.join(subpath, 'debian/changelog')):
@@ -474,6 +473,11 @@ class GenericTarget(Target):
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
         from ognibuild.resolver import auto_resolver
+        from ognibuild import UnidentifiedError, DetailedFailure
+        from ognibuild.buildsystem import (
+            NoBuildToolsFound,
+            detect_buildsystems,
+        )
 
         if self.chroot:
             session = SchrootSession(self.chroot)
@@ -1155,21 +1159,21 @@ class WatchdogPetter(object):
                     while True:
                         msg = await self.ws.receive()
 
-                        if msg.type == aiohttp.WSMsgType.text:
+                        if msg.type == WSMsgType.text:
                             logging.warning("Unknown websocket message: %r", msg.data)
-                        elif msg.type == aiohttp.WSMsgType.BINARY:
+                        elif msg.type == WSMsgType.BINARY:
                             if msg.data == b'kill':
                                 logging.info('Received kill over websocket, exiting..')
                                 if self.kill:
                                     self.kill()
                             else:
                                 logging.warning("Unknown websocket message: %r", msg.data)
-                        elif msg.type == aiohttp.WSMsgType.closed:
+                        elif msg.type == WSMsgType.closed:
                             break
-                        elif msg.type == aiohttp.WSMsgType.error:
+                        elif msg.type == WSMsgType.error:
                             logging.warning("Error on websocket: %s", self.ws.exception())
                             break
-                        elif msg.type == aiohttp.WSMsgType.close:
+                        elif msg.type == WSMsgType.close:
                             logging.info('Request to close websocket.')
                             await self.ws.close()
                             break
