@@ -30,7 +30,6 @@ test-it-all::
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest silver_platter.tests.test_suite
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest ognibuild.tests.test_suite
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest buildlog_consultant.tests.test_suite
-	PYTHONPATH=$(PYTHONPATH) python3 -m unittest upstream_ontologist.tests.test_suite
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest debmutate.tests.test_suite
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest janitor.tests.test_suite
 
