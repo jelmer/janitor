@@ -1513,10 +1513,6 @@ async def main(argv=None):
     )
     parser.add_argument(
         '--port', type=int, default=0, help="Port to use for diagnostics web server")
-    parser.add_argument(
-        '--health-check-kind', type=str, help='Health check kind')
-    parser.add_argument(
-        '--health-check-url', type=str, help='Health check URL')
 
     # Unused, here for backwards compatibility.
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
