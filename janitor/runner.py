@@ -27,7 +27,6 @@ from io import BytesIO
 import logging
 import os
 from .queue import QueueItem, get_queue_item, iter_queue
-import shlex
 import ssl
 import sys
 import tempfile
