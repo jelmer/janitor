@@ -100,25 +100,7 @@ async def get_queue(
             command.pop(0)
         expecting = None
         if command:
-            if command[0] == "new-upstream":
-                if "--snapshot" in command:
-                    description = "New upstream snapshot"
-                else:
-                    description = "New upstream"
-                    if row["context"]:
-                        expecting = (
-                            "expecting to merge <a href='https://qa.debian.org"
-                            "/cgi-bin/watch?pkg=%s'>%s</a>"
-                            % (row["package"], row["context"])
-                        )
-            elif command[0] == "lintian-brush":
-                description = "Lintian fixes"
-                if row["context"]:
-                    expecting = "expecting to fix: " + ", ".join(
-                        map(lintian_tag_link, row["context"].split(" "))
-                    )
-            else:
-                description = ' '.join(command)
+            description = ' '.join(command)
         else:
             description = 'no-op'
         if expecting is not None:
