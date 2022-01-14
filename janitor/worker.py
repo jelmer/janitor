@@ -289,6 +289,10 @@ class DebianTarget(Target):
         self.argv = argv
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
+        if not self.argv:
+            return GenericCommandResult(
+                description='No change build', context=None, tags=[], value=0)
+
         logging.info('Running %r', self.argv)
         dist_command = 'SCHROOT=%s PYTHONPATH=%s %s -m janitor.dist' % (
             self.chroot, ':'.join(sys.path), sys.executable)
@@ -448,6 +452,10 @@ class GenericTarget(Target):
         self.argv = argv
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
+        if not self.argv:
+            return GenericCommandResult(
+                description='No change build', context=None, tags=[], value=0)
+
         try:
             return generic_script_runner(
                 local_tree, script=self.argv, commit_pending=None,
