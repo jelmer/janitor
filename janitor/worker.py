@@ -601,9 +601,7 @@ def process_package(
     output_directory: str,
     target: str,
     metadata: Any,
-    build_command: Optional[str] = None,
     possible_transports: Optional[List[Transport]] = None,
-    possible_hosters: Optional[List[Hoster]] = None,
     resume_branch_url: Optional[str] = None,
     cached_branch_url: Optional[str] = None,
     extra_resume_branches: Optional[List[Tuple[str, str]]] = None,
@@ -1399,7 +1397,7 @@ async def process_single_item(
 
         run_id = assignment["id"]
 
-        possible_transports = []
+        possible_transports: List[Transport] = []
 
         env = assignment["env"]
 
