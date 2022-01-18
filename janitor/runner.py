@@ -361,7 +361,6 @@ class JanitorResult(object):
         start_time=None,
         finish_time=None,
         worker_name=None,
-        worker_link=None,
         vcs_type=None,
         resume_from=None,
     ):
@@ -373,7 +372,6 @@ class JanitorResult(object):
         self.code = code
         self.logfilenames = logfilenames or []
         self.worker_name = worker_name
-        self.worker_link = worker_link
         self.vcs_type = vcs_type
         if worker_result:
             self.context = worker_result.context
@@ -763,7 +761,6 @@ class ActiveRun(object):
             finish_time=datetime.utcnow(),
             log_id=self.log_id,
             worker_name=self.worker_name,
-            worker_link=self.worker_link,
             resume_from=self.resume_from,
             **kwargs)
 
@@ -925,7 +922,6 @@ async def store_run(
     logfilenames: List[str],
     value: Optional[int],
     worker_name: str,
-    worker_link: Optional[str],
     result_branches: Optional[List[Tuple[str, str, bytes, bytes]]] = None,
     result_tags: Optional[List[Tuple[str, bytes]]] = None,
     resume_from: Optional[str] = None,
@@ -953,7 +949,6 @@ async def store_run(
       logfilenames: List of log filenames
       value: Value of the run (as int)
       worker_name: Name of the worker
-      worker_link: Link to worker URL
       result_branches: Result branches
       result_tags: Result tags
       resume_from: Run this one was resumed from
@@ -970,10 +965,10 @@ async def store_run(
         "start_time, finish_time, package, instigated_context, context, "
         "main_branch_revision, "
         "revision, result, suite, vcs_type, branch_url, logfilenames, "
-        "value, worker, worker_link, result_tags, "
+        "value, worker, result_tags, "
         "resume_from, failure_details, target_branch_url) "
         "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)",
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)",
         run_id,
         command,
         description,
@@ -992,7 +987,6 @@ async def store_run(
         logfilenames,
         value,
         worker_name,
-        worker_link,
         result_tags_updated,
         resume_from,
         failure_details,
@@ -1163,7 +1157,6 @@ class QueueProcessor(object):
                         logfilenames=result.logfilenames,
                         value=result.value,
                         worker_name=result.worker_name,
-                        worker_link=result.worker_link,
                         result_branches=result.branches,
                         result_tags=result.tags,
                         failure_details=result.failure_details,
@@ -1513,13 +1506,11 @@ async def handle_finish(request):
         active_run.stop_watchdog()
         queue_item = active_run.queue_item
         worker_name = active_run.worker_name
-        worker_link = active_run.worker_link
         main_branch_url = active_run.main_branch_url
         resume_from = active_run.resume_from
     else:
         queue_item = None
         worker_name = None
-        worker_link = None
         main_branch_url = None
         resume_from = None
 
@@ -1574,7 +1565,6 @@ async def handle_finish(request):
             suite=queue_item.suite,
             log_id=run_id,
             worker_name=worker_name,
-            worker_link=worker_link,
             branch_url=main_branch_url,
             vcs_type=queue_item.vcs_type,
             worker_result=worker_result,

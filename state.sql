@@ -86,9 +86,7 @@ CREATE TABLE IF NOT EXISTS run (
    review_comment text,
    value integer,
    -- Name of the worker that executed this run.
-   worker text,
-   -- Link to worker-specific status page
-   worker_link text,
+   worker text references worker(name),
    result_tags result_tag[],
    subpath text,
    failure_details json,
