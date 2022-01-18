@@ -11,7 +11,7 @@ ENV AUTOPKGTEST=/code/autopkgtest-wrapper
 ADD . /code
 RUN make -C /code
 COPY sbuildrc /root/.sbuildrc
-RUN mkdir /chroots && /code/create-sbuild-chroot.py --config=/code/janitor.conf /chroots/unstable-amd64-sbuild --make-sbuild-tarball=/chroots/unstable-amd64-sbuild.tar.gz
+RUN mkdir /chroots && /code/create-sbuild-chroot.py --config=/code/janitor.conf /chroots/unstable-amd64-sbuild --make-sbuild-tarball=/chroots/unstable-amd64-sbuild.tar.gz --include=auto-apt-proxy
 # Hack for statoverride issue
 EXPOSE 8080
 ENTRYPOINT ["python3", "-m", "janitor.worker", "--port=8080", "--listen-address=0.0.0.0"]
