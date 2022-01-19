@@ -804,6 +804,8 @@ async def create_app(
 
     aiozipkin.setup(private_app, tracer, skip_routes=[
         private_app.router['metrics'],
+        ])
+    aiozipkin.setup(app, tracer, skip_routes=[
         app.router['ws-notifications'],
         ])
 
