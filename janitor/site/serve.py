@@ -298,7 +298,7 @@ async def handle_result_codes(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
         suite = None
-    all_suites = [s.name for s in config.suite]
+    all_suites = [s.name for s in request.app['config'].suite]
     async with request.app.database.acquire() as conn:
         query = """\
     (select (
@@ -329,7 +329,7 @@ async def handle_result_code(request):
         codes = ['success', 'nothing-to-do']
     else:
         codes = [code]
-    all_suites = [s.name for s in config.suite]
+    all_suites = [s.name for s in request.app['config'].suite]
     async with request.app.database.acquire() as conn:
         return {
             "code": code,
