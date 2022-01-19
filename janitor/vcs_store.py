@@ -26,7 +26,7 @@ from typing import Optional
 
 from aiohttp import web
 from aiohttp.web_middlewares import normalize_path_middleware
-from aiohttp_openmetrics import setup_metrics
+from aiohttp_openmetrics import metrics_middleware, metrics
 from http.client import parse_headers  # type: ignore
 
 from breezy.controldir import ControlDir, format_registry
@@ -669,7 +669,9 @@ async def create_web_app(
     public_app.db = db
     public_app.allow_writes = None
     public_app.config = config
-    setup_metrics(app)
+    public_app.middlewares.insert(0, metrics_middleware)
+    app.middlewares.insert(0, metrics_middleware)
+    app.router.add_get("/metrics", metrics, name="metrics")
     app.router.add_get("/diff/{run_id}/{role}", diff_request, name='diff')
     if dulwich_server:
         app.router.add_post(

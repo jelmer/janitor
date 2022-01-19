@@ -17,23 +17,27 @@
 
 """Serve the janitor site."""
 
-import aiozipkin
 import asyncio
+import functools
 import logging
+import os
 import re
 import shutil
 import tempfile
 import time
 import uuid
+
+import aiozipkin
 from aiohttp.web_urldispatcher import (
     URL,
 )
 from aiohttp import web, ClientSession, ClientConnectorError
-from aiohttp_openmetrics import setup_metrics
+from aiohttp_openmetrics import metrics, metrics_middleware
 from aiohttp.web import middleware
 from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
 
+from .. import state
 from ..config import get_suite_config
 from ..logs import get_log_manager
 from ..pubsub import pubsub_reader, pubsub_handler, Topic
@@ -777,8 +781,13 @@ async def create_app(
 
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
+    private_app = web.Application(middlewares=[trailing_slash_redirect])
 
-    setup_metrics(app)
+    app.middlewares.insert(0, metrics_middleware)
+    private_app.middlewares.insert(0, metrics_middleware)
+    private_app.router.add_get("/metrics", metrics, name="metrics")
+    private_app.router.add_get("/health", handle_health, name="health")
+
     app.topic_notifications = Topic("notifications")
     app.router.add_get(
         "/ws/notifications",
@@ -793,8 +802,8 @@ async def create_app(
         tracer = await aiozipkin.create_custom(endpoint)
     trace_configs = [aiozipkin.make_trace_config(tracer)]
 
-    aiozipkin.setup(app, tracer, skip_routes=[
-        app.router['metrics'],
+    aiozipkin.setup(private_app, tracer, skip_routes=[
+        private_app.router['metrics'],
         app.router['ws-notifications'],
         ])
 
@@ -1080,7 +1089,6 @@ async def create_app(
     app.on_cleanup.append(turndown_artifact_manager)
     setup_debsso(app)
     app.router.add_post("/", handle_post_root, name="root-post")
-    app.router.add_get("/health", handle_health, name="health")
     app.add_subapp(
         "/api",
         create_api_app(
@@ -1109,12 +1117,11 @@ async def create_app(
         app.logfile_manager = get_log_manager(config.logs_location, trace_configs=trace_configs)
 
     app.on_startup.append(setup_logfile_manager)
-    return app
+    return private_app, app
 
 
-if __name__ == "__main__":
+async def main(argv=None):
     import argparse
-    import functools
     import os
     from janitor import state
     from janitor.config import read_config
@@ -1124,6 +1131,8 @@ if __name__ == "__main__":
     parser.add_argument("--debugtoolbar", type=str, action="append", help="IP to allow debugtoolbar queries from.")
     parser.add_argument("--host", type=str, help="Host to listen on")
     parser.add_argument("--port", type=int, help="Port to listen on", default=8080)
+    parser.add_argument(
+        "--public-port", type=int, help="Public port to listen on", default=8090)
     parser.add_argument(
         "--publisher-url",
         type=str,
@@ -1187,7 +1196,7 @@ if __name__ == "__main__":
     with open(args.policy, "r") as f:
         policy_config = read_policy(f)
 
-    app = create_app(
+    private_app, public_app = await create_app(
         config, policy_config, minified=args.debug,
         external_url=args.external_url,
         debugtoolbar=args.debugtoolbar,
@@ -1199,4 +1208,21 @@ if __name__ == "__main__":
         listen_address=args.host,
         port=args.port)
 
-    web.run_app(app, host=args.host, port=args.port)
+    private_runner = web.AppRunner(private_app)
+    public_runner = web.AppRunner(public_app)
+    await private_runner.setup()
+    await public_runner.setup()
+    site = web.TCPSite(private_runner, args.host, port=args.port)
+    await site.start()
+    logging.info("Listening on %s:%s", args.host, args.port)
+    site = web.TCPSite(public_runner, args.host, port=args.public_port)
+    await site.start()
+    logging.info("Listening on %s:%s", args.host, args.public_port)
+    while True:
+        await asyncio.sleep(3600)
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(asyncio.run(main(sys.argv)))
