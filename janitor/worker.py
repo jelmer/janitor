@@ -1083,7 +1083,7 @@ async def get_assignment(
         json["worker_link"] = jenkins_metadata.get("build_url")
         json["health_check"] = None
     elif my_url:
-        json["worker_link"] = my_url
+        json["worker_link"] = str(my_url)
         json["health_check"] = {
             'kind': 'http',
             'url': str(my_url / "health")}
