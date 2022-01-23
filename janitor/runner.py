@@ -107,7 +107,8 @@ last_success_gauge = Gauge(
 )
 build_duration = Histogram("build_duration", "Build duration", ["package", "suite"])
 run_result_count = Counter("result", "Result counts", ["package", "suite", "result_code"])
-active_run_count = Gauge("active_runs", "Number of active runs")
+active_run_count = Gauge("active_runs", "Number of active runs", ["worker"])
+assignment_count = Counter("assignments", "Number of assignments handed out", ["worker"])
 rate_limited_count = Counter("rate_limited_host", "Rate limiting per host", ["host"])
 
 
@@ -1123,11 +1124,12 @@ class QueueProcessor(object):
     def register_run(self, active_run: ActiveRun) -> None:
         self.active_runs[active_run.log_id] = active_run
         self.topic_queue.publish(self.status_json())
-        active_run_count.inc()
+        active_run_count.labels(worker=active_run.worker_name).inc()
         packages_processed_count.inc()
 
     async def unclaim_run(self, log_id: str) -> None:
-        active_run_count.dec()
+        active_run = self.active_runs.get(log_id)
+        active_run_count.labels(worker=active_run.worker_name if active_run else None).dec()
         try:
             del self.active_runs[log_id]
         except KeyError:
@@ -1289,6 +1291,7 @@ async def handle_log(request):
 @routes.post("/active-runs", name="assign")
 async def handle_assign(request):
     json = await request.json()
+    assignment_count.labels(worker=json.get("worker")).inc()
     return await next_item(
         request, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
