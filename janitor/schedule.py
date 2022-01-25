@@ -23,7 +23,6 @@ __all__ = [
 
 from datetime import datetime, timedelta
 import logging
-import shlex
 from typing import Optional, List, Tuple
 
 from debian.changelog import Version

@@ -29,7 +29,6 @@ from breezy.diff import show_diff_trees
 from breezy.errors import (
     ConnectionError,
     NotBranchError,
-    NoSuchFile,
     NoSuchRevision,
     NoRepositoryPresent,
     IncompatibleRepositories,
@@ -37,8 +36,8 @@ from breezy.errors import (
 )
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
-from breezy.repository import InterRepository, Repository
-from breezy.transport import Transport, get_transport
+from breezy.repository import Repository
+from breezy.transport import Transport
 from lintian_brush.vcs import (
     determine_browser_url,
     unsplit_vcs_url,

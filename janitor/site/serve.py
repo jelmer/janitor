@@ -1125,7 +1125,6 @@ async def create_app(
 async def main(argv=None):
     import argparse
     import os
-    from janitor import state
     from janitor.config import read_config
     from janitor.policy import read_policy
 
