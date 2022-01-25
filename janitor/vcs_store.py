@@ -703,9 +703,11 @@ async def create_web_app(
 
 
     app.router.add_get("/", handle_index, name="index")
+    public_app.router.add_get("/", handle_index, name="index")
     public_app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='public-repo-list')
     app.router.add_get("/{vcs:git|bzr}/", handle_repo_list, name='repo-list')
     app.router.add_get("/health", handle_health, name='health')
+    public_app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
