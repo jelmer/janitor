@@ -99,7 +99,7 @@ def apply_policy(
     uploaders: List[str],
     in_base: bool,
     release_stages_passed: Set[str]
-) -> Tuple[Dict[str, Tuple[str, Optional[int]]], str, Optional[str], Optional[str]]:
+) -> Tuple[Dict[str, Tuple[str, Optional[int]]], Optional[str], Optional[str], Optional[str]]:
     publish_mode = {}
     env = {}
     command = None
@@ -131,9 +131,10 @@ def apply_policy(
             qa_review = s.qa_review
         if s.HasField("broken_notify"):
             broken_notify = s.broken_notify
-    command = ' '.join(
-        ['%s=%s' % e for e in sorted(env.items())] +
-        [command])
+    if command is not None:
+        command = ' '.join(
+            ['%s=%s' % e for e in sorted(env.items())] +
+            [command])
     return (
         {k: (PUBLISH_MODE_STR[v[0]], v[1]) for (k, v) in publish_mode.items()},
         command,

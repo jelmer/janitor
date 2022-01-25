@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-from janitor.worker import tree_set_changelog_version, bundle_results
+from janitor.worker import bundle_results
 from aiohttp.multipart import MultipartReader
 
 from io import BytesIO
@@ -25,72 +25,6 @@ import shutil
 import tempfile
 
 import asynctest
-
-from breezy.tests import TestCaseWithTransport
-
-
-class TreeSetChangelogVersionTests(TestCaseWithTransport):
-    def test_set(self):
-        tree = self.make_branch_and_tree(".")
-        self.build_tree_contents(
-            [
-                ("debian/",),
-                (
-                    "debian/changelog",
-                    """\
-blah (0.39) UNRELEASED; urgency=medium
-
-  * Properly cope with trailing commas when adding dependencies.
-
- -- Jelmer Vernooij <jelmer@debian.org>  Sat, 19 Oct 2019 15:50:25 +0000
-""",
-                ),
-            ]
-        )
-        tree.add(["debian", "debian/changelog"])
-        tree.commit("add changelog")
-        tree_set_changelog_version(tree, "0.39~jan+lint1", "")
-        self.assertFileEqual(
-            """\
-blah (0.39~jan+lint1) UNRELEASED; urgency=medium
-
-  * Properly cope with trailing commas when adding dependencies.
-
- -- Jelmer Vernooij <jelmer@debian.org>  Sat, 19 Oct 2019 15:50:25 +0000
-""",
-            "debian/changelog",
-        )
-
-    def test_is_higher(self):
-        tree = self.make_branch_and_tree(".")
-        self.build_tree_contents(
-            [
-                ("debian/",),
-                (
-                    "debian/changelog",
-                    """\
-blah (0.40) UNRELEASED; urgency=medium
-
-  * Properly cope with trailing commas when adding dependencies.
-
- -- Jelmer Vernooij <jelmer@debian.org>  Sat, 19 Oct 2019 15:50:25 +0000
-""",
-                ),
-            ]
-        )
-        tree.add(["debian", "debian/changelog"])
-        tree.commit("add changelog")
-        tree_set_changelog_version(tree, "0.39~jan+lint1", "")
-        self.assertFileEqual(
-            """\
-blah (0.40) UNRELEASED; urgency=medium
-
-  * Properly cope with trailing commas when adding dependencies.
-
- -- Jelmer Vernooij <jelmer@debian.org>  Sat, 19 Oct 2019 15:50:25 +0000
-""",
-            "debian/changelog",
-        )
 
 
 class AsyncBytesIO:

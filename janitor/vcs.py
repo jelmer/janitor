@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import ClientSession, ClientTimeout
 from io import BytesIO
 import logging
 import os
@@ -354,6 +355,9 @@ class VcsManager(object):
     def list_repositories(self, vcs_type: str) -> Iterable[str]:
         raise NotImplementedError(self.list_repositories)
 
+    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
+        raise NotImplementedError(self.get_diff)
+
 
 class LocalVcsManager(VcsManager):
     def __init__(self, base_path: str):
@@ -381,6 +385,9 @@ class LocalVcsManager(VcsManager):
         for entry in os.scandir(os.path.join(self.base_path, vcs_type)):
             yield entry.name
 
+    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
+        raise NotImplementedError(self.get_diff)
+
 
 class RemoteVcsManager(VcsManager):
     def __init__(self, git_base_url: Optional[str], bzr_base_url: Optional[str]):
@@ -397,6 +404,13 @@ class RemoteVcsManager(VcsManager):
     @classmethod
     def from_urls(cls, urls: Dict[str, str]):
         return cls(urls.get('git'), urls.get('bzr'))
+
+    async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
+        url = self.get_diff_url(codebase, old_revid, new_revid, vcs_type)
+        if url is None:
+            raise NotImplementedError('vcs type %s' % vcs_type)
+        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+            return await resp.read()
 
     def __repr__(self):
         return "%s(%r, %r)" % (
