@@ -687,8 +687,8 @@ async def create_web_app(
         app.router.add_get(
             "/git/{package}/info/refs",
             dulwich_refs, name='dulwich-refs')
-        app.router.add_get(
-            "/public/git/{package}/info/refs",
+        public_app.router.add_get(
+            "/git/{package}/info/refs",
             dulwich_refs, name='dulwich-refs-public')
     else:
         for (method, regex), fn in HTTPGitApplication.services.items():
@@ -696,8 +696,8 @@ async def create_web_app(
                 method, "/git/{package}{subpath:" + regex.pattern + "}",
                 git_backend,
             )
-            app.router.add_route(
-                method, "/public/git/{package}{subpath:" + regex.pattern + "}",
+            public_app.router.add_route(
+                method, "/git/{package}{subpath:" + regex.pattern + "}",
                 git_backend,
             )
 
