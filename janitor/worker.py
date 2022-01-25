@@ -74,8 +74,6 @@ from silver_platter.debian import (
     pick_additional_colocated_branches,
 )
 
-from silver_platter.proposal import Hoster
-
 from silver_platter.utils import (
     full_branch_url,
     open_branch,
@@ -499,8 +497,16 @@ class GenericTarget(Target):
             bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
             session.chdir(os.path.join(internal_dir, subpath))
             try:
-                run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
-                run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                try:
+                    run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                except NotImplementedError as e:
+                    traceback.print_exc()
+                    raise WorkerFailure('build-action-unknown', str(e))
+                try:
+                    run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                except NotImplementedError as e:
+                    traceback.print_exc()
+                    raise WorkerFailure('test-action-unknown', str(e))
             except NoBuildToolsFound as e:
                 raise WorkerFailure('no-build-tools-found', str(e))
             except DetailedFailure as f:
@@ -570,7 +576,7 @@ def import_branches_git(
 def import_branches_bzr(
     vcs_store_url, local_branch, package, suite, log_id, branches, tags
 ):
-    from breezy.errors import NoSuchFile, NoSuchRevision
+    from breezy.errors import NoSuchFile
     from breezy.transport import get_transport
     for fn, n, br, r in branches:
         target_branch_path = urlutils.join(vcs_store_url, package, suite)
