@@ -236,9 +236,6 @@ class Target(object):
 
     name: str
 
-    def parse_args(self, argv):
-        raise NotImplementedError(self.parse_args)
-
     def build(self, ws, subpath, output_directory, env):
         raise NotImplementedError(self.build)
 
@@ -259,7 +256,7 @@ class DebianTarget(Target):
 
     DEFAULT_BUILD_COMMAND = 'sbuild -A -s -v'
 
-    def __init__(self, env):
+    def __init__(self, env, argv):
         self.env = env
         self.build_distribution = env.get("BUILD_DISTRIBUTION")
         self.build_command = env.get("BUILD_COMMAND") or self.DEFAULT_BUILD_COMMAND
@@ -282,8 +279,6 @@ class DebianTarget(Target):
                 'Invalid value for DEB_UPDATE_CHANGELOG: %s, '
                 'defaulting to auto.', uc)
             self.update_changelog = None
-
-    def parse_args(self, argv):
         self.argv = argv
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
@@ -442,11 +437,9 @@ class GenericTarget(Target):
 
     name = "generic"
 
-    def __init__(self, env):
+    def __init__(self, env, argv):
         self.chroot = env.get("CHROOT")
         self.env = env
-
-    def parse_args(self, argv):
         self.argv = argv
 
     def make_changes(self, local_tree, subpath, resume_metadata, log_directory):
@@ -626,14 +619,12 @@ def process_package(
 
     build_target: Target
     if target == "debian":
-        build_target = DebianTarget(env)
+        build_target = DebianTarget(env, command)
     elif target == "generic":
-        build_target = GenericTarget(env)
+        build_target = GenericTarget(env, command)
     else:
         raise WorkerFailure(
             'target-unsupported', 'The target %r is not supported' % target)
-
-    build_target.parse_args(command)
 
     logger.info("Opening branch at %s", vcs_url)
     try:
@@ -683,7 +674,7 @@ def process_package(
 
     additional_colocated_branches = build_target.additional_colocated_branches(main_branch)
     roles = {b: r for (r, b) in additional_colocated_branches.items()}
-    roles[main_branch.name] = 'main'
+    roles[main_branch.name] = 'main'   # type: ignore
 
     ws = Workspace(
         main_branch,
@@ -1391,9 +1382,7 @@ async def process_single_item(
             resume_branch_url = None
             resume_branches = None
         cached_branch_url = assignment["branch"].get("cached_url")
-        command = assignment["command"]
-        if isinstance(command, str):
-            command = shlex.split(command)
+        command = shlex.split(assignment["command"])
         target = assignment["build"]["target"]
         build_environment = assignment["build"].get("environment", {})
 

@@ -495,7 +495,6 @@ async def iter_publish_ready(
         List[str],
         str,
         str,
-        Optional[str],
         bool,
         List[Tuple[str, str, bytes, bytes, Optional[str], Optional[int], Optional[str]]],
     ]

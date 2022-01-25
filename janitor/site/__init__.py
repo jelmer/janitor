@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import aiohttp
-from aiohttp import ClientConnectorError, web, BasicAuth, ClientTimeout
+from aiohttp import ClientConnectorError, web, BasicAuth
 from jinja2 import Environment, PackageLoader, select_autoescape
 from typing import Optional
 import urllib.parse
@@ -156,11 +156,7 @@ class BuildDiffUnavailable(Exception):
 async def get_vcs_diff(client, vcs_manager: VcsManager, vcs_type: str, package: str, old_revid: bytes, new_revid: bytes) -> bytes:
     if old_revid == new_revid:
         return b""
-    url = vcs_manager.get_diff_url(package, old_revid, new_revid, vcs_type)
-    if url is None:
-        raise NotImplementedError('vcs type %s' % vcs_type)
-    async with client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
-        return await resp.read()
+    return await vcs_manager.get_diff(package, old_revid, new_revid, vcs_type)
 
 
 async def get_archive_diff(

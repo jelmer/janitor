@@ -177,7 +177,7 @@ def publish(
                 raise MergeConflict(main_branch, local_branch)
         except NoSuchRevision as e:
             raise PublishFailure(
-                description="Revision missing: %s" % e.revision,
+                description="Revision missing: %s" % e.revision,  # type: ignore
                 code="revision-missing")
 
     labels: Optional[List[str]]
