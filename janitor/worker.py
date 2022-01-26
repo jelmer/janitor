@@ -856,30 +856,43 @@ async def upload_results(
     run_id: str,
     metadata: Any,
     output_directory: Optional[str] = None,
+    retry_count=5,
 ) -> Any:
-    with bundle_results(metadata, output_directory) as mpwriter:
-        finish_url = base_url / "active-runs" / run_id / "finish"
-        async with session.post(
-            finish_url, data=mpwriter, timeout=DEFAULT_UPLOAD_TIMEOUT
-        ) as resp:
-            if resp.status == 404:
-                resp_json = await resp.json()
-                raise ResultUploadFailure(resp_json["reason"])
-            if resp.status not in (201, 200):
-                raise ResultUploadFailure(
-                    "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
-                )
-            result = await resp.json()
-            if output_directory is not None:
-                local_filenames = set(
-                    [e.name for e in os.scandir(output_directory) if e.is_file()])
-                runner_filenames = set(result.get('filenames', []))
-                if local_filenames != runner_filenames:
-                    logging.warning(
-                        'Difference between local filenames and '
-                        'runner reported filenames: %r != %r',
-                        local_filenames, runner_filenames)
-            return result
+    delay = 1.0
+    exit_e: Exception = AssertionError("no error raised")
+    import pdb; pdb.set_trace()
+    for i in range(retry_count):
+        with bundle_results(metadata, output_directory) as mpwriter:
+            finish_url = base_url / "active-runs" / run_id / "finish"
+            try:
+                async with session.post(
+                    finish_url, data=mpwriter, timeout=DEFAULT_UPLOAD_TIMEOUT
+                ) as resp:
+                    if resp.status == 404:
+                        resp_json = await resp.json()
+                        raise ResultUploadFailure(resp_json["reason"])
+                    if resp.status not in (201, 200):
+                        raise ResultUploadFailure(
+                            "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
+                        )
+                    result = await resp.json()
+                    if output_directory is not None:
+                        local_filenames = set(
+                            [e.name for e in os.scandir(output_directory) if e.is_file()])
+                        runner_filenames = set(result.get('filenames', []))
+                        if local_filenames != runner_filenames:
+                            logging.warning(
+                                'Difference between local filenames and '
+                                'runner reported filenames: %r != %r',
+                                local_filenames, runner_filenames)
+                    return result
+            except ClientConnectorError as e:
+                exit_e = e
+                logging.warning('Error connecting to %s: %s', finish_url, e)
+                asyncio.sleep(delay)
+                delay *= 1.5
+    else:
+        raise exit_e
 
 
 @contextmanager
