@@ -147,16 +147,14 @@ class GCSArtifactManager(ArtifactManager):
             return
         todo = []
         for name in names:
-            with open(os.path.join(local_path, name), "rb") as f:
-                uploaded_data = f.read()
-                todo.append(
-                    self.storage.upload(
-                        self.bucket_name,
-                        "%s/%s" % (run_id, name),
-                        uploaded_data,
-                        timeout=timeout,
-                    )
+            todo.append(
+                self.storage.upload_from_filename(
+                    self.bucket_name,
+                    "%s/%s" % (run_id, name),
+                    os.path.join(local_path, name),
+                    timeout=timeout,
                 )
+            )
         try:
             await asyncio.gather(*todo)
         except ClientResponseError as e:
@@ -220,7 +218,6 @@ class GCSArtifactManager(ArtifactManager):
 def get_artifact_manager(location, trace_configs=None):
     if location.startswith("gs://"):
         return GCSArtifactManager(location, trace_configs=trace_configs)
-    # TODO(jelmer): Support uploading to GCS
     return LocalArtifactManager(location)
 
 
@@ -258,12 +255,9 @@ async def store_artifacts_with_backup(manager, backup_manager, from_dir, run_id,
             logging.info(
                 "Uploading results to backup artifact " "location %r.", backup_manager
             )
-            return True
         else:
-            logging.warning("No backup artifact manager set. " "Discarding results.")
-            return False
-    else:
-        return True
+            logging.warning("No backup artifact manager set. ")
+            raise
 
 
 if __name__ == "__main__":

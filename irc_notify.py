@@ -22,10 +22,11 @@ import re
 from urllib.parse import urljoin
 
 from aiohttp.client import ClientSession
+from aiohttp import web
 import pydle
 
 from janitor.pubsub import pubsub_reader
-from aiohttp_openmetrics import run_prometheus_server, Counter
+from aiohttp_openmetrics import setup_metrics, Counter
 
 
 irc_messages_sent = Counter("irc_messages_sent", "Number of messages sent to IRC")
@@ -112,7 +113,14 @@ async def main(args):
         publisher_url=args.publisher_url,
     )
     loop = asyncio.get_event_loop()
-    await run_prometheus_server(args.prometheus_listen_address, args.prometheus_port)
+    app = web.Application()
+    setup_metrics(app)
+    app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
+    await site.start()
+
     asyncio.ensure_future(
         notifier.connect(args.server, tls=True, tls_verify=False), loop=loop
     )

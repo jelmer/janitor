@@ -538,14 +538,11 @@ class WorkerResult(object):
             ]
         if tags:
             tags = [(n, r.encode("utf-8")) for (fn, n, r) in tags]
-        target_kind = worker_result.get("target", {}).get("name")
+        target_kind = worker_result.get("target", {"name": None})["name"]
         for result_cls in RESULT_CLASSES:
             if target_kind == result_cls.kind:
                 target_details = worker_result["target"]["details"]
-                if target_details is not None:
-                    builder_result = result_cls.from_json(target_details)
-                else:
-                    builder_result = None
+                builder_result = result_cls.from_json(target_details)
                 break
         else:
             if target_kind is None:
@@ -1589,24 +1586,36 @@ async def handle_finish(request):
             result.builder_result.from_directory(output_directory)
 
             artifact_names = result.builder_result.artifact_filenames()
-            await store_artifacts_with_backup(
-                queue_processor.artifact_manager,
-                queue_processor.backup_artifact_manager,
-                output_directory,
-                run_id,
-                artifact_names,
-            )
+            try:
+                await store_artifacts_with_backup(
+                    queue_processor.artifact_manager,
+                    queue_processor.backup_artifact_manager,
+                    output_directory,
+                    run_id,
+                    artifact_names,
+                )
+            except BaseException as e:
+                result.code = "artifact-upload-failed"
+                result.description = str(e)
+                # TODO(jelmer): Mark ourselves as unhealthy?
+                artifact_names = None
+        else:
+            artifact_names = None
 
     try:
         await queue_processor.finish_run(queue_item, result)
     except RunExists as e:
         return web.json_response(
-            {"id": run_id, "filenames": filenames, "result": result.json(), 'reason': str(e)},
+            {"id": run_id, "filenames": filenames, "artifacts": artifact_names,
+             "logs": logfilenames,
+             "result": result.json(), 'reason': str(e)},
             status=409,
         )
 
     return web.json_response(
-        {"id": run_id, "filenames": filenames, "result": result.json()},
+        {"id": run_id, "filenames": filenames,
+         "logs": logfilenames,
+         "artifacts": artifact_names, "result": result.json()},
         status=201,
     )
 

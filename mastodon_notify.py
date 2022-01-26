@@ -17,8 +17,9 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.client import ClientSession
+from aiohttp import web
 
-from aiohttp_openmetrics import run_prometheus_server, Counter
+from aiohttp_openmetrics import setup_metrics, Counter
 
 from janitor.pubsub import pubsub_reader
 
@@ -65,7 +66,14 @@ async def main(args, mastodon):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    await run_prometheus_server(args.prometheus_listen_address, args.prometheus_port)
+    app = web.Application()
+    setup_metrics(app)
+    app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
+    await site.start()
+
     notifier = MastodonNotifier(mastodon)
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
