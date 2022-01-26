@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 from aiohttp.client import ClientSession
+from aiohttp import web
 import logging
 import re
 import sys
@@ -25,7 +26,7 @@ from urllib.parse import urljoin
 import slixmpp
 
 from janitor.pubsub import pubsub_reader
-from aiohttp_openmetrics import run_prometheus_server, Counter
+from aiohttp_openmetrics import setup_metrics, Counter
 
 xmpp_messages_sent = Counter("xmpp_messages_sent", "Number of messages sent to XMPP")
 
@@ -134,7 +135,14 @@ async def main(args):
     notifier = JanitorNotifier(
         args.jid, args.password, channel=args.channel, publisher_url=args.publisher_url
     )
-    await run_prometheus_server(args.prometheus_listen_address, args.prometheus_port)
+    app = web.Application()
+    setup_metrics(app)
+    app.router.add_get('/health', lambda req: web.Response(text='ok', status=200))
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, args.prometheus_listen_address, args.prometheus_port)
+    await site.start()
+
     notifier.connect()
     async with ClientSession() as session:
         async for msg in pubsub_reader(session, args.notifications_url):
