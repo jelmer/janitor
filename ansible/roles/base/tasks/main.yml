@@ -33,7 +33,7 @@
     name:
      - mypy-protobuf
      - aiohttp-openmetrics
-     - aiohttp-apispec
+     - git+https://github.com/maximdanilchenko/aiohttp-apispec
      - aiozipkin
      - setuptools-rust
      - fastbencode
