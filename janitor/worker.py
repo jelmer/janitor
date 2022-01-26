@@ -860,7 +860,6 @@ async def upload_results(
 ) -> Any:
     delay = 1.0
     exit_e: Exception = AssertionError("no error raised")
-    import pdb; pdb.set_trace()
     for i in range(retry_count):
         with bundle_results(metadata, output_directory) as mpwriter:
             finish_url = base_url / "active-runs" / run_id / "finish"
