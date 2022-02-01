@@ -548,27 +548,27 @@ class WorkerResult(object):
             else:
                 raise NotImplementedError('unsupported build target %r' % target_kind)
         return cls(
-            worker_result.get("code"),
-            worker_result.get("description"),
-            worker_result.get("context"),
-            worker_result.get("subworker"),
-            main_branch_revision,
-            revision,
-            worker_result.get("value"),
-            branches,
-            tags,
-            worker_result.get("remotes"),
-            worker_result.get("details"),
-            builder_result,
-            datetime.fromisoformat(worker_result['start_time'])
+            code=worker_result.get("code"),
+            description=worker_result.get("description"),
+            context=worker_result.get("context"),
+            subworker=worker_result.get("subworker"),
+            main_branch_revision=main_branch_revision,
+            revision=revision,
+            value=worker_result.get("value"),
+            branches=branches,
+            tags=tags,
+            remotes=worker_result.get("remotes"),
+            details=worker_result.get("details"),
+            builder_result=builder_result,
+            start_time=datetime.fromisoformat(worker_result['start_time'])
             if 'start_time' in worker_result else None,
-            datetime.fromisoformat(worker_result['finish_time'])
+            finish_time=datetime.fromisoformat(worker_result['finish_time'])
             if 'finish_time' in worker_result else None,
-            worker_result.get("queue_id"),
-            worker_result.get("worker_name"),
-            worker_result.get("followup_actions"),
-            worker_result.get("refreshed", False),
-            worker_result.get("target_branch_url", None),
+            queue_id=worker_result.get("queue_id"),
+            worker_name=worker_result.get("worker_name"),
+            followup_actions=worker_result.get("followup_actions"),
+            refreshed=worker_result.get("refreshed", False),
+            target_branch_url=worker_result.get("target_branch_url", None),
         )
 
 
