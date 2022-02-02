@@ -986,7 +986,8 @@ def run_worker(
     resume_subworker_result=None,
     resume_branches=None,
     possible_transports=None,
-    force_build=False
+    force_build=False,
+    retry_count=5
 ):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
@@ -1014,14 +1015,15 @@ def run_worker(
                 enable_tag_pushing(ws.local_tree.branch)
                 logging.info("Pushing result branch to %r", vcs_store_urls)
 
+                # TODO(jelmer): Force runner to always specify vcs_type
+                if vcs_type is None:
+                    vcs = getattr(ws.local_tree.branch.repository, "vcs", None)
+                    if vcs:
+                        vcs_type = vcs.abbreviation
+                    else:
+                        vcs_type = "bzr"
+
                 try:
-                    # TODO(jelmer): Force runner to always specify vcs_type
-                    if vcs_type is None:
-                        vcs = getattr(ws.local_tree.branch.repository, "vcs", None)
-                        if vcs:
-                            vcs_type = vcs.abbreviation
-                        else:
-                            vcs_type = "bzr"
                     if vcs_type.lower() == "git":
                         import_branches_git(
                             vcs_store_urls["git"], ws.local_tree.branch, env['PACKAGE'],
@@ -1361,7 +1363,8 @@ async def handle_health(request):
 
 async def process_single_item(
         session, my_url: yarl.URL, base_url: yarl.URL, node_name, workitem,
-        jenkins_metadata=None, prometheus=None, vcs_store_urls=None):
+        jenkins_metadata=None, prometheus=None, vcs_store_urls=None,
+        retry_count=5):
     assignment = await get_assignment(
         session, my_url, base_url, node_name,
         jenkins_metadata=jenkins_metadata,
@@ -1447,7 +1450,8 @@ async def process_single_item(
                 cached_branch_url=cached_branch_url,
                 resume_subworker_result=resume_result,
                 possible_transports=possible_transports,
-                force_build=force_build
+                force_build=force_build,
+                retry_count=retry_count,
             ),
         )
         watchdog_petter.kill = main_task.cancel
@@ -1488,6 +1492,7 @@ async def process_single_item(
                 run_id=assignment["id"],
                 metadata=metadata,
                 output_directory=output_directory,
+                retry_count=retry_count,
             )
 
             logging.info('Results uploaded')
@@ -1544,6 +1549,8 @@ async def main(argv=None):
     parser.add_argument("--listen-address", type=str, default="127.0.0.1")
     parser.add_argument(
         "--loop", action="store_true", help="Keep building until the queue is empty")
+    parser.add_argument(
+        "--retry-count", type=int, default=5, help="Number of retries when pushing")
 
     args = parser.parse_args(argv)
 
@@ -1675,7 +1682,8 @@ async def main(argv=None):
                     workitem=app['workitem'],
                     jenkins_metadata=jenkins_metadata,
                     prometheus=args.prometheus,
-                    vcs_store_urls=vcs_store_urls)
+                    vcs_store_urls=vcs_store_urls,
+                    retry_count=args.retry_count)
             except AssignmentFailure as e:
                 logging.fatal("failed to get assignment: %s", e.reason)
                 return 1
