@@ -373,7 +373,7 @@ class JanitorResult(object):
         self.logfilenames = logfilenames or []
         self.worker_name = worker_name
         self.vcs_type = vcs_type
-        if worker_result:
+        if worker_result is not None:
             self.context = worker_result.context
             if self.code is None:
                 self.code = worker_result.code or 'success'
@@ -1572,7 +1572,7 @@ async def handle_finish(request):
             resume_from=resume_from,
             )
 
-        if result.builder_result:
+        if result.builder_result is not None:
             result.builder_result.from_directory(output_directory)
 
             artifact_names = result.builder_result.artifact_filenames()
