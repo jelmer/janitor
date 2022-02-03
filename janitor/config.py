@@ -39,3 +39,12 @@ def get_suite_config(config: Config, name: str) -> Suite:
         if c.name == name:
             return c
     raise KeyError(name)
+
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config_file', type=str, help='Configuration file to read')
+    args = parser.parse_args()
+    with open(args.config_file, 'r') as f:
+        config = read_config(f)
