@@ -35,4 +35,7 @@ def get_suite_config(config: Config, name: str) -> Suite:
     for s in config.suite:
         if s.name == name:
             return s
+    for c in config.campaign:
+        if c.name == name:
+            return c
     raise KeyError(name)

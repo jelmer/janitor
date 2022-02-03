@@ -1370,7 +1370,7 @@ async def handle_mass_reschedule(request):
     offset = int(post.get('offset', '0'))
     refresh = 'refresh' in post
     config = request.app['config']
-    all_suites = [s.name for s in config.suite]
+    all_campaigns = [s.name for s in config.suite] + [c.name for c in config.campaign]
     async with request.app['db'].acquire() as conn:
         query = """
 SELECT
@@ -1391,7 +1391,7 @@ WHERE
             params.append(suite)
             where.append("suite = $%d" % len(params))
         else:
-            params.append(all_suites)
+            params.append(all_campaigns)
             where.append("suite = ANY($%d::text[])" % len(params))
         if rejected:
             where.append("review_status = 'rejected'")

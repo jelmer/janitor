@@ -271,10 +271,11 @@ ARCHES: List[str] = ["amd64"]
 async def handle_publish(request):
     post = await request.post()
     suite = post.get("suite")
-    for suite_config in request.app.config.suite:
-        if suite is not None and suite_config.name != suite:
-            continue
+    for suite_config in request.app.config.suite + request.app.config.campaign:
         if not suite_config.HasField('debian_build'):
+            continue
+        build_distribution = (suite_config.debian_build.build_distribution or suite_config.name)
+        if suite is not None and build_distribution != suite:
             continue
         request.app.generator_manager.trigger(suite_config)
 
