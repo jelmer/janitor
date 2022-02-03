@@ -19,9 +19,7 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydat
     if include:
         cmd.append("--include=%s" % ','.join(include))
     for suite in suites:
-        if not suite.debian_build:
-            continue
-        cmd.append("--alias=%s-%s-sbuild" % (suite.debian_build.build_distribution, sbuild_arch))
+        cmd.append("--alias=%s-%s-sbuild" % (suite, sbuild_arch))
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
     subprocess.check_call(cmd)
@@ -68,7 +66,16 @@ if args.remove_old:
                 shutil.rmtree(old_sbuild_path)
             os.unlink(entry.path)
 
-create_chroot(config.distribution, sbuild_path, config.suite, sbuild_arch, args.include, make_sbuild_tarball=args.make_sbuild_tarball)
+suites = []
+for suite in config.suite:
+    if not suite.debian_build:
+        continue
+    suites.append(suite.debian_build.build_distribution)
+for campaign in config.campaign:
+    if not campaign.debian_build:
+        continue
+    suites.append(campaign.debian_build.build_distribution)
+create_chroot(config.distribution, sbuild_path, suites, sbuild_arch, args.include, make_sbuild_tarball=args.make_sbuild_tarball)
 
 if args.user:
     subprocess.check_call(

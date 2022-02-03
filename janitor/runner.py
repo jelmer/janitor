@@ -787,7 +787,7 @@ class ActiveRun(object):
 
 
 def open_resume_branch(
-        main_branch: Branch, suite_name: str, package: str,
+        main_branch: Branch, campaign_name: str, package: str,
         possible_hosters: Optional[List[Hoster]] = None) -> Optional[Branch]:
     try:
         hoster = get_hoster(main_branch, possible_hosters=possible_hosters)
@@ -807,7 +807,7 @@ def open_resume_branch(
         return None
     else:
         try:
-            for option in [suite_name, ('%s/main' % suite_name), ('%s/main/%s' % (suite_name, package))]:
+            for option in [campaign_name, ('%s/main' % campaign_name), ('%s/main/%s' % (campaign_name, package))]:
                 (
                     resume_branch,
                     unused_overwrite,
@@ -1026,7 +1026,9 @@ async def followup_run(config, database, policy, item, result: JanitorResult):
             if getattr(result.builder_result, 'build_distribution', None) is not None:
                 dependent_suites = [
                     suite.name for suite in config.suite
-                    if result.builder_result.build_distribution in suite.debian_build.extra_build_distribution]
+                    if suite.debian_build and result.builder_result.build_distribution in suite.debian_build.extra_build_distribution] + [
+                    campaign.name for suite in config.campaign
+                    if suite.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
                     "SELECT package, suite FROM last_missing_apt_dependencies WHERE name = $1 AND suite = ANY($2::text[])",
                     item.package, dependent_suites)
