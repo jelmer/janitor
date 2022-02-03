@@ -45,3 +45,7 @@ jobs:
         make test-it-all
       env:
         PYTHONHASHSEED: random
+    - name: Config compat test
+      run: |
+        git clone https://salsa.debian.org/jelmer/janitor.debian.net/ janitor.debian.net
+        PYTHONPATH=. python3 -m janitor.config janitor.debian.net/k8s/janitor.conf
