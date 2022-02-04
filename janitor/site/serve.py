@@ -300,7 +300,8 @@ async def handle_result_codes(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
         suite = None
-    all_suites = [s.name for s in request.app['config'].suite]
+    all_suites = [s.name for s in request.app['config'].suite] + [
+                  c.name for c in request.app['config'].campaign]
     async with request.app.database.acquire() as conn:
         query = """\
     (select (
@@ -327,11 +328,9 @@ async def handle_result_code(request):
     code = request.match_info.get("code")
     query = ('SELECT * FROM last_runs '
              'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])')
-    if code == 'success':
-        codes = ['success', 'nothing-to-do']
-    else:
-        codes = [code]
-    all_suites = [s.name for s in request.app['config'].suite]
+    codes = [code]
+    all_suites = [s.name for s in request.app['config'].suite] + [
+                  c.name for c in request.app['config'].campaign]
     async with request.app.database.acquire() as conn:
         return {
             "code": code,

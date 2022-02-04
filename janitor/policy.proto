@@ -67,8 +67,8 @@ message PublishPolicy {
     optional string role = 2 [ default = "main" ];
 }
 
-message SuitePolicy {
-    // Name of the suite
+message CampaignPolicy {
+    // Name of the campaign
     optional string name = 1;
 
     optional string command = 2;
@@ -88,9 +88,11 @@ message Environment {
 message Policy {
     repeated Match match = 1;
 
-    repeated SuitePolicy suite = 2;
+    repeated CampaignPolicy suite = 2 [ deprecated=true ];
 
     repeated Environment env = 3;
+
+    repeated CampaignPolicy campaign = 4;
 }
 
 message PolicyConfig {
