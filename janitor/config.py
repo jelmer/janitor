@@ -33,7 +33,7 @@ def read_config(f):
     return text_format.Parse(f.read(), Config())
 
 
-def get_suite_config(config: Config, name: str) -> Union[Suite,Campaign]:
+def get_suite_config(config: Config, name: str) -> Union[Suite, Campaign]:
     for s in config.suite:
         if s.name == name:
             return s
