@@ -913,7 +913,7 @@ async def create_app(
     register_scrub_obsolete_endpoints(app.router)
     from .new_upstream import register_new_upstream_endpoints
     register_new_upstream_endpoints(app.router)
-    SUITE_REGEX = "|".join([re.escape(suite.name) for suite in config.suite] + [re.escape(campaign.name) for suite in config.campaign])
+    SUITE_REGEX = "|".join([re.escape(suite.name) for suite in config.suite] + [re.escape(campaign.name) for campaign in config.campaign])
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % SUITE_REGEX,
         handle_merge_proposals,
