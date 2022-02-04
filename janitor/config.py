@@ -22,16 +22,18 @@ __all__ = [
     "get_suite_config",
 ]
 
+from typing import Union
+
 from google.protobuf import text_format  # type: ignore
 
-from .config_pb2 import Config, Suite
+from .config_pb2 import Config, Suite, Campaign
 
 
 def read_config(f):
     return text_format.Parse(f.read(), Config())
 
 
-def get_suite_config(config: Config, name: str) -> Suite:
+def get_suite_config(config: Config, name: str) -> Union[Suite,Campaign]:
     for s in config.suite:
         if s.name == name:
             return s
