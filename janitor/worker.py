@@ -470,6 +470,7 @@ class GenericTarget(Target):
         from ognibuild.build import run_build
         from ognibuild.test import run_test
         from ognibuild.buildlog import InstallFixer
+        from ognibuild.session import SessionSetupFailure
         from ognibuild.session.plain import PlainSession
         from ognibuild.session.schroot import SchrootSession
         from ognibuild.resolver import auto_resolver
@@ -484,39 +485,42 @@ class GenericTarget(Target):
             logger.info('Using schroot %s', self.chroot)
         else:
             session = PlainSession()
-        with session:
-            resolver = auto_resolver(session)
-            fixers = [InstallFixer(resolver)]
-            external_dir, internal_dir = session.setup_from_vcs(ws.local_tree)
-            bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
-            session.chdir(os.path.join(internal_dir, subpath))
-            try:
+        try:
+            with session:
+                resolver = auto_resolver(session)
+                fixers = [InstallFixer(resolver)]
+                external_dir, internal_dir = session.setup_from_vcs(ws.local_tree)
+                bss = list(detect_buildsystems(os.path.join(external_dir, subpath)))
+                session.chdir(os.path.join(internal_dir, subpath))
                 try:
-                    run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
-                except NotImplementedError as e:
-                    traceback.print_exc()
-                    raise WorkerFailure('build-action-unknown', str(e))
-                try:
-                    run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
-                except NotImplementedError as e:
-                    traceback.print_exc()
-                    raise WorkerFailure('test-action-unknown', str(e))
-            except NoBuildToolsFound as e:
-                raise WorkerFailure('no-build-tools-found', str(e))
-            except DetailedFailure as f:
-                raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
-            except UnidentifiedError as e:
-                lines = [line for line in e.lines if line]
-                if e.secondary:
-                    raise WorkerFailure('build-failed', e.secondary.line)
-                elif len(lines) == 1:
-                    raise WorkerFailure('build-failed', lines[0])
-                else:
-                    raise WorkerFailure(
-                        'build-failed',
-                        "%r failed with unidentified error "
-                        "(return code %d)" % (e.argv, e.retcode)
-                    )
+                    try:
+                        run_build(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                    except NotImplementedError as e:
+                        traceback.print_exc()
+                        raise WorkerFailure('build-action-unknown', str(e))
+                    try:
+                        run_test(session, buildsystems=bss, resolver=resolver, fixers=fixers)
+                    except NotImplementedError as e:
+                        traceback.print_exc()
+                        raise WorkerFailure('test-action-unknown', str(e))
+                except NoBuildToolsFound as e:
+                    raise WorkerFailure('no-build-tools-found', str(e))
+                except DetailedFailure as f:
+                    raise WorkerFailure(f.error.kind, str(f.error), details={'command': f.argv})
+                except UnidentifiedError as e:
+                    lines = [line for line in e.lines if line]
+                    if e.secondary:
+                        raise WorkerFailure('build-failed', e.secondary.line)
+                    elif len(lines) == 1:
+                        raise WorkerFailure('build-failed', lines[0])
+                    else:
+                        raise WorkerFailure(
+                            'build-failed',
+                            "%r failed with unidentified error "
+                            "(return code %d)" % (e.argv, e.retcode)
+                        )
+        except SessionSetupFailure as e:
+            raise WorkerFailure('session-setup-failure', str(e))
 
         return {}
 
