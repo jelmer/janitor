@@ -447,6 +447,7 @@ class GenericTarget(Target):
             return GenericCommandResult(
                 description='No change build', context=None, tags=[], value=0)
 
+        logging.info('Running %r', self.argv)
         try:
             return generic_script_runner(
                 local_tree, script=self.argv, commit_pending=None,
