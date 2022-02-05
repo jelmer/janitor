@@ -54,7 +54,9 @@ def update_vars_from_request(vs, request):
     vs["is_qa_reviewer"] = is_qa_reviewer(request)
     vs["user"] = request['user']
     vs["rel_url"] = request.rel_url
-    vs["suites"] = request.app['config'].suite
+    vs["suites"] = (
+        [c for c in request.app['config'].suite] +
+        [c for c in request.app['config'].campaign])
     vs["site_name"] = request.app['config'].instance_name or "Debian Janitor"
     vs["openid_configured"] = bool(getattr(request.app, "openid_config", None))
     if request.app['external_url'] is not None:
