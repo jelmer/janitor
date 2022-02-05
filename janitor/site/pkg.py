@@ -197,6 +197,7 @@ async def generate_run_file(
     kwargs["show_debdiff"] = show_debdiff
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
+    kwargs["campaign"] = get_suite_config(config, run['suite'])
     kwargs["resume_from"] = run['resume_from']
 
     def read_file(f):
@@ -285,6 +286,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     kwargs["merge_proposals"] = merge_proposals
     kwargs["runs"] = runs
     kwargs["removed"] = package['removed']
+    kwargs["distributions"] = config.distributions
     kwargs["tracker_url"] = partial(tracker_url, config)
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:

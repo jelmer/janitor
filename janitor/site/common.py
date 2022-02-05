@@ -285,6 +285,8 @@ WHERE run.package = $1 AND run.suite = $2
     else:
         env = {}
 
+    campaign = get_distribution(config, suite)
+
     kwargs.update({
         "package": package['name'],
         "unchanged_run": unchanged_run,
@@ -298,6 +300,7 @@ WHERE run.package = $1 AND run.suite = $2
         "vcswatch_version": package['vcswatch_version'],
         "run_id": run_id,
         "suite": suite,
+        "campaign": campaign,
         "show_diff": show_diff,
         "show_debdiff": show_debdiff,
         "previous_runs": previous_runs,
@@ -309,7 +312,7 @@ WHERE run.package = $1 AND run.suite = $2
         "queue_wait_time": queue_wait_time,
         "publish_policy": package['publish_policy'],
         "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
-        "tracker_url": partial(tracker_url, config),
+        "tracker_url": partial(tracker_url, config, campaign.base_distribution),
     })
     return kwargs
 
