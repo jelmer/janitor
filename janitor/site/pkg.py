@@ -42,6 +42,7 @@ from janitor.site import (
 )
 
 from .common import iter_candidates, get_unchanged_run
+from ..config import get_suite_config
 
 FAIL_BUILD_LOG_LEN = 15
 
@@ -286,7 +287,7 @@ async def generate_pkg_file(db, config, package, merge_proposals, runs, availabl
     kwargs["merge_proposals"] = merge_proposals
     kwargs["runs"] = runs
     kwargs["removed"] = package['removed']
-    kwargs["distributions"] = config.distributions
+    kwargs["distributions"] = config.distribution
     kwargs["tracker_url"] = partial(tracker_url, config)
     kwargs["available_suites"] = available_suites
     async with db.acquire() as conn:
