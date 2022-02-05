@@ -314,7 +314,7 @@ WHERE run.package = $1 AND run.suite = $2
         "publish_policy": package['publish_policy'],
         "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
     })
-    if campaign.debian_build:
+    if campaign.HasField('debian_build'):
         kwargs["tracker_url"] = partial(tracker_url, config, campaign.debian_build.base_distribution)
     return kwargs
 

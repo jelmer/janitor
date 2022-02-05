@@ -1415,7 +1415,7 @@ async def next_item(request, mode, worker=None, worker_link=None, jenkins_metada
 
     try:
         with span.new_child('cache-branch:check'):
-            if suite_config.debian_build:
+            if suite_config.HasField('debian_build'):
                 distribution = get_distribution(
                     queue_processor.config,
                     suite_config.debian_build.base_distribution)
