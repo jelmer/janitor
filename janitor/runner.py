@@ -71,7 +71,7 @@ from .artifacts import (
     upload_backup_artifacts,
 )
 from .compat import to_thread
-from .config import read_config, get_suite_config
+from .config import read_config, get_suite_config, get_distribution
 from .debian import (
     changes_filenames,
     open_guessed_salsa_branch,
@@ -169,8 +169,8 @@ class GenericBuilder(Builder):
 
     result_cls = GenericResult
 
-    def __init__(self, distro_config):
-        self.distro_config = distro_config
+    def __init__(self):
+        pass
 
     async def build_env(self, conn, suite_config, queue_item):
         env = {}
@@ -336,12 +336,13 @@ RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 def get_builder(config, suite_config):
     if suite_config.HasField('debian_build'):
+        distribution = get_distribution(config, suite_config.base_distribution)
         return DebianBuilder(
-            config.distribution,
+            distribution,
             config.apt_location
             )
     elif suite_config.HasField('generic_build'):
-        return GenericBuilder(config.distribution)
+        return GenericBuilder()
     else:
         raise NotImplementedError('no supported build type')
 
@@ -1420,8 +1421,11 @@ async def next_item(request, mode, worker=None, worker_link=None, jenkins_metada
 
     try:
         with span.new_child('cache-branch:check'):
+            # TODO(jelmer): Don't make this debian-specific
+            distribution = get_distribution(
+                queue_processor.config, suite_config.base_distribution)
             cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-                item.package, cache_branch_name(queue_processor.config.distribution, "main"), vcs_type
+                item.package, cache_branch_name(distribution, "main"), vcs_type
             )
     except UnsupportedVcs:
         cached_branch_url = None
