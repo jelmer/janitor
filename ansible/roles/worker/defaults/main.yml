@@ -1,1 +1,2 @@
 ---
+janitor_chroot_base: /srv/chroots
