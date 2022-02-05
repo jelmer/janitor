@@ -329,7 +329,7 @@ RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 def get_builder(config, suite_config):
     if suite_config.HasField('debian_build'):
-        distribution = get_distribution(config, suite_config.base_distribution)
+        distribution = get_distribution(config, suite_config.debian_build.base_distribution)
         return DebianBuilder(
             distribution,
             config.apt_location
