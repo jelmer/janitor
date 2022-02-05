@@ -176,14 +176,7 @@ class GenericBuilder(Builder):
         env = {}
         if suite_config.generic_build.chroot:
             env["CHROOT"] = suite_config.generic_build.chroot
-        elif self.distro_config.chroot:
-            env["CHROOT"] = self.distro_config.chroot
 
-        env["REPOSITORIES"] = "%s %s/ %s" % (
-            self.distro_config.archive_mirror_uri,
-            self.distro_config.name,
-            " ".join(self.distro_config.component),
-        )
         return env
 
 
