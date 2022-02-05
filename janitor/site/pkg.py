@@ -116,7 +116,6 @@ async def generate_run_file(
     kwargs["run"] = run
     kwargs["run_id"] = run['id']
     kwargs.update(run)
-    kwargs["tracker_url"] = partial(tracker_url, config)
     async with db.acquire() as conn:
         if run['main_branch_revision']:
             with span.new_child('sql:unchanged-run'):
@@ -199,6 +198,10 @@ async def generate_run_file(
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
     kwargs["campaign"] = get_suite_config(config, run['suite'])
+    if kwargs['campaign'].debian_build:
+        kwargs["tracker_url"] = partial(
+            tracker_url, config,
+            kwargs['campaign'].debian_build.base_distribution)
     kwargs["resume_from"] = run['resume_from']
 
     def read_file(f):

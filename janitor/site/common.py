@@ -7,6 +7,7 @@ from functools import partial
 from typing import Optional, List
 
 from janitor import state, splitout_env
+from janitor.config import get_suite_config
 from janitor.queue import get_queue_position
 from janitor.site import (
     get_archive_diff,
@@ -285,7 +286,7 @@ WHERE run.package = $1 AND run.suite = $2
     else:
         env = {}
 
-    campaign = get_distribution(config, suite)
+    campaign = get_suite_config(config, suite)
 
     kwargs.update({
         "package": package['name'],
@@ -312,8 +313,9 @@ WHERE run.package = $1 AND run.suite = $2
         "queue_wait_time": queue_wait_time,
         "publish_policy": package['publish_policy'],
         "changelog_policy": env.get('DEB_UPDATE_CHANGELOG', 'auto'),
-        "tracker_url": partial(tracker_url, config, campaign.base_distribution),
     })
+    if campaign.debian_build:
+        kwargs["tracker_url"] = partial(tracker_url, config, campaign.debian_build.base_distribution)
     return kwargs
 
 
