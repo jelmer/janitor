@@ -421,6 +421,8 @@ class DebianTarget(Target):
                         raise WorkerFailure(code, e.description)
                     logger.info("Built %r.", changes_names)
         except SessionSetupFailure as e:
+            if e.errlines:
+                sys.stderr.buffer.writelines(e.errlines)
             raise WorkerFailure('session-setup-failure', str(e))
         from .debian.lintian import run_lintian
         lintian_result = run_lintian(
@@ -520,6 +522,8 @@ class GenericTarget(Target):
                             "(return code %d)" % (e.argv, e.retcode)
                         )
         except SessionSetupFailure as e:
+            if e.errlines:
+                sys.stderr.buffer.writelines(e.errlines)
             raise WorkerFailure('session-setup-failure', str(e))
 
         return {}
