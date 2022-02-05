@@ -1,3 +1,4 @@
 ---
 janitor_site_address: '::1'
 janitor_site_port: 8082
+janitor_site_public_port: 8090
