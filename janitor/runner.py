@@ -329,7 +329,8 @@ RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 def get_builder(config, suite_config):
     if suite_config.HasField('debian_build'):
-        distribution = get_distribution(config, suite_config.debian_build.base_distribution)
+        distribution = get_distribution(
+            config, suite_config.debian_build.base_distribution)
         return DebianBuilder(
             distribution,
             config.apt_location
@@ -1414,11 +1415,15 @@ async def next_item(request, mode, worker=None, worker_link=None, jenkins_metada
 
     try:
         with span.new_child('cache-branch:check'):
-            # TODO(jelmer): Don't make this debian-specific
-            distribution = get_distribution(
-                queue_processor.config, suite_config.base_distribution)
+            if suite_config.debian_build:
+                distribution = get_distribution(
+                    queue_processor.config,
+                    suite_config.debian_build.base_distribution)
+                branch_name = cache_branch_name(distribution, "main")
+            else:
+                branch_name = "main"
             cached_branch_url = queue_processor.public_vcs_manager.get_branch_url(
-                item.package, cache_branch_name(distribution, "main"), vcs_type
+                item.package, branch_name, vcs_type
             )
     except UnsupportedVcs:
         cached_branch_url = None
