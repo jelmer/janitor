@@ -198,7 +198,7 @@ async def generate_run_file(
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
     kwargs["campaign"] = get_suite_config(config, run['suite'])
-    if kwargs['campaign'].debian_build:
+    if kwargs['campaign'].HasField('debian_build'):
         kwargs["tracker_url"] = partial(
             tracker_url, config,
             kwargs['campaign'].debian_build.base_distribution)

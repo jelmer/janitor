@@ -74,13 +74,13 @@ if args.remove_old:
 
 suites = []
 for suite in config.suite:
-    if not suite.debian_build:
+    if not suite.HasField('debian_build'):
         continue
     if suite.debian_build.base_distribution != distro_config.name:
         continue
     suites.append(suite.debian_build.build_distribution)
 for campaign in config.campaign:
-    if not campaign.debian_build:
+    if not campaign.HasField('debian_build'):
         continue
     if campaign.debian_build.base_distribution != distro_config.name:
         continue
