@@ -49,7 +49,7 @@ from aiohttp_openmetrics import (
 
 from .. import state
 from ..artifacts import get_artifact_manager, ArtifactsMissing
-from ..config import read_config, get_suite_config
+from ..config import read_config, get_suite_config, get_distribution
 from ..pubsub import pubsub_reader
 
 
@@ -335,6 +335,7 @@ async def publish_suite(
     try:
         start_time = datetime.utcnow()
         logger.info("Publishing %s", suite.name)
+        distribution = get_distribution(config, suite.base_distribution)
         suite_path = os.path.join(dists_directory, suite.name)
         with tempfile.TemporaryDirectory(dir=dists_directory) as td:
             await write_suite_files(
@@ -342,7 +343,7 @@ async def publish_suite(
                 db,
                 package_info_provider,
                 suite,
-                components=config.distribution.component,
+                components=distribution.component,
                 arches=ARCHES,
                 origin=config.origin,
                 gpg_context=gpg_context,

@@ -22,7 +22,7 @@ from typing import Optional
 import urllib.parse
 from yarl import URL
 
-from janitor.config import Config
+from janitor.config import Config, get_distribution
 from janitor.schedule import TRANSIENT_ERROR_RESULT_CODES
 from janitor.vcs import RemoteVcsManager, VcsManager
 
@@ -250,9 +250,10 @@ async def check_worker_creds(db, request: web.Request) -> Optional[str]:
     return login
 
 
-def tracker_url(config: Config, pkg: str) -> Optional[str]:
-    if config.distribution.tracker_url:
-        return "%s/%s" % (config.distribution.tracker_url.rstrip("/"), pkg)
+def tracker_url(config: Config, base_distribution: str, pkg: str) -> Optional[str]:
+    distribution = get_distribution(config, base_distribution)
+    if distribution and distribution.tracker_url:
+        return "%s/%s" % (distribution.tracker_url.rstrip("/"), pkg)
     return None
 
 
