@@ -17,11 +17,11 @@
       - python3-bs4
     state: present
 - stat:
-    path: "{{ item['sbuild_path'] }}"
+    path: "{{ janitor_chroot_base }}/{{ item['chroot'] }}"
   register: sbuild
   with_items: "{{ janitor_distributions }}"
 - name: Create schroot
-  command: "{{ janitor_code_path }}/create-sbuild-chroot.py --user={{ janitor_user }} {% if 'include' in item.item %} --include={% for include in item.item['include'] %}{{ include }}{{ ',' if not loop.last }}{% endfor %}{% endif %} {{ item.item['sbuild_path'] }}"
+  command: "{{ janitor_code_path }}/create-sbuild-chroot.py --user={{ janitor_user }} {% if 'include' in item.item %} --include={% for include in item.item['include'] %}{{ include }}{{ ',' if not loop.last }}{% endfor %}{% endif %} {{ item.item['name'] }}"
   when: not item.stat.exists
   with_items: "{{ sbuild.results }}"
 - name: Update schroot
