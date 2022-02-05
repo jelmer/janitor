@@ -58,7 +58,7 @@ def update_vars_from_request(vs, request):
         [c for c in request.app['config'].suite] +
         [c for c in request.app['config'].campaign])
     vs["site_name"] = request.app['config'].instance_name or "Debian Janitor"
-    vs["openid_configured"] = bool(getattr(request.app, "openid_config", None))
+    vs["openid_configured"] = "openid_config" in request.app
     if request.app['external_url'] is not None:
         vs["url"] = request.app['external_url'].join(request.rel_url)
         vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.app['external_url']))
