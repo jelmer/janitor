@@ -80,6 +80,7 @@ from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .schedule import (
     do_schedule,
     TRANSIENT_ERROR_RESULT_CODES,
+    PolicyUnavailable,
 )
 from .vcs import (
     VcsManager,
@@ -1181,7 +1182,7 @@ async def get_publish_attempt_count(
 ) -> int:
     return await conn.fetchval(
         "select count(*) from publish where revision = $1 "
-        "and result_code != ANY($2::text[])",
+        "and result_code != ALL($2::text[])",
         revision.decode("utf-8"),
         transient_result_codes,
     )
@@ -1928,14 +1929,19 @@ applied independently.
                 mp.url,
                 last_run.result_code,
             )
-            await do_schedule(
-                conn,
-                last_run.package,
-                last_run.suite,
-                bucket="update-existing-mp",
-                refresh=False,
-                requestor="publisher (transient error)",
-            )
+            try:
+                await do_schedule(
+                    conn,
+                    last_run.package,
+                    last_run.suite,
+                    bucket="update-existing-mp",
+                    refresh=False,
+                    requestor="publisher (transient error)",
+                )
+            except PolicyUnavailable as e:
+                logging.warning(
+                    'Policy unavailable while attempting to reschedule %s/%s',
+                    last_run.package, last_run.suite)
         elif last_run_age.days > EXISTING_RUN_RETRY_INTERVAL:
             logger.info(
                 "%s: Last run failed (%s) a long time ago (%d days). " "Rescheduling.",
