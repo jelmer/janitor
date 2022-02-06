@@ -9,13 +9,17 @@
 
 Select suite to display:
 
-<form method="GET" id="suiteform">
-<select name="suite" onchange="$('#suiteform').submit()">
+<form method="GET" id="filter">
+<select name="suite" onchange="$('#filter').submit()">
 <option name="_all" value="_all">All</option>
 {% for s in all_suites %}
 <option value="{{ s }}" name="{{ s }}"{% if s == suite %} selected{% endif %}>{{ s }}</option>
 {% endfor %}
 </select>
+<input type="checkbox" name="exclude_never_processed" id="never-processed"{% if exclude_never_processed %} checked{% endif %} onchange="$('#filter').submit()"/>
+<label for="never-processed">Exclude never processed</label>
+<input type="checkbox" name="exclude_transient" id="transient"{% if exclude_transient %} checked{% endif %} onchange="$('#filter').submit()"/>
+<label for="transient">Exclude transient</label>
 </form>
 
 {% macro random_colors(n) %}[ {% for i in range(n) %}'rgb({{ range(0, 255)|random }}, {{ range(0, 255)|random }}, {{ range(0, 255)|random }})', {% endfor %}]{% endmacro %}
