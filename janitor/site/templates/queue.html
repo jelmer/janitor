@@ -91,7 +91,7 @@ kill = function(run_id) {
 </tr>
 </thead>
 <tbody valign="top">
-{% for queue_id, pkg, requestor, suite, description, estimated_duration, last_run_id, last_run_result_code in queue %}
+{% for queue_id, pkg, requestor, campaign, description, estimated_duration, last_run_id, last_run_result_code in queue %}
 <tr id="queue-{{ queue_id }}"{% if queue_id in active_queue_ids %} class="active"{% endif %}>
   <td><a class="reference external" href="pkg/{{ pkg }}">{{ pkg }}</a></td>
   <td>{{ description|safe }}</td>
