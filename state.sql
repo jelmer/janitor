@@ -92,7 +92,8 @@ CREATE TABLE IF NOT EXISTS run (
    failure_details json,
    target_branch_url text,
    resume_from text references run (id),
-   foreign key (package) references package(name)
+   foreign key (package) references package(name),
+   check(finish_time >= start_time)
 );
 CREATE INDEX ON run (package, suite, start_time DESC);
 CREATE INDEX ON run (start_time);
