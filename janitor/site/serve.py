@@ -297,26 +297,37 @@ async def handle_never_processed(request):
 
 @html_template("result-code-index.html", headers={"Cache-Control": "max-age=60"})
 async def handle_result_codes(request):
+    from ..schedule import TRANSIENT_ERROR_RESULT_CODES
     suite = request.query.get("suite")
+    exclude_never_processed = "exclude_never_processed" in request.query
+    exclude_transient = "exclude_transient" in request.query
     if suite is not None and suite.lower() == "_all":
         suite = None
     all_suites = [s.name for s in request.app['config'].suite] + [
                   c.name for c in request.app['config'].campaign]
+    args = [[suite] if suite else all_suites]
     async with request.app.database.acquire() as conn:
         query = """\
-    (select (
+    select (
             case when result_code = 'nothing-new-to-do' then 'success'
             else result_code end), count(result_code) from last_runs
-        where suite = ANY($1::text[]) group by 1)
-    union
+        where suite = ANY($1::text[])
+    """
+        if exclude_transient:
+            query += " AND result_code != ALL($2::text[])"
+            args.append(TRANSIENT_ERROR_RESULT_CODES)
+        query += " group by 1"
+        if not exclude_never_processed:
+            query = """(%s) union
     select 'never-processed', count(*) from candidate c
         where not exists (
             SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
         and suite = ANY($1::text[]) order by 2 desc
-    """
+    """ % query
         return {
-            "result_codes": await conn.fetch(
-                query, [suite] if suite else all_suites),
+            "exclude_never_processed": exclude_never_processed,
+            "exclude_transient": exclude_transient,
+            "result_codes": await conn.fetch(query, *args),
             "suite": suite, "all_suites": all_suites}
 
 
