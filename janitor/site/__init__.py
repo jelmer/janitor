@@ -28,8 +28,11 @@ from janitor.vcs import RemoteVcsManager, VcsManager
 
 BUG_ERROR_RESULT_CODES = [
     'worker-failure',
+    'worker-clone-incomplete-read',
+    'worker-clone-malformed-transform',
     'autopkgtest-chroot-not-found',
     'build-chroot-not-found',
+    'worker-killed',
     ]
 
 
