@@ -40,17 +40,20 @@ parser.add_argument('--make-sbuild-tarball', action='store_true', help='Create s
 parser.add_argument(
     "--config", type=str, default="janitor.conf", help="Path to configuration."
 )
-parser.add_argument("distribution", type=str, nargs='*')
+parser.add_argument("distribution", type=str, nargs="*")
 args = parser.parse_args()
 
 with open(args.config, "r") as f:
     config = read_config(f)
 
-for distribution in (args.distribution or [d.name for d in config.distribution]):
+if not args.distribution:
+    args.distribution = [d.name for d in config.distribution]
+
+for distribution in args.distribution:
     try:
-        distro_config = get_distribution(config, args.distribution)
+        distro_config = get_distribution(config, distribution)
     except KeyError:
-        parser.error('no such distribution: %s' % args.distribution)
+        parser.error('no such distribution: %s' % distribution)
 
     sbuild_arch = get_sbuild_architecture()
     if not args.base_directory:
@@ -90,7 +93,9 @@ for distribution in (args.distribution or [d.name for d in config.distribution])
         make_sbuild_tarball = os.path.join(args.base_directory, distro_config.chroot + '.tar.gz')
     else:
         make_sbuild_tarball = None
-    create_chroot(distro_config, sbuild_path, suites, sbuild_arch, args.include, make_sbuild_tarball=None)
+    create_chroot(
+        distro_config, sbuild_path, suites, sbuild_arch, args.include,
+        make_sbuild_tarball=make_sbuild_tarball)
 
     if args.user:
         subprocess.check_call(

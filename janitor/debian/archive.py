@@ -335,7 +335,7 @@ async def publish_suite(
     try:
         start_time = datetime.utcnow()
         logger.info("Publishing %s", suite.name)
-        distribution = get_distribution(config, suite.base_distribution)
+        distribution = get_distribution(config, suite.debian_build.base_distribution)
         suite_path = os.path.join(dists_directory, suite.name)
         with tempfile.TemporaryDirectory(dir=dists_directory) as td:
             await write_suite_files(

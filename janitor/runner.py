@@ -33,7 +33,7 @@ import tempfile
 from typing import List, Any, Optional, BinaryIO, Dict, Tuple, Type
 import uuid
 
-from aiohttp import web
+from aiohttp import web, ClientSession, ClientTimeout
 
 from yarl import URL
 
@@ -652,12 +652,12 @@ class ActiveRun(object):
 
     KEEPALIVE_INTERVAL = 60 * 10
 
-    log_files: Dict[str, BinaryIO]
     worker_name: str
     worker_link: Optional[str]
     queue_item: QueueItem
     log_id: str
     start_time: datetime
+    last_keepalive: datetime
 
     def __init__(
         self,
@@ -670,24 +670,101 @@ class ActiveRun(object):
         self.start_time = datetime.utcnow()
         self.log_id = str(uuid.uuid4())
         self.worker_name = worker_name
-        self.log_files = {}
         self.main_branch_url = self.queue_item.branch_url
         self.vcs_type = self.queue_item.vcs_type
         self.resume_branch_name = None
-        self.reset_keepalive()
-        self._watch_dog = None
         self.worker_link = worker_link
         self._jenkins_metadata = jenkins_metadata
         self.resume_from = None
+        self._reset_keepalive()
+
+    def _reset_keepalive(self):
+        self.last_keepalive = datetime.utcnow()
 
     @property
     def current_duration(self):
         return datetime.utcnow() - self.start_time
 
+    async def kill(self) -> None:
+        raise NotImplementedError(self.kill)
+
+    async def list_log_files(self):
+        raise NotImplementedError(self.list_log_files)
+
+    async def get_log_file(self, name):
+        raise NotImplementedError(self.get_log_file)
+
+    def create_result(self, **kwargs):
+        return JanitorResult(
+            pkg=self.queue_item.package,
+            suite=self.queue_item.suite,
+            start_time=self.start_time,
+            finish_time=datetime.utcnow(),
+            log_id=self.log_id,
+            worker_name=self.worker_name,
+            resume_from=self.resume_from,
+            **kwargs)
+
+    def json(self) -> Any:
+        """Return a JSON representation."""
+        return {
+            "queue_id": self.queue_item.id,
+            "id": self.log_id,
+            "package": self.queue_item.package,
+            "suite": self.queue_item.suite,
+            "estimated_duration": self.queue_item.estimated_duration.total_seconds()
+            if self.queue_item.estimated_duration
+            else None,
+            "current_duration": self.current_duration.total_seconds(),
+            "start_time": self.start_time.isoformat(),
+            "worker": self.worker_name,
+            "worker_link": self.worker_link,
+            "jenkins": self._jenkins_metadata,
+            "last-keepalive": self.last_keepalive.isoformat(
+                timespec='seconds'),
+        }
+
+    def start_watchdog(self, queue_processor):
+        pass
+
+    def stop_watchdog(self):
+        pass
+
+
+class WSActiveRun(ActiveRun):
+
+    _log_files: Dict[str, BinaryIO]
+
+    def __init__(self, *args, **kwargs):
+        super(WSActiveRun, self).__init__(*args, **kwargs)
+        self._log_files = {}
+        self._watch_dog = None
+
+    def append_log(self, name, data):
+        try:
+            f = self._log_files[name]
+        except KeyError:
+            f = self._log_files[name] = BytesIO()
+            ret = True
+        else:
+            ret = False
+        f.write(data)
+        self._reset_keepalive()
+        return ret
+
+    async def list_log_files(self):
+        return list(self._log_files.keys())
+
+    async def get_log_file(self, name):
+        try:
+            return BytesIO(self._log_files[name].getvalue())
+        except KeyError:
+            raise FileNotFoundError
+
     def start_watchdog(self, queue_processor):
         if self._watch_dog is not None:
             raise Exception("Watchdog already started")
-        self._watch_dog = asyncio.create_task(self.watchdog(queue_processor))
+        self._watch_dog = asyncio.create_task(self._watchdog(queue_processor))
 
     def stop_watchdog(self):
         if self._watch_dog is None:
@@ -698,21 +775,7 @@ class ActiveRun(object):
             pass
         self._watch_dog = None
 
-    def reset_keepalive(self):
-        self.last_keepalive = datetime.utcnow()
-
-    def append_log(self, name, data):
-        try:
-            f = self.log_files[name]
-        except KeyError:
-            f = self.log_files[name] = BytesIO()
-            ret = True
-        else:
-            ret = False
-        f.write(data)
-        return ret
-
-    async def watchdog(self, queue_processor):
+    async def _watchdog(self, queue_processor):
         while True:
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
             duration = datetime.utcnow() - self.last_keepalive
@@ -736,49 +799,86 @@ class ActiveRun(object):
                     logging.warning('Watchdog was not stopped?')
                 break
 
-    def kill(self) -> None:
-        raise NotImplementedError(self.kill)
 
-    def list_log_files(self):
-        return list(self.log_files.keys())
+class PollingActiveRun(ActiveRun):
 
-    def get_log_file(self, name):
+    KEEPALIVE_INTERVAL = 10 * 10
+    KEEPALIVE_TIMEOUT = 60
+
+    def __init__(self, my_url, *args, **kwargs):
+        super(PollingActiveRun, self).__init__(*args, **kwargs)
+        self.my_url = my_url
+        self._watch_dog = None
+
+    def append_log(self, name, data):
+        return False
+
+    async def kill(self) -> None:
+        async with ClientSession() as session, \
+                session.post(
+                    self.my_url / 'kill', headers={
+                        'Accept': 'application/json'},
+                    raise_for_status=True):
+            pass
+
+    async def list_log_files(self):
+        # TODO(jelmer)
+        async with ClientSession() as session, \
+                session.get(
+                    self.my_url / 'logs', headers={
+                        'Accept': 'application/json'},
+                    raise_for_status=True) as resp:
+            return await resp.json()
+
+    async def get_log_file(self, name):
+        async with ClientSession() as session, \
+                session.get(
+                    self.my_url / 'logs' / name,
+                    raise_for_status=True) as resp:
+            return BytesIO(await resp.read())
+
+    def start_watchdog(self, queue_processor):
+        if self._watch_dog is not None:
+            raise Exception("Watchdog already started")
+        self._watch_dog = asyncio.create_task(self._watchdog(queue_processor))
+
+    def stop_watchdog(self):
+        if self._watch_dog is None:
+            return
         try:
-            return BytesIO(self.log_files[name].getvalue())
-        except KeyError:
-            raise FileNotFoundError
+            self._watch_dog.cancel()
+        except asyncio.CancelledError:
+            pass
+        self._watch_dog = None
 
-    def create_result(self, **kwargs):
-        return JanitorResult(
-            pkg=self.queue_item.package,
-            suite=self.queue_item.suite,
-            start_time=self.start_time,
-            finish_time=datetime.utcnow(),
-            log_id=self.log_id,
-            worker_name=self.worker_name,
-            resume_from=self.resume_from,
-            **kwargs)
-
-    def json(self) -> Any:
-        """Return a JSON representation."""
-        ret = {
-            "queue_id": self.queue_item.id,
-            "id": self.log_id,
-            "package": self.queue_item.package,
-            "suite": self.queue_item.suite,
-            "estimated_duration": self.queue_item.estimated_duration.total_seconds()
-            if self.queue_item.estimated_duration
-            else None,
-            "current_duration": self.current_duration.total_seconds(),
-            "start_time": self.start_time.isoformat(),
-            "worker": self.worker_name,
-            "worker_link": self.worker_link,
-            "logfilenames": list(self.list_log_files()),
-            "jenkins": self._jenkins_metadata,
-            "last-keepalive": self.last_keepalive.isoformat(
-                timespec='seconds'),
-        }
-        return ret
+    async def _watchdog(self, queue_processor):
+        async with ClientSession() as session:
+            while True:
+                async with session.get(
+                        self.my_url / 'health', raise_for_status=True,
+                        timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)):
+                    self._reset_keepalive()
+                await asyncio.sleep(self.KEEPALIVE_INTERVAL)
+                duration = datetime.utcnow() - self.last_keepalive
+                if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
+                    logging.warning(
+                        "No keepalives received from %s for %s in %s, aborting.",
+                        self.worker_name,
+                        self.log_id,
+                        duration,
+                    )
+                    result = self.create_result(
+                        branch_url=self.queue_item.branch_url,
+                        vcs_type=self.queue_item.vcs_type,
+                        description=("No keepalives received in %s." % duration),
+                        code="worker-timeout",
+                        logfilenames=[],
+                    )
+                    try:
+                        await queue_processor.finish_run(self, result)
+                    except RunExists:
+                        logging.warning('Watchdog was not stopped?')
+                    break
 
 
 def open_resume_branch(
@@ -1225,7 +1325,7 @@ async def _find_active_run(request):
     if queue_item is None:
         raise web.HTTPNotFound(
             text="Unable to find relevant queue item %r" % queue_id)
-    active_run = ActiveRun(worker_name=worker_name, queue_item=queue_item)
+    active_run = WSActiveRun(worker_name=worker_name, queue_item=queue_item)
     queue_processor.register_run(active_run)
     return active_run
 
@@ -1233,7 +1333,7 @@ async def _find_active_run(request):
 @routes.get("/log/{run_id}", name="log-index")
 async def handle_log_index(request):
     active_run = await _find_active_run(request)
-    log_filenames = active_run.list_log_files()
+    log_filenames = await active_run.list_log_files()
     return web.json_response(log_filenames)
 
 
@@ -1241,7 +1341,7 @@ async def handle_log_index(request):
 async def handle_kill(request):
     active_run = await _find_active_run(request)
     ret = active_run.json()
-    active_run.kill()
+    await active_run.kill()
     return web.json_response(ret)
 
 
@@ -1258,7 +1358,7 @@ async def handle_log(request):
     except KeyError:
         return web.Response(text="No such current run: %s" % run_id, status=404)
     try:
-        f = active_run.get_log_file(filename)
+        f = await active_run.get_log_file(filename)
     except FileNotFoundError:
         return web.Response(text="No such log file: %s" % filename, status=404)
 
@@ -1283,6 +1383,7 @@ async def handle_assign(request):
         request, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
         jenkins_metadata=json.get("jenkins"),
+        backchannel=json.get('backchannel')
         )
 
 
@@ -1291,7 +1392,7 @@ async def handle_peek(request):
     return await next_item(request, 'peek')
 
 
-async def next_item(request, mode, worker=None, worker_link=None, jenkins_metadata=None):
+async def next_item(request, mode, worker=None, worker_link=None, jenkins_metadata=None, backchannel=None):
     possible_transports = []
     possible_hosters = []
 
@@ -1318,12 +1419,29 @@ async def next_item(request, mode, worker=None, worker_link=None, jenkins_metada
                 item = await queue_processor.next_queue_item(conn)
             if item is None:
                 return web.json_response({'reason': 'queue empty'}, status=503)
-            active_run = ActiveRun(
-                worker_name=worker,
-                queue_item=item,
-                jenkins_metadata=jenkins_metadata,
-                worker_link=worker_link
-            )
+
+            if backchannel and backchannel['kind'] == 'http':
+                active_run = PollingActiveRun(
+                    my_url=backchannel['url'],
+                    worker_name=worker,
+                    queue_item=item,
+                    jenkins_metadata=jenkins_metadata,
+                    worker_link=worker_link
+                )
+            elif backchannel and backchannel['kind'] == 'ws':
+                active_run = WSActiveRun(
+                    worker_name=worker,
+                    queue_item=item,
+                    jenkins_metadata=jenkins_metadata,
+                    worker_link=worker_link
+                )
+            else:
+                active_run = ActiveRun(
+                    worker_name=worker,
+                    queue_item=item,
+                    jenkins_metadata=jenkins_metadata,
+                    worker_link=worker_link
+                )
 
             queue_processor.register_run(active_run)
 
@@ -1478,7 +1596,6 @@ async def handle_upload_log(request):
         if active_run.append_log(logname, data):
             # Make sure everybody is aware of the new log file.
             queue_processor.topic_queue.publish(queue_processor.status_json())
-    active_run.reset_keepalive()
 
     return web.json_response({}, status=200)
 

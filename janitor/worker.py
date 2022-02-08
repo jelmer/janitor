@@ -1088,7 +1088,7 @@ class AssignmentFailure(Exception):
 
 async def get_assignment(
     session: ClientSession,
-    my_url: yarl.URL,
+    my_url: Optional[yarl.URL],
     base_url: yarl.URL,
     node_name: str,
     jenkins_metadata: Optional[Dict[str, str]] = None,
@@ -1101,15 +1101,13 @@ async def get_assignment(
     if jenkins_metadata:
         json["jenkins"] = jenkins_metadata
         json["worker_link"] = jenkins_metadata.get("build_url")
-        json["health_check"] = None
+        json["backchannel"] = {'kind': 'ws'}
     elif my_url:
         json["worker_link"] = str(my_url)
-        json["health_check"] = {
-            'kind': 'http',
-            'url': str(my_url / "health")}
+        json["backchannel"] = {'kind': 'http', 'url': str(my_url)}
     else:
         json["worker_link"] = None
-        json["health_check"] = None
+        json["backchannel"] = {'kind': 'ws'}
     logging.debug("Sending assignment request: %r", json)
     try:
         async with session.post(assign_url, json=json) as resp:
@@ -1280,7 +1278,7 @@ INDEX_TEMPLATE = Template("""\
 
 <h1>Logs</h1>
 <ul>
-{% for name in names %}
+{% for name in lognames %}
   <li><a href="/logs/{{ name }}">{{ name }}</a></li>
 {% endfor %}
 </ul>
@@ -1291,9 +1289,12 @@ INDEX_TEMPLATE = Template("""\
 
 
 async def handle_index(request):
+    lognames = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
+                if not entry.name.endswith('.log') and entry.is_file()]
     return web.Response(text=INDEX_TEMPLATE.render(
         assignment=request.app['workitem'].get('assignment'),
         metadata=request.app['workitem'].get('metadata'),
+        lognames=lognames,
         datetime=datetime),
         content_type='text/html', status=200)
 
@@ -1354,9 +1355,12 @@ async def handle_log_index(request):
         raise web.HTTPNotFound(text="Log directory not created yet")
     names = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
              if entry.name.endswith('.log')]
-    return web.Response(
-        text=LOG_INDEX_TEMPLATE.render(names=names), content_type='text/html',
-        status=200)
+    if request.headers.get('Accept') == 'application/json':
+        return web.json_response(names)
+    else:
+        return web.Response(
+            text=LOG_INDEX_TEMPLATE.render(names=names), content_type='text/html',
+            status=200)
 
 
 async def handle_log(request):
@@ -1371,7 +1375,7 @@ async def handle_health(request):
 
 
 async def process_single_item(
-        session, my_url: yarl.URL, base_url: yarl.URL, node_name, workitem,
+        session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
         jenkins_metadata=None, prometheus=None, vcs_store_urls=None,
         retry_count=5):
     assignment = await get_assignment(
@@ -1382,13 +1386,16 @@ async def process_single_item(
 
     logging.debug("Got back assignment: %r", assignment)
 
-    watchdog_petter = WatchdogPetter(
-        session, base_url, assignment['id'],
-        queue_id=assignment['queue_id'])
     with ExitStack() as es:
         es.callback(workitem.clear)
-        watchdog_petter.start()
-        es.callback(watchdog_petter.cancel)
+        if my_url is None:
+            watchdog_petter = WatchdogPetter(
+                session, base_url, assignment['id'],
+                queue_id=assignment['queue_id'])
+            watchdog_petter.start()
+            es.callback(watchdog_petter.cancel)
+        else:
+            watchdog_petter = None
         suite = assignment["suite"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
@@ -1436,7 +1443,8 @@ async def process_single_item(
         output_directory = es.enter_context(TemporaryDirectory(prefix='janitor'))
         workitem['directory'] = output_directory
         loop = asyncio.get_running_loop()
-        watchdog_petter.track_log_directory(output_directory)
+        if watchdog_petter:
+            watchdog_petter.track_log_directory(output_directory)
 
         main_task = loop.run_in_executor(
             None,
@@ -1463,7 +1471,8 @@ async def process_single_item(
                 retry_count=retry_count,
             ),
         )
-        watchdog_petter.kill = main_task.cancel
+        if watchdog_petter:
+            watchdog_petter.kill = main_task.cancel
         try:
             result = await main_task
         except WorkerFailure as e:
@@ -1556,6 +1565,7 @@ async def main(argv=None):
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
     parser.add_argument("--gcp-logging", action="store_true")
     parser.add_argument("--listen-address", type=str, default="127.0.0.1")
+    parser.add_argument("--my-url", type=str, default=None)
     parser.add_argument(
         "--loop", action="store_true", help="Keep building until the queue is empty")
     parser.add_argument(
@@ -1597,7 +1607,6 @@ async def main(argv=None):
     site = web.TCPSite(runner, args.listen_address, args.port)
     await site.start()
     (site_addr, site_port) = site._server.sockets[0].getsockname()
-    logging.info('Diagnostics available at http://%s:%d/', site_addr, site_port)
 
     global_config = GlobalStack()
     global_config.set("branch.fetch_tags", True)
@@ -1663,7 +1672,11 @@ async def main(argv=None):
     else:
         vcs_store_urls = None
 
-    if is_gce_instance():
+    if args.my_url:
+        my_url = yarl.URL(args.my_url)
+    elif 'MY_IP' in os.environ:
+        my_url = yarl.URL('http://%s:%d/' % (os.environ['MY_IP'], site_port))
+    elif is_gce_instance():
         external_ip = gce_external_ip()
         if external_ip:
             my_url = yarl.URL('http://%s:%d/' % (external_ip, site_port))
@@ -1672,6 +1685,9 @@ async def main(argv=None):
     # TODO(jelmer): Find out kubernetes IP?
     else:
         my_url = None
+
+    if my_url:
+        logging.info('Diagnostics available at s', my_url)
 
     loop = asyncio.get_event_loop()
     async with ClientSession(auth=auth) as session:
