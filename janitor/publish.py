@@ -2212,14 +2212,20 @@ applied independently.
         if await is_conflicted(mp):
             logger.info("%s is conflicted. Rescheduling.", mp.url)
             if not dry_run:
-                await do_schedule(
-                    conn,
-                    mp_run['package'],
-                    mp_run['suite'],
-                    bucket="update-existing-mp",
-                    refresh=True,
-                    requestor="publisher (merge conflict)",
-                )
+                try:
+                    await do_schedule(
+                        conn,
+                        mp_run['package'],
+                        mp_run['suite'],
+                        bucket="update-existing-mp",
+                        refresh=True,
+                        requestor="publisher (merge conflict)",
+                    )
+                except PolicyUnavailable:
+                    logging.warning(
+                        'Policy unavailable while attempting to reschedule '
+                        'conflicted %s/%s',
+                        mp_run['package'], mp_run['suite'])
         return False
 
 

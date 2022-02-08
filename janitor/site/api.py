@@ -1162,14 +1162,16 @@ async def handle_run_peek(request):
 @docs()
 @routes.post("/active-runs", name="run-assign")
 async def handle_run_assign(request):
+    json = await request.json()
     span = aiozipkin.request_span(request)
     with span.new_child('check-worker-creds'):
         worker_name = await check_worker_creds(request.app['db'], request)
     url = URL(request.app['runner_url']) / "active-runs"
     with span.new_child('forward-runner'):
         try:
+            json["worker"] = worker_name
             async with request.app['http_client_session'].post(
-                url, json={"worker": worker_name}
+                    url, json=json, timeout=ClientTimeout(60)
             ) as resp:
                 if resp.status != 201:
                     try:

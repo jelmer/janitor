@@ -28,7 +28,7 @@ from janitor import state
 from janitor.candidates import store_candidates
 from janitor.config import read_config
 from janitor.debian.missing_deps import NewPackage, UpdatePackage, resolve_requirement
-from janitor.schedule import do_schedule
+from janitor.schedule import do_schedule, PolicyUnavailable
 from janitor.policy import sync_policy, read_policy
 
 DEFAULT_NEW_PACKAGE_PRIORITY = 150
@@ -102,7 +102,12 @@ async def schedule_update_package(conn, policy, package, desired_version, reques
         package, 'fresh-releases', None, DEFAULT_UPDATE_PACKAGE_PRIORITY,
         DEFAULT_SUCCESS_CHANCE)
     await sync_policy(conn, policy, selected_package=package)
-    await do_schedule(conn, package, "fresh-releases", requestor=requestor, bucket='missing-deps')
+    try:
+        await do_schedule(conn, package, "fresh-releases", requestor=requestor, bucket='missing-deps')
+    except PolicyUnavailable as e:
+        logging.warning(
+            'Unable to schedule %s/fresh-releases: %s',
+            package, e)
 
 
 async def followup_missing_requirement(conn, apt_mgr, policy, requirement, needed_by=None):
