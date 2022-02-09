@@ -705,6 +705,14 @@ class ActiveRun(object):
             resume_from=self.resume_from,
             **kwargs)
 
+    @property
+    def keepalive_age(self):
+        return datetime.utcnow() - self.last_keepalive
+
+    @property
+    def is_mia(self):
+        return self.keepalive_age.total_seconds() > 60 * 60
+
     def json(self) -> Any:
         """Return a JSON representation."""
         return {
@@ -722,6 +730,8 @@ class ActiveRun(object):
             "jenkins": self._jenkins_metadata,
             "last-keepalive": self.last_keepalive.isoformat(
                 timespec='seconds'),
+            "keepalive_age": self.keepalive_age.total_seconds(),
+            "mia": self.is_mia,
         }
 
     def start_watchdog(self, queue_processor):
@@ -852,15 +862,18 @@ class PollingActiveRun(ActiveRun):
         self._watch_dog = None
 
     async def _watchdog(self, queue_processor):
+        health_url = self.my_url / 'health'
+        logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
             while True:
-                async with session.get(
-                        self.my_url / 'health', raise_for_status=True,
-                        timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)):
-                    self._reset_keepalive()
-                await asyncio.sleep(self.KEEPALIVE_INTERVAL)
-                duration = datetime.utcnow() - self.last_keepalive
-                if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
+                try:
+                    async with session.get(
+                            health_url, raise_for_status=True,
+                            timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)):
+                        self._reset_keepalive()
+                except (ClientConnectorError, ClientResponseError) as e:
+                    logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
                     logging.warning(
                         "No keepalives received from %s for %s in %s, aborting.",
                         self.worker_name,
@@ -879,6 +892,7 @@ class PollingActiveRun(ActiveRun):
                     except RunExists:
                         logging.warning('Watchdog was not stopped?')
                     break
+                await asyncio.sleep(self.KEEPALIVE_INTERVAL)
 
 
 def open_resume_branch(
@@ -1317,17 +1331,7 @@ async def _find_active_run(request):
     try:
         return queue_processor.active_runs[run_id]
     except KeyError:
-        pass
-    if not worker_name or not queue_id:
         raise web.HTTPNotFound(text="No such current run: %s" % run_id)
-    async with queue_processor.database.acquire() as conn:
-        queue_item = await get_queue_item(conn, int(queue_id))
-    if queue_item is None:
-        raise web.HTTPNotFound(
-            text="Unable to find relevant queue item %r" % queue_id)
-    active_run = WSActiveRun(worker_name=worker_name, queue_item=queue_item)
-    queue_processor.register_run(active_run)
-    return active_run
 
 
 @routes.get("/log/{run_id}", name="log-index")
@@ -1383,7 +1387,7 @@ async def handle_assign(request):
         request, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
         jenkins_metadata=json.get("jenkins"),
-        backchannel=json.get('backchannel')
+        backchannel=json['backchannel']
         )
 
 

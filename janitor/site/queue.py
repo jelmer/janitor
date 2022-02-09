@@ -40,7 +40,7 @@ def get_processing(answer: Dict[str, Any]) -> Iterator[Dict[str, Any]]:
             entry["start_time"] = datetime.fromisoformat(entry["start_time"])
             entry["current_duration"] = datetime.utcnow() - entry["start_time"]
         if entry.get('last-keepalive'):
-            entry["keepalive_age"] = datetime.utcnow() - datetime.fromisoformat(entry['last-keepalive'])
+            entry["keepalive_age"] = timedelta(seconds=entry["keepalive_age"])
         yield entry
 
 
