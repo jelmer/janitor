@@ -1380,6 +1380,11 @@ async def handle_health(request):
     return web.Response(text='ok', status=200)
 
 
+async def handle_log_id(request):
+    assignment = request.app['workitem'].get('assignment')
+    return web.Response(text=assignment.get('id', ''), status=200)
+
+
 async def process_single_item(
         session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
         jenkins_metadata=None, prometheus=None, vcs_store_urls=None,
@@ -1607,6 +1612,7 @@ async def main(argv=None):
     app.router.add_get('/artifacts/', handle_artifact_index, name='artifact-index')
     app.router.add_get('/artifacts/{filename}', handle_artifact, name='artifact')
     app.router.add_get('/health', handle_health, name='health')
+    app.router.add_get('/log-id', handle_log_id, name='log_id')
     setup_metrics(app)
     runner = web.AppRunner(app)
     await runner.setup()
