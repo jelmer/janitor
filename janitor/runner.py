@@ -862,15 +862,19 @@ class PollingActiveRun(ActiveRun):
         self._watch_dog = None
 
     async def _watchdog(self, queue_processor):
-        health_url = self.my_url / 'health'
+        health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
         async with ClientSession() as session:
             while True:
                 try:
                     async with session.get(
                             health_url, raise_for_status=True,
-                            timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)):
-                        self._reset_keepalive()
+                            timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
+                        log_id = (await resp.read()).decode()
+                        if log_id != self.log_id:
+                            logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
+                        else:
+                            self._reset_keepalive()
                 except (ClientConnectorError, ClientResponseError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
