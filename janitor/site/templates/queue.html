@@ -50,7 +50,7 @@ tr.old-keepalive {
 </thead>
 <tbody valign="top" id="queue-table">
 {% for entry in processing %}
-<tr id="active-{{ entry['id'] }}"{% if 'keepalive_age' in entry and entry['keepalive_age'].seconds >= 60 * 60 %} class="old-keepalive"{% endif %}>
+<tr id="active-{{ entry['id'] }}"{% if entry['mia'] %} class="old-keepalive"{% endif %}>
     <td><a href="/cupboard/pkg/{{ entry['package'] }}">{{ entry['package'] }}</a></td>
     <td>{{ entry['suite'] }}</td>
     <td>{{ format_duration(entry['estimated_duration']) if entry['estimated_duration'] else 'unknown' }}</td>
@@ -122,8 +122,7 @@ registerHandler('queue', function(msg) {
          }).join(' ') + '</td>');
          if ('last-keepalive' in p) {
              tr.append('<td>' + format_duration(p['keepalive_age']) + '</td>');
-             var keepalive_age = moment.duration(p['keepalive_age'], 's');
-             if (keepalive_age.hours() >= 1) {
+             if (p['mia']) {
                  tr.addClass('old-keepalive');
              }
          } else {

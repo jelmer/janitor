@@ -1098,16 +1098,17 @@ async def get_assignment(
         ["dpkg-architecture", "-qDEB_BUILD_ARCH"]
     ).decode().strip()
     json: Any = {"node": node_name, "archs": [build_arch]}
+    if my_url:
+        json["backchannel"] = {'kind': 'http', 'url': str(my_url)}
+    else:
+        json["backchannel"] = {'kind': 'ws'}
     if jenkins_metadata:
         json["jenkins"] = jenkins_metadata
         json["worker_link"] = jenkins_metadata.get("build_url")
-        json["backchannel"] = {'kind': 'ws'}
     elif my_url:
         json["worker_link"] = str(my_url)
-        json["backchannel"] = {'kind': 'http', 'url': str(my_url)}
     else:
         json["worker_link"] = None
-        json["backchannel"] = {'kind': 'ws'}
     logging.debug("Sending assignment request: %r", json)
     try:
         async with session.post(assign_url, json=json) as resp:
@@ -1276,12 +1277,14 @@ INDEX_TEMPLATE = Template("""\
 <li><b>Current duration: </b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
 </ul>
 
+{% if lognames %}
 <h1>Logs</h1>
 <ul>
 {% for name in lognames %}
   <li><a href="/logs/{{ name }}">{{ name }}</a></li>
 {% endfor %}
 </ul>
+{% endif %}
 
 </body>
 </html>
@@ -1289,8 +1292,11 @@ INDEX_TEMPLATE = Template("""\
 
 
 async def handle_index(request):
-    lognames = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
-                if not entry.name.endswith('.log') and entry.is_file()]
+    if 'directory' in request.app['workitem']:
+        lognames = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
+                    if not entry.name.endswith('.log') and entry.is_file()]
+    else:
+        lognames = None
     return web.Response(text=INDEX_TEMPLATE.render(
         assignment=request.app['workitem'].get('assignment'),
         metadata=request.app['workitem'].get('metadata'),
@@ -1687,7 +1693,7 @@ async def main(argv=None):
         my_url = None
 
     if my_url:
-        logging.info('Diagnostics available at s', my_url)
+        logging.info('Diagnostics available at %s', my_url)
 
     loop = asyncio.get_event_loop()
     async with ClientSession(auth=auth) as session:
