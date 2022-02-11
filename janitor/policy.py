@@ -59,11 +59,14 @@ def matches(match, package_name, vcs_url, package_maintainer, package_uploaders,
     return True
 
 
-def known_suites(config):
+def known_campaigns(config):
     ret = set()
     for policy in config.policy:
         for suite in policy.suite:
             ret.add(suite.name)
+    for policy in config.policy:
+        for campaign in policy.campaign:
+            ret.add(campaign.name)
     return ret
 
 
@@ -229,7 +232,7 @@ WHERE
 
 async def sync_policy(conn, policy, selected_package=None):
     current_policy = {}
-    suites = known_suites(policy)
+    suites = known_campaigns(policy)
     if policy.freeze_dates_url:
         release_stages_passed = await read_release_stages(policy.freeze_dates_url)
         logging.info('Release stages passed: %r', release_stages_passed)
@@ -239,6 +242,7 @@ async def sync_policy(conn, policy, selected_package=None):
     logging.info('Creating current policy')
     async for (package, suite, cur_pol) in iter_policy(conn, package=selected_package):
         current_policy[(package, suite)] = cur_pol
+    logging.info('Current policy: %d entries', len(current_policy))
     logging.info('Updating policy')
     for package in await iter_packages(conn, package=selected_package):
         updated = False
