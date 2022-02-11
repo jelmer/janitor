@@ -351,6 +351,16 @@ async def handle_diffoscope(request):
 
 
 async def precache(app, old_id, new_id):
+    """Precache the diff between two runs.
+
+    Args:
+      app: Web App
+      old_id: Run id for old run
+      new_id: Run id for new run
+    Raises:
+      ArtifactsMissing: if either the old or new run artifacts are missing
+
+    """
     with ExitStack() as es:
         old_dir = es.enter_context(TemporaryDirectory())
         new_dir = es.enter_context(TemporaryDirectory())
