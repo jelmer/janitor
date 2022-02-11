@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS queue (
    bucket queue_bucket default 'default',
    package text not null,
    suite suite_name not null,
-   command text not null,
+   command text,
    priority bigint default 0 not null,
    foreign key (package) references package(name),
    -- Some subworker-specific indication of what we are expecting to do.
