@@ -22,6 +22,8 @@ message Distribution {
   optional string build_command = 7;
 
   optional string vendor = 9;
+
+  repeated string extra = 10;
 }
 
 message Config {
