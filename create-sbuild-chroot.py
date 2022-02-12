@@ -10,7 +10,7 @@ from iniparse import RawConfigParser
 from janitor.config import read_config, get_distribution
 
 
-def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydata=True, make_sbuild_tarball=None):
+def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydata=True, make_sbuild_tarball=None, extra=[]):
     cmd = ["sbuild-createchroot", distro.name, sbuild_path, distro.archive_mirror_uri]
     cmd.append("--components=%s" % ','.join(distro.component))
     if eatmydata:
@@ -22,6 +22,10 @@ def create_chroot(distro, sbuild_path, suites, sbuild_arch, include=[], eatmydat
         cmd.append("--alias=%s-%s-sbuild" % (suite, sbuild_arch))
     if make_sbuild_tarball:
         cmd.append("--make-sbuild-tarball=%s" % make_sbuild_tarball)
+    for name in extra:
+        cmd.append("--extra-repository='deb %s %s %s'" % (
+            distro.archive_mirror_uri, name, ' '.join(distro.component)))
+
     subprocess.check_call(cmd)
 
 
