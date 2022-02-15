@@ -19,6 +19,7 @@ import aiozipkin
 import asyncio
 from contextlib import ExitStack
 import hashlib
+from itertools import chain
 import logging
 import gzip
 import bz2
@@ -271,7 +272,7 @@ ARCHES: List[str] = ["amd64"]
 async def handle_publish(request):
     post = await request.post()
     suite = post.get("suite")
-    for suite_config in request.app.config.suite + request.app.config.campaign:
+    for suite_config in chain(request.app.config.suite, request.app.config.campaign):
         if not suite_config.HasField('debian_build'):
             continue
         build_distribution = (suite_config.debian_build.build_distribution or suite_config.name)
@@ -418,7 +419,7 @@ class GeneratorManager(object):
 
 async def loop_publish(config, generator_manager):
     while True:
-        for suite in config.suite + config.campaign:
+        for suite in chain(config.suite, config.campaign):
             generator_manager.trigger(suite)
         # every 12 hours
         await asyncio.sleep(60 * 60 * 12)
