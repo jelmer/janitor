@@ -418,7 +418,7 @@ class GeneratorManager(object):
 
 async def loop_publish(config, generator_manager):
     while True:
-        for suite in config.suite:
+        for suite in config.suite + config.campaign:
             generator_manager.trigger(suite)
         # every 12 hours
         await asyncio.sleep(60 * 60 * 12)
