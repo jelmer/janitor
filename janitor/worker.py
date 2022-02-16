@@ -1133,140 +1133,6 @@ async def get_assignment(
         raise AssignmentFailure("timeout while retrieving assignment: %s" % e)
 
 
-class WatchdogPetter(object):
-
-    def __init__(self, session, base_url, run_id, queue_id=None):
-        self.base_url = base_url
-        self.run_id = run_id
-        self._task = None
-        self._log_cached = []
-        self.ws = None
-        self.loop = asyncio.new_event_loop()
-        self._thread = Thread(target=self._run, daemon=True)
-        self._thread.start()
-        self._tasks = []
-        self._log_dir_tasks = {}
-        self._last_communication = datetime.utcnow()
-        self.kill = None
-        self.queue_id = queue_id
-
-    def _run(self):
-        asyncio.set_event_loop(self.loop)
-        self.loop.run_forever()
-
-    def start(self):
-        for task in [self._connection(), self._send_keepalives()]:
-            self._tasks.append(asyncio.run_coroutine_threadsafe(task, self.loop))
-
-    def cancel(self):
-        for task in self._tasks:
-            task.cancel()
-
-    async def _send_keepalives(self):
-        try:
-            while True:
-                await asyncio.sleep(10)
-                if (datetime.utcnow() - self._last_communication).total_seconds() > 60:
-                    if not await self.send_keepalive():
-                        logging.warning('failed to send keepalive')
-        except asyncio.CancelledError:
-            pass
-        except BaseException:
-            logging.exception('sending keepalives')
-            raise
-
-    async def _connection(self):
-        try:
-            ws_url = self.base_url / "ws/active-runs" / self.run_id / "progress"
-            params = {}
-            if self.queue_id is not None:
-                params['queue_id'] = self.queue_id
-            async with self.session:
-                while True:
-                    try:
-                        self.ws = await self.session.ws_connect(ws_url, params=params)
-                    except (ClientResponseError, ClientConnectorError) as e:
-                        self.ws = None
-                        logging.warning("progress ws: Unable to connect: %s" % e)
-                        await asyncio.sleep(5)
-                        continue
-
-                    for (fn, data) in self._log_cached:
-                        await self.send_log_fragment(fn, data)
-                    self._log_cached = []
-
-                    while True:
-                        msg = await self.ws.receive()
-
-                        if msg.type == WSMsgType.text:
-                            logging.warning("Unknown websocket message: %r", msg.data)
-                        elif msg.type == WSMsgType.BINARY:
-                            if msg.data == b'kill':
-                                logging.info('Received kill over websocket, exiting..')
-                                if self.kill:
-                                    self.kill()
-                            else:
-                                logging.warning("Unknown websocket message: %r", msg.data)
-                        elif msg.type == WSMsgType.closed:
-                            break
-                        elif msg.type == WSMsgType.error:
-                            logging.warning("Error on websocket: %s", self.ws.exception())
-                            break
-                        elif msg.type == WSMsgType.close:
-                            logging.info('Request to close websocket.')
-                            await self.ws.close()
-                            break
-                        else:
-                            logging.warning("Ignoring ws message type %r", msg.type)
-                    self.ws = None
-                    await asyncio.sleep(5)
-        except asyncio.CancelledError:
-            pass
-
-    async def send_keepalive(self):
-        if self.ws is not None:
-            logging.debug('Sending keepalive')
-            await self.ws.send_bytes(b"keepalive")
-            return True
-        else:
-            logging.debug('Not sending keepalive; websocket is dead')
-            return False
-        self._last_communication = datetime.utcnow()
-
-    async def send_log_fragment(self, filename, data):
-        if self.ws is None:
-            self._log_cached.append((filename, data))
-        else:
-            await self.ws.send_bytes(
-                b"\0".join([b"log", filename.encode("utf-8"), data])
-            )
-        self._last_communication = datetime.utcnow()
-
-    def track_log_directory(self, directory):
-        task = self._forward_logs(directory)
-        self._log_dir_tasks[directory] = task
-        asyncio.run_coroutine_threadsafe(task, self.loop)
-
-    async def _forward_logs(self, directory):
-        fs = {}
-        try:
-            while True:
-                try:
-                    for entry in os.scandir(directory):
-                        if (entry.name not in fs and
-                                entry.name.endswith('.log')):
-                            fs[entry.name] = open(entry.path, 'rb')
-                except FileNotFoundError:
-                    pass  # Uhm, okay
-                for name, f in fs.items():
-                    data = f.read()
-                    await self.send_log_fragment(name, data)
-                await asyncio.sleep(60)
-        except BaseException:
-            logging.exception('log directory forwarding')
-            raise
-
-
 INDEX_TEMPLATE = Template("""\
 <html>
 <head><title>Job</title></head>
@@ -1402,14 +1268,6 @@ async def process_single_item(
 
     with ExitStack() as es:
         es.callback(workitem.clear)
-        if my_url is None:
-            watchdog_petter = WatchdogPetter(
-                session, base_url, assignment['id'],
-                queue_id=assignment['queue_id'])
-            watchdog_petter.start()
-            es.callback(watchdog_petter.cancel)
-        else:
-            watchdog_petter = None
         suite = assignment["suite"]
         branch_url = assignment["branch"]["url"]
         vcs_type = assignment["branch"]["vcs_type"]
@@ -1455,8 +1313,6 @@ async def process_single_item(
         output_directory = es.enter_context(TemporaryDirectory(prefix='janitor'))
         workitem['directory'] = output_directory
         loop = asyncio.get_running_loop()
-        if watchdog_petter:
-            watchdog_petter.track_log_directory(output_directory)
 
         main_task = loop.run_in_executor(
             None,
@@ -1483,8 +1339,6 @@ async def process_single_item(
                 retry_count=retry_count,
             ),
         )
-        if watchdog_petter:
-            watchdog_petter.kill = main_task.cancel
         try:
             result = await main_task
         except WorkerFailure as e:

@@ -1085,56 +1085,6 @@ async def handle_needs_review(request):
 
 
 @docs()
-@routes.get("/ws/active-runs/{run_id}/progress", name="run-progress")
-async def handle_run_progress(request):
-    worker_name = await check_worker_creds(request.app['db'], request)
-
-    run_id = request.match_info["run_id"]
-
-    run_url = urllib.parse.urljoin(request.app['runner_url'], "active-runs/%s" % run_id)
-
-    params = {'worker_name': worker_name}
-    queue_id = request.query.get('queue_id')
-    if queue_id:
-        params['queue_id'] = queue_id
-
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
-
-    try:
-        async for msg in ws:
-            if msg.type == WSMsgType.BINARY:
-                if msg.data == b"keepalive":
-                    logging.debug('%s is still alive', run_id)
-                    try:
-                        async with request.app['http_client_session'].post(run_url + '/keepalive', params=params, timeout=ClientTimeout(20)) as resp:
-                            if resp.status != 200:
-                                logging.warning('error sending keepalive for %s: %s', run_id, resp.status)
-                    except asyncio.TimeoutError:
-                        logging.warning('timeout sending keepalive for %s: %s', run_id, resp.status)
-                elif msg.data.startswith(b"log\0"):
-                    (kind, name, payload) = msg.data.split(b"\0", 2)
-                    try:
-                        async with request.app['http_client_session'].post(run_url + '/log/' + name.decode('utf-8'), params=params, data=payload, timeout=ClientTimeout(20)) as resp:
-                            if resp.status != 200:
-                                logging.warning('error sending log for %s: %s', run_id, resp.status)
-                    except asyncio.TimeoutError:
-                        logging.warning('timeout sending logs for %s: %s', run_id, resp.status)
-                else:
-                    logging.warning(
-                        "Unknown websocket message from worker %s: %r",
-                        worker_name,
-                        msg.data,
-                    )
-            else:
-                logging.warning("Ignoring ws message type %r", msg.type)
-    except ConnectionResetError:
-        pass
-
-    return ws
-
-
-@docs()
 @routes.get("/active-runs/+peek")
 async def handle_run_peek(request):
     span = aiozipkin.request_span(request)

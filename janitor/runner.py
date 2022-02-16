@@ -750,9 +750,6 @@ class JenkinsRun(ActiveRun):
         self._watch_dog = None
         self._metadata = None
 
-    def append_log(self, name, data):
-        return False
-
     async def kill(self) -> None:
         raise NotImplementedError(self.kill)
 
@@ -832,9 +829,6 @@ class PollingActiveRun(ActiveRun):
         super(PollingActiveRun, self).__init__(*args, **kwargs)
         self.my_url = my_url
         self._watch_dog = None
-
-    def append_log(self, name, data):
-        return False
 
     async def kill(self) -> None:
         async with ClientSession() as session, \
@@ -1604,41 +1598,9 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
     return web.json_response(assignment, status=201)
 
 
-@routes.post("/active-runs/{run_id}/log/{logname}", name="upload-log")
-async def handle_upload_log(request):
-    queue_processor = request.app['queue_processor']
-    run_id = request.match_info['run_id']
-    logname = request.match_info['logname']
-    try:
-        active_run = queue_processor.active_runs[run_id]
-    except KeyError:
-        logging.warning("No such current run: %s" % run_id)
-        return web.json_response({'run_id': run_id}, status=404)
-
-    async for data, _ in request.content.iter_chunks():
-        if active_run.append_log(logname, data):
-            # Make sure everybody is aware of the new log file.
-            queue_processor.topic_queue.publish(queue_processor.status_json())
-
-    return web.json_response({}, status=200)
-
-
 @routes.get("/health", name="health")
 async def handle_health(request):
     return web.Response(text="OK")
-
-
-@routes.post("/active-runs/{run_id}/keepalive", name="keepalive")
-async def handle_keepalive(request):
-    queue_processor = request.app['queue_processor']
-    run_id = request.match_info['run_id']
-    try:
-        active_run = queue_processor.active_runs[run_id]
-    except KeyError:
-        logging.warning("No such current run: %s" % run_id)
-        return web.json_response({'run_id': run_id}, status=404)
-    active_run.keepalive()
-    return web.json_response({}, status=200)
 
 
 @routes.post("/active-runs/{run_id}/finish", name="finish")
