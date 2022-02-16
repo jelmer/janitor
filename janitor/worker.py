@@ -1105,7 +1105,7 @@ async def get_assignment(
             'kind': 'jenkins',
             'url': jenkins_build_url}
     else:
-        json["backchannel"] = {'kind': 'ws'}
+        json["backchannel"] = None
     if jenkins_build_url:
         json["worker_link"] = jenkins_build_url
     elif my_url:

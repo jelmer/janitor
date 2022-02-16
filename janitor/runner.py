@@ -739,67 +739,6 @@ class ActiveRun(object):
         pass
 
 
-class WSActiveRun(ActiveRun):
-
-    _log_files: Dict[str, BinaryIO]
-
-    def __init__(self, *args, **kwargs):
-        super(WSActiveRun, self).__init__(*args, **kwargs)
-        self._log_files = {}
-        self._watch_dog = None
-
-    def append_log(self, name, data):
-        try:
-            f = self._log_files[name]
-        except KeyError:
-            f = self._log_files[name] = BytesIO()
-            ret = True
-        else:
-            ret = False
-        f.write(data)
-        self._reset_keepalive()
-        return ret
-
-    async def list_log_files(self):
-        return list(self._log_files.keys())
-
-    async def get_log_file(self, name):
-        try:
-            return BytesIO(self._log_files[name].getvalue())
-        except KeyError:
-            raise FileNotFoundError
-
-    def start_watchdog(self, queue_processor):
-        if self._watch_dog is not None:
-            raise Exception("Watchdog already started")
-        self._watch_dog = asyncio.create_task(self._watchdog(queue_processor))
-
-    def stop_watchdog(self):
-        if self._watch_dog is None:
-            return
-        try:
-            self._watch_dog.cancel()
-        except asyncio.CancelledError:
-            pass
-        self._watch_dog = None
-
-    async def _watchdog(self, queue_processor):
-        while True:
-            await asyncio.sleep(self.KEEPALIVE_INTERVAL)
-            if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
-                logging.warning(
-                    "No keepalives received from %s for %s in %s, aborting.",
-                    self.worker_name,
-                    self.log_id,
-                    self.keepalive_age,
-                )
-                try:
-                    await queue_processor.timeout_run(self, self.keepalive_age)
-                except RunExists:
-                    logging.warning('Watchdog was not stopped?')
-                break
-
-
 class JenkinsRun(ActiveRun):
 
     KEEPALIVE_INTERVAL = 10 * 10
@@ -1520,12 +1459,6 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     worker_name=worker,
                     queue_item=item,
                     worker_link=worker_link)
-            elif backchannel and backchannel['kind'] == 'ws':
-                active_run = WSActiveRun(
-                    worker_name=worker,
-                    queue_item=item,
-                    worker_link=worker_link
-                )
             else:
                 active_run = ActiveRun(
                     worker_name=worker,
