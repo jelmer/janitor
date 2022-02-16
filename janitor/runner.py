@@ -614,6 +614,23 @@ async def open_branch_with_fallback(
         raise
 
 
+def create_background_task(fn, title):
+    loop = asyncio.get_event_loop()
+    task = loop.create_task(fn)
+
+    def log_result(future):
+        try:
+            future.result()
+        except asyncio.CancelledError:
+            logging.debug('%s cancelled', title)
+        except BaseException:
+            logging.exception('%s failed', title)
+        else:
+            logging.debug('%s succeeded', title)
+    task.add_done_callback(log_result)
+    return task
+
+
 async def import_logs(
     output_directory: str,
     logfile_manager: LogFileManager,
@@ -650,8 +667,6 @@ async def import_logs(
 
 
 class ActiveRun(object):
-
-    KEEPALIVE_INTERVAL = 60 * 10
 
     worker_name: str
     worker_link: Optional[str]
@@ -741,14 +756,17 @@ class ActiveRun(object):
 
 class JenkinsRun(ActiveRun):
 
-    KEEPALIVE_INTERVAL = 10 * 10
+    KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url, *args, **kwargs):
+    def __init__(self, my_url: URL, *args, **kwargs):
         super(JenkinsRun, self).__init__(*args, **kwargs)
         self.my_url = my_url
         self._watch_dog = None
         self._metadata = None
+
+    def __repr__(self):
+        return "<%s(%r)>" % (type(self).__name__, self.my_url)
 
     async def kill(self) -> None:
         raise NotImplementedError(self.kill)
@@ -768,7 +786,8 @@ class JenkinsRun(ActiveRun):
     def start_watchdog(self, queue_processor):
         if self._watch_dog is not None:
             raise Exception("Watchdog already started")
-        self._watch_dog = asyncio.create_task(self._watchdog(queue_processor))
+        self._watch_dog = create_background_task(
+            self._watchdog(queue_processor), 'watchdog for %r' % self)
 
     def stop_watchdog(self):
         if self._watch_dog is None:
@@ -780,7 +799,9 @@ class JenkinsRun(ActiveRun):
         self._watch_dog = None
 
     async def _get_job(self, session):
-        async with session.get(self.my_url / 'api/json', raise_for_status=True) as resp:
+        async with session.get(
+                self.my_url / 'api/json', raise_for_status=True,
+                timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
             return await resp.json()
 
     async def _watchdog(self, queue_processor):
@@ -790,9 +811,10 @@ class JenkinsRun(ActiveRun):
             while True:
                 try:
                     await self._get_job(session)
-                    self._reset_keepalive()
-                except (ClientConnectorError, ClientResponseError) as e:
+                except (ClientConnectorError, ClientResponseError, asyncio.TimeoutError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                else:
+                    self._reset_keepalive()
                 if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
                     logging.warning(
                         "No keepalives received from %s for %s in %s, aborting.",
@@ -822,13 +844,16 @@ class JenkinsRun(ActiveRun):
 
 class PollingActiveRun(ActiveRun):
 
-    KEEPALIVE_INTERVAL = 10 * 10
+    KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
 
-    def __init__(self, my_url, *args, **kwargs):
+    def __init__(self, my_url: URL, *args, **kwargs):
         super(PollingActiveRun, self).__init__(*args, **kwargs)
         self.my_url = my_url
         self._watch_dog = None
+
+    def __repr__(self):
+        return "<%s(%r)>" % (type(self).__name__, self.my_url)
 
     async def kill(self) -> None:
         async with ClientSession() as session, \
@@ -857,7 +882,8 @@ class PollingActiveRun(ActiveRun):
     def start_watchdog(self, queue_processor):
         if self._watch_dog is not None:
             raise Exception("Watchdog already started")
-        self._watch_dog = asyncio.create_task(self._watchdog(queue_processor))
+        self._watch_dog = create_background_task(
+            self._watchdog(queue_processor), 'watchdog for %r' % self)
 
     def stop_watchdog(self):
         if self._watch_dog is None:
@@ -882,7 +908,7 @@ class PollingActiveRun(ActiveRun):
                             logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
                         else:
                             self._reset_keepalive()
-                except (ClientConnectorError, ClientResponseError) as e:
+                except (ClientConnectorError, ClientResponseError, asyncio.TimeoutError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
                     logging.warning(
@@ -1442,14 +1468,14 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
             if backchannel and backchannel['kind'] == 'http':
                 active_run = PollingActiveRun(
-                    my_url=backchannel['url'],
+                    my_url=URL(backchannel['url']),
                     worker_name=worker,
                     queue_item=item,
                     worker_link=worker_link
                 )
             elif backchannel and backchannel['kind'] == 'jenkins':
                 active_run = JenkinsRun(
-                    my_url=backchannel['url'],
+                    my_url=URL(backchannel['url']),
                     worker_name=worker,
                     queue_item=item,
                     worker_link=worker_link)
