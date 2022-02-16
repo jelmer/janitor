@@ -33,7 +33,7 @@ import tempfile
 from typing import List, Any, Optional, BinaryIO, Dict, Tuple, Type
 import uuid
 
-from aiohttp import web, ClientSession, ClientTimeout
+from aiohttp import web, ClientSession, ClientTimeout, ClientConnectorError, ClientResponseError
 
 from yarl import URL
 
@@ -65,13 +65,14 @@ from . import (
     splitout_env,
 )
 from .artifacts import (
+    ArtifactManager,
     get_artifact_manager,
     LocalArtifactManager,
     store_artifacts_with_backup,
     upload_backup_artifacts,
 )
 from .compat import to_thread
-from .config import read_config, get_suite_config, get_distribution
+from .config import read_config, get_suite_config, get_distribution, Config
 from .debian import (
     changes_filenames,
     open_guessed_salsa_branch,
@@ -85,7 +86,7 @@ from .logs import (
     LogFileManager,
     FileSystemLogFileManager,
 )
-from .policy import read_policy
+from .policy import read_policy, PolicyConfig
 from .pubsub import Topic, pubsub_handler
 from .schedule import do_schedule_control, do_schedule
 from .vcs import (
@@ -95,6 +96,7 @@ from .vcs import (
     BranchOpenFailure,
     get_vcs_manager,
     UnsupportedVcs,
+    VcsManager,
 )
 
 DEFAULT_RETRY_AFTER = 120
@@ -344,13 +346,12 @@ def get_builder(config, suite_config):
 class JanitorResult(object):
     def __init__(
         self,
-        pkg,
-        log_id,
+        pkg: str,
+        log_id: str,
         branch_url,
-        description=None,
-        code=None,
+        description: Optional[str] = None,
+        code: Optional[str] = None,
         worker_result=None,
-        worker_cls=None,
         logfilenames=None,
         suite=None,
         start_time=None,
@@ -664,7 +665,6 @@ class ActiveRun(object):
         queue_item: QueueItem,
         worker_name: str,
         worker_link: Optional[str] = None,
-        jenkins_metadata: Optional[Dict[str, str]] = None,
     ):
         self.queue_item = queue_item
         self.start_time = datetime.utcnow()
@@ -674,7 +674,6 @@ class ActiveRun(object):
         self.vcs_type = self.queue_item.vcs_type
         self.resume_branch_name = None
         self.worker_link = worker_link
-        self._jenkins_metadata = jenkins_metadata
         self.resume_from = None
         self._reset_keepalive()
 
@@ -727,7 +726,6 @@ class ActiveRun(object):
             "start_time": self.start_time.isoformat(),
             "worker": self.worker_name,
             "worker_link": self.worker_link,
-            "jenkins": self._jenkins_metadata,
             "last-keepalive": self.last_keepalive.isoformat(
                 timespec='seconds'),
             "keepalive_age": self.keepalive_age.total_seconds(),
@@ -788,26 +786,102 @@ class WSActiveRun(ActiveRun):
     async def _watchdog(self, queue_processor):
         while True:
             await asyncio.sleep(self.KEEPALIVE_INTERVAL)
-            duration = datetime.utcnow() - self.last_keepalive
-            if duration > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
+            if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
                 logging.warning(
                     "No keepalives received from %s for %s in %s, aborting.",
                     self.worker_name,
                     self.log_id,
-                    duration,
-                )
-                result = self.create_result(
-                    branch_url=self.queue_item.branch_url,
-                    vcs_type=self.queue_item.vcs_type,
-                    description=("No keepalives received in %s." % duration),
-                    code="worker-timeout",
-                    logfilenames=[],
+                    self.keepalive_age,
                 )
                 try:
-                    await queue_processor.finish_run(self, result)
+                    await queue_processor.timeout_run(self, self.keepalive_age)
                 except RunExists:
                     logging.warning('Watchdog was not stopped?')
                 break
+
+
+class JenkinsRun(ActiveRun):
+
+    KEEPALIVE_INTERVAL = 10 * 10
+    KEEPALIVE_TIMEOUT = 60
+
+    def __init__(self, my_url, *args, **kwargs):
+        super(JenkinsRun, self).__init__(*args, **kwargs)
+        self.my_url = my_url
+        self._watch_dog = None
+        self._metadata = None
+
+    def append_log(self, name, data):
+        return False
+
+    async def kill(self) -> None:
+        raise NotImplementedError(self.kill)
+
+    async def list_log_files(self):
+        return ['worker.log']
+
+    async def get_log_file(self, name):
+        if name != 'worker.log':
+            raise FileNotFoundError(name)
+        async with ClientSession() as session, \
+                session.get(
+                    self.my_url / 'logText/progressiveText',
+                    raise_for_status=True) as resp:
+            return BytesIO(await resp.read())
+
+    def start_watchdog(self, queue_processor):
+        if self._watch_dog is not None:
+            raise Exception("Watchdog already started")
+        self._watch_dog = asyncio.create_task(self._watchdog(queue_processor))
+
+    def stop_watchdog(self):
+        if self._watch_dog is None:
+            return
+        try:
+            self._watch_dog.cancel()
+        except asyncio.CancelledError:
+            pass
+        self._watch_dog = None
+
+    async def _get_job(self, session):
+        async with session.get(self.my_url / 'api/json', raise_for_status=True) as resp:
+            return await resp.json()
+
+    async def _watchdog(self, queue_processor):
+        health_url = self.my_url / 'log-id'
+        logging.info('Pinging URL %s', health_url)
+        async with ClientSession() as session:
+            while True:
+                try:
+                    await self._get_job(session)
+                    self._reset_keepalive()
+                except (ClientConnectorError, ClientResponseError) as e:
+                    logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
+                    logging.warning(
+                        "No keepalives received from %s for %s in %s, aborting.",
+                        self.worker_name,
+                        self.log_id,
+                        self.keepalive_age,
+                    )
+                    result = self.create_result(
+                        branch_url=self.queue_item.branch_url,
+                        vcs_type=self.queue_item.vcs_type,
+                        description=("No keepalives received in %s." % self.keepalive_age),
+                        code="worker-timeout",
+                        logfilenames=[],
+                    )
+                    try:
+                        await queue_processor.finish_run(self, result)
+                    except RunExists:
+                        logging.warning('Watchdog was not stopped?')
+                    break
+                await asyncio.sleep(self.KEEPALIVE_INTERVAL)
+
+    def json(self):
+        ret = super(JenkinsRun, self).json()
+        ret['jenkins'] = self._metadata
+        return ret
 
 
 class PollingActiveRun(ActiveRun):
@@ -882,17 +956,10 @@ class PollingActiveRun(ActiveRun):
                         "No keepalives received from %s for %s in %s, aborting.",
                         self.worker_name,
                         self.log_id,
-                        duration,
-                    )
-                    result = self.create_result(
-                        branch_url=self.queue_item.branch_url,
-                        vcs_type=self.queue_item.vcs_type,
-                        description=("No keepalives received in %s." % duration),
-                        code="worker-timeout",
-                        logfilenames=[],
+                        self.keepalive_age,
                     )
                     try:
-                        await queue_processor.finish_run(self, result)
+                        await queue_processor.timeout_run(self, self.keepalive_age)
                     except RunExists:
                         logging.warning('Watchdog was not stopped?')
                     break
@@ -1118,7 +1185,9 @@ async def store_run(
         )
 
 
-async def followup_run(config, database, policy, item, result: JanitorResult):
+async def followup_run(
+        config: Config, database: state.Database, policy: PolicyConfig,
+        item: QueueItem, result: JanitorResult) -> None:
     if result.code == "success" and item.suite not in ("unchanged", "debianize"):
         async with database.acquire() as conn:
             run = await conn.fetchrow(
@@ -1184,21 +1253,23 @@ class RunExists(Exception):
 
 
 class QueueProcessor(object):
+
+    rate_limit_hosts: Dict[str, datetime]
+
     def __init__(
         self,
-        database,
-        policy,
-        config,
-        dry_run=False,
-        logfile_manager=None,
-        artifact_manager=None,
-        vcs_manager=None,
-        public_vcs_manager=None,
-        use_cached_only=False,
-        overall_timeout=None,
-        committer=None,
-        backup_artifact_manager=None,
-        backup_logfile_manager=None,
+        database: state.Database,
+        policy: PolicyConfig,
+        config: Config,
+        dry_run: bool = False,
+        logfile_manager: Optional[LogFileManager] = None,
+        artifact_manager: Optional[ArtifactManager] = None,
+        vcs_manager: Optional[VcsManager] = None,
+        public_vcs_manager: Optional[VcsManager] = None,
+        use_cached_only: bool = False,
+        committer: Optional[str] = None,
+        backup_artifact_manager: Optional[ArtifactManager] = None,
+        backup_logfile_manager: Optional[LogFileManager] = None,
     ):
         """Create a queue processor.
         """
@@ -1213,7 +1284,6 @@ class QueueProcessor(object):
         self.use_cached_only = use_cached_only
         self.topic_queue = Topic("queue", repeat_last=True)
         self.topic_result = Topic("result")
-        self.overall_timeout = overall_timeout
         self.committer = committer
         self.active_runs: Dict[str, ActiveRun] = {}
         self.backup_artifact_manager = backup_artifact_manager
@@ -1240,6 +1310,16 @@ class QueueProcessor(object):
             del self.active_runs[log_id]
         except KeyError:
             pass
+
+    async def timeout_run(self, run: ActiveRun, duration: timedelta) -> None:
+        result = run.create_result(
+            branch_url=run.queue_item.branch_url,
+            vcs_type=run.queue_item.vcs_type,
+            description=("No keepalives received in %s." % duration),
+            code="worker-timeout",
+            logfilenames=[],
+        )
+        await self.finish_run(run.queue_item, result)
 
     async def finish_run(self, item: QueueItem, result: JanitorResult) -> None:
         run_result_count.labels(
@@ -1390,7 +1470,6 @@ async def handle_assign(request):
     return await next_item(
         request, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
-        jenkins_metadata=json.get("jenkins"),
         backchannel=json['backchannel']
         )
 
@@ -1400,7 +1479,7 @@ async def handle_peek(request):
     return await next_item(request, 'peek')
 
 
-async def next_item(request, mode, worker=None, worker_link=None, jenkins_metadata=None, backchannel=None):
+async def next_item(request, mode, worker=None, worker_link=None, backchannel=None):
     possible_transports = []
     possible_hosters = []
 
@@ -1433,21 +1512,24 @@ async def next_item(request, mode, worker=None, worker_link=None, jenkins_metada
                     my_url=backchannel['url'],
                     worker_name=worker,
                     queue_item=item,
-                    jenkins_metadata=jenkins_metadata,
                     worker_link=worker_link
                 )
+            elif backchannel and backchannel['kind'] == 'jenkins':
+                active_run = JenkinsRun(
+                    my_url=backchannel['url'],
+                    worker_name=worker,
+                    queue_item=item,
+                    worker_link=worker_link)
             elif backchannel and backchannel['kind'] == 'ws':
                 active_run = WSActiveRun(
                     worker_name=worker,
                     queue_item=item,
-                    jenkins_metadata=jenkins_metadata,
                     worker_link=worker_link
                 )
             else:
                 active_run = ActiveRun(
                     worker_name=worker,
                     queue_item=item,
-                    jenkins_metadata=jenkins_metadata,
                     worker_link=worker_link
                 )
 
@@ -1791,12 +1873,6 @@ async def main(argv=None):
         "--config", type=str, default="janitor.conf", help="Path to configuration."
     )
     parser.add_argument(
-        "--overall-timeout",
-        type=int,
-        default=None,
-        help="Overall timeout per run (in seconds).",
-    )
-    parser.add_argument(
         "--backup-directory",
         type=str,
         default=None,
@@ -1885,7 +1961,6 @@ async def main(argv=None):
             vcs_manager,
             public_vcs_manager,
             args.use_cached_only,
-            overall_timeout=args.overall_timeout,
             committer=config.committer,
             backup_artifact_manager=backup_artifact_manager,
             backup_logfile_manager=backup_logfile_manager,
