@@ -15,6 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
+from aiohttp import ClientOSError
 import aiozipkin
 import asyncio
 import asyncpg
@@ -30,7 +31,7 @@ from .queue import QueueItem, get_queue_item, iter_queue
 import ssl
 import sys
 import tempfile
-from typing import List, Any, Optional, BinaryIO, Dict, Tuple, Type
+from typing import List, Any, Optional, Dict, Tuple, Type
 import uuid
 
 from aiohttp import web, ClientSession, ClientTimeout, ClientConnectorError, ClientResponseError
@@ -758,6 +759,7 @@ class JenkinsRun(ActiveRun):
 
     KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
+    KEEPALIVE_KILL = 60 * 60
 
     def __init__(self, my_url: URL, *args, **kwargs):
         super(JenkinsRun, self).__init__(*args, **kwargs)
@@ -811,11 +813,12 @@ class JenkinsRun(ActiveRun):
             while True:
                 try:
                     await self._get_job(session)
-                except (ClientConnectorError, ClientResponseError, asyncio.TimeoutError) as e:
+                except (ClientConnectorError, ClientResponseError,
+                        asyncio.TimeoutError, ClientOSError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 else:
                     self._reset_keepalive()
-                if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
+                if self.keepalive_age > timedelta(seconds=self.KEEPALIVE_KILL):
                     logging.warning(
                         "No keepalives received from %s for %s in %s, aborting.",
                         self.worker_name,
@@ -839,11 +842,13 @@ class PollingActiveRun(ActiveRun):
 
     KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
+    KEEPALIVE_KILL = 60 * 60
 
     def __init__(self, my_url: URL, *args, **kwargs):
         super(PollingActiveRun, self).__init__(*args, **kwargs)
         self.my_url = my_url
         self._watch_dog = None
+        self._log_id_mismatch = False
 
     def __repr__(self):
         return "<%s(%r)>" % (type(self).__name__, self.my_url)
@@ -887,6 +892,12 @@ class PollingActiveRun(ActiveRun):
             pass
         self._watch_dog = None
 
+    @property
+    def is_mia(self):
+        if super(PollingActiveRun, self).is_mia:
+            return True
+        return self._log_id_mismatch
+
     async def _watchdog(self, queue_processor):
         health_url = self.my_url / 'log-id'
         logging.info('Pinging URL %s', health_url)
@@ -899,11 +910,14 @@ class PollingActiveRun(ActiveRun):
                         log_id = (await resp.read()).decode()
                         if log_id != self.log_id:
                             logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
+                            self._log_id_mismatch = True
                         else:
                             self._reset_keepalive()
-                except (ClientConnectorError, ClientResponseError, asyncio.TimeoutError) as e:
+                            self._log_id_mismatch = False
+                except (ClientConnectorError, ClientResponseError,
+                        asyncio.TimeoutError, ClientOSError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
-                if self.keepalive_age > timedelta(seconds=(self.KEEPALIVE_INTERVAL * 2)):
+                if self.keepalive_age > timedelta(seconds=self.KEEPALIVE_KILL):
                     logging.warning(
                         "No keepalives received from %s for %s in %s, aborting.",
                         self.worker_name,
