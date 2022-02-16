@@ -26,6 +26,9 @@ from typing import List, TextIO, Tuple, Optional, Dict, Set
 from . import policy_pb2
 
 
+PolicyConfig = policy_pb2.PolicyConfig
+
+
 def read_policy(f: TextIO) -> policy_pb2.PolicyConfig:
     return text_format.Parse(f.read(), policy_pb2.PolicyConfig())
 

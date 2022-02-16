@@ -1091,7 +1091,7 @@ async def get_assignment(
     my_url: Optional[yarl.URL],
     base_url: yarl.URL,
     node_name: str,
-    jenkins_metadata: Optional[Dict[str, str]] = None,
+    jenkins_build_url: Optional[str],
 ) -> Any:
     assign_url = base_url / "active-runs"
     build_arch = subprocess.check_output(
@@ -1100,11 +1100,14 @@ async def get_assignment(
     json: Any = {"node": node_name, "archs": [build_arch]}
     if my_url:
         json["backchannel"] = {'kind': 'http', 'url': str(my_url)}
+    elif jenkins_build_url:
+        json["backchannel"] = {
+            'kind': 'jenkins',
+            'url': jenkins_build_url}
     else:
         json["backchannel"] = {'kind': 'ws'}
-    if jenkins_metadata:
-        json["jenkins"] = jenkins_metadata
-        json["worker_link"] = jenkins_metadata.get("build_url")
+    if jenkins_build_url:
+        json["worker_link"] = jenkins_build_url
     elif my_url:
         json["worker_link"] = str(my_url)
     else:
@@ -1387,11 +1390,11 @@ async def handle_log_id(request):
 
 async def process_single_item(
         session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
-        jenkins_metadata=None, prometheus=None, vcs_store_urls=None,
+        jenkins_build_url=None, prometheus=None, vcs_store_urls=None,
         retry_count=5):
     assignment = await get_assignment(
         session, my_url, base_url, node_name,
-        jenkins_metadata=jenkins_metadata,
+        jenkins_build_url=jenkins_build_url
     )
     workitem['assignment'] = assignment
 
@@ -1434,8 +1437,6 @@ async def process_single_item(
             "start_time": start_time.isoformat()
         }
         workitem['metadata'] = metadata
-        if jenkins_metadata:
-            metadata["jenkins"] = jenkins_metadata
 
         if vcs_store_urls is None:
             vcs_store_urls = assignment["vcs_store"]
@@ -1657,20 +1658,7 @@ async def main(argv=None):
             "janitor-worker", WorkerCredentialStore, fallback=True
         )
 
-    if any(
-        filter(
-            os.environ.__contains__,
-            ["BUILD_URL", "EXECUTOR_NUMBER", "BUILD_ID", "BUILD_NUMBER"],
-        )
-    ):
-        jenkins_metadata = {
-            "build_url": os.environ.get("BUILD_URL"),
-            "executor_number": os.environ.get("EXECUTOR_NUMBER"),
-            "build_id": os.environ.get("BUILD_ID"),
-            "build_number": os.environ.get("BUILD_NUMBER"),
-        }
-    else:
-        jenkins_metadata = None
+    jenkins_build_url = os.environ.get('BUILD_URL')
 
     node_name = os.environ.get("NODE_NAME")
     if not node_name:
@@ -1717,7 +1705,7 @@ async def main(argv=None):
                     base_url=base_url,
                     node_name=node_name,
                     workitem=app['workitem'],
-                    jenkins_metadata=jenkins_metadata,
+                    jenkins_build_url=jenkins_build_url,
                     prometheus=args.prometheus,
                     vcs_store_urls=vcs_store_urls,
                     retry_count=args.retry_count)
