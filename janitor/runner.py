@@ -73,7 +73,7 @@ from .artifacts import (
     upload_backup_artifacts,
 )
 from .compat import to_thread
-from .config import read_config, get_suite_config, get_distribution, Config
+from .config import read_config, get_campaign_config, get_distribution, Config
 from .debian import (
     changes_filenames,
     open_guessed_salsa_branch,
@@ -139,7 +139,7 @@ class Builder(object):
 
     result_cls: Type[BuilderResult] = BuilderResult
 
-    async def build_env(self, conn, suite_config, queue_item):
+    async def build_env(self, conn, campaign_config, queue_item):
         raise NotImplementedError(self.build_env)
 
 
@@ -175,10 +175,10 @@ class GenericBuilder(Builder):
     def __init__(self):
         pass
 
-    async def build_env(self, conn, suite_config, queue_item):
+    async def build_env(self, conn, campaign_config, queue_item):
         env = {}
-        if suite_config.generic_build.chroot:
-            env["CHROOT"] = suite_config.generic_build.chroot
+        if campaign_config.generic_build.chroot:
+            env["CHROOT"] = campaign_config.generic_build.chroot
 
         return env
 
@@ -268,7 +268,7 @@ class DebianBuilder(Builder):
         self.distro_config = distro_config
         self.apt_location = apt_location
 
-    async def build_env(self, conn, suite_config, queue_item):
+    async def build_env(self, conn, campaign_config, queue_item):
         if self.apt_location.startswith("gs://"):
             bucket_name = URL(self.apt_location).host
             apt_location = "https://storage.googleapis.com/%s/" % bucket_name
@@ -278,13 +278,13 @@ class DebianBuilder(Builder):
             "EXTRA_REPOSITORIES": ":".join(
                 [
                     "deb %s %s/ main" % (apt_location, suite)
-                    for suite in suite_config.debian_build.extra_build_distribution
+                    for suite in campaign_config.debian_build.extra_build_distribution
                 ]
             )
         }
 
-        if suite_config.debian_build.chroot:
-            env["CHROOT"] = suite_config.debian_build.chroot
+        if campaign_config.debian_build.chroot:
+            env["CHROOT"] = campaign_config.debian_build.chroot
         elif self.distro_config.chroot:
             env["CHROOT"] = self.distro_config.chroot
 
@@ -297,11 +297,11 @@ class DebianBuilder(Builder):
             " ".join(self.distro_config.component),
         )
 
-        env["BUILD_DISTRIBUTION"] = suite_config.debian_build.build_distribution or suite_config.name
-        env["BUILD_SUFFIX"] = suite_config.debian_build.build_suffix or ""
+        env["BUILD_DISTRIBUTION"] = campaign_config.debian_build.build_distribution or campaign_config.name
+        env["BUILD_SUFFIX"] = campaign_config.debian_build.build_suffix or ""
 
-        if suite_config.debian_build.build_command:
-            env["BUILD_COMMAND"] = suite_config.debian_build.build_command
+        if campaign_config.debian_build.build_command:
+            env["BUILD_COMMAND"] = campaign_config.debian_build.build_command
         elif self.distro_config.build_command:
             env["BUILD_COMMAND"] = self.distro_config.build_command
 
@@ -319,7 +319,7 @@ class DebianBuilder(Builder):
         if self.distro_config.lintian_suppress_tag:
             env['LINTIAN_SUPPRESS_TAGS'] = ','.join(self.distro_config.lintian_suppress_tag)
 
-        env.update([(env.key, env.value) for env in suite_config.debian_build.sbuild_env])
+        env.update([(env.key, env.value) for env in campaign_config.debian_build.sbuild_env])
 
         env['DEB_VENDOR'] = self.distro_config.vendor or dpkg_vendor()
 
@@ -330,15 +330,15 @@ BUILDER_CLASSES: List[Type[Builder]] = [DebianBuilder, GenericBuilder]
 RESULT_CLASSES = [builder_cls.result_cls for builder_cls in BUILDER_CLASSES]
 
 
-def get_builder(config, suite_config):
-    if suite_config.HasField('debian_build'):
+def get_builder(config, campaign_config):
+    if campaign_config.HasField('debian_build'):
         distribution = get_distribution(
-            config, suite_config.debian_build.base_distribution)
+            config, campaign_config.debian_build.base_distribution)
         return DebianBuilder(
             distribution,
             config.apt_location
             )
-    elif suite_config.HasField('generic_build'):
+    elif campaign_config.HasField('generic_build'):
         return GenericBuilder()
     else:
         raise NotImplementedError('no supported build type')
@@ -1173,8 +1173,6 @@ async def followup_run(
             # they lacked this one
             if getattr(result.builder_result, 'build_distribution', None) is not None:
                 dependent_suites = [
-                    suite.name for suite in config.suite
-                    if suite.debian_build and result.builder_result.build_distribution in suite.debian_build.extra_build_distribution] + [
                     campaign.name for campaign in config.campaign
                     if campaign.debian_build and result.builder_result.build_distribution in campaign.debian_build.extra_build_distribution]
                 runs_to_retry = await conn.fetch(
@@ -1502,7 +1500,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 continue
 
             try:
-                suite_config = get_suite_config(queue_processor.config, item.suite)
+                campaign_config = get_campaign_config(queue_processor.config, item.suite)
             except KeyError:
                 logging.warning(
                     'Unable to find details for suite %r', item.suite)
@@ -1511,10 +1509,10 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 continue
 
         # This is simple for now, since we only support one distribution.
-        builder = get_builder(queue_processor.config, suite_config)
+        builder = get_builder(queue_processor.config, campaign_config)
 
         with span.new_child('build-env'):
-            build_env = await builder.build_env(conn, suite_config, item)
+            build_env = await builder.build_env(conn, campaign_config, item)
 
         try:
             with span.new_child('branch:open'):
@@ -1546,7 +1544,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                     resume_branch = await to_thread(
                         open_resume_branch,
                         main_branch,
-                        suite_config.branch_name,
+                        campaign_config.branch_name,
                         item.package,
                         possible_hosters=possible_hosters)
             else:
@@ -1560,7 +1558,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
                 try:
                     resume_branch = await to_thread(
                         queue_processor.public_vcs_manager.get_branch,
-                        item.package, '%s/%s' % (suite_config.name, 'main'), vcs_type)
+                        item.package, '%s/%s' % (campaign_config.name, 'main'), vcs_type)
                 except UnsupportedVcs:
                     logging.warning(
                         'Unsupported vcs %s for resume branch of %s',
@@ -1583,10 +1581,10 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
 
     try:
         with span.new_child('cache-branch:check'):
-            if suite_config.HasField('debian_build'):
+            if campaign_config.HasField('debian_build'):
                 distribution = get_distribution(
                     queue_processor.config,
-                    suite_config.debian_build.base_distribution)
+                    campaign_config.debian_build.base_distribution)
                 branch_name = cache_branch_name(distribution, "main")
             else:
                 branch_name = "main"
@@ -1619,7 +1617,7 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         "env": env,
         "command": command,
         "suite": item.suite,
-        "force-build": suite_config.force_build,
+        "force-build": campaign_config.force_build,
         "vcs_store": queue_processor.public_vcs_manager.base_urls,
     }
 

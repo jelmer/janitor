@@ -5,7 +5,7 @@
 {% block body %}
 <div class="section" id="upstream-releases">
 <h1>Upstream Releases</h1>
-<p>This repository contains packages from {{ suite_config.base_distribution }} for which it is possible
+<p>This repository contains packages from {{ campaign_config.base_distribution }} for which it is possible
 to automatically merge in a new upstream version.</p>
 <p>These packages are currently only available for amd64.</p>
 <div class="admonition warning">
@@ -59,7 +59,7 @@ Pin-Priority: <span class="mi">800</span>
 <p>The following source packages with new upstream releases merged are currently
 available:</p>
 
-{{ package_list(suite_config.base_distribution, packages) }}
+{{ package_list(campaign_config.base_distribution, packages) }}
 
 </div>
 </div>

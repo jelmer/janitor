@@ -42,7 +42,7 @@ from janitor.site import (
 )
 
 from .common import iter_candidates, get_unchanged_run
-from ..config import get_suite_config
+from ..config import get_campaign_config
 
 FAIL_BUILD_LOG_LEN = 15
 
@@ -197,7 +197,7 @@ async def generate_run_file(
     kwargs["show_debdiff"] = show_debdiff
     kwargs["max"] = max
     kwargs["suite"] = run['suite']
-    kwargs["campaign"] = get_suite_config(config, run['suite'])
+    kwargs["campaign"] = get_campaign_config(config, run['suite'])
     if kwargs['campaign'].HasField('debian_build'):
         kwargs["tracker_url"] = partial(
             tracker_url, config,

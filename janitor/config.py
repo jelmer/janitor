@@ -19,7 +19,7 @@ __all__ = [
     "Config",
     "Suite",
     "read_config",
-    "get_suite_config",
+    "get_campaign_config",
 ]
 
 from typing import Union
@@ -40,10 +40,7 @@ def get_distribution(config: Config, name: str) -> Distribution:
     raise KeyError(name)
 
 
-def get_suite_config(config: Config, name: str) -> Union[Suite, Campaign]:
-    for s in config.suite:
-        if s.name == name:
-            return s
+def get_campaign_config(config: Config, name: str) -> Union[Suite, Campaign]:
     for c in config.campaign:
         if c.name == name:
             return c

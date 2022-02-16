@@ -1,7 +1,7 @@
 import aiozipkin
 from typing import Dict, List
 from . import html_template
-from ..config import get_suite_config
+from ..config import get_campaign_config
 from lintian_brush.lintian_overrides import load_renamed_tags
 renamed_tags = load_renamed_tags()
 
@@ -18,7 +18,7 @@ where run.suite = 'debianize'
 order by source, version desc
 """),
             "suite": 'debianize',
-            "suite_config": get_suite_config(request.app['config'], 'debianize'),
+            "campaign_config": get_campaign_config(request.app['config'], 'debianize'),
         }
 
 

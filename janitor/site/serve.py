@@ -38,7 +38,7 @@ from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
 
 from .. import state
-from ..config import get_suite_config
+from ..config import get_campaign_config
 from ..logs import get_log_manager
 from ..pubsub import pubsub_reader, pubsub_handler, Topic
 from ..vcs import get_vcs_manager
@@ -142,7 +142,7 @@ async def handle_apt_repo(request):
         vs = {
             "packages": await get_published_packages(conn, suite),
             "suite": suite,
-            "suite_config": get_suite_config(request.app['config'], suite),
+            "campaign_config": get_campaign_config(request.app['config'], suite),
         }
         text = await render_template_for_request(suite + ".html", request, vs)
         return web.Response(
@@ -303,8 +303,7 @@ async def handle_result_codes(request):
     exclude_transient = "exclude_transient" in request.query
     if suite is not None and suite.lower() == "_all":
         suite = None
-    all_suites = [s.name for s in request.app['config'].suite] + [
-                  c.name for c in request.app['config'].campaign]
+    all_suites = [c.name for c in request.app['config'].campaign]
     args = [[suite] if suite else all_suites]
     async with request.app.database.acquire() as conn:
         query = """\
@@ -340,8 +339,7 @@ async def handle_result_code(request):
     query = ('SELECT * FROM last_runs '
              'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])')
     codes = [code]
-    all_suites = [s.name for s in request.app['config'].suite] + [
-                  c.name for c in request.app['config'].campaign]
+    all_suites = [c.name for c in request.app['config'].campaign]
     async with request.app.database.acquire() as conn:
         return {
             "code": code,
@@ -923,7 +921,7 @@ async def create_app(
     register_scrub_obsolete_endpoints(app.router)
     from .new_upstream import register_new_upstream_endpoints
     register_new_upstream_endpoints(app.router)
-    SUITE_REGEX = "|".join([re.escape(suite.name) for suite in config.suite] + [re.escape(campaign.name) for campaign in config.campaign])
+    SUITE_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % SUITE_REGEX,
         handle_merge_proposals,

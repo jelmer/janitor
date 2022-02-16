@@ -87,7 +87,7 @@ async def main():
     with open(args.config, "r") as f:
         config = read_config(f)
 
-    campaign_names = [suite.name for suite in config.suite] + [campaign.name for campaign in config.campaign]
+    campaign_names = [campaign.name for campaign in config.campaign]
 
     db = state.Database(config.database_location)
 

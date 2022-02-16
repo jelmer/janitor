@@ -1322,7 +1322,7 @@ async def handle_mass_reschedule(request):
     offset = int(post.get('offset', '0'))
     refresh = 'refresh' in post
     config = request.app['config']
-    all_campaigns = [s.name for s in config.suite] + [c.name for c in config.campaign]
+    all_campaigns = [c.name for c in config.campaign]
     async with request.app['db'].acquire() as conn:
         query = """
 SELECT

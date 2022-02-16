@@ -72,7 +72,7 @@ SELECT id, package, suite, vcs_type, result_branches, main_branch_revision, valu
 
 async def generate_rejected(conn, config, suite=None):
     if suite is None:
-        suites = [s.name for s in config.suite] + [c.name for c in config.campaign]
+        suites = [c.name for c in config.campaign]
     else:
         suites = [suite]
 

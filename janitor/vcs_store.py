@@ -44,7 +44,7 @@ from . import (
     state,
 )
 
-from .config import read_config, get_suite_config
+from .config import read_config, get_campaign_config
 from .site import is_worker, iter_accept, env as site_env
 from .vcs import (
     VcsManager,
@@ -571,7 +571,7 @@ async def bzr_backend(request):
     repo = await _bzr_open_repo(vcs_manager, request.app.db, package)
     if branch_name:
         try:
-            get_suite_config(request.app.config, branch_name)
+            get_campaign_config(request.app.config, branch_name)
         except KeyError:
             raise web.HTTPNotFound(text='no such suite: %s' % branch_name)
         transport = repo.user_transport.clone(branch_name)
