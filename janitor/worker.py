@@ -1141,9 +1141,9 @@ INDEX_TEMPLATE = Template("""\
 <h1>Build Details</h1>
 
 <ul>
-<li><b>Command: </b>{{ assignment['command'] }}</li>
-<li><b>Start Time: </b>: {{ metadata['start_time'] }}
-<li><b>Current duration: </b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
+<li><b>Command</b>: {{ assignment['command'] }}</li>
+<li><b>Start Time</b>: {{ metadata['start_time'] }}
+<li><b>Current duration</b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
 </ul>
 
 {% if lognames %}
@@ -1163,7 +1163,7 @@ INDEX_TEMPLATE = Template("""\
 async def handle_index(request):
     if 'directory' in request.app['workitem']:
         lognames = [entry.name for entry in os.scandir(request.app['workitem']['directory'])
-                    if not entry.name.endswith('.log') and entry.is_file()]
+                    if entry.name.endswith('.log') and entry.is_file()]
     else:
         lognames = None
     return web.Response(text=INDEX_TEMPLATE.render(
