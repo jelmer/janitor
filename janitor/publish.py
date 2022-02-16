@@ -75,7 +75,7 @@ from . import (
     state,
 )
 from .compat import to_thread
-from .config import read_config, get_suite_config
+from .config import read_config, get_campaign_config, Campaign
 from .pubsub import Topic, pubsub_handler, pubsub_reader
 from .schedule import (
     do_schedule,
@@ -239,11 +239,11 @@ class PublishFailure(Exception):
         self.description = description
 
 
-async def derived_branch_name(conn, suite_config, run, role):
+async def derived_branch_name(conn, campaign_config, run, role):
     if len(run.result_branches) == 1:
-        name = suite_config.branch_name
+        name = campaign_config.branch_name
     else:
-        name = "%s/%s" % (suite_config.branch_name, role)
+        name = "%s/%s" % (campaign_config.branch_name, role)
 
     if await state.has_cotenants(conn, run.package, run.branch_url):
         return name + "/" + run.package
@@ -404,7 +404,7 @@ async def consider_publish_run(
             "Run %s is publish ready, but does not have revision set.", run.id
         )
         return {}
-    suite_config = get_suite_config(config, run.suite)
+    campaign_config = get_campaign_config(config, run.suite)
     # TODO(jelmer): next try in SQL query
     attempt_count = await get_publish_attempt_count(
         conn, run.revision, {"differ-unreachable"}
@@ -454,7 +454,7 @@ async def consider_publish_run(
             continue
         actual_modes[role] = await publish_from_policy(
             conn,
-            suite_config,
+            campaign_config,
             template_env_path,
             rate_limiter,
             vcs_manager,
@@ -806,7 +806,7 @@ async def store_publish(
 
 async def publish_from_policy(
     conn,
-    suite_config,
+    campaign_config: Campaign,
     template_env_path,
     rate_limiter,
     vcs_manager,
@@ -868,12 +868,12 @@ async def publish_from_policy(
     main_branch_url = role_branch_url(main_branch_url, remote_branch_name)
 
     if not force and await already_published(
-        conn, run.package, suite_config.branch_name, revision, mode
+        conn, run.package, campaign_config.branch_name, revision, mode
     ):
         return
     if mode in (MODE_PROPOSE, MODE_ATTEMPT_PUSH):
         open_mp = await get_open_merge_proposal(
-            conn, run.package, suite_config.branch_name
+            conn, run.package, campaign_config.branch_name
         )
         if not open_mp:
             try:
@@ -928,7 +928,7 @@ async def publish_from_policy(
             revision=revision,
             log_id=run.id,
             unchanged_id=(unchanged_run['id'] if unchanged_run else None),
-            derived_branch_name=await derived_branch_name(conn, suite_config, run, role),
+            derived_branch_name=await derived_branch_name(conn, campaign_config, run, role),
             maintainer_email=maintainer_email,
             vcs_manager=vcs_manager,
             topic_merge_proposal=topic_merge_proposal,
@@ -940,10 +940,10 @@ async def publish_from_policy(
             possible_transports=possible_transports,
             rate_limiter=rate_limiter,
             result_tags=run.result_tags,
-            allow_create_proposal=run_allow_proposal_creation(suite_config, run),
+            allow_create_proposal=run_allow_proposal_creation(campaign_config, run),
             commit_message_template=(
-                suite_config.merge_proposal.commit_message
-                if suite_config.merge_proposal else None),
+                campaign_config.merge_proposal.commit_message
+                if campaign_config.merge_proposal else None),
         )
     except PublishFailure as e:
         code, description = await handle_publish_failure(
@@ -1019,16 +1019,16 @@ def role_branch_url(url, remote_branch_name):
     return urlutils.join_segment_parameters(base_url, params)
 
 
-def run_allow_proposal_creation(suite_config, run):
-    if suite_config.merge_proposal is not None and suite_config.merge_proposal.value_threshold:
-        return (run.value >= suite_config.merge_proposal.value_threshold)
+def run_allow_proposal_creation(campaign_config, run):
+    if campaign_config.merge_proposal is not None and campaign_config.merge_proposal.value_threshold:
+        return (run.value >= campaign_config.merge_proposal.value_threshold)
     else:
         return True
 
 
 async def publish_and_store(
     db,
-    suite_config,
+    campaign_config,
     template_env_path,
     topic_publish,
     topic_merge_proposal,
@@ -1051,7 +1051,7 @@ async def publish_and_store(
     main_branch_url = role_branch_url(run.branch_url, remote_branch_name)
 
     if allow_create_proposal is None:
-        allow_create_proposal = run_allow_proposal_creation(suite_config, run)
+        allow_create_proposal = run_allow_proposal_creation(campaign_config, run)
 
     async with db.acquire() as conn:
         unchanged_run_id = await conn.fetchval(
@@ -1074,7 +1074,7 @@ async def publish_and_store(
                 revision,
                 run.id,
                 unchanged_run_id,
-                await derived_branch_name(conn, suite_config, run, role),
+                await derived_branch_name(conn, campaign_config, run, role),
                 maintainer_email,
                 vcs_manager,
                 dry_run=dry_run,
@@ -1088,13 +1088,13 @@ async def publish_and_store(
                 rate_limiter=rate_limiter,
                 result_tags=run.result_tags,
                 commit_message_template=(
-                    suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
+                    campaign_config.merge_proposal.commit_message if campaign_config.merge_proposal else None),
             )
         except PublishFailure as e:
             await store_publish(
                 conn,
                 run.package,
-                suite_config.branch_name,
+                campaign_config.branch_name,
                 run.main_branch_revision,
                 run.revision,
                 role,
@@ -1289,7 +1289,7 @@ async def publish_request(request):
         create_background_task(
             publish_and_store(
                 request.app['db'],
-                get_suite_config(request.app['config'], run.suite),
+                get_campaign_config(request.app['config'], run.suite),
                 request.app['template_env_path'],
                 request.app['topic_publish'],
                 request.app['topic_merge_proposal'],
@@ -2083,9 +2083,9 @@ This merge proposal will be closed, since the branch has moved to %s.
                 mp_run['role'],
                 mp_run['revision'].encode('utf-8'),
             )
-        suite_config = get_suite_config(config, mp_run['suite'])
+        campaign_config = get_campaign_config(config, mp_run['suite'])
         if source_branch_name is None:
-            source_branch_name = await derived_branch_name(conn, suite_config, last_run, mp_run['role'])
+            source_branch_name = await derived_branch_name(conn, campaign_config, last_run, mp_run['role'])
 
         unchanged_run_id = await conn.fetchval(
             "SELECT id FROM run "
@@ -2119,7 +2119,7 @@ This merge proposal will be closed, since the branch has moved to %s.
                 rate_limiter=rate_limiter,
                 result_tags=last_run.result_tags,
                 commit_message_template=(
-                    suite_config.merge_proposal.commit_message if suite_config.merge_proposal else None),
+                    campaign_config.merge_proposal.commit_message if campaign_config.merge_proposal else None),
             )
         except PublishFailure as e:
             code, description = await handle_publish_failure(
@@ -2171,7 +2171,7 @@ applied independently.
                 await store_publish(
                     conn,
                     last_run.package,
-                    suite_config.branch_name,
+                    campaign_config.branch_name,
                     last_run_base_revision,
                     last_run_revision,
                     mp_run['role'],
@@ -2392,7 +2392,7 @@ async def listen_to_runner(
         for role, (mode, max_frequency_days) in publish_policy.items():
             await publish_from_policy(
                 conn,
-                get_suite_config(config, run.suite),
+                get_campaign_config(config, run.suite),
                 template_env_path,
                 rate_limiter,
                 vcs_manager,

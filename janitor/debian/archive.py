@@ -19,7 +19,6 @@ import aiozipkin
 import asyncio
 from contextlib import ExitStack
 import hashlib
-from itertools import chain
 import logging
 import gzip
 import bz2
@@ -50,7 +49,7 @@ from aiohttp_openmetrics import (
 
 from .. import state
 from ..artifacts import get_artifact_manager, ArtifactsMissing
-from ..config import read_config, get_suite_config, get_distribution
+from ..config import read_config, get_distribution, Campaign
 from ..pubsub import pubsub_reader
 
 
@@ -272,13 +271,13 @@ ARCHES: List[str] = ["amd64"]
 async def handle_publish(request):
     post = await request.post()
     suite = post.get("suite")
-    for suite_config in chain(request.app.config.suite, request.app.config.campaign):
-        if not suite_config.HasField('debian_build'):
+    for campaign_config in request.app.config.campaign:
+        if not campaign_config.HasField('debian_build'):
             continue
-        build_distribution = (suite_config.debian_build.build_distribution or suite_config.name)
+        build_distribution = (campaign_config.debian_build.build_distribution or campaign_config.name)
         if suite is not None and build_distribution != suite:
             continue
-        request.app.generator_manager.trigger(suite_config)
+        request.app.generator_manager.trigger(campaign_config)
 
     return web.json_response({})
 
@@ -391,35 +390,31 @@ class GeneratorManager(object):
         self.gpg_context = gpg_context
         self.generators = {}
 
-    def trigger(self, suite):
-        if isinstance(suite, str):
-            suite_config = get_suite_config(self.config, suite)
-        else:
-            suite_config = suite
-        if not suite_config.HasField('debian_build'):
+    def trigger(self, campaign_config: Campaign):
+        if not campaign_config.HasField('debian_build'):
             return
         try:
-            task = self.generators[suite_config.name]
+            task = self.generators[campaign_config.name]
         except KeyError:
             pass
         else:
             if not task.done():
                 return
-        self.generators[suite_config.name] = create_background_task(
+        self.generators[campaign_config.name] = create_background_task(
             publish_suite(
                 self.dists_dir,
                 self.db,
                 self.package_info_provider,
                 self.config,
-                suite_config,
+                campaign_config,
                 self.gpg_context,
-            ), 'publish %s' % suite_config.name
+            ), 'publish %s' % campaign_config.name
         )
 
 
 async def loop_publish(config, generator_manager):
     while True:
-        for suite in chain(config.suite, config.campaign):
+        for suite in config.campaign:
             generator_manager.trigger(suite)
         # every 12 hours
         await asyncio.sleep(60 * 60 * 12)

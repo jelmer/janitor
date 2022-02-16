@@ -7,7 +7,7 @@ from functools import partial
 from typing import Optional, List
 
 from janitor import state, splitout_env
-from janitor.config import get_suite_config
+from janitor.config import get_campaign_config
 from janitor.queue import get_queue_position
 from janitor.site import (
     get_archive_diff,
@@ -286,7 +286,7 @@ WHERE run.package = $1 AND run.suite = $2
     else:
         env = {}
 
-    campaign = get_suite_config(config, suite)
+    campaign = get_campaign_config(config, suite)
 
     kwargs.update({
         "package": package['name'],

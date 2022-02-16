@@ -81,12 +81,6 @@ for distribution in args.distribution:
                 os.unlink(entry.path)
 
     suites = []
-    for suite in config.suite:
-        if not suite.HasField('debian_build'):
-            continue
-        if suite.debian_build.base_distribution != distro_config.name:
-            continue
-        suites.append(suite.debian_build.build_distribution)
     for campaign in config.campaign:
         if not campaign.HasField('debian_build'):
             continue

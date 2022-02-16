@@ -7,7 +7,7 @@ from datetime import datetime
 import urllib.parse
 
 from . import html_template, render_template_for_request
-from ..config import get_suite_config
+from ..config import get_campaign_config
 from ..schedule import TRANSIENT_ERROR_RESULT_CODES
 
 
@@ -102,7 +102,7 @@ async def handle_fresh_builds(request):
                 archive_version[name] = av
                 suite_version.setdefault(suite, {})[name] = jv
         return {
-            "base_distribution": get_suite_config(
+            "base_distribution": get_campaign_config(
                 request.app['config'], SUITES[0]
             ).debian_build.base_distribution,
             "archive_version": archive_version,
@@ -131,7 +131,7 @@ async def handle_apt_repo(request):
         vs = {
             "packages": await get_published_packages(conn, suite),
             "suite": suite,
-            "suite_config": get_suite_config(request.app['config'], suite),
+            "campaign_config": get_campaign_config(request.app['config'], suite),
         }
         text = await render_template_for_request(suite + ".html", request, vs)
         return web.Response(

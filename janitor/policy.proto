@@ -88,8 +88,6 @@ message Environment {
 message Policy {
     repeated Match match = 1;
 
-    repeated CampaignPolicy suite = 2 [ deprecated=true ];
-
     repeated Environment env = 3;
 
     repeated CampaignPolicy campaign = 4;
