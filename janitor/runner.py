@@ -822,15 +822,8 @@ class JenkinsRun(ActiveRun):
                         self.log_id,
                         self.keepalive_age,
                     )
-                    result = self.create_result(
-                        branch_url=self.queue_item.branch_url,
-                        vcs_type=self.queue_item.vcs_type,
-                        description=("No keepalives received in %s." % self.keepalive_age),
-                        code="worker-timeout",
-                        logfilenames=[],
-                    )
                     try:
-                        await queue_processor.finish_run(self, result)
+                        await queue_processor.timeout_run(self, self.keepalive_age)
                     except RunExists:
                         logging.warning('Watchdog was not stopped?')
                     break

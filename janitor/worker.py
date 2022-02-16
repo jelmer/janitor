@@ -1251,6 +1251,8 @@ async def handle_health(request):
 
 async def handle_log_id(request):
     assignment = request.app['workitem'].get('assignment')
+    if assignment is None:
+        return web.Response(text='', status=200)
     return web.Response(text=assignment.get('id', ''), status=200)
 
 
