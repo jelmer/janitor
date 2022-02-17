@@ -108,7 +108,7 @@ async def handle_simple(templatename, request):
     return web.Response(
         content_type="text/html",
         text=await render_template_for_request(templatename, request, vs),
-        headers={"Cache-Control": "max-age=3600"},
+        headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"},
     )
 
 
@@ -117,7 +117,7 @@ async def handle_generic_start(request):
     return {"suite": request.match_info["suite"]}
 
 
-@html_template("generic-candidates.html", headers={"Cache-Control": "max-age=3600"})
+@html_template("generic-candidates.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
 async def handle_generic_candidates(request):
     from .common import generate_candidates
 
@@ -126,7 +126,7 @@ async def handle_generic_candidates(request):
     )
 
 
-@html_template("merge-proposals.html", headers={"Cache-Control": "max-age=60"})
+@html_template("merge-proposals.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
@@ -148,11 +148,11 @@ async def handle_apt_repo(request):
         return web.Response(
             content_type="text/html",
             text=text,
-            headers={"Cache-Control": "max-age=60"},
+            headers={"Cache-Control": "max-age=60", "Vary": "Cookie"},
         )
 
 
-@html_template("history.html", headers={"Cache-Control": "max-age=10"})
+@html_template("history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_history(request):
     limit = int(request.query.get("limit", "100"))
     offset = int(request.query.get("offset", "0"))
@@ -174,7 +174,7 @@ ORDER BY finish_time DESC"""
     }
 
 
-@html_template("credentials.html", headers={"Cache-Control": "max-age=10"})
+@html_template("credentials.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_credentials(request):
     try:
         credentials = await get_credentials(
@@ -236,7 +236,7 @@ async def handle_pgp_keys(request):
         )
 
 
-@html_template("publish-history.html", headers={"Cache-Control": "max-age=10"})
+@html_template("publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_publish_history(request):
     limit = int(request.query.get("limit", "100"))
     from .publish import write_history
@@ -245,7 +245,7 @@ async def handle_publish_history(request):
         return await write_history(conn, limit=limit)
 
 
-@html_template("queue.html", headers={"Cache-Control": "max-age=10"})
+@html_template("queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_queue(request):
     limit = int(request.query.get("limit", "100"))
     from .queue import write_queue
@@ -258,7 +258,7 @@ async def handle_queue(request):
     )
 
 
-@html_template("maintainer-stats.html", headers={"Cache-Control": "max-age=60"})
+@html_template("maintainer-stats.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_cupboard_maintainer_stats(request):
     from .stats import write_maintainer_stats
 
@@ -266,7 +266,7 @@ async def handle_cupboard_maintainer_stats(request):
         return await write_maintainer_stats(conn)
 
 
-@html_template("maintainer-overview.html", headers={"Cache-Control": "max-age=60"})
+@html_template("maintainer-overview.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_maintainer_overview(request):
     from .stats import write_maintainer_overview
 
@@ -276,7 +276,7 @@ async def handle_maintainer_overview(request):
         )
 
 
-@html_template("never-processed.html", headers={"Cache-Control": "max-age=60"})
+@html_template("never-processed.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_never_processed(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -295,7 +295,7 @@ async def handle_never_processed(request):
         return {"never_processed": await conn.fetch(query, *args)}
 
 
-@html_template("result-code-index.html", headers={"Cache-Control": "max-age=60"})
+@html_template("result-code-index.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_result_codes(request):
     from ..schedule import TRANSIENT_ERROR_RESULT_CODES
     suite = request.query.get("suite")
@@ -330,7 +330,7 @@ async def handle_result_codes(request):
             "suite": suite, "all_suites": all_suites}
 
 
-@html_template("result-code.html", headers={"Cache-Control": "max-age=60"})
+@html_template("result-code.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_result_code(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -379,7 +379,7 @@ async def handle_static_file(path, request):
     return web.FileResponse(path)
 
 
-@html_template("package-name-list.html", headers={"Cache-Control": "max-age=600"})
+@html_template("package-name-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_pkg_list(request):
     # TODO(jelmer): The javascript plugin thingy should just redirect to
     # the right URL, not rely on query parameters here.
@@ -399,7 +399,7 @@ async def handle_pkg_list(request):
 
 
 @html_template(
-    "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600"})
+    "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_maintainer_list(request):
     from .pkg import generate_maintainer_list
 
@@ -411,7 +411,7 @@ async def handle_maintainer_list(request):
     return await generate_maintainer_list(packages)
 
 
-@html_template("maintainer-index.html", headers={"Cache-Control": "max-age=600"})
+@html_template("maintainer-index.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_maintainer_index(request):
     if request['user']:
         email = request['user'].get("email")
@@ -428,7 +428,7 @@ async def handle_maintainer_index(request):
     return {}
 
 
-@html_template("package-overview.html", headers={"Cache-Control": "max-age=600"})
+@html_template("package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_pkg(request):
     from .pkg import generate_pkg_file
 
@@ -467,7 +467,7 @@ ORDER BY merge_proposal.url, run.finish_time DESC
     )
 
 
-@html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600"})
+@html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_vcs_regressions(request):
     async with request.app.database.acquire() as conn:
         query = """\
@@ -494,7 +494,7 @@ vcswatch_status in ('old', 'new', 'commits', 'ok')
 
 
 @html_template(
-    "broken-merge-proposals.html", headers={"Cache-Control": "max-age=600"}
+    "broken-merge-proposals.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"}
 )
 async def handle_broken_mps(request):
     async with request.app.database.acquire() as conn:
@@ -527,7 +527,7 @@ order by url, last_run.finish_time desc
     return {"broken_mps": broken_mps}
 
 
-@html_template("run.html", headers={"Cache-Control": "max-age=3600"})
+@html_template("run.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
 async def handle_run(request):
     from .common import get_run
     from .pkg import generate_run_file
@@ -582,7 +582,7 @@ async def handle_result_file(request):
         return web.Response(
             content_type="text/plain",
             text=text,
-            headers={"Cache-Control": "max-age=3600"},
+            headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"},
         )
     else:
         try:
@@ -593,11 +593,11 @@ async def handle_result_file(request):
             raise web.HTTPNotFound(text="No artifact %s for run %s" % (filename, run_id))
         with artifact as f:
             return web.Response(
-                body=f.read(), headers={"Cache-Control": "max-age=3600"}
+                body=f.read(), headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"}
             )
 
 
-@html_template("ready-list.html", headers={"Cache-Control": "max-age=60"})
+@html_template("ready-list.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_ready_proposals(request):
     from .pkg import generate_ready_list
 
@@ -606,7 +606,7 @@ async def handle_ready_proposals(request):
     return await generate_ready_list(request.app.database, suite, review_status)
 
 
-@html_template("generic-package.html", headers={"Cache-Control": "max-age=600"})
+@html_template("generic-package.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_generic_pkg(request):
     from .common import generate_pkg_context
 
