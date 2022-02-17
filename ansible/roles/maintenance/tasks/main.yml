@@ -7,8 +7,14 @@
     - schedule.service
     - policy.timer
     - policy.service
+- name: Install package overrides systemd files
+  template:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/janitor-{{ item }}"
+  with_items:
     - package-overrides.service
     - package-overrides.timer
+  when: janitor_package_overrides is defined
 - name: Enable systemd files for schedule
   systemd:
     name: "janitor-{{ item }}.timer"
@@ -17,7 +23,14 @@
   with_items:
     - schedule
     - policy
+- name: Enable systemd files for package overrides
+  systemd:
+    name: "janitor-{{ item }}.timer"
+    state: started
+    enabled: yes
+  with_items:
     - package-overrides
+  when: janitor_package_overrides is defined
 - name: Schedule
   template:
     src: schedule.sh
