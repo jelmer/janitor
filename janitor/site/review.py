@@ -183,6 +183,7 @@ async def generate_review(
         "suite": suite,
         "suites": suites,
         "value": value,
+        "publishable_only": publishable_only,
         "MAX_DIFF_SIZE": MAX_DIFF_SIZE,
         "todo": [
             {

@@ -130,6 +130,9 @@ function submitReview(elem, status) {
 <input class='review-button' type="submit" name="review_status" value="Reject" accesskey="r" onclick="submitReview(this, 'rejected')">
 <input class='review-button' type="submit" name="review_status" value="Reschedule" accesskey="s" onclick="submitReview(this, 'reschedule')">
 <input class='review-button' type="submit" name="review_status" value="Abstain" accesskey="n" onclick="submitReview(this, 'abstained')">
+
+<input type="checkbox" value="true" name="publishable_only" id="publishable-only"{% if publishable_only %} checked{% endif %} onchange="$('#options').submit()"/>
+<label for="publishable_only">Publishable only</label>
 </form>
 
 <p><a href="/cupboard/pkg/{{ package_name }}/{{ run_id }}" id="full-run-link">Full Run</a></p>

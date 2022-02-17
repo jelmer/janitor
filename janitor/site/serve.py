@@ -638,10 +638,10 @@ async def handle_rejected(request):
 
 async def handle_review_post(request):
     from .review import generate_review, store_review
-    publishable_only = request.query.get("publishable_only", "true") == "true"
     check_qa_reviewer(request)
 
     post = await request.post()
+    publishable_only = post.get("publishable_only", "true") == "true"
     async with request.app.database.acquire() as conn:
         run = await conn.fetchrow(
             'SELECT package, suite FROM run WHERE id = $1',
