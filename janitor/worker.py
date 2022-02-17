@@ -1024,13 +1024,18 @@ def run_worker(
                 enable_tag_pushing(ws.local_tree.branch)
                 logging.info("Pushing result branch to %r", vcs_store_urls)
 
-                # TODO(jelmer): Force runner to always specify vcs_type
+                vcs = getattr(ws.local_tree.branch.repository, "vcs", None)
+                if vcs:
+                    actual_vcs_type = vcs.abbreviation
+                else:
+                    actual_vcs_type = "bzr"
+
                 if vcs_type is None:
-                    vcs = getattr(ws.local_tree.branch.repository, "vcs", None)
-                    if vcs:
-                        vcs_type = vcs.abbreviation
-                    else:
-                        vcs_type = "bzr"
+                    vcs_type = actual_vcs_type
+                elif actual_vcs_type != vcs_type:
+                    raise WorkerFailure(
+                        'vcs-type-mismatch',
+                        'Expected VCS %s, got %s' % (vcs_type, actual_vcs_type))
 
                 try:
                     if vcs_type.lower() == "git":
