@@ -1147,8 +1147,10 @@ INDEX_TEMPLATE = Template("""\
 
 <ul>
 <li><b>Command</b>: {{ assignment['command'] }}</li>
+{% if metadata.get('start_time') %}
 <li><b>Start Time</b>: {{ metadata['start_time'] }}
 <li><b>Current duration</b>: {{ datetime.utcnow() - datetime.fromisoformat(metadata['start_time']) }}
+{% endif %}
 </ul>
 
 {% if lognames %}
