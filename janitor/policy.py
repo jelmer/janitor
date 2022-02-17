@@ -65,9 +65,6 @@ def matches(match, package_name, vcs_url, package_maintainer, package_uploaders,
 def known_campaigns(config):
     ret = set()
     for policy in config.policy:
-        for suite in policy.suite:
-            ret.add(suite.name)
-    for policy in config.policy:
         for campaign in policy.campaign:
             ret.add(campaign.name)
     return ret
@@ -98,7 +95,7 @@ NOTIFY_MODE_STR = {
 
 def apply_policy(
     config: policy_pb2.PolicyConfig,
-    suite: str,
+    campaign: str,
     package_name: str,
     vcs_url: Optional[str],
     maintainer: str,
@@ -124,8 +121,8 @@ def apply_policy(
                 del env[env_entry.name]
             else:
                 env[env_entry.name] = env_entry.value
-        for s in policy.suite:
-            if s.name == suite:
+        for s in policy.campaign:
+            if s.name == campaign:
                 break
         else:
             continue
@@ -171,7 +168,7 @@ async def read_release_stages(url: str) -> Set[str]:
 async def update_policy(
     conn: asyncpg.Connection,
     name: str,
-    suite: str,
+    campaign: str,
     publish_mode: Dict[str, Tuple[str, Optional[int]]],
     command: List[str],
     qa_review: Optional[str],
@@ -187,7 +184,7 @@ async def update_policy(
         "qa_review = EXCLUDED.qa_review, "
         "broken_notify = EXCLUDED.broken_notify",
         name,
-        suite,
+        campaign,
         command,
         [(role, mode, max_freq) for (role, (mode, max_freq)) in publish_mode.items()],
         qa_review,
@@ -236,7 +233,7 @@ WHERE
 
 async def sync_policy(conn, policy, selected_package=None):
     current_policy = {}
-    suites = known_campaigns(policy)
+    campaigns = known_campaigns(policy)
     if policy.freeze_dates_url:
         release_stages_passed = await read_release_stages(policy.freeze_dates_url)
         logging.info('Release stages passed: %r', release_stages_passed)
@@ -244,16 +241,16 @@ async def sync_policy(conn, policy, selected_package=None):
         release_stages_passed = None
     num_updated = 0
     logging.info('Creating current policy')
-    async for (package, suite, cur_pol) in iter_policy(conn, package=selected_package):
-        current_policy[(package, suite)] = cur_pol
+    async for (package, campaign, cur_pol) in iter_policy(conn, package=selected_package):
+        current_policy[(package, campaign)] = cur_pol
     logging.info('Current policy: %d entries', len(current_policy))
     logging.info('Updating policy')
     for package in await iter_packages(conn, package=selected_package):
         updated = False
-        for suite in suites:
+        for campaign in campaigns:
             intended_policy = apply_policy(
                 policy,
-                suite,
+                campaign,
                 package['name'],
                 package['vcs_url'],
                 package['maintainer_email'],
@@ -261,11 +258,11 @@ async def sync_policy(conn, policy, selected_package=None):
                 package['in_base'],
                 release_stages_passed
             )
-            stored_policy = current_policy.pop((package['name'], suite), None)
+            stored_policy = current_policy.pop((package['name'], campaign), None)
             if stored_policy != intended_policy:
-                logging.debug("%s/%s -> %r" % (package['name'], suite, intended_policy))
+                logging.debug("%s/%s -> %r" % (package['name'], campaign, intended_policy))
                 await update_policy(
-                    conn, package['name'], suite, *intended_policy
+                    conn, package['name'], campaign, *intended_policy
                 )
                 updated = True
         if updated:
