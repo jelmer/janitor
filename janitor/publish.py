@@ -259,7 +259,10 @@ def branches_match(url_a, url_b):
     # TODO(jelmer): Support following redirects
     if url_a.rstrip("/") != url_b.rstrip("/"):
         return False
-    return open_branch(url_a).name == open_branch(url_b).name
+    try:
+        return open_branch(url_a).name == open_branch(url_b).name
+    except BranchMissing:
+        return False
 
 
 @dataclass
