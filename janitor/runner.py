@@ -532,7 +532,7 @@ class WorkerResult(object):
                 for (fn, n, br, r) in branches
             ]
         if tags:
-            tags = [(n, r.encode("utf-8")) for (fn, n, r) in tags]
+            tags = [(n, r.encode("utf-8")) for (n, r) in tags]
         target_kind = worker_result.get("target", {"name": None})["name"]
         for result_cls in RESULT_CLASSES:
             if target_kind == result_cls.kind:
