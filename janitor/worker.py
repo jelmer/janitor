@@ -187,7 +187,7 @@ class WorkerResult(object):
                 (f, n, br.decode("utf-8") if br else None, r.decode("utf-8"))
                 for (f, n, br, r) in self.branches
             ],
-            "tags": [(f, n, r.decode("utf-8")) for (f, n, r) in self.tags],
+            "tags": [(n, r.decode("utf-8")) for (n, r) in self.tags.items()],
             "target": {
                 "name": self.target,
                 "details": self.target_details,
