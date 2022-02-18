@@ -127,6 +127,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--user-secret-path", type=str, default="mastodon-notify-user.secret",
         help="Path to user secret.")
+    parser.add_argument(
+        "--app-secret-path", type=str, default="mastodon-notify-app.secret",
+        help="Path to app secret.")
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
 
     args = parser.parse_args()
@@ -134,20 +137,19 @@ if __name__ == "__main__":
         Mastodon.create_app(
             "debian-janitor-notify",
             api_base_url=args.api_base_url,
-            to_file="mastodon-notify-app.secret",
+            to_file=args.app_secret_path
         )
         sys.exit(0)
 
     if args.login:
         mastodon = Mastodon(
-            client_id="mastodon-notify-app.secret", api_base_url=args.api_base_url
-        )
+            client_id=args.app_secret_path, api_base_url=args.api_base_url)
 
         import getpass
 
         password = getpass.getpass()
 
-        mastodon.log_in(args.login, password, to_file="mastodon-notify-user.secret")
+        mastodon.log_in(args.login, password, to_file=args.user_secret_path)
 
         sys.exit(0)
 
