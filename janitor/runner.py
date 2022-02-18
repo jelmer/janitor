@@ -759,7 +759,6 @@ class JenkinsRun(ActiveRun):
 
     KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
-    KEEPALIVE_KILL = 60 * 60
 
     def __init__(self, my_url: URL, *args, **kwargs):
         super(JenkinsRun, self).__init__(*args, **kwargs)
@@ -818,7 +817,7 @@ class JenkinsRun(ActiveRun):
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 else:
                     self._reset_keepalive()
-                if self.keepalive_age > timedelta(seconds=self.KEEPALIVE_KILL):
+                if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
                     logging.warning(
                         "No keepalives received from %s for %s in %s, aborting.",
                         self.worker_name,
@@ -842,7 +841,6 @@ class PollingActiveRun(ActiveRun):
 
     KEEPALIVE_INTERVAL = 10
     KEEPALIVE_TIMEOUT = 60
-    KEEPALIVE_KILL = 60 * 60
 
     def __init__(self, my_url: URL, *args, **kwargs):
         super(PollingActiveRun, self).__init__(*args, **kwargs)
@@ -906,7 +904,7 @@ class PollingActiveRun(ActiveRun):
                 try:
                     async with session.get(
                             health_url, raise_for_status=True,
-                            timeout=ClientTimeout(self.KEEPALIVE_TIMEOUT)) as resp:
+                            timeout=ClientTimeout(queue_processor.run_timeout * 60)) as resp:
                         log_id = (await resp.read()).decode()
                         if log_id != self.log_id:
                             logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
@@ -917,7 +915,7 @@ class PollingActiveRun(ActiveRun):
                 except (ClientConnectorError, ClientResponseError,
                         asyncio.TimeoutError, ClientOSError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
-                if self.keepalive_age > timedelta(seconds=self.KEEPALIVE_KILL):
+                if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
                     logging.warning(
                         "No keepalives received from %s for %s in %s, aborting.",
                         self.worker_name,
@@ -1225,6 +1223,7 @@ class QueueProcessor(object):
         database: state.Database,
         policy: PolicyConfig,
         config: Config,
+        run_timeout: int,
         dry_run: bool = False,
         logfile_manager: Optional[LogFileManager] = None,
         artifact_manager: Optional[ArtifactManager] = None,
@@ -1253,6 +1252,7 @@ class QueueProcessor(object):
         self.backup_artifact_manager = backup_artifact_manager
         self.backup_logfile_manager = backup_logfile_manager
         self.rate_limit_hosts = {}
+        self.run_timeout = run_timeout
 
     def status_json(self) -> Any:
         return {
@@ -1817,6 +1817,9 @@ async def main(argv=None):
     )
     parser.add_argument("--gcp-logging", action='store_true', help='Use Google cloud logging.')
     parser.add_argument("--debug", action="store_true", help="Print debugging info")
+    parser.add_argument(
+        "--run-timeout", type=int, help="Time before marking a run as having timed out (minutes)",
+        60 * 10)
     args = parser.parse_args()
 
     if args.gcp_logging:
@@ -1881,12 +1884,13 @@ async def main(argv=None):
             db,
             policy,
             config,
-            args.dry_run,
-            logfile_manager,
-            artifact_manager,
-            vcs_manager,
-            public_vcs_manager,
-            args.use_cached_only,
+            run_timeout=args.run_timeout,
+            dry_run=args.dry_run,
+            logfile_manager=logfile_manager,
+            artifact_manager=artifact_manager,
+            vcs_manager=vcs_manager,
+            public_vcs_manager=public_vcs_manager,
+            use_cached_only=args.use_cached_only,
             committer=config.committer,
             backup_artifact_manager=backup_artifact_manager,
             backup_logfile_manager=backup_logfile_manager,
