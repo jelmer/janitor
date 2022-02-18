@@ -49,7 +49,7 @@ from aiohttp_openmetrics import (
 
 from .. import state
 from ..artifacts import get_artifact_manager, ArtifactsMissing
-from ..config import read_config, get_distribution, Campaign
+from ..config import read_config, get_distribution, Campaign, get_campaign_config
 from ..pubsub import pubsub_reader
 
 
@@ -323,7 +323,9 @@ async def listen_to_runner(runner_url, generator_manager):
         async for result in pubsub_reader(session, url):
             if result["code"] != "success":
                 continue
-            generator_manager.trigger(result["suite"])
+            campaign = get_campaign_config(generator_manager.config, result["suite"])
+            if campaign:
+                generator_manager.trigger(campaign)
 
 
 async def publish_suite(
