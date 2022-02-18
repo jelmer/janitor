@@ -61,6 +61,12 @@ CREATE INDEX ON merge_proposal (revision);
 CREATE INDEX ON merge_proposal (url);
 CREATE DOMAIN suite_name AS TEXT check (value similar to '[a-z0-9][a-z0-9+-.]+');
 CREATE TYPE review_status AS ENUM('unreviewed', 'approved', 'rejected', 'abstained');
+CREATE TABLE result_tag (
+ actual_name text,
+ revision text not null
+);
+
+CREATE INDEX ON result_tag (revision);
 CREATE TABLE IF NOT EXISTS run (
    id text not null primary key,
    command text,
@@ -87,6 +93,7 @@ CREATE TABLE IF NOT EXISTS run (
    value integer,
    -- Name of the worker that executed this run.
    worker text references worker(name),
+   worker_link text,
    result_tags result_tag[],
    subpath text,
    failure_details json,
@@ -196,6 +203,19 @@ CREATE VIEW last_effective_runs AS
   WHERE
     result_code != 'nothing-new-to-do'
   ORDER BY package, suite, start_time DESC;
+
+CREATE TABLE new_result_branch (
+ run_id text not null references run (id),
+ role text not null,
+ remote_name text,
+ base_revision text not null,
+ revision text not null,
+ absorbed boolean default false,
+ UNIQUE(run_id, role)
+);
+
+CREATE INDEX ON new_result_branch (revision);
+CREATE INDEX ON new_result_branch (absorbed);
 
 -- The last "unabsorbed" change. An unabsorbed change is the last change that
 -- was not yet merged or pushed.
@@ -329,26 +349,6 @@ CREATE TABLE result_branch (
  base_revision text not null,
  revision text not null
 );
-
-CREATE TABLE new_result_branch (
- run_id text not null references run (id),
- role text not null,
- remote_name text,
- base_revision text not null,
- revision text not null,
- absorbed boolean default false,
- UNIQUE(run_id, role)
-);
-
-CREATE INDEX ON new_result_branch (revision);
-CREATE INDEX ON new_result_branch (absorbed);
-
-CREATE TABLE result_tag (
- actual_name text,
- revision text not null
-);
-
-CREATE INDEX ON result_tag (revision);
 
 CREATE TYPE result_branch_with_policy AS (
   role text,
