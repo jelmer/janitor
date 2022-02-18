@@ -1819,7 +1819,7 @@ async def main(argv=None):
     parser.add_argument("--debug", action="store_true", help="Print debugging info")
     parser.add_argument(
         "--run-timeout", type=int, help="Time before marking a run as having timed out (minutes)",
-        60 * 10)
+        default=60 * 10)
     args = parser.parse_args()
 
     if args.gcp_logging:
