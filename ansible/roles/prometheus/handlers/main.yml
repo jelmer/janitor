@@ -1,3 +1,0 @@
----
-- name: restart prometheus-pushgateway
-  service: name=prometheus-pushgateway state=restarted
