@@ -39,7 +39,6 @@ from aiohttp import (
     BasicAuth,
     ClientSession,
     ClientTimeout,
-    ClientResponseError,
     ClientConnectorError,
     ContentTypeError,
     web,
