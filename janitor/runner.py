@@ -917,7 +917,7 @@ class PollingActiveRun(ActiveRun):
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
                     logging.warning(
-                        "No keepalives received from %s for %s in %s, aborting.",
+                        "No health checks to %s succeeded for %s in %s, aborting.",
                         self.worker_name,
                         self.log_id,
                         self.keepalive_age,
