@@ -829,7 +829,8 @@ class JenkinsRun(ActiveRun):
                             self.worker_name, self.log_id)
                         await queue_processor.abort_run(
                             self, 'run-disappeared',
-                            'Jenkins job %s has disappeared', self.my_url)
+                            'Jenkins job %s has disappeared' % self.my_url)
+                        break
                     else:
                         logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 else:
