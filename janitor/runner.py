@@ -34,7 +34,14 @@ import tempfile
 from typing import List, Any, Optional, Dict, Tuple, Type
 import uuid
 
-from aiohttp import web, ClientSession, ClientTimeout, ClientConnectorError, ClientResponseError
+from aiohttp import (
+    web,
+    ClientSession,
+    ClientTimeout,
+    ClientConnectorError,
+    ClientResponseError,
+    ServerDisconnectedError,
+    )
 
 from yarl import URL
 
@@ -812,7 +819,7 @@ class JenkinsRun(ActiveRun):
             while True:
                 try:
                     await self._get_job(session)
-                except (ClientConnectorError,
+                except (ClientConnectorError, ServerDisconnectedError,
                         asyncio.TimeoutError, ClientOSError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 except ClientResponseError as e:
@@ -923,7 +930,8 @@ class PollingActiveRun(ActiveRun):
                             self._reset_keepalive()
                             self._log_id_mismatch = False
                 except (ClientConnectorError, ClientResponseError,
-                        asyncio.TimeoutError, ClientOSError) as e:
+                        asyncio.TimeoutError, ClientOSError,
+                        ServerDisconnectedError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
                     logging.warning(
