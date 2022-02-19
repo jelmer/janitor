@@ -812,9 +812,19 @@ class JenkinsRun(ActiveRun):
             while True:
                 try:
                     await self._get_job(session)
-                except (ClientConnectorError, ClientResponseError,
+                except (ClientConnectorError,
                         asyncio.TimeoutError, ClientOSError) as e:
                     logging.warning('Failed to ping client %s: %s', self.my_url, e)
+                except ClientResponseError as e:
+                    if e.status == 404:
+                        logging.warning(
+                            "Jenkins job %s (worker %s) for run %s has disappeared.", self.my_url,
+                            self.worker_name, self.log_id)
+                        await queue_processor.abort_run(
+                            self, 'run-disappeared',
+                            'Jenkins job %s has disappeared', self.my_url)
+                    else:
+                        logging.warning('Failed to ping client %s: %s', self.my_url, e)
                 else:
                     self._reset_keepalive()
                 if self.keepalive_age > timedelta(seconds=queue_processor.run_timeout * 60):
@@ -1276,11 +1286,15 @@ class QueueProcessor(object):
             pass
 
     async def timeout_run(self, run: ActiveRun, duration: timedelta) -> None:
+        return await self.abort_run(
+            run, code='worker-timeout', description=("No keepalives received in %s." % duration))
+
+    async def abort_run(self, run: ActiveRun, code: str, description: str) -> None:
         result = run.create_result(
             branch_url=run.queue_item.branch_url,
             vcs_type=run.queue_item.vcs_type,
-            description=("No keepalives received in %s." % duration),
-            code="worker-timeout",
+            description=description,
+            code=code,
             logfilenames=[],
         )
         await self.finish_run(run.queue_item, result)
