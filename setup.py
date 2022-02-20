@@ -18,10 +18,10 @@
 from setuptools import setup
 
 setup(
-    name="debian-janitor",
+    name="janitor",
     author="Jelmer Vernooij",
     author_email="jelmer@jelmer.uk",
-    url="https://salsa.debian.org/jelmer/debian-janitor",
+    url="https://github.com/jelmer/janitor",
     description="Manager for automatic VCS changes",
     version="0.0.1",
     license="GNU GPL v2 or later",
