@@ -40,7 +40,7 @@ distribution {
   vendor: "debian"
 }
 
-suite {
+campaign {
   name: "lintian-fixes"
   branch_name: "lintian-fixes"
   debian_build {
@@ -52,7 +52,7 @@ suite {
   }
 }
 
-suite {
+campaign {
   name: "unchanged"
   branch_name: "master"
   debian_build {
@@ -63,7 +63,7 @@ suite {
   }
 }
 
-suite {
+campaign {
   name: "fresh-releases"
   branch_name: "new-upstream"
   debian_build {
@@ -74,7 +74,7 @@ suite {
   }
 }
 
-suite {
+campaign {
   name: "fresh-snapshots"
   branch_name: "new-upstream-snapshot"
   debian_build {
@@ -85,7 +85,7 @@ suite {
   }
 }
 
-suite {
+campaign {
   name: "multiarch-fixes"
   branch_name: "multiarch-fixes"
   debian_build {
@@ -96,7 +96,7 @@ suite {
   }
 }
 
-suite {
+campaign {
   name: "uncommitted"
   branch_name: "uncommitted"
   debian_build {
@@ -107,7 +107,7 @@ suite {
   }
 }
 
-suite {
+campaign {
   name: "debianize"
   branch_name: "debianize"
   debian_build {
@@ -118,7 +118,7 @@ suite {
   }
 }
 
-suite {
+campaign {
   name: "upstream-unchanged"
   branch_name: "upstream-unchanged"
   generic_build {
