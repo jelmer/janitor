@@ -1,21 +1,29 @@
-This repository contains the setup for the "Debian Janitor" bot. It contains
-the specific configuration & infrastructure for the instance running on
-janitor.debian.net. Any code that is more generic should probably be
-in either ``silver-platter``, ``lintian-brush`` or ``breezy``.
+This repository contains the setup for a "Janitor" bot. This is basically
+a platform for running silver-platter continuously on a specific set
+of packages.
 
-There are several instances of the Janitor. For their configuration, see:
 
-* [Debian Janitor](https://salsa.debian.org/jelmer/janitor.debian.net)
-* Kali Janitor (repository is private)
-* [Upstream Janitor](https://github.com/jelmer/janitor.jelmer.uk)
+Any code that is not related to the platform but to actually making changes
+should probably live in either ``silver-platter``, ``lintian-brush`` or
+``breezy``.
+
+There are currently several instances of the Janitor running. For their configuration, see:
+
+* [Debian Janitor](https://janitor.debian.net/) - Setup at https://salsa.debian.org/jelmer/janitor.debian.net
+* [Kali Janitor](https://janitor.kali.org/) - Configuration repository is private
+* [Upstream Janitor](https://janitor.jelmer.uk/) - Setup at https://github.com/jelmer/janitor.jelmer.uk
 
 Philosophy
 ==========
 
-There are some straightforward changes to Debian packages that can be made
+There are some straightforward changes to code that can be made
 using scripting. The janitor's job is to opportunistically make those changes
 when it is certain it can do so with a high confidence, and to back off
 otherwise.
+
+The janitor continuously tries to run changes on the set of repositories it
+knows about. It tries to be clever about scheduling those operations that
+are more likely to yield results and be published (i.e. merged or pushed).
 
 Design
 ======
@@ -73,8 +81,10 @@ from the ``janitor/site/templates/`` subdirectory.
 Installation
 ============
 
-The easiest way to set up a new instance of the Janitor is probably to use the
-ansible playbooks at https://salsa.debian.org/jelmer/debian-janitor-ansible
+There are two common ways of deployign a new janitor instance.
+
+ * On top of kubernetes (see the configuration for the Debian & Upstream janitor)
+ * Using ansible, based on the playbooks in the ``ansible/`` directory
 
 Contributing
 ============
