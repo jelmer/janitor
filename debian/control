@@ -1,0 +1,46 @@
+Source: janitor
+Priority: optional
+Section: vcs
+Maintainer: Jelmer Vernooĳ <jelmer@debian.org>
+Build-Depends: debhelper-compat (= 13),
+               dh-exec,
+               dh-python,
+               flake8,
+               mypy,
+               mypy-protobuf,
+               protobuf-compiler,
+               python3-all,
+               python3-asynctest,
+               python3-aiozipkin,
+               python3-breezy (>= 3.1~),
+               python3-jinja2,
+               python3-protobuf,
+               silver-platter
+Rules-Requires-Root: no
+
+Package: python3-janitor
+Architecture: all
+Recommends: zipkin
+Depends: brz-debian,
+         python3-aiohttp,
+         python3-aiodns,
+         python3-aiozipkin,
+         python3-breezy,
+         python3-prometheus-client,
+         python3-protobuf,
+         ${misc:Depends},
+         ${python3:Depends}
+Description: platform for making automated VCS changes
+ Platform built on top of silver-platter that can continuously make
+ changes to a set of version control repositories.
+ .
+ It tries to continuously run scripts against the set of repositories it
+ knows about. It tries to be clever about scheduling those operations that
+ are more likely to yield results and be published (i.e. merged or pushed).
+ .
+ Depending on the preferences of repository owners, changes can be committed
+ and pushed upstream directly, be proposed in the form of pull requests
+ or attached to bug reports.
+ .
+ A web UI and tooling is provided to manage and review changes in bulk and
+ report on changes made.
