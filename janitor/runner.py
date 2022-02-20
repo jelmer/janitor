@@ -863,7 +863,7 @@ class PollingActiveRun(ActiveRun):
         super(PollingActiveRun, self).__init__(*args, **kwargs)
         self.my_url = my_url
         self._watch_dog = None
-        self._log_id_mismatch = False
+        self._log_id_mismatch = None
 
     def __repr__(self):
         return "<%s(%r)>" % (type(self).__name__, self.my_url)
@@ -911,7 +911,7 @@ class PollingActiveRun(ActiveRun):
     def is_mia(self):
         if super(PollingActiveRun, self).is_mia:
             return True
-        return self._log_id_mismatch
+        return self._log_id_mismatch is not None
 
     async def _watchdog(self, queue_processor):
         health_url = self.my_url / 'log-id'
@@ -925,10 +925,10 @@ class PollingActiveRun(ActiveRun):
                         log_id = (await resp.read()).decode()
                         if log_id != self.log_id:
                             logging.warning('Unexpected log id %s != %s', log_id, self.log_id)
-                            self._log_id_mismatch = True
+                            self._log_id_mismatch = log_id
                         else:
                             self._reset_keepalive()
-                            self._log_id_mismatch = False
+                            self._log_id_mismatch = None
                 except (ClientConnectorError, ClientResponseError,
                         asyncio.TimeoutError, ClientOSError,
                         ServerDisconnectedError) as e:
@@ -942,6 +942,22 @@ class PollingActiveRun(ActiveRun):
                     )
                     try:
                         await queue_processor.timeout_run(self, self.keepalive_age)
+                    except RunExists:
+                        logging.warning('Watchdog was not stopped?')
+                    break
+                if (self._log_id_mismatch is not None and
+                        (datetime.now() - self.start_time).total_seconds() > 30):
+                    logging.warning(
+                        "Worker is now processing new run. Marking run as MIA.",
+                        self.worker_name,
+                        self.log_id,
+                        self.keepalive_age,
+                    )
+                    try:
+                        await queue_processor.abort_run(
+                            self, 'run-disappeared',
+                            'Worker started processing new run %s rather than %s',
+                            self._log_id_mismatch, self.log_id)
                     except RunExists:
                         logging.warning('Watchdog was not stopped?')
                     break
