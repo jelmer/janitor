@@ -42,7 +42,13 @@ def get_branch_urls_from_github_webhook(body):
     url_keys = ["clone_url", "html_url", "git_url", "ssh_url"]
     urls = []
     for url_key in url_keys:
-        url = body["repository"][url_key]
+        try:
+            url = body["repository"][url_key]
+        except KeyError:
+            logging.warning(
+                'URL key %r not present for repository: %r', url_key,
+                body["repository"])
+            continue
         urls.append(git_url_to_bzr_url(url, ref=body["ref"].encode()))
         try:
             branch_name = ref_to_branch_name(body["ref"].encode())
