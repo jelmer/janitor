@@ -2,4 +2,4 @@ FROM eu.gcr.io/debian-janitor/base
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9918
 RUN apt update && apt -y install python3-pydle
-ENTRYPOINT ["python3", "/code/irc_notify.py", "--prometheus-port=9918", "--prometheus-listen-address=0.0.0.0"]
+ENTRYPOINT ["python3", "/code/notifiers/irc_notify.py", "--prometheus-port=9918", "--prometheus-listen-address=0.0.0.0"]
