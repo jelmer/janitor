@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright (C) 2018 Jelmer Vernooij <jelmer@jelmer.uk>
+# Copyright (C) 2018-2022 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
