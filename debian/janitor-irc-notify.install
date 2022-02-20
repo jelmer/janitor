@@ -1,2 +1,0 @@
-#!/usr/bin/dh-exec
-irc_notify.py => /usr/bin/janitor-irc-notify
