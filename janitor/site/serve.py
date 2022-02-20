@@ -152,6 +152,11 @@ async def handle_apt_repo(request):
         )
 
 
+@html_template("reprocess-logs.html")
+async def handle_reprocess_logs(request):
+    return {}
+
+
 @html_template("history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_history(request):
     limit = int(request.query.get("limit", "100"))
@@ -943,6 +948,7 @@ async def create_app(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
     app.router.add_get("/{suite:unchanged}", handle_apt_repo, name="unchanged-start")
     app.router.add_get("/cupboard/history", handle_history, name="history")
+    app.router.add_get("/cupboard/reprocess-logs", handle_reprocess_logs, name="reprocess-logs")
     app.router.add_get("/cupboard/queue", handle_queue, name="queue")
     app.router.add_get(
         "/cupboard/result-codes/", handle_result_codes, name="result-code-list"
