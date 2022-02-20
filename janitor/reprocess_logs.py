@@ -72,6 +72,7 @@ async def reprocess_run_logs(
         db, logfile_manager, package, suite, log_id, command, duration,
         result_code, description, failure_details, dry_run=False,
         reschedule=False, log_timeout=None):
+    """Reprocess run logs."""
     if result_code in ('dist-no-tarball', ):
         return
     if result_code.startswith('dist-'):

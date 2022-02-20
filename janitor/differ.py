@@ -65,6 +65,22 @@ def is_binary(n):
     return n.endswith(".deb") or n.endswith(".udeb")
 
 
+class ArtifactRetrievalTimeout(Exception):
+    """Timeout while retrieving artifacts."""
+
+
+class DiffCommandTimeout(Exception):
+    """Timeout while running diff command."""
+
+    def __init__(self, command, timeout):
+        self.command = command
+        self.timeout = timeout
+
+
+class DiffCommandMemoryError(Exception):
+    """Memory error while running diff command."""
+
+
 @routes.get("/debdiff/{old_id}/{new_id}", name="debdiff")
 async def handle_debdiff(request):
     old_id = request.match_info["old_id"]
@@ -135,6 +151,8 @@ async def handle_debdiff(request):
                 )
             except DebdiffError as e:
                 return web.Response(status=400, text=e.args[0])
+            except asyncio.TimeoutError:
+                raise web.HTTPGatewayTimeout(text="Timeout running debdiff")
 
         if cache_path:
             with open(cache_path, "wb") as f:
@@ -359,7 +377,9 @@ async def precache(app, old_id, new_id):
       new_id: Run id for new run
     Raises:
       ArtifactsMissing: if either the old or new run artifacts are missing
-
+      ArtifactRetrievalTimeout: if retrieving artifacts resulted in a timeout
+      DiffCommandTimeout: if running the diff command triggered a timeout
+      DiffCommandMemoryError: if the diff command used too much memory
     """
     with ExitStack() as es:
         old_dir = es.enter_context(TemporaryDirectory())
@@ -402,9 +422,9 @@ async def precache(app, old_id, new_id):
                         lambda: _set_limits(app.task_memory_limit)), app.task_timeout
                 )
             except MemoryError:
-                raise web.HTTPServiceUnavailable(text="diffoscope used too much memory")
+                raise DiffCommandMemoryError("diffoscope", app.task_memory_limit)
             except asyncio.TimeoutError:
-                raise web.HTTPGatewayTimeout(text="diffoscope timed out")
+                raise DiffCommandTimeout("diffoscope", app.task_timeout)
 
             try:
                 with open(diffoscope_cache_path, "w") as f:
@@ -444,8 +464,12 @@ async def handle_precache(request):
                 text="No artifacts for run id: %r" % e,
                 headers={"unavailable_run_id": e.args[0]},
             )
-        except asyncio.TimeoutError:
+        except ArtifactRetrievalTimeout:
             raise web.HTTPGatewayTimeout(text="Timeout retrieving artifacts")
+        except DiffCommandTimeout:
+            raise web.HTTPGatewayTimeout(text="Timeout diffing artifacts")
+        except DiffCommandMemoryError:
+            raise web.HTTPServiceUnavailable(text="diffing used too much memory")
 
     create_background_task(_precache(), 'precaching')
 
@@ -479,6 +503,12 @@ where
             for x in done:
                 try:
                     x.result()
+                except ArtifactRetrievalTimeout as e:
+                    logging.info("Timeout retrieving artifacts: %s", e)
+                except DiffCommandTimeout as e:
+                    logging.info("Timeout diffing artifacts: %s", e)
+                except DiffCommandMemoryError as e:
+                    logging.info("Memory error diffing artifacts: %s", e)
                 except Exception as e:
                     logging.info("Error precaching: %r", e)
                     traceback.print_exc()
@@ -573,6 +603,12 @@ async def listen_to_runner(runner_url, app):
                         result["log_id"],
                         e,
                     )
+                except ArtifactRetrievalTimeout as e:
+                    logging.info("Timeout retrieving artifacts: %s", e)
+                except DiffCommandTimeout as e:
+                    logging.info("Timeout diffing artifacts: %s", e)
+                except DiffCommandMemoryError as e:
+                    logging.info("Memory error diffing artifacts: %s", e)
                 except Exception as e:
                     logging.info(
                         "Error precaching diff for %s: %r", result["log_id"], e
