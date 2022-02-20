@@ -1,4 +1,10 @@
 #!/usr/bin/python3
+"""Cleanup owned repositories that are no longer needed for merge proposals.
+
+This is necessary in particular because some hosting sites
+(e.g. default GitLab) have restrictions on the number of repositories
+that a single user can own (in the case of GitLab, 1000).
+"""
 
 import sys
 
