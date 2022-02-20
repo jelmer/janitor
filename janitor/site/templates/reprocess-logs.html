@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% block page_title %}Reprocess Logs{% endblock %}
+{% block body %}
+<h1>Reprocess Logs</h1>
+<form id="mass_reschedule" method="POST" action="/api/reprocess-logs">
+    Dry Run: <input type="checkbox" name="dry_run" value="1"/>
+    Reschedule: <input type="checkbox" name="reschedule" value="1"/>
+    <input type="submit" value="Reprocess Logs"/>
+</form>
+
+{% endblock %}
