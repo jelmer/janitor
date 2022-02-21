@@ -1213,6 +1213,8 @@ async def handle_artifact(request):
     if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Artifact directory not created yet")
     p = os.path.join(request.app['workitem']['directory'], request.match_info['filename'])
+    if not os.path.exists(p):
+        raise web.HTTPNotFound(text="No such artifact")
     return web.FileResponse(p)
 
 
@@ -1248,6 +1250,8 @@ async def handle_log(request):
     if 'directory' not in request.app['workitem']:
         raise web.HTTPNotFound(text="Log directory not created yet")
     p = os.path.join(request.app['workitem']['directory'], request.match_info['filename'])
+    if not os.path.exists(p):
+        raise web.HTTPNotFound(text="No such log file")
     return web.FileResponse(p)
 
 
