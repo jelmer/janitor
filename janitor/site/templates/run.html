@@ -136,8 +136,6 @@ function submit_review(status) {
 
 {% endif %}
 
-
-
 {% if binary_packages %}
 <h2>Resulting package</h2>
 
@@ -149,6 +147,19 @@ function submit_review(status) {
 <h2>Lintian Result</h2>
 
 {{ display_lintian_result(lintian_result) }}
+
+{% endif %}
+
+{% if reviews %}
+<h2>Reviews</h2>
+
+<table class="reviews">
+	<thead><td>Reviewer</td><td>Verdict</td><td>Comment</td></thead>
+
+	{% for review in reviews %}
+	<tr><td>{{ review['reviewer'] }}</td><td>{{ review['review_status'] }}</td><td>{{ review['review_comment'] }}</td></tr>
+	{% endfor %}
+</table>
 
 {% endif %}
 
