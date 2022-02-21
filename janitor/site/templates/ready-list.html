@@ -14,20 +14,20 @@
 <h1>Ready to publish</h1>
 <ul>
 {% for run in runs %}
-<li><a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>{% if run.command.startswith('lintian-brush') %}
+<li><a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>{% if plain_command.startswith('lintian-brush') %}
 {{ lintian_brush_summary(run.result['applied']) }}
-{% elif run.command.startswith('new-upstream ') or run.command == 'new-upstream' %}
-{% if '--snapshot' in run.command %}: Merge new upstream snapshot <b>{{ run.result['upstream_version'] }}</b>
+{% elif plain_command.startswith('new-upstream ') or plain_command == 'new-upstream' %}
+{% if '--snapshot' in plain_command %}: Merge new upstream snapshot <b>{{ run.result['upstream_version'] }}</b>
 {% else %}: Merge new upstream release <b>{{ run.result['upstream_version'] }}</b> {% endif %}
-{% elif run.command.startswith('apply-multiarch-hints') %}
+{% elif plain_command.startswith('apply-multiarch-hints') %}
 Apply multi-arch hints: {{ multiarch_hints_summary(run.result['applied-hints']) }}
-{% elif run.command.startswith('scrub-obsolete') %}
+{% elif plain_command.startswith('scrub-obsolete') %}
 Scrub obsolete dependencies and constraints.
-{% elif run.command.startswith('orphan') %}
+{% elif plain_command.startswith('orphan') %}
 Move orphaned package to QA team.
-{% elif run.command.startswith('mia') %}
+{% elif plain_command.startswith('mia') %}
 Remove MIA uploaders.
-{% else %}: Unknown command {{ run.command }}
+{% else %}: Unknown command {{ plain_command }}
 {% endif %}
 </li>
 {% endfor %}
