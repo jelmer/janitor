@@ -9,7 +9,7 @@ from lintian_brush import (
 )
 from lintian_brush.lintian_overrides import load_renamed_tags
 
-from . import html_template
+from .common import html_template
 
 
 SUITE = "lintian-fixes"

@@ -1,5 +1,5 @@
 import aiozipkin
-from . import html_template
+from .common import html_template
 
 
 @html_template(

@@ -2,10 +2,10 @@
 
 import operator
 
-from . import env, json_chart_data, html_template
+from . import env, json_chart_data
 from aiohttp import web
 import asyncpg
-from .common import iter_candidates
+from .common import iter_candidates, html_template
 
 
 async def write_maintainer_stats(conn):

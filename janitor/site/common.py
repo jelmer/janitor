@@ -334,3 +334,19 @@ async def generate_candidates(db, suite):
             candidates.append((row['package'], row['value']))
         candidates.sort(key=lambda x: x[1], reverse=True)
     return {"candidates": candidates, "suite": suite}
+
+
+def html_template(template_name, headers={}):
+    def decorator(fn):
+        async def handle(request):
+            template = request.app['jinja_env'].get_template(template_name)
+            vs = await fn(request)
+            if isinstance(vs, web.Response):
+                return vs
+            update_vars_from_request(vs, request)
+            text = await template.render_async(**vs)
+            return web.Response(content_type="text/html", text=text, headers=headers)
+
+        return handle
+
+    return decorator
