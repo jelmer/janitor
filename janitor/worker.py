@@ -1100,6 +1100,8 @@ async def get_assignment(
     base_url: yarl.URL,
     node_name: str,
     jenkins_build_url: Optional[str],
+    package: Optional[str] = None,
+    campaign: Optional[str] = None,
 ) -> Any:
     assign_url = base_url / "active-runs"
     build_arch = subprocess.check_output(
@@ -1120,6 +1122,10 @@ async def get_assignment(
         json["worker_link"] = str(my_url)
     else:
         json["worker_link"] = None
+    if package:
+        json["package"] = package
+    if campaign:
+        json["campaign"] = campaign
     logging.debug("Sending assignment request: %r", json)
     try:
         async with session.post(assign_url, json=json) as resp:
@@ -1272,11 +1278,14 @@ async def handle_log_id(request):
 
 async def process_single_item(
         session, my_url: Optional[yarl.URL], base_url: yarl.URL, node_name, workitem,
-        jenkins_build_url=None, prometheus=None, vcs_store_urls=None,
-        retry_count=5):
+        jenkins_build_url=None, prometheus: Optional[str] = None,
+        vcs_store_urls=None,
+        package: Optional[str] = None, campaign: Optional[str] = None,
+        retry_count: int = 5):
     assignment = await get_assignment(
         session, my_url, base_url, node_name,
-        jenkins_build_url=jenkins_build_url
+        jenkins_build_url=jenkins_build_url,
+        package=package, campaign=campaign,
     )
     workitem['assignment'] = assignment
 
@@ -1442,6 +1451,10 @@ async def main(argv=None):
     )
     parser.add_argument(
         '--port', type=int, default=0, help="Port to use for diagnostics web server")
+    parser.add_argument(
+        '--package', type=str, help='Request run for specified package')
+    parser.add_argument(
+        '--campaign', type=str, help='Request run for specified campaign')
 
     # Unused, here for backwards compatibility.
     parser.add_argument('--build-command', help=argparse.SUPPRESS, type=str)
@@ -1578,7 +1591,8 @@ async def main(argv=None):
                     jenkins_build_url=jenkins_build_url,
                     prometheus=args.prometheus,
                     vcs_store_urls=vcs_store_urls,
-                    retry_count=args.retry_count)
+                    retry_count=args.retry_count,
+                    package=args.package, campaign=args.campaign)
             except AssignmentFailure as e:
                 logging.fatal("failed to get assignment: %s", e.reason)
                 return 1
