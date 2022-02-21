@@ -21,6 +21,7 @@ from aiohttp import (
     ClientTimeout,
     ServerDisconnectedError,
 )
+from datetime import datetime
 import gzip
 from io import BytesIO
 import os
@@ -32,17 +33,20 @@ class ServiceUnavailable(Exception):
 
 
 class LogFileManager(object):
-    async def has_log(self, pkg, run_id, name, timeout=None):
+    async def has_log(self, pkg: str, run_id: str, name: str, timeout=None):
         raise NotImplementedError(self.has_log)
 
-    async def get_log(self, pkg, run_id, name, timeout=None):
+    async def get_log(self, pkg: str, run_id: str, name: str, timeout=None):
         raise NotImplementedError(self.get_log)
 
-    async def import_log(self, pkg, run_id, orig_path, timeout=None):
+    async def import_log(self, pkg: str, run_id: str, orig_path: str, timeout=None):
         raise NotImplementedError(self.import_log)
 
-    async def iter_ids(self):
-        raise NotImplementedError(self.iter_ids)
+    async def iter_logs(self):
+        raise NotImplementedError(self.iter_logs)
+
+    async def get_ctime(self, pkg: str, run_id: str, name: str) -> datetime:
+        raise NotImplementedError(self.get_ctime)
 
 
 class FileSystemLogFileManager(LogFileManager):
@@ -57,13 +61,21 @@ class FileSystemLogFileManager(LogFileManager):
             os.path.join(self.log_directory, pkg, run_id, name) + ".gz",
         ]
 
-    async def iter_ids(self):
+    async def iter_logs(self):
         for pkg in os.scandir(self.log_directory):
             for entry in os.scandir(pkg.path):
-                yield entry.name
+                yield pkg.name, entry.name, os.listdir(entry.path)
 
     async def has_log(self, pkg, run_id, name):
         return any(map(os.path.exists, self._get_paths(pkg, run_id, name)))
+
+    async def get_ctime(self, pkg: str, run_id: str, name: str) -> datetime:
+        for p in self._get_paths(pkg, run_id, name):
+            try:
+                return datetime.fromtimestamp(os.stat(p).st_ctime)
+            except FileNotFoundError:
+                continue
+        raise FileNotFoundError(name)
 
     async def get_log(self, pkg, run_id, name, timeout=None):
         for path in self._get_paths(pkg, run_id, name):
@@ -158,13 +170,13 @@ class GCSLogFilemanager(LogFileManager):
         self.storage = Storage(service_file=creds_path, session=self.session)
         self.bucket = self.storage.get_bucket(self.bucket_name)
 
-    async def iter_ids(self):
-        ids = set()
+    async def iter_logs(self):
+        seen = {}
         for name in await self.bucket.list_blobs():
-            log_id = name.split("/")[0]
-            if log_id not in ids:
-                yield log_id
-            ids.add(log_id)
+            pkg, log_id, lfn = name.split("/")
+            seen.setdefault((pkg, log_id), []).append(lfn)
+        for (pkg, log_id), lfns in seen.items():
+            yield pkg, log_id, lfns
 
     def _get_object_name(self, pkg, run_id, name):
         return "%s/%s/%s.gz" % (pkg, run_id, name)
@@ -172,6 +184,19 @@ class GCSLogFilemanager(LogFileManager):
     async def has_log(self, pkg, run_id, name):
         object_name = self._get_object_name(pkg, run_id, name)
         return await self.bucket.blob_exists(object_name, self.session)
+
+    async def get_ctime(self, pkg, run_id, name):
+        from iso8601 import parse_date
+        object_name = self._get_object_name(pkg, run_id, name)
+        try:
+            blob = await self.bucket.get_blob(object_name, self.session)
+        except ClientResponseError as e:
+            if e.status == 404:
+                raise FileNotFoundError(name)
+            raise ServiceUnavailable()
+        except ServerDisconnectedError:
+            raise ServiceUnavailable()
+        return parse_date(blob.timeCreated)
 
     async def get_log(self, pkg, run_id, name, timeout=30):
         object_name = self._get_object_name(pkg, run_id, name)
