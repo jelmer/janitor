@@ -1,3 +1,0 @@
-FROM postgres:13
-MAINTAINER Jelmer Vernooij <jelmer@debian.org>
-RUN apt update && apt -y install postgresql-$PG_MAJOR-debversion
