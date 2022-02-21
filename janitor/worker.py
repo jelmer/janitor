@@ -1480,8 +1480,7 @@ async def main(argv=None):
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, args.listen_address, args.port)
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(None, site.start)
+    await site.start()
     (site_addr, site_port) = site._server.sockets[0].getsockname()
 
     global_config = GlobalStack()
