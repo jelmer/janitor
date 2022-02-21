@@ -238,6 +238,13 @@ WHERE run.package = $1 AND run.suite = $2
         with span.new_child('sql:queue-position'):
             (queue_position, queue_wait_time) = await get_queue_position(
                 conn, suite, package['name'])
+        if run_id:
+            with span.new_child('sql:reviews'):
+                reviews = await conn.fetch(
+                    'SELECT * FROM review WHERE run_id = $1 '
+                    'ORDER BY reviewed_at ASC', run_id)
+        else:
+            reviews = None
 
     async def show_diff(role):
         try:
@@ -290,6 +297,7 @@ WHERE run.package = $1 AND run.suite = $2
 
     kwargs.update({
         "package": package['name'],
+        "reviews": reviews,
         "unchanged_run": unchanged_run,
         "merge_proposals": merge_proposals,
         "maintainer_email": package['maintainer_email'],
