@@ -25,6 +25,49 @@ from buildlog_consultant.sbuild import worker_failure_from_sbuild_log  # noqa: E
 from janitor.schedule import do_schedule  # noqa: E402
 
 
+def process_build_log(logf):
+    failure = worker_failure_from_sbuild_log(logf)
+    if failure.error:
+        if failure.stage and not failure.error.is_global:
+            new_code = "%s-%s" % (failure.stage, failure.error.kind)
+        else:
+            new_code = failure.error.kind
+        try:
+            new_failure_details = failure.error.json()
+        except NotImplementedError:
+            new_failure_details = None
+    elif failure.stage:
+        new_code = "build-failed-stage-%s" % failure.stage
+        new_failure_details = None
+    else:
+        new_code = "build-failed"
+        new_failure_details = None
+    new_description = failure.description
+    new_phase = failure.phase
+    return (new_code, new_description, new_phase, new_failure_details)
+
+
+def process_dist_log(logf):
+    lines = [line.decode('utf-8', 'replace') for line in logf]
+    problem = find_build_failure_description(lines)[1]
+    if problem is None:
+        new_code = 'dist-command-failed'
+        new_description = description
+        new_failure_details = None
+    else:
+        if problem.is_global:
+            new_code = problem.kind
+        else:
+            new_code = 'dist-' + problem.kind
+        new_description = str(problem)
+        try:
+            new_failure_details = problem.json()
+        except NotImplementedError:
+            new_failure_details = None
+    new_phase = None
+    return (new_code, new_description, new_phase, new_failure_details)
+
+
 async def reprocess_run_logs(
         db, logfile_manager, package, suite, log_id, command, duration,
         result_code, description, failure_details, dry_run=False,
@@ -43,42 +86,11 @@ async def reprocess_run_logs(
         return
 
     if logname == 'build.log':
-        failure = worker_failure_from_sbuild_log(logf)
-        if failure.error:
-            if failure.stage and not failure.error.is_global:
-                new_code = "%s-%s" % (failure.stage, failure.error.kind)
-            else:
-                new_code = failure.error.kind
-            try:
-                new_failure_details = failure.error.json()
-            except NotImplementedError:
-                new_failure_details = None
-        elif failure.stage:
-            new_code = "build-failed-stage-%s" % failure.stage
-            new_failure_details = None
-        else:
-            new_code = "build-failed"
-            new_failure_details = None
-        new_description = failure.description
-        new_phase = failure.phase
+        (new_code, new_description, new_phase,
+         new_failure_details) = process_build_log(logf)
     elif logname == 'dist.log':
-        lines = [line.decode('utf-8', 'replace') for line in logf]
-        problem = find_build_failure_description(lines)[1]
-        if problem is None:
-            new_code = 'dist-command-failed'
-            new_description = description
-            new_failure_details = None
-        else:
-            if problem.is_global:
-                new_code = problem.kind
-            else:
-                new_code = 'dist-' + problem.kind
-            new_description = str(problem)
-            try:
-                new_failure_details = problem.json()
-            except NotImplementedError:
-                new_failure_details = None
-        new_phase = None
+        (new_code, new_description, new_phase,
+         new_failure_details) = process_dist_log(logf)
 
     if new_code != result_code or description != new_description or failure_details != new_failure_details:
         logging.info(
