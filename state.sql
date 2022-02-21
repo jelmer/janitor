@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS package (
    subpath text,
    vcs_last_revision text,
 
-   maintainer_email text not null,
+   maintainer_email text,
    uploader_emails text[] not null,
    archive_version debversion,
    vcs_url text,
