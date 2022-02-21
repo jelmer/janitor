@@ -49,7 +49,7 @@ from aiohttp_openmetrics import Counter, Gauge, Histogram, setup_metrics
 
 from breezy import debug, urlutils
 from breezy.branch import Branch
-from breezy.errors import PermissionDenied, ConnectionError
+from breezy.errors import PermissionDenied, ConnectionError, UnexpectedHttpStatus
 from breezy.propose import Hoster
 from breezy.transport import UnusableRedirect
 
@@ -1004,6 +1004,15 @@ def open_resume_branch(
             return None
         except UnusableRedirect as e:
             logging.warning("Unable to list existing proposals: %s", e)
+            return None
+        except UnexpectedHttpStatus as e:
+            # TODO(jelmer): Handle 429 better and report against rate limiting
+            if e.code in (429, 500):
+                logging.warning(
+                    'Unexpected HTTP status for %s: %s %s', e.path,
+                    e.code, e.extra)
+            else:
+                raise
             return None
         else:
             return resume_branch
