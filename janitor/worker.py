@@ -92,6 +92,7 @@ from breezy.errors import (
     NotBranchError,
     InvalidHttpResponse,
     UnexpectedHttpStatus,
+    TransportError,
     TransportNotPossible,
 )
 from breezy.git.remote import RemoteGitError
@@ -709,6 +710,9 @@ def process_package(
             raise WorkerFailure("worker-clone-bad-gateway", str(e))
         else:
             raise WorkerFailure("worker-clone-http-%s" % e.code, str(e))
+    except TransportError as e:
+        traceback.print_exc()
+        raise WorkerFailure("worker-clone-transport-error", str(e))
 
     try:
         logger.info('Workspace ready - starting.')
