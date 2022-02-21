@@ -957,8 +957,8 @@ class PollingActiveRun(ActiveRun):
                     try:
                         await queue_processor.abort_run(
                             self, 'run-disappeared',
-                            'Worker started processing new run %s rather than %s',
-                            self._log_id_mismatch, self.log_id)
+                            'Worker started processing new run %s rather than %s' %
+                            (self._log_id_mismatch, self.log_id))
                     except RunExists:
                         logging.warning('Watchdog was not stopped?')
                     break
