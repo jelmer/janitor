@@ -1386,9 +1386,9 @@ class QueueProcessor(object):
             return False
         return until > datetime.now()
 
-    async def next_queue_item(self, conn) -> Optional[QueueItem]:
+    async def next_queue_item(self, conn, package=None, campaign=None) -> Optional[QueueItem]:
         limit = len(self.active_runs) + 300
-        async for item in iter_queue(conn, limit=limit):
+        async for item in iter_queue(conn, limit=limit, campaign=campaign, package=package):
             if self.is_queue_item_assigned(item.id):
                 continue
             if self.is_queue_item_rate_limited(item.branch_url):
@@ -1473,7 +1473,9 @@ async def handle_assign(request):
     return await next_item(
         request, 'assign', worker=json.get("worker"),
         worker_link=json.get("worker_link"),
-        backchannel=json['backchannel']
+        backchannel=json['backchannel'],
+        package=json.get('package'),
+        campaign=json.get('campaign')
         )
 
 
@@ -1482,7 +1484,7 @@ async def handle_peek(request):
     return await next_item(request, 'peek')
 
 
-async def next_item(request, mode, worker=None, worker_link=None, backchannel=None):
+async def next_item(request, mode, worker=None, worker_link=None, backchannel=None, package=None, campaign=None):
     possible_transports = []
     possible_hosters = []
 
@@ -1506,7 +1508,8 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
         item = None
         while item is None:
             with span.new_child('sql:queue-item'):
-                item = await queue_processor.next_queue_item(conn)
+                item = await queue_processor.next_queue_item(
+                    conn, package=package, campaign=campaign)
             if item is None:
                 return web.json_response({'reason': 'queue empty'}, status=503)
 

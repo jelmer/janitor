@@ -145,7 +145,7 @@ WHERE queue.id = $1
     return None
 
 
-async def iter_queue(conn: asyncpg.Connection, limit=None):
+async def iter_queue(conn: asyncpg.Connection, limit=None, package=None, campaign=None):
     query = """
 SELECT
     package.branch_url AS branch_url,
@@ -164,6 +164,20 @@ FROM
     queue
 LEFT JOIN package ON package.name = queue.package
 LEFT OUTER JOIN upstream ON upstream.name = package.name
+"""
+    conditions = []
+    args = []
+    if package:
+        args.append(package)
+        conditions.append("queue.package = $%d" % len(args))
+    if campaign:
+        args.append(campaign)
+        conditions.append("queue.suite = $%d" % len(args))
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    query += """
 ORDER BY
 queue.bucket ASC,
 queue.priority ASC,
@@ -171,5 +185,5 @@ queue.id ASC
 """
     if limit:
         query += " LIMIT %d" % limit
-    for row in await conn.fetch(query):
+    for row in await conn.fetch(query, *args):
         yield QueueItem.from_row(row)
