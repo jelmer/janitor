@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
-from .common import iter_candidates
-from . import html_template
+from .common import iter_candidates, html_template
 
 
 SUITE = "orphan"

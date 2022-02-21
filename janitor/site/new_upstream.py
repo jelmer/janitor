@@ -6,7 +6,8 @@ import asyncpg
 from datetime import datetime
 import urllib.parse
 
-from . import html_template, render_template_for_request
+from . import render_template_for_request
+from .common import html_template
 from ..config import get_campaign_config
 from ..schedule import TRANSIENT_ERROR_RESULT_CODES
 

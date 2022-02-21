@@ -2,8 +2,7 @@
 
 import aiozipkin
 import asyncpg
-from .common import generate_pkg_context, iter_candidates
-from . import html_template
+from .common import generate_pkg_context, iter_candidates, html_template
 
 SUITE = "multiarch-fixes"
 

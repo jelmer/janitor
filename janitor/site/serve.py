@@ -44,11 +44,12 @@ from ..pubsub import pubsub_reader, pubsub_handler, Topic
 from ..vcs import get_vcs_manager
 
 from . import (
-    html_template,
     is_admin,
     render_template_for_request,
     check_qa_reviewer,
 )
+
+from .common import html_template
 
 
 FORWARD_CLIENT_TIMEOUT = 30 * 60

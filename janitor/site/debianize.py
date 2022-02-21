@@ -1,6 +1,6 @@
 import aiozipkin
 from typing import Dict, List
-from . import html_template
+from .common import html_template
 from ..config import get_campaign_config
 from lintian_brush.lintian_overrides import load_renamed_tags
 renamed_tags = load_renamed_tags()
