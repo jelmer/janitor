@@ -6,7 +6,7 @@ from lintian_brush.lintian_overrides import load_renamed_tags
 renamed_tags = load_renamed_tags()
 
 
-@html_template("debianize-start.html", headers={"Cache-Control": "max-age=60"})
+@html_template("debianize/start.html", headers={"Cache-Control": "max-age=60"})
 async def handle_debianize_start(request):
     async with request.app.database.acquire() as conn:
         return {
@@ -23,7 +23,7 @@ order by source, version desc
 
 
 @html_template(
-    "debianize-package.html", headers={"Cache-Control": "max-age=600"}
+    "debianize/package.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_debianize_pkg(request):
     from .common import generate_pkg_context
@@ -45,7 +45,7 @@ async def handle_debianize_pkg(request):
     )
 
 
-@html_template("debianize-tag.html", headers={"Cache-Control": "max-age=600"})
+@html_template("debianize/tag.html", headers={"Cache-Control": "max-age=600"})
 async def handle_debianize_tag_page(request):
     tag = request.match_info["tag"]
     oldnames = []
@@ -64,7 +64,7 @@ select path, name, lintian_results.context, severity from run inner join lintian
 
 
 @html_template(
-    "debianize-tag-list.html", headers={"Cache-Control": "max-age=600"}
+    "debianize/tag-list.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_debianize_lintian_tag_list(request):
     async with request.app.database.acquire() as conn:
