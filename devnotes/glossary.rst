@@ -1,9 +1,10 @@
-Suite
-#####
+Campaign
+########
 
-One of {'lintian-fixes', 'fresh-upstreams', 'fresh-releases'}.
+An effort to fix a particular thing in the set of packages the janitor instance
+is responsible for.
 
-Maps many:1 to a silver-platter mutator.
+E.g. lintian-fixes', 'fresh-upstreams', 'fresh-releases'.
 
 Codebase
 ########
