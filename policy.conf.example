@@ -29,7 +29,7 @@ policy {
   # packages.
 
   # Fixing lintian issues
-  suite {
+  campaign {
     name: "lintian-fixes"
     command: "lintian-brush"
     publish { mode: propose }
@@ -39,14 +39,14 @@ policy {
   # Don't propose merges for upstream merges for now, since the janitor only
   # proposes changes to the main branch, not to pristine-tar/upstream.
   # See https://salsa.debian.org/jelmer/debian-janitor/issues/18
-  suite {
+  campaign {
     name: "fresh-releases"
     command: "new-upstream"
     publish { mode: build_only }
     qa_review: required;
   }
 
-  suite {
+  campaign {
     name: "fresh-snapshots"
     publish { mode: build_only }
     command: "new-upstream --snapshot"
@@ -55,7 +55,7 @@ policy {
 
   # Builds of packaging repositories without any changes applied.
   # These are used as base when generating debdiffs and diffoscope diffs.
-  suite {
+  campaign {
     name: "unchanged"
     publish { mode: build_only }
     command: "true"
@@ -63,7 +63,7 @@ policy {
   }
 
   # Apply multi-arch changes (apply-multiarch-hints)
-  suite {
+  campaign {
     name: "multiarch-fixes"
     publish { mode: propose }
     command: "apply-multiarch-hints"
@@ -72,7 +72,7 @@ policy {
 
   # Mark orphaned packages as orphaned, updating Vcs-Git headers and Maintainer
   # field.
-  suite {
+  campaign {
     name: "orphan"
     publish { mode: build_only }
     command: "orphan --no-update-vcs"
@@ -80,7 +80,7 @@ policy {
   }
 
   # Drop people who are MIA from uploader fields
-  suite {
+  campaign {
     name: "mia"
     publish { mode: attempt_push }
     command: "mia"
@@ -96,7 +96,7 @@ policy {
   }
 
   # CME fixes, for testing purposes.
-  suite {
+  campaign {
     name: "cme"
     publish { mode: build_only }
     command: "cme-fix"
@@ -104,7 +104,7 @@ policy {
   }
 
   # Remove obsolete dependencies and other settings.
-  suite {
+  campaign {
     name: "scrub-obsolete"
     publish { mode: propose }
     command: "scrub-obsolete"
@@ -112,14 +112,14 @@ policy {
   }
 
   # Generating Debian packaging from scratch
-  suite {
+  campaign {
     name: "debianize"
     publish { mode: build_only }
     command: "debianize"
     qa_review: required;
   }
 
-  suite {
+  campaign {
     name: "upstream-unchanged"
     publish { mode: build_only }
     command: "true"
@@ -131,14 +131,17 @@ policy {
   # Auto means that the changelog will be updated by default, unless
   # some indicator is found that gbp-dch is used with the package
   # (e.g. a [dch] section in debian/gbp.conf)
-  changelog: auto
+  env {
+    name: "DEB_UPDATE_CHANGELOG"
+    value: "auto"
+  }
 }
 
 policy {
   match { vcs_url_regex: "https:\/\/salsa\.debian\.org\/debian\/.*" }
   # Mark orphaned packages as orphaned, updating Vcs-Git headers and Maintainer
   # field.
-  suite {
+  campaign {
     name: "orphan"
     publish { mode: attempt_push }
   }
@@ -150,12 +153,12 @@ policy {
 policy {
   match { vcs_url_regex: "https:\/\/salsa\.debian\.org\/debian\/.*" }
 
-  suite {
+  campaign {
     name: "multiarch-fixes"
     publish { mode: propose }
   }
 
-  suite {
+  campaign {
     name: "lintian-fixes"
     publish { mode: propose }
   }
@@ -165,7 +168,7 @@ policy {
 policy {
   match { source_package: "exabgp" }
 
-  suite {
+  campaign {
     name: "lintian-fixes"
     command: "lintian-brush --compat-release=oldstable"
   }
