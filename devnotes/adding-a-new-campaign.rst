@@ -1,10 +1,10 @@
-Adding a new suite
+Adding a new campaign
 ==================
 
 Create a new mutators script
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-At the core of every suite is a script that can make changes
+At the core of every campaign is a script that can make changes
 to a version controlled branch.
 
 This script will be executed in a version controlled checkout of
@@ -19,12 +19,12 @@ or
 
 ``./debian-svp run --command=myscript --dry-run --diff package-name``
 
-Add configuration for the suite
+Add configuration for the campaign
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In janitor.conf, add a section for the suite. E.g.::
+In janitor.conf, add a section for the campaign. E.g.::
 
-    suite {
+    campaign {
       name: "some-name"
       branch_name: "some-name"
       debian_build {
@@ -36,8 +36,8 @@ In janitor.conf, add a section for the suite. E.g.::
 In policy.conf, add a default stanza::
 
     policy {
-      suite {
-       name: "some-name"  # This is the name of the suite
+      campaign {
+       name: "some-name"  # This is the name of the campaign
        command: "some-name"  # This is the mutator script to run
        publish { mode: propose }  # Default publishing mode
       }
@@ -46,7 +46,7 @@ In policy.conf, add a default stanza::
 Add script for finding candidates
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Add a script that can gather candidates for the new suite. This script should
+Add a script that can gather candidates for the new campaign. This script should
 be run regularly to find new candidates to schedule, with its output fed into
 ``python3 -m janitor.candidates``. The easiest way to do this is to add
 the script to ``schedule.sh``
@@ -56,4 +56,4 @@ See janitor/candidates.proto for the textproto schema of the output.
 Add site (optional)
 ~~~~~~~~~~~~~~~~~~~
 
-Add a website for the new suite under ``janitor/site``
+Add a website for the new campaign under ``janitor/site``
