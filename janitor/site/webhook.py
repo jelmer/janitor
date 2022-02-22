@@ -17,6 +17,7 @@
 
 from typing import List, Optional, Tuple
 import json
+import logging
 
 from aiohttp import web
 import asyncpg
