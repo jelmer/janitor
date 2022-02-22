@@ -289,7 +289,7 @@ ON absorbed.tag = unabsorbed.tag
 
 
 @html_template(
-    "lintian-fixes-start.html", headers={"Cache-Control": "max-age=3600"}
+    "lintian-fixes/start.html", headers={"Cache-Control": "max-age=3600"}
 )
 async def handle_lintian_fixes(request):
     import lintian_brush
@@ -379,7 +379,7 @@ async def handle_lintian_fixes_developer_table_page(request):
 
 
 @html_template(
-    "lintian-fixes-stats.html", headers={"Cache-Control": "max-age=3600"}
+    "lintian-fixes/stats.html", headers={"Cache-Control": "max-age=3600"}
 )
 async def handle_lintian_fixes_stats(request):
     async with request.app.database.acquire() as conn:
@@ -414,14 +414,14 @@ group by 1 order by 1 desc
 
 
 @html_template(
-    "lintian-fixes-failed-list.html", headers={"Cache-Control": "max-age=600"}
+    "lintian-fixes/failed-list.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_failed_lintian_brush_fixers_list(request):
     return {"fixers": iter_failed_lintian_fixers(request.app.database)}
 
 
 @html_template(
-    "lintian-fixes-failed.html", headers={"Cache-Control": "max-age=600"}
+    "lintian-fixes/failed.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_failed_lintian_brush_fixers(request):
     fixer = request.match_info["fixer"]
@@ -431,7 +431,7 @@ async def handle_failed_lintian_brush_fixers(request):
 
 
 @html_template(
-    "lintian-fixes-regressions.html", headers={"Cache-Control": "max-age=600"}
+    "lintian-fixes/regressions.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_brush_regressions(request):
     async with request.app.database.acquire() as conn:

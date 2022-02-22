@@ -1,6 +1,6 @@
-{% extends "layout.html" %}
-{% from "lintian-fixes-util.html" import lintian_tag_link %}
-{% block sidebar %}{% include "lintian-fixes-sidebar.html" %}{% endblock %}
+{% extends "../layout.html" %}
+{% from "util.html" import lintian_tag_link %}
+{% block sidebar %}{% include "sidebar.html" %}{% endblock %}
 {% block page_title %}Lintian Fixes{% endblock %}
 {% block body %}
 
@@ -43,24 +43,24 @@ GitHub, GitLab, Launchpad).</p>
 </ul>
 </div>
 
-{% include "faq-opt-in.html" %}
-{% include "faq-opt-out.html" %}
-{% include "faq-download-diff.html" %}
-{% include "faq-update-changelog.html" %}
-{% include "faq-auto-push.html" %}
-{% include "faq-vcs-finding.html" %}
-{% include "faq-supported-vcs.html" %}
-{% include "faq-lintian-fixes-kinds.html" %}
-{% include "faq-lintian-fixes-restrict.html" %}
-{% include "faq-lintian-fixes-addon.html" %}
-{% include "faq-incorrect.html" %}
-{% include "faq-other-problem.html" %}
-{% include "faq-out-of-date-proposal.html" %}
-{% include "faq-lintian-fixes-locally.html" %}
-{% include "faq-lintian-fixes-contributing.html" %}
-{% include "faq-api.html" %}
-{% include "faq-lintian-fixes-ubuntu.html" %}
-{% include "faq-lintian-fixes-technology.html" %}
+{% include "../faq-opt-in.html" %}
+{% include "../faq-opt-out.html" %}
+{% include "../faq-download-diff.html" %}
+{% include "../faq-update-changelog.html" %}
+{% include "../faq-auto-push.html" %}
+{% include "../faq-vcs-finding.html" %}
+{% include "../faq-supported-vcs.html" %}
+{% include "../faq-kinds.html" %}
+{% include "../faq-restrict.html" %}
+{% include "../faq-addon.html" %}
+{% include "../faq-incorrect.html" %}
+{% include "../faq-other-problem.html" %}
+{% include "../faq-out-of-date-proposal.html" %}
+{% include "../faq-locally.html" %}
+{% include "../faq-contributing.html" %}
+{% include "../faq-api.html" %}
+{% include "../faq-ubuntu.html" %}
+{% include "../faq-technology.html" %}
 
 </div>
 </div>
