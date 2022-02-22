@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 {% block sidebar %}{% include "debianize-sidebar.html" %}{% endblock %}
-{% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
+{% from "lintian-fixes/util.html" import lintian_tag_link, lintian_brush_summary %}
 {% from "run_util.html" import display_lintian_hintitem %}
 {% block page_title %}Lintian Fixes - for {{ tag }}{% endblock %}
 {% block body %}

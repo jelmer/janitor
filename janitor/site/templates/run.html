@@ -105,7 +105,7 @@ function submit_review(status) {
 {% if result %}
 <h3>Summary</h3>
 {% if suite == 'lintian-fixes' %}
-{% from "lintian-fixes-util.html" import lintian_brush_summary %}
+{% from "lintian-fixes/util.html" import lintian_brush_summary %}
 {{ lintian_brush_summary(result['applied']) }}
 {% elif suite == 'multiarch-fixes' %}
 Multi-arch fixes.

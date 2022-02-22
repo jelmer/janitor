@@ -1,7 +1,7 @@
-{% extends "layout.html" %}
-{% block sidebar %}{% include "lintian-fixes-sidebar.html" %}{% endblock %}
-{% from "lintian-fixes-util.html" import lintian_tag_link, lintian_brush_summary %}
-{% from "run_util.html" import reschedule_button, display_result_code, publish_buttons %}
+{% extends "../layout.html" %}
+{% block sidebar %}{% include "sidebar.html" %}{% endblock %}
+{% from "util.html" import lintian_tag_link, lintian_brush_summary %}
+{% from "../run_util.html" import reschedule_button, display_result_code, publish_buttons %}
 {% block page_title %}Lintian Fixes - Developer {{ developer }}{% endblock %}
 {% block body %}
 <div class="section" id="candidates">
