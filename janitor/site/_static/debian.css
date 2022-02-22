@@ -1,0 +1,56 @@
+ul.lintian-filelist {
+   list-style-type: disclosure-closed;
+}
+
+ul.lintian-hintlist {
+    list-style: none;
+    padding-left: 5px;
+}
+
+ul.lintian-commentlist {
+    list-style: none;
+    padding-left: 0px;
+}
+
+li.lintian-fileitem {
+    margin: 5px 0 5px 0;
+}
+
+#lintian-code-informative {
+    color: #111;
+    background-color: #C7EA3C;
+}
+
+#lintian-code-warning {
+    color: #111;
+    background-color: #FFEB44;
+}
+
+#lintian-code-error {
+    color: #111;
+    background-color: #FF6700;
+}
+
+#lintian-code-X {
+    color: #111;
+    background-color: #EE99EE;
+}
+
+#lintian-code-O {
+    color: #111;
+    background-color: #DDD;
+}
+
+#lintian-code-pedantic {
+    color: #111;
+    background-color: #C7EA3C;
+}
+
+#lintian-code-classification {
+    color: #111;
+    background-color: lightblue;
+}
+
+li.lintian-code-O {
+    color: #444;
+}
