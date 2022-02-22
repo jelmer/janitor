@@ -1,5 +1,5 @@
-{% extends "layout.html" %}
-{% block sidebar %}{% include "debianize-sidebar.html" %}{% endblock %}
+{% extends "../layout.html" %}
+{% block sidebar %}{% include "sidebar.html" %}{% endblock %}
 {% block page_title %}Debianize{% endblock %}
 {% block body %}
 
@@ -61,13 +61,13 @@ Pin-Priority: <span class="mi">800</span>
 </ul>
 </div>
 
-{% include "faq-debianize-opt-in.html" %}
-{% include "faq-supported-vcs.html" %}
-{% include "faq-other-problem.html" %}
-{% include "faq-debianize-locally.html" %}
-{% include "faq-debianize-contributing.html" %}
-{% include "faq-api.html" %}
-{% include "faq-debianize-technology.html" %}
+{% include "faq-opt-in.html" %}
+{% include "../faq-supported-vcs.html" %}
+{% include "../faq-other-problem.html" %}
+{% include "faq-locally.html" %}
+{% include "faq-contributing.html" %}
+{% include "../faq-api.html" %}
+{% include "faq-technology.html" %}
 
 </div>
 </div>
