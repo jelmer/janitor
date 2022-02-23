@@ -3,7 +3,7 @@ from . import html_template
 
 
 @html_template(
-    "scrub-obsolete-package.html", headers={"Cache-Control": "max-age=600"}
+    "scrub-obsolete/package.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_scrub_obsolete_pkg(request):
     from .common import generate_pkg_context
