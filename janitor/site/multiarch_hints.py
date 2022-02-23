@@ -92,14 +92,14 @@ async def generate_candidates(db):
 
 
 @html_template(
-    "multiarch-fixes-start.html", headers={"Cache-Control": "max-age=3600"}
+    "multiarch-fixes/start.html", headers={"Cache-Control": "max-age=3600"}
 )
 async def handle_multiarch_fixes(request):
     return {"SUITE": SUITE}
 
 
 @html_template(
-    "multiarch-fixes-hint-list.html", headers={"Cache-Control": "max-age=600"}
+    "multiarch-fixes/hint-list.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_multiarch_fixes_hint_list(request):
     async with request.app.database.acquire() as conn:
@@ -107,7 +107,7 @@ async def handle_multiarch_fixes_hint_list(request):
 
 
 @html_template(
-    "multiarch-fixes-hint.html", headers={"Cache-Control": "max-age=600"}
+    "multiarch-fixes/hint.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_multiarch_fixes_hint_page(request):
     return await generate_hint_page(
@@ -116,7 +116,7 @@ async def handle_multiarch_fixes_hint_page(request):
 
 
 @html_template(
-    "multiarch-fixes-stats.html", headers={"Cache-Control": "max-age=3600"}
+    "multiarch-fixes/stats.html", headers={"Cache-Control": "max-age=3600"}
 )
 async def handle_multiarch_fixes_stats(request):
     async with request.app.database.acquire() as conn:
@@ -156,14 +156,14 @@ absorbed_multiarch_hints group by 1
 
 
 @html_template(
-    "multiarch-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}
+    "multiarch-fixes/candidates.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_multiarch_fixes_candidates(request):
     return await generate_candidates(request.app.database)
 
 
 @html_template(
-    "multiarch-fixes-package.html", headers={"Cache-Control": "max-age=600"}
+    "multiarch-fixes/package.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_multiarch_fixes_pkg(request):
     # TODO(jelmer): Handle Accept: text/diff
