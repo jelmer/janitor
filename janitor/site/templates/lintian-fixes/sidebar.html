@@ -1,4 +1,4 @@
-{% from "../inputs.html" import package_input %}
+{% from "inputs.html" import package_input %}
 <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
 <h1 class="logo"><a href="/">{{ site_name }}</a></h1>
 
@@ -7,7 +7,7 @@
 {% if user %}
 Logged in as <a href="/m/{{ user['email'] }}">{{ user['name'] }}</a>
 {% else %}
-{% include "../login.html" %}
+{% include "login.html" %}
 {% endif %}
 
 <ul class="current">
