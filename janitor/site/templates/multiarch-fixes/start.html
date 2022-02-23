@@ -1,5 +1,5 @@
-{% extends "../layout.html" %}
-{% block sidebar %}{% include "sidebar.html" %}{% endblock %}
+{% extends "layout.html" %}
+{% block sidebar %}{% include "multiarch-fixes/sidebar.html" %}{% endblock %}
 {% block page_title %}Multi-Arch Fixes{% endblock %}
 {% block body %}
 
@@ -46,7 +46,7 @@ candidates for fixes, see <a href="candidates">candidates</a>.</p>
 
 {% include "faq-opt-in.html" %}
 {% include "faq-opt-out.html" %}
-{% include "faq-multiarch-fixes-lintian.html" %}
+{% include "multiarch-fixes/faq-lintian.html" %}
 {% include "faq-download-diff.html" %}
 {% include "faq-update-changelog.html" %}
 {% include "faq-auto-push.html" %}

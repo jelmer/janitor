@@ -1,6 +1,6 @@
-{% extends "../layout.html" %}
-{% block sidebar %}{% include "sidebar.html" %}{% endblock %}
-{% from "../run_util.html" import result_code_explanation, reschedule_button %}
+{% extends "layout.html" %}
+{% block sidebar %}{% include "lintian-fixes/sidebar.html" %}{% endblock %}
+{% from "run_util.html" import result_code_explanation, reschedule_button %}
 {% block page_title %}Lintian Brush Failures for {{ fixer }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ fixer }}">

@@ -103,6 +103,7 @@ env = Environment(
 )
 
 
+
 def highlight_diff(diff):
     from pygments import highlight
     from pygments.lexers.diff import DiffLexer

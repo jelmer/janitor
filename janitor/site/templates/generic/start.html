@@ -1,5 +1,5 @@
-{% extends "../layout.html" %}
-{% block sidebar %}{% include ["../" + suite + "/sidebar.html", "sidebar.html"] %}{% endblock %}
+{% extends "layout.html" %}
+{% block sidebar %}{% include [suite + "/sidebar.html", "sidebar.html"] %}{% endblock %}
 {% block page_title %}{{ suite }}{% endblock %}
 {% block body %}
 

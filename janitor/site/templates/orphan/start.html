@@ -1,5 +1,5 @@
-{% extends "../layout.html" %}
-{% block sidebar %}{% include "sidebar.html" %}{% endblock %}
+{% extends "layout.html" %}
+{% block sidebar %}{% include "orphan/sidebar.html" %}{% endblock %}
 {% block page_title %}Orphan Fixes{% endblock %}
 {% block body %}
 
@@ -33,13 +33,13 @@ href="candidates">candidates</a>.</p>
 </ul>
 </div>
 
-{% include "../faq-opt-in.html" %}
-{% include "../faq-opt-out.html" %}
-{% include "../faq-vcs-finding.html" %}
-{% include "../faq-supported-vcs.html" %}
-{% include "../faq-incorrect.html" %}
-{% include "../faq-other-problem.html" %}
-{% include "../faq-out-of-date-proposal.html" %}
+{% include "faq-opt-in.html" %}
+{% include "faq-opt-out.html" %}
+{% include "faq-vcs-finding.html" %}
+{% include "faq-supported-vcs.html" %}
+{% include "faq-incorrect.html" %}
+{% include "faq-other-problem.html" %}
+{% include "faq-out-of-date-proposal.html" %}
 
 </div>
 
