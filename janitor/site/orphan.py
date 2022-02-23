@@ -7,7 +7,7 @@ from . import html_template
 SUITE = "orphan"
 
 
-@html_template("orphan-candidates.html", headers={"Cache-Control": "max-age=3600"})
+@html_template("orphan/candidates.html", headers={"Cache-Control": "max-age=3600"})
 async def handle_orphan_candidates(request):
     candidates = []
     async with request.app.database.acquire() as conn:
@@ -17,7 +17,7 @@ async def handle_orphan_candidates(request):
     return {"candidates": candidates}
 
 
-@html_template("orphan-start.html")
+@html_template("orphan/start.html")
 async def handle_orphan_start(request):
     return {}
 
