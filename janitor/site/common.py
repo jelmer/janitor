@@ -15,6 +15,7 @@ from janitor.site import (
     BuildDiffUnavailable,
     DebdiffRetrievalError,
     tracker_url,
+    update_vars_from_request,
 )
 
 
