@@ -44,6 +44,7 @@ from .diffoscope import (
     filter_irrelevant as filter_diffoscope_irrelevant,
     run_diffoscope,
     format_diffoscope,
+    DiffoscopeError,
 )
 from .pubsub import pubsub_reader
 from aiohttp_openmetrics import setup_metrics
@@ -67,6 +68,14 @@ def is_binary(n):
 
 class ArtifactRetrievalTimeout(Exception):
     """Timeout while retrieving artifacts."""
+
+
+class DiffCommandError(Exception):
+    """Generic diff command error."""
+
+    def __init__(self, command, reason):
+        self.command = command
+        self.reason = reason
 
 
 class DiffCommandTimeout(Exception):
@@ -328,6 +337,8 @@ async def handle_diffoscope(request):
                 raise web.HTTPServiceUnavailable(text="diffoscope used too much memory")
             except asyncio.TimeoutError:
                 raise web.HTTPGatewayTimeout(text="diffoscope timed out")
+            except DiffoscopeError as e:
+                raise web.HTTPInternalServerError(reason='diffoscope error', text=e.args[0])
 
         if cache_path is not None:
             with open(cache_path, "w") as f:
@@ -380,6 +391,7 @@ async def precache(app, old_id, new_id):
       ArtifactRetrievalTimeout: if retrieving artifacts resulted in a timeout
       DiffCommandTimeout: if running the diff command triggered a timeout
       DiffCommandMemoryError: if the diff command used too much memory
+      DiffCommandError: if a diff command failed
     """
     with ExitStack() as es:
         old_dir = es.enter_context(TemporaryDirectory())
@@ -425,6 +437,8 @@ async def precache(app, old_id, new_id):
                 raise DiffCommandMemoryError("diffoscope", app.task_memory_limit)
             except asyncio.TimeoutError:
                 raise DiffCommandTimeout("diffoscope", app.task_timeout)
+            except DiffoscopeError as e:
+                raise DiffCommandError("diffoscope", e.args[0])
 
             try:
                 with open(diffoscope_cache_path, "w") as f:
@@ -470,6 +484,9 @@ async def handle_precache(request):
             raise web.HTTPGatewayTimeout(text="Timeout diffing artifacts")
         except DiffCommandMemoryError:
             raise web.HTTPServiceUnavailable(text="diffing used too much memory")
+        except DiffCommandError as e:
+            raise web.HTTPInternalServerError(
+                reason='diff command error', text=e.args[0])
 
     create_background_task(_precache(), 'precaching')
 
@@ -509,6 +526,8 @@ where
                     logging.info("Timeout diffing artifacts: %s", e)
                 except DiffCommandMemoryError as e:
                     logging.info("Memory error diffing artifacts: %s", e)
+                except DiffCommandError as e:
+                    logging.info("Error diff artifacts: %s", e)
                 except Exception as e:
                     logging.info("Error precaching: %r", e)
                     traceback.print_exc()
@@ -609,6 +628,8 @@ async def listen_to_runner(runner_url, app):
                     logging.info("Timeout diffing artifacts: %s", e)
                 except DiffCommandMemoryError as e:
                     logging.info("Memory error diffing artifacts: %s", e)
+                except DiffCommandError as e:
+                    logging.info("Error diff artifacts: %s", e)
                 except Exception as e:
                     logging.info(
                         "Error precaching diff for %s: %r", result["log_id"], e
