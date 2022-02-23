@@ -1,7 +1,7 @@
-{% extends "layout.html" %}
-{% block sidebar %}{% include "multiarch-fixes-sidebar.html" %}{% endblock %}
-{% from "run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, result_code_explanation, display_result_code, describe_publish_policy, display_branch_url with context %}
-{% from "multiarch-fixes-util.html" import multiarch_hints_summary %}
+{% extends "../layout.html" %}
+{% block sidebar %}{% include "sidebar.html" %}{% endblock %}
+{% from "../run_util.html" import local_command, merge_command, reschedule_button, publish_buttons, result_code_explanation, display_result_code, describe_publish_policy, display_branch_url with context %}
+{% from "util.html" import multiarch_hints_summary %}
 {% block page_title %}Multiarch Fixes - {{ package }}{% endblock %}
 {% block body %}
 <div class="section" id="{{ package }}">
