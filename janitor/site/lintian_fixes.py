@@ -303,7 +303,7 @@ async def handle_lintian_fixes(request):
 
 
 @html_template(
-    "lintian-fixes-package.html", headers={"Cache-Control": "max-age=600"}
+    "lintian-fixes/package.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_fixes_pkg(request):
     # TODO(jelmer): Handle Accept: text/diff
@@ -323,7 +323,7 @@ async def handle_lintian_fixes_pkg(request):
 
 
 @html_template(
-    "lintian-fixes-tag-list.html", headers={"Cache-Control": "max-age=600"}
+    "lintian-fixes/tag-list.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_fixes_tag_list(request):
     async with request.app.database.acquire() as conn:
@@ -340,7 +340,7 @@ async def handle_lintian_fixes_tag_list(request):
         return {"tags": tags, "oldnames": oldnames}
 
 
-@html_template("lintian-fixes-tag.html", headers={"Cache-Control": "max-age=600"})
+@html_template("lintian-fixes/tag.html", headers={"Cache-Control": "max-age=600"})
 async def handle_lintian_fixes_tag_page(request):
     tag = request.match_info["tag"]
     oldnames = []
@@ -359,14 +359,14 @@ async def handle_lintian_fixes_tag_page(request):
 
 
 @html_template(
-    "lintian-fixes-candidates.html", headers={"Cache-Control": "max-age=600"}
+    "lintian-fixes/candidates.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_fixes_candidates(request):
     return await generate_candidates(request.app.database)
 
 
 @html_template(
-    "lintian-fixes-developer-table.html", headers={"Cache-Control": "max-age=30"}
+    "lintian-fixes/developer-table.html", headers={"Cache-Control": "max-age=30"}
 )
 async def handle_lintian_fixes_developer_table_page(request):
     try:
