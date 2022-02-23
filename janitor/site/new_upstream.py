@@ -45,7 +45,7 @@ WHERE NOT package.removed AND suite = $1
 
 
 @html_template(
-    "new-upstream-package.html", headers={"Cache-Control": "max-age=600"}
+    "new-upstream/package.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_new_upstream_pkg(request):
     from .common import generate_pkg_context
@@ -67,7 +67,7 @@ async def handle_new_upstream_pkg(request):
 
 
 @html_template(
-    "new-upstream-candidates.html", headers={"Cache-Control": "max-age=600"})
+    "new-upstream/candidates.html", headers={"Cache-Control": "max-age=600"})
 async def handle_new_upstream_candidates(request):
     from .new_upstream import generate_candidates
 
@@ -117,7 +117,7 @@ async def handle_fresh(request):
     return web.HTTPPermanentRedirect("/fresh-builds")
 
 
-@html_template("new-upstream-stats.html", headers={"Cache-Control": "max-age=60"})
+@html_template("new-upstream/stats.html", headers={"Cache-Control": "max-age=60"})
 async def handle_stats(request):
     suite = request.match_info["suite"]
     return {"suite": suite}

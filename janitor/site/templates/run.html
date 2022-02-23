@@ -68,7 +68,7 @@ function submit_review(status) {
 <li style="display: none">Build Version: {{ run.build_version }}</li>
 </ul>
 
-{{ local_command(command, package, vcs_type, vcs_url) }}
+{{ local_command(command, None, package, vcs_type, vcs_url) }}
 
 {% if branch_url %}
 {{ reschedule_button(suite, package, "Reschedule") }}
@@ -105,17 +105,7 @@ function submit_review(status) {
 
 {% if result %}
 <h3>Summary</h3>
-{% if suite == 'lintian-fixes' %}
-{% from "lintian-fixes/util.html" import lintian_brush_summary %}
-{{ lintian_brush_summary(result['applied']) }}
-{% elif suite == 'multiarch-fixes' %}
-Multi-arch fixes.
-{% elif suite == 'orphan' %}
-Mark package as orphaned.
-{% elif suite in ('fresh-releases', 'fresh-snapshots') %}
-{% from "new_upstream_util.html" import new_upstream_summary %}
-{{ new_upstream_summary(result) }}
-{% endif %}
+{% include [suite + "/summary.html", "generic/summary.html"] %}
 {% endif %}
 
 {% if revision and result_code in ('success', 'nothing-to-do') and suite != 'unchanged' %}

@@ -1,15 +1,6 @@
-{% macro needed_package(command) %}
-{% if command in ('lintian-fixes', 'deb-scrub-obsolete', 'deb-multiarch-fixes') -%}lintian-brush
-{% elif command in ('drop-mia-uploaders', ) -%}python3-debmutate
-{% elif suite in ('cme', ) -%}cme
-{% elif command in ('deb-new-upstream', 'deb-import-uncommitted') -%}brz-debian
-{% else -%}{% endif %}
-{%- endmacro -%}
-
-{% macro local_command(command, package, vcs, vcs_url) %}
+{% macro local_command(command, command_package, package, vcs, vcs_url) %}
 {% if command %}
-{% set pkg = needed_package(command) %}
-<p>Try this locally {% if pkg %}(using the <a href="https://packages.debian.org/{{ pkg }}">{{ pkg }}</a> {% endif %}package):</p>
+<p>Try this locally {% if command_package %}(using the <a href="https://packages.debian.org/{{ command_package }}">{{ command_package }}</a> {% endif %}package):</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 debcheckout {{ package }}
 cd {{ package }}

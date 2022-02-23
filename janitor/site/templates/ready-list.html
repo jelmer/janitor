@@ -6,29 +6,16 @@
 {% include [suite + "-sidebar.html", "generic-sidebar.html"] %}
 {% endif %}
 {% endblock %}
-{% from "lintian-fixes/util.html" import lintian_brush_summary %}
-{% from "multiarch-fixes-util.html" import multiarch_hints_summary %}
 {% block page_title %}Changes ready to publish{% if suite %} - {{ suite }}{% endif %}{% endblock %}
 {% block body %}
  <div class="section" id="history">
 <h1>Ready to publish</h1>
 <ul>
 {% for run in runs %}
-<li><a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>{% if plain_command.startswith('lintian-brush') %}
-{{ lintian_brush_summary(run.result['applied']) }}
-{% elif plain_command.startswith('new-upstream ') or plain_command == 'new-upstream' %}
-{% if '--snapshot' in plain_command %}: Merge new upstream snapshot <b>{{ run.result['upstream_version'] }}</b>
-{% else %}: Merge new upstream release <b>{{ run.result['upstream_version'] }}</b> {% endif %}
-{% elif plain_command.startswith('apply-multiarch-hints') %}
-Apply multi-arch hints: {{ multiarch_hints_summary(run.result['applied-hints']) }}
-{% elif plain_command.startswith('scrub-obsolete') %}
-Scrub obsolete dependencies and constraints.
-{% elif plain_command.startswith('orphan') %}
-Move orphaned package to QA team.
-{% elif plain_command.startswith('mia') %}
-Remove MIA uploaders.
-{% else %}: Unknown command {{ plain_command }}
-{% endif %}
+<li><a href="pkg/{{ run.package }}/{{ run.id }}">{{ run.package }}</a>
+{% set command = run.command -%}
+{% set result = run.result -%}
+{% include [suite + "/summary.html", "generic/summary.html"] %}
 </li>
 {% endfor %}
 </ul>
