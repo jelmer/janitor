@@ -112,12 +112,12 @@ async def handle_simple(templatename, request):
     )
 
 
-@html_template("generic-start.html")
+@html_template("generic/start.html")
 async def handle_generic_start(request):
     return {"suite": request.match_info["suite"]}
 
 
-@html_template("generic-candidates.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
+@html_template("generic/candidates.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
 async def handle_generic_candidates(request):
     from .common import generate_candidates
 
@@ -611,7 +611,7 @@ async def handle_ready_proposals(request):
     return await generate_ready_list(request.app.database, suite, review_status)
 
 
-@html_template("generic-package.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template("generic/package.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_generic_pkg(request):
     from .common import generate_pkg_context
 
