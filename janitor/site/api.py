@@ -1071,6 +1071,7 @@ async def handle_needs_review(request):
         with span.new_child('sql:needs-review'):
             for (
                 run_id,
+                command,
                 package,
                 suite,
                 vcs_type,
@@ -1087,6 +1088,7 @@ async def handle_needs_review(request):
             ):
                 ret.append({
                     'package': package,
+                    'command': command,
                     'id': run_id,
                     'branches': [rb[0] for rb in result_branches],
                     'value': value})
