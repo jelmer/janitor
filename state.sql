@@ -208,7 +208,7 @@ CREATE TABLE new_result_branch (
  run_id text not null references run (id),
  role text not null,
  remote_name text,
- base_revision text not null,
+ base_revision text,
  revision text not null,
  absorbed boolean default false,
  UNIQUE(run_id, role)

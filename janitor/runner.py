@@ -440,7 +440,8 @@ class JanitorResult(object):
             "resume": {"run_id": self.resume_from} if self.resume_from else None,
             "branches": (
                 [
-                    (fn, n, br.decode("utf-8"), r.decode("utf-8"))
+                    (fn, n, br.decode("utf-8") if br else None,
+                     r.decode("utf-8") if r else None)
                     for (fn, n, br, r) in self.branches
                 ]
                 if self.branches is not None
