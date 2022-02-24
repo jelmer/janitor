@@ -6,6 +6,7 @@
 <h1>Review</h1>
 
 <div class="score">Score: <span id="score">{{ value }}</div></div>
+<div class="command">Command: <span id="command">{{ command }}</div></div>
 
 {% for role, remote_branch_name, base_revision, revision in branches %}
 <div class="diff" id='diff-{{ role }}'>
@@ -18,7 +19,7 @@
 </div>
 
 <script type="text/javascript">
-function loadRun(package, run_id, roles, value) {
+function loadRun(package, command, run_id, roles, value) {
     $('.review-button').blur()
     $('.review-button').disabled = "disabled";
     $('.diff').remove();
@@ -43,6 +44,7 @@ function loadRun(package, run_id, roles, value) {
       $('#full-run-link').attr('href', "/cupboard/pkg/" + package + "/" + run_id);
       $('#run-id').attr('value', run_id);
       $('#score').text(value);
+      $('#command').text(command);
       $('#package-name').attr('value', package);
       $('.review-button').disabled = "enabled";
    });
@@ -58,13 +60,14 @@ $(function() {
 
 function loadNewJob() {
   if ((newJob = todo.shift()) !== undefined) {
-    loadRun(newJob.package, newJob.id, newJob.branches, newJob.value);
+    loadRun(newJob.package, newJob.command, newJob.id, newJob.branches, newJob.value);
   } else {
     $('.diff').replaceWith('All done!');
     $('#debdiff').replaceWith('');
     $('#options').remove();
     $('#full-run-link').remove();
     $('#score').remove();
+    $('#command').remove();
   }
 }
 

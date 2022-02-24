@@ -28,7 +28,7 @@ async def iter_needs_review(
         reviewer: Optional[str] = None):
     args: List[Any] = []
     query = """
-SELECT id, package, suite, vcs_type, result_branches, main_branch_revision, value FROM publish_ready
+SELECT id, command, package, suite, vcs_type, result_branches, main_branch_revision, value FROM publish_ready
 """
     conditions = []
     if suites is not None:
@@ -117,6 +117,7 @@ async def generate_review(
 
     (
         run_id,
+        command,
         package,
         suite,
         vcs_type,
@@ -179,6 +180,7 @@ async def generate_review(
         "show_debdiff": show_debdiff,
         "package_name": package,
         "run_id": run_id,
+        "command": command,
         "branches": result_branches,
         "suite": suite,
         "suites": suites,
@@ -188,6 +190,7 @@ async def generate_review(
         "todo": [
             {
                 'package': entry['package'],
+                'command': entry['command'],
                 'id': entry['id'],
                 'branches': [rb[0] for rb in entry['result_branches']],
                 'value': entry['value']
