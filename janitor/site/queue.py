@@ -131,16 +131,20 @@ async def write_queue(
     if queue_status:
         processing = get_processing(queue_status)
         active_queue_ids = set([p["queue_id"] for p in queue_status["processing"]])
+        avoid_hosts = queue_status["avoid_hosts"]
+        rate_limit_hosts = {
+            host: datetime.fromisoformat(ts)
+            for (host, ts) in queue_status["rate_limit_hosts"].items()}
     else:
         processing = iter([])
         active_queue_ids = set()
+        avoid_hosts = None
+        rate_limit_hosts = None
     return {
         "queue": get_queue(db, limit),
         "buckets": get_buckets(db),
         "active_queue_ids": active_queue_ids,
         "processing": processing,
-        "avoid_hosts": queue_status["avoid_hosts"],
-        "rate_limit_hosts": {
-            host: datetime.fromisoformat(ts)
-            for (host, ts) in queue_status["rate_limit_hosts"].items()},
+        "avoid_hosts": avoid_hosts,
+        "rate_limit_hosts": rate_limit_hosts,
     }

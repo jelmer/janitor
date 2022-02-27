@@ -31,7 +31,7 @@ from .queue import QueueItem, get_queue_item, iter_queue
 import ssl
 import sys
 import tempfile
-from typing import List, Any, Optional, Dict, Tuple, Type
+from typing import List, Any, Optional, Dict, Tuple, Type, Set
 import uuid
 
 from aiohttp import (
@@ -1308,7 +1308,7 @@ class QueueProcessor(object):
             "processing": [
                 active_run.json() for active_run in self.active_runs.values()
             ],
-            "avoid_hosts": self.avoid_hosts,
+            "avoid_hosts": list(self.avoid_hosts),
             "rate_limit_hosts": {
                 host: ts.isoformat()
                 for (host, ts) in self.rate_limit_hosts}
