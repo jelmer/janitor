@@ -1071,7 +1071,8 @@ class ResumeInfo(object):
             "result": self.result,
             "branch_url": self.resume_branch_url,
             "branches": [
-                (fn, n, br.decode("utf-8"), r.decode("utf-8"))
+                (fn, n, br.decode("utf-8") if br is not None else None,
+                 r.decode("utf-8") if r is not None else None)
                 for (fn, n, br, r) in self.resume_result_branches
             ],
         }
