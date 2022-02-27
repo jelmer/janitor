@@ -67,10 +67,20 @@ WHERE url = $1
     return await conn.fetchrow(query, url)
 
 
+async def get_publishes(conn, url):
+    return await conn.fetch("""
+SELECT * FROM publish WHERE merge_proposal_url = $1
+ORDER BY timestamp ASC
+""", url)
+
+
 async def write_merge_proposal(db, url):
     async with db.acquire() as conn:
         proposal = await get_proposal_with_run(conn, url)
 
+        publishes = await get_publishes(conn, url)
+
     return {
         "proposal": proposal,
+        "publishes": publishes,
     }
