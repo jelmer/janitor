@@ -27,7 +27,7 @@
 <script>
 function submit_status(status) {
 console.log("Submitting review " + status + " for {{ url }} ");
-$.post('/api/merge-proposal', {'url': status, 'url': {{ repr(url) }}});
+$.post('/api/merge-proposal', {'url': status, 'url': {{ url|tojson }}});
 }
 </script>
 {% elif proposal.status == 'merged' %}
