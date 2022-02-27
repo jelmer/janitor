@@ -161,33 +161,6 @@ async def handle_apt_repo(request):
         )
 
 
-@html_template("reprocess-logs.html")
-async def handle_reprocess_logs(request):
-    return {}
-
-
-@html_template("history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
-async def handle_history(request):
-    limit = int(request.query.get("limit", "100"))
-    offset = int(request.query.get("offset", "0"))
-
-    query = """\
-SELECT finish_time, package, suite, worker_link,
-worker as worker_name, finish_time - start_time AS duration,
-result_code, id, description FROM run
-ORDER BY finish_time DESC"""
-    if offset:
-        query += ' OFFSET %d' % offset
-    if limit:
-        query += ' LIMIT %d' % limit
-    async with request.app.database.acquire() as conn:
-        runs = await conn.fetch(query)
-    return {
-        "count": limit,
-        "history": runs
-    }
-
-
 @html_template("credentials.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_credentials(request):
     try:
@@ -250,44 +223,6 @@ async def handle_pgp_keys(request):
         )
 
 
-@html_template("publish.html")
-async def handle_publish(request):
-    id = request.match_info["id"]
-    from .publish import write_publish
-    async with request.app.database.acquire() as conn:
-        return await write_publish(conn, id)
-
-
-@html_template("publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
-async def handle_publish_history(request):
-    limit = int(request.query.get("limit", "100"))
-    from .publish import write_history
-
-    async with request.app.database.acquire() as conn:
-        return await write_history(conn, limit=limit)
-
-
-@html_template("queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
-async def handle_queue(request):
-    limit = int(request.query.get("limit", "100"))
-    from .queue import write_queue
-
-    return await write_queue(
-        request.app.http_client_session,
-        request.app.database,
-        queue_status=request.app['runner_status'],
-        limit=limit,
-    )
-
-
-@html_template("maintainer-stats.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
-async def handle_cupboard_maintainer_stats(request):
-    from .stats import write_maintainer_stats
-
-    async with request.app.database.acquire() as conn:
-        return await write_maintainer_stats(conn)
-
-
 @html_template("maintainer-overview.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_maintainer_overview(request):
     from .stats import write_maintainer_overview
@@ -296,78 +231,6 @@ async def handle_maintainer_overview(request):
         return await write_maintainer_overview(
             conn, request.match_info["maintainer"]
         )
-
-
-@html_template("never-processed.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
-async def handle_never_processed(request):
-    suite = request.query.get("suite")
-    if suite is not None and suite.lower() == "_all":
-        suite = None
-    suites = [suite] if suite else None
-    async with request.app.database.acquire() as conn:
-        query = """\
-        select c.package, c.suite from candidate c
-        where not exists (
-            SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
-        """
-        args = []
-        if suites:
-            query += " AND suite = ANY($1::text[])"
-            args.append(suites)
-        return {"never_processed": await conn.fetch(query, *args)}
-
-
-@html_template("result-code-index.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
-async def handle_result_codes(request):
-    from ..schedule import TRANSIENT_ERROR_RESULT_CODES
-    suite = request.query.get("suite")
-    exclude_never_processed = "exclude_never_processed" in request.query
-    exclude_transient = "exclude_transient" in request.query
-    if suite is not None and suite.lower() == "_all":
-        suite = None
-    all_suites = [c.name for c in request.app['config'].campaign]
-    args = [[suite] if suite else all_suites]
-    async with request.app.database.acquire() as conn:
-        query = """\
-    select (
-            case when result_code = 'nothing-new-to-do' then 'success'
-            else result_code end), count(result_code) from last_runs
-        where suite = ANY($1::text[])
-    """
-        if exclude_transient:
-            query += " AND result_code != ALL($2::text[])"
-            args.append(TRANSIENT_ERROR_RESULT_CODES)
-        query += " group by 1"
-        if not exclude_never_processed:
-            query = """(%s) union
-    select 'never-processed', count(*) from candidate c
-        where not exists (
-            SELECT FROM run WHERE run.package = c.package AND c.suite = suite)
-        and suite = ANY($1::text[]) order by 2 desc
-    """ % query
-        return {
-            "exclude_never_processed": exclude_never_processed,
-            "exclude_transient": exclude_transient,
-            "result_codes": await conn.fetch(query, *args),
-            "suite": suite, "all_suites": all_suites}
-
-
-@html_template("result-code.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
-async def handle_result_code(request):
-    suite = request.query.get("suite")
-    if suite is not None and suite.lower() == "_all":
-        suite = None
-    code = request.match_info.get("code")
-    query = ('SELECT * FROM last_runs '
-             'WHERE result_code = ANY($1::text[]) AND suite = ANY($2::text[])')
-    codes = [code]
-    all_suites = [c.name for c in request.app['config'].campaign]
-    async with request.app.database.acquire() as conn:
-        return {
-            "code": code,
-            "runs": await conn.fetch(query, codes, [suite] if suite else all_suites),
-            "suite": suite,
-            "all_suites": all_suites}
 
 
 async def handle_login(request):
@@ -515,69 +378,6 @@ vcswatch_status in ('old', 'new', 'commits', 'ok')
         return {"regressions": await conn.fetch(query)}
 
 
-@html_template(
-    "broken-merge-proposals.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"}
-)
-async def handle_broken_mps(request):
-    async with request.app.database.acquire() as conn:
-        broken_mps = await conn.fetch(
-            """\
-select
-url,
-last_run.suite,
-last_run.package,
-last_run.id,
-last_run.result_code,
-last_run.finish_time,
-last_run.description
-from
-(select
- distinct on (url) url, run.suite, run.package, run.finish_time,
- merge_proposal.revision as current_revision
-from merge_proposal join run on
- merge_proposal.revision = run.revision where status = 'open')
-as current_run left join last_runs last_run
-on
-current_run.suite = last_run.suite and
-current_run.package = last_run.package
-where
-last_run.result_code not in ('success', 'nothing-to-do', 'nothing-new-to-do')
-order by url, last_run.finish_time desc
-"""
-        )
-
-    return {"broken_mps": broken_mps}
-
-
-@html_template("run.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
-async def handle_run(request):
-    from .common import get_run
-    from .pkg import generate_run_file
-
-    span = aiozipkin.request_span(request)
-    run_id = request.match_info["run_id"]
-    pkg = request.match_info.get("pkg")
-    async with request.app.database.acquire() as conn:
-        with span.new_child('sql:run'):
-            run = await get_run(conn, run_id)
-            if run is None:
-                raise web.HTTPNotFound(text="No run with id %r" % run_id)
-    if pkg is not None and pkg != run['package']:
-        if run is None:
-            raise web.HTTPNotFound(text="No run with id %r" % run_id)
-    return await generate_run_file(
-        request.app.database,
-        request.app.http_client_session,
-        request.app['config'],
-        request.app.differ_url,
-        request.app.logfile_manager,
-        run,
-        request.app['vcs_manager'],
-        is_admin=is_admin(request),
-        span=span,
-    )
-
-
 async def handle_result_file(request):
     pkg = request.match_info["pkg"]
     filename = request.match_info["filename"]
@@ -646,77 +446,6 @@ async def handle_generic_pkg(request):
         pkg,
         aiozipkin.request_span(request),
         run_id,
-    )
-
-
-@html_template("rejected.html")
-async def handle_rejected(request):
-    from .review import generate_rejected
-
-    suite = request.query.get("suite")
-    async with request.app.database.acquire() as conn:
-        return await generate_rejected(conn, request.app['config'], suite=suite)
-
-
-async def handle_review_post(request):
-    from .review import generate_review, store_review
-    check_qa_reviewer(request)
-
-    post = await request.post()
-    publishable_only = post.get("publishable_only", "true") == "true"
-    async with request.app.database.acquire() as conn:
-        if "review_status" in post:
-            run = await conn.fetchrow(
-                'SELECT package, suite FROM run WHERE id = $1',
-                post["run_id"])
-            review_status = post["review_status"].lower()
-            if review_status == "reschedule":
-                review_status = "rejected"
-                from ..schedule import do_schedule
-
-                await do_schedule(
-                    conn,
-                    run['package'],
-                    run['suite'],
-                    refresh=True,
-                    requestor="reviewer",
-                    bucket="default",
-                )
-            review_comment = post.get("review_comment")
-            await store_review(conn, post["run_id"], review_comment, review_status, request['user'])
-        text = await generate_review(
-            conn,
-            request,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app['vcs_manager'],
-            suites=post.getall("suite", None),
-            publishable_only=publishable_only,
-        )
-        return web.Response(
-            content_type="text/html",
-            text=text,
-            headers={"Cache-Control": "no-cache"},
-        )
-
-
-async def handle_review(request):
-    from .review import generate_review
-    publishable_only = request.query.get("publishable_only", "true") == "true"
-
-    suites = request.query.getall("suite", None)
-    async with request.app.database.acquire() as conn:
-        text = await generate_review(
-            conn,
-            request,
-            request.app.http_client_session,
-            request.app.differ_url,
-            request.app['vcs_manager'],
-            suites=suites,
-            publishable_only=publishable_only,
-        )
-    return web.Response(
-        content_type="text/html", text=text, headers={"Cache-Control": "no-cache"}
     )
 
 
@@ -969,23 +698,6 @@ async def create_app(
     app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
     app.router.add_get("/{suite:unchanged}", handle_apt_repo, name="unchanged-start")
-    app.router.add_get("/cupboard/history", handle_history, name="history")
-    app.router.add_get("/cupboard/reprocess-logs", handle_reprocess_logs, name="reprocess-logs")
-    app.router.add_get("/cupboard/queue", handle_queue, name="queue")
-    app.router.add_get(
-        "/cupboard/result-codes/", handle_result_codes, name="result-code-list"
-    )
-    app.router.add_get(
-        "/cupboard/result-codes/{code}", handle_result_code, name="result-code"
-    )
-    app.router.add_get(
-        "/cupboard/never-processed", handle_never_processed, name="never-processed"
-    )
-    app.router.add_get(
-        "/cupboard/maintainer-stats",
-        handle_cupboard_maintainer_stats,
-        name="cupboard-maintainer-stats",
-    )
     app.router.add_get(
         "/cupboard/maintainer", handle_maintainer_list, name="maintainer-list"
     )
@@ -1014,26 +726,16 @@ async def create_app(
     app.router.add_get(
         "/m/{maintainer}", handle_maintainer_overview, name="maintainer-overview-short"
     )
-    app.router.add_get(
-        "/cupboard/publish/", handle_publish_history, name="publish-history"
-    )
-    app.router.add_get(
-        "/cupboard/publish/{id}", handle_publish, name="publish"
-    )
     app.router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
     app.router.add_get("/cupboard/pkg/", handle_pkg_list, name="package-list")
     app.router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
-    app.router.add_get("/cupboard/pkg/{pkg}/{run_id}/", handle_run, name="cupboard-run")
-    app.router.add_get("/cupboard/review", handle_review, name="cupboard-review")
-    app.router.add_get("/cupboard/rejected", handle_rejected, name="cupboard-rejected")
-    app.router.add_post(
-        "/cupboard/review", handle_review_post, name="cupboard-review-post"
-    )
     app.router.add_get(
         "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,
         name="cupboard-result-file",
     )
+    from .cupboard import register_cupboard_endpoints
+    register_cupboard_endpoints(app.router)
     app.router.add_get(
         "/{suite:" + SUITE_REGEX + "}/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,
@@ -1057,11 +759,9 @@ async def create_app(
         handle_generic_pkg,
         name="generic-run",
     )
+    # Debian specific
     app.router.add_get(
         "/cupboard/vcs-regressions/", handle_vcs_regressions, name="vcs-regressions"
-    )
-    app.router.add_get(
-        "/cupboard/broken-merge-proposals", handle_broken_mps, name="broken-mps"
     )
     app.router.add_get("/login", handle_login, name="login")
     for entry in os.scandir(os.path.join(os.path.dirname(__file__), "_static")):
