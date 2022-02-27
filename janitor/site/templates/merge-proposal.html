@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block sidebar %}
+{% if not suite %}
+{% include "cupboard-sidebar.html" %}
+{% else %}
+{% include [suite + "-sidebar.html", "generic/sidebar.html"] %}
+{% endif %}
+{% endblock %}
+{% block page_title %}Merge Proposal Status - {{ proposal.url }}{% endblock %}
+{% block body %}
+<div class="section" id="merge-proposal-status">
+<h1>Merge Proposal Status</h1>
+
+<ul>
+	<li>URL: <a href="{{ proposal.url }}">{{ proposal.url }}</a></li>
+{% if proposal.package %}
+<li>Package: <a href="/cupboard/pkg/{{ proposal.package }}">{{ proposal.package }}</a></li>
+{% endif %}
+<li>Status:
+{% if is_admin and status != 'open' and status != 'merged' %}
+<select id="status" name='status' onchange="submit_status(this.value)">
+  <option value="closed"{% if status == 'closed' %} selected="true"{% endif %}>Closed</option>
+  <option value="abandoned"{% if status == 'abandoned' %} selected="true"{% endif %}>Abandoned</option>
+  <option value="applied"{% if status == 'applied' %} selected="true"{% endif %}>Applied</option>
+</select>
+<script>
+function submit_status(status) {
+console.log("Submitting review " + status + " for {{ url }} ");
+$.post('/api/merge-proposal', {'url': status, 'url': {{ repr(url) }}});
+}
+</script>
+{% elif proposal.status == 'merged' %}
+Merged{% if proposal.merged_at %} at {{ format_timestamp(proposal.merged_at) }}{% endif %}{% if proposal.merged_by %} by {{ proposal.merged_by }}{% endif %}
+{% else %}
+{{ proposal.status }}
+{% endif %}
+</li>
+{% if proposal.suite %}
+<li><a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Details</a></li>
+{% endif %}
+
+{% endblock %}

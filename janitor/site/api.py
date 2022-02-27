@@ -401,6 +401,18 @@ async def handle_merge_proposal_list(request):
 
 
 @docs()
+@routes.post("/merge-proposal", name="merge-proposal")
+async def handle_merge_proposal_change(request):
+    check_admin(request)
+    post = await request.post()
+    async with request.app['db'].acquire() as conn:
+        await conn.execute(
+            "UPDATE merge_proposal SET status = $1 WHERE url = $2",
+            post['status'], post['url'])
+    return web.json_response({})
+
+
+@docs()
 @routes.post("/refresh-proposal-status", name="refresh-proposal-status")
 async def handle_refresh_proposal_status(request):
     post = await request.post()

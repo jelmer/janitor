@@ -15,8 +15,8 @@ last relevant run failed.</p>
     <th class="head">Package</th>
     <th class="head">Suite</th>
     <th class="head">Result code</th>
-    <td class="head">Finish time</th>
-    <td class="head">Description</th>
+    <th class="head">Finish time</th>
+    <th class="head">Description</th>
 </tr>
 </thead>
 <tbody valign="top">
@@ -25,7 +25,7 @@ last relevant run failed.</p>
 <td><a class="reference external" href="{{ mp_url }}">Merge Proposal</a></td>
 <td><a class="reference external" href="/cupboard/pkg/{{ package }}">{{ package }}</a></td>
 <td><a class="reference external" href="/{{ campaign }}">{{ campaign }}</a></td>
-<td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ run_id }}">{{ result_code }}</a></td>
+<td><a class="reference external" href="/cupboard/pkg/{{ package }}/{{ run_id }}">{{ display_result_code(result_code) }}</a></td>
 <td>{{ format_timestamp(finish_time) }}</td>
 <td>{{ description }}</td>
 </tr>
