@@ -37,6 +37,9 @@ from debmutate.vcs import (
     split_vcs_url,
     unsplit_vcs_url,
 )
+from upstream_branch_url import (
+    find_public_repo_url,
+    )
 from lintian_brush.vcs import (
     fixup_broken_git_url,
     canonicalize_vcs_url,
@@ -79,6 +82,7 @@ async def update_package_metadata(
             except ValueError as e:
                 logging.info("%s: %s", package.name, e)
                 branch_url = None
+            url = find_public_repo_url(url) or url
         else:
             subpath = None
             branch_url = None
