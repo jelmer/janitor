@@ -22,6 +22,7 @@ import aiozipkin
 
 from aiohttp import web
 
+from . import is_admin
 from .common import html_template
 
 
