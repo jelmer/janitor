@@ -70,19 +70,19 @@ SELECT id, command, package, suite, vcs_type, result_branches, main_branch_revis
     return await conn.fetch(query, *args)
 
 
-async def generate_rejected(conn, config, suite=None):
-    if suite is None:
-        suites = [c.name for c in config.campaign]
+async def generate_rejected(conn, config, campaign=None):
+    if campaign is None:
+        campaigns = [c.name for c in config.campaign]
     else:
-        suites = [suite]
+        campaigns = [campaign]
 
     runs = await conn.fetch(
         "SELECT id, suite, package, review_comment FROM run "
         "WHERE review_status = 'rejected' AND suite = ANY($1::text[]) "
         "ORDER BY finish_time DESC",
-        suites)
+        campaigns)
 
-    return {"runs": runs, "suite": suite}
+    return {"runs": runs, "suite": campaign}
 
 
 async def generate_review(
