@@ -26,7 +26,7 @@ import logging
 import os
 import sys
 import time
-from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable
+from typing import Dict, List, Optional, Any, Tuple, Set, AsyncIterable, Iterator
 import uuid
 
 
@@ -48,9 +48,9 @@ from breezy import urlutils
 import gpg
 
 from silver_platter.proposal import (
-    iter_all_mps,
     Hoster,
     hosters,
+    iter_hoster_instances,
 )
 from silver_platter.utils import (
     open_branch,
@@ -60,11 +60,12 @@ from silver_platter.utils import (
     full_branch_url,
 )
 
-from breezy.errors import PermissionDenied
+from breezy.errors import PermissionDenied, UnexpectedHttpStatus
 from breezy.propose import (
     get_proposal_by_url,
     HosterLoginRequired,
     UnsupportedHoster,
+    MergeProposal,
 )
 from breezy.transport import Transport
 import breezy.plugins.gitlab  # noqa: F401
@@ -2230,6 +2231,27 @@ applied independently.
                         'conflicted %s/%s',
                         mp_run['package'], mp_run['suite'])
         return False
+
+
+def iter_all_mps(
+    statuses: Optional[List[str]] = None,
+) -> Iterator[Tuple[Hoster, MergeProposal, str]]:
+    """iterate over all existing merge proposals."""
+    if statuses is None:
+        statuses = ["open", "merged", "closed"]
+    for instance in iter_hoster_instances():
+        for status in statuses:
+            try:
+                for mp in instance.iter_my_proposals(status=status):
+                    yield instance, mp, status
+            except HosterLoginRequired:
+                logging.info(
+                    'Skipping %r, no credentials known.',
+                    instance)
+            except UnexpectedHttpStatus as e:
+                logging.warning(
+                    'Got unexpected HTTP status %s, skipping %r',
+                    e, instance)
 
 
 async def check_existing(
