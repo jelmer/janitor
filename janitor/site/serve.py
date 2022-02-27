@@ -131,8 +131,16 @@ async def handle_generic_candidates(request):
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
-    suite = request.match_info["suite"]
+    suite = request.match_info.get("suite")
     return await write_merge_proposals(request.app.database, suite)
+
+
+@html_template("merge-proposal.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+async def handle_merge_proposal(request):
+    from .merge_proposals import write_merge_proposal
+
+    url = request.query["url"]
+    return await write_merge_proposal(request.app.database, url)
 
 
 async def handle_apt_repo(request):
@@ -240,6 +248,14 @@ async def handle_pgp_keys(request):
             body=request.app.gpg.key_export_minimal("\0".join(fprs)),
             content_type="application/pgp-keys",
         )
+
+
+@html_template("publish.html")
+async def handle_publish(request):
+    id = request.match_info["id"]
+    from .publish import write_publish
+    async with request.app.database.acquire() as conn:
+        return await write_publish(conn, id)
 
 
 @html_template("publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
@@ -935,6 +951,11 @@ async def create_app(
         name="suite-merge-proposals",
     )
     app.router.add_get(
+        "/{suite:%s}/merge-proposal" % SUITE_REGEX,
+        handle_merge_proposal,
+        name="suite-merge-proposal",
+    )
+    app.router.add_get(
         "/{suite:%s}/ready" % SUITE_REGEX, handle_ready_proposals, name="suite-ready"
     )
     app.router.add_get(
@@ -974,6 +995,17 @@ async def create_app(
         name="cupboard-maintainer-overview",
     )
     app.router.add_get(
+        "/cupboard/merge-proposals",
+        handle_merge_proposals,
+        name="cupboard-merge-proposals",
+    )
+    app.router.add_get(
+        "/cupboard/merge-proposal",
+        handle_merge_proposal,
+        name="merge-proposal",
+    )
+
+    app.router.add_get(
         "/maintainer/{maintainer}",
         handle_maintainer_overview,
         name="maintainer-overview",
@@ -983,7 +1015,10 @@ async def create_app(
         "/m/{maintainer}", handle_maintainer_overview, name="maintainer-overview-short"
     )
     app.router.add_get(
-        "/cupboard/publish", handle_publish_history, name="publish-history"
+        "/cupboard/publish/", handle_publish_history, name="publish-history"
+    )
+    app.router.add_get(
+        "/cupboard/publish/{id}", handle_publish, name="publish"
     )
     app.router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
     app.router.add_get("/cupboard/pkg/", handle_pkg_list, name="package-list")

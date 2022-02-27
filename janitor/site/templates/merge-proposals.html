@@ -3,7 +3,7 @@
 {% if not suite %}
 {% include "cupboard-sidebar.html" %}
 {% else %}
-{% include [suite + "-sidebar.html", "generic-sidebar.html"] %}
+{% include [suite + "-sidebar.html", "generic/sidebar.html"] %}
 {% endif %}
 {% endblock %}
 {% block page_title %}Merge Proposal Status{% endblock %}
@@ -15,6 +15,9 @@
 <a class="reference external" href="{{ proposal.url }}">{% if proposal.package %}{{ proposal.package }}{% else %}{{ proposal.url }}{% endif %}</a>
 {% if proposal.suite %}
 (<a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Details</a>)
+{% endif %}
+{% if not suite %}
+(<a href="/cupboard/merge-proposal?url={{ proposal.url|urlencode }}">Info</a>)
 {% endif %}
 {% endmacro %}
 
