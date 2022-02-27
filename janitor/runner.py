@@ -1278,6 +1278,7 @@ class QueueProcessor(object):
         committer: Optional[str] = None,
         backup_artifact_manager: Optional[ArtifactManager] = None,
         backup_logfile_manager: Optional[LogFileManager] = None,
+        avoid_hosts: List[str] = None
     ):
         """Create a queue processor.
         """
@@ -1298,6 +1299,7 @@ class QueueProcessor(object):
         self.backup_logfile_manager = backup_logfile_manager
         self.rate_limit_hosts = {}
         self.run_timeout = run_timeout
+        self.avoid_hosts = avoid_hosts or []
 
     def status_json(self) -> Any:
         return {
@@ -1387,10 +1389,12 @@ class QueueProcessor(object):
         self.rate_limit_hosts[host] = (
             retry_after or (datetime.now() + timedelta(seconds=DEFAULT_RETRY_AFTER)))
 
-    def is_queue_item_rate_limited(self, url):
+    def can_process_url(self, url):
         if url is None:
             return False
         host = urlutils.URL.from_string(url).host
+        if host in self.avoid_hosts:
+            return False
         until = self.rate_limit_hosts.get(host)
         if not until:
             return False
@@ -1401,7 +1405,7 @@ class QueueProcessor(object):
         async for item in iter_queue(conn, limit=limit, campaign=campaign, package=package):
             if self.is_queue_item_assigned(item.id):
                 continue
-            if self.is_queue_item_rate_limited(item.branch_url):
+            if self.can_process_url(item.branch_url):
                 continue
             return item
         return None
@@ -1872,6 +1876,10 @@ async def main(argv=None):
     parser.add_argument(
         "--run-timeout", type=int, help="Time before marking a run as having timed out (minutes)",
         default=60 * 10)
+    parser.add_argument(
+        "--avoid-host", type=str,
+        help="Avoid processing runs on a host (e.g. 'salsa.debian.org')",
+        default=[], action='append')
     args = parser.parse_args()
 
     if args.gcp_logging:
@@ -1946,6 +1954,7 @@ async def main(argv=None):
             committer=config.committer,
             backup_artifact_manager=backup_artifact_manager,
             backup_logfile_manager=backup_logfile_manager,
+            avoid_hosts=args.avoid_host,
         )
 
         app = await create_app(queue_processor, tracer=tracer)
