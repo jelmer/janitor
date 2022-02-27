@@ -1145,7 +1145,7 @@ async def publish_and_store(
             requestor=requestor,
         )
 
-        publish_delay = run.finish_time - datetime.utcnow()
+        publish_delay = datetime.utcnow() - run.finish_time
         publish_latency.observe(publish_delay.total_seconds())
 
         topic_publish.publish(

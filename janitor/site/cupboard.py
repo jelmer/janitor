@@ -18,6 +18,13 @@
 """Serve the janitor cupboard site."""
 
 
+import aiozipkin
+
+from aiohttp import web
+
+from .common import html_template
+
+
 @html_template("rejected.html")
 async def handle_rejected(request):
     from .review import generate_rejected

@@ -12,6 +12,24 @@ tr.old-keepalive {
 }
 </style>
 
+{% if avoid_hosts or rate_limit_hosts %}
+<div name="restrictions">
+<h2>Restrictions</h2>
+{% if avoid_hosts %}
+Manually avoiding hosts:
+<ul>
+{% for host in avoid_hosts %}	<li>{{ host }}</li> {% endfor %}
+</ul>
+{% endif %}
+{% if rate_limit_hosts %}
+Rate limiting hosts:
+<ul>
+	{% for host, until in rate_limit_hosts.items() %}	<li>{{ host }} until {{ until.isoformat() }}</li> {% endfor %}
+</ul>
+{% endif %}
+</div>
+{% endif %}
+
 <div name="buckets">
 <h2>Entries per bucket</h2>
 <table class="docutils" border="1">

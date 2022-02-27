@@ -23,10 +23,6 @@ from typing import AsyncIterator, Tuple, Optional, Dict, Any, Iterator
 from janitor import state
 
 
-def lintian_tag_link(tag: str) -> str:
-    return '<a href="https://lintian.debian.org/tags/%s.html">%s</a>' % (tag, tag)
-
-
 class RunnerProcessingUnavailable(Exception):
     """Raised when unable to get processing data for runner."""
 
@@ -143,4 +139,8 @@ async def write_queue(
         "buckets": get_buckets(db),
         "active_queue_ids": active_queue_ids,
         "processing": processing,
+        "avoid_hosts": queue_status["avoid_hosts"],
+        "rate_limit_hosts": {
+            host: datetime.fromisoformat(ts)
+            for (host, ts) in queue_status["rate_limit_hosts"].items()},
     }

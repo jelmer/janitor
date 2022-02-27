@@ -1263,6 +1263,7 @@ class RunExists(Exception):
 class QueueProcessor(object):
 
     rate_limit_hosts: Dict[str, datetime]
+    avoid_hosts: Set[str]
 
     def __init__(
         self,
@@ -1279,7 +1280,7 @@ class QueueProcessor(object):
         committer: Optional[str] = None,
         backup_artifact_manager: Optional[ArtifactManager] = None,
         backup_logfile_manager: Optional[LogFileManager] = None,
-        avoid_hosts: List[str] = None
+        avoid_hosts: Optional[Set[str]] = None
     ):
         """Create a queue processor.
         """
@@ -1300,13 +1301,17 @@ class QueueProcessor(object):
         self.backup_logfile_manager = backup_logfile_manager
         self.rate_limit_hosts = {}
         self.run_timeout = run_timeout
-        self.avoid_hosts = avoid_hosts or []
+        self.avoid_hosts = avoid_hosts or set()
 
     def status_json(self) -> Any:
         return {
             "processing": [
                 active_run.json() for active_run in self.active_runs.values()
             ],
+            "avoid_hosts": self.avoid_hosts,
+            "rate_limit_hosts": {
+                host: ts.isoformat()
+                for (host, ts) in self.rate_limit_hosts}
         }
 
     def register_run(self, active_run: ActiveRun) -> None:
@@ -1390,23 +1395,23 @@ class QueueProcessor(object):
         self.rate_limit_hosts[host] = (
             retry_after or (datetime.now() + timedelta(seconds=DEFAULT_RETRY_AFTER)))
 
-    def can_process_url(self, url):
+    def can_process_url(self, url) -> bool:
         if url is None:
-            return False
+            return True
         host = urlutils.URL.from_string(url).host
         if host in self.avoid_hosts:
             return False
         until = self.rate_limit_hosts.get(host)
-        if not until:
+        if until and until > datetime.now():
             return False
-        return until > datetime.now()
+        return True
 
     async def next_queue_item(self, conn, package=None, campaign=None) -> Optional[QueueItem]:
         limit = len(self.active_runs) + 300
         async for item in iter_queue(conn, limit=limit, campaign=campaign, package=package):
             if self.is_queue_item_assigned(item.id):
                 continue
-            if self.can_process_url(item.branch_url):
+            if not self.can_process_url(item.branch_url):
                 continue
             return item
         return None
@@ -1955,7 +1960,7 @@ async def main(argv=None):
             committer=config.committer,
             backup_artifact_manager=backup_artifact_manager,
             backup_logfile_manager=backup_logfile_manager,
-            avoid_hosts=args.avoid_host,
+            avoid_hosts=set(args.avoid_host),
         )
 
         app = await create_app(queue_processor, tracer=tracer)
