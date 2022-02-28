@@ -1,5 +1,10 @@
 #!/usr/bin/python3
 
+from aiohttp_apispec import (
+    docs,
+    )
+
+
 import aiozipkin
 import asyncpg
 from typing import List, Dict
@@ -439,6 +444,51 @@ async def handle_lintian_brush_regressions(request):
     return {"packages": packages}
 
 
+@docs()
+async def handle_report(request):
+    report = {}
+    merge_proposal = {}
+    async with request.app['db'].acquire() as conn:
+        for package, url in await conn.fetch("""
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.package, merge_proposal.url
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+AND status = 'open'
+WHERE run.suite = 'lintian-fixes'
+"""):
+            merge_proposal[package] = url
+        query = """
+SELECT DISTINCT ON (package)
+  result_code,
+  start_time,
+  package,
+  result
+FROM
+  last_unabsorbed_runs
+WHERE suite = 'lintian-fixes'
+ORDER BY package, start_time DESC
+"""
+        for record in await conn.fetch(query):
+            if record['result_code'] not in ("success", "nothing-to-do"):
+                continue
+            data = {
+                "timestamp": record['start_time'].isoformat(),
+            }
+            data["fixed-tags"] = []
+            for entry in record['result']["applied"]:
+                data["fixed-tags"].extend(entry["fixed_lintian_tags"])
+            if record['package'] in merge_proposal:
+                data["merge-proposal"] = merge_proposal[record['package']]
+            report[record['package']] = data
+    return web.json_response(
+        report, headers={"Cache-Control": "max-age=600"}, status=200
+    )
+
+
 def register_lintian_fixes_endpoints(router):
     router.add_get(
         "/lintian-fixes/", handle_lintian_fixes, name="lintian-fixes-start"
@@ -497,3 +547,7 @@ def register_lintian_fixes_endpoints(router):
         handle_lintian_brush_regressions,
         name="lintian-brush-regressions",
     )
+    router.add_get(
+        "/lintian-fixes/api/report",
+        handle_report,
+        name="lintian-brush-report")

@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from aiohttp_apispec import docs
 import aiozipkin
 from aiohttp import web, ClientConnectorError
 import asyncpg
@@ -170,6 +171,51 @@ async def handle_chart_results(request):
         list((await summarize_results(request.app.database, suite)).items()))
 
 
+@docs()
+async def handle_report(request):
+    suite = request.match_info["suite"]
+    report = {}
+    merge_proposal = {}
+    async with request.app['db'].acquire() as conn:
+        for package, url in await conn.fetch("""
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.package, merge_proposal.url
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+AND status = 'open'
+WHERE run.suite = $1
+""", suite):
+            merge_proposal[package] = url
+        query = """
+SELECT DISTINCT ON (package)
+  result_code,
+  start_time,
+  package,
+  result
+FROM
+  last_unabsorbed_runs
+WHERE suite = $1
+ORDER BY package, suite, start_time DESC
+"""
+        for record in await conn.fetch(query, suite):
+            if record['result_code'] not in ("success", "nothing-to-do"):
+                continue
+            data = {
+                "timestamp": record['start_time'].isoformat(),
+            }
+            data["upstream-version"] = record['result'].get("upstream_version")
+            data["old-upstream-version"] = record['result'].get("old_upstream_version")
+            if record['package'] in merge_proposal:
+                data["merge-proposal"] = merge_proposal[record['package']]
+            report[record['package']] = data
+    return web.json_response(
+        report, headers={"Cache-Control": "max-age=600"}, status=200
+    )
+
+
 def register_new_upstream_endpoints(router):
     NEW_UPSTREAM_REGEX = "fresh-(releases|snapshots)"
     router.add_get(
@@ -198,3 +244,6 @@ def register_new_upstream_endpoints(router):
         handle_new_upstream_candidates,
         name="new-upstream-candidates",
     )
+    router.add_get(
+        "/{suite:" + NEW_UPSTREAM_REGEX+ "}/api/report", handle_report,
+        name="report")

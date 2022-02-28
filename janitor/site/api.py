@@ -1040,16 +1040,8 @@ ORDER BY package, suite, start_time DESC
                 continue
             data = {
                 "timestamp": record['start_time'].isoformat(),
+                "result": record['result'],
             }
-            if suite == "lintian-fixes":
-                data["fixed-tags"] = []
-                for entry in record['result']["applied"]:
-                    data["fixed-tags"].extend(entry["fixed_lintian_tags"])
-            if suite in ("fresh-releases", "fresh-snapshots"):
-                data["upstream-version"] = record['result'].get("upstream_version")
-                data["old-upstream-version"] = record['result'].get("old_upstream_version")
-            if suite == "multiarch-fixes":
-                data["applied-hints"] = record['result'].get("applied-hints")
             if record['package'] in merge_proposal:
                 data["merge-proposal"] = merge_proposal[record['package']]
             report[record['package']] = data
