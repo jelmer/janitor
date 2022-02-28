@@ -296,6 +296,13 @@ async def handle_index(request):
     return web.Response(text='')
 
 
+async def handle_pgp_keys(request):
+    pgp_keys = []
+    for entry in list(request.app['gpg'].keylist(secret=True)):
+        pgp_keys.append(request.app['gpg'].key_export_minimal(entry.fpr).decode())
+    return web.json_response(pgp_keys)
+
+
 async def run_web_server(listen_addr, port, dists_dir, config, generator_manager, tracer):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
@@ -307,6 +314,7 @@ async def run_web_server(listen_addr, port, dists_dir, config, generator_manager
     app.router.add_post("/publish", handle_publish, name="publish")
     app.router.add_get("/last-publish", handle_last_publish, name="last-publish")
     app.router.add_get("/health", handle_health, name="health")
+    app.router.add_get("/pgp_keys", handle_pgp_keys, name="pgp-keys")
     aiozipkin.setup(app, tracer)
     runner = web.AppRunner(app)
     await runner.setup()
