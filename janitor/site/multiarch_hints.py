@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+from aiohttp_apispec import docs
 import aiozipkin
 import asyncpg
 from .common import generate_pkg_context, iter_candidates, html_template
@@ -124,8 +125,8 @@ async def handle_multiarch_fixes_stats(request):
             for (c, nr) in await conn.fetch(
                 """\
 select json_array_length(result->'applied-hints'), count(*) from run
-where result_code = 'success' and suite = 'multiarch-fixes' group by 1
-"""
+where result_code = 'success' and suite = $1 group by 1
+""", SUITE
             )
         }
         per_kind = {
@@ -181,6 +182,48 @@ async def handle_multiarch_fixes_pkg(request):
     )
 
 
+@docs()
+async def handle_report(request):
+    report = {}
+    merge_proposal = {}
+    async with request.app['db'].acquire() as conn:
+        for package, url in await conn.fetch("""
+SELECT
+    DISTINCT ON (merge_proposal.url)
+    merge_proposal.package, merge_proposal.url
+FROM
+    merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+AND status = 'open'
+WHERE run.suite = $1
+""", SUITE):
+            merge_proposal[package] = url
+        query = """
+SELECT DISTINCT ON (package)
+  result_code,
+  start_time,
+  package,
+  result
+FROM
+  last_unabsorbed_runs
+WHERE suite = $1
+ORDER BY package, suite, start_time DESC
+"""
+        for record in await conn.fetch(query, SUITE):
+            if record['result_code'] not in ("success", "nothing-to-do"):
+                continue
+            data = {
+                "timestamp": record['start_time'].isoformat(),
+            }
+            data["applied-hints"] = record['result'].get("applied-hints")
+            if record['package'] in merge_proposal:
+                data["merge-proposal"] = merge_proposal[record['package']]
+            report[record['package']] = data
+    return web.json_response(
+        report, headers={"Cache-Control": "max-age=600"}, status=200
+    )
+
 def register_multiarch_hints_endpoints(router):
     router.add_get(
         "/multiarch-fixes/", handle_multiarch_fixes, name="multiarch-fixes-start"
@@ -215,3 +258,6 @@ def register_multiarch_hints_endpoints(router):
         handle_multiarch_fixes_pkg,
         name="multiarch-fixes-package-run",
     )
+    router.add_get(
+        "/multiarch-fixes/api/report",
+        handle_report, name="multiarch-fixes-report")
