@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 {% block sidebar %}
 {% if not suite %}
-{% include "cupboard-sidebar.html" %}
+{% include "cupboard/sidebar.html" %}
 {% else %}
 {% include [suite + "/sidebar.html", "generic/sidebar.html"] %}
 {% endif %}

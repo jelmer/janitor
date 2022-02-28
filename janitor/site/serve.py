@@ -313,45 +313,6 @@ async def handle_maintainer_index(request):
     return {}
 
 
-@html_template("package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
-async def handle_pkg(request):
-    from .pkg import generate_pkg_file
-
-    span = aiozipkin.request_span(request)
-
-    package_name = request.match_info["pkg"]
-    async with request.app.database.acquire() as conn:
-        with span.new_child('sql:package'):
-            package = await conn.fetchrow(
-                'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
-                'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
-        if package is None:
-            raise web.HTTPNotFound(text="No package with name %s" % package_name)
-        with span.new_child('sql:merge-proposals'):
-            merge_proposals = await conn.fetch("""\
-SELECT DISTINCT ON (merge_proposal.url)
-merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
-FROM
-merge_proposal
-LEFT JOIN run
-ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE run.package = $1
-ORDER BY merge_proposal.url, run.finish_time DESC
-""", package['name'])
-        with span.new_child('sql:publishable-suites'):
-            available_suites = await state.iter_publishable_suites(conn, package_name)
-    with span.new_child('sql:runs'):
-        async with request.app.database.acquire() as conn:
-            runs = await conn.fetch(
-                "SELECT id, finish_time, result_code, suite FROM run "
-                "LEFT JOIN debian_build ON run.id = debian_build.run_id "
-                "WHERE package = $1 ORDER BY finish_time DESC", package['name'])
-    return await generate_pkg_file(
-        request.app.database, request.app['config'], package, merge_proposals, runs,
-        available_suites, span
-    )
-
-
 @html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_vcs_regressions(request):
     async with request.app.database.acquire() as conn:
@@ -649,7 +610,6 @@ async def create_app(
         ("/contact", "contact"),
         ("/about", "about"),
         ("/apt", "apt"),
-        ("/cupboard/", "cupboard"),
     ]:
         app.router.add_get(
             path,
@@ -728,7 +688,6 @@ async def create_app(
     )
     app.router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
     app.router.add_get("/cupboard/pkg/", handle_pkg_list, name="package-list")
-    app.router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
     app.router.add_get(
         "/cupboard/pkg/{pkg}/{run_id}/{filename:.+}",
         handle_result_file,

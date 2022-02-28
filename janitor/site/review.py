@@ -113,7 +113,7 @@ async def generate_review(
             reviewer=reviewer
         )
     if not entries:
-        return await render_template_for_request("review-done.html", request, {})
+        return await render_template_for_request("cupboard/review-done.html", request, {})
 
     (
         run_id,
@@ -197,7 +197,7 @@ async def generate_review(
             } for entry in entries
         ],
     }
-    return await render_template_for_request("review.html", request, kwargs)
+    return await render_template_for_request("cupboard/review.html", request, kwargs)
 
 
 async def store_review(conn, run_id, status, comment, reviewer):
