@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block sidebar %}{% include "cupboard-sidebar.html" %}{% endblock %}
+{% block sidebar %}{% include "cupboard/sidebar.html" %}{% endblock %}
 {% from "run_util.html" import result_code_explanation %}
 {% block page_title %}Result Code {{ code }}{% if suite %} - for {{ suite }}{% endif %}{% endblock %}
 {% block body %}

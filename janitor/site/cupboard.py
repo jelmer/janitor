@@ -22,11 +22,13 @@ import aiozipkin
 
 from aiohttp import web
 
+from .. import state
+
 from . import is_admin
 from .common import html_template
 
 
-@html_template("rejected.html")
+@html_template("cupboard/rejected.html")
 async def handle_rejected(request):
     from .review import generate_rejected
 
@@ -35,7 +37,7 @@ async def handle_rejected(request):
         return await generate_rejected(conn, request.app['config'], campaign=campaign)
 
 
-@html_template("history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template("cupboard/history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_history(request):
     limit = int(request.query.get("limit", "100"))
     offset = int(request.query.get("offset", "0"))
@@ -57,12 +59,12 @@ ORDER BY finish_time DESC"""
     }
 
 
-@html_template("reprocess-logs.html")
+@html_template("cupboard/reprocess-logs.html")
 async def handle_reprocess_logs(request):
     return {}
 
 
-@html_template("maintainer-stats.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template("cupboard/maintainer-stats.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_cupboard_maintainer_stats(request):
     from .stats import write_maintainer_stats
 
@@ -70,7 +72,7 @@ async def handle_cupboard_maintainer_stats(request):
         return await write_maintainer_stats(conn)
 
 
-@html_template("queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template("cupboard/queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_queue(request):
     limit = int(request.query.get("limit", "100"))
     from .queue import write_queue
@@ -83,7 +85,7 @@ async def handle_queue(request):
     )
 
 
-@html_template("never-processed.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template("cupboard/never-processed.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_never_processed(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -102,7 +104,7 @@ async def handle_never_processed(request):
         return {"never_processed": await conn.fetch(query, *args)}
 
 
-@html_template("result-code-index.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template("cupboard/result-code-index.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_result_codes(request):
     from ..schedule import TRANSIENT_ERROR_RESULT_CODES
     suite = request.query.get("suite")
@@ -137,7 +139,7 @@ async def handle_result_codes(request):
             "suite": suite, "all_suites": all_suites}
 
 
-@html_template("result-code.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template("cupboard/result-code.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_result_code(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -155,7 +157,7 @@ async def handle_result_code(request):
             "all_suites": all_suites}
 
 
-@html_template("publish.html")
+@html_template("cupboard/publish.html")
 async def handle_publish(request):
     id = request.match_info["id"]
     from .publish import write_publish
@@ -163,7 +165,7 @@ async def handle_publish(request):
         return await write_publish(conn, id)
 
 
-@html_template("publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template("cupboard/publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_publish_history(request):
     limit = int(request.query.get("limit", "100"))
     from .publish import write_history
@@ -264,7 +266,7 @@ async def handle_run(request):
 
 
 @html_template(
-    "broken-merge-proposals.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"}
+    "cupboard/broken-merge-proposals.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"}
 )
 async def handle_broken_mps(request):
     async with request.app.database.acquire() as conn:
@@ -297,7 +299,52 @@ order by url, last_run.finish_time desc
     return {"broken_mps": broken_mps}
 
 
+@html_template("cupboard/start.html")
+async def handle_cupboard_start(request):
+    return {}
+
+
+@html_template("cupboard/package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+async def handle_pkg(request):
+    from .pkg import generate_pkg_file
+
+    span = aiozipkin.request_span(request)
+
+    package_name = request.match_info["pkg"]
+    async with request.app.database.acquire() as conn:
+        with span.new_child('sql:package'):
+            package = await conn.fetchrow(
+                'SELECT name, vcswatch_status, maintainer_email, vcs_type, '
+                'vcs_url, branch_url, vcs_browse, removed FROM package WHERE name = $1', package_name)
+        if package is None:
+            raise web.HTTPNotFound(text="No package with name %s" % package_name)
+        with span.new_child('sql:merge-proposals'):
+            merge_proposals = await conn.fetch("""\
+SELECT DISTINCT ON (merge_proposal.url)
+merge_proposal.url AS url, merge_proposal.status AS status, run.suite AS suite
+FROM
+merge_proposal
+LEFT JOIN run
+ON merge_proposal.revision = run.revision AND run.result_code = 'success'
+WHERE run.package = $1
+ORDER BY merge_proposal.url, run.finish_time DESC
+""", package['name'])
+        with span.new_child('sql:publishable-suites'):
+            available_suites = await state.iter_publishable_suites(conn, package_name)
+    with span.new_child('sql:runs'):
+        async with request.app.database.acquire() as conn:
+            runs = await conn.fetch(
+                "SELECT id, finish_time, result_code, suite FROM run "
+                "LEFT JOIN debian_build ON run.id = debian_build.run_id "
+                "WHERE package = $1 ORDER BY finish_time DESC", package['name'])
+    return await generate_pkg_file(
+        request.app.database, request.app['config'], package, merge_proposals, runs,
+        available_suites, span
+    )
+
+
 def register_cupboard_endpoints(router):
+    router.add_get("/cupboard/", handle_cupboard_start, name="cupboard-start")
     router.add_get("/cupboard/rejected", handle_rejected, name="cupboard-rejected")
     router.add_get("/cupboard/history", handle_history, name="history")
     router.add_get("/cupboard/reprocess-logs", handle_reprocess_logs, name="reprocess-logs")
@@ -326,8 +373,8 @@ def register_cupboard_endpoints(router):
     router.add_post(
         "/cupboard/review", handle_review_post, name="cupboard-review-post"
     )
+    router.add_get("/cupboard/pkg/{pkg}/", handle_pkg, name="cupboard-package")
     router.add_get("/cupboard/pkg/{pkg}/{run_id}/", handle_run, name="cupboard-run")
     router.add_get(
         "/cupboard/broken-merge-proposals", handle_broken_mps, name="broken-mps"
     )
-
