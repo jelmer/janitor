@@ -112,6 +112,7 @@ async def get_publish_history(
 async def generate_run_file(
     db, client, config, differ_url, logfile_manager, run, vcs_manager, is_admin, span
 ):
+    from ..schedule import estimate_success_probability
     kwargs = {}
     kwargs["run"] = run
     kwargs["run_id"] = run['id']
@@ -140,6 +141,9 @@ async def generate_run_file(
                 'SELECT review_status, comment, reviewer, reviewed_at '
                 'FROM review WHERE run_id = $1',
                 run['id'])
+        with span.new_child('sql:success-probability'):
+            kwargs["success_probability"], kwargs["total_previous_runs"] = await estimate_success_probability(
+                conn, run['package'], run['suite'])
     kwargs["queue_wait_time"] = queue_wait_time
     kwargs["queue_position"] = queue_position
     kwargs["vcs_type"] = package['vcs_type']
