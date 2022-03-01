@@ -30,7 +30,7 @@ from a human.</p>
 <div class="highlight-default notranslate"><div class="highlight"><pre>
 echo deb "[arch=amd64 signed-by=/usr/share/keyrings/debian-janitor-archive-keyring.gpg]" {{ url.join(URL('..')) }} fresh-snapshots main | sudo tee /etc/apt/sources.list.d/fresh-snapshots.list
 echo deb "[arch=amd64 signed-by=/usr/share/keyrings/debian-janitor-archive-keyring.gpg]" {{ url.join(URL('..')) }} fresh-releases main | sudo tee /etc/apt/sources.list.d/fresh-releases.list
-sudo curl -o /usr/share/keyrings/debian-janitor-archive-keyring.gpg {{ url.join(URL('../pgp_keys')) }}
+sudo curl -o /usr/share/keyrings/debian-janitor-archive-keyring.gpg {{ url.join(URL('../archive-keyring.gpg')) }}
 sudo apt update
 </pre></div>
 

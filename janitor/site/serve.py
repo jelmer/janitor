@@ -52,9 +52,6 @@ from . import (
 from .common import html_template
 
 
-FORWARD_CLIENT_TIMEOUT = 30 * 60
-
-
 def create_background_task(fn, title):
     loop = asyncio.get_event_loop()
     task = loop.create_task(fn)
@@ -215,6 +212,29 @@ async def handle_pgp_keys(request):
     else:
         fprs = []
         for keydata in credentials["pgp_keys"]:
+            result = request.app.gpg.key_import(keydata.encode("utf-8"))
+            fprs.extend([i.fpr for i in result.imports])
+        return web.Response(
+            body=request.app.gpg.key_export_minimal("\0".join(fprs)),
+            content_type="application/pgp-keys",
+        )
+
+
+async def handle_archive_keyring(request):
+    url = URL(request.app.archiver_url) / "pgp_keys"
+    async with request.app.http_client_session.get(url=url) as resp:
+        if resp.status != 200:
+            raise Exception("unexpected response")
+        pgp_keys = await resp.json()
+    armored = request.match_info["extension"] == ".asc"
+    if armored:
+        return web.Response(
+            text="\n".join(pgp_keys),
+            content_type="application/pgp-keys",
+        )
+    else:
+        fprs = []
+        for keydata in pgp_keys:
             result = request.app.gpg.key_import(keydata.encode("utf-8"))
             fprs.extend([i.fpr for i in result.imports])
         return web.Response(
@@ -620,6 +640,10 @@ async def create_app(
     app.router.add_get("/ssh_keys", handle_ssh_keys, name="ssh-keys")
     app.router.add_get(
         r"/pgp_keys{extension:(\.asc)?}", handle_pgp_keys, name="pgp-keys"
+    )
+    app.router.add_get(
+        r"/archive-keyring{extension:(\.asc|\.gpg)}", handle_archive_keyring,
+        name="archive-keyring"
     )
     from .lintian_fixes import register_lintian_fixes_endpoints
     register_lintian_fixes_endpoints(app.router)

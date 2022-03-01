@@ -37,14 +37,14 @@ Merged{% if proposal.merged_at %} at {{ format_timestamp(proposal.merged_at) }}{
 {% endif %}
 </li>
 {% if proposal.suite %}
-<li><a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Details</a></li>
+<li><a href="/{{ proposal.suite }}/pkg/{{ proposal.package }}">Run Details</a></li>
 {% endif %}
 
 <h2>State changes</h2>
 
 <ul>
 	{% for publish in publishes %}
-	<li>{{ format_timestamp(publish.timestamp) }}: {{ display_publish_result_code(publish.result_code) }}: {% if '\n' in description %}<pre>{{ description }}</pre>{% else %}{{ description }}{% endif %}</li>
+	<li>{{ format_timestamp(publish.timestamp) }}: {{ display_publish_result_code(publish.result_code) }}: {% if '\n' in publish.description %}<pre>{{ publish.description }}</pre>{% else %}{{ publish.description }}{% endif %}</li>
 	{% endfor %}
 </ul>
 
