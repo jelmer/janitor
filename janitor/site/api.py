@@ -57,10 +57,12 @@ from . import (
     get_archive_diff,
     get_vcs_diff,
     iter_accept,
-    render_template_for_request,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
 )
+from .common import (
+    render_template_for_request,
+    )
 from janitor.logs import get_log_manager
 from .webhook import process_webhook
 from ..policy_pb2 import PolicyConfig
@@ -149,7 +151,7 @@ async def handle_publish(request):
 @routes.get("/webhook", name="webhook-help")
 async def handle_webhook(request):
     if request.headers.get("Content-Type") != "application/json":
-        text = await render_template_for_request("webhook.html", request, {})
+        text = await render_template_for_request(env, "webhook.html", request, {})
         return web.Response(
             content_type="text/html",
             text=text,
@@ -921,7 +923,7 @@ async def handle_runner_log_index(request):
                 content_type='text/plain')
         elif accept in ('text/html', ):
             text = await render_template_for_request(
-                "log-index.html", request, {'contents': ret})
+                env, "log-index.html", request, {'contents': ret})
             return web.Response(text=text, content_type="text/html")
 
     return web.json_response(ret)

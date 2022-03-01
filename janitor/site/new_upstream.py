@@ -7,8 +7,8 @@ import asyncpg
 from datetime import datetime
 import urllib.parse
 
-from . import render_template_for_request
-from .common import html_template
+from . import env
+from .common import html_template, render_template_for_request
 from ..config import get_campaign_config
 from ..schedule import TRANSIENT_ERROR_RESULT_CODES
 
@@ -135,7 +135,7 @@ async def handle_apt_repo(request):
             "suite": suite,
             "campaign_config": get_campaign_config(request.app['config'], suite),
         }
-        text = await render_template_for_request(suite + ".html", request, vs)
+        text = await render_template_for_request(env, suite + ".html", request, vs)
         return web.Response(
             content_type="text/html",
             text=text,
