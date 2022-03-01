@@ -1506,7 +1506,6 @@ def create_app(
     app['http_client_session'] = ClientSession(trace_configs=trace_configs)
     app['config'] = config
     app['logfile_manager'] = get_log_manager(config.logs_location)
-    app['jinja_env'] = env
     app['db'] = db
     app['external_url'] = external_url
     app['policy_config'] = policy_config
