@@ -14,6 +14,7 @@ from lintian_brush import (
 )
 from lintian_brush.lintian_overrides import load_renamed_tags
 
+from . import env
 from .common import html_template
 
 
@@ -294,7 +295,7 @@ ON absorbed.tag = unabsorbed.tag
 
 
 @html_template(
-    "lintian-fixes/start.html", headers={"Cache-Control": "max-age=3600"}
+    env, "lintian-fixes/start.html", headers={"Cache-Control": "max-age=3600"}
 )
 async def handle_lintian_fixes(request):
     import lintian_brush
@@ -308,7 +309,7 @@ async def handle_lintian_fixes(request):
 
 
 @html_template(
-    "lintian-fixes/package.html", headers={"Cache-Control": "max-age=600"}
+    env, "lintian-fixes/package.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_fixes_pkg(request):
     # TODO(jelmer): Handle Accept: text/diff
@@ -328,7 +329,7 @@ async def handle_lintian_fixes_pkg(request):
 
 
 @html_template(
-    "lintian-fixes/tag-list.html", headers={"Cache-Control": "max-age=600"}
+    env, "lintian-fixes/tag-list.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_fixes_tag_list(request):
     async with request.app.database.acquire() as conn:
@@ -345,7 +346,7 @@ async def handle_lintian_fixes_tag_list(request):
         return {"tags": tags, "oldnames": oldnames}
 
 
-@html_template("lintian-fixes/tag.html", headers={"Cache-Control": "max-age=600"})
+@html_template(env, "lintian-fixes/tag.html", headers={"Cache-Control": "max-age=600"})
 async def handle_lintian_fixes_tag_page(request):
     tag = request.match_info["tag"]
     oldnames = []
@@ -364,14 +365,14 @@ async def handle_lintian_fixes_tag_page(request):
 
 
 @html_template(
-    "lintian-fixes/candidates.html", headers={"Cache-Control": "max-age=600"}
+    env, "lintian-fixes/candidates.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_fixes_candidates(request):
     return await generate_candidates(request.app.database)
 
 
 @html_template(
-    "lintian-fixes/developer-table.html", headers={"Cache-Control": "max-age=30"}
+    env, "lintian-fixes/developer-table.html", headers={"Cache-Control": "max-age=30"}
 )
 async def handle_lintian_fixes_developer_table_page(request):
     try:
@@ -384,7 +385,7 @@ async def handle_lintian_fixes_developer_table_page(request):
 
 
 @html_template(
-    "lintian-fixes/stats.html", headers={"Cache-Control": "max-age=3600"}
+    env, "lintian-fixes/stats.html", headers={"Cache-Control": "max-age=3600"}
 )
 async def handle_lintian_fixes_stats(request):
     async with request.app.database.acquire() as conn:
@@ -419,14 +420,14 @@ group by 1 order by 1 desc
 
 
 @html_template(
-    "lintian-fixes/failed-list.html", headers={"Cache-Control": "max-age=600"}
+    env, "lintian-fixes/failed-list.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_failed_lintian_brush_fixers_list(request):
     return {"fixers": iter_failed_lintian_fixers(request.app.database)}
 
 
 @html_template(
-    "lintian-fixes/failed.html", headers={"Cache-Control": "max-age=600"}
+    env, "lintian-fixes/failed.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_failed_lintian_brush_fixers(request):
     fixer = request.match_info["fixer"]
@@ -436,7 +437,7 @@ async def handle_failed_lintian_brush_fixers(request):
 
 
 @html_template(
-    "lintian-fixes/regressions.html", headers={"Cache-Control": "max-age=600"}
+    env, "lintian-fixes/regressions.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_lintian_brush_regressions(request):
     async with request.app.database.acquire() as conn:

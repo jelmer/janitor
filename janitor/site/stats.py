@@ -88,7 +88,7 @@ async def handle_graph_pushes_over_time(request, conn):
     return {"labels": labels, "push_count": counts}
 
 
-@html_template("stats.html", headers={"Cache-Control": "max-age=60"})
+@html_template(env, "stats.html", headers={"Cache-Control": "max-age=60"})
 async def handle_stats(request):
     async with request.app.database.acquire() as conn:
         by_status = {}
@@ -266,7 +266,6 @@ async def handle_package_hosters(request, conn):
 
 def stats_app(database, config, external_url):
     app = web.Application()
-    app['jinja_env'] = env
     app['config'] = config
     app['external_url'] = external_url
     app.database = database

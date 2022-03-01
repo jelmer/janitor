@@ -24,11 +24,11 @@ from aiohttp import web
 
 from .. import state
 
-from . import is_admin
+from . import is_admin, env
 from .common import html_template
 
 
-@html_template("cupboard/rejected.html")
+@html_template(env, "cupboard/rejected.html")
 async def handle_rejected(request):
     from .review import generate_rejected
 
@@ -37,7 +37,7 @@ async def handle_rejected(request):
         return await generate_rejected(conn, request.app['config'], campaign=campaign)
 
 
-@html_template("cupboard/history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_history(request):
     limit = int(request.query.get("limit", "100"))
     offset = int(request.query.get("offset", "0"))
@@ -59,12 +59,12 @@ ORDER BY finish_time DESC"""
     }
 
 
-@html_template("cupboard/reprocess-logs.html")
+@html_template(env, "cupboard/reprocess-logs.html")
 async def handle_reprocess_logs(request):
     return {}
 
 
-@html_template("cupboard/maintainer-stats.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "cupboard/maintainer-stats.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_cupboard_maintainer_stats(request):
     from .stats import write_maintainer_stats
 
@@ -72,7 +72,7 @@ async def handle_cupboard_maintainer_stats(request):
         return await write_maintainer_stats(conn)
 
 
-@html_template("cupboard/queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_queue(request):
     limit = int(request.query.get("limit", "100"))
     from .queue import write_queue
@@ -85,7 +85,7 @@ async def handle_queue(request):
     )
 
 
-@html_template("cupboard/never-processed.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "cupboard/never-processed.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_never_processed(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -104,7 +104,7 @@ async def handle_never_processed(request):
         return {"never_processed": await conn.fetch(query, *args)}
 
 
-@html_template("cupboard/result-code-index.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "cupboard/result-code-index.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_result_codes(request):
     from ..schedule import TRANSIENT_ERROR_RESULT_CODES
     suite = request.query.get("suite")
@@ -139,7 +139,7 @@ async def handle_result_codes(request):
             "suite": suite, "all_suites": all_suites}
 
 
-@html_template("cupboard/result-code.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "cupboard/result-code.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_result_code(request):
     suite = request.query.get("suite")
     if suite is not None and suite.lower() == "_all":
@@ -157,7 +157,7 @@ async def handle_result_code(request):
             "all_suites": all_suites}
 
 
-@html_template("cupboard/publish.html")
+@html_template(env, "cupboard/publish.html")
 async def handle_publish(request):
     id = request.match_info["id"]
     from .publish import write_publish
@@ -165,7 +165,7 @@ async def handle_publish(request):
         return await write_publish(conn, id)
 
 
-@html_template("cupboard/publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "cupboard/publish-history.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_publish_history(request):
     limit = int(request.query.get("limit", "100"))
     from .publish import write_history
@@ -236,7 +236,7 @@ async def handle_review(request):
     )
 
 
-@html_template("run.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
+@html_template(env, "cupboard/run.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
 async def handle_run(request):
     from .common import get_run
     from .pkg import generate_run_file
@@ -266,7 +266,7 @@ async def handle_run(request):
 
 
 @html_template(
-    "cupboard/broken-merge-proposals.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"}
+    env, "cupboard/broken-merge-proposals.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"}
 )
 async def handle_broken_mps(request):
     async with request.app.database.acquire() as conn:
@@ -299,12 +299,12 @@ order by url, last_run.finish_time desc
     return {"broken_mps": broken_mps}
 
 
-@html_template("cupboard/start.html")
+@html_template(env, "cupboard/start.html")
 async def handle_cupboard_start(request):
     return {}
 
 
-@html_template("cupboard/package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "cupboard/package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_pkg(request):
     from .pkg import generate_pkg_file
 

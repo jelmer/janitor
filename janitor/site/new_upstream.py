@@ -48,7 +48,7 @@ WHERE NOT package.removed AND suite = $1
 
 
 @html_template(
-    "new-upstream/package.html", headers={"Cache-Control": "max-age=600"}
+    env, "new-upstream/package.html", headers={"Cache-Control": "max-age=600"}
 )
 async def handle_new_upstream_pkg(request):
     from .common import generate_pkg_context
@@ -70,7 +70,7 @@ async def handle_new_upstream_pkg(request):
 
 
 @html_template(
-    "new-upstream/candidates.html", headers={"Cache-Control": "max-age=600"})
+    env, "new-upstream/candidates.html", headers={"Cache-Control": "max-age=600"})
 async def handle_new_upstream_candidates(request):
     from .new_upstream import generate_candidates
 
@@ -78,49 +78,7 @@ async def handle_new_upstream_candidates(request):
     return await generate_candidates(request.app.database, suite)
 
 
-@html_template("fresh-builds.html", headers={"Cache-Control": "max-age=60"})
-async def handle_fresh_builds(request):
-    from .apt_repo import get_published_packages
-    archive_version = {}
-    suite_version = {}
-    sources = set()
-    SUITES = ["fresh-releases", "fresh-snapshots"]
-    url = urllib.parse.urljoin(request.app.archiver_url, "last-publish")
-    try:
-        async with request.app.http_client_session.get(url) as resp:
-            if resp.status == 200:
-                last_publish_time = {
-                    suite: datetime.fromisoformat(v)
-                    for suite, v in (await resp.json()).items()
-                }
-            else:
-                last_publish_time = {}
-    except ClientConnectorError:
-        last_publish_time = {}
-
-    async with request.app.database.acquire() as conn:
-        for suite in SUITES:
-            for name, jv, av in await get_published_packages(conn, suite):
-                sources.add(name)
-                archive_version[name] = av
-                suite_version.setdefault(suite, {})[name] = jv
-        return {
-            "base_distribution": get_campaign_config(
-                request.app['config'], SUITES[0]
-            ).debian_build.base_distribution,
-            "archive_version": archive_version,
-            "suite_version": suite_version,
-            "sources": sources,
-            "suites": SUITES,
-            "last_publish_time": last_publish_time,
-        }
-
-
-async def handle_fresh(request):
-    return web.HTTPPermanentRedirect("/fresh-builds")
-
-
-@html_template("new-upstream/stats.html", headers={"Cache-Control": "max-age=60"})
+@html_template(env, "new-upstream/stats.html", headers={"Cache-Control": "max-age=60"})
 async def handle_stats(request):
     suite = request.match_info["suite"]
     return {"suite": suite}
@@ -228,8 +186,6 @@ def register_new_upstream_endpoints(router):
     router.add_get(
         "/{suite:%s}/+chart/results" % NEW_UPSTREAM_REGEX, handle_chart_results, name="new-upstream-chart-results"
     )
-    router.add_get("/fresh-builds", handle_fresh_builds, name="fresh-builds")
-    router.add_get("/fresh", handle_fresh, name="fresh")
     router.add_get(
         "/{suite:%s}/pkg/{pkg}/" % NEW_UPSTREAM_REGEX,
         handle_new_upstream_pkg,

@@ -88,12 +88,12 @@ async def handle_simple(templatename, request):
     )
 
 
-@html_template("generic/start.html")
+@html_template(env, "generic/start.html")
 async def handle_generic_start(request):
     return {"suite": request.match_info["suite"]}
 
 
-@html_template("generic/candidates.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
+@html_template(env, "generic/candidates.html", headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"})
 async def handle_generic_candidates(request):
     from .common import generate_candidates
 
@@ -102,7 +102,7 @@ async def handle_generic_candidates(request):
     )
 
 
-@html_template("merge-proposals.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "merge-proposals.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_merge_proposals(request):
     from .merge_proposals import write_merge_proposals
 
@@ -110,7 +110,7 @@ async def handle_merge_proposals(request):
     return await write_merge_proposals(request.app.database, suite)
 
 
-@html_template("merge-proposal.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "merge-proposal.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_merge_proposal(request):
     from .merge_proposals import write_merge_proposal
 
@@ -136,7 +136,7 @@ async def handle_apt_repo(request):
         )
 
 
-@html_template("credentials.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
+@html_template(env, "credentials.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_credentials(request):
     try:
         credentials = await get_credentials(
@@ -221,7 +221,7 @@ async def handle_archive_keyring(request):
         )
 
 
-@html_template("maintainer-overview.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "maintainer-overview.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_maintainer_overview(request):
     from .stats import write_maintainer_overview
 
@@ -235,7 +235,7 @@ async def handle_static_file(path, request):
     return web.FileResponse(path)
 
 
-@html_template("package-name-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "package-name-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_pkg_list(request):
     # TODO(jelmer): The javascript plugin thingy should just redirect to
     # the right URL, not rely on query parameters here.
@@ -255,7 +255,7 @@ async def handle_pkg_list(request):
 
 
 @html_template(
-    "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+    env, "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_maintainer_list(request):
     from .pkg import generate_maintainer_list
 
@@ -267,7 +267,7 @@ async def handle_maintainer_list(request):
     return await generate_maintainer_list(packages)
 
 
-@html_template("maintainer-index.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "maintainer-index.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_maintainer_index(request):
     if request['user']:
         email = request['user'].get("email")
@@ -284,7 +284,7 @@ async def handle_maintainer_index(request):
     return {}
 
 
-@html_template("vcs-regressions.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "vcs-regressions.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_vcs_regressions(request):
     async with request.app.database.acquire() as conn:
         query = """\
@@ -351,7 +351,7 @@ async def handle_result_file(request):
             )
 
 
-@html_template("ready-list.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
+@html_template(env, "ready-list.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
 async def handle_ready_proposals(request):
     from .pkg import generate_ready_list
 
@@ -360,7 +360,7 @@ async def handle_ready_proposals(request):
     return await generate_ready_list(request.app.database, suite, review_status)
 
 
-@html_template("generic/package.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
+@html_template(env, "generic/package.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
 async def handle_generic_pkg(request):
     from .common import generate_pkg_context
 
@@ -381,7 +381,7 @@ async def handle_generic_pkg(request):
     )
 
 
-@html_template("repo-list.html")
+@html_template(env, "repo-list.html")
 async def handle_repo_list(request):
     vcs = request.match_info["vcs"]
     url = request.app['vcs_manager'].base_urls[vcs]
@@ -673,7 +673,6 @@ async def create_app(
     app.database = database
     app['config'] = config
 
-    app['jinja_env'] = env
     from janitor.artifacts import get_artifact_manager
 
     async def startup_artifact_manager(app):
