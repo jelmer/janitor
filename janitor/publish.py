@@ -2252,6 +2252,10 @@ def iter_all_mps(
                 logging.warning(
                     'Got unexpected HTTP status %s, skipping %r',
                     e, instance)
+            except UnsupportedHoster as e:
+                logging.warning(
+                    'Unsupported host instance, skipping %r',
+                    instance)
 
 
 async def check_existing(
