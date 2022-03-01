@@ -306,6 +306,7 @@ async def handle_pgp_keys(request):
 async def run_web_server(listen_addr, port, dists_dir, config, generator_manager, tracer):
     trailing_slash_redirect = normalize_path_middleware(append_slash=True)
     app = web.Application(middlewares=[trailing_slash_redirect])
+    app['gpg'] = gpg.Context(armor=True)
     app.config = config
     app.generator_manager = generator_manager
     setup_metrics(app)
