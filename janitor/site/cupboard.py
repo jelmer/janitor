@@ -378,3 +378,5 @@ def register_cupboard_endpoints(router):
     router.add_get(
         "/cupboard/broken-merge-proposals", handle_broken_mps, name="broken-mps"
     )
+    from .stats import stats_app
+    app.add_subapp("/cupboard/stats", stats_app(database, config, app['external_url']))
