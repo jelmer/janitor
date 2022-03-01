@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 import asyncpg
+from typing import Optional, Set
 
 
 class QueueItem(object):
@@ -145,7 +146,7 @@ WHERE queue.id = $1
     return None
 
 
-async def iter_queue(conn: asyncpg.Connection, limit=None, package=None, campaign=None):
+async def iter_queue(conn: asyncpg.Connection, limit: Optional[int] = None, package: Optional[str] = None, campaign: Optional[str] = None, avoid_hosts: Optional[Set[str]] = None):
     query = """
 SELECT
     package.branch_url AS branch_url,
@@ -173,6 +174,12 @@ LEFT OUTER JOIN upstream ON upstream.name = package.name
     if campaign:
         args.append(campaign)
         conditions.append("queue.suite = $%d" % len(args))
+
+    if avoid_hosts:
+        for host in avoid_hosts:
+            assert isinstance(host, str), "not a string: %r" % host
+            args.append(host)
+            conditions.append("package.branch_url NOT LIKE CONCAT('%%/', $%d::text, '/%%')" % len(args))
 
     if conditions:
         query += " WHERE " + " AND ".join(conditions)
