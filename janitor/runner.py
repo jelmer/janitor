@@ -1007,13 +1007,21 @@ def open_resume_branch(
             logging.warning("Unable to list existing proposals: %s", e)
             return None
         except UnexpectedHttpStatus as e:
-            # TODO(jelmer): Handle 429 better and report against rate limiting
-            if e.code in (429, 500):
-                logging.warning(
-                    'Unexpected HTTP status for %s: %s %s', e.path,
-                    e.code, e.extra)
-            else:
-                raise
+            if e.code == 429:
+                try:
+                    retry_after = int(e.headers['Retry-After'])  # type: ignore
+                except TypeError:
+                    logging.warning(
+                        'Unable to parse retry-after header: %s',
+                        e.headers['Retry-After'])  # type: ignore
+                    retry_after = None
+                else:
+                    retry_after = None
+                raise BranchRateLimited(e.url, str(e), retry_after=retry_after)
+            logging.warning(
+                'Unexpected HTTP status for %s: %s %s', e.path,
+                e.code, e.extra)
+            # TODO(jelmer): Considering re-raising here for some errors?
             return None
         else:
             return resume_branch
@@ -1408,7 +1416,9 @@ class QueueProcessor(object):
 
     async def next_queue_item(self, conn, package=None, campaign=None) -> Optional[QueueItem]:
         limit = len(self.active_runs) + 300
-        async for item in iter_queue(conn, limit=limit, campaign=campaign, package=package):
+        async for item in iter_queue(
+                conn, limit=limit, campaign=campaign, package=package,
+                avoid_hosts=self.avoid_hosts):
             if self.is_queue_item_assigned(item.id):
                 continue
             if not self.can_process_url(item.branch_url):
@@ -1603,12 +1613,21 @@ async def next_item(request, mode, worker=None, worker_link=None, backchannel=No
             vcs_type = get_vcs_abbreviation(main_branch.repository)
             if not item.refresh:
                 with span.new_child('resume-branch:open'):
-                    resume_branch = await to_thread(
-                        open_resume_branch,
-                        main_branch,
-                        campaign_config.branch_name,
-                        item.package,
-                        possible_hosters=possible_hosters)
+                    try:
+                        resume_branch = await to_thread(
+                            open_resume_branch,
+                            main_branch,
+                            campaign_config.branch_name,
+                            item.package,
+                            possible_hosters=possible_hosters)
+                    except BranchRateLimited as e:
+                        host = urlutils.URL.from_string(e.url).host
+                        logging.warning('Rate limiting for %s: %r', host, e)
+                        queue_processor.rate_limited(host, e.retry_after)
+                        await abort(active_run, 'resume-rate-limited', str(e))
+                        return web.json_response(
+                            {'reason': str(e)}, status=429, headers={
+                                'Retry-After': e.retry_after or DEFAULT_RETRY_AFTER})
             else:
                 resume_branch = None
 
