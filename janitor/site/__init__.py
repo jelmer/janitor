@@ -68,12 +68,6 @@ def update_vars_from_request(vs, request):
         vs["vcs_manager"] = RemoteVcsManager.from_single_url(str(request.url.with_path("/")))
 
 
-async def render_template_for_request(templatename, request, vs):
-    update_vars_from_request(vs, request)
-    template = env.get_template(templatename)
-    return await template.render_async(**vs)
-
-
 def format_duration(duration):
     weeks = duration.days // 7
     days = duration.days % 7

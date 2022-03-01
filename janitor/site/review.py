@@ -8,13 +8,16 @@ from typing import List, Optional, Any
 
 from janitor import state
 from . import (
+    env,
     get_archive_diff,
     get_vcs_diff,
     BuildDiffUnavailable,
     DebdiffRetrievalError,
-    render_template_for_request,
 )
-from .common import get_unchanged_run
+from .common import (
+    get_unchanged_run,
+    render_template_for_request,
+    )
 
 MAX_DIFF_SIZE = 200 * 1024
 
@@ -113,7 +116,7 @@ async def generate_review(
             reviewer=reviewer
         )
     if not entries:
-        return await render_template_for_request("cupboard/review-done.html", request, {})
+        return await render_template_for_request(env, "cupboard/review-done.html", request, {})
 
     (
         run_id,
@@ -197,7 +200,7 @@ async def generate_review(
             } for entry in entries
         ],
     }
-    return await render_template_for_request("cupboard/review.html", request, kwargs)
+    return await render_template_for_request(env, "cupboard/review.html", request, kwargs)
 
 
 async def store_review(conn, run_id, status, comment, reviewer):

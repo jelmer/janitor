@@ -42,12 +42,15 @@ from ..pubsub import pubsub_reader, pubsub_handler, Topic
 from ..vcs import get_vcs_manager
 
 from . import (
+    env,
     is_admin,
-    render_template_for_request,
     check_qa_reviewer,
 )
 
-from .common import html_template
+from .common import (
+    html_template,
+    render_template_for_request,
+    )
 from .openid import setup_openid
 
 
@@ -80,7 +83,7 @@ async def handle_simple(templatename, request):
     vs = {}
     return web.Response(
         content_type="text/html",
-        text=await render_template_for_request(templatename, request, vs),
+        text=await render_template_for_request(env, templatename, request, vs),
         headers={"Cache-Control": "max-age=3600", "Vary": "Cookie"},
     )
 
@@ -125,7 +128,7 @@ async def handle_apt_repo(request):
             "suite": suite,
             "campaign_config": get_campaign_config(request.app['config'], suite),
         }
-        text = await render_template_for_request(suite + ".html", request, vs)
+        text = await render_template_for_request(env, suite + ".html", request, vs)
         return web.Response(
             content_type="text/html",
             text=text,
@@ -666,7 +669,6 @@ async def create_app(
     database = state.Database(config.database_location)
     app.database = database
     app['config'] = config
-    from janitor.site import env
 
     app['jinja_env'] = env
     from janitor.artifacts import get_artifact_manager

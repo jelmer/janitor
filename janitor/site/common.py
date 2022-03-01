@@ -351,3 +351,9 @@ def html_template(template_name, headers={}):
         return handle
 
     return decorator
+
+
+async def render_template_for_request(jinja_env, templatename, request, vs):
+    update_vars_from_request(vs, request)
+    template = jinja_env.get_template(templatename)
+    return await template.render_async(**vs)
