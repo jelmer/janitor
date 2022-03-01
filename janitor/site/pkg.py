@@ -317,7 +317,7 @@ async def generate_ready_list(
     db, suite: Optional[str], review_status: Optional[str] = None
 ):
     async with db.acquire() as conn:
-        query = 'SELECT package, id, command, result FROM publish_ready'
+        query = 'SELECT package, suite, id, command, result FROM publish_ready'
 
         conditions = [
             "EXISTS (SELECT * FROM unnest(unpublished_branches) "

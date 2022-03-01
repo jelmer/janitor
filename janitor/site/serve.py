@@ -25,7 +25,6 @@ import re
 import shutil
 import tempfile
 import time
-import uuid
 
 import aiozipkin
 from aiohttp.web_urldispatcher import (
@@ -33,7 +32,6 @@ from aiohttp.web_urldispatcher import (
 )
 from aiohttp import web, ClientSession, ClientConnectorError
 from aiohttp_openmetrics import metrics, metrics_middleware
-from aiohttp.web import middleware
 from aiohttp.web_middlewares import normalize_path_middleware
 import gpg
 
@@ -50,6 +48,7 @@ from . import (
 )
 
 from .common import html_template
+from .openid import setup_openid
 
 
 def create_background_task(fn, title):
@@ -67,30 +66,6 @@ def create_background_task(fn, title):
             logging.debug('%s succeeded', title)
     task.add_done_callback(log_result)
     return task
-
-
-@middleware
-async def openid_middleware(request, handler):
-    session_id = request.cookies.get("session_id")
-    if session_id is not None:
-        async with request.app.database.acquire() as conn:
-            row = await conn.fetchrow(
-                "SELECT userinfo FROM site_session WHERE id = $1",
-                session_id)
-            if row is not None:
-                (userinfo,) = row
-            else:
-                # Session expired?
-                userinfo = None
-    else:
-        userinfo = None
-    request['user'] = userinfo
-    resp = await handler(request)
-    return resp
-
-
-def setup_debsso(app):
-    app.middlewares.insert(0, openid_middleware)
 
 
 async def get_credentials(session, publisher_url):
@@ -168,7 +143,7 @@ async def handle_credentials(request):
         return web.Response(status=500, text='Unable to retrieve credentials')
     pgp_fprs = []
     for keydata in credentials["pgp_keys"]:
-        result = request.app.gpg.key_import(keydata.encode("utf-8"))
+        result = request.app['gpg'].key_import(keydata.encode("utf-8"))
         pgp_fprs.extend([i.fpr for i in result.imports])
 
     pgp_validity = {
@@ -185,7 +160,7 @@ async def handle_credentials(request):
         "pgp_validity": pgp_validity.get,
         "pgp_algo": gpg.core.pubkey_algo_name,
         "ssh_keys": credentials["ssh_keys"],
-        "pgp_keys": request.app.gpg.keylist("\0".join(pgp_fprs)),
+        "pgp_keys": request.app['gpg'].keylist("\0".join(pgp_fprs)),
         "hosting": credentials["hosting"],
     }
 
@@ -212,10 +187,10 @@ async def handle_pgp_keys(request):
     else:
         fprs = []
         for keydata in credentials["pgp_keys"]:
-            result = request.app.gpg.key_import(keydata.encode("utf-8"))
+            result = request.app['gpg'].key_import(keydata.encode("utf-8"))
             fprs.extend([i.fpr for i in result.imports])
         return web.Response(
-            body=request.app.gpg.key_export_minimal("\0".join(fprs)),
+            body=request.app['gpg'].key_export_minimal("\0".join(fprs)),
             content_type="application/pgp-keys",
         )
 
@@ -235,10 +210,10 @@ async def handle_archive_keyring(request):
     else:
         fprs = []
         for keydata in pgp_keys:
-            result = request.app.gpg.key_import(keydata.encode("utf-8"))
+            result = request.app['gpg'].key_import(keydata.encode("utf-8"))
             fprs.extend([i.fpr for i in result.imports])
         return web.Response(
-            body=request.app.gpg.key_export_minimal("\0".join(fprs)),
+            body=request.app['gpg'].key_export_minimal("\0".join(fprs)),
             content_type="application/pgp-keys",
         )
 
@@ -251,33 +226,6 @@ async def handle_maintainer_overview(request):
         return await write_maintainer_overview(
             conn, request.match_info["maintainer"]
         )
-
-
-async def handle_login(request):
-    state = str(uuid.uuid4())
-    callback_path = request.app.router["oauth2-callback"].url_for()
-    if not request.app['openid_config']:
-        raise web.HTTPNotFound(text='login is disabled on this instance')
-    location = URL(request.app['openid_config']["authorization_endpoint"]).with_query(
-        {
-            "client_id": request.app['config'].oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
-            "redirect_uri": str(request.app['external_url'].join(callback_path)),
-            "response_type": "code",
-            "scope": "openid",
-            "state": state,
-        }
-    )
-    response = web.HTTPFound(location)
-    response.set_cookie(
-        "state", state, max_age=60, path=callback_path, httponly=True, secure=True
-    )
-    if "url" in request.query:
-        try:
-            response.set_cookie("back_url", str(URL(request.query["url"]).relative()))
-        except ValueError:
-            # 'url' is not a URL
-            raise web.HTTPBadRequest(text='invalid url')
-    return response
 
 
 async def handle_static_file(path, request):
@@ -438,74 +386,6 @@ async def handle_repo_list(request):
         return {"vcs": vcs, "repositories": await resp.json()}
 
 
-async def handle_oauth_callback(request):
-    code = request.query.get("code")
-    state_code = request.query.get("state")
-    if request.cookies.get("state") != state_code:
-        return web.Response(status=400, text="state variable mismatch")
-    if not request.app['openid_config']:
-        raise web.HTTPNotFound(text='login disabled')
-    token_url = URL(request.app['openid_config']["token_endpoint"])
-    redirect_uri = (request.app['external_url'] or request.url).join(
-        request.app.router["oauth2-callback"].url_for()
-    )
-    params = {
-        "code": code,
-        "client_id": request.app['config'].oauth2_provider.client_id or os.environ['OAUTH2_CLIENT_ID'],
-        "client_secret": request.app['config'].oauth2_provider.client_secret or os.environ['OAUTH2_CLIENT_SECRET'],
-        "grant_type": "authorization_code",
-        "redirect_uri": str(redirect_uri),
-    }
-    async with request.app.http_client_session.post(
-        token_url, params=params
-    ) as resp:
-        if resp.status != 200:
-            return web.json_response(
-                status=resp.status, data={
-                    "error": "token-error",
-                    "message": "received response %d" % resp.status,
-                    })
-        resp = await resp.json()
-        if resp["token_type"] != "Bearer":
-            return web.Response(
-                status=500,
-                text="Expected bearer token, got %s" % resp["token_type"],
-            )
-        refresh_token = resp["refresh_token"]  # noqa: F841
-        access_token = resp["access_token"]
-
-    try:
-        back_url = request.cookies["back_url"]
-    except KeyError:
-        back_url = "/"
-
-    async with request.app.http_client_session.get(
-        request.app['openid_config']["userinfo_endpoint"],
-        headers={"Authorization": "Bearer %s" % access_token},
-    ) as resp:
-        if resp.status != 200:
-            raise Exception(
-                "unable to get user info (%s): %s"
-                % (resp.status, await resp.read())
-            )
-        userinfo = await resp.json()
-    session_id = str(uuid.uuid4())
-    async with request.app.database.acquire() as conn:
-        await conn.execute("""
-INSERT INTO site_session (id, userinfo) VALUES ($1, $2)
-ON CONFLICT (id) DO UPDATE SET userinfo = EXCLUDED.userinfo
-""", session_id, userinfo)
-
-    # TODO(jelmer): Store access token / refresh token?
-
-    resp = web.HTTPFound(back_url)
-
-    resp.del_cookie("state")
-    resp.del_cookie("back_url")
-    resp.set_cookie("session_id", session_id, secure=True, httponly=True)
-    return resp
-
-
 async def handle_health(request):
     return web.Response(text='ok')
 
@@ -564,28 +444,13 @@ async def create_app(
     async def start_gpg_context(app):
         gpg_home = tempfile.TemporaryDirectory()
         gpg_context = gpg.Context(home_dir=gpg_home.name)
-        app.gpg = gpg_context.__enter__()
+        app['gpg'] = gpg_context.__enter__()
 
         async def cleanup_gpg(app):
             gpg_context.__exit__(None, None, None)
             shutil.rmtree(gpg_home)
 
         app.on_cleanup.append(cleanup_gpg)
-
-    async def discover_openid_config(app):
-        url = URL(app['config'].oauth2_provider.base_url).join(
-            URL("/.well-known/openid-configuration")
-        )
-        async with app.http_client_session.get(url) as resp:
-            if resp.status != 200:
-                # TODO(jelmer): Fail? Set flag?
-                logging.warning(
-                    "Unable to find openid configuration (%s): %s",
-                    resp.status,
-                    await resp.read(),
-                )
-                return
-            app['openid_config'] = await resp.json()
 
     async def start_pubsub_forwarder(app):
         async def listen_to_publisher_publish(app):
@@ -746,7 +611,6 @@ async def create_app(
     app.router.add_get(
         "/cupboard/vcs-regressions/", handle_vcs_regressions, name="vcs-regressions"
     )
-    app.router.add_get("/login", handle_login, name="login")
     for entry in os.scandir(os.path.join(os.path.dirname(__file__), "_static")):
         app.router.add_get(
             "/_static/%s" % entry.name,
@@ -779,8 +643,6 @@ async def create_app(
                 handle_static_file, "%s.%s%s" % (basepath, minified_prefix, kind)
             ),
         )
-    app.router.add_get("/oauth/callback", handle_oauth_callback, name="oauth2-callback")
-
     from .api import create_app as create_api_app
     from .webhook import process_webhook, is_webhook_request
 
@@ -795,9 +657,6 @@ async def create_app(
     app.policy = policy_config
     app.publisher_url = publisher_url
     app['vcs_manager'] = vcs_manager
-    app['openid_config'] = None
-    if config.oauth2_provider and config.oauth2_provider.base_url:
-        app.on_startup.append(discover_openid_config)
     app.on_startup.append(start_pubsub_forwarder)
     app.on_startup.append(start_gpg_context)
     if external_url:
@@ -806,9 +665,6 @@ async def create_app(
         app['external_url'] = None
     database = state.Database(config.database_location)
     app.database = database
-    from .stats import stats_app
-
-    app.add_subapp("/cupboard/stats", stats_app(database, config, app['external_url']))
     app['config'] = config
     from janitor.site import env
 
@@ -825,7 +681,8 @@ async def create_app(
 
     app.on_startup.append(startup_artifact_manager)
     app.on_cleanup.append(turndown_artifact_manager)
-    setup_debsso(app)
+    setup_openid(
+        app, config.oauth2_provider.base_url if config.oauth2_provider else None)
     app.router.add_post("/", handle_post_root, name="root-post")
     app.add_subapp(
         "/api",
