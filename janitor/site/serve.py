@@ -497,7 +497,6 @@ async def create_app(
         ("/", "index"),
         ("/contact", "contact"),
         ("/about", "about"),
-        ("/apt", "apt"),
     ]:
         app.router.add_get(
             path,
@@ -571,7 +570,6 @@ async def create_app(
         handle_merge_proposal,
         name="merge-proposal",
     )
-
     app.router.add_get(
         "/maintainer/{maintainer}",
         handle_maintainer_overview,
@@ -688,6 +686,10 @@ async def create_app(
     setup_openid(
         app, config.oauth2_provider.base_url if config.oauth2_provider else None)
     app.router.add_post("/", handle_post_root, name="root-post")
+    from .stats import stats_app
+    app.add_subapp(
+        "/cupboard/stats", stats_app(app.database, config, app['external_url']))
+
     app.add_subapp(
         "/api",
         create_api_app(
