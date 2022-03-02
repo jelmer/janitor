@@ -1,4 +1,4 @@
-FROM eu.gcr.io/debian-janitor/base
+FROM ghcr.io/jelmer/janitor/base
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9920
 RUN apt update && apt install -y devscripts diffoscope libjs-jquery && apt clean
