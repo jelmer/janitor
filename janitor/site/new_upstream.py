@@ -1,11 +1,12 @@
 #!/usr/bin/python3
 
+from datetime import datetime
+import urllib.parse
+
 from aiohttp_apispec import docs
 import aiozipkin
 from aiohttp import web, ClientConnectorError
 import asyncpg
-from datetime import datetime
-import urllib.parse
 
 from . import env
 from .common import html_template, render_template_for_request

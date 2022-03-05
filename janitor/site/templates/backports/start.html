@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+{% from "fresh-util.html" import package_list %}
+{% block sidebar %}{% include "new-upstream/sidebar.html" %}{% endblock %}
+{% block page_title %}{{ target_release }} backports{% endblock %}
+{% block body %}
+<div class="section" id="backports">
+<h1>{{ target_release }} backports</h1>
+<p>This repository contains automatically created backports from Debian testing to {{ target_release }}.</p>
+<p>These packages are currently only available for amd64.</p>
+<div class="admonition warning">
+<p class="first admonition-title">Warning</p>
+<p class="last">The packages in this repository were created automatically, without review
+from a human.</p>
+</div>
+<div class="section" id="using-the-repository">
+<h2>Using the repository</h2>
+<p>To use the apt repository, run something like:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>echo deb "[arch=amd64 signed-by=/usr/share/keyrings/debian-janitor-archive-keyring.gpg]" {{ url.join(URL('..')) }} {{ target_release }}-backports main | sudo tee /etc/apt/sources.list.d/{{ target_release }}-backports.list
+sudo curl -o /usr/share/keyrings/debian-janitor-archive-keyring.gpg {{ url.join(URL('../archive-keyring.gpg')) }}
+apt update
+</pre></div>
+</div>
+<p>To e.g. install the version of <em>cifs-utils</em> that’s in this repository, run:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>apt install -t {{ target_release }}-backpors cifs-utils
+</pre></div>
+</div>
+<p>The packages are also versioned in such a way that if the new upstream version
+gets uploaded to the official Debian APT repository, it will replace the package
+in this archive.</p>
+</div>
+<div class="section" id="pinning">
+<h2>Pinning</h2>
+<p>Optionally, if you want to track a given package so upgrades happen automatically,
+add the following to <code class="docutils literal notranslate"><span class="pre">/etc/apt/preferences</span></code> (and see
+<a class="reference external" href="https://wiki.debian.org/AptPreferences">the documentation about apt preferences</a>):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre>Package: cifs-utils
+Pin: release a={{ target-release }}-backports
+Pin-Priority: <span class="mi">800</span>
+</pre></div>
+</div>
+</div>
+
+<div class="section" id="status">
+<h2>Package Status</h2>
+<p>
+<form autocomplete="off" action="pkg">
+  <div class="packages" style="width:300px;">
+    <input id="package" type="text" name="package" class="typeahead" placeholder="Package">
+  </div>
+  <input type="submit" style="display: none">
+</form>
+</p></div>
+
+<div class="section" id="package-list">
+<h2>Package list</h2>
+<p>The following source packages with new upstream releases merged are currently
+available:</p>
+
+{{ package_list(campaign_config.base_distribution, packages) }}
+
+</div>
+</div>
+
+<script>
+$(document).ready(function() {
+var packages = new Bloodhound({
+  datumTokenizer: Bloodhound.tokenizers.whitespace,
+  queryTokenizer: Bloodhound.tokenizers.whitespace,
+  prefetch: '/api/pkgnames'
+});
+
+$('#package').typeahead(null, {
+  name: 'packages',
+  source: packages
+});
+});
+</script>
+
+{% endblock %}
