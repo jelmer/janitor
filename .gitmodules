@@ -1,6 +1,3 @@
-[submodule "lintian-brush"]
-	path = lintian-brush
-	url = https://salsa.debian.org/jelmer/lintian-brush.git
 [submodule "silver-platter"]
 	path = silver-platter
 	url = https://github.com/jelmer/silver-platter.git
