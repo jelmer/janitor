@@ -1,7 +1,6 @@
 This repository contains the setup for a "Janitor" bot. This is basically
-a platform for running silver-platter continuously on a specific set
-of packages.
-
+a platform for managing large-scale automated code improvements on
+top of [silver-platter](https://github.com/jelmer/silver-platter).
 
 Any code that is not related to the platform but to actually making changes
 should probably live in either ``silver-platter``, ``lintian-brush`` or
@@ -11,7 +10,7 @@ There are currently several instances of the Janitor running. For their configur
 
 * [Debian Janitor](https://janitor.debian.net/) - Setup at https://salsa.debian.org/jelmer/janitor.debian.net
 * [Kali Janitor](https://janitor.kali.org/) - Configuration repository is private
-* [Upstream Janitor](https://janitor.jelmer.uk/) - Setup at https://github.com/jelmer/janitor.jelmer.uk
+* [Upstream Janitor aka ``Scruffy``](https://www.scruffy.dev/) - Setup at https://github.com/jelmer/janitor.jelmer.uk
 
 Philosophy
 ==========
@@ -86,17 +85,28 @@ There are two common ways of deployign a new janitor instance.
  * On top of kubernetes (see the configuration for the Debian & Upstream janitor)
  * Using ansible, based on the playbooks in the ``ansible/`` directory
 
+Docker
+------
+
+Several docker images are provided
+
+ * ghcr.io/jelmer/janitor/base - base image, essentially debian:sid-slim with some additional packages installed
+ * ghcr.io/jelmer/janitor/archive - APT archive generator
+ * ghcr.io/jelmer/janitor/differ - diffoscope/debdiff generator
+ * ghcr.io/jelmer/janitor/irc_notify - IRC notification bot
+ * ghcr.io/jelmer/janitor/mastodon_notify - Mastodon notification bot
+ * ghcr.io/jelmer/janitor/publish - VCS publisher
+ * ghcr.io/jelmer/janitor/runner - Queue management & Run handling
+ * ghcr.io/jelmer/janitor/site - Web site & public API
+ * ghcr.io/jelmer/janitor/vcs_store - VCS storage
+ * ghcr.io/jelmer/janitor/worker - Worker
+ * ghcr.io/jelmer/janitor/xmpp_notify - XMPP Notification Bot
+
 Contributing
 ============
 
-The easiest way to get started with contributing to the Janitor is to work on
-identifying issues and adding fixers for lintian-brush. There is
-[a guide](https://salsa.debian.org/jelmer/lintian-brush/-/blob/master/doc/fixer-writing-guide.rst)
-on identifying good candidates and writing fixers in the lintian-brush
-repository.
-
-If you're interested in working on adding another suite, see
-[adding-a-new-suite](devnotes/adding-a-new-suite.rst).
+If you're interested in working on adding another campaign, see
+[adding-a-new-campaign](devnotes/adding-a-new-campaign.rst).
 
 Some of us hang out in the ``#debian-janitor`` IRC channel on OFTC
 (irc.oftc.net).
