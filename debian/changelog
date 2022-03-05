@@ -1,0 +1,5 @@
+janitor (0.1.0-1) UNRELEASED; urgency=medium
+
+  * Initial release. (Closes: #1006804)
+
+ -- Jelmer Vernooĳ <jelmer@debian.org>  Sat, 05 Mar 2022 13:48:16 +0000
