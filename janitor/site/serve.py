@@ -525,6 +525,9 @@ async def create_app(
     register_scrub_obsolete_endpoints(app.router)
     from .new_upstream import register_new_upstream_endpoints
     register_new_upstream_endpoints(app.router)
+    from .backports import register_backports_endpoints
+    register_backports_endpoints(app.router, "buster")
+    register_backports_endpoints(app.router, "bullseye")
     SUITE_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % SUITE_REGEX,
