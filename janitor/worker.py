@@ -542,8 +542,8 @@ def _drop_env(command):
 def import_branches_git(
         vcs_store_url, local_branch: Branch, package: str,
         suite: str, log_id: str,
-        branches: List[Tuple[str, str, Optional[bytes], bytes]],
-        tags: Dict[str, bytes]):
+        branches: Optional[List[Tuple[str, str, Optional[bytes], Optional[bytes]]]],
+        tags: Optional[Dict[str, bytes]]):
     from breezy.repository import InterRepository
     repo_url = urlutils.join(vcs_store_url, package)
 
@@ -557,7 +557,7 @@ def import_branches_git(
 
     def get_changed_refs(refs):
         changed_refs = {}
-        for (fn, n, br, r) in branches:
+        for (fn, n, br, r) in (branches or []):
             tagname = ("refs/tags/%s/%s" % (log_id, fn)).encode("utf-8")
             if r is None:
                 changed_refs[tagname] = (ZERO_SHA, r)
@@ -566,7 +566,7 @@ def import_branches_git(
             branchname = ("refs/heads/%s/%s" % (suite, fn)).encode("utf-8")
             # TODO(jelmer): Ideally this would be a symref:
             changed_refs[branchname] = changed_refs[tagname]
-        for n, r in tags.items():
+        for n, r in (tags or {}).items():
             tagname = ("refs/tags/%s" % (n, )).encode("utf-8")
             changed_refs[tagname] = (repo.lookup_bzr_revision_id(r)[0], r)
         return changed_refs
@@ -889,7 +889,8 @@ async def upload_results(
                     result = await resp.json()
                     if output_directory is not None:
                         local_filenames = set(
-                            [e.name for e in os.scandir(output_directory) if e.is_file()])
+                            [entry.name for entry in os.scandir(output_directory)
+                             if entry.is_file()])
                         runner_filenames = set(result.get('filenames', []))
                         if local_filenames != runner_filenames:
                             logging.warning(
@@ -981,24 +982,25 @@ def _push_error_to_worker_failure(e):
 
 
 def run_worker(
-    branch_url,
-    run_id,
-    subpath,
-    vcs_type,
-    env,
-    command,
-    output_directory,
-    metadata,
-    vcs_store_urls,
-    vendor,
-    suite,
-    target,
-    resume_branch_url=None,
-    cached_branch_url=None,
+    branch_url: str,
+    run_id: str,
+    subpath: str,
+    vcs_type: str,
+    env: Dict[str, str],
+    command: List[str],
+    output_directory: str,
+    metadata: Any,
+    vcs_store_urls: Dict[str, str],
+    vendor: str,
+    suite: str,
+    target: str,
+    resume_branch_url: Optional[str] = None,
+    cached_branch_url: Optional[str] = None,
     resume_subworker_result=None,
-    resume_branches=None,
-    possible_transports=None,
-    force_build=False,
+    resume_branches: Optional[
+        List[Tuple[str, str, Optional[bytes], Optional[bytes]]]] = None,
+    possible_transports: Optional[List[Transport]] = None,
+    force_build: bool = False,
     retry_count=5
 ):
     loop = asyncio.new_event_loop()
@@ -1056,27 +1058,28 @@ def run_worker(
                 except Exception as e:
                     raise _push_error_to_worker_failure(e)
 
-                logging.info("Pushing packaging branch cache to %s", cached_branch_url)
+                if cached_branch_url:
+                    logging.info("Pushing packaging branch cache to %s", cached_branch_url)
 
-                def tag_selector(tag_name):
-                    return tag_name.startswith(vendor + '/') or tag_name.startswith('upstream/')
+                    def tag_selector(tag_name):
+                        return tag_name.startswith(vendor + '/') or tag_name.startswith('upstream/')
 
-                try:
-                    push_branch(
-                        ws.local_tree.branch,
-                        cached_branch_url,
-                        vcs_type=vcs_type.lower() if vcs_type is not None else None,
-                        possible_transports=possible_transports,
-                        stop_revision=ws.main_branch.last_revision(),
-                        tag_selector=tag_selector,
-                        overwrite=True,
-                    )
-                except (InvalidHttpResponse, IncompleteRead,
-                        ConnectionError, UnexpectedHttpStatus, RemoteGitError,
-                        TransportNotPossible) as e:
-                    logging.warning(
-                        "unable to push to cache URL %s: %s",
-                        cached_branch_url, e)
+                    try:
+                        push_branch(
+                            ws.local_tree.branch,
+                            cached_branch_url,
+                            vcs_type=vcs_type.lower() if vcs_type is not None else None,
+                            possible_transports=possible_transports,
+                            stop_revision=ws.main_branch.last_revision(),
+                            tag_selector=tag_selector,
+                            overwrite=True,
+                        )
+                    except (InvalidHttpResponse, IncompleteRead,
+                            ConnectionError, UnexpectedHttpStatus, RemoteGitError,
+                            TransportNotPossible) as e:
+                        logging.warning(
+                            "unable to push to cache URL %s: %s",
+                            cached_branch_url, e)
 
                 logging.info("All done.")
                 return result
