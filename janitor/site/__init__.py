@@ -89,9 +89,10 @@ def format_duration(duration):
 def format_timestamp(ts):
     return ts.isoformat(timespec="minutes")
 
+template_loader = PackageLoader("janitor.site", "templates")
 
 env = Environment(
-    loader=PackageLoader("janitor.site", "templates"),
+    loader=template_loader,
     autoescape=select_autoescape(["html", "xml"]),
     enable_async=True,
 )
