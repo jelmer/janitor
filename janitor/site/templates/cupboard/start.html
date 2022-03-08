@@ -9,7 +9,6 @@
 <li class="toctree-l1"><a class="reference internal" href="queue">Queue</a></li>
 <li class="toctree-l1"><a class="reference internal" href="history">History</a></li>
 <li class="toctree-l1"><a class="reference internal" href="pkg">Packages by name</a></li>
-<li class="toctree-l1"><a class="reference internal" href="maintainer">Packages by maintainer</a></li>
 <li class="toctree-l1"><a class="reference internal" href="result-codes">Result Codes</a></li>
 <li class="toctree-l1"><a class="reference internal" href="ready">Ready</a></li>
 {% if is_qa_reviewer %}
@@ -17,12 +16,13 @@
 {% endif %}
 <li class="toctree-l1"><a class="reference internal" href="publish">Publish history</a></li>
 <li class="toctree-l1"><a class="reference internal" href="stats">Statistics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="maintainer-stats">Maintainer Statistics</a></li>
-<li class="toctree-l1"><a class="reference internal" href="vcs-regressions">VCS Regressions</a></li>
 <li class="toctree-l1"><a class="reference internal" href="broken-merge-proposals">Merge Proposals with broken runs</a></li>
 {% if is_admin %}
 <li class="toctree-l1"><a class="reference internal" href="reprocess-logs">Reprocess logs</a></li>
 {% endif %}
+{% for title, url in extra_cupboard_links %}
+<li class="toctree-l1"><a class="reference internal" href="{{ url }}">{{ title }}</a></li>
+{% endfor %}
 </ul>
 </div>
 </div>

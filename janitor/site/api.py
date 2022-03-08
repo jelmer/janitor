@@ -823,34 +823,6 @@ async def handle_publish_autopublish(request):
 
 
 @docs()
-@routes.get("/package-branch", name="package-branch")
-async def handle_package_branch(request):
-    response_obj = []
-    async with request.app['db'].acquire() as conn:
-        for row in await conn.fetch("""
-SELECT
-  name,
-  branch_url,
-  revision,
-  last_scanned,
-  description
-FROM
-  package
-LEFT JOIN branch ON package.branch_url = branch.url
-"""):
-            response_obj.append(
-                {
-                    "name": row['name'],
-                    "branch_url": row['branch_url'],
-                    "revision": row['revision'],
-                    "last_scanned": row['last_scanned'].isoformat() if row['last_scanned'] else None,
-                    "description": row['description'],
-                }
-            )
-    return web.json_response(response_obj, headers={"Cache-Control": "max-age=60"})
-
-
-@docs()
 @routes.get("/{suite}/published-packages", name="published-packages")
 async def handle_published_packages(request):
     from .apt_repo import get_published_packages

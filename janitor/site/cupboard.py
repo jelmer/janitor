@@ -294,7 +294,7 @@ order by url, last_run.finish_time desc
 
 @html_template(env, "cupboard/start.html")
 async def handle_cupboard_start(request):
-    return {}
+    return {'extra_cupboard_links': _extra_cupboard_links}
 
 
 @html_template(env, "cupboard/package-overview.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
@@ -336,11 +336,11 @@ ORDER BY merge_proposal.url, run.finish_time DESC
     )
 
 
-_cupboard_links = []
+_extra_cupboard_links = []
 
 
 def register_cupboard_link(title, shortlink):
-    _cupboard_links.append((title, shortlink))
+    _extra_cupboard_links.append((title, shortlink))
 
 
 def register_cupboard_endpoints(router):
@@ -348,11 +348,6 @@ def register_cupboard_endpoints(router):
     router.add_get("/cupboard/rejected", handle_rejected, name="cupboard-rejected")
     router.add_get("/cupboard/history", handle_history, name="history")
     router.add_get("/cupboard/reprocess-logs", handle_reprocess_logs, name="reprocess-logs")
-    router.add_get(
-        "/cupboard/maintainer-stats",
-        handle_cupboard_maintainer_stats,
-        name="cupboard-maintainer-stats",
-    )
     router.add_get("/cupboard/queue", handle_queue, name="queue")
     router.add_get(
         "/cupboard/never-processed", handle_never_processed, name="never-processed"

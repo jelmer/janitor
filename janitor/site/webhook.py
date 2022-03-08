@@ -193,6 +193,7 @@ async def process_webhook(request, db):
                     )
                     rescheduled.setdefault(package['name'], []).append(suite)
 
+        # TODODEB(jelmer): This code is debian-specific
         package = await get_package_by_upstream_branch_url(
             conn, urls)
         if package is not None:
