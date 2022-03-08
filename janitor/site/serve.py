@@ -221,16 +221,6 @@ async def handle_archive_keyring(request):
         )
 
 
-@html_template(env, "maintainer-overview.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
-async def handle_maintainer_overview(request):
-    from .stats import write_maintainer_overview
-
-    async with request.app.database.acquire() as conn:
-        return await write_maintainer_overview(
-            conn, request.match_info["maintainer"]
-        )
-
-
 async def handle_static_file(path, request):
     return web.FileResponse(path)
 
@@ -252,36 +242,6 @@ async def handle_pkg_list(request):
             for row in await conn.fetch(
                 'SELECT name FROM package WHERE NOT removed ORDER BY name')]
     return {'packages': packages}
-
-
-@html_template(
-    env, "by-maintainer-package-list.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
-async def handle_maintainer_list(request):
-    from .pkg import generate_maintainer_list
-
-    async with request.app.database.acquire() as conn:
-        packages = [
-            (row['name'], row['maintainer_email'])
-            for row in await conn.fetch(
-                'SELECT name, maintainer_email FROM package WHERE NOT removed')]
-    return await generate_maintainer_list(packages)
-
-
-@html_template(env, "maintainer-index.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
-async def handle_maintainer_index(request):
-    if request['user']:
-        email = request['user'].get("email")
-    else:
-        email = request.query.get("email")
-    if email and "/" in email:
-        raise web.HTTPBadRequest(text="invalid maintainer email")
-    if email:
-        raise web.HTTPFound(
-            request.app.router["maintainer-overview-short"].url_for(
-                maintainer=email
-            )
-        )
-    return {}
 
 
 async def handle_result_file(request):
@@ -514,24 +474,11 @@ async def create_app(
         "/{suite:%s}/ready" % SUITE_REGEX, handle_ready_proposals, name="suite-ready"
     )
     app.router.add_get(
-        "/{suite:%s}/maintainer" % SUITE_REGEX,
-        handle_maintainer_list,
-        name="suite-maintainer-list",
-    )
-    app.router.add_get(
         "/{suite:%s}/pkg/" % SUITE_REGEX, handle_pkg_list, name="suite-package-list"
     )
     app.router.add_get(
         "/{vcs:git|bzr}/", handle_repo_list, name="repo-list")
     app.router.add_get("/{suite:unchanged}", handle_apt_repo, name="unchanged-start")
-    app.router.add_get(
-        "/cupboard/maintainer", handle_maintainer_list, name="maintainer-list"
-    )
-    app.router.add_get(
-        "/cupboard/maintainer/{maintainer}",
-        handle_maintainer_overview,
-        name="cupboard-maintainer-overview",
-    )
     app.router.add_get(
         "/cupboard/merge-proposals",
         handle_merge_proposals,
@@ -541,15 +488,6 @@ async def create_app(
         "/cupboard/merge-proposal",
         handle_merge_proposal,
         name="merge-proposal",
-    )
-    app.router.add_get(
-        "/maintainer/{maintainer}",
-        handle_maintainer_overview,
-        name="maintainer-overview",
-    )
-    app.router.add_get("/m/", handle_maintainer_index, name="maintainer-index-short")
-    app.router.add_get(
-        "/m/{maintainer}", handle_maintainer_overview, name="maintainer-overview-short"
     )
     app.router.add_get("/cupboard/ready", handle_ready_proposals, name="cupboard-ready")
     app.router.add_get("/cupboard/pkg/", handle_pkg_list, name="package-list")
