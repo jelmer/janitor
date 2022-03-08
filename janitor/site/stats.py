@@ -8,21 +8,6 @@ import asyncpg
 from .common import iter_candidates, html_template
 
 
-async def write_maintainer_stats(conn):
-    by_maintainer = {}
-
-    for maintainer_email, status, count in await conn.fetch(
-        """
-select maintainer_email, status, count(*) from merge_proposal
-left join package on package.name = merge_proposal.package
-group by maintainer_email, status
-order by maintainer_email asc
-"""
-    ):
-        by_maintainer.setdefault(maintainer_email, {})[status] = count
-    return {"by_maintainer": by_maintainer}
-
-
 async def get_proposals(conn: asyncpg.Connection, packages):
     return await conn.fetch("""
 SELECT
@@ -36,40 +21,6 @@ ON merge_proposal.revision = run.revision AND run.result_code = 'success'
 WHERE merge_proposal.package = ANY($1::text[])
 ORDER BY merge_proposal.url, run.finish_time DESC
 """, packages)
-
-
-async def write_maintainer_overview(conn, maintainer):
-    packages = [
-        row['name']
-        for row in await conn.fetch(
-            "SELECT name FROM package WHERE "
-            "maintainer_email = $1 OR $1 = any(uploader_emails) AND NOT removed",
-            maintainer)
-    ]
-    proposals = await get_proposals(conn, packages)
-    candidates = await iter_candidates(conn, packages=packages)
-
-    runs = await conn.fetch("""
-SELECT DISTINCT ON (package)
-  id,
-  package,
-  command,
-  finish_time,
-  result_code
-FROM
-  last_unabsorbed_runs
-LEFT JOIN debian_build ON last_unabsorbed_runs.id = debian_build.run_id
-WHERE package = ANY($1::text[])
-ORDER BY package, suite, start_time DESC
-""", packages)
-
-    return {
-        "packages": packages,
-        "runs": runs,
-        "candidates": candidates,
-        "maintainer": maintainer,
-        "proposals": proposals,
-    }
 
 
 @json_chart_data(max_age=60)
