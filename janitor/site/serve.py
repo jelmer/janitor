@@ -514,8 +514,6 @@ async def create_app(
     )
     from .lintian_fixes import register_lintian_fixes_endpoints
     register_lintian_fixes_endpoints(app.router)
-    from .multiarch_hints import register_multiarch_hints_endpoints
-    register_multiarch_hints_endpoints(app.router)
     from .orphan import register_orphan_endpoints
     register_orphan_endpoints(app.router)
     from .debianize import register_debianize_endpoints
