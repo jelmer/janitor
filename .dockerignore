@@ -4,3 +4,4 @@ credentials.*
 .git
 .bzr
 .eggs
+*~

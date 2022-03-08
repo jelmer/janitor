@@ -448,8 +448,6 @@ async def create_app(
     )
     from .lintian_fixes import register_lintian_fixes_endpoints
     register_lintian_fixes_endpoints(app.router)
-    from .orphan import register_orphan_endpoints
-    register_orphan_endpoints(app.router)
     from .debianize import register_debianize_endpoints
     register_debianize_endpoints(app.router)
     from .scrub_obsolete import register_scrub_obsolete_endpoints
