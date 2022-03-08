@@ -36,7 +36,7 @@ test-it-all::
 	PYTHONPATH=$(PYTHONPATH) python3 -m unittest janitor.tests.test_suite
 
 suite-references:
-	git grep "\\(lintian-brush\|lintian-fixes\|multiarch-fixes\|debianize\|fresh-releases\|fresh-snapshots\|orphan\|mia\\)" | grep -v .example
+	git grep "\\(lintian-brush\|lintian-fixes\|debianize\|fresh-releases\|fresh-snapshots\\)" | grep -v .example
 
 test:
 	PYTHONPATH=$(PYTHONPATH) python3 setup.py test
