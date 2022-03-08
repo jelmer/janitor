@@ -1490,6 +1490,8 @@ async def main(argv=None):
             format="[%(asctime)s] %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S")
 
+        logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
+
     app = web.Application()
     app['workitem'] = {}
     app.router.add_get('/', handle_index, name='index')
