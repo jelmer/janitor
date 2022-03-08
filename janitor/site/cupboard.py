@@ -65,14 +65,6 @@ async def handle_reprocess_logs(request):
     return {}
 
 
-@html_template(env, "cupboard/maintainer-stats.html", headers={"Cache-Control": "max-age=60", "Vary": "Cookie"})
-async def handle_cupboard_maintainer_stats(request):
-    from .stats import write_maintainer_stats
-
-    async with request.app.database.acquire() as conn:
-        return await write_maintainer_stats(conn)
-
-
 @html_template(env, "cupboard/queue.html", headers={"Cache-Control": "max-age=10", "Vary": "Cookie"})
 async def handle_queue(request):
     limit = int(request.query.get("limit", "100"))
@@ -342,6 +334,13 @@ ORDER BY merge_proposal.url, run.finish_time DESC
         request.app.database, request.app['config'], package, merge_proposals, runs,
         available_suites, span
     )
+
+
+_cupboard_links = []
+
+
+def register_cupboard_link(title, shortlink):
+    _cupboard_links.append((title, shortlink))
 
 
 def register_cupboard_endpoints(router):
