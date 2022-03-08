@@ -26,8 +26,8 @@
 </select>
 <script>
 function submit_status(status) {
-console.log("Submitting review " + status + " for {{ url }} ");
-$.post('/api/merge-proposal', {'url': status, 'url': {{ url|tojson }}});
+console.log("Changing of merge proposal {{ proposal.url }} to " + status);
+$.post('/api/merge-proposal', {'status': status, 'url': {{ proposal.url|tojson }}});
 }
 </script>
 {% elif proposal.status == 'merged' %}
