@@ -18,7 +18,7 @@
 <li>Package: <a href="/cupboard/pkg/{{ proposal.package }}">{{ proposal.package }}</a></li>
 {% endif %}
 <li>Status:
-{% if is_admin and status != 'open' and status != 'merged' %}
+{% if is_admin and status in ('closed', 'abandoned', 'applied') %}
 <select id="status" name='status' onchange="submit_status(this.value)">
   <option value="closed"{% if status == 'closed' %} selected="true"{% endif %}>Closed</option>
   <option value="abandoned"{% if status == 'abandoned' %} selected="true"{% endif %}>Abandoned</option>

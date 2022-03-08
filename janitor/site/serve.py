@@ -250,7 +250,7 @@ async def handle_pkg_list(request):
         packages = [
             row['name']
             for row in await conn.fetch(
-                'SELECT name, maintainer_email FROM package WHERE NOT removed ORDER BY name')]
+                'SELECT name FROM package WHERE NOT removed ORDER BY name')]
     return {'packages': packages}
 
 
@@ -282,32 +282,6 @@ async def handle_maintainer_index(request):
             )
         )
     return {}
-
-
-@html_template(env, "vcs-regressions.html", headers={"Cache-Control": "max-age=600", "Vary": "Cookie"})
-async def handle_vcs_regressions(request):
-    async with request.app.database.acquire() as conn:
-        query = """\
-select
-package.name,
-run.suite,
-run.id,
-run.result_code,
-package.vcswatch_status
-from
-last_runs run left join package on run.package = package.name
-where
-result_code in (
-'branch-missing',
-'branch-unavailable',
-'401-unauthorized',
-'hosted-on-alioth',
-'missing-control-file'
-)
-and
-vcswatch_status in ('old', 'new', 'commits', 'ok')
-"""
-        return {"regressions": await conn.fetch(query)}
 
 
 async def handle_result_file(request):
@@ -608,10 +582,6 @@ async def create_app(
         "/{suite:" + SUITE_REGEX + "}/pkg/{pkg}/{run_id}",
         handle_generic_pkg,
         name="generic-run",
-    )
-    # Debian specific
-    app.router.add_get(
-        "/cupboard/vcs-regressions/", handle_vcs_regressions, name="vcs-regressions"
     )
     for entry in os.scandir(os.path.join(os.path.dirname(__file__), "_static")):
         app.router.add_get(
