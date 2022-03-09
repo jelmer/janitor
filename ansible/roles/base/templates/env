@@ -1,2 +1,3 @@
-PYTHONPATH={{ janitor_code_path }}/ognibuild:{{ janitor_code_path }}/buildlog-consultant:{{ janitor_code_path }}/upstream-ontologist:{{ janitor_code_path }}:{{ janitor_code_path }}/lintian-brush:{{ janitor_code_path }}/breezy:{{ janitor_code_path }}/silver-platter:{{ janitor_code_path }}/dulwich:{{ janitor_code_path }}/python-debian/lib:{{ janitor_code_path }}/debmutate
+PYTHONPATH={{ janitor_code_path }}/ognibuild:{{ janitor_code_path }}/buildlog-consultant:{{ janitor_code_path }}/upstream-ontologist:{{ janitor_code_path }}:{{ janitor_code_path }}/lintian-brush:{{ janitor_code_path }}/breezy:{{ janitor_code_path }}/silver-platter:{{ janitor_code_path }}/dulwich:{{ janitor_code_path }}/python-debian/lib:{{ janitor_code_path }}/debmutate:{{ janitor_home }}
 AUTOPKGTEST={{ janitor_code_path }}/autopkgtest-wrapper
+BRZ_PLUGINS_AT=debian@{{ janitor_code_path }}/breezy-debian
