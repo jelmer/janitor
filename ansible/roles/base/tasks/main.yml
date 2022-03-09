@@ -47,7 +47,7 @@
     home: "{{ janitor_home }}"
 - name: Update janitor git repository
   git:
-    repo: https://salsa.debian.org/jelmer/debian-janitor
+    repo: https://github.com/jelmer/janitor
     dest: "{{ janitor_code_path }}"
     force: yes
   become: yes
