@@ -38,6 +38,7 @@ from breezy.errors import (
 from breezy.git.remote import RemoteGitError
 from breezy.controldir import ControlDir, format_registry
 from breezy.repository import Repository
+from breezy.revision import NULL_REVISION
 from breezy.transport import Transport
 from lintian_brush.vcs import (
     determine_browser_url,
@@ -420,13 +421,13 @@ class RemoteVcsManager(VcsManager):
     def get_diff_url(self, codebase, old_revid, new_revid, vcs_type=None):
         if vcs_type == 'bzr':
             return urllib.parse.urljoin(self.base_urls['bzr'], "%s/diff?old=%s&new=%s" % (
-                codebase, old_revid.decode('utf-8'),
-                new_revid.decode('utf-8')))
+                codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
+                new_revid.decode('utf-8') if new_revid else NULL_REVISION))
         elif vcs_type == 'git':
             return urllib.parse.urljoin(self.base_urls['git'], "%s/diff?old=%s&new=%s" % (
                 codebase,
-                old_revid[len(b'git-v1:'):].decode('utf-8'),
-                new_revid[len('git-v1:'):].decode('utf-8')))
+                old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
+                new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
         else:
             return None
 

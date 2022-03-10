@@ -25,6 +25,8 @@ from typing import Optional, Tuple
 from aiohttp import ClientConnectorError, ClientResponseError
 import asyncpg
 
+from breezy.revision import NULL_REVISION
+
 from janitor.queue import get_queue_position
 from janitor import state
 from buildlog_consultant.sbuild import (
@@ -165,7 +167,8 @@ async def generate_run_file(
         try:
             diff = await get_vcs_diff(
                 client, vcs_manager, run['vcs_type'], run['package'],
-                base_revid.encode('utf-8'), revid.encode('utf-8'))
+                base_revid.encode('utf-8') if base_revid is not None else NULL_REVISION,
+                revid.encode('utf-8') if revid is not None else NULL_REVISION)
         except ClientResponseError as e:
             return "Unable to retrieve diff; error %d" % e.status
         except ClientConnectorError as e:
