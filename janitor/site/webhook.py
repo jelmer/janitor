@@ -25,6 +25,7 @@ import asyncpg
 from breezy.git.refs import ref_to_branch_name
 from breezy.git.urls import git_url_to_bzr_url
 
+from ..config import get_campaign_config
 from .. import state
 from ..schedule import (
     do_schedule,
@@ -187,6 +188,12 @@ async def process_webhook(request, db):
             for suite in await state.iter_publishable_suites(
                     conn, package['name']
             ):
+                try:
+                    campaign = get_campaign_config(request.app['config'], suite)
+                except KeyError:
+                    continue
+                if not campaign.webhook_trigger:
+                    continue
                 if suite not in rescheduled.get(package['name'], []):
                     await do_schedule(
                         conn, package['name'], suite, requestor=requestor, bucket="hook"
