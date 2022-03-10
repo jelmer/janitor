@@ -319,36 +319,6 @@ async def handle_schedule_control(request):
     return web.json_response(response_obj)
 
 
-class PackageListEntrySchema(Schema):
-
-    name = fields.Str(description='package name')
-    maintainer_email = fields.Email(description='maintainer email')
-    branch_url = fields.Url(description='branch URL')
-
-
-@docs()
-@routes.get("/pkg", name="package-list")
-@routes.get("/pkg/{package}", name="package")
-async def handle_package_list(request):
-    name = request.match_info.get("package")
-    response_obj = []
-    async with request.app['db'].acquire() as conn:
-        query = 'SELECT name, maintainer_email, branch_url FROM package WHERE NOT removed'
-        args = []
-        if name:
-            query += ' AND name = $1'
-            args.append(name)
-        for row in await conn.fetch(query, *args):
-            response_obj.append(
-                {
-                    "name": row['name'],
-                    "maintainer_email": row['maintainer_email'],
-                    "branch_url": row['branch_url'],
-                }
-            )
-    return web.json_response(response_obj, headers={"Cache-Control": "max-age=600"})
-
-
 @docs()
 @routes.get("/pkgnames", name="package-names")
 async def handle_packagename_list(request):
