@@ -109,6 +109,10 @@ message Campaign {
     DebianBuild debian_build = 3;
     GenericBuild generic_build = 4;
   }
+
+  // Does this campaign fix issues based on the repository contents
+  // or some external source?
+  optional bool webhook_trigger = 7 [default=false];
 }
 
 message GenericBuild {
