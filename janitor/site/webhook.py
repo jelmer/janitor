@@ -187,9 +187,6 @@ async def process_webhook(request, db):
             for suite in await state.iter_publishable_suites(
                     conn, package['name']
             ):
-                if suite.endswith('-backports'):
-                    # TODO(jelmer): Drop this special-casing
-                    continue
                 if suite not in rescheduled.get(package['name'], []):
                     await do_schedule(
                         conn, package['name'], suite, requestor=requestor, bucket="hook"
