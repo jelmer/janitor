@@ -14,20 +14,6 @@ from ..config import get_campaign_config
 from ..schedule import TRANSIENT_ERROR_RESULT_CODES
 
 
-async def get_proposals(conn: asyncpg.Connection, package, suite):
-    return await conn.fetch("""
-SELECT
-    DISTINCT ON (merge_proposal.url)
-    merge_proposal.url, merge_proposal.status
-FROM
-    merge_proposal
-LEFT JOIN run
-ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE merge_proposal.package = $1 AND suite = $2
-ORDER BY merge_proposal.url, run.finish_time DESC
-""", package, suite)
-
-
 async def generate_candidates(db, suite):
     async with db.acquire() as conn:
         query = """

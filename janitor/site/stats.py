@@ -8,21 +8,6 @@ import asyncpg
 from .common import iter_candidates, html_template
 
 
-async def get_proposals(conn: asyncpg.Connection, packages):
-    return await conn.fetch("""
-SELECT
-    DISTINCT ON (merge_proposal.url)
-    merge_proposal.package AS package, merge_proposal.url AS url, merge_proposal.status AS status,
-    run.suite AS suite
-FROM
-    merge_proposal
-LEFT JOIN run
-ON merge_proposal.revision = run.revision AND run.result_code = 'success'
-WHERE merge_proposal.package = ANY($1::text[])
-ORDER BY merge_proposal.url, run.finish_time DESC
-""", packages)
-
-
 @json_chart_data(max_age=60)
 async def handle_graph_pushes_over_time(request, conn):
     labels = []
