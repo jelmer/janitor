@@ -3,7 +3,6 @@ relevant for running janitor instances.
 
 playbooks for specific instances can be found here:
 
- * https://salsa.debian.org/jelmer/debian-janitor-ansible
  * https://gitlab.com/kalilinux/internal/janitor.kali.org
 
 The various roles of the Janitor can be set up on different hosts or the same host.

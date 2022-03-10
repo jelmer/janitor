@@ -46,6 +46,10 @@ class JanitorNotifier(pydle.Client):
     async def on_connect(self):
         await self.join(self._channel)
 
+    async def on_disconnect(self, expected):
+        if not expected:
+            logging.error('Unexpected disconnect, exiting')
+
     async def set_runner_status(self, status):
         self._runner_status = status
 

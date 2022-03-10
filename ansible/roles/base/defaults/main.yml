@@ -6,7 +6,7 @@ janitor_db_host: brangwain.vpn.jelmer.uk
 janitor_db_port: 5432
 janitor_db_name: janitor
 janitor_home: /home/janitor
-janitor_code_path: "/opt/debian-janitor"
+janitor_code_path: "/opt/janitor"
 janitor_conf_path: "{{ janitor_home }}/janitor.conf"
 janitor_vcs_path: "{{ janitor_home }}/vcs"
 janitor_apt_path: "{{ janitor_home }}/apt"
