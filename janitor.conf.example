@@ -61,6 +61,7 @@ campaign {
     build_suffix: "jan+unchanged"
     base_distribution: "unstable"
   }
+  webhook_trigger: false
 }
 
 campaign {
@@ -72,6 +73,7 @@ campaign {
     build_suffix: "jan+nur"
     base_distribution: "unstable"
   }
+  webhook_trigger: true
 }
 
 campaign {
@@ -83,6 +85,7 @@ campaign {
     build_suffix: "jan+nus"
     base_distribution: "unstable"
   }
+  webhook_trigger: true
 }
 
 campaign {
@@ -94,6 +97,7 @@ campaign {
     build_suffix: "jan+maf"
     base_distribution: "unstable"
   }
+  webhook_trigger: false
 }
 
 campaign {
