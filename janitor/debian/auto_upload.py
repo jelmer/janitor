@@ -243,7 +243,10 @@ async def main(argv=None):
             sys.exit(1)
 
     runner_task = loop.create_task(
-        listen_to_runner(args.runner_url, artifact_manager, args.dput_host, args.debsign_keyid, args.distribution, source_only=args.source_only))
+        listen_to_runner(
+            args.runner_url, artifact_manager, args.dput_host,
+            args.debsign_keyid, args.distribution,
+            source_only=args.source_only))
     runner_task.add_done_callback(log_result)
     tasks.append(runner_task)
 
