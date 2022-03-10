@@ -1419,48 +1419,6 @@ async def handle_get_active_run(request):
             return web.json_response({}, status=404)
 
 
-@docs()
-@routes.post("/vcswatch", name="vcswatch")
-async def handle_vcswatch(request):
-    json = await request.json()
-    # Keys set:
-    # * old-hash
-    # * new-hash
-    # * package
-    # * status
-    # * branch
-    # * url
-
-    package = json['package']
-    url = json['url']
-
-    rescheduled = []
-    policy_unavailable = []
-    requestor = "vcwatch notification"
-    async with request.app['db'].acquire() as conn:
-        if await state.has_cotenants(conn, package, url):
-            # TODO(jelmer): Have vcswatch pass along path, and only
-            # notify for changes under path
-            return web.json_response({
-                'rescheduled': [],
-                'policy-unavailable': [],
-                'ignored': 'package is in repository with cotenants',
-                }, status=200)
-        for suite in await state.iter_publishable_suites(conn, package):
-            try:
-                await do_schedule(
-                    conn, package, suite, requestor=requestor, bucket="hook")
-            except PolicyUnavailable:
-                policy_unavailable.append(suite)
-            else:
-                rescheduled.append(suite)
-
-    return web.json_response({
-        'rescheduled': rescheduled,
-        'policy-unavailable': policy_unavailable,
-        }, status=200)
-
-
 def create_app(
     db,
     publisher_url: str,
