@@ -469,6 +469,12 @@ def committer_env(committer):
     if email:
         env["DEBEMAIL"] = email
     env["COMMITTER"] = committer
+    env["BRZ_EMAIL"] = committer
+    env["GIT_COMMITTER_NAME"] = user
+    env["GIT_COMMITTER_EMAIL"] = email
+    env["GIT_AUTHOR_NAME"] = user
+    env["GIT_AUTHOR_EMAIL"] = email
+    env["EMAIL"] = email
     return env
 
 
