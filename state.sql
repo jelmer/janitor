@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS package (
    vcs_last_revision text,
 
    maintainer_email text,
-   uploader_emails text[] not null,
+   uploader_emails text[],
    archive_version debversion,
    vcs_url text,
    vcs_browse text,
