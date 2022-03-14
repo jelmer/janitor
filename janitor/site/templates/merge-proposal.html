@@ -18,12 +18,12 @@
 <li>Package: <a href="/cupboard/pkg/{{ proposal.package }}">{{ proposal.package }}</a></li>
 {% endif %}
 <li>Status:
-{% if is_admin and status in ('closed', 'abandoned', 'applied', 'rejected') %}
+{% if is_admin and proposal.status in ('closed', 'abandoned', 'applied', 'rejected') %}
 <select id="status" name='status' onchange="submit_status(this.value)">
-  <option value="closed"{% if status == 'closed' %} selected="true"{% endif %}>Closed</option>
-  <option value="abandoned"{% if status == 'abandoned' %} selected="true"{% endif %}>Abandoned</option>
-  <option value="rejected"{% if status == 'rejected' %} selected="true"{% endif %}>Rejected</option>
-  <option value="applied"{% if status == 'applied' %} selected="true"{% endif %}>Applied</option>
+  <option value="closed"{% if proposal.status == 'closed' %} selected="true"{% endif %}>Closed</option>
+  <option value="abandoned"{% if proposal.status == 'abandoned' %} selected="true"{% endif %}>Abandoned</option>
+  <option value="rejected"{% if proposal.status == 'rejected' %} selected="true"{% endif %}>Rejected</option>
+  <option value="applied"{% if proposal.status == 'applied' %} selected="true"{% endif %}>Applied</option>
 </select>
 <script>
 function submit_status(status) {
