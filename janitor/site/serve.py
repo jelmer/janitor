@@ -450,8 +450,6 @@ async def create_app(
     register_lintian_fixes_endpoints(app.router)
     from .debianize import register_debianize_endpoints
     register_debianize_endpoints(app.router)
-    from .scrub_obsolete import register_scrub_obsolete_endpoints
-    register_scrub_obsolete_endpoints(app.router)
     from .new_upstream import register_new_upstream_endpoints
     register_new_upstream_endpoints(app.router)
     from .backports import register_backports_endpoints
