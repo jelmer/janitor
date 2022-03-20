@@ -359,6 +359,9 @@ class VcsManager(object):
     async def get_diff(self, codebase, old_revid, new_revid, vcs_type):
         raise NotImplementedError(self.get_diff)
 
+    async def get_commit_info(self, codebase, old_revid, new_revid, vcs_type):
+        raise NotImplementedError(self.get_commit_info)
+
 
 class LocalVcsManager(VcsManager):
     def __init__(self, base_path: str):
@@ -412,6 +415,21 @@ class RemoteVcsManager(VcsManager):
             raise NotImplementedError('vcs type %s' % vcs_type)
         async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
             return await resp.read()
+
+    async def get_commit_info(self, codebase, old_revid, new_revid, vcs_type):
+        if vcs_type == 'bzr':
+            url = urllib.parse.urljoin(self.base_urls['bzr'], "%s/commit-info?old=%s&new=%s" % (
+                codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
+                new_revid.decode('utf-8') if new_revid else NULL_REVISION))
+        elif vcs_type == 'git':
+            return urllib.parse.urljoin(self.base_urls['git'], "%s/commit-info?old=%s&new=%s" % (
+                codebase,
+                old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
+                new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")
+        else:
+            raise NotImplementedError('vcs type %s' % vcs_type)
+        async with ClientSession() as client, client.get(url, timeout=ClientTimeout(30), raise_for_status=True) as resp:
+            return await resp.json()
 
     def __repr__(self):
         return "%s(%r, %r)" % (

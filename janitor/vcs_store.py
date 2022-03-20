@@ -107,6 +107,32 @@ async def bzr_diff_request(request):
     return await bzr_diff_helper(repo, old_revid, new_revid)
 
 
+async def bzr_commit_info_request(request):
+    package = request.match_info["package"]
+    old_revid = request.query.get('old')
+    if old_revid is not None:
+        old_revid = old_revid.encode('utf-8')
+    new_revid = request.query.get('new')
+    if new_revid is not None:
+        new_revid = new_revid.encode('utf-8')
+    try:
+        repo = request.app.vcs_manager.get_repository(package)
+    except NotBranchError:
+        repo = None
+    if repo is None:
+        raise web.HTTPServiceUnavailable(
+            text="Local VCS repository for %s temporarily inaccessible" %
+            package)
+    ret = []
+    with repo.lock_read():
+        graph = repo.get_graph()
+        for rev in repo.iter_revisions(graph.iter_lefthand_ancestry(new_revid, [old_revid])):
+            ret.append({
+                'revision-id': rev.revision_id.decode('utf-8'),
+                'message': rev.description})
+    return web.json_response(ret)
+
+
 async def git_diff_request(request):
     package = request.match_info["package"]
     old_sha = request.query.get('old')
@@ -126,6 +152,33 @@ async def git_diff_request(request):
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
     return await git_diff_helper(repo, old_sha, new_sha)
+
+
+async def git_commit_info_request(request):
+    package = request.match_info["package"]
+    old_sha = request.query.get('old')
+    if old_sha is not None:
+        old_sha = old_sha.encode('utf-8')
+    new_sha = request.query.get('new')
+    if new_sha is not None:
+        new_sha = new_sha.encode('utf-8')
+    try:
+        repo = request.app.vcs_manager.get_repository(package)
+    except NotBranchError:
+        repo = None
+    if repo is None:
+        raise web.HTTPServiceUnavailable(
+            text="Local VCS repository for %s temporarily inaccessible" %
+            package)
+    if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
+        raise web.HTTPBadRequest(text='invalid shas specified')
+    ret = []
+    walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
+    for entry in walker:
+        ret.append({
+            'commit-id': entry.commit.id.decode('ascii'),
+            'message': entry.commit.message.decode('utf-8', 'replace')})
+    return web.json_response(ret)
 
 
 async def git_diff_helper(repo, old_sha, new_sha):
@@ -709,8 +762,10 @@ async def create_web_app(
     app.router.add_get("/health", handle_health, name='health')
     public_app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
+    app.router.add_get("/git/{package}/commit-info", git_commit_info_request, name='git-commit-info')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
+    app.router.add_get("/bzr/{package}/commit-info", bzr_commit_info_request, name='git-commit-info')
     public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
     public_app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo-public')
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')

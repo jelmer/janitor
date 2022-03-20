@@ -8,6 +8,13 @@
 <div class="score">Score: <span id="score">{{ value }}</div></div>
 <div class="command">Command: <span id="command">{{ command }}</div></div>
 
+<div class="revisions"><h2>Revision Info</h2>
+<ul>
+{% for commit in commit_info %}
+<li>{{ commit['commit-id'] }}: {{ commit['description'] }}</li>
+{% endif %}
+</div>
+
 {% for role, remote_branch_name, base_revision, revision in branches %}
 <div class="diff" id='diff-{{ role }}'>
 {{highlight_diff(show_diff(role))|safe}}
