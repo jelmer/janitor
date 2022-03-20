@@ -25,7 +25,7 @@ from aiohttp.web_middlewares import normalize_path_middleware
 
 from .. import state
 
-from . import is_admin, env
+from . import is_admin, env, check_qa_reviewer
 from .common import html_template
 
 
