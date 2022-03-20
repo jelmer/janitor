@@ -220,14 +220,14 @@ class WorkerFailure(Exception):
 def _convert_script_failed(e: ScriptFailed) -> WorkerFailure:
     if e.args[1] == 127:
         return WorkerFailure(
-            'command-not-found',
+            'codemod-command-not-found',
             'Command %s not found' % e.args[0])
     elif e.args[1] == 137:
         return WorkerFailure(
             'out-of-memory',
             'Ran out of memory running command')
     return WorkerFailure(
-        'command-failed',
+        'codemod-command-failed',
         'Script %s failed to run with code %s' % e.args)
 
 
