@@ -288,7 +288,7 @@ async def handle_schedule_control(request):
     async with request.app['db'].acquire() as conn:
         run = await conn.fetchrow(
             "SELECT main_branch_revision, package, branch_url FROM run "
-            "LEFT JOIN package ON package.name = run.package WHERE id = $1",
+            "WHERE id = $1",
             run_id)
         if run is None:
             return web.json_response({"reason": "Run not found"}, status=404)
@@ -377,11 +377,11 @@ async def handle_merge_proposal_list(request):
 async def handle_merge_proposal_change(request):
     check_admin(request)
     post = await request.post()
-    async with request.app['db'].acquire() as conn:
-        await conn.execute(
-            "UPDATE merge_proposal SET status = $1 WHERE url = $2",
-            post['status'], post['url'])
-    return web.json_response({})
+
+    url = urllib.parse.urljoin(request.app['publisher_url'], "merge-proposal")
+    async with request.app['http_client_session'].post(url, data={
+            'url': post['url'], 'status': post['status'}, raise_for_status=True) as resp:
+        return web.json_response({})
 
 
 @docs()

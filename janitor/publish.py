@@ -1192,6 +1192,15 @@ async def get_publish_attempt_count(
     )
 
 
+@routes.post("/merge-proposal", name="merge-proposal")
+async def update_merge_proposal_request(request):
+    post = await request.post()
+    async with request.app['db'].acquire() as conn:
+        await conn.execute(
+            "UPDATE merge_proposal SET status = $1 WHERE url = $2",
+            post['status'], post['url'])
+
+
 @routes.post("/consider/{run_id}", name="consider")
 async def consider_request(request):
     run_id = request.match_info['run_id']
