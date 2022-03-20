@@ -765,7 +765,7 @@ async def create_web_app(
     app.router.add_get("/git/{package}/commit-info", git_commit_info_request, name='git-commit-info')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
-    app.router.add_get("/bzr/{package}/commit-info", bzr_commit_info_request, name='git-commit-info')
+    app.router.add_get("/bzr/{package}/commit-info", bzr_commit_info_request, name='bzr-commit-info')
     public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
     public_app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo-public')
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')

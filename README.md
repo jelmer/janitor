@@ -99,7 +99,7 @@ Several docker images are provided
  * ghcr.io/jelmer/janitor/runner - Queue management & Run handling
  * ghcr.io/jelmer/janitor/site - Web site & public API
  * ghcr.io/jelmer/janitor/vcs_store - VCS storage
- * ghcr.io/jelmer/janitor/worker - Worker
+ * ghcr.io/jelmer/janitor/worker - Base for workers
  * ghcr.io/jelmer/janitor/xmpp_notify - XMPP Notification Bot
 
 Contributing
