@@ -69,7 +69,11 @@ function loadNewJob() {
   if ((newJob = todo.shift()) !== undefined) {
     loadRun(newJob.package, newJob.command, newJob.id, newJob.branches, newJob.value);
   } else {
+{% if publishable_only %}
     $('.diff').replaceWith('All done!');
+{% else %}
+    $('.diff').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>');
+{% endif %}
     $('#debdiff').replaceWith('');
     $('#options').remove();
     $('#full-run-link').remove();

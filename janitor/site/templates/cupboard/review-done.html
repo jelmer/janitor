@@ -7,5 +7,9 @@
 
 <p>All done!</p>
 
+{% if publishable_only %}
+<p><a href="/cupboard/review?publishable_only=false">Review unpublishable</a></p>
+{% endif %}
+
 </div>
 {% endblock %}

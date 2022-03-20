@@ -118,7 +118,9 @@ async def generate_review(
             reviewer=reviewer
         )
     if not entries:
-        return await render_template_for_request(env, "cupboard/review-done.html", request, {})
+        return await render_template_for_request(
+            env, "cupboard/review-done.html", request, {
+                'publishable_only': publishable_only})
 
     (
         run_id,
