@@ -1520,6 +1520,44 @@ async def handle_peek(request):
     return await next_item(request, 'peek')
 
 
+@routes.get("/queue", name="queue")
+async def handle_queue(request):
+    response_obj = []
+    queue_processor = request.app['queue_processor']
+    query = """
+SELECT
+   queue.id AS queue_id,
+   package.branch_url AS branch_url,
+   package.subpath AS subpath,
+   package.name AS package,
+   queue.context AS context,
+   queue.id AS queue_id,
+   queue.command AS command
+FROM
+    queue
+LEFT JOIN package ON package.name = queue.package
+ORDER BY
+queue.bucket ASC,
+queue.priority ASC,
+queue.id ASC
+"""
+    if limit in request.query
+        query += " LIMIT %d" % int(request.query['limit'])
+    async with queue_processor.database.acquire() as conn:
+        for entry in await conn.fetch(query):
+            response_obj.append(
+                {
+                    "queue_id": entry['queue_id'],
+                    "branch_url": entry['branch_url'],
+                    "subpath": entry['subpath'],
+                    "package": entry['package'],
+                    "context": entry['context'],
+                    "command": entry['command'],
+                }
+            )
+    return web.json_response(response_obj)
+
+
 async def next_item(request, mode, worker=None, worker_link=None, backchannel=None, package=None, campaign=None):
     possible_transports = []
     possible_hosters = []

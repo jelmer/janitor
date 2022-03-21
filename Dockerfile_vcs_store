@@ -1,4 +1,4 @@
-FROM ghcr.io/jelmer/janitor/base
+FROM ghcr.io/jelmer/janitor/base:latest
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 VOLUME /vcs
 EXPOSE 9923

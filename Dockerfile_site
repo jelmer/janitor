@@ -1,4 +1,4 @@
-FROM ghcr.io/jelmer/janitor/base
+FROM ghcr.io/jelmer/janitor/base:latest
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 8082
 # TODO: config

@@ -722,7 +722,7 @@ def process_package(
 
         metadata["revision"] = metadata[
             "main_branch_revision"
-        ] = ws.main_branch.last_revision().decode()
+        ] = ws.main_branch.last_revision().decode('utf-8')
 
         metadata["subworker"] = {}
         metadata["remotes"] = {}
@@ -755,7 +755,7 @@ def process_package(
             else:
                 raise
         finally:
-            metadata["revision"] = ws.local_tree.branch.last_revision().decode()
+            metadata["revision"] = ws.local_tree.branch.last_revision().decode('utf-8')
 
         result_branches = []
         for (name, base_revision, revision) in ws.result_branches():
