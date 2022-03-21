@@ -2013,31 +2013,36 @@ applied independently.
         # For some old runs it is not set because we didn't track
         # the default branch name.
         if not dry_run and mp_remote_branch_name is not None:
-            logger.info(
-                "%s: Closing merge proposal, since branch for role "
-                "'%s' has changed from %s to %s.",
-                mp.url,
-                mp_run['role'],
-                mp_remote_branch_name,
-                last_run_remote_branch_name,
-            )
-            await update_proposal_status(mp, "abandoned", revision, package_name)
             try:
-                await to_thread(mp.post_comment, """
+                mp.set_target_branch_name(last_run_remote_branch_name or "")
+            except NotImplementedError:
+                logger.info(
+                    "%s: Closing merge proposal, since branch for role "
+                    "'%s' has changed from %s to %s.",
+                    mp.url,
+                    mp_run['role'],
+                    mp_remote_branch_name,
+                    last_run_remote_branch_name,
+                )
+                await update_proposal_status(mp, "abandoned", revision, package_name)
+                try:
+                    await to_thread(mp.post_comment, """
 This merge proposal will be closed, since the branch for the role '%s'
 has changed from %s to %s.
 """ % (mp_run['role'], mp_remote_branch_name, last_run_remote_branch_name))
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied posting comment to %s: %s", mp.url, e
-                )
-            try:
-                await to_thread(mp.close)
-            except PermissionDenied as e:
-                logger.warning(
-                    "Permission denied closing merge request %s: %s", mp.url, e
-                )
-                return False
+                except PermissionDenied as e:
+                    logger.warning(
+                        "Permission denied posting comment to %s: %s", mp.url, e
+                    )
+                try:
+                    await to_thread(mp.close)
+                except PermissionDenied as e:
+                    logger.warning(
+                        "Permission denied closing merge request %s: %s", mp.url, e
+                    )
+                    return False
+            else:
+                return True
         return False
 
     if not await to_thread(branches_match, mp_run['branch_url'], last_run.branch_url):
