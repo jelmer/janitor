@@ -159,18 +159,18 @@ async def generate_review(
         except TimeoutError:
             return "Timeout while retrieving diff; see it at %s" % external_url
 
-    async def get_commits(role):
+    async def get_revision_info(role):
         try:
             (remote_name, base_revid, revid) = state.get_result_branch(result_branches, role)
         except KeyError:
-            return ""
+            return []
 
         old_revid = base_revid.encode('utf-8') if base_revid else None
         new_revid = revid.encode('utf-8') if revid else None
         if old_revid == new_revid:
             return []
         try:
-            return await vcs_manager.get_commit_info(package, old_revid, new_revid, vcs_type)
+            return await vcs_manager.get_revision_info(package, old_revid, new_revid, vcs_type)
         except ClientResponseError as e:
             logging.warning("Unable to retrieve commit info; error code %d", e.status)
             return []
@@ -207,7 +207,7 @@ async def generate_review(
     kwargs = {
         "show_diff": show_diff,
         "show_debdiff": show_debdiff,
-        "commit_info": get_commit_info,
+        "get_revision_info": get_revision_info,
         "package_name": package,
         "run_id": run_id,
         "command": command,

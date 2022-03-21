@@ -380,7 +380,7 @@ async def handle_merge_proposal_change(request):
 
     url = urllib.parse.urljoin(request.app['publisher_url'], "merge-proposal")
     async with request.app['http_client_session'].post(url, data={
-            'url': post['url'], 'status': post['status'}, raise_for_status=True) as resp:
+            'url': post['url'], 'status': post['status']}, raise_for_status=True) as resp:
         return web.json_response({})
 
 
@@ -414,37 +414,15 @@ class QueueItemSchema(Schema):
 @routes.get("/queue", name="queue")
 async def handle_queue(request):
     limit = request.query.get("limit")
+    params = {}
     if limit is not None:
-        limit = int(limit)
-    response_obj = []
-    async with request.app['db'].acquire() as conn:
-        for entry in await conn.fetch("""
-SELECT
-   queue.id AS queue_id,
-   package.branch_url AS branch_url,
-   package.subpath AS subpath,
-   package.name AS package,
-   queue.context AS context,
-   queue.id AS queue_id,
-   queue.command AS command
-FROM
-    queue
-LEFT JOIN package ON package.name = queue.package
-ORDER BY
-queue.bucket ASC,
-queue.priority ASC,
-queue.id ASC
-"""):
-            response_obj.append(
-                {
-                    "queue_id": entry['queue_id'],
-                    "branch_url": entry['branch_url'],
-                    "package": entry['package'],
-                    "context": entry['context'],
-                    "command": entry['command'],
-                }
-            )
-    return web.json_response(response_obj, headers={"Cache-Control": "max-age=60"})
+        params['limit'] = str(int(limit))
+    url = URL(request.app['runner_url']) / "queue"
+    span = aiozipkin.request_span(request)
+    with span.new_child('runner:queue'):
+        async with request.app['http_client_session'].get(url, param=params) as resp:
+            return web.json_response(
+                await resp.json(), status=resp.status, headers={"Cache-Control": "max-age=60"})
 
 
 @docs()

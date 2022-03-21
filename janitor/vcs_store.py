@@ -107,7 +107,7 @@ async def bzr_diff_request(request):
     return await bzr_diff_helper(repo, old_revid, new_revid)
 
 
-async def bzr_commit_info_request(request):
+async def bzr_revision_info_request(request):
     package = request.match_info["package"]
     old_revid = request.query.get('old')
     if old_revid is not None:
@@ -154,7 +154,7 @@ async def git_diff_request(request):
     return await git_diff_helper(repo, old_sha, new_sha)
 
 
-async def git_commit_info_request(request):
+async def git_revision_info_request(request):
     package = request.match_info["package"]
     old_sha = request.query.get('old')
     if old_sha is not None:
@@ -177,6 +177,7 @@ async def git_commit_info_request(request):
     for entry in walker:
         ret.append({
             'commit-id': entry.commit.id.decode('ascii'),
+            'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
             'message': entry.commit.message.decode('utf-8', 'replace')})
     return web.json_response(ret)
 
@@ -762,10 +763,10 @@ async def create_web_app(
     app.router.add_get("/health", handle_health, name='health')
     public_app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
-    app.router.add_get("/git/{package}/commit-info", git_commit_info_request, name='git-commit-info')
+    app.router.add_get("/git/{package}/revision-info", git_revision_info_request, name='git-revision-info')
     app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
-    app.router.add_get("/bzr/{package}/commit-info", bzr_commit_info_request, name='bzr-commit-info')
+    app.router.add_get("/bzr/{package}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
     public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
     public_app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo-public')
     app.router.add_post("/bzr/{package}/.bzr/smart", bzr_backend, name='bzr-repo')

@@ -1,4 +1,4 @@
-FROM ghcr.io/jelmer/janitor/base
+FROM ghcr.io/jelmer/janitor/base:latest
 MAINTAINER Jelmer Vernooij <jelmer@debian.org>
 EXPOSE 9911
 RUN apt update && apt install -y python3-launchpadlib python3-keyrings.alt dpkg-dev python3-paramiko
