@@ -155,6 +155,7 @@ async def git_diff_request(request):
 
 
 async def git_revision_info_request(request):
+    from dulwich.errors import MissingCommitError
     package = request.match_info["package"]
     old_sha = request.query.get('old')
     if old_sha is not None:
@@ -173,7 +174,10 @@ async def git_revision_info_request(request):
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
     ret = []
-    walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
+    try:
+        walker = repo._git.get_walker(include=[new_sha], exclude=[old_sha])
+    except MissingCommitError:
+        return web.json_response({}, status=404)
     for entry in walker:
         ret.append({
             'commit-id': entry.commit.id.decode('ascii'),
