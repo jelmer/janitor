@@ -44,15 +44,44 @@
 </ul>
 </div>
 {% endif %}
+
 {% if closed_proposals %}
 <div class="section" id="closed-proposals">
 <h2>Closed Proposals</h2>
 <p>Proposals can be closed without being merged for a number of reasons - a
 similar change has already been applied, the change was rejected or the change
 was merged without history being referenced (i.e. in the case of a
-cherry-pick.</p>
+cherry-pick merge).</p>
 <ul class="simple">
 {% for proposal in closed_proposals %}
+<li>{{ display_merge_proposal(proposal) }}</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+{% if abandoned_proposals %}
+<div class="section" id="abandoned-proposals">
+<h2>Abandoned Proposals</h2>
+<p>Proposals can be abandoned by the bot for a number of reasons. In some
+cases, the relevant branch changes (e.g. if it is named after the active release),
+or the package could have been removed from the archive.</p>
+<ul class="simple">
+{% for proposal in abandoned_proposals %}
+<li>{{ display_merge_proposal(proposal) }}</li>
+{% endfor %}
+</ul>
+</div>
+{% endif %}
+
+{% if rejected_proposals %}
+<div class="section" id="rejected-proposals">
+<h2>Rejected Proposals</h2>
+<p>Rejected proposals are proposals that are closed by somebody other than the
+bot itself, e.g. because the maintainer didn't think the change was correct.
+</p>
+<ul class="simple">
+{% for proposal in rejected_proposals %}
 <li>{{ display_merge_proposal(proposal) }}</li>
 {% endfor %}
 </ul>
