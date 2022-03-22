@@ -1,4 +1,5 @@
-#!/usr/bin/python3
+
+!/usr/bin/python3
 # Copyright (C) 2019-2021 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -426,39 +427,76 @@ async def handle_queue(request):
 
 
 @docs()
-@routes.get("/{suite}/pkg/{package}/diff", name="package-diff")
-@routes.get("/pkg/{package}/run/{run_id}/diff", name="package-run-diff")
-@routes.get("/run/{run_id}/diff", name="run-diff")
-async def handle_diff(request):
+@routes.get("/{suite}/pkg/{package}/revision-info", name="package-revision-info")
+@routes.get("/pkg/{package}/run/{run_id}/revision-info", name="package-run-revision-info")
+@routes.get("/run/{run_id}/revision-info", name="run-revision-info")
+async def handle_revision_info(request):
     role = request.query.get("role", "main")
-    async with request.app['db'].acquire() as conn:
-        try:
-            run_id = request.match_info["run_id"]
-        except KeyError:
-            package = request.match_info["package"]
-            suite = request.match_info["suite"]
-            run = await conn.fetchrow(
+    run_id = request.match_info.get('run_id')
+    package = request.match_info.get("package")
+    suite = request.match_info.get("suite")
+    run = await find_vcs_info(request.app['db'], run_id, package, suite)
+    if run is None:
+        if run_id is None:
+            return web.json_response(
+                {"error": "no unabsorbed run for %s/%s" % (package, suite)},
+                status=404)
+        else:
+            return web.json_response(
+                {"error": "no run %s" % (run_id, )}, status=404)
+
+    try:
+        revision_info = await request.app['vcs_manager'].get_revision_info(
+            run['package'], run['base_revision'].encode('utf-8'),
+            run['revision'].encode('utf-8'), run['vcs_type'])
+        return web.json_response(revision_info)
+    except ContentTypeError as e:
+        return web.json_response(
+            {"error": "publisher returned error %d" % e.code}, status=400)
+    except ClientConnectorError:
+        return web.json_response(
+            {"error": "unable to contact publisher"}, status=502)
+    except ClientOSError:
+        return web.json_response(
+            {"error": "unable to contact publisher - oserror"}, status=502)
+
+
+async def find_vcs_info(db, run_id=None, package=None, suite=None):
+    async with db.acquire() as conn:
+        if run_id is not None:
+            return await conn.fetchrow(
                 'SELECT id, package, vcs_type, last_unabsorbed_runs.base_revision, '
                 'last_unabsorbed_runs.revision FROM last_unabsorbed_runs '
                 'LEFT JOIN new_result_branch ON '
                 'new_result_branch.run_id = last_unabsorbed_runs.id '
                 'WHERE package = $1 AND suite = $2 AND role = $3',
                 package, suite, role)
-            if run is None:
-                return web.Response(
-                    text="no unabsorbed run for %s/%s" % (package, suite), status=404
-                )
         else:
-            run = await conn.fetchrow(
+            return await conn.fetchrow(
                 'SELECT id, package, vcs_type, '
                 'new_result_branch.base_revision AS base_revision, '
                 'new_result_branch.revision AS revision FROM run '
                 'LEFT JOIN new_result_branch ON new_result_branch.run_id = run.id '
                 'WHERE id = $1 AND role = $2', run_id, role)
-            if run is None:
-                return web.Response(
-                    text="no run %s" % (run_id, ), status=404
-                )
+
+
+
+@docs()
+@routes.get("/{suite}/pkg/{package}/diff", name="package-diff")
+@routes.get("/pkg/{package}/run/{run_id}/diff", name="package-run-diff")
+@routes.get("/run/{run_id}/diff", name="run-diff")
+async def handle_diff(request):
+    role = request.query.get("role", "main")
+    run_id = request.match_info.get('run_id')
+    package = request.match_info.get("package")
+    suite = request.match_info.get("suite")
+    run = await find_vcs_info(request.app['db'], run_id, package, suite)
+    if run is None:
+        if run_id:
+            raise web.HTTPNotFound(text="no run %s" % (run_id, ))
+        else:
+            raise web.HTTPNotFound(
+                text="no unabsorbed run for %s/%s" % (package, suite))
 
     try:
         max_diff_size = int(request.query["max_diff_size"])
@@ -768,28 +806,6 @@ async def handle_publish_autopublish(request):
             return web.Response(body=await resp.read(), status=resp.status)
     except ClientConnectorError:
         return web.Response(text="unable to contact publisher", status=400)
-
-
-@docs()
-@routes.get("/{suite}/published-packages", name="published-packages")
-async def handle_published_packages(request):
-    from .apt_repo import get_published_packages
-    suite = request.match_info["suite"]
-    async with request.app['db'].acquire() as conn:
-        response_obj = []
-        for (
-            package,
-            build_version,
-            archive_version,
-        ) in await get_published_packages(conn, suite):
-            response_obj.append(
-                {
-                    "package": package,
-                    "build_version": build_version,
-                    "archive_version": archive_version,
-                }
-            )
-    return web.json_response(response_obj)
 
 
 @docs()
