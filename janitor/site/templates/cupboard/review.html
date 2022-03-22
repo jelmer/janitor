@@ -9,15 +9,16 @@
 <div class="command">Command: <span id="command">{{ command }}</div></div>
 
 {% for role, remote_branch_name, base_revision, revision in branches %}
-<div class="diff" id='diff-{{ role }}'>
-<div class="revisions"><h2>{{ role }}</h2>
+<div class="branch" id='branch-{{ role }}'>
+<h2>{{ role }}</h2>
+<div class="revisions" id="revisions-{{ role }}">
 <ul>
 {% for rev in get_revision_info(role) %}
-<li>{{ rev['revision-id'] }}: {{ rev['message'] }}</li>
+<li>{% if rev['link'] %}<a href="{{ rev['link'] }}">{% endif %}{{ rev['revision-id'] }}{% if rev['link'] %}</a>{% endif %}: <pre>{{ rev['message'] }}</pre></li>
 {% endfor %}
 </ul>
 </div>
-{{highlight_diff(show_diff(role))|safe}}
+<div class="diff" id='diff-{{ role }}'>{{highlight_diff(show_diff(role))|safe}}</div>
 </div>
 {% endfor %}
 
@@ -29,16 +30,30 @@
 function loadRun(package, command, run_id, roles, value) {
     $('.review-button').blur()
     $('.review-button').disabled = "disabled";
-    $('.diff').remove();
+    $('.branch').remove();
     var deferreds = [];
     roles.forEach(function(role) {
-      var url = '/api/run/' + run_id + '/diff?role=' + role;
-      $('<div class="diff" id="diff-' + role + '">Loading <a href="' + url + '">' + url + '</a>...</div>').insertBefore('#debdiff');
-      deferreds.push($('#diff-' + role).load(url + '&max_diff_size={{MAX_DIFF_SIZE}}', undefined, function (responseText, textStatus, req) {
+      var diff_url = '/api/run/' + run_id + '/diff?role=' + role;
+      $('<div class="branch" id="branch-' + role + '"><h2>' + role + '</h2><div class="revisions" id="revision-' + role + '"/><div class="diff" id="diff-' + role + '">Loading <a href="' + diff_url + '">' + diff_url + '</a>...</div></div>').insertBefore('#debdiff');
+      deferreds.push($('#diff-' + role).load(diff_url + '&max_diff_size={{MAX_DIFF_SIZE}}', undefined, function (responseText, textStatus, req) {
            if (req.status == 413) {
-                 $('#diff-' + role).html('<p>Diff is too large. See it at <a href="' + url + '">' + url + '</a></p>');
+                 $('#diff-' + role).html('<p>Diff is too large. See it at <a href="' + diff_url + '">' + url + '</a></p>');
            }
       }));
+      var revisions_url = '/api/run/' + run_id + '/revision-info?role=' + role;
+      $.getJSON(revisions_url, function(data) {
+          var items = [];
+          $.each(data, function(rev) {
+            items.push("<li>");
+            if (rev['link']) {
+                items.push("<a href=" + rev['link'] + ">" + rev['revision-id'] + "</a>");
+            } else {
+                items.push(rev['revision-id']);
+            }
+            items.push(": <pre>" + rev['message'] + "</pre></li>");
+          });
+          $('#revisions-' + role).html("<ul>" + "".join(items) + "</ul>");
+      });
     });
     deferreds.push($('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
           undefined,

@@ -422,7 +422,7 @@ class RemoteVcsManager(VcsManager):
                 codebase, old_revid.decode('utf-8') if old_revid else NULL_REVISION,
                 new_revid.decode('utf-8') if new_revid else NULL_REVISION))
         elif vcs_type == 'git':
-            return urllib.parse.urljoin(self.base_urls['git'], "%s/revision-info?old=%s&new=%s" % (
+            url = urllib.parse.urljoin(self.base_urls['git'], "%s/revision-info?old=%s&new=%s" % (
                 codebase,
                 old_revid[len(b'git-v1:'):].decode('utf-8') if old_revid is not None else "",
                 new_revid[len('git-v1:'):].decode('utf-8')) if new_revid is not None else "")

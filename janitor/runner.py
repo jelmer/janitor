@@ -1541,7 +1541,7 @@ queue.bucket ASC,
 queue.priority ASC,
 queue.id ASC
 """
-    if limit in request.query
+    if limit in request.query:
         query += " LIMIT %d" % int(request.query['limit'])
     async with queue_processor.database.acquire() as conn:
         for entry in await conn.fetch(query):

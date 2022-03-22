@@ -129,6 +129,7 @@ async def bzr_revision_info_request(request):
         for rev in repo.iter_revisions(graph.iter_lefthand_ancestry(new_revid, [old_revid])):
             ret.append({
                 'revision-id': rev.revision_id.decode('utf-8'),
+                'link': None,
                 'message': rev.description})
     return web.json_response(ret)
 
@@ -182,6 +183,7 @@ async def git_revision_info_request(request):
         ret.append({
             'commit-id': entry.commit.id.decode('ascii'),
             'revision-id': 'git-v1:' + entry.commit.id.decode('ascii'),
+            'link': '/git/%s/commit/%s/' % (package, entry.commit.id.decode('ascii')),
             'message': entry.commit.message.decode('utf-8', 'replace')})
     return web.json_response(ret)
 
@@ -768,7 +770,7 @@ async def create_web_app(
     public_app.router.add_get("/health", handle_health, name='health')
     app.router.add_get("/git/{package}/diff", git_diff_request, name='git-diff')
     app.router.add_get("/git/{package}/revision-info", git_revision_info_request, name='git-revision-info')
-    app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
+    public_app.router.add_get("/git/{package}/{path_info:.*}", handle_klaus, name='klaus')
     app.router.add_get("/bzr/{package}/diff", bzr_diff_request, name='bzr-diff')
     app.router.add_get("/bzr/{package}/revision-info", bzr_revision_info_request, name='bzr-revision-info')
     public_app.router.add_post("/bzr/{package}/{branch}/.bzr/smart", bzr_backend, name='bzr-branch-public')
