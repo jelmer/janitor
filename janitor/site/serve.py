@@ -448,8 +448,6 @@ async def create_app(
     )
     from .lintian_fixes import register_lintian_fixes_endpoints
     register_lintian_fixes_endpoints(app.router)
-    from .debianize import register_debianize_endpoints
-    register_debianize_endpoints(app.router)
     SUITE_REGEX = "|".join([re.escape(campaign.name) for campaign in config.campaign])
     app.router.add_get(
         "/{suite:%s}/merge-proposals" % SUITE_REGEX,
