@@ -52,7 +52,7 @@ function loadRun(package, command, run_id, roles, value) {
             }
             items.push(": <pre>" + rev['message'] + "</pre></li>");
           });
-          $('#revisions-' + role).html("<ul>" + "".join(items) + "</ul>");
+          $('#revisions-' + role).html("<ul>" + items.join("") + "</ul>");
       });
     });
     deferreds.push($('#debdiff').load('/api/run/' + run_id + '/debdiff?filter_boring=1',
@@ -84,10 +84,10 @@ function loadNewJob() {
   if ((newJob = todo.shift()) !== undefined) {
     loadRun(newJob.package, newJob.command, newJob.id, newJob.branches, newJob.value);
   } else {
-{% if publishable_only %}
-    $('.diff').replaceWith('All done!');
+{% if not publishable_only %}
+    $('.branch').replaceWith('All done!');
 {% else %}
-    $('.diff').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>');
+    $('.branch').replaceWith('All done! <a href="/cupboard/review?publishable_only=false">Review unpublishable</a>');
 {% endif %}
     $('#debdiff').replaceWith('');
     $('#options').remove();

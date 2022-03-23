@@ -1,5 +1,4 @@
-
-!/usr/bin/python3
+#!/usr/bin/python3
 # Copyright (C) 2019-2021 Jelmer Vernooij <jelmer@jelmer.uk>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -435,7 +434,7 @@ async def handle_revision_info(request):
     run_id = request.match_info.get('run_id')
     package = request.match_info.get("package")
     suite = request.match_info.get("suite")
-    run = await find_vcs_info(request.app['db'], run_id, package, suite)
+    run = await find_vcs_info(request.app['db'], role, run_id, package, suite)
     if run is None:
         if run_id is None:
             return web.json_response(
@@ -461,12 +460,12 @@ async def handle_revision_info(request):
             {"error": "unable to contact publisher - oserror"}, status=502)
 
 
-async def find_vcs_info(db, run_id=None, package=None, suite=None):
+async def find_vcs_info(db, role, run_id=None, package=None, suite=None):
     async with db.acquire() as conn:
-        if run_id is not None:
+        if run_id is None:
             return await conn.fetchrow(
-                'SELECT id, package, vcs_type, last_unabsorbed_runs.base_revision, '
-                'last_unabsorbed_runs.revision FROM last_unabsorbed_runs '
+                'SELECT id, package, vcs_type, new_result_branch.base_revision, '
+                'new_result_branch.revision FROM last_unabsorbed_runs '
                 'LEFT JOIN new_result_branch ON '
                 'new_result_branch.run_id = last_unabsorbed_runs.id '
                 'WHERE package = $1 AND suite = $2 AND role = $3',
@@ -490,7 +489,7 @@ async def handle_diff(request):
     run_id = request.match_info.get('run_id')
     package = request.match_info.get("package")
     suite = request.match_info.get("suite")
-    run = await find_vcs_info(request.app['db'], run_id, package, suite)
+    run = await find_vcs_info(request.app['db'], role, run_id, package, suite)
     if run is None:
         if run_id:
             raise web.HTTPNotFound(text="no run %s" % (run_id, ))
