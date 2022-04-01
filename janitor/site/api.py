@@ -446,8 +446,10 @@ async def handle_revision_info(request):
 
     try:
         revision_info = await request.app['vcs_manager'].get_revision_info(
-            run['package'], run['base_revision'].encode('utf-8'),
-            run['revision'].encode('utf-8'), run['vcs_type'])
+            run['package'],
+            run['base_revision'].encode('utf-8') if run['base_revision'] else None,
+            run['revision'].encode('utf-8') if run['revision'] else None,
+            run['vcs_type'])
         return web.json_response(revision_info)
     except ContentTypeError as e:
         return web.json_response(
@@ -505,8 +507,9 @@ async def handle_diff(request):
         try:
             diff = await get_vcs_diff(
                 request.app['http_client_session'], request.app['vcs_manager'],
-                run['vcs_type'], run['package'], run['base_revision'].encode('utf-8'),
-                run['revision'].encode('utf-8'))
+                run['vcs_type'], run['package'],
+                run['base_revision'].encode('utf-8') if run['base_revision'] else None,
+                run['revision'].encode('utf-8') if run['revision'] else None)
         except ClientResponseError as e:
             return web.Response(status=e.status, text="Unable to retrieve diff")
         except NotImplementedError:
@@ -1143,6 +1146,10 @@ async def handle_run_finish(request: web.Request) -> web.Response:
                 if resp.status == 404:
                     json = await resp.json()
                     return web.json_response({"reason": json["reason"]}, status=404)
+                if resp.status == 409:
+                    result = await resp.json()
+                    result["api_url"] = str(request.app.router["run"].url_for(run_id=result['id']))
+                    return web.json_response(result, status=409)
                 if resp.status not in (201, 200):
                     try:
                         internal_error = await resp.json()

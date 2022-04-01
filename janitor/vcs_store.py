@@ -55,8 +55,9 @@ from .vcs import (
 GIT_BACKEND_CHUNK_SIZE = 4096
 
 
-async def bzr_diff_helper(repo, old_revid, new_revid):
-    # Fall back to breezy
+async def bzr_diff_helper(repo, old_revid, new_revid, path=None):
+    if path:
+        raise NotImplementedError
     args = [
         sys.executable,
         '-m',
@@ -66,7 +67,7 @@ async def bzr_diff_helper(repo, old_revid, new_revid):
             old_revid.decode(),
             new_revid.decode(),
         ),
-        repo.user_url
+        urlutils.join(repo.user_url, path or '')
     ]
 
     p = await asyncio.create_subprocess_exec(
@@ -91,6 +92,7 @@ async def bzr_diff_helper(repo, old_revid, new_revid):
 async def bzr_diff_request(request):
     package = request.match_info["package"]
     old_revid = request.query.get('old')
+    path = request.query.get('path')
     if old_revid is not None:
         old_revid = old_revid.encode('utf-8')
     new_revid = request.query.get('new')
@@ -104,7 +106,7 @@ async def bzr_diff_request(request):
         raise web.HTTPServiceUnavailable(
             text="Local VCS repository for %s temporarily inaccessible" %
             package)
-    return await bzr_diff_helper(repo, old_revid, new_revid)
+    return await bzr_diff_helper(repo, old_revid, new_revid, path)
 
 
 async def bzr_revision_info_request(request):
@@ -142,6 +144,7 @@ async def git_diff_request(request):
     new_sha = request.query.get('new')
     if new_sha is not None:
         new_sha = new_sha.encode('utf-8')
+    path = request.query.get('path')
     try:
         repo = request.app.vcs_manager.get_repository(package)
     except NotBranchError:
@@ -152,7 +155,7 @@ async def git_diff_request(request):
             package)
     if not valid_hexsha(old_sha) or not valid_hexsha(new_sha):
         raise web.HTTPBadRequest(text='invalid shas specified')
-    return await git_diff_helper(repo, old_sha, new_sha)
+    return await git_diff_helper(repo, old_sha, new_sha, path)
 
 
 async def git_revision_info_request(request):
@@ -188,12 +191,14 @@ async def git_revision_info_request(request):
     return web.json_response(ret)
 
 
-async def git_diff_helper(repo, old_sha, new_sha):
+async def git_diff_helper(repo, old_sha, new_sha, path=None):
     args = [
         "git",
         "diff",
         old_sha, new_sha
     ]
+    if path:
+        args.extend(['-', path])
 
     p = await asyncio.create_subprocess_exec(
         *args,
@@ -217,6 +222,7 @@ async def git_diff_helper(repo, old_sha, new_sha):
 
 async def diff_request(request):
     run_id = request.match_info["run_id"]
+    path = request.query.get('path')
     role = request.match_info["role"]
     span = aiozipkin.request_span(request)
     with span.new_child('sql:run'):
@@ -252,10 +258,11 @@ WHERE id = $1 AND new_result_branch.role = $2
         with span.new_child('subprocess:git-diff'):
             return await git_diff_helper(
                 repo, old_revid.decode()[len('git-v1:'):],
-                new_revid.decode()[len('git-v1:'):])
+                new_revid.decode()[len('git-v1:'):],
+                path)
     else:
         with span.new_child('subprocess:brz-diff'):
-            return await bzr_diff_helper(repo, old_revid, new_revid)
+            return await bzr_diff_helper(repo, old_revid, new_revid, path)
 
 
 async def _git_open_repo(vcs_manager, db, package):

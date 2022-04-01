@@ -117,6 +117,11 @@ class ResultUploadFailure(Exception):
         self.reason = reason
 
 
+class RetriableResultUploadFailure(ResultUploadFailure):
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+
 class EmptyQueue(Exception):
     """Queue was empty."""
 
@@ -882,6 +887,10 @@ async def upload_results(
                     if resp.status == 404:
                         resp_json = await resp.json()
                         raise ResultUploadFailure(resp_json["reason"])
+                    if resp.status in (500, 502, 503):
+                        raise RetriableResultUploadFailure(
+                            "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
+                        )
                     if resp.status not in (201, 200):
                         raise ResultUploadFailure(
                             "Unable to submit result: %r: %d" % (await resp.text(), resp.status)
@@ -898,10 +907,10 @@ async def upload_results(
                                 'runner reported filenames: %r != %r',
                                 local_filenames, runner_filenames)
                     return result
-            except ClientConnectorError as e:
+            except (ClientConnectorError, RetriableResultUploadFailure) as e:
                 exit_e = e
                 logging.warning('Error connecting to %s: %s', finish_url, e)
-                asyncio.sleep(delay)
+                await asyncio.sleep(delay)
                 delay *= 1.5
     else:
         raise exit_e
