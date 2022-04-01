@@ -22,3 +22,6 @@
 [submodule "buildlog-consultant"]
 	path = buildlog-consultant
 	url = https://github.com/jelmer/buildlog-consultant.git
+[submodule "lintian-brush"]
+	path = lintian-brush
+	url = https://salsa.debian.org/jelmer/lintian-brush.git
