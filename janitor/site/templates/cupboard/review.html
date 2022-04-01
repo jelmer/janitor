@@ -34,7 +34,7 @@ function loadRun(package, command, run_id, roles, value) {
     var deferreds = [];
     roles.forEach(function(role) {
       var diff_url = '/api/run/' + run_id + '/diff?role=' + role;
-      $('<div class="branch" id="branch-' + role + '"><h2>' + role + '</h2><div class="revisions" id="revision-' + role + '"/><div class="diff" id="diff-' + role + '">Loading <a href="' + diff_url + '">' + diff_url + '</a>...</div></div>').insertBefore('#debdiff');
+      $('<div class="branch" id="branch-' + role + '"><h2>' + role + '</h2><div class="revisions" id="revisions-' + role + '"/><div class="diff" id="diff-' + role + '">Loading <a href="' + diff_url + '">' + diff_url + '</a>...</div></div>').insertBefore('#debdiff');
       deferreds.push($('#diff-' + role).load(diff_url + '&max_diff_size={{MAX_DIFF_SIZE}}', undefined, function (responseText, textStatus, req) {
            if (req.status == 413) {
                  $('#diff-' + role).html('<p>Diff is too large. See it at <a href="' + diff_url + '">' + url + '</a></p>');
@@ -43,7 +43,7 @@ function loadRun(package, command, run_id, roles, value) {
       var revisions_url = '/api/run/' + run_id + '/revision-info?role=' + role;
       $.getJSON(revisions_url, function(data) {
           var items = [];
-          $.each(data, function(rev) {
+          data.forEach(function(rev) {
             items.push("<li>");
             if (rev['link']) {
                 items.push("<a href=" + rev['link'] + ">" + rev['revision-id'] + "</a>");

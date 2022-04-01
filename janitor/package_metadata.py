@@ -37,7 +37,7 @@ from debmutate.vcs import (
     split_vcs_url,
     unsplit_vcs_url,
 )
-from upstream_branch_url import (
+from upstream_ontologist.vcs import (
     find_public_repo_url,
     )
 from lintian_brush.vcs import (

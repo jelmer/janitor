@@ -956,7 +956,7 @@ class PollingActiveRun(ActiveRun):
                 if (self._log_id_mismatch is not None and
                         (datetime.now() - self.start_time).total_seconds() > 30):
                     logging.warning(
-                        "Worker is now processing new run. Marking run as MIA.",
+                        "Worker %s is now processing new run %s (age: %s). Marking run as MIA.",
                         self.worker_name,
                         self.log_id,
                         self.keepalive_age,
@@ -1393,7 +1393,8 @@ class QueueProcessor(object):
                         resume_from=result.resume_from,
                         target_branch_url=result.target_branch_url,
                     )
-                except asyncpg.UniqueViolationError:
+                except asyncpg.UniqueViolationError as e:
+                    logging.info('Unique violation error creating run: %r', e)
                     raise RunExists(result.log_id)
                 if result.builder_result:
                     await result.builder_result.store(conn, result.log_id)
