@@ -25,3 +25,6 @@
 [submodule "lintian-brush"]
 	path = lintian-brush
 	url = https://salsa.debian.org/jelmer/lintian-brush.git
+[submodule "python-debian"]
+	path = python-debian
+	url = https://salsa.debian.org/python-debian-team/python-debian.git
