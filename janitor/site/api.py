@@ -1189,6 +1189,43 @@ def create_background_task(fn, title):
 
 
 @docs()
+@routes.post('/run/{run_id}/reprocess-logs', name='admin-reprocess-logs-run')
+async def handle_run_reprocess_logs(request):
+    from ..reprocess_logs import reprocess_run_logs
+    check_admin(request)
+    run_id = request.match_info['run_id']
+    dry_run = 'dry_run' in post
+    reschedule = 'reschedule' in post
+    async with request.app['db'].acquire() as conn:
+        run = await conn.fetchrow(
+            'SELECT package, suite, command, finish_time - start_time AS duration, '
+            'result_code, description, failure_details FROM run WHERE id = $1',
+            run_id)
+
+    result = await reprocess_run_logs(
+        request.app['db'],
+        request.app['logfile_manager'],
+        run['package'], run['suite'], run_id,
+        run['command'], run['duration'], run['result_code'],
+        run['description'], run['failure_details'],
+        dry_run=dry_run, reschedule=reschedule)
+
+    if result:
+        (new_code, new_description, new_failure_details) = result
+        return web.json_response(
+            {'changed': True,
+             'result_code': new_code,
+             'description': description,
+             'failure_details': failure_details})
+    else:
+        return web.json_response({
+            'changed': False,
+            'result_code': run['result_code'],
+            'description': run['description'],
+            'failure_details': run['failure_details']})
+
+
+@docs()
 @routes.post('/reprocess-logs', name='admin-reprocess-logs')
 async def handle_reprocess_logs(request):
     from ..reprocess_logs import reprocess_run_logs
