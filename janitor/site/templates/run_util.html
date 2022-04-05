@@ -55,6 +55,28 @@ window.bugform.onsubmit = function(e) {
 
 {% endmacro %}
 
+{% macro reprocess_logs_button(run_id, title="Reprocess logs", id="reprocess-logs", accesskey="l") %}
+<button id="{{ id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
+
+<script>
+$(function() {
+  $("#{{ id }}").click(function() {
+      $.post('/api/{{ run_id }}/reprocess-logs', {}, function(data) {
+      if (data['changed']) {
+          $("#{{ id }}").replaceWith("<span>Logs reprocessed and analysis updated.</span>");
+      } else {
+          $("#{{ id }}").replaceWith("<span>Logs reprocessed but not changes made.</span>");
+      }
+    }, 'json')
+    .fail(function(response) {
+      $("#{{ id }}").replaceWith("<span>Failed to reprocess logs: " + response.responseText + "</span>");
+    });
+  });
+});
+</script>
+
+{% endmacro %}
+
 {% macro reschedule_button(suite, package, title="Reschedule", id='reschedule', data={}, accesskey="s") %}
 <button id="{{ id }}"{% if accesskey %} accesskey="{{ accesskey }}"{% endif %}>{{ title }}</button>
 

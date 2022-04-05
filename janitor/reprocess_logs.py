@@ -17,7 +17,9 @@
 
 from __future__ import absolute_import
 
+from datetime import timedelta
 import logging
+from typing import Optional
 
 import silver_platter  # noqa: E402, F401
 from buildlog_consultant.common import find_build_failure_description  # noqa: E402
@@ -69,10 +71,12 @@ def process_dist_log(logf):
 
 
 async def reprocess_run_logs(
-        db, logfile_manager, package, suite, log_id, command, duration,
-        result_code, description, failure_details, dry_run=False,
-        reschedule=False, log_timeout=None):
-    """Reprocess run logs."""
+        db, logfile_manager, package: str, suite: str, log_id: str, command: str,
+        duration: timedelta,
+        result_code: str, description: str, failure_details, dry_run: bool = False,
+        reschedule: bool = False, log_timeout: Optional[int] = None):
+    """Reprocess run logs.
+    """
     if result_code in ('dist-no-tarball', ):
         return
     if result_code.startswith('dist-'):
@@ -122,3 +126,5 @@ async def reprocess_run_logs(
                         requestor="reprocess-build-results",
                         bucket="reschedule",
                     )
+        return (new_code, new_description, new_failure_details)
+    return
