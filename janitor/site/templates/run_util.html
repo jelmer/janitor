@@ -61,7 +61,7 @@ window.bugform.onsubmit = function(e) {
 <script>
 $(function() {
   $("#{{ id }}").click(function() {
-      $.post('/api/{{ run_id }}/reprocess-logs', {}, function(data) {
+      $.post('/api/run/{{ run_id }}/reprocess-logs', {}, function(data) {
       if (data['changed']) {
           $("#{{ id }}").replaceWith("<span>Logs reprocessed and analysis updated.</span>");
       } else {
